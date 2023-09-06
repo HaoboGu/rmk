@@ -1,0 +1,23 @@
+[package]
+name = "rmk"
+version = "0.0.1"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://www.github.com/haobogu/rmk"
+repository = "https://www.github.com/haobogu/rmk"
+readme = "README.md"
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+embedded-hal = "0.2.7"
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.3"
+panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
+num_enum = { version = "0.7.0", default-features = false }
+rtt-target = "0.4.0"
+log = "0.4.19"
+rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
+usb-device = "0.2.9"
+usbd-hid = "0.6.1"

@@ -1,0 +1,38 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Cortex Debug",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "showDevDebugOutput": "parsed",
+            "runToEntryPoint": "main",
+            "device": "stlink",
+            "preLaunchTask": "flash",
+            "configFiles": [
+                "openocd.cfg"
+            ],
+            "svdFile": "STM32H7B0x.svd",
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "clearSearch": false,
+                "polling_interval": 20,
+                "rtt_start_retry": 2000,
+                "decoders": [
+                    {
+                        "label": "RTT channel 0",
+                        "port": 0,
+                        "type": "console"
+                    }
+                ]
+            },
+        }
+    ]
+}

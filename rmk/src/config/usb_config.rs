@@ -1,0 +1,1 @@
+pub static MANUFACTURER: &str = "RMK";
