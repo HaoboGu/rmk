@@ -10,10 +10,11 @@ This crate requires nightly Rust. `openocd` is used for flashing & debugging.
 
 Steps for creating your own firmware:
 
-1. Add rmk to your `Cargo.toml`
-2. Choose your target. For stm32h7, you can use `rustup target add thumbv7em-none-eabihf`
-3. Create `.cargo/config.toml` in your project's root, specify your target. See [`boards/stm32h7/.cargo/config.toml`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/.cargo/config.toml)
-4. Create `main.rs`, initialize your MCU in rtic app, create usb polling task and keyboard task. There are three main parts of `main.rs`:
+1. Create a rust embedded project
+2. Add rmk to your `Cargo.toml`
+3. Choose your target. For stm32h7, you can use `rustup target add thumbv7em-none-eabihf`
+4. Create `.cargo/config.toml` in your project's root, specify your target. See [`boards/stm32h7/.cargo/config.toml`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/.cargo/config.toml)
+5. Create `main.rs`, initialize your MCU in rtic app, create usb polling task and keyboard task. There are three main parts of `main.rs`:
     1. MCU and peripherals initialization 
       
         ``` rust
@@ -138,7 +139,7 @@ Steps for creating your own firmware:
                 });
             }
         ```
-5. An example can be found at [`boards/stm32h7`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7)
+6. An example can be found at [`boards/stm32h7`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7)
 
 ## Compile
 
@@ -164,6 +165,8 @@ openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h
 ``` 
 
 ## TODOs
+
+A lot of todos at the list, any contributions are welcomed :)
 
 - [x] basic keyboard functions
 - [ ] system/media keys
