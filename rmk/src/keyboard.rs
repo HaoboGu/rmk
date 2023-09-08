@@ -1,9 +1,11 @@
-use crate::{action::Action, keycode::KeyCode, layout::KeyMap, matrix::Matrix};
+use crate::{
+    action::Action, keycode::KeyCode, layout::KeyMap, matrix::Matrix, usb::KeyboardUsbDevice,
+};
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use log::info;
-use usb_device::{class_prelude::UsbBus, UsbError};
-use usbd_hid::hid_class::HIDClass;
+use usb_device::class_prelude::UsbBus;
+use usbd_hid::descriptor::KeyboardReport;
 
 pub struct Keyboard<
     In: InputPin,
@@ -21,8 +23,8 @@ pub struct Keyboard<
     /// Keymap
     keymap: KeyMap<ROW, COL, NUM_LAYER>,
 
-    /// Keyboard hid report
-    report: [u8; 8],
+    /// Keyboard internal hid report buf
+    report: KeyboardReport,
 
     /// Should send a new report?
     changed: bool,
@@ -44,22 +46,23 @@ impl<
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
             keymap: KeyMap::new(keymap),
-            report: [0; 8],
+            report: KeyboardReport {
+                modifier: 0,
+                reserved: 0,
+                leds: 0,
+                keycodes: [0; 6],
+            },
             changed: false,
         }
     }
 
     /// Send hid report. The report is sent only when key state changes.
-    pub fn send_report<B: UsbBus>(&mut self, hid: &HIDClass<B>) {
+    pub fn send_report<B: UsbBus>(&mut self, usb_device: &KeyboardUsbDevice<'_, B>) {
         if self.changed {
-            match hid.push_raw_input(&self.report) {
-                Ok(_) => (),
-                Err(UsbError::WouldBlock) => (),
-                Err(_) => panic!("push raw input error"),
-            }
+            usb_device.send_keyboard_report(&self.report);
 
             // Reset report key states
-            for bit in &mut self.report[2..8] {
+            for bit in &mut self.report.keycodes {
                 *bit = 0;
             }
             self.changed = false;
@@ -68,7 +71,6 @@ impl<
 
     /// Main keyboard task, it scans matrix, process active keys
     /// If there is any change of keys, set self.changed=true
-    /// TODO: Use channels to pass changes to hid?
     pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
         self.matrix.scan().await?;
         let changed_matrix = self.matrix.changed;
@@ -114,20 +116,20 @@ impl<
         if key.is_modifier() {
             let mut modifier_bit = key.as_modifier_bit();
             if pressed {
-                self.report[0] |= modifier_bit;
+                self.report.modifier |= modifier_bit;
             } else {
                 // Release modifier
                 modifier_bit = !modifier_bit;
-                self.report[0] &= modifier_bit;
+                self.report.modifier &= modifier_bit;
             }
         } else if key.is_basic() {
-            for i in 2..8 {
-                // 6KRO implementation
-                if pressed && self.report[i] == 0 {
-                    self.report[i] = key as u8;
+            // 6KRO implementation
+            for bit in &mut self.report.keycodes {
+                if pressed && (*bit == 0) {
+                    *bit = key as u8;
                     break;
-                } else if !pressed && self.report[i] == key as u8 {
-                    self.report[i] = 0;
+                } else if !pressed && (*bit == (key as u8)) {
+                    *bit = 0;
                     break;
                 }
             }

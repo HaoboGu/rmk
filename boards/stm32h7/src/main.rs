@@ -2,6 +2,7 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 #![allow(dead_code)]
+#![feature(async_closure)]
 
 #[macro_use]
 mod macros;
@@ -13,10 +14,10 @@ use rtic::app;
 #[app(device = stm32h7xx_hal::pac, peripherals = true)]
 mod app {
     use log::info;
-    use rmk::config::KEYBOARD_CONFIG;
     use rmk::keyboard::Keyboard;
     use rmk::rtt_logger;
-    use rmk::usb::create_usb_device_and_hid_class;
+    use rmk::usb::KeyboardUsbDevice;
+    use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
     use rtic_monotonics::systick::*;
     use stm32h7xx_hal::{
         gpio::{ErasedPin, Input, Output, PE3},
@@ -24,17 +25,12 @@ mod app {
         prelude::*,
         usb_hs::{UsbBus, USB1},
     };
-    use usb_device::prelude::*;
-    use usbd_hid::hid_class::HIDClass;
 
     static mut EP_MEMORY: [u32; 1024] = [0; 1024];
 
     #[shared]
     struct Shared {
-        usb: (
-            HIDClass<'static, UsbBus<USB1>>,
-            UsbDevice<'static, UsbBus<USB1>>,
-        ),
+        usb_device: KeyboardUsbDevice<'static, UsbBus<USB1>>,
         led: PE3<Output>,
     }
 
@@ -89,51 +85,50 @@ mod app {
             ccdr.peripheral.USB1OTG,
             &ccdr.clocks,
         );
-        let usb_bus = cortex_m::singleton!(
+        let usb_allocator = cortex_m::singleton!(
             : usb_device::class_prelude::UsbBusAllocator<UsbBus<USB1>> =
                 UsbBus::new(usb, unsafe { &mut EP_MEMORY })
         )
         .unwrap();
-        let (hid, usb_dev) = create_usb_device_and_hid_class(usb_bus, &KEYBOARD_CONFIG);
+
+        // Initialize keyboard matrix pins
+        let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
+        // Initialize keyboard
+        let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
+            usb_allocator,
+            &KEYBOARD_CONFIG,
+            input_pins,
+            output_pins,
+            crate::keymap::KEYMAP,
+        );
 
         // Led config
         let mut led = gpioe.pe3.into_push_pull_output();
         led.set_high();
 
-        // Initialize keyboard matrix pins
-        let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
-        // Initialize keyboard
-        let keyboard = Keyboard::new(input_pins, output_pins, crate::keymap::KEYMAP);
-
         // Spawn keyboard task
         scan::spawn().ok();
 
         // RTIC resources
-        (
-            Shared {
-                usb: (hid, usb_dev),
-                led,
-            },
-            Local { keyboard },
-        )
+        (Shared { usb_device, led }, Local { keyboard })
     }
 
-    #[task(local = [keyboard], shared = [usb])]
+    #[task(local = [keyboard], shared = [usb_device])]
     async fn scan(mut cx: scan::Context) {
         // Keyboard scan task
         info!("Start matrix scanning");
         loop {
             cx.local.keyboard.keyboard_task().await.unwrap();
-            cx.shared.usb.lock(|(hid, _usb_device)| {
-                cx.local.keyboard.send_report(hid);
-            })
+            cx.shared.usb_device.lock(|d| {
+                cx.local.keyboard.send_report(d);
+            });
         }
     }
 
-    #[task(binds = OTG_HS, shared = [usb])]
+    #[task(binds = OTG_HS, shared = [usb_device])]
     fn usb_poll(mut cx: usb_poll::Context) {
-        cx.shared.usb.lock(|(hid, usb_device)| {
-            usb_device.poll(&mut [hid]);
+        cx.shared.usb_device.lock(|usb_device| {
+            usb_device.usb_poll();
         });
     }
 }
