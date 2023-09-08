@@ -1,15 +1,10 @@
+use crate::{action::Action, keycode::KeyCode, layout::KeyMap, matrix::Matrix};
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use log::info;
 use usb_device::{class_prelude::UsbBus, UsbError};
 use usbd_hid::hid_class::HIDClass;
 
-use crate::{
-    action::Action,
-    keycode::KeyCode,
-    layout::KeyMap,
-    matrix::Matrix,
-};
 pub struct Keyboard<
     In: InputPin,
     Out: OutputPin,
@@ -54,6 +49,7 @@ impl<
         }
     }
 
+    /// Send hid report. The report is sent only when key state changes.
     pub fn send_report<B: UsbBus>(&mut self, hid: &HIDClass<B>) {
         if self.changed {
             match hid.push_raw_input(&self.report) {
@@ -61,16 +57,18 @@ impl<
                 Err(UsbError::WouldBlock) => (),
                 Err(_) => panic!("push raw input error"),
             }
-            // Reset report state
-            self.report = [0; 8];
+
+            // Reset report key states
+            for bit in &mut self.report[2..8] {
+                *bit = 0;
+            }
             self.changed = false;
         }
-
     }
 
     /// Main keyboard task, it scans matrix, process active keys
     /// If there is any change of keys, set self.changed=true
-    /// TODO: Does it more elegant: Use channels to pass changes to hid?
+    /// TODO: Use channels to pass changes to hid?
     pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
         self.matrix.scan().await?;
         let changed_matrix = self.matrix.changed;
