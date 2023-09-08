@@ -13,10 +13,7 @@ pub struct Matrix<
 > {
     input_pins: [In; INPUT_PIN_NUM],
     output_pins: [Out; OUTPUT_PIN_NUM],
-    cur_key_state: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-    pub key_state: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-    pub changed: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-    debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
+    pub debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
 }
 
 impl<
@@ -31,9 +28,6 @@ impl<
         Matrix {
             input_pins,
             output_pins,
-            cur_key_state: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-            key_state: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-            changed: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             debouncer: Debouncer::new(),
         }
     }
@@ -45,24 +39,9 @@ impl<
             out_pin.set_high()?;
             Systick::delay(1.micros()).await;
             // Check input pins
-            for (in_idx, pin) in self.input_pins.iter().enumerate() {
-                let mut key_changed = false;
-                if pin.is_high()? ^ self.cur_key_state[out_idx][in_idx] {
-                    self.cur_key_state[out_idx][in_idx] = pin.is_high()?;
-                    key_changed = true;
-                }
-
+            for (in_idx, in_pin) in self.input_pins.iter().enumerate() {
                 // Debounce, update key state if there's a key changed after debounc
-                (
-                    self.key_state[out_idx][in_idx],
-                    self.changed[out_idx][in_idx],
-                ) = self.debouncer.debounce(
-                    in_idx,
-                    out_idx,
-                    key_changed,
-                    self.cur_key_state[out_idx][in_idx],
-                    self.key_state[out_idx][in_idx],
-                );
+                self.debouncer.debounce(in_idx, out_idx, in_pin.is_high()?);
             }
             out_pin.set_low()?;
         }

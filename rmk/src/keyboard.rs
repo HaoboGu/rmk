@@ -16,7 +16,7 @@ pub struct Keyboard<
 > {
     /// Keyboard matrix, use COL2ROW by default
     #[cfg(not(feature = "ROW2COL"))]
-    matrix: Matrix<In, Out, ROW, COL>,
+    pub matrix: Matrix<In, Out, ROW, COL>,
     #[cfg(feature = "ROW2COL")]
     matrix: Matrix<In, Out, COL, ROW>,
 
@@ -73,11 +73,11 @@ impl<
     /// If there is any change of keys, set self.changed=true
     pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
         self.matrix.scan().await?;
-        let changed_matrix = self.matrix.changed;
+        let changed_matrix = self.matrix.debouncer.key_state;
         for (col_idx, col) in changed_matrix.iter().enumerate() {
-            for (row_idx, changed) in col.iter().enumerate() {
-                if *changed {
-                    self.process_action(row_idx, col_idx, self.matrix.key_state[col_idx][row_idx]);
+            for (row_idx, state) in col.iter().enumerate() {
+                if state.changed {
+                    self.process_action(row_idx, col_idx, state.pressed);
                     self.changed = true
                 }
             }

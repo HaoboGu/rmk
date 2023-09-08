@@ -122,6 +122,7 @@ mod app {
             cx.shared.usb_device.lock(|d| {
                 cx.local.keyboard.send_report(d);
             });
+            Systick::delay(1.millis()).await;
         }
     }
 
