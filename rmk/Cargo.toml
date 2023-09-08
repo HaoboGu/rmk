@@ -21,3 +21,4 @@ rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 usb-device = "0.2.9"
 usbd-hid = "0.6.1"
+once_cell = {version = "*", default-features = false, features = ["critical-section"]}

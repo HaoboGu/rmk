@@ -13,6 +13,7 @@ use rtic::app;
 #[app(device = stm32h7xx_hal::pac, peripherals = true)]
 mod app {
     use log::info;
+    use rmk::config::KEYBOARD_CONFIG;
     use rmk::keyboard::Keyboard;
     use rmk::rtt_logger;
     use rmk::usb::create_usb_device_and_hid_class;
@@ -93,9 +94,7 @@ mod app {
                 UsbBus::new(usb, unsafe { &mut EP_MEMORY })
         )
         .unwrap();
-        let (hid, usb_dev) = create_usb_device_and_hid_class(
-            usb_bus, 0x16c0, 0x27dd, "haobogu", "fancer", "00000001",
-        );
+        let (hid, usb_dev) = create_usb_device_and_hid_class(usb_bus, &KEYBOARD_CONFIG);
 
         // Led config
         let mut led = gpioe.pe3.into_push_pull_output();
@@ -127,7 +126,6 @@ mod app {
             cx.local.keyboard.keyboard_task().await.unwrap();
             cx.shared.usb.lock(|(hid, _usb_device)| {
                 cx.local.keyboard.send_report(hid);
-
             })
         }
     }
