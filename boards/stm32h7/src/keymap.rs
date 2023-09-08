@@ -5,7 +5,7 @@ const NUM_LAYER: usize = 2;
 
 pub static KEYMAP: [[[Action; COL]; ROW]; NUM_LAYER] = [
     layer!([
-        [k!(Kp9), k!(Kp8), k!(Kp7)],
+        [k!(A), k!(B), k!(C)],
         [k!(Kp4), k!(LShift), k!(Kp6)],
         [k!(Kp1), k!(Kp2), k!(Kp3)],
         [mo!(1), a!(No), k!(Kp0)]

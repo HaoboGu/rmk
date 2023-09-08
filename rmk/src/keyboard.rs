@@ -6,7 +6,7 @@ use usbd_hid::hid_class::HIDClass;
 
 use crate::{
     action::Action,
-    keycode::{BaseKeyCode, KeyCode},
+    keycode::KeyCode,
     layout::KeyMap,
     matrix::Matrix,
 };
@@ -113,9 +113,8 @@ impl<
     }
 
     fn process_key(&mut self, key: KeyCode, pressed: bool) {
-        let k = key.to_base_keycode();
-        if k.is_modifier() {
-            let mut modifier_bit = k.as_modifier_bit();
+        if key.is_modifier() {
+            let mut modifier_bit = key.as_modifier_bit();
             if pressed {
                 self.report[0] |= modifier_bit;
             } else {
@@ -123,13 +122,13 @@ impl<
                 modifier_bit = !modifier_bit;
                 self.report[0] &= modifier_bit;
             }
-        } else if k != BaseKeyCode::No {
+        } else if key.is_basic() {
             for i in 2..8 {
                 // 6KRO implementation
                 if pressed && self.report[i] == 0 {
-                    self.report[i] = k as u8;
+                    self.report[i] = key as u8;
                     break;
-                } else if !pressed && self.report[i] == k as u8 {
+                } else if !pressed && self.report[i] == key as u8 {
                     self.report[i] = 0;
                     break;
                 }
