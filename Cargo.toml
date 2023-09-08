@@ -3,9 +3,21 @@ resolver = "2"
 members = ["rmk", "boards/*"]
 default-members = ["boards/stm32h7", "rmk"]
 
+# Profile dev: optimize for fast compiling with debug info
 [profile.dev]
-opt-level = 2
 debug = true
+opt-level = 2
+overflow-checks = true
+lto = false
 
 [profile.release]
-opt-level = 3
+codegen-units = 1 # For better optimizations
+debug = true # no overhead for bare-metal
+# opt-level = "z" # For small binary
+opt-level = 3 # For speed
+overflow-checks = false
+lto = "fat"
+
+# [profile.release.package."*"]
+# codegen-units = 1 # better optimizations
+# opt-level = "z"
