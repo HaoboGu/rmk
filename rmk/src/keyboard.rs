@@ -69,8 +69,8 @@ impl<
         }
     }
 
-    /// Main keyboard task, it scans matrix, process active keys
-    /// If there is any change of keys, set self.changed=true
+    /// Main keyboard task, it scans matrix, processes active keys
+    /// If there is any change of key states, set self.changed=true
     pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
         self.matrix.scan().await?;
         let changed_matrix = self.matrix.debouncer.key_state;
