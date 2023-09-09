@@ -30,7 +30,7 @@ impl DebounceState {
     }
 }
 
-/// Default per-key debouncer. The debouncing algorithm is same as QMK's [default debouncer](https://github.com/qmk/qmk_firmware/blob/b2ded61796aee1f705a222e229c5b55416d93dd0/quantum/debounce/sym_defer_g.c#L33C16-L33C16)
+/// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/main/app/drivers/kscan/debounce.c)
 pub struct Debouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_tick: u32,
     pub key_state: [[DebounceState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
