@@ -1,5 +1,9 @@
 use crate::{
-    action::Action, keycode::KeyCode, layout::KeyMap, matrix::Matrix, usb::KeyboardUsbDevice,
+    action::{Action, Modifier},
+    keycode::KeyCode,
+    layout::KeyMap,
+    matrix::Matrix,
+    usb::KeyboardUsbDevice,
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -72,7 +76,10 @@ impl<
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
     pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
+        // Matrix scan
         self.matrix.scan().await?;
+
+        // Check matrix states, process key if there is a key state change
         let changed_matrix = self.matrix.debouncer.key_state;
         for (col_idx, col) in changed_matrix.iter().enumerate() {
             for (row_idx, state) in col.iter().enumerate() {
@@ -86,6 +93,7 @@ impl<
         Ok(())
     }
 
+    // Process key changes at (row, col)
     fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
         let action = self.keymap.get_action(row, col);
         match action {
@@ -112,6 +120,7 @@ impl<
         }
     }
 
+    // Process a single key press.
     fn process_key(&mut self, key: KeyCode, pressed: bool) {
         if key.is_modifier() {
             let mut modifier_bit = key.as_modifier_bit();
@@ -134,5 +143,27 @@ impl<
                 }
             }
         }
+    }
+
+    fn process_key_modifier(&mut self, key: KeyCode, modifier: Modifier, pressed: bool) {
+        let mut modifier_bit = modifier.to_keycode().as_modifier_bit();
+        // For KeyWithModifier, accept basic keycode only?
+        if key.is_basic() {
+            // Find avaial keycode position
+            for bit in &mut self.report.keycodes {
+                if pressed && (*bit == 0) {
+                    *bit = key as u8;
+                    self.report.modifier |= modifier_bit;
+                    break;
+                } else if !pressed && (*bit == (key as u8)) {
+                    *bit = 0;
+                    // Release modifier
+                    modifier_bit = !modifier_bit;
+                    self.report.modifier &= modifier_bit;
+                    break;
+                }
+            }
+        }
+        // TODO: KeyWithModifier is a tap event, wait some time, then send release.
     }
 }

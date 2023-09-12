@@ -122,6 +122,7 @@ mod app {
             cx.shared.usb_device.lock(|d| {
                 cx.local.keyboard.send_report(d);
             });
+            // Scanning frequency: 1KHZ
             Systick::delay(1.millis()).await;
         }
     }

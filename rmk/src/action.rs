@@ -27,6 +27,21 @@ pub enum Modifier {
     RGui,
 }
 
+impl Modifier {
+    pub fn to_keycode(self) -> KeyCode {
+        match self {
+            Modifier::LCtrl => KeyCode::LCtrl,
+            Modifier::LShift => KeyCode::LShift,
+            Modifier::LAlt => KeyCode::LAlt,
+            Modifier::LGui => KeyCode::LGui,
+            Modifier::RCtrl => KeyCode::RCtrl,
+            Modifier::RShift => KeyCode::RShift,
+            Modifier::RAlt => KeyCode::RAlt,
+            Modifier::RGui => KeyCode::RGui,
+        }
+    }
+}
+
 /// Action represents all actions that can be executed by keyboard.
 /// Actions are stored in keymaps, some actions have different funtionalities which is triggered by different ways.
 /// In QMK, action is defined by a uint16_t, with a lot of bitwise operation.
@@ -58,7 +73,7 @@ pub enum Action {
     LayerToggle(u8),
     /// OneShot key for layer.
     OneShotLayer(u8),
-    /// Activate the layer with a modifier. 
+    /// Activate the layer with a modifier.
     LayerMods(u8, Modifier),
     /// Hold this key to activate the layer temporarily, tap to send a keycode.
     LayerOrTapKey(u8, KeyCode),
@@ -76,5 +91,4 @@ pub enum Action {
     SwapHands(KeyCode),
 }
 
-pub trait HoldOrTap {
-}
+pub trait HoldOrTap {}
