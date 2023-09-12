@@ -28,7 +28,7 @@ pub enum Modifier {
 }
 
 impl Modifier {
-    pub fn to_keycode(self) -> KeyCode {
+    pub fn as_keycode(self) -> KeyCode {
         match self {
             Modifier::LCtrl => KeyCode::LCtrl,
             Modifier::LShift => KeyCode::LShift,

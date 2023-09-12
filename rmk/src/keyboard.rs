@@ -7,7 +7,7 @@ use crate::{
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
-use log::info;
+use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::KeyboardReport;
 
@@ -84,7 +84,7 @@ impl<
         for (col_idx, col) in changed_matrix.iter().enumerate() {
             for (row_idx, state) in col.iter().enumerate() {
                 if state.changed {
-                    self.process_action(row_idx, col_idx, state.pressed);
+                    self.process_action(row_idx, col_idx, state.pressed).await;
                     self.changed = true
                 }
             }
@@ -94,15 +94,18 @@ impl<
     }
 
     // Process key changes at (row, col)
-    fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
+    async fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
         let action = self.keymap.get_action(row, col);
         match action {
             Action::No | Action::Transparent => (),
             Action::Key(k) => {
                 self.process_key(k, pressed);
             }
-            Action::KeyWithModifier(_, _) => info!("not implemented"),
-            Action::Modifier(_) => todo!(),
+            Action::KeyWithModifier(k, modifier) => {
+                self.process_key_modifier(k, modifier, pressed).await
+            }
+
+            Action::Modifier(modifier) => self.process_modifier_tap(modifier, pressed).await,
             Action::OneShotModifier(_) => todo!(),
             Action::ModifiertOrTapToggle(_) => todo!(),
             Action::ModifierOrTapKey(_, _) => todo!(),
@@ -123,47 +126,76 @@ impl<
     // Process a single key press.
     fn process_key(&mut self, key: KeyCode, pressed: bool) {
         if key.is_modifier() {
-            let mut modifier_bit = key.as_modifier_bit();
+            let modifier_bit = key.as_modifier_bit();
             if pressed {
-                self.report.modifier |= modifier_bit;
+                self.register_modifier(modifier_bit);
             } else {
-                // Release modifier
-                modifier_bit = !modifier_bit;
-                self.report.modifier &= modifier_bit;
+                self.unregister_modifier(modifier_bit);
             }
         } else if key.is_basic() {
             // 6KRO implementation
-            for bit in &mut self.report.keycodes {
-                if pressed && (*bit == 0) {
-                    *bit = key as u8;
-                    break;
-                } else if !pressed && (*bit == (key as u8)) {
-                    *bit = 0;
-                    break;
-                }
+            if pressed {
+                self.register_keycode(key);
+            } else {
+                self.unregister_keycode(key);
             }
         }
     }
 
-    fn process_key_modifier(&mut self, key: KeyCode, modifier: Modifier, pressed: bool) {
-        let mut modifier_bit = modifier.to_keycode().as_modifier_bit();
+    async fn process_key_modifier(&mut self, key: KeyCode, modifier: Modifier, pressed: bool) {
+        // KeyWithModifier is a tap event, only pressed change is considered
         // For KeyWithModifier, accept basic keycode only?
-        if key.is_basic() {
+        if pressed && key.is_basic() {
             // Find avaial keycode position
-            for bit in &mut self.report.keycodes {
-                if pressed && (*bit == 0) {
-                    *bit = key as u8;
-                    self.report.modifier |= modifier_bit;
-                    break;
-                } else if !pressed && (*bit == (key as u8)) {
-                    *bit = 0;
-                    // Release modifier
-                    modifier_bit = !modifier_bit;
-                    self.report.modifier &= modifier_bit;
-                    break;
-                }
+            self.register_keycode(key);
+            self.register_modifier(modifier.as_keycode().as_modifier_bit());
+
+            // TODO: trigger send
+            // Wait 10ms, then send release
+            Systick::delay(10.millis()).await;
+
+            // Send release event then
+            self.unregister_keycode(key);
+            self.unregister_modifier(modifier.as_keycode().as_modifier_bit());
+        }
+    }
+
+    async fn process_modifier_tap(&mut self, modifier: Modifier, pressed: bool) {
+        // Modifer tap event, consider pressed change only
+        if pressed {
+            self.register_modifier(modifier.as_keycode().as_modifier_bit());
+
+            // TODO: trigger send
+            // Wait 10ms, then send release
+            Systick::delay(10.millis()).await;
+
+            self.unregister_modifier(modifier.as_keycode().as_modifier_bit());
+        }
+    }
+
+    fn register_keycode(&mut self, key: KeyCode) {
+        for bit in &mut self.report.keycodes {
+            if *bit == 0 {
+                *bit = key as u8;
+                break;
             }
         }
-        // TODO: KeyWithModifier is a tap event, wait some time, then send release.
+    }
+
+    fn unregister_keycode(&mut self, key: KeyCode) {
+        for bit in &mut self.report.keycodes {
+            if *bit == (key as u8) {
+                *bit = 0;
+                break;
+            }
+        }
+    }
+
+    fn register_modifier(&mut self, modifier_bit: u8) {
+        self.report.modifier |= modifier_bit;
+    }
+
+    fn unregister_modifier(&mut self, modifier_bit: u8) {
+        self.report.modifier &= !modifier_bit;
     }
 }
