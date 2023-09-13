@@ -1,0 +1,37 @@
+cargo-features = ["per-package-target"]
+
+[package]
+name = "rmk-rp2040"
+version = "0.0.1"
+description = ""
+edition = "2021"
+license = "Apache-2.0"
+forced-target = "thumbv6m-none-eabi"
+
+[dependencies]
+rmk = { version = "0.0.1", path = "../../rmk" }
+
+# Use pico as the BSP crate
+rp-pico = "0.8"
+rp2040-hal = { version="0.9", features=["rt", "critical-section-impl"] }
+rp2040-boot2 = "0.3"
+
+fugit = "0.3.7"
+# defmt = "0.3"
+# defmt-rtt = "0.4"
+panic-probe = { version = "0.3"}
+
+# Workspace dependencies
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.3"
+log = "0.4.19"
+rtic = { version = "2.0.0", features = ["thumbv6-backend"] }
+rtic-monotonics = { version = "1.0.0", features = ["rp2040"] }
+usb-device = "0.2.9"
+usbd-hid = "0.6.1"
+
+[features]
+# avoid having to use --allow-multiple-definition linker flag
+# on macOS with Apple Silicon at least
+default = ["rp-pico/disable-intrinsics"]
