@@ -4,7 +4,7 @@
 // Make rust analyzer happy with num-enum crate
 #![allow(non_snake_case, non_upper_case_globals)]
 
-use action::Action;
+use action::KeyAction;
 use config::KeyboardConfig;
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -17,7 +17,7 @@ pub mod config;
 pub mod debounce;
 pub mod keyboard;
 pub mod keycode;
-pub mod layout;
+pub mod keymap;
 pub mod layout_macro;
 pub mod matrix;
 pub mod usb;
@@ -38,7 +38,7 @@ pub fn initialize_keyboard_and_usb_device<
     config: &KeyboardConfig<'a>,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    keymap: [[[Action; COL]; ROW]; NUM_LAYER],
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
 ) -> (
     Keyboard<In, Out, ROW, COL, NUM_LAYER>,
     KeyboardUsbDevice<'a, B>,

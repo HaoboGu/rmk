@@ -1,9 +1,10 @@
-use rmk::{a, action::Action, k, keycode::KeyCode, layer, mo};
+use rmk::action::KeyAction;
+use rmk::{a, k, layer, mo};
 const COL: usize = 3;
 const ROW: usize = 4;
 const NUM_LAYER: usize = 2;
 
-pub static KEYMAP: [[[Action; COL]; ROW]; NUM_LAYER] = [
+pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
     layer!([
         [k!(A), k!(B), k!(C)],
         [k!(Kp4), k!(LShift), k!(Kp6)],

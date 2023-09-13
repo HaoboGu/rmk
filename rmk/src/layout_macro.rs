@@ -9,14 +9,14 @@ macro_rules! layer {
 #[macro_export]
 macro_rules! k {
     ($k: ident) => {
-        Action::Key(KeyCode::$k)
+        $crate::action::KeyAction::Single($crate::action::Action::Key($crate::keycode::KeyCode::$k))
     };
 }
 
 #[macro_export]
 macro_rules! a {
     ($a: ident) => {
-        Action::$a
+        $crate::action::KeyAction::$a
     };
 }
 
@@ -24,7 +24,9 @@ macro_rules! a {
 #[macro_export]
 macro_rules! mk {
     ($k: ident) => {
-        Action::MouseKey(KeyCode::$k)
+        $crate::action::KeyAction::Single($crate::action::Action::MouseKey(
+            $crate::keycode::KeyCode::$k,
+        ))
     };
 }
 
@@ -32,7 +34,9 @@ macro_rules! mk {
 #[macro_export]
 macro_rules! sc {
     ($k: ident) => {
-        Action::SystemControl(KeyCode::$k)
+        $crate::action::KeyAction::Single($crate::action::Action::SystemControl(
+            $crate::keycode::KeyCode::$k,
+        ))
     };
 }
 
@@ -40,7 +44,9 @@ macro_rules! sc {
 #[macro_export]
 macro_rules! cc {
     ($k: ident) => {
-        Action::ConsumerControl(KeyCode::$k)
+        $crate::action::KeyAction::Single($crate::action::Action::ConsumerControl(
+            $crate::keycode::KeyCode::$k,
+        ))
     };
 }
 
@@ -48,7 +54,7 @@ macro_rules! cc {
 #[macro_export]
 macro_rules! mo {
     ($x: literal) => {
-        Action::LayerActivate($x)
+        $crate::action::KeyAction::Single($crate::action::Action::LayerActivate($x))
     };
 }
 
@@ -56,7 +62,7 @@ macro_rules! mo {
 #[macro_export]
 macro_rules! lm {
     ($x: literal, $m: expr) => {
-        Action::LayerMods($x, $m)
+        $crate::action::KeyAction::WithModifier($crate::action::Action::LayerActivate($x), $m)
     };
 }
 
@@ -64,7 +70,10 @@ macro_rules! lm {
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
-        Action::LayerOrTapKey($x, KeyCode::$k)
+        $crate::action::KeyAction::TapHold(
+            $crate::keycode::KeyCode::$k,
+            $crate::action::Action::LayerActivate($x),
+        )
     };
 }
 
@@ -72,7 +81,7 @@ macro_rules! lt {
 #[macro_export]
 macro_rules! osl {
     ($x: literal) => {
-        Action::OneShotLayer($x)
+        $crate::action::KeyAction::OneShot($crate::action::Action::LayerActivate($x))
     };
 }
 
@@ -80,7 +89,7 @@ macro_rules! osl {
 #[macro_export]
 macro_rules! tg {
     ($x: literal) => {
-        Action::LayerToggle($x)
+        $crate::action::KeyAction::Single($crate::action::Action::LayerToggle($x))
     };
 }
 
@@ -88,6 +97,9 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        Action::LayerOrTapToggle($x)
+        $crate::action::TapHold(
+            $crate::action::Action::LayerToggle($x),
+            $crate::action::Action::LayerActivate($x),
+        )
     };
 }

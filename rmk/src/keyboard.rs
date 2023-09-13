@@ -1,7 +1,7 @@
 use crate::{
-    action::{Action, Modifier},
-    keycode::KeyCode,
-    layout::KeyMap,
+    action::{Action, KeyAction},
+    keycode::{KeyCode, Modifier},
+    keymap::KeyMap,
     matrix::Matrix,
     usb::KeyboardUsbDevice,
 };
@@ -45,7 +45,7 @@ impl<
     pub fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
-        keymap: [[[Action; COL]; ROW]; NUM_LAYER],
+        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
@@ -97,34 +97,53 @@ impl<
     async fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
         let action = self.keymap.get_action(row, col);
         match action {
-            Action::No | Action::Transparent => (),
-            Action::Key(k) => {
-                self.process_key(k, pressed);
+            KeyAction::No | KeyAction::Transparent => (),
+            KeyAction::Single(a) => self.process_normal_action(a, pressed),
+            KeyAction::WithModifier(a, m) => self.process_action_with_modifier(a, m, pressed),
+            KeyAction::Tap(a) => self.process_tap(a).await,
+            KeyAction::TapHold(tap_action, hold_action) => {
+                self.process_tap_or_hold(tap_action, hold_action).await
             }
-            Action::KeyWithModifier(k, modifier) => {
-                self.process_key_modifier(k, modifier, pressed).await
-            }
+            KeyAction::OneShot(_) => todo!(),
+        }
+    }
 
-            Action::Modifier(modifier) => self.process_modifier_tap(modifier, pressed).await,
-            Action::OneShotModifier(_) => todo!(),
-            Action::ModifiertOrTapToggle(_) => todo!(),
-            Action::ModifierOrTapKey(_, _) => todo!(),
-            Action::LayerActivate(_) => todo!(),
-            Action::LayerDeactivate(_) => todo!(),
-            Action::LayerToggle(_) => todo!(),
-            Action::OneShotLayer(_) => todo!(),
-            Action::LayerMods(_, _) => todo!(),
-            Action::LayerOrTapKey(_, _) => todo!(),
-            Action::LayerOrTapToggle(_) => todo!(),
+    fn process_normal_action(&mut self, action: Action, pressed: bool) {
+        match action {
+            Action::Key(key) => self.process_keycode(key, pressed),
             Action::MouseKey(_) => todo!(),
             Action::SystemControl(_) => todo!(),
             Action::ConsumerControl(_) => todo!(),
             Action::SwapHands(_) => todo!(),
+            Action::LayerActivate(_) => todo!(),
+            Action::LayerDeactivate(_) => todo!(),
+            Action::LayerToggle(_) => todo!(),
         }
     }
 
-    // Process a single key press.
-    fn process_key(&mut self, key: KeyCode, pressed: bool) {
+    fn process_action_with_modifier(&mut self, action: Action, modifier: Modifier, pressed: bool) {
+        self.process_keycode(modifier.as_keycode(), pressed);
+        if pressed {
+            self.process_normal_action(action, pressed);
+        }
+    }
+
+    async fn process_tap(&mut self, action: Action) {
+        self.process_normal_action(action, true);
+
+        // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
+        // Wait 10ms, then send release
+        Systick::delay(10.millis()).await;
+
+        self.process_normal_action(action, false);
+    }
+
+    async fn process_tap_or_hold(&mut self, _tap_action: Action, _hold_action: Action) {
+        todo!("tap or hold not implemented");
+    }
+
+    // Process a single normal key press.
+    fn process_keycode(&mut self, key: KeyCode, pressed: bool) {
         if key.is_modifier() {
             let modifier_bit = key.as_modifier_bit();
             if pressed {
@@ -139,37 +158,6 @@ impl<
             } else {
                 self.unregister_keycode(key);
             }
-        }
-    }
-
-    async fn process_key_modifier(&mut self, key: KeyCode, modifier: Modifier, pressed: bool) {
-        // KeyWithModifier is a tap event, only pressed change is considered
-        // For KeyWithModifier, accept basic keycode only?
-        if pressed && key.is_basic() {
-            // Find avaial keycode position
-            self.register_keycode(key);
-            self.register_modifier(modifier.as_keycode().as_modifier_bit());
-
-            // TODO: trigger send
-            // Wait 10ms, then send release
-            Systick::delay(10.millis()).await;
-
-            // Send release event then
-            self.unregister_keycode(key);
-            self.unregister_modifier(modifier.as_keycode().as_modifier_bit());
-        }
-    }
-
-    async fn process_modifier_tap(&mut self, modifier: Modifier, pressed: bool) {
-        // Modifer tap event, consider pressed change only
-        if pressed {
-            self.register_modifier(modifier.as_keycode().as_modifier_bit());
-
-            // TODO: trigger send
-            // Wait 10ms, then send release
-            Systick::delay(10.millis()).await;
-
-            self.unregister_modifier(modifier.as_keycode().as_modifier_bit());
         }
     }
 

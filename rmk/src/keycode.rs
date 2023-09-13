@@ -1,5 +1,41 @@
 use num_enum::FromPrimitive;
 
+/// Modifiers defined in hid spec.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Modifier {
+    /// Left control.
+    LCtrl,
+    /// Left shift.
+    LShift,
+    /// Left alt(option).
+    LAlt,
+    /// Left gui(widnows/command/meta key).
+    LGui,
+    /// Right control.
+    RCtrl,
+    /// Right shift.
+    RShift,
+    /// Right alt(option/AltGr).
+    RAlt,
+    /// Right gui(windows/command/meta key).
+    RGui,
+}
+
+impl Modifier {
+    pub fn as_keycode(self) -> KeyCode {
+        match self {
+            Modifier::LCtrl => KeyCode::LCtrl,
+            Modifier::LShift => KeyCode::LShift,
+            Modifier::LAlt => KeyCode::LAlt,
+            Modifier::LGui => KeyCode::LGui,
+            Modifier::RCtrl => KeyCode::RCtrl,
+            Modifier::RShift => KeyCode::RShift,
+            Modifier::RAlt => KeyCode::RAlt,
+            Modifier::RGui => KeyCode::RGui,
+        }
+    }
+}
+
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// To be compatible with Via/Vial, most of them are same with [QMK](https://github.com/qmk/qmk_firmware/blob/master/quantum/keycodes.h)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
