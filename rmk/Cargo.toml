@@ -10,7 +10,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
-embedded-hal = "0.2.7"
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
