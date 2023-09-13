@@ -21,8 +21,6 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod matrix;
 pub mod usb;
-#[macro_use]
-pub mod rtt_logger;
 
 /// Initialize keyboard core and keyboard usb device
 pub fn initialize_keyboard_and_usb_device<

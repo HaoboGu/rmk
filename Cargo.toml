@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["rmk", "boards/*"]
-default-members = ["boards/stm32h7", "rmk"]
+default-members = ["rmk"]
 
 # Profile dev: optimize for fast compiling with debug info
 [profile.dev]

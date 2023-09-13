@@ -13,11 +13,8 @@ license = "MIT OR Apache-2.0"
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
-panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
 num_enum = { version = "0.7.0", default-features = false }
-rtt-target = "0.4.0"
 log = "0.4.19"
-rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 usb-device = "0.2.9"
 usbd-hid = "0.6.1"

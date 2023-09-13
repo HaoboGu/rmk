@@ -2,20 +2,21 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 #![allow(dead_code)]
-#![feature(async_closure)]
 
 #[macro_use]
 mod macros;
 mod keymap;
+#[macro_use]
+pub mod rtt_logger;
 
 use panic_rtt_target as _;
 use rtic::app;
 
 #[app(device = stm32h7xx_hal::pac, peripherals = true)]
 mod app {
+    use crate::rtt_logger;
     use log::info;
     use rmk::keyboard::Keyboard;
-    use rmk::rtt_logger;
     use rmk::usb::KeyboardUsbDevice;
     use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
     use rtic_monotonics::systick::*;
