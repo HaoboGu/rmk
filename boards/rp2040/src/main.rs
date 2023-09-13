@@ -4,22 +4,27 @@
 
 mod keymap;
 
+use defmt_rtt as _;
 use panic_probe as _;
 
 #[rtic::app(
-    device = rp2040_hal::pac,
+    device = rp_pico::hal::pac,
     dispatchers = [TIMER_IRQ_1]
 )]
 mod app {
+    use defmt::*;
     use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};
     use rmk::{
         config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device, keyboard::Keyboard,
         usb::KeyboardUsbDevice,
     };
-    use rp2040_hal::{
-        clocks::init_clocks_and_plls, gpio::*, sio, usb::UsbBus, watchdog::Watchdog, Sio,
+    use rp_pico::{
+        hal::{
+            clocks::init_clocks_and_plls, gpio::*, sio, sio::Sio, usb::UsbBus, watchdog::Watchdog,
+        },
+        Pins, XOSC_CRYSTAL_FREQ,
     };
-    use rtic_monotonics::rp2040::*;
+    use rtic_monotonics::systick::*;
     use usb_device::class_prelude::UsbBusAllocator;
 
     // Static usb bus instance
@@ -50,17 +55,16 @@ mod app {
             sio::spinlock_reset();
         }
 
-        // Initialize the interrupt for the RP2040 timer and obtain the token
-        // proving that we have.
-        let mut resets = c.device.RESETS;
-        let rp2040_timer_token = rtic_monotonics::create_rp2040_monotonic_token!();
-        // Configure the clocks, watchdog - The default is to generate a 125 MHz system clock
-        Timer::start(c.device.TIMER, &mut resets, rp2040_timer_token); // default rp2040 clock-rate is 125MHz
+        // Initialize the systick interrupt & obtain the token to prove that we did
+        let systick_mono_token = rtic_monotonics::create_systick_token!();
+        // Default rp2040 clock-rate is 125MHz
+        Systick::start(c.core.SYST, 125_000_000, systick_mono_token);
 
+        let mut resets = c.device.RESETS;
         // Initialize clocks
         let mut watchdog = Watchdog::new(c.device.WATCHDOG);
         let clocks = init_clocks_and_plls(
-            12_000_000u32,
+            XOSC_CRYSTAL_FREQ,
             c.device.XOSC,
             c.device.CLOCKS,
             c.device.PLL_SYS,
@@ -79,7 +83,7 @@ mod app {
             sio.gpio_bank0,
             &mut resets,
         );
-        let mut led = pins.gpio25.into_push_pull_output();
+        let mut led = pins.led.into_push_pull_output();
         led.set_low().unwrap();
 
         // Usb config
@@ -132,7 +136,7 @@ mod app {
     #[task(local = [keyboard, led], priority = 1, shared = [usb_device])]
     async fn scan(mut cx: scan::Context) {
         // Keyboard scan task
-        // info!("Start matrix scanning");
+        info!("Start matrix scanning");
         loop {
             cx.local.keyboard.keyboard_task().await.unwrap();
             cx.shared.usb_device.lock(|d| {
@@ -143,7 +147,7 @@ mod app {
             let _ = cx.local.led.toggle();
 
             // Scanning frequency: 1KHZ
-            Timer::delay(1.millis()).await;
+            Systick::delay(1.millis()).await;
         }
     }
 
