@@ -5,7 +5,7 @@ authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://www.github.com/haobogu/rmk"
 repository = "https://www.github.com/haobogu/rmk"
-readme = "README.md"
+readme = "../README.md"
 edition = "2021"
 license = "Apache-2.0"
 
