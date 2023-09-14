@@ -3,6 +3,28 @@ use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use rtic_monotonics::systick::*;
 
+/// KeyState represents the state of a key.
+#[derive(Copy, Clone, Debug)]
+pub struct KeyState {
+    pub pressed: bool,
+    pub changed: bool,
+}
+
+impl KeyState {
+    pub fn new() -> Self {
+        KeyState {
+            pressed: false,
+            changed: false,
+        }
+    }
+}
+
+/// Key's position in the matrix 
+pub struct KeyPos {
+    row: u8,
+    col: u8,
+}
+
 /// Matrix is the physical pcb layout of the keyboard matrix.
 ///
 pub struct Matrix<

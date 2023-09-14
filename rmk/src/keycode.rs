@@ -38,6 +38,7 @@ impl Modifier {
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// To be compatible with Via/Vial, most of them are same with [QMK](https://github.com/qmk/qmk_firmware/blob/master/quantum/keycodes.h)
+/// Use flat representation of keycodes. TODO: investigate how to dispatch enum of enums nicely
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
 pub enum KeyCode {

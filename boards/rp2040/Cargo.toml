@@ -9,14 +9,14 @@ license = "Apache-2.0"
 forced-target = "thumbv6m-none-eabi"
 
 [dependencies]
-rmk = { version = "0.0.1", path = "../../rmk" }
+rmk = { version = "0.0.2", path = "../../rmk" }
 
 # Use pico as the BSP crate
 rp-pico = "0.8"
 
 defmt = "0.3"
 defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-rtt"] }
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 # Workspace dependencies
 embedded-hal = { version = "0.2.7", features = ["unproven"] }

@@ -1,3 +1,4 @@
+use crate::matrix::KeyState;
 use rtic_monotonics::{systick::Systick, Monotonic};
 
 /// Default DEBOUNCE_THRESHOLD.
@@ -6,8 +7,7 @@ static DEBOUNCE_THRESHOLD: u16 = 5;
 /// Debounce info for each key.
 #[derive(Copy, Clone, Debug)]
 pub struct DebounceState {
-    pub pressed: bool,
-    pub changed: bool,
+    pub key_state: KeyState,
     pub counter: u16,
 }
 
@@ -33,7 +33,7 @@ impl DebounceState {
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/main/app/drivers/kscan/debounce.c)
 pub struct Debouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_tick: u32,
-    pub key_state: [[DebounceState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    pub debounce_state: [[DebounceState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
 impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
@@ -42,9 +42,8 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     /// Create a default debouncer
     pub fn new() -> Self {
         Debouncer {
-            key_state: [[DebounceState {
-                pressed: false,
-                changed: false,
+            debounce_state: [[DebounceState {
+                key_state: KeyState::new(),
                 counter: 0,
             }; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_tick: 0,
@@ -58,10 +57,10 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
 
         if elapsed_ms > 0 {
-            let state: &mut DebounceState = &mut self.key_state[out_idx][in_idx];
+            let state: &mut DebounceState = &mut self.debounce_state[out_idx][in_idx];
 
-            state.changed = false;
-            if state.pressed == pressed {
+            state.key_state.changed = false;
+            if state.key_state.pressed == pressed {
                 state.decrease(elapsed_ms);
                 return;
             }
@@ -71,9 +70,9 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
                 return;
             }
 
-            state.pressed = !state.pressed;
+            state.key_state.pressed = !state.key_state.pressed;
             state.counter = 0;
-            state.changed = true;
+            state.key_state.changed = true;
             self.last_tick = cur_tick;
         }
     }

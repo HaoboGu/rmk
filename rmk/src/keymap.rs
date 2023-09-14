@@ -1,16 +1,5 @@
 use crate::action::KeyAction;
 
-pub struct KeyPos {
-    row: u8,
-    col: u8,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum KeyState {
-    Released,
-    Pressed,
-}
-
 /// KeyMap represents the stack of layers.
 /// The conception of KeyMap in rmk is borrowed from qmk: https://docs.qmk.fm/#/keymap.
 /// Keymap should be bind to the actual pcb matrix definition by KeyPos.

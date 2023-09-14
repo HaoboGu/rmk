@@ -80,11 +80,11 @@ impl<
         self.matrix.scan().await?;
 
         // Check matrix states, process key if there is a key state change
-        let changed_matrix = self.matrix.debouncer.key_state;
+        let changed_matrix = self.matrix.debouncer.debounce_state;
         for (col_idx, col) in changed_matrix.iter().enumerate() {
             for (row_idx, state) in col.iter().enumerate() {
-                if state.changed {
-                    self.process_action(row_idx, col_idx, state.pressed).await;
+                if state.key_state.changed {
+                    self.process_action(row_idx, col_idx, state.key_state.pressed).await;
                     self.changed = true
                 }
             }

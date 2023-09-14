@@ -378,7 +378,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa6fa5645ef5a760cd340eaa92af9c1ce131c8c09e7f8926d8a24b59d26652b9"
 dependencies = [
  "cortex-m",
- "rtt-target 0.4.0",
+ "defmt",
 ]
 
 [[package]]
@@ -470,7 +470,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
