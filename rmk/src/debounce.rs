@@ -2,12 +2,11 @@ use crate::matrix::KeyState;
 use rtic_monotonics::{systick::Systick, Monotonic};
 
 /// Default DEBOUNCE_THRESHOLD.
-static DEBOUNCE_THRESHOLD: u16 = 5;
+static DEBOUNCE_THRESHOLD: u16 = 10;
 
 /// Debounce info for each key.
 #[derive(Copy, Clone, Debug)]
 pub struct DebounceState {
-    pub key_state: KeyState,
     pub counter: u16,
 }
 
@@ -42,16 +41,13 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     /// Create a default debouncer
     pub fn new() -> Self {
         Debouncer {
-            debounce_state: [[DebounceState {
-                key_state: KeyState::new(),
-                counter: 0,
-            }; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            debounce_state: [[DebounceState { counter: 0 }; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_tick: 0,
         }
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub fn debounce(&mut self, in_idx: usize, out_idx: usize, pressed: bool) {
+    pub fn debounce(&mut self, in_idx: usize, out_idx: usize, pressed: bool, key_state: &mut KeyState) {
         // Record debounce state per ms
         let cur_tick = Systick::now().ticks();
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
@@ -59,8 +55,8 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
         if elapsed_ms > 0 {
             let state: &mut DebounceState = &mut self.debounce_state[out_idx][in_idx];
 
-            state.key_state.changed = false;
-            if state.key_state.pressed == pressed {
+            key_state.changed = false;
+            if key_state.pressed == pressed {
                 state.decrease(elapsed_ms);
                 return;
             }
@@ -70,9 +66,9 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
                 return;
             }
 
-            state.key_state.pressed = !state.key_state.pressed;
+            key_state.pressed = !key_state.pressed;
             state.counter = 0;
-            state.key_state.changed = true;
+            key_state.changed = true;
             self.last_tick = cur_tick;
         }
     }

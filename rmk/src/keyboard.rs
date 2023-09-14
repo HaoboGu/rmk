@@ -7,6 +7,7 @@ use crate::{
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use log::info;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::KeyboardReport;
@@ -80,11 +81,15 @@ impl<
         self.matrix.scan().await?;
 
         // Check matrix states, process key if there is a key state change
-        let changed_matrix = self.matrix.debouncer.debounce_state;
-        for (col_idx, col) in changed_matrix.iter().enumerate() {
-            for (row_idx, state) in col.iter().enumerate() {
-                if state.key_state.changed {
-                    self.process_action(row_idx, col_idx, state.key_state.pressed).await;
+        for row_idx in 0..ROW {
+            for col_idx in 0..COL {
+                if self.matrix.key_states[col_idx][row_idx].changed {
+                    self.process_action(
+                        row_idx,
+                        col_idx,
+                        self.matrix.key_states[col_idx][row_idx].pressed,
+                    )
+                    .await;
                     self.changed = true
                 }
             }
@@ -95,6 +100,11 @@ impl<
 
     // Process key changes at (row, col)
     async fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
+        if pressed {
+            self.matrix.key_states[col][row].start_timer();
+        } else {
+            info!("{:?}", self.matrix.key_states[col][row].elapsed());
+        }
         let action = self.keymap.get_action(row, col);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
@@ -111,13 +121,7 @@ impl<
     fn process_normal_action(&mut self, action: Action, pressed: bool) {
         match action {
             Action::Key(key) => self.process_keycode(key, pressed),
-            Action::MouseKey(_) => todo!(),
-            Action::SystemControl(_) => todo!(),
-            Action::ConsumerControl(_) => todo!(),
-            Action::SwapHands(_) => todo!(),
-            Action::LayerActivate(_) => todo!(),
-            Action::LayerDeactivate(_) => todo!(),
-            Action::LayerToggle(_) => todo!(),
+            _ => (),
         }
     }
 

@@ -1,13 +1,17 @@
 use crate::debounce::Debouncer;
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
-use rtic_monotonics::systick::*;
+use rtic_monotonics::{
+    systick::{fugit::{Instant, Duration}, *},
+    Monotonic,
+};
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug)]
 pub struct KeyState {
     pub pressed: bool,
     pub changed: bool,
+    pub hold_start: Option<Instant<u32, 1, 1000>>,
 }
 
 impl KeyState {
@@ -15,11 +19,27 @@ impl KeyState {
         KeyState {
             pressed: false,
             changed: false,
+            hold_start: None,
         }
+    }
+
+    pub fn start_timer(&mut self) {
+        self.hold_start = Some(Systick::now());
+    }
+
+    pub fn elapsed(&self) -> Option<Duration<u32, 1, 1000>> {
+        match self.hold_start {
+            Some(t) => Systick::now().checked_duration_since(t),
+            None => None,
+        }
+    }
+
+    pub fn clear_timer(&mut self) {
+        self.hold_start = None;
     }
 }
 
-/// Key's position in the matrix 
+/// Key's position in the matrix
 pub struct KeyPos {
     row: u8,
     col: u8,
@@ -36,6 +56,8 @@ pub struct Matrix<
     input_pins: [In; INPUT_PIN_NUM],
     output_pins: [Out; OUTPUT_PIN_NUM],
     pub debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
+    /// Key state matrix
+    pub key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
 impl<
@@ -51,6 +73,7 @@ impl<
             input_pins,
             output_pins,
             debouncer: Debouncer::new(),
+            key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
         }
     }
 
@@ -63,7 +86,12 @@ impl<
             // Check input pins
             for (in_idx, in_pin) in self.input_pins.iter().enumerate() {
                 // Debounce, update key state if there's a key changed after debounc
-                self.debouncer.debounce(in_idx, out_idx, in_pin.is_high()?);
+                self.debouncer.debounce(
+                    in_idx,
+                    out_idx,
+                    in_pin.is_high()?,
+                    &mut self.key_states[out_idx][in_idx],
+                );
             }
             out_pin.set_low()?;
         }

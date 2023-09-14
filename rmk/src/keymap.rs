@@ -30,7 +30,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         for (layer_idx, layer) in self.layers.iter().enumerate() {
             if self.layer_state[layer_idx] {
                 // This layer is activated
-                let action = layer[col][row];
+                let action = layer[row][col];
                 if action == KeyAction::Transparent || action == KeyAction::No {
                     continue;
                 }
