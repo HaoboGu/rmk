@@ -4,7 +4,7 @@ Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
 ## Prerequisites
 
-This crate requires nightly Rust. `openocd`(stm32) or `probe-rs`(rp2040) is used for flashing & debugging.
+This crate requires **nightly** Rust. `openocd`(stm32) or `probe-rs`(rp2040) is used for flashing & debugging.
 
 ## Usage
 
@@ -19,6 +19,10 @@ Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boar
 
 Just run
 ```
+# Compile stm32 example
+cd boards/stm32h7
+# Compile rp2040 example
+# cd boards/rp2040
 cargo build
 
 # Check binary size after build
