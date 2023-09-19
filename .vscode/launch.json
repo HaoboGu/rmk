@@ -5,7 +5,8 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cortex Debug",
+            "name": "Cortex-Debug stm32h7",
+            "preLaunchTask": "flash stm32h7",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
@@ -14,11 +15,10 @@
             "showDevDebugOutput": "parsed",
             "runToEntryPoint": "main",
             "device": "stlink",
-            "preLaunchTask": "flash",
             "configFiles": [
                 "openocd.cfg"
             ],
-            "svdFile": "STM32H7B0x.svd",
+            "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
             "rttConfig": {
                 "enabled": true,
                 "address": "auto",
@@ -33,6 +33,45 @@
                     }
                 ]
             },
+        },
+        {
+            "name": "Probe-rs rp2040",
+            "preLaunchTask": "Cargo Build (debug)",
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/boards/rp2040",
+            "chip": "rp2040",
+            // RP2040 doesn't support connectUnderReset
+            "connectUnderReset": false,
+            "speed": 4000,
+            "runtimeExecutable": "probe-rs",
+            "runtimeArgs": [
+                "dap-server"
+            ],
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "resetAfterFlashing": true,
+                "haltAfterReset": true,
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+                    "chip": "RP2040",
+                    "svdFile": "${workspaceFolder}/boards/rp2040/rp2040.svd",
+                    "rttEnabled": true,
+                    "options": {
+                        "env": {
+                            "DEFMT_LOG": "debug"
+                        }
+                    },
+                }
+            ],
+            "consoleLogLevel": "Debug", //Error, Warn, Info, Debug, Trace
+            "wireProtocol": "Swd",
+            "env": {
+                "RUST_LOG": "debug"
+            }
         }
     ]
 }
