@@ -47,7 +47,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub fn debounce(&mut self, in_idx: usize, out_idx: usize, pressed: bool, key_state: &mut KeyState) {
+    pub fn debounce(&mut self, in_idx: usize, out_idx: usize, pin_state: bool, key_state: &mut KeyState) {
         // Record debounce state per ms
         let cur_tick = Systick::now().ticks();
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
@@ -56,7 +56,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
             let state: &mut DebounceState = &mut self.debounce_state[out_idx][in_idx];
 
             key_state.changed = false;
-            if key_state.pressed == pressed {
+            if key_state.pressed == pin_state {
                 state.decrease(elapsed_ms);
                 return;
             }

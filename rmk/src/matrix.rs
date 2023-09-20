@@ -80,12 +80,11 @@ impl<
     /// Do matrix scanning, the result is stored in matrix's key_state field.
     pub async fn scan(&mut self) -> Result<(), Infallible> {
         for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
-            // Pull up output pin
+            // Pull up output pin, wait 1us ensuring the change comes into effect
             out_pin.set_high()?;
             Systick::delay(1.micros()).await;
-            // Check input pins
             for (in_idx, in_pin) in self.input_pins.iter().enumerate() {
-                // Debounce, update key state if there's a key changed after debounc
+                // Check input pins and debounce
                 self.debouncer.debounce(
                     in_idx,
                     out_idx,
