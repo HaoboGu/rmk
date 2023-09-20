@@ -2,7 +2,7 @@ use crate::{
     action::{Action, KeyAction},
     keycode::{KeyCode, Modifier},
     keymap::KeyMap,
-    matrix::Matrix,
+    matrix::{KeyState, Matrix},
     usb::KeyboardUsbDevice,
 };
 use core::convert::Infallible;
@@ -81,15 +81,12 @@ impl<
         self.matrix.scan().await?;
 
         // Check matrix states, process key if there is a key state change
+        // Keys are processed in the following order:
+        // process_key_change -> process_key_action_* -> process_action_*
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
                 if self.matrix.key_states[col_idx][row_idx].changed {
-                    self.process_action(
-                        row_idx,
-                        col_idx,
-                        self.matrix.key_states[col_idx][row_idx].pressed,
-                    )
-                    .await;
+                    self.process_key_change(row_idx, col_idx).await;
                     self.changed = true
                 }
             }
@@ -98,70 +95,103 @@ impl<
         Ok(())
     }
 
-    // Process key changes at (row, col)
-    async fn process_action(&mut self, row: usize, col: usize, pressed: bool) {
-        if pressed {
-            self.matrix.key_states[col][row].start_timer();
+    /// Process key changes at (row, col)
+    async fn process_key_change(&mut self, row: usize, col: usize) {
+        let mut key_state = self.matrix.key_states[col][row];
+        if key_state.pressed {
+            key_state.start_timer();
         } else {
-            info!("{:?}", self.matrix.key_states[col][row].elapsed());
+            info!("{:?}", key_state.elapsed());
         }
         let action = self.keymap.get_action(row, col);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
-            KeyAction::Single(a) => self.process_normal_action(a, pressed),
-            KeyAction::WithModifier(a, m) => self.process_action_with_modifier(a, m, pressed),
-            KeyAction::Tap(a) => self.process_tap(a).await,
+            KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
+            KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_state),
+            KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
             KeyAction::TapHold(tap_action, hold_action) => {
-                self.process_tap_or_hold(tap_action, hold_action).await
+                self.process_key_action_tap_hold(tap_action, hold_action)
+                    .await
             }
-            KeyAction::OneShot(_) => todo!(),
+            KeyAction::OneShot(oneshot_action) => {
+                self.process_key_action_oneshot(oneshot_action).await
+            }
         }
     }
 
-    fn process_normal_action(&mut self, action: Action, pressed: bool) {
+    fn process_key_action_normal(&mut self, action: Action, key_state: KeyState) {
         match action {
-            Action::Key(key) => self.process_keycode(key, pressed),
+            Action::Key(key) => self.process_action_keycode(key, key_state),
+            Action::LayerActivate(layer_num) => {
+                self.process_action_layer_activate(layer_num, key_state)
+            }
             _ => (),
         }
     }
 
-    fn process_action_with_modifier(&mut self, action: Action, modifier: Modifier, pressed: bool) {
-        self.process_keycode(modifier.as_keycode(), pressed);
-        if pressed {
-            self.process_normal_action(action, pressed);
+    fn process_key_action_with_modifier(
+        &mut self,
+        action: Action,
+        modifier: Modifier,
+        key_state: KeyState,
+    ) {
+        // Process modifier first
+        // TODO: check the order when release a key
+        self.process_action_keycode(modifier.as_keycode(), key_state);
+        self.process_key_action_normal(action, key_state);
+    }
+
+    async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
+        // TODO: when the tap is triggered, once the key is pressed or when it's released?
+        if key_state.changed && key_state.pressed {
+            key_state.pressed = true;
+            self.process_key_action_normal(action, key_state);
+
+            // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
+            // Wait 10ms, then send release
+            Systick::delay(10.millis()).await;
+    
+            key_state.pressed = false;
+            self.process_key_action_normal(action, key_state);
         }
     }
 
-    async fn process_tap(&mut self, action: Action) {
-        self.process_normal_action(action, true);
-
-        // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
-        // Wait 10ms, then send release
-        Systick::delay(10.millis()).await;
-
-        self.process_normal_action(action, false);
-    }
-
-    async fn process_tap_or_hold(&mut self, _tap_action: Action, _hold_action: Action) {
+    async fn process_key_action_tap_hold(&mut self, _tap_action: Action, _hold_action: Action) {
         todo!("tap or hold not implemented");
     }
 
-    // Process a single normal key press.
-    fn process_keycode(&mut self, key: KeyCode, pressed: bool) {
+    async fn process_key_action_oneshot(&mut self, _oneshot_action: Action) {
+        todo!("oneshot action not implemented");
+    }
+
+    // Process a single keycode.
+    fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
         if key.is_modifier() {
             let modifier_bit = key.as_modifier_bit();
-            if pressed {
+            if key_state.pressed {
                 self.register_modifier(modifier_bit);
             } else {
                 self.unregister_modifier(modifier_bit);
             }
         } else if key.is_basic() {
             // 6KRO implementation
-            if pressed {
+            if key_state.pressed {
                 self.register_keycode(key);
             } else {
                 self.unregister_keycode(key);
             }
+        }
+    }
+
+    fn process_action_layer_activate(&mut self, layer_num: u8, key_state: KeyState) {
+        // Change layer state only when the key's state is changed
+        if !key_state.changed {
+            return;
+        }
+        if key_state.pressed {
+            self.keymap.activate_layer(layer_num);
+        } else {
+            self.keymap.deactivate_layer(layer_num);
         }
     }
 
