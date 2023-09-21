@@ -7,7 +7,6 @@ use crate::{
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
-use log::info;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::KeyboardReport;
@@ -85,7 +84,8 @@ impl<
         // process_key_change -> process_key_action_* -> process_action_*
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
-                if self.matrix.key_states[col_idx][row_idx].changed {
+                let ks = self.matrix.get_key_state(row_idx, col_idx);
+                if ks.changed {
                     self.process_key_change(row_idx, col_idx).await;
                     self.changed = true
                 }
@@ -97,13 +97,12 @@ impl<
 
     /// Process key changes at (row, col)
     async fn process_key_change(&mut self, row: usize, col: usize) {
-        let mut key_state = self.matrix.key_states[col][row];
-        if key_state.pressed {
-            key_state.start_timer();
-        } else {
-            info!("{:?}", key_state.elapsed());
-        }
-        let action = self.keymap.get_action(row, col);
+        // Matrix should process key pressed event first
+        self.matrix.key_pressed(row, col);
+
+        // Process key
+        let key_state = self.matrix.get_key_state(row, col);
+        let action = self.keymap.get_action(row, col, key_state);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
@@ -150,7 +149,7 @@ impl<
             // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
             // Wait 10ms, then send release
             Systick::delay(10.millis()).await;
-    
+
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state);
         }
@@ -189,6 +188,7 @@ impl<
             return;
         }
         if key_state.pressed {
+            // TODO: release all other pressed keys when layer switches?
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);

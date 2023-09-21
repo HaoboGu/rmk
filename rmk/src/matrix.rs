@@ -2,7 +2,10 @@ use crate::debounce::Debouncer;
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use rtic_monotonics::{
-    systick::{fugit::{Instant, Duration}, *},
+    systick::{
+        fugit::{Duration, Instant},
+        *,
+    },
     Monotonic,
 };
 
@@ -95,5 +98,26 @@ impl<
             out_pin.set_low()?;
         }
         Ok(())
+    }
+
+    /// When a key is pressed, some callbacks some be called, such as `start_timer`
+    pub fn key_pressed(&mut self, row: usize, col: usize) {
+        // COL2ROW
+        #[cfg(not(feature = "ROW2COL"))]
+        self.key_states[col][row].start_timer();
+
+        // ROW2COL
+        #[cfg(feature = "ROW2COL")]
+        self.key_states[row][col].start_timer();
+    }
+
+    pub fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+        // COL2ROW
+        #[cfg(not(feature = "ROW2COL"))]
+        return self.key_states[col][row];
+
+        // ROW2COL
+        #[cfg(feature = "ROW2COL")]
+        return self.key_states[row][col];
     }
 }
