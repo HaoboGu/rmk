@@ -1,4 +1,10 @@
 {
     "cortex-debug.variableUseNaturalFormat": true,
     "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "check",
+        "--quiet",
+        "--message-format=json"
+    ],
 }
