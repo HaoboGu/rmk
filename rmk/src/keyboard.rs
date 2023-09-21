@@ -121,8 +121,13 @@ impl<
     fn process_key_action_normal(&mut self, action: Action, key_state: KeyState) {
         match action {
             Action::Key(key) => self.process_action_keycode(key, key_state),
-            Action::LayerActivate(layer_num) => {
-                self.process_action_layer_activate(layer_num, key_state)
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
+            Action::LayerOff(layer_num) => {
+                // We just turn off a layer when the key is pressed
+                // TODO: Do we need this action?
+                if key_state.changed && key_state.pressed {
+                    self.keymap.deactivate_layer(layer_num);
+                }
             }
             _ => (),
         }
@@ -182,13 +187,12 @@ impl<
         }
     }
 
-    fn process_action_layer_activate(&mut self, layer_num: u8, key_state: KeyState) {
+    fn process_action_layer_switch(&mut self, layer_num: u8, key_state: KeyState) {
         // Change layer state only when the key's state is changed
         if !key_state.changed {
             return;
         }
         if key_state.pressed {
-            // TODO: release all other pressed keys when layer switches?
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);

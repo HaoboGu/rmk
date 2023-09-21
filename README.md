@@ -55,10 +55,10 @@ A lot of todos at the list, any contributions are welcomed :)
 
 - [x] test rp2040
 - [x] basic keyboard functions
-- [ ] system/media keys
-- [ ] layer
-- [ ] macro
+- [x] layer
 - [ ] via/vial support
+- [ ] system/media keys
+- [ ] macro
 - [ ] encoder
 - [ ] RGB
 - [ ] cli

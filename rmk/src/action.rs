@@ -1,4 +1,4 @@
-use crate::keycode::{Modifier, KeyCode};
+use crate::keycode::{KeyCode, Modifier};
 
 /// A KeyAction is the action of a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like TapHold
@@ -35,9 +35,9 @@ pub enum Action {
     /// One-hand support
     SwapHands(KeyCode),
     /// Activate a layer
-    LayerActivate(u8),
+    LayerOn(u8),
     /// Deactivate a layer
-    LayerDeactivate(u8),
+    LayerOff(u8),
     /// Toggle a layer
     LayerToggle(u8),
 }

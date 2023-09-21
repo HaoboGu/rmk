@@ -17,6 +17,12 @@ pub struct KeyState {
     pub hold_start: Option<Instant<u32, 1, 1000>>,
 }
 
+impl Default for KeyState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyState {
     pub fn new() -> Self {
         KeyState {

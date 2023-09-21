@@ -21,34 +21,38 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     pub fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> KeyMap<ROW, COL, NUM_LAYER> {
         KeyMap {
             layers: action_map,
-            layer_state: [true; NUM_LAYER],
+            layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
         }
     }
 
-    /// Fetch the action in keymap
-    /// FIXME: When the layer is changed, release event should be processed in the original layer(layer cache)
-    /// See https://github.com/qmk/qmk_firmware/blob/master/quantum/action_layer.c#L299
+    /// Fetch the action in keymap, with layer cache
     pub fn get_action(&mut self, row: usize, col: usize, key_state: KeyState) -> KeyAction {
-        if key_state.pressed {
-            // If the key is already pressed, check layer cache
-            let layer = self.get_layer_from_cache(row, col);
+        if !key_state.pressed && key_state.changed {
+            // Releasing a pressed key, use cached layer and restore the cache
+            let layer = self.pop_layer_from_cache(row, col);
             return self.layers[layer as usize][row][col];
-        } else {
-            // Iterate from higher layer to lower layer
-            for (layer_idx, layer) in self.layers.iter().rev().enumerate() {
-                if self.layer_state[layer_idx] {
-                    // This layer is activated
-                    let action = layer[row][col];
-                    if action == KeyAction::Transparent || action == KeyAction::No {
-                        continue;
-                    }
-                    // Cache the layer
-                    self.save_layer_cache(row, col, layer_idx as u8);
+        }
 
-                    return action;
+        // Iterate from higher layer to lower layer, the lowest checked layer is the default layer
+        for (layer_idx, layer) in self.layers.iter().enumerate().rev() {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                // This layer is activated
+                let action = layer[row][col];
+                if action == KeyAction::Transparent || action == KeyAction::No {
+                    continue;
                 }
+
+                // Found a valid action in the layer, cache it
+                self.save_layer_cache(row, col, layer_idx as u8);
+
+                return action;
+            }
+
+            if layer_idx as u8 == self.default_layer {
+                // No action
+                break;
             }
         }
 
@@ -57,6 +61,13 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
 
     fn get_layer_from_cache(&self, row: usize, col: usize) -> u8 {
         self.layer_cache[row][col]
+    }
+
+    fn pop_layer_from_cache(&mut self, row: usize, col: usize) -> u8 {
+        let layer = self.layer_cache[row][col];
+        self.layer_cache[row][col] = self.default_layer;
+
+        layer
     }
 
     fn save_layer_cache(&mut self, row: usize, col: usize, layer_num: u8) {
