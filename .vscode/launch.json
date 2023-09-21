@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Cortex-Debug stm32h7",
-            "preLaunchTask": "flash stm32h7",
+            "preLaunchTask": "flash stm32",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
@@ -14,9 +14,8 @@
             "servertype": "openocd",
             "showDevDebugOutput": "parsed",
             "runToEntryPoint": "main",
-            "device": "stlink",
             "configFiles": [
-                "openocd.cfg"
+                "${workspaceFolder}/boards/stm32h7/openocd.cfg"
             ],
             "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
             "rttConfig": {
