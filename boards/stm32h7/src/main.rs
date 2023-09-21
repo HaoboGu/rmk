@@ -42,7 +42,7 @@ mod app {
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local) {
-        rtt_logger::init();
+        rtt_logger::init(log::LevelFilter::Debug);
         let cp = cx.core;
         let dp = cx.device;
 
