@@ -9,7 +9,7 @@ use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
-use usbd_hid::descriptor::KeyboardReport;
+use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
 pub struct Keyboard<
     In: InputPin,
@@ -30,8 +30,20 @@ pub struct Keyboard<
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
+    /// Media internal report
+    media_report: MediaKeyboardReport,
+
+    /// System control internal report
+    system_control_report: SystemControlReport,
+
     /// Should send a new report?
-    changed: bool,
+    need_send_key_report: bool,
+
+    /// Should send a consumer control report?
+    need_send_consumer_control_report: bool,
+
+    /// Should send a system control report?
+    need_send_system_control_report: bool,
 }
 
 impl<
@@ -56,20 +68,25 @@ impl<
                 leds: 0,
                 keycodes: [0; 6],
             },
-            changed: false,
+            media_report: MediaKeyboardReport { usage_id: 0 },
+            system_control_report: SystemControlReport { usage_id: 0 },
+            need_send_key_report: false,
+            need_send_consumer_control_report: false,
+            need_send_system_control_report: false,
         }
     }
 
     /// Send hid report. The report is sent only when key state changes.
     pub fn send_report<B: UsbBus>(&mut self, usb_device: &KeyboardUsbDevice<'_, B>) {
-        if self.changed {
+        // TODO: refine changed, separate hid/media/system
+        if self.need_send_key_report {
             usb_device.send_keyboard_report(&self.report);
 
             // Reset report key states
             for bit in &mut self.report.keycodes {
                 *bit = 0;
             }
-            self.changed = false;
+            self.need_send_key_report = false;
         }
     }
 
@@ -87,7 +104,6 @@ impl<
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
                 if ks.changed {
                     self.process_key_change(row_idx, col_idx).await;
-                    self.changed = true
                 }
             }
         }
@@ -97,7 +113,7 @@ impl<
 
     /// Process key changes at (row, col)
     async fn process_key_change(&mut self, row: usize, col: usize) {
-        // Matrix should process key pressed event first
+        // Matrix should process key pressed event first, record the timestamp of key changes
         self.matrix.key_pressed(row, col);
 
         // Process key
@@ -124,10 +140,13 @@ impl<
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
             Action::LayerOff(layer_num) => {
                 // We just turn off a layer when the key is pressed
-                // TODO: Do we need this action?
+                // TODO: Do we really need this action?
                 if key_state.changed && key_state.pressed {
                     self.keymap.deactivate_layer(layer_num);
                 }
+            }
+            Action::ConsumerControl(consumer_key) => {
+                self.process_action_consumer_control(consumer_key, key_state)
             }
             _ => (),
         }
@@ -145,6 +164,7 @@ impl<
         self.process_key_action_normal(action, key_state);
     }
 
+    /// Tap action, send a key when the key is pressed, then release the key.
     async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
         // TODO: when the tap is triggered, once the key is pressed or when it's released?
         if key_state.changed && key_state.pressed {
@@ -168,8 +188,9 @@ impl<
         todo!("oneshot action not implemented");
     }
 
-    // Process a single keycode.
+    // Process a single keycode, typically a basic key or a modifier key.
     fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
+        self.need_send_key_report = true;
         if key.is_modifier() {
             let modifier_bit = key.as_modifier_bit();
             if key_state.pressed {
@@ -187,6 +208,7 @@ impl<
         }
     }
 
+    /// Process layer switch action.
     fn process_action_layer_switch(&mut self, layer_num: u8, key_state: KeyState) {
         // Change layer state only when the key's state is changed
         if !key_state.changed {
@@ -199,6 +221,37 @@ impl<
         }
     }
 
+    /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
+    fn process_action_consumer_control(&mut self, key: KeyCode, key_state: KeyState) {
+        if key.is_consumer() {
+            if key_state.pressed {
+                if let Some(media_key) = key.as_consumer_control_usage_id() {
+                    self.media_report.usage_id = media_key as u16;
+                    self.need_send_consumer_control_report = true;
+                }
+            } else {
+                self.media_report.usage_id = 0;
+                self.need_send_consumer_control_report = true;
+            }
+        }
+    }
+
+    /// Process system control action. System control keys are keys in system page, such as power key.
+    fn process_action_system_control(&mut self, key: KeyCode, key_state: KeyState) {
+        if key.is_system() {
+            if key_state.pressed {
+                if let Some(system_key) = key.as_system_control_usage_id() {
+                    self.system_control_report.usage_id = system_key as u8;
+                    self.need_send_system_control_report = true;
+                }
+            } else {
+                self.system_control_report.usage_id = 0;
+                self.need_send_system_control_report = true;
+            }
+        }
+    }
+
+    /// Register a key to be sent in hid report.
     fn register_keycode(&mut self, key: KeyCode) {
         for bit in &mut self.report.keycodes {
             if *bit == 0 {
@@ -208,6 +261,7 @@ impl<
         }
     }
 
+    /// Unregister a key from hid report.
     fn unregister_keycode(&mut self, key: KeyCode) {
         for bit in &mut self.report.keycodes {
             if *bit == (key as u8) {
@@ -217,10 +271,12 @@ impl<
         }
     }
 
+    /// Register a modifier to be sent in hid report.
     fn register_modifier(&mut self, modifier_bit: u8) {
         self.report.modifier |= modifier_bit;
     }
 
+    /// Unregister a modifier from hid report.
     fn unregister_modifier(&mut self, modifier_bit: u8) {
         self.report.modifier &= !modifier_bit;
     }

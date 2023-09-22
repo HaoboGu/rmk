@@ -1,17 +1,24 @@
+use log::error;
 use usb_device::{
     class_prelude::{UsbBus, UsbBusAllocator},
-    prelude::{UsbDevice, UsbDeviceBuilder, UsbVidPid}, UsbError,
+    prelude::{UsbDevice, UsbDeviceBuilder, UsbVidPid},
+    UsbError,
 };
 use usbd_hid::{
-    descriptor::{KeyboardReport, SerializedDescriptor},
+    descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescriptor, SystemControlReport},
     hid_class::HIDClass,
 };
 
 use crate::config::KeyboardConfig;
 
 pub struct KeyboardUsbDevice<'a, B: UsbBus> {
-    /// Usb hid device instance
+    /// Usb hid instance
     hid: HIDClass<'a, B>,
+    /// Consumer control hid instance
+    consumer_control_hid: HIDClass<'a, B>,
+    /// System control hid instance
+    system_control_hid: HIDClass<'a, B>,
+    /// Usb device instance
     usb_device: UsbDevice<'a, B>,
 }
 
@@ -19,6 +26,8 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
     pub fn new(usb_allocator: &'a UsbBusAllocator<B>, config: &KeyboardConfig<'a>) -> Self {
         KeyboardUsbDevice {
             hid: HIDClass::new(usb_allocator, KeyboardReport::desc(), 10),
+            consumer_control_hid: HIDClass::new(usb_allocator, MediaKeyboardReport::desc(), 10),
+            system_control_hid: HIDClass::new(usb_allocator, SystemControlReport::desc(), 10),
             usb_device: UsbDeviceBuilder::new(
                 usb_allocator,
                 UsbVidPid(config.usb_config.vid, config.usb_config.pid),
@@ -32,7 +41,8 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
 
     /// Usb polling
     pub fn usb_poll(&mut self) {
-        self.usb_device.poll(&mut [&mut self.hid]);
+        self.usb_device
+            .poll(&mut [&mut self.hid, &mut self.consumer_control_hid, &mut self.system_control_hid]);
     }
 
     /// Send keyboard hid report
@@ -40,7 +50,25 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
         match self.hid.push_input(report) {
             Ok(_) => (),
             Err(UsbError::WouldBlock) => (),
-            Err(_) => panic!("push raw input error"),
+            Err(e) => error!("Send keyboard report error: {:?}", e),
+        }
+    }
+
+    /// Send consumer control report, commonly used in keyboard media control
+    pub fn send_consumer_control_report(&self, report: &MediaKeyboardReport) {
+        match self.consumer_control_hid.push_input(report) {
+            Ok(_) => (),
+            Err(UsbError::WouldBlock) => (),
+            Err(e) => error!("Send consumer control report error: {:?}", e),
+        }
+    }
+
+    /// Send system control report
+    pub fn send_system_control_report(&self, report: &SystemControlReport) {
+        match self.system_control_hid.push_input(report) {
+            Ok(_) => (),
+            Err(UsbError::WouldBlock) => (),
+            Err(e) => error!("Send system control report error: {:?}", e),
         }
     }
 }

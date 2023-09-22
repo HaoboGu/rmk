@@ -1,4 +1,5 @@
 use num_enum::FromPrimitive;
+use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 
 /// Modifiers defined in hid spec.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -854,5 +855,39 @@ impl KeyCode {
     /// Returns `true` if the keycode is a user keycode
     pub fn is_user(self) -> bool {
         KeyCode::User0 <= self && self <= KeyCode::User31
+    }
+
+    /// Convert a keycode to usb hid media key
+    pub fn as_consumer_control_usage_id(self) -> Option<MediaKey> {
+        match self {
+            KeyCode::AudioMute => Some(MediaKey::Mute),
+            KeyCode::AudioVolUp => Some(MediaKey::VolumeIncrement),
+            KeyCode::AudioVolDown => Some(MediaKey::VolumeDecrement),
+            KeyCode::MediaNextTrack => Some(MediaKey::NextTrack),
+            KeyCode::MediaPrevTrack => Some(MediaKey::PrevTrack),
+            KeyCode::MediaStop => Some(MediaKey::Stop),
+            KeyCode::MediaPlayPause => Some(MediaKey::PlayPause),
+            KeyCode::MediaSelect => Some(MediaKey::Record),
+            // KeyCode::MediaEject => None,
+            // KeyCode::MediaFastForward => None,
+            // KeyCode::MediaRewind => None,
+            // KeyCode::BrightnessUp => None,
+            // KeyCode::BrightnessDown => None,
+            // KeyCode::ControlPanel => None,
+            // KeyCode::Assistant => None,
+            // KeyCode::MissionControl => None,
+            // KeyCode::Launchpad => None,
+            _ => None,
+        }
+    }
+
+    /// Convert a keycode to usb hid media key
+    pub fn as_system_control_usage_id(self) -> Option<SystemControlKey> {
+        match self {
+            KeyCode::SystemPower => Some(SystemControlKey::PowerDown),
+            KeyCode::SystemSleep => Some(SystemControlKey::Sleep),
+            KeyCode::SystemWake => Some(SystemControlKey::WakeUp),
+            _ => None,
+        }
     }
 }
