@@ -2,6 +2,21 @@
 
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
+
+## Features & TODOs
+
+A lot of todos at the list, any contributions are welcomed :)
+
+- [x] test rp2040
+- [x] basic keyboard functions
+- [x] layer
+- [x] system/media keys
+- [ ] via/vial support
+- [ ] macro
+- [ ] encoder
+- [ ] RGB
+- [ ] cli
+
 ## Prerequisites
 
 This crate requires **nightly** Rust. `openocd`(stm32) or `probe-rs`(rp2040) is used for flashing & debugging.
@@ -49,16 +64,3 @@ Or you can do it manually using this command after compile:
 openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
 ``` 
 
-## TODOs
-
-A lot of todos at the list, any contributions are welcomed :)
-
-- [x] test rp2040
-- [x] basic keyboard functions
-- [x] layer
-- [ ] via/vial support
-- [ ] system/media keys
-- [ ] macro
-- [ ] encoder
-- [ ] RGB
-- [ ] cli

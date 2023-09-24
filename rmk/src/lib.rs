@@ -12,6 +12,7 @@ use keyboard::Keyboard;
 use usb::KeyboardUsbDevice;
 use usb_device::class_prelude::{UsbBus, UsbBusAllocator};
 
+pub mod vial;
 pub mod action;
 pub mod config;
 pub mod debounce;
