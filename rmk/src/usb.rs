@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use usb_device::{
     class_prelude::{UsbBus, UsbBusAllocator},
     prelude::{UsbDevice, UsbDeviceBuilder, UsbVidPid},
@@ -9,7 +9,7 @@ use usbd_hid::{
     hid_class::HIDClass,
 };
 
-use crate::config::KeyboardConfig;
+use crate::{config::KeyboardConfig, vial::ViaReport};
 
 pub struct KeyboardUsbDevice<'a, B: UsbBus> {
     /// Usb hid instance
@@ -18,6 +18,8 @@ pub struct KeyboardUsbDevice<'a, B: UsbBus> {
     consumer_control_hid: HIDClass<'a, B>,
     /// System control hid instance
     system_control_hid: HIDClass<'a, B>,
+    /// Via communication instance
+    via_hid: HIDClass<'a, B>,
     /// Usb device instance
     usb_device: UsbDevice<'a, B>,
 }
@@ -28,6 +30,7 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
             hid: HIDClass::new(usb_allocator, KeyboardReport::desc(), 10),
             consumer_control_hid: HIDClass::new(usb_allocator, MediaKeyboardReport::desc(), 10),
             system_control_hid: HIDClass::new(usb_allocator, SystemControlReport::desc(), 10),
+            via_hid: HIDClass::new(usb_allocator, ViaReport::desc(), 10),
             usb_device: UsbDeviceBuilder::new(
                 usb_allocator,
                 UsbVidPid(config.usb_config.vid, config.usb_config.pid),
@@ -41,8 +44,25 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
 
     /// Usb polling
     pub fn usb_poll(&mut self) {
-        self.usb_device
-            .poll(&mut [&mut self.hid, &mut self.consumer_control_hid, &mut self.system_control_hid]);
+        self.usb_device.poll(&mut [
+            &mut self.hid,
+            &mut self.consumer_control_hid,
+            &mut self.system_control_hid,
+            &mut self.via_hid,
+        ]);
+    }
+
+    /// Read via report, returns the length of the report, 0 if no report is available.
+    pub fn read_via_report(&mut self, report: &mut ViaReport) -> usize {
+        // Use output_data: host to device data
+        match self.via_hid.pull_raw_output(&mut report.output_data) {
+            Ok(l) => l,
+            Err(UsbError::WouldBlock) => 0,
+            Err(e) => {
+                error!("Read via report error: {:?}", e);
+                0
+            }
+        }
     }
 
     /// Send keyboard hid report
@@ -59,7 +79,7 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
         match self.consumer_control_hid.push_input(report) {
             Ok(_) => (),
             Err(UsbError::WouldBlock) => (),
-            Err(e) => error!("Send consumer control report error: {:?}", e),
+            Err(e) => info!("Send consumer control report error: {:?}", e),
         }
     }
 

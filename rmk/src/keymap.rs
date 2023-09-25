@@ -91,4 +91,14 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
         self.layer_state[layer_num as usize] = false;
     }
+
+    /// Toggle given layer
+    pub fn toggle_layer(&mut self, layer_num: u8) {
+        if layer_num as usize >= NUM_LAYER {
+            warn!("Not a valid layer {layer_num}, keyboard supports only {NUM_LAYER} layers");
+            return;
+        }
+
+        self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
+    }
 }

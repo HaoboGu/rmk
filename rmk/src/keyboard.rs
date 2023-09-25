@@ -4,9 +4,11 @@ use crate::{
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
     usb::KeyboardUsbDevice,
+    vial::ViaReport,
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use log::info;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
@@ -35,6 +37,9 @@ pub struct Keyboard<
 
     /// System control internal report
     system_control_report: SystemControlReport,
+
+    /// Via report
+    via_report: ViaReport,
 
     /// Should send a new report?
     need_send_key_report: bool,
@@ -70,6 +75,10 @@ impl<
             },
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
+            via_report: ViaReport {
+                input_data: [0; 32],
+                output_data: [0; 32],
+            },
             need_send_key_report: false,
             need_send_consumer_control_report: false,
             need_send_system_control_report: false,
@@ -81,12 +90,25 @@ impl<
         // TODO: refine changed, separate hid/media/system
         if self.need_send_key_report {
             usb_device.send_keyboard_report(&self.report);
-
             // Reset report key states
             for bit in &mut self.report.keycodes {
                 *bit = 0;
             }
             self.need_send_key_report = false;
+        }
+
+        if self.need_send_consumer_control_report {
+            info!("Sending consumer report: {:?}", self.media_report);
+            usb_device.send_consumer_control_report(&self.media_report);
+            self.media_report.usage_id = 0;
+            self.need_send_consumer_control_report = false;
+        }
+    }
+
+    /// Read hid report.
+    pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
+        if usb_device.read_via_report(&mut self.via_report) > 0 {
+            info!("Received via report: {:02X?}", self.via_report.output_data);
         }
     }
 
@@ -145,10 +167,13 @@ impl<
                     self.keymap.deactivate_layer(layer_num);
                 }
             }
-            Action::ConsumerControl(consumer_key) => {
-                self.process_action_consumer_control(consumer_key, key_state)
+            Action::LayerToggle(layer_num) => {
+                // Toggle a layer when the key is release
+                if key_state.changed && !key_state.pressed {
+                    self.keymap.toggle_layer(layer_num);
+                }
+
             }
-            _ => (),
         }
     }
 
@@ -191,7 +216,11 @@ impl<
     // Process a single keycode, typically a basic key or a modifier key.
     fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
         self.need_send_key_report = true;
-        if key.is_modifier() {
+        if key.is_consumer() {
+            self.process_action_consumer_control(key, key_state);
+        } else if key.is_system() {
+            self.process_action_system_control(key, key_state);
+        } else if key.is_modifier() {
             let modifier_bit = key.as_modifier_bit();
             if key_state.pressed {
                 self.register_modifier(modifier_bit);
@@ -225,10 +254,9 @@ impl<
     fn process_action_consumer_control(&mut self, key: KeyCode, key_state: KeyState) {
         if key.is_consumer() {
             if key_state.pressed {
-                if let Some(media_key) = key.as_consumer_control_usage_id() {
-                    self.media_report.usage_id = media_key as u16;
-                    self.need_send_consumer_control_report = true;
-                }
+                let media_key = key.as_consumer_control_usage_id();
+                self.media_report.usage_id = media_key as u16;
+                self.need_send_consumer_control_report = true;
             } else {
                 self.media_report.usage_id = 0;
                 self.need_send_consumer_control_report = true;

@@ -122,6 +122,9 @@ mod app {
             cx.local.keyboard.keyboard_task().await.unwrap();
             cx.shared.usb_device.lock(|d| {
                 cx.local.keyboard.send_report(d);
+                // Read via report
+                // TODO: move it to another thread?
+                cx.local.keyboard.read_report(d);
             });
             // Scanning frequency: 1KHZ
             Systick::delay(1.millis()).await;

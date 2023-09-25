@@ -24,16 +24,8 @@ pub enum KeyAction {
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Action {
-    /// A normal key
+    /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc. 
     Key(KeyCode),
-    /// Action for mouse key.
-    MouseKey(KeyCode),
-    /// Action for System Control(0x80), which is in General Desktop Page(0x01) defined by HID spec.
-    SystemControl(KeyCode),
-    /// Action for Consumer Control(0x01), which is in Consumer Page(0x0C) defined by HID spec.
-    ConsumerControl(KeyCode),
-    /// One-hand support
-    SwapHands(KeyCode),
     /// Activate a layer
     LayerOn(u8),
     /// Deactivate a layer

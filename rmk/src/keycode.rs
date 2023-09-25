@@ -858,16 +858,16 @@ impl KeyCode {
     }
 
     /// Convert a keycode to usb hid media key
-    pub fn as_consumer_control_usage_id(self) -> Option<MediaKey> {
+    pub fn as_consumer_control_usage_id(self) -> MediaKey {
         match self {
-            KeyCode::AudioMute => Some(MediaKey::Mute),
-            KeyCode::AudioVolUp => Some(MediaKey::VolumeIncrement),
-            KeyCode::AudioVolDown => Some(MediaKey::VolumeDecrement),
-            KeyCode::MediaNextTrack => Some(MediaKey::NextTrack),
-            KeyCode::MediaPrevTrack => Some(MediaKey::PrevTrack),
-            KeyCode::MediaStop => Some(MediaKey::Stop),
-            KeyCode::MediaPlayPause => Some(MediaKey::PlayPause),
-            KeyCode::MediaSelect => Some(MediaKey::Record),
+            KeyCode::AudioMute => MediaKey::Mute,
+            KeyCode::AudioVolUp => MediaKey::VolumeIncrement,
+            KeyCode::AudioVolDown => MediaKey::VolumeDecrement,
+            KeyCode::MediaNextTrack => MediaKey::NextTrack,
+            KeyCode::MediaPrevTrack => MediaKey::PrevTrack,
+            KeyCode::MediaStop => MediaKey::Stop,
+            KeyCode::MediaPlayPause => MediaKey::PlayPause,
+            KeyCode::MediaSelect => MediaKey::Record,
             // KeyCode::MediaEject => None,
             // KeyCode::MediaFastForward => None,
             // KeyCode::MediaRewind => None,
@@ -877,7 +877,7 @@ impl KeyCode {
             // KeyCode::Assistant => None,
             // KeyCode::MissionControl => None,
             // KeyCode::Launchpad => None,
-            _ => None,
+            _ => MediaKey::Zero,
         }
     }
 
