@@ -7,4 +7,9 @@
         "--quiet",
         "--message-format=json"
     ],
+    "rust-analyzer.linkedProjects": [
+        "./rmk/Cargo.toml",
+        "./boards/stm32h7/Cargo.toml",
+        "./boards/rp2040/Cargo.toml"
+    ],
 }

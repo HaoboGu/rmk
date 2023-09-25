@@ -5,8 +5,8 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cortex-Debug stm32h7",
-            "preLaunchTask": "flash stm32",
+            "name": "Cortex-Debug - stm32h7",
+            "preLaunchTask": "Flash stm32h7",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
@@ -34,8 +34,8 @@
             },
         },
         {
-            "name": "Probe-rs rp2040",
-            "preLaunchTask": "Cargo Build (debug)",
+            "name": "Probe-rs - rp2040",
+            "preLaunchTask": "Build Debug",
             "type": "probe-rs-debug",
             "request": "launch",
             "cwd": "${workspaceFolder}/boards/rp2040",
