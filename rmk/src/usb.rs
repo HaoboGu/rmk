@@ -9,7 +9,7 @@ use usbd_hid::{
     hid_class::HIDClass,
 };
 
-use crate::{config::KeyboardConfig, vial::ViaReport};
+use crate::{config::KeyboardConfig, via::ViaReport};
 
 pub struct KeyboardUsbDevice<'a, B: UsbBus> {
     /// Usb hid instance

@@ -4,7 +4,7 @@ use crate::{
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
     usb::KeyboardUsbDevice,
-    vial::ViaReport,
+    via::{ViaReport, process_via_packet},
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -108,6 +108,7 @@ impl<
     /// Read hid report.
     pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
         if usb_device.read_via_report(&mut self.via_report) > 0 {
+            process_via_packet(&mut self.via_report);
             info!("Received via report: {:02X?}", self.via_report.output_data);
         }
     }
