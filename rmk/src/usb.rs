@@ -13,6 +13,12 @@ use usbd_hid::{
 
 use crate::{config::KeyboardConfig, via::ViaReport};
 
+// TODO: Use a composite hid device for Keyboard + Mouse + System control + Consumer control
+// In this case, report id should be used.
+// The keyboard usb device should have 3 hid instances:
+// 1. Boot keyboard: 1 endpoint in
+// 2. Composite keyboard: Keyboard + Mouse + System control + Consumer control: 1 endpoint in
+// 3. Raw hid communication: used to communicate with via: 2 endpoints(in/out)
 pub struct KeyboardUsbDevice<'a, B: UsbBus> {
     /// Usb hid instance
     hid: HIDClass<'a, B>,
@@ -70,6 +76,9 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
             .manufacturer(config.usb_config.manufacturer)
             .product(config.usb_config.product)
             .serial_number(config.usb_config.serial_number)
+            .max_power(500)
+            // .composite_with_iads() // Only used when the usb device is a composite device, like HID + MSC
+            .supports_remote_wakeup(true)
             .build(),
         }
     }
