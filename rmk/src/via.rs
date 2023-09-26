@@ -67,7 +67,7 @@ pub fn process_via_packet(report: &mut ViaReport) {
     match ViaCommand::from_primitive(command_id) {
         ViaCommand::GetProtocolVersion => {
             report.input_data[0] = (VIA_PROTOCOL_VERSION >> 8) as u8;
-            report.input_data[0] = (VIA_PROTOCOL_VERSION & 0xFF) as u8;
+            report.input_data[1] = (VIA_PROTOCOL_VERSION & 0xFF) as u8;
         }
         ViaCommand::GetKeyboardValue => {
             // Check the second u8

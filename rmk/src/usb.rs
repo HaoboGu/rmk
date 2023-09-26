@@ -6,7 +6,9 @@ use usb_device::{
 };
 use usbd_hid::{
     descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescriptor, SystemControlReport},
-    hid_class::HIDClass,
+    hid_class::{
+        HIDClass, HidClassSettings, HidCountryCode, HidProtocol, HidSubClass, ProtocolModeConfig,
+    },
 };
 
 use crate::{config::KeyboardConfig, via::ViaReport};
@@ -27,9 +29,39 @@ pub struct KeyboardUsbDevice<'a, B: UsbBus> {
 impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
     pub fn new(usb_allocator: &'a UsbBusAllocator<B>, config: &KeyboardConfig<'a>) -> Self {
         KeyboardUsbDevice {
-            hid: HIDClass::new(usb_allocator, KeyboardReport::desc(), 10),
-            consumer_control_hid: HIDClass::new(usb_allocator, MediaKeyboardReport::desc(), 10),
-            system_control_hid: HIDClass::new(usb_allocator, SystemControlReport::desc(), 10),
+            hid: HIDClass::new_ep_in_with_settings(
+                usb_allocator,
+                KeyboardReport::desc(),
+                10,
+                HidClassSettings {
+                    subclass: HidSubClass::Boot,
+                    protocol: HidProtocol::Keyboard,
+                    config: ProtocolModeConfig::ForceBoot,
+                    locale: HidCountryCode::NotSupported,
+                },
+            ),
+            consumer_control_hid: HIDClass::new_ep_in_with_settings(
+                usb_allocator,
+                MediaKeyboardReport::desc(),
+                10,
+                HidClassSettings {
+                    subclass: HidSubClass::NoSubClass,
+                    protocol: HidProtocol::Keyboard,
+                    config: ProtocolModeConfig::DefaultBehavior,
+                    locale: HidCountryCode::NotSupported,
+                },
+            ),
+            system_control_hid: HIDClass::new_ep_in_with_settings(
+                usb_allocator,
+                SystemControlReport::desc(),
+                10,
+                HidClassSettings {
+                    subclass: HidSubClass::NoSubClass,
+                    protocol: HidProtocol::Keyboard,
+                    config: ProtocolModeConfig::DefaultBehavior,
+                    locale: HidCountryCode::NotSupported,
+                },
+            ),
             via_hid: HIDClass::new(usb_allocator, ViaReport::desc(), 10),
             usb_device: UsbDeviceBuilder::new(
                 usb_allocator,
