@@ -11,7 +11,7 @@ use usbd_hid::{
     },
 };
 
-use crate::{config::KeyboardConfig, via::ViaReport};
+use crate::{config::KeyboardConfig, via::descriptor::ViaReport};
 
 // TODO: Use a composite hid device for Keyboard + Mouse + System control + Consumer control
 // In this case, report id should be used.
@@ -101,6 +101,18 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
             Err(UsbError::WouldBlock) => 0,
             Err(e) => {
                 error!("Read via report error: {:?}", e);
+                0
+            }
+        }
+    }
+
+    pub fn send_via_report(&self, report: &ViaReport) -> usize {
+        // Use output_data: host to device data
+        match self.via_hid.push_input(report) {
+            Ok(l) => l,
+            Err(UsbError::WouldBlock) => 0,
+            Err(e) => {
+                error!("Send via report error: {:?}", e);
                 0
             }
         }
