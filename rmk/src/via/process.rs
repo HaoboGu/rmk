@@ -24,18 +24,28 @@ pub fn process_via_packet(report: &mut ViaReport) {
                         let value = Systick::now().ticks();
                         set_data_u32(&mut report.input_data[1..], value);
                     }
-                    ViaKeyboardInfo::LayoutOptions => todo!("need eeprom"),
-                    ViaKeyboardInfo::SwitchMatrixState => todo!(),
+                    ViaKeyboardInfo::LayoutOptions => todo!("GetKeyboardValue - LayoutOptions: need eeprom"),
+                    ViaKeyboardInfo::SwitchMatrixState => todo!("GetKeyboardValue - SwitchMatrixState"),
                     ViaKeyboardInfo::FirmwareVersion => {
                         let value = VIA_FIRMWARE_VERSION;
                         set_data_u32(&mut report.input_data[1..], value);
                     }
-                    ViaKeyboardInfo::DeviceIndication => todo!(),
+                    _ => ()
                 },
-                Err(e) => error!("Invalid keyboard value number: {}", e.number),
+                Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e.number),
             }
         }
-        ViaCommand::SetKeyboardValue => todo!(),
+        ViaCommand::SetKeyboardValue => {
+            // Check the second u8
+            match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
+                Ok(v) => match v {
+                    ViaKeyboardInfo::LayoutOptions => todo!("SetKeyboardValue - LayoutOptions: need eeprom"),
+                    ViaKeyboardInfo::DeviceIndication => todo!("SetKeyboardValue - DeviceIndication"),
+                    _ => ()
+                },
+                Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e.number),
+            }
+        }
         ViaCommand::DynamicKeymapGetKeycode => todo!(),
         ViaCommand::DynamicKeymapSetKeycode => todo!(),
         ViaCommand::DynamicKeymapReset => todo!(),
