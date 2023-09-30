@@ -475,6 +475,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal",
+ "embedded-storage",
  "log",
  "num_enum 0.7.0",
  "rtic-monotonics",

@@ -22,6 +22,7 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod matrix;
 pub mod usb;
+pub mod eeprom;
 
 /// Initialize keyboard core and keyboard usb device
 pub fn initialize_keyboard_and_usb_device<

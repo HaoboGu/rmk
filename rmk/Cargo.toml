@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
+embedded-storage ={ version = "0.3"}
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 num_enum = { version = "0.7.0", default-features = false }
