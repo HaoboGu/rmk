@@ -1,6 +1,8 @@
 use embedded_storage::Storage;
 
 /// Eeprom based on any storage device which implements `embedded-storage::Storage` trait
+/// Ref: https://www.st.com/content/ccc/resource/technical/document/application_note/group0/b2/94/a6/62/18/c0/4f/e6/DM00311483/files/DM00311483.pdf/jcr:content/translations/en.DM00311483.pdf
+/// 
 pub struct Eeprom<F>
 where
     F: Storage,
