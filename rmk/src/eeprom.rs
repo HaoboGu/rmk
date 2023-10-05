@@ -1,19 +1,19 @@
-use embedded_storage::Storage;
+use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
 
-/// Eeprom based on any storage device which implements `embedded-storage::Storage` trait
-/// Ref: https://www.st.com/resource/en/application_note/an4894-how-to-use-eeprom-emulation-on-stm32-mcus-stmicroelectronics.pdf
-/// Zh Ref: https://www.st.com/resource/zh/application_note/an3969-eeprom-emulation-in-stm32f40xstm32f41x-microcontrollers-stmicroelectronics.pdf
+/// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
 /// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
-pub struct Eeprom<F, const STORAGE_PAGE_SIZE: u32, const EEPROM_SIZE: usize>
-where
-    F: Storage,
-{
+pub struct Eeprom<
+    F: NorFlash,
+    const STORAGE_START_ADDR: u32,
+    const STORAGE_SIZE: u32,
+    const EEPROM_SIZE: usize,
+> {
     /// Current position in the storage
     pos: u32,
-    /// Backend storage, implements `embedded-storage::Storage` trait
+    /// Backend storage, implements `embedded-storage::NorFlash` trait
     storage: F,
     /// A eeprom cache in ram to speed up reads, whose size is same as the logical eeprom capacity
     cache: [u8; EEPROM_SIZE],
@@ -41,44 +41,80 @@ impl EepromRecord {
     }
 }
 
-impl<F: Storage, const STORAGE_PAGE_SIZE: u32, const EEPROM_SIZE: usize>
-    Eeprom<F, STORAGE_PAGE_SIZE, EEPROM_SIZE>
+impl<
+        F: NorFlash,
+        const STORAGE_START_ADDR: u32,
+        const STORAGE_SIZE: u32,
+        const EEPROM_SIZE: usize,
+    > Eeprom<F, STORAGE_START_ADDR, STORAGE_SIZE, EEPROM_SIZE>
 {
-    pub fn write_byte(&mut self, mut address: u16, data: &mut [u8]) {
+    pub fn new(storage: F) -> Self {
+        let mut eeprom = Eeprom {
+            pos: 0,
+            storage,
+            cache: [0xFF; EEPROM_SIZE],
+        };
+
+        // TODO: initialize eeprom using keymaps if eeprom is empty
+
+        // Restore eeprom from storage
+        let mut buf: [u8; 4] = [0xFF; 4];
+        while eeprom.pos < STORAGE_SIZE {
+            match eeprom.storage.read(eeprom.pos, &mut buf) {
+                Ok(_) => {
+                    let record = EepromRecord::from_bytes(buf);
+                    if record.address >= EEPROM_SIZE as u16 {
+                        break;
+                    }
+                    eeprom.cache[record.address as usize] = record.data as u8;
+                    eeprom.cache[record.address as usize + 1] = (record.data >> 8) as u8;
+                    eeprom.pos += 4;
+                }
+                Err(_) => break,
+            }
+        }
+
+        eeprom
+    }
+
+    pub fn write_byte(&mut self, mut address: u16, data: &[u8]) {
         if data.len() == 0 {
             warn!("No data to write to eeprom, skip");
             return;
         }
+
         // Check address
-        if address as usize >= EEPROM_SIZE {
+        if address as usize + data.len() >= EEPROM_SIZE {
             error!("Invalid address");
             return;
         }
 
-        let mut start_idx = 0;
-        // If the address is even, we have to append the first byte.
+        // Update cache first
+        self.cache[address as usize..(address as usize + data.len())].copy_from_slice(data);
+
+        // If the address is odd, add the previous byte to data.
+        let mut data_len = data.len();
         if address % 2 != 0 {
-            let prev_byte = self.cache[address as usize - 1];
-            self.write_record(EepromRecord {
-                address,
-                data: ((prev_byte as u16) << 8) | (data[0] as u16),
-            });
-            start_idx = 1;
+            address -= 1;
+            data_len += 1;
         }
 
-        for i in (start_idx..data.len()).step_by(2) {
-            if i + 1 == data.len() {
+        for i in (0..data_len).step_by(2) {
+            let data_idx = address as usize + i;
+            let data;
+            if i + 1 == data_len {
                 // Last byte, append 0xFF
-                self.write_record(EepromRecord {
-                    address,
-                    data: (0xFF << 8) | (data[i] as u16)
-                });
+                data = (0xFF << 8) | (self.cache[data_idx] as u16);
             } else {
-                self.write_record(EepromRecord {
-                    address,
-                    data: ((data[i + 1] as u16) << 8) | (data[i] as u16),
-                });
+                data = ((self.cache[data_idx + 1] as u16) << 8) | (self.cache[data_idx] as u16);
             }
+            let record = EepromRecord { address, data };
+
+            // If the storage is full, do consolidation
+            if self.check_consolidation() {
+                self.write_record(record);
+            }
+
             address += 2;
         }
     }
@@ -90,16 +126,10 @@ impl<F: Storage, const STORAGE_PAGE_SIZE: u32, const EEPROM_SIZE: usize>
     }
 
     fn write_record(&mut self, record: EepromRecord) {
-        if self.pos + 4 > STORAGE_PAGE_SIZE {
-            info!("Backend storage is full, consolidating records");
-            self.consolidate_records();
-            // Check position again
-            if self.pos + 4 > STORAGE_PAGE_SIZE {
-                error!("Backend storage is full, failed to write record");
-                return;
-            }
-        }
-        match self.storage.write(self.pos, &record.to_bytes()) {
+        match self
+            .storage
+            .write(STORAGE_START_ADDR + self.pos, &record.to_bytes())
+        {
             Ok(_) => self.pos += 4,
             Err(_) => error!("Failed to write record to storage"),
         }
@@ -110,7 +140,7 @@ impl<F: Storage, const STORAGE_PAGE_SIZE: u32, const EEPROM_SIZE: usize>
         let mut bytes = [0u8; 4];
         // Scan the storage, find the record with the given address
         for p in (0..self.pos).step_by(4) {
-            match self.storage.read(p, &mut bytes) {
+            match self.storage.read(STORAGE_START_ADDR + p, &mut bytes) {
                 Ok(_) => {
                     // Check address
                     let record = EepromRecord::from_bytes(bytes);
@@ -118,14 +148,52 @@ impl<F: Storage, const STORAGE_PAGE_SIZE: u32, const EEPROM_SIZE: usize>
                         return Some(record);
                     }
                 }
-                Err(_) => todo!(),
+                Err(_) => error!("Failed to read record from storage"),
             }
         }
 
         None
     }
 
+    fn check_consolidation(&mut self) -> bool {
+        if self.pos + 4 > STORAGE_SIZE {
+            info!("Backend storage is full, consolidating records");
+            self.consolidate_records();
+            // Check position again
+            if self.pos + 4 > STORAGE_SIZE {
+                error!("Backend storage is full, failed to write record");
+                return false;
+            }
+        }
+
+        true
+    }
+
     fn consolidate_records(&mut self) {
-        todo!()
+        // Erase the flash page first
+        // TODO: erase to STORAGE_START_ADDR + STORAGE_SIZE, or STORAGE_START_ADDR + self.pos?
+        match self
+            .storage
+            .erase(STORAGE_START_ADDR, STORAGE_START_ADDR + self.pos)
+        {
+            Ok(_) => {
+                // Consolidate records
+                // TODO: lock the eeprom while reconstructing
+                self.pos = 0;
+                for idx in (0..self.cache.len()).step_by(2) {
+                    // Skip default value
+                    if self.cache[idx] == 0xFF && self.cache[idx + 1] == 0xFF {
+                        continue;
+                    }
+                    // Build Eeprom record and write to flash
+                    let record = EepromRecord {
+                        address: idx as u16,
+                        data: ((self.cache[idx + 1] as u16) << 8) | (self.cache[idx] as u16),
+                    };
+                    self.write_record(record);
+                }
+            }
+            Err(_) => error!("Failed to erase storage"),
+        }
     }
 }
