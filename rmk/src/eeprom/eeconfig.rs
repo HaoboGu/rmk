@@ -4,7 +4,8 @@ const EEPROM_MAGIC: u16 = 0xFEE6;
 const KEYMAP_MAGIC: u16 = 0x1400;
 
 /// Keyboard configurations stored in EEPROM.
-#[derive(PackedStruct)]
+/// TODO: Read `EeConfig` values from EEPROM in-place: `EeConfig::unpack_from_slice(&eeprom.cache[0..16]);`
+#[derive(PackedStruct, Debug)]
 pub struct EeConfig {
     /// If this magic value equals to `EEPROM_MAGIC`, the EEPROM is enabled.
     #[packed_field(endian = "msb")]
@@ -23,9 +24,12 @@ pub struct EeConfig {
     /// RGB light configs
     #[packed_field(size_bytes = "5")]
     rgb_light: EeRgbLightConfig,
+    /// Via layout option 
+    #[packed_field(endian="msb")]
+    layout_option: u32,
 }
 
-#[derive(PackedStruct)]
+#[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeKeymapConfig {
     /// If this magic value equals to `KEYMAP_MAGIC`, the eeprom keymap config is enabled.
@@ -49,7 +53,7 @@ pub struct EeKeymapConfig {
     nkro: bool,
 }
 
-#[derive(PackedStruct)]
+#[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeBacklightConfig {
     #[packed_field(bits = "0")]
@@ -62,7 +66,7 @@ pub struct EeBacklightConfig {
     level: u8,
 }
 
-#[derive(PackedStruct)]
+#[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeAudioConfig {
     #[packed_field(bits = "0")]
@@ -73,7 +77,7 @@ pub struct EeAudioConfig {
     level: u8,
 }
 
-#[derive(PackedStruct)]
+#[derive(PackedStruct, Debug)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeRgbLightConfig {
     #[packed_field(bits = "0")]

@@ -517,6 +517,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 name = "rmk"
 version = "0.0.2"
 dependencies = [
+ "byteorder",
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal",
@@ -555,6 +556,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "log",
+ "packed_struct",
  "panic-rtt-target",
  "rmk",
  "rtic",

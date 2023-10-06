@@ -1,4 +1,4 @@
-mod eeconfig;
+pub mod eeconfig;
 
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
@@ -77,6 +77,10 @@ impl<
         }
 
         eeprom
+    }
+
+    pub fn get_cache(&mut self) -> &mut [u8] {
+        &mut self.cache
     }
 
     pub fn write_byte(&mut self, mut address: u16, data: &[u8]) {
