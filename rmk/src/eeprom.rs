@@ -1,3 +1,5 @@
+mod eeconfig;
+
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
 
