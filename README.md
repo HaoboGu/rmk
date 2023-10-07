@@ -7,12 +7,12 @@ Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
 A lot of todos at the list, any contributions are welcomed :)
 
-- [x] test rp2040
+- [x] support rp2040
 - [x] basic keyboard functions
 - [x] layer
 - [x] system/media keys
-- [ ] eeprom
-- [ ] via/vial support
+- [x] eeprom
+- [ ] 🚧 via/vial support
 - [ ] macro
 - [ ] encoder
 - [ ] RGB
