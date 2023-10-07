@@ -3,24 +3,6 @@ pub mod eeconfig;
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
 
-/// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
-/// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
-/// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
-/// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
-pub struct Eeprom<
-    F: NorFlash,
-    const STORAGE_START_ADDR: u32,
-    const STORAGE_SIZE: u32,
-    const EEPROM_SIZE: usize,
-> {
-    /// Current position in the storage
-    pos: u32,
-    /// Backend storage, implements `embedded-storage::NorFlash` trait
-    storage: F,
-    /// A eeprom cache in ram to speed up reads, whose size is same as the logical eeprom capacity
-    cache: [u8; EEPROM_SIZE],
-}
-
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
 pub struct EepromRecord {
@@ -43,6 +25,23 @@ impl EepromRecord {
     }
 }
 
+/// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
+/// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
+/// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
+/// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
+pub struct Eeprom<
+    F: NorFlash,
+    const STORAGE_START_ADDR: u32,
+    const STORAGE_SIZE: u32,
+    const EEPROM_SIZE: usize,
+> {
+    /// Current position in the storage
+    pos: u32,
+    /// Backend storage, implements `embedded-storage::NorFlash` trait
+    storage: F,
+    /// A eeprom cache in ram to speed up reads, whose size is same as the logical eeprom capacity
+    cache: [u8; EEPROM_SIZE],
+}
 impl<
         F: NorFlash,
         const STORAGE_START_ADDR: u32,
@@ -57,7 +56,9 @@ impl<
             cache: [0xFF; EEPROM_SIZE],
         };
 
+        eeprom.set_enable(true);
         // TODO: initialize eeprom using keymaps if eeprom is empty
+
 
         // Restore eeprom from storage
         let mut buf: [u8; 4] = [0xFF; 4];
@@ -77,10 +78,6 @@ impl<
         }
 
         eeprom
-    }
-
-    pub fn get_cache(&mut self) -> &mut [u8] {
-        &mut self.cache
     }
 
     pub fn write_byte(&mut self, mut address: u16, data: &[u8]) {
@@ -127,7 +124,7 @@ impl<
 
     /// Read bytes from eeprom, starting from the given address, and reading `read_size` bytes.
     /// Returns a slice of eeprom cache, which is immutable
-    pub fn read_byte(&mut self, address: u16, read_size: usize) -> &[u8] {
+    pub fn read_byte(&self, address: u16, read_size: usize) -> &[u8] {
         &self.cache[address as usize..(address as usize + read_size)]
     }
 

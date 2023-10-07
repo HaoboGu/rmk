@@ -67,11 +67,11 @@ pub fn process_via_packet(report: &mut ViaReport) {
         ViaCommand::DynamicKeymapSetKeycode => {
             let _layer = report.output_data[1];
             let _row = report.output_data[2];
-            let _col = report.output_data[3]; 
+            let _col = report.output_data[3];
             let _keycode = BigEndian::read_u16(&report.output_data[4..6]);
             todo!("DynamicKeymap - Set Keycode")
         }
-        ViaCommand::DynamicKeymapReset => todo!(),
+        ViaCommand::DynamicKeymapReset => todo!("DynamicKeymap - Reset"),
         ViaCommand::CustomSetValue => todo!(),
         ViaCommand::CustomGetValue => todo!(),
         ViaCommand::CustomSave => todo!(),
@@ -83,8 +83,18 @@ pub fn process_via_packet(report: &mut ViaReport) {
         ViaCommand::DynamicKeymapMacroSetBuffer => todo!(),
         ViaCommand::DynamicKeymapMacroReset => todo!(),
         ViaCommand::DynamicKeymapGetLayerCount => todo!(),
-        ViaCommand::DynamicKeymapGetBuffer => todo!(),
-        ViaCommand::DynamicKeymapSetBuffer => todo!(),
+        ViaCommand::DynamicKeymapGetBuffer => {
+            let _offset = BigEndian::read_u16(&report.output_data[1..3]);
+            // size <= 28
+            let _size = report.output_data[3]; 
+            todo!("DynamicKeymap - Get Buffer");
+        },
+        ViaCommand::DynamicKeymapSetBuffer => {
+            let _offset = BigEndian::read_u16(&report.output_data[1..3]);
+            // size <= 28
+            let _size = report.output_data[3]; 
+            todo!("DynamicKeymap - Set Buffer");
+        },
         ViaCommand::DynamicKeymapGetEncoder => todo!(),
         ViaCommand::DynamicKeymapSetEncoder => todo!(),
         ViaCommand::Vial => info!("Received vial command!"),
