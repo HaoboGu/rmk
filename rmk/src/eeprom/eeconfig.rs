@@ -38,6 +38,9 @@ const LAYOUT_OPTION_ADDR: u16 = 12;
 /// Size of layout option: 4 bytes
 const LAYOUT_OPTION_SIZE: usize = 4;
 
+/// Start index of dynamic keymap
+pub(crate) const DYNAMIC_KEYMAP_ADDR: u16 = 15;
+
 impl<
         F: NorFlash,
         const STORAGE_START_ADDR: u32,
@@ -45,6 +48,49 @@ impl<
         const EEPROM_SIZE: usize,
     > Eeprom<F, STORAGE_START_ADDR, STORAGE_SIZE, EEPROM_SIZE>
 {
+    /// Initialize eeprom with default eeconfig
+    pub fn init_with_default_config(&mut self) {
+        self.set_enable(true);
+        self.set_default_layer(0);
+        // TODO: move all default configs to a single place
+        self.set_keymap_config(EeKeymapConfig {
+            swap_control_capslock: false,
+            capslock_to_control: false,
+            swap_lalt_lgui: false,
+            swap_ralt_rgui: false,
+            no_gui: false,
+            swap_grave_esc: false,
+            swap_backslash_backspace: false,
+            nkro: false,
+            swap_lctl_lgui: false,
+            swap_rctl_rgui: false,
+            oneshot_enable: false,
+            swap_escape_capslock: false,
+            autocorrect_enable: false,
+            ..EeKeymapConfig::default()
+        });
+        self.set_backlight_config(EeBacklightConfig {
+            enable: false,
+            breathing: false,
+            reserved: false,
+            level: 0,
+        });
+        self.set_audio_config(EeAudioConfig {
+            enable: false,
+            clicky_enable: false,
+            level: 0,
+        });
+        self.set_rgb_light_config(EeRgbLightConfig {
+            enable: false,
+            mode: 0,
+            hue: 0,
+            sat: 0,
+            val: 0,
+            speed: 0,
+        });
+        self.set_layout_option(0);
+    }
+
     /// Enable or disable eeprom by writing magic value
     pub fn set_enable(&mut self, enabled: bool) {
         let magic = if enabled {
@@ -73,6 +119,18 @@ impl<
         self.cache[DEFAULT_LAYER_START]
     }
 
+    /// Set keymap config
+    pub fn set_keymap_config(&mut self, config: EeKeymapConfig) {
+        let mut buf = match config.pack() {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Pack keymap config error: {:?}", e);
+                [0xFF; 2]
+            }
+        };
+        self.write_byte(KEYMAP_CONFIG_ADDR, &mut buf);
+    }
+
     /// Returns keymap config as `EeKeymapConfig`
     pub fn get_keymap_config(&self) -> Option<EeKeymapConfig> {
         match EeKeymapConfig::unpack_from_slice(
@@ -84,6 +142,18 @@ impl<
                 None
             }
         }
+    }
+
+    /// Set backlight config
+    pub fn set_backlight_config(&mut self, config: EeBacklightConfig) {
+        let mut buf = match config.pack() {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Pack backlight config error: {:?}", e);
+                [0xFF; 1]
+            }
+        };
+        self.write_byte(BACKLIGHT_CONFIG_ADDR, &mut buf);
     }
 
     /// Returns backlight config as `EeBacklightConfig`
@@ -99,6 +169,18 @@ impl<
         }
     }
 
+    /// Set audio config
+    pub fn set_audio_config(&mut self, config: EeAudioConfig) {
+        let mut buf = match config.pack() {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Pack audio config error: {:?}", e);
+                [0xFF; 1]
+            }
+        };
+        self.write_byte(AUDIO_CONFIG_ADDR, &mut buf);
+    }
+
     /// Returns audio config as `EeAudioConfig`
     pub fn get_audio_config(&self) -> Option<EeAudioConfig> {
         match EeAudioConfig::unpack_from_slice(self.read_byte(AUDIO_CONFIG_ADDR, AUDIO_CONFIG_SIZE))
@@ -109,6 +191,18 @@ impl<
                 None
             }
         }
+    }
+
+    /// Set rgb light config
+    pub fn set_rgb_light_config(&mut self, config: EeRgbLightConfig) {
+        let mut buf = match config.pack() {
+            Ok(b) => b,
+            Err(e) => {
+                error!("Pack rgb light config error: {:?}", e);
+                [0xFF; 5]
+            }
+        };
+        self.write_byte(RGB_CONFIG_ADDR, &mut buf);
     }
 
     /// Returns rgb light config as `EeRgbLightConfig`
@@ -123,34 +217,49 @@ impl<
         }
     }
 
+    /// Set layout option
+    pub fn set_layout_option(&mut self, option: u32) {
+        let mut buf = [0xFF; 4];
+        BigEndian::write_u32(&mut buf, option);
+        self.write_byte(LAYOUT_OPTION_ADDR, &mut buf);
+    }
+
     /// Returns layout option
     pub fn get_layout_option(&self) -> u32 {
         BigEndian::read_u32(self.read_byte(LAYOUT_OPTION_ADDR, LAYOUT_OPTION_SIZE))
     }
 }
 
-#[derive(PackedStruct, Debug)]
-#[packed_struct(bit_numbering = "msb0")]
+#[derive(PackedStruct, Debug, Default)]
+#[packed_struct(bit_numbering = "msb0", bytes = "2")]
 pub struct EeKeymapConfig {
-    /// If this magic value equals to `KEYMAP_MAGIC`, the eeprom keymap config is enabled.
-    #[packed_field(bits = "0..=7")]
-    keymap_enable_magic: u8,
-    #[packed_field(bits = "8")]
+    #[packed_field(bits = "0")]
     swap_control_capslock: bool,
-    #[packed_field(bits = "9")]
+    #[packed_field(bits = "1")]
     capslock_to_control: bool,
-    #[packed_field(bits = "10")]
+    #[packed_field(bits = "2")]
     swap_lalt_lgui: bool,
-    #[packed_field(bits = "11")]
+    #[packed_field(bits = "3")]
     swap_ralt_rgui: bool,
-    #[packed_field(bits = "12")]
+    #[packed_field(bits = "4")]
     no_gui: bool,
-    #[packed_field(bits = "13")]
+    #[packed_field(bits = "5")]
     swap_grave_esc: bool,
-    #[packed_field(bits = "14")]
+    #[packed_field(bits = "6")]
     swap_backslash_backspace: bool,
-    #[packed_field(bits = "15")]
+    #[packed_field(bits = "7")]
     nkro: bool,
+    #[packed_field(bits = "8")]
+    swap_lctl_lgui: bool,
+    #[packed_field(bits = "9")]
+    swap_rctl_rgui: bool,
+    #[packed_field(bits = "10")]
+    oneshot_enable: bool,
+    #[packed_field(bits = "11")]
+    swap_escape_capslock: bool,
+    #[packed_field(bits = "12")]
+    autocorrect_enable: bool,
+    _reserved: ReservedOne<packed_bits::Bits<3>>,
 }
 
 #[derive(PackedStruct, Debug)]
