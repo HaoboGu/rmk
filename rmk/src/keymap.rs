@@ -7,7 +7,7 @@ use log::warn;
 /// RMK detects hardware key strokes, uses KeyPos to retrieve the action from KeyMap.
 pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
-    layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32

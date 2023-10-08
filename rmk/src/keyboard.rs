@@ -27,7 +27,7 @@ pub struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    keymap: KeyMap<ROW, COL, NUM_LAYER>,
+    pub keymap: KeyMap<ROW, COL, NUM_LAYER>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
