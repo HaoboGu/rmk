@@ -105,8 +105,13 @@ impl<
     }
 
     /// Returns eeprom magic value stored in EEPROM
-    pub fn get_magic(&self) -> u16 {
-        BigEndian::read_u16(self.read_byte(MAGIC_ADDR, MAGIC_SIZE))
+    pub fn get_magic(&mut self) -> u16 {
+        // ALWAYS read magic from backend store
+        if let Some(record) = self.read_record(0) {
+            record.data
+        } else {
+            EEPROM_DISABLED_MAGIC
+        }
     }
 
     /// Set default layer

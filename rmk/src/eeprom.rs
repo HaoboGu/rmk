@@ -1,7 +1,12 @@
 pub mod eeconfig;
+pub mod eekeymap;
 
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
+
+use crate::keymap::KeyMap;
+
+use self::eeconfig::EEPROM_MAGIC;
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
@@ -41,6 +46,12 @@ pub struct Eeprom<
     storage: F,
     /// A eeprom cache in ram to speed up reads, whose size is same as the logical eeprom capacity
     cache: [u8; EEPROM_SIZE],
+    /// Size for dynamic keymap.
+    /// Each key in keymap used 2 bytes, so the size should be at least 2 * NUM_LAYER * ROW * COL.
+    ///
+    ///  For a 104-key keyboard, with 4 layers, 6 rows and 21 columns, the size is 1008 bytes,
+    ///  EEPROM_SIZE should be at least 1008(keymap) + 15(eeconfig) + 100(macro)
+    dynamic_keymap_size: usize,
 }
 impl<
         F: NorFlash,
@@ -49,16 +60,23 @@ impl<
         const EEPROM_SIZE: usize,
     > Eeprom<F, STORAGE_START_ADDR, STORAGE_SIZE, EEPROM_SIZE>
 {
-    pub fn new(storage: F) -> Self {
+    pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+        storage: F,
+        keymap: &KeyMap<ROW, COL, NUM_LAYER>,
+    ) -> Self {
         let mut eeprom = Eeprom {
             pos: 0,
             storage,
             cache: [0xFF; EEPROM_SIZE],
+            dynamic_keymap_size: ROW * COL * NUM_LAYER * 2,
         };
 
-        eeprom.set_enable(true);
-        // TODO: initialize eeprom using keymaps if eeprom is empty
-
+        // Initialize eeprom using default config
+        if eeprom.get_magic() != EEPROM_MAGIC {
+            // TODO: support user custom config
+            eeprom.init_with_default_config();
+            eeprom.set_keymap(keymap);
+        }
 
         // Restore eeprom from storage
         let mut buf: [u8; 4] = [0xFF; 4];
@@ -174,7 +192,6 @@ impl<
 
     fn consolidate_records(&mut self) {
         // Erase the flash page first
-        // TODO: erase to STORAGE_START_ADDR + STORAGE_SIZE, or STORAGE_START_ADDR + self.pos?
         match self
             .storage
             .erase(STORAGE_START_ADDR, STORAGE_START_ADDR + self.pos)

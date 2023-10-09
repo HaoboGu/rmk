@@ -1,53 +1,56 @@
+use crate::keycode::{KeyCode, ModifierCombination};
 use log::error;
-
-use crate::keycode::{KeyCode, Modifier};
+use packed_struct::prelude::*;
 
 /// A KeyAction is the action of a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like TapHold
-/// 
+///
 /// Each `KeyAction` can be serialized to a u16, which can be stored in EEPROM.
 ///
-/// 16bits = KeyAction type(4bits) + KeyAction Detail(4bits) + BasicAction(8bits)
+/// 16bits = KeyAction type(3bits) + Layer/Modifier Detail(5bits) + BasicAction(8bits)
 ///
 /// OR
 ///
-/// 16bits = KeyAction type(4bits) + KeyAction Detail(4bits) + BasicAction(8bits)
+/// 16bits = KeyAction type(3bits) + Action(12bits)
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum KeyAction {
     /// No action
-    /// 
+    ///
     /// Serialized as 0x0000
     No,
     /// Transparent action, next layer will be checked
-    /// 
+    ///
     /// Serialized as 0x0001
     Transparent,
     /// A single action, such as triggering a key, or activating a layer.
     /// Action is triggered when pressed and cancelled when released.
-    /// 
+    ///
     /// Serialized as 0000|Action(12bits).
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
-    /// 
+    ///
     /// Serialized as 0001|Action(12bits).
     Tap(Action),
     /// Keep current key pressed until the next key is triggered.
-    /// 
+    ///
     /// Serialized as 0010|Action(12bits).
     OneShot(Action),
     /// Action with a modifier triggered, only `Action::Key(BasicKeyCodes)`(aka 0x004 ~ 0x0FF) can be used with modifier.
-    /// 
-    /// Serialized as 0011|modifier(4bits)|BasicAction(8bits).
-    WithModifier(Action, Modifier),
-    /// Tap/hold will trigger different actions: TapHold(tap_action, hold_action).
+    ///
+    /// Serialized as 010|modifier(5bits)|BasicAction(8bits).
+    WithModifier(Action, ModifierCombination),
+    /// Layer Tap/hold will trigger different actions: TapHold(tap_action, hold_action).
     /// Only modifier and layer operation(0~15 layer) can be used as `hold_action`.
     /// `tap_action` is limited to `Action::Key(BasicKeyCodes)`(aka 0x004 ~ 0x0FF)
-    /// 
-    /// Serialized as 0100|modifier(4bits)|BasicKeyCodes(8bits)
-    /// Serialized as 0101|layer(4bits)|BasicKeyCodes(8bits)
-    // TODO1: Check compatibility with VIA
-    // TODO2: Does it better for layer TapHold? -> 1|layer(3bits)|AllKeyCodes(12bits)
-    // only layer 0-7 can be used in this case
+    ///
+    /// Serialized as 1|layer(3bits)|Action(12bits)
+    LayerTapHold(Action, u8),
+    /// Modifier Tap/hold will trigger different actions: TapHold(tap_action, modifier).
+    ///
+    /// Serialized as 011|modifier(5bits)|BasicKeyCodes(8bits)
+    ModifierTapHold(Action, ModifierCombination),
+    /// General TapHold action. It cannot be serialized to u16, will be ignored temporarily.
+    /// TODO: Figura out a better way to represent & save a general tap/hold action
     TapHold(Action, Action),
 }
 
@@ -59,32 +62,49 @@ impl KeyAction {
             KeyAction::Single(a) => a.to_u16(),
             KeyAction::Tap(a) => 0x0001 | a.to_u16(),
             KeyAction::OneShot(a) => 0x0010 | a.to_u16(),
-            KeyAction::WithModifier(a, m) => 0x0011 | ((*m as u16) << 8) | a.to_u16(),
-            KeyAction::TapHold(tap_action, hold_action) => match (tap_action, hold_action) {
-                (Action::Key(tap_key), Action::Key(hold_key)) => {
-                    // TapHold(key, modifier)
-                    if tap_key.is_basic() {
-                        if let Some(m) = Modifier::from_keycode(*hold_key) {
-                            return 0x0100 | ((m as u16) << 8) | (*tap_key as u16);
-                        }
-                    }
-                    // Not supported case
-                    error!("Unsupported TapHold action: {:?}", self);
-                    0x0000
-                }
-                (Action::Key(tap_key), Action::LayerOn(layer)) => {
-                    if tap_key.is_basic() && *layer < 16 {
-                        0x0101 | ((*layer as u16) << 8) | (*tap_key as u16)
+            KeyAction::WithModifier(a, m) => {
+                let mut modifier_bits = [0];
+                // Ignore packing error
+                ModifierCombination::pack_to_slice(m, &mut modifier_bits).unwrap_or_default();
+                0x4000 | ((modifier_bits[0] as u16) << 8) | a.to_u16()
+            }
+            KeyAction::ModifierTapHold(action, modifier) => match action {
+                Action::Key(k) => {
+                    if k.is_basic() {
+                        let mut modifier_bits = [0];
+                        // Ignore packing error
+                        ModifierCombination::pack_to_slice(modifier, &mut modifier_bits)
+                            .unwrap_or_default();
+                        0x6000 | ((modifier_bits[0] as u16) << 8) | *k as u16
                     } else {
-                        error!("Unsupported TapHold action: {:?}", self);
-                        0x0000
+                        0x000
                     }
                 }
                 _ => {
-                    error!("Unsupported TapHold action: {:?}", self);
+                    error!("ModifierTapHold supports basic keycodes");
                     0x0000
                 }
             },
+            KeyAction::LayerTapHold(action, layer) => {
+                if *layer < 8 {
+                    0x8000 | ((*layer as u16) << 15) | action.to_u16()
+                } else {
+                    error!("LayerTapHold supports layers 0~7, got {}", layer);
+                    0x0000
+                }
+            }
+            KeyAction::TapHold(_, _) => {
+                error!("Unsupported TapHold action: {:?}", self);
+                0x0000
+            }
+        }
+    }
+
+    pub fn from_via_keycode(via_keycode: u16) -> Self {
+        match via_keycode {
+            0x0000 => KeyAction::No,
+            0x0001 => KeyAction::Transparent,
+            _ => todo!()
         }
     }
 }

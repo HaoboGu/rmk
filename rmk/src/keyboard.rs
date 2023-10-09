@@ -1,6 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
-    keycode::{KeyCode, Modifier},
+    keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
     usb::KeyboardUsbDevice,
@@ -109,7 +109,7 @@ impl<
     pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
         if usb_device.read_via_report(&mut self.via_report) > 0 {
             process_via_packet(&mut self.via_report);
-            
+
             // Send via report back after processing
             usb_device.send_via_report(&self.via_report);
         }
@@ -156,6 +156,8 @@ impl<
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
+            KeyAction::LayerTapHold(_, _) => todo!(),
+            KeyAction::ModifierTapHold(_, _) => todo!(),
         }
     }
 
@@ -164,8 +166,8 @@ impl<
             Action::Key(key) => self.process_action_keycode(key, key_state),
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
             Action::LayerOff(layer_num) => {
-                // We just turn off a layer when the key is pressed
-                // TODO: Do we really need this action?
+                // Turn off a layer temporarily when the key is pressed
+                // Reactivate the layer after the key is released
                 if key_state.changed && key_state.pressed {
                     self.keymap.deactivate_layer(layer_num);
                 }
@@ -175,7 +177,6 @@ impl<
                 if key_state.changed && !key_state.pressed {
                     self.keymap.toggle_layer(layer_num);
                 }
-
             }
         }
     }
@@ -183,12 +184,15 @@ impl<
     fn process_key_action_with_modifier(
         &mut self,
         action: Action,
-        modifier: Modifier,
+        modifier: ModifierCombination,
         key_state: KeyState,
     ) {
         // Process modifier first
         // TODO: check the order when release a key
-        self.process_action_keycode(modifier.as_keycode(), key_state);
+        let (keycodes, n) = modifier.to_modifier_keycodes();
+        for i in 0..n {
+            self.process_action_keycode(keycodes[i], key_state);
+        }
         self.process_key_action_normal(action, key_state);
     }
 

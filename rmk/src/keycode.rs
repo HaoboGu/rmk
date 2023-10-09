@@ -1,52 +1,85 @@
 use num_enum::FromPrimitive;
+use packed_struct::prelude::*;
 use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 
-/// Modifiers defined in hid spec.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Modifier {
-    /// Left control.
-    LCtrl,
-    /// Left shift.
-    LShift,
-    /// Left alt(option).
-    LAlt,
-    /// Left gui(widnows/command/meta key).
-    LGui,
-    /// Right control.
-    RCtrl,
-    /// Right shift.
-    RShift,
-    /// Right alt(option/AltGr).
-    RAlt,
-    /// Right gui(windows/command/meta key).
-    RGui,
+/// To represent all combinations of modifiers, at least 5 bits are needed:
+/// 1 bit for Left/Right, 4 bits for modifier type.
+/// |  x  |  x  |  x  |  x  |  x  |
+/// | L/R | GUI | ALT |SHIFT| CTRL|
+#[derive(PackedStruct, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[packed_struct(bit_numbering = "msb0", bytes = "1")]
+pub struct ModifierCombination {
+    #[packed_field(bits = "0")]
+    ctrl: bool,
+    #[packed_field(bits = "1")]
+    shift: bool,
+    #[packed_field(bits = "2")]
+    alt: bool,
+    #[packed_field(bits = "3")]
+    gui: bool,
+    #[packed_field(bits = "4")]
+    left: bool,
 }
 
-impl Modifier {
-    pub fn as_keycode(self) -> KeyCode {
-        match self {
-            Modifier::LCtrl => KeyCode::LCtrl,
-            Modifier::LShift => KeyCode::LShift,
-            Modifier::LAlt => KeyCode::LAlt,
-            Modifier::LGui => KeyCode::LGui,
-            Modifier::RCtrl => KeyCode::RCtrl,
-            Modifier::RShift => KeyCode::RShift,
-            Modifier::RAlt => KeyCode::RAlt,
-            Modifier::RGui => KeyCode::RGui,
+impl ModifierCombination {
+    /// Convert modifier combination to a list of modifier keycodes.
+    /// Returns a list of modifiers keycodes, and the length of the list.
+    pub fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
+        let mut keycodes = [KeyCode::No; 8];
+        let mut i = 0;
+        if self.left {
+            if self.ctrl {
+                keycodes[i] = KeyCode::LCtrl;
+                i += 1;
+            }
+            if self.shift {
+                keycodes[i] = KeyCode::LShift;
+                i += 1;
+            }
+            if self.alt {
+                keycodes[i] = KeyCode::LAlt;
+                i += 1;
+            }
+            if self.gui {
+                keycodes[i] = KeyCode::LGui;
+                i += 1;
+            }
+        } else {
+            if self.ctrl {
+                keycodes[i] = KeyCode::RCtrl;
+                i += 1;
+            }
+            if self.shift {
+                keycodes[i] = KeyCode::RShift;
+                i += 1;
+            }
+            if self.alt {
+                keycodes[i] = KeyCode::RAlt;
+                i += 1;
+            }
+            if self.gui {
+                keycodes[i] = KeyCode::RGui;
+                i += 1;
+            }
         }
+
+        (keycodes, i)
     }
-    pub fn from_keycode(keycode: KeyCode) -> Option<Self> {
-        match keycode {
-            KeyCode::LCtrl => Some(Modifier::LCtrl),
-            KeyCode::LShift => Some(Modifier::LShift),
-            KeyCode::LAlt => Some(Modifier::LAlt),
-            KeyCode::LGui => Some(Modifier::LGui),
-            KeyCode::RCtrl => Some(Modifier::RCtrl),
-            KeyCode::RShift => Some(Modifier::RShift),
-            KeyCode::RAlt => Some(Modifier::RAlt),
-            KeyCode::RGui => Some(Modifier::RGui),
-            _ => None,
+
+    /// Get modifier hid report bits from modifier combination
+    pub fn to_hid_modifier_bits(&self) -> u8 {
+        let (keycodes, n) = self.to_modifier_keycodes();
+        let mut hid_modifier_bits = 0;
+        for i in 0..n {
+            hid_modifier_bits |= keycodes[i].as_modifier_bit();
         }
+
+        hid_modifier_bits
+    }
+
+    /// Convert modifier combination to bits
+    pub fn to_bits(&self) -> u8 {
+        ModifierCombination::pack(&self).unwrap_or_default()[0]
     }
 }
 
