@@ -88,7 +88,7 @@ pub fn process_via_packet(report: &mut ViaReport) {
             report.input_data[2] = 0x10;
         }
         ViaCommand::DynamicKeymapMacroGetBuffer => {
-            let offset = BigEndian::read_u16(&report.output_data[1..3]);
+            let _offset = BigEndian::read_u16(&report.output_data[1..3]);
             let size = report.output_data[3];
             if size <= 28 {
                 info!("Current returned data: {:02X?}", report.input_data);
