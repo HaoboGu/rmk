@@ -5,3 +5,5 @@
 *.bin
 *.elf
 *.hex
+
+.idea
