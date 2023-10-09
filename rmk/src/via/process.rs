@@ -6,14 +6,15 @@ use rtic_monotonics::{systick::Systick, Monotonic};
 
 pub fn process_via_packet(report: &mut ViaReport) {
     let command_id = report.output_data[0];
-    info!(
-        "Received via report: {:02X?}, command_id: {}",
-        report.output_data, command_id
-    );
 
     // `report.input_data` is initialized using `report.output_data`
     report.input_data = report.output_data;
-    match ViaCommand::from_primitive(command_id) {
+    let via_command = ViaCommand::from_primitive(command_id);
+    info!(
+        "Received via report: {:02X?}, command_id: {:?}",
+        report.output_data, via_command
+    );
+    match via_command {
         ViaCommand::GetProtocolVersion => {
             BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
         }
@@ -26,11 +27,11 @@ pub fn process_via_packet(report: &mut ViaReport) {
                         BigEndian::write_u32(&mut report.input_data[2..6], value);
                     }
                     ViaKeyboardInfo::LayoutOptions => {
-                        let _layout_option: u32 = todo!("get layout option");
-                        // BigEndian::write_u32(&mut report.input_data[2..6], _layout_option);
+                        let layout_option: u32 = 0;
+                        BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                     }
                     ViaKeyboardInfo::SwitchMatrixState => {
-                        todo!("GetKeyboardValue - SwitchMatrixState")
+                        // todo!("GetKeyboardValue - SwitchMatrixState")
                     }
                     ViaKeyboardInfo::FirmwareVersion => {
                         BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
@@ -68,8 +69,9 @@ pub fn process_via_packet(report: &mut ViaReport) {
             let _layer = report.output_data[1];
             let _row = report.output_data[2];
             let _col = report.output_data[3];
-            let _keycode = BigEndian::read_u16(&report.output_data[4..6]);
-            todo!("DynamicKeymap - Set Keycode")
+            let keycode = BigEndian::read_u16(&report.output_data[4..6]);
+            info!("KeyCode: {:02X?}", keycode);
+            // todo!("DynamicKeymap - Set Keycode")
         }
         ViaCommand::DynamicKeymapReset => todo!("DynamicKeymap - Reset"),
         ViaCommand::CustomSetValue => todo!(),
@@ -77,27 +79,52 @@ pub fn process_via_packet(report: &mut ViaReport) {
         ViaCommand::CustomSave => todo!(),
         ViaCommand::EepromReset => todo!(),
         ViaCommand::BootloaderJump => todo!(),
-        ViaCommand::DynamicKeymapMacroGetCount => todo!(),
-        ViaCommand::DynamicKeymapMacroGetBufferSize => todo!(),
-        ViaCommand::DynamicKeymapMacroGetBuffer => todo!(),
+        ViaCommand::DynamicKeymapMacroGetCount => {
+            report.input_data[1] = 1;
+        }
+        ViaCommand::DynamicKeymapMacroGetBufferSize => {
+            // report.input_data[0] = 0xFF;
+            report.input_data[1] = 0x00;
+            report.input_data[2] = 0x10;
+        }
+        ViaCommand::DynamicKeymapMacroGetBuffer => {
+            let offset = BigEndian::read_u16(&report.output_data[1..3]);
+            let size = report.output_data[3];
+            if size <= 28 {
+                info!("Current returned data: {:02X?}", report.input_data);
+            } else {
+                report.input_data[0] = 0xFF;
+            }
+        },
         ViaCommand::DynamicKeymapMacroSetBuffer => todo!(),
         ViaCommand::DynamicKeymapMacroReset => todo!(),
-        ViaCommand::DynamicKeymapGetLayerCount => todo!(),
+        ViaCommand::DynamicKeymapGetLayerCount => {
+            report.input_data[1] = 4;
+        }
         ViaCommand::DynamicKeymapGetBuffer => {
             let _offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
-            let _size = report.output_data[3]; 
-            todo!("DynamicKeymap - Get Buffer");
-        },
+            let _size = report.output_data[3];
+            report.input_data[4..].fill(0x00);
+            // Fill KC_As 
+            for i in 4..(4+_size as usize) {
+                if i % 2 == 0 {
+                    report.input_data[i] = 0x00;
+                } else {
+                    report.input_data[i] = 0x04;
+                }
+            }
+            // todo!("DynamicKeymap - Get Buffer");
+        }
         ViaCommand::DynamicKeymapSetBuffer => {
             let _offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
-            let _size = report.output_data[3]; 
-            todo!("DynamicKeymap - Set Buffer");
-        },
+            let _size = report.output_data[3];
+            // todo!("DynamicKeymap - Set Buffer");
+        }
         ViaCommand::DynamicKeymapGetEncoder => todo!(),
         ViaCommand::DynamicKeymapSetEncoder => todo!(),
-        ViaCommand::Vial => info!("Received vial command!"),
+        ViaCommand::Vial => vial::process_vial(report),
         ViaCommand::Unhandled => todo!(),
     }
 }

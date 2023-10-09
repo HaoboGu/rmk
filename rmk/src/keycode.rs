@@ -18,7 +18,7 @@ pub struct ModifierCombination {
     #[packed_field(bits = "3")]
     gui: bool,
     #[packed_field(bits = "4")]
-    left: bool,
+    right: bool,
 }
 
 impl ModifierCombination {
@@ -27,7 +27,7 @@ impl ModifierCombination {
     pub fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
         let mut keycodes = [KeyCode::No; 8];
         let mut i = 0;
-        if self.left {
+        if self.right {
             if self.ctrl {
                 keycodes[i] = KeyCode::LCtrl;
                 i += 1;
@@ -80,6 +80,11 @@ impl ModifierCombination {
     /// Convert modifier combination to bits
     pub fn to_bits(&self) -> u8 {
         ModifierCombination::pack(&self).unwrap_or_default()[0]
+    }
+
+    /// Convert from bits
+    pub fn from_bits(bits: u8) -> Self {
+        ModifierCombination::unpack(&[bits]).unwrap_or_default()
     }
 }
 

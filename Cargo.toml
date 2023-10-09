@@ -6,7 +6,7 @@ default-members = ["boards/stm32h7", "rmk"]
 # Profile dev: optimize for fast compiling with debug info
 [profile.dev]
 debug = true
-opt-level = 2
+opt-level = 3
 overflow-checks = true
 lto = false
 

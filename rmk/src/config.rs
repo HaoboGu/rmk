@@ -8,10 +8,10 @@ pub struct KeyboardConfig<'a> {
 
 pub static KEYBOARD_CONFIG: KeyboardConfig = KeyboardConfig {
     usb_config: UsbHidConfig {
-        pid: 0x1234,
-        vid: 0x1233,
+        pid: 0x4643,
+        vid: 0x4C4B,
         manufacturer: "RMK",
         product: "RMK product",
-        serial_number: "0",
+        serial_number: "vial:f64c2b3c:000001",
     },
 };
