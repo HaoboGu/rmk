@@ -178,6 +178,7 @@ impl<
                     self.keymap.toggle_layer(layer_num);
                 }
             }
+            _ => (),
         }
     }
 
