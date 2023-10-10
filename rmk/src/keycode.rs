@@ -7,7 +7,7 @@ use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 /// |  x  |  x  |  x  |  x  |  x  |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[derive(PackedStruct, Clone, Copy, Debug, Default, Eq, PartialEq)]
-#[packed_struct(bit_numbering = "msb0", bytes = "1")]
+#[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
 pub struct ModifierCombination {
     #[packed_field(bits = "0")]
     ctrl: bool,
@@ -22,6 +22,16 @@ pub struct ModifierCombination {
 }
 
 impl ModifierCombination {
+    pub fn new(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
+        ModifierCombination {
+            ctrl,
+            shift,
+            alt,
+            gui,
+            right,
+        }
+    }
+
     /// Convert modifier combination to a list of modifier keycodes.
     /// Returns a list of modifiers keycodes, and the length of the list.
     pub fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
@@ -84,7 +94,7 @@ impl ModifierCombination {
 
     /// Convert from bits
     pub fn from_bits(bits: u8) -> Self {
-        ModifierCombination::unpack(&[bits]).unwrap_or_default()
+        ModifierCombination::unpack_from_slice(&[bits]).unwrap_or_default()
     }
 }
 
@@ -659,6 +669,7 @@ pub enum KeyCode {
     RgbModeKnight = 0x630,
     RgbModeXmas = 0x631,
     RgbModeGradient = 0x632,
+    // Not in vial
     RgbModeRgbtest = 0x633,
     RgbModeTwinkle = 0x634,
     // Internal functional keycodes, use 0x700 ~ 0x7FF
