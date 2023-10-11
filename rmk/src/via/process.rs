@@ -95,7 +95,7 @@ pub fn process_via_packet(report: &mut ViaReport) {
             } else {
                 report.input_data[0] = 0xFF;
             }
-        },
+        }
         ViaCommand::DynamicKeymapMacroSetBuffer => todo!(),
         ViaCommand::DynamicKeymapMacroReset => todo!(),
         ViaCommand::DynamicKeymapGetLayerCount => {
@@ -106,8 +106,8 @@ pub fn process_via_packet(report: &mut ViaReport) {
             // size <= 28
             let _size = report.output_data[3];
             report.input_data[4..].fill(0x00);
-            // Fill KC_As 
-            for i in 4..(4+_size as usize) {
+            // Fill KC_As
+            for i in 4..(4 + _size as usize) {
                 if i % 2 == 0 {
                     report.input_data[i] = 0x00;
                 } else {

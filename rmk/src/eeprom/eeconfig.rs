@@ -78,7 +78,7 @@ impl<
         self.set_audio_config(EeAudioConfig {
             enable: false,
             clicky_enable: false,
-            level: 0,
+            level: 1,
         });
         self.set_rgb_light_config(EeRgbLightConfig {
             enable: false,
