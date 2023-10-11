@@ -1,5 +1,5 @@
 {
-    "cortex-debug.variableUseNaturalFormat": true,
+    "cortex-debug.variableUseNaturalFormat": false,
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.overrideCommand": [
         "cargo",
