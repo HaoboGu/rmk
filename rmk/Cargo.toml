@@ -21,3 +21,7 @@ usb-device = "0.2.9"
 usbd-hid = "0.6.1"
 packed_struct = { version = "0.10.1", default-features = false }
 byteorder = { version = "1.4", default-features = false }
+
+[features]
+default = ["col2row"]
+col2row = []

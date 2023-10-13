@@ -21,9 +21,9 @@ pub struct Keyboard<
     const NUM_LAYER: usize,
 > {
     /// Keyboard matrix, use COL2ROW by default
-    #[cfg(not(feature = "ROW2COL"))]
+    #[cfg(feature = "col2row")]
     pub matrix: Matrix<In, Out, ROW, COL>,
-    #[cfg(feature = "ROW2COL")]
+    #[cfg(not(feature = "col2row"))]
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
