@@ -3,8 +3,8 @@ use crate::{
     keymap::KeyMap,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
-use byteorder::{BigEndian, ByteOrder};
-use log::info;
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use log::{info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
 use rtic_monotonics::{systick::Systick, Monotonic};
 
@@ -88,19 +88,36 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
             );
             keymap.set_action_at(row, col, layer, from_via_keycode(keycode));
         }
-        ViaCommand::DynamicKeymapReset => todo!("DynamicKeymap - Reset"),
-        ViaCommand::CustomSetValue => todo!(),
-        ViaCommand::CustomGetValue => todo!(),
-        ViaCommand::CustomSave => todo!(),
-        ViaCommand::EepromReset => todo!(),
-        ViaCommand::BootloaderJump => todo!(),
+        ViaCommand::DynamicKeymapReset => {
+            warn!("Dynamic keymap reset -- not supported")
+        }
+        ViaCommand::CustomSetValue => {
+            // backlight/rgblight/rgb matrix/led matrix/audio settings here
+            warn!("Custom set value -- not supported")
+        }
+        ViaCommand::CustomGetValue => {
+            // backlight/rgblight/rgb matrix/led matrix/audio settings here
+            warn!("Custom get value -- not supported")
+        }
+        ViaCommand::CustomSave => {
+            // backlight/rgblight/rgb matrix/led matrix/audio settings here
+            warn!("Custom get value -- not supported")
+        }
+        ViaCommand::EepromReset => {
+            warn!("Eeprom reset -- not supported")
+        }
+        ViaCommand::BootloaderJump => {
+            warn!("Bootloader jump -- not supported")
+        }
         ViaCommand::DynamicKeymapMacroGetCount => {
             report.input_data[1] = 1;
+            warn!("Macro get count -- to be implemented")
         }
         ViaCommand::DynamicKeymapMacroGetBufferSize => {
             // report.input_data[0] = 0xFF;
             report.input_data[1] = 0x00;
             report.input_data[2] = 0x10;
+            warn!("Macro get buffer size -- to be implemented")
         }
         ViaCommand::DynamicKeymapMacroGetBuffer => {
             let _offset = BigEndian::read_u16(&report.output_data[1..3]);
@@ -110,36 +127,61 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
             } else {
                 report.input_data[0] = 0xFF;
             }
+            warn!("Macro get buffer -- to be implemented")
         }
-        ViaCommand::DynamicKeymapMacroSetBuffer => todo!(),
-        ViaCommand::DynamicKeymapMacroReset => todo!(),
+        ViaCommand::DynamicKeymapMacroSetBuffer => {
+            warn!("Macro set buffer -- to be implemented")
+        }
+        ViaCommand::DynamicKeymapMacroReset => {
+            warn!("Macro reset -- to be implemented")
+        }
         ViaCommand::DynamicKeymapGetLayerCount => {
-            report.input_data[1] = 4;
+            report.input_data[1] = NUM_LAYER as u8;
         }
         ViaCommand::DynamicKeymapGetBuffer => {
-            let _offset = BigEndian::read_u16(&report.output_data[1..3]);
+            let offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
-            let _size = report.output_data[3];
-            report.input_data[4..].fill(0x00);
-            // Fill KC_As
-            for i in 4..(4 + _size as usize) {
-                if i % 2 == 0 {
-                    report.input_data[i] = 0x00;
-                } else {
-                    report.input_data[i] = 0x04;
-                }
-            }
-            // todo!("DynamicKeymap - Get Buffer");
+            let size = report.output_data[3];
+            let mut idx = 4;
+            keymap
+                .layers
+                .iter()
+                .flatten()
+                .flatten()
+                .skip(offset as usize)
+                .take(size as usize)
+                .for_each(|a| {
+                    let kc = to_via_keycode(*a);
+                    LittleEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
+                    idx += 2;
+                });
         }
         ViaCommand::DynamicKeymapSetBuffer => {
-            let _offset = BigEndian::read_u16(&report.output_data[1..3]);
+            let offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
-            let _size = report.output_data[3];
-            // todo!("DynamicKeymap - Set Buffer");
+            let size = report.output_data[3];
+            let mut idx = 4;
+            keymap
+                .layers
+                .iter_mut()
+                .flatten()
+                .flatten()
+                .skip(offset as usize)
+                .take(size as usize)
+                .for_each(|a| {
+                    let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
+                    let action = from_via_keycode(via_keycode);
+                    *a = action;
+                    idx += 2;
+                })
         }
-        ViaCommand::DynamicKeymapGetEncoder => todo!(),
-        ViaCommand::DynamicKeymapSetEncoder => todo!(),
+        ViaCommand::DynamicKeymapGetEncoder => {
+            warn!("Keymap get encoder -- not supported");
+        }
+        ViaCommand::DynamicKeymapSetEncoder => {
+            warn!("Keymap get encoder -- not supported");
+        }
         ViaCommand::Vial => vial::process_vial(report),
-        ViaCommand::Unhandled => todo!(),
+        ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
     }
 }
