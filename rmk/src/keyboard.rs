@@ -108,7 +108,7 @@ impl<
     /// Read hid report.
     pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
         if usb_device.read_via_report(&mut self.via_report) > 0 {
-            process_via_packet(&mut self.via_report);
+            process_via_packet(&mut self.via_report, &mut self.keymap);
 
             // Send via report back after processing
             usb_device.send_via_report(&self.via_report);
@@ -143,7 +143,7 @@ impl<
 
         // Process key
         let key_state = self.matrix.get_key_state(row, col);
-        let action = self.keymap.get_action(row, col, key_state);
+        let action = self.keymap.get_action_with_layer_cache(row, col, key_state);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state),

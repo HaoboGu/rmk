@@ -27,8 +27,22 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
     }
 
+    pub fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {
+        self.layers[layer_num][row][col] = action;
+    }
+
     /// Fetch the action in keymap, with layer cache
-    pub fn get_action(&mut self, row: usize, col: usize, key_state: KeyState) -> KeyAction {
+    pub fn get_action_at(&mut self, row: usize, col: usize, layer_num: usize) -> KeyAction {
+        self.layers[layer_num][row][col]
+    }
+
+    /// Fetch the action in keymap, with layer cache
+    pub fn get_action_with_layer_cache(
+        &mut self,
+        row: usize,
+        col: usize,
+        key_state: KeyState,
+    ) -> KeyAction {
         if !key_state.pressed && key_state.changed {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(row, col);

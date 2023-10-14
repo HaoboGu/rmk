@@ -1,10 +1,17 @@
 use super::{descriptor::*, protocol::*, *};
+use crate::{
+    keymap::KeyMap,
+    via::keycode_convert::{from_via_keycode, to_via_keycode},
+};
 use byteorder::{BigEndian, ByteOrder};
 use log::info;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 use rtic_monotonics::{systick::Systick, Monotonic};
 
-pub fn process_via_packet(report: &mut ViaReport) {
+pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    report: &mut ViaReport,
+    keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
+) {
     let command_id = report.output_data[0];
 
     // `report.input_data` is initialized using `report.output_data`
@@ -59,19 +66,27 @@ pub fn process_via_packet(report: &mut ViaReport) {
             }
         }
         ViaCommand::DynamicKeymapGetKeycode => {
-            let _layer = report.output_data[1];
-            let _row = report.output_data[2];
-            let _col = report.output_data[3];
-            let _keycode: u16 = todo!("get keycode");
-            // BigEndian::write_u16(&mut report.input_data[4..6], keycode);
+            let layer = report.output_data[1] as usize;
+            let row = report.output_data[2] as usize;
+            let col = report.output_data[3] as usize;
+            let action = keymap.get_action_at(row, col, layer);
+            let keycode = to_via_keycode(action);
+            info!(
+                "Getting keycode: {:02X?} at ({},{}), layer {}",
+                keycode, row, col, layer
+            );
+            BigEndian::write_u16(&mut report.input_data[4..6], keycode);
         }
         ViaCommand::DynamicKeymapSetKeycode => {
-            let _layer = report.output_data[1];
-            let _row = report.output_data[2];
-            let _col = report.output_data[3];
+            let layer = report.output_data[1] as usize;
+            let row = report.output_data[2] as usize;
+            let col = report.output_data[3] as usize;
             let keycode = BigEndian::read_u16(&report.output_data[4..6]);
-            info!("KeyCode: {:02X?}", keycode);
-            // todo!("DynamicKeymap - Set Keycode")
+            info!(
+                "Setting keycode: {:02X?} at ({},{}), layer {}",
+                keycode, row, col, layer
+            );
+            keymap.set_action_at(row, col, layer, from_via_keycode(keycode));
         }
         ViaCommand::DynamicKeymapReset => todo!("DynamicKeymap - Reset"),
         ViaCommand::CustomSetValue => todo!(),
