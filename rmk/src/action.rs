@@ -50,7 +50,7 @@ pub enum KeyAction {
     /// Serialized as 011|modifier(5bits)|BasicKeyCodes(8bits)
     ModifierTapHold(Action, ModifierCombination),
     /// General TapHold action. It cannot be serialized to u16, will be ignored temporarily.
-    /// TODO: Figura out a better way to represent & save a general tap/hold action
+    /// TODO: Figure out a better way to represent & save a general tap/hold action
     TapHold(Action, Action),
 }
 

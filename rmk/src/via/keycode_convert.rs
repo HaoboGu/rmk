@@ -1,3 +1,4 @@
+use log::warn;
 use num_enum::FromPrimitive;
 
 use crate::{
@@ -14,7 +15,10 @@ pub fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::LayerOn(l) => 0x5100 | l as u16,
             _ => 0x0000,
         },
-        KeyAction::Tap(_) => todo!(),
+        KeyAction::Tap(_) => {
+            warn!("Tap action is not supported by via");
+            0
+        }
         KeyAction::OneShot(a) => match a {
             Action::Modifier(m) => {
                 let modifier_bits = m.to_bits();

@@ -38,7 +38,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                         BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                     }
                     ViaKeyboardInfo::SwitchMatrixState => {
-                        // todo!("GetKeyboardValue - SwitchMatrixState")
+                        warn!("GetKeyboardValue - SwitchMatrixState")
                     }
                     ViaKeyboardInfo::FirmwareVersion => {
                         BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
@@ -54,11 +54,11 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                 Ok(v) => match v {
                     ViaKeyboardInfo::LayoutOptions => {
                         let _layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                        todo!("SetKeyboardValue - LayoutOptions: need eeprom");
+                        warn!("SetKeyboardValue - LayoutOptions: need eeprom");
                     }
                     ViaKeyboardInfo::DeviceIndication => {
                         let _device_indication = report.output_data[2];
-                        todo!("SetKeyboardValue - DeviceIndication")
+                        warn!("SetKeyboardValue - DeviceIndication")
                     }
                     _ => (),
                 },
