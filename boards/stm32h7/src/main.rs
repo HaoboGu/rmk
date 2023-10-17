@@ -28,6 +28,7 @@ mod app {
     };
 
     static mut EP_MEMORY: [u32; 1024] = [0; 1024];
+    const FLASH_SECTOR_15_ADDR: u32 = 14 * 8192;
 
     #[shared]
     struct Shared {
@@ -42,7 +43,7 @@ mod app {
 
     #[init]
     fn init(cx: init::Context) -> (Shared, Local) {
-        rtt_logger::init(log::LevelFilter::Debug);
+        rtt_logger::init(log::LevelFilter::Info);
         let cp = cx.core;
         let dp = cx.device;
 
@@ -91,6 +92,14 @@ mod app {
                 UsbBus::new(usb, unsafe { &mut EP_MEMORY })
         )
         .unwrap();
+
+        // let (mut flash, _) = dp.FLASH.split();
+        // let mut unlocked = flash.unlocked();
+        // unlocked.erase_sector(14).unwrap();
+        // unlocked.erase_sector(15).unwrap();
+        // let mut bytes = [8u8;16];
+        // const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+        // unlocked.read(FLASH_SECTOR_15_ADDR, &mut bytes).unwrap();
 
         // Initialize keyboard matrix pins
         let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
