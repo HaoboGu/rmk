@@ -4,7 +4,7 @@ use crate::{
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use log::{info, warn};
+use log::{info, warn, debug};
 use num_enum::{FromPrimitive, TryFromPrimitive};
 use rtic_monotonics::{systick::Systick, Monotonic};
 
@@ -17,7 +17,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
     // `report.input_data` is initialized using `report.output_data`
     report.input_data = report.output_data;
     let via_command = ViaCommand::from_primitive(command_id);
-    info!(
+    debug!(
         "Received via report: {:02X?}, command_id: {:?}",
         report.output_data, via_command
     );
@@ -123,7 +123,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
             let _offset = BigEndian::read_u16(&report.output_data[1..3]);
             let size = report.output_data[3];
             if size <= 28 {
-                info!("Current returned data: {:02X?}", report.input_data);
+                debug!("Current returned data: {:02X?}", report.input_data);
             } else {
                 report.input_data[0] = 0xFF;
             }
@@ -149,10 +149,10 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                 .flatten()
                 .flatten()
                 .skip(offset as usize)
-                .take(size as usize)
+                .take((size/2) as usize)
                 .for_each(|a| {
                     let kc = to_via_keycode(*a);
-                    LittleEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
+                    BigEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
                     idx += 2;
                 });
         }
