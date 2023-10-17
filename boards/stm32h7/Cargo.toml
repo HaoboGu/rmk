@@ -3,9 +3,14 @@ cargo-features = ["per-package-target"]
 [package]
 name = "rmk-stm32h7"
 version = "0.0.2"
-description = ""
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
 edition = "2021"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
+
 forced-target = "thumbv7em-none-eabihf"
 
 [dependencies]

@@ -2,10 +2,15 @@ cargo-features = ["per-package-target"]
 
 [package]
 name = "rmk-rp2040"
-version = "0.0.1"
-description = ""
+version = "0.0.2"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
 edition = "2021"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
+
 forced-target = "thumbv6m-none-eabi"
 
 [dependencies]
