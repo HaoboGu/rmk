@@ -55,15 +55,17 @@ pub struct KeyPos {
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-///
 pub struct Matrix<
     In: InputPin,
     Out: OutputPin,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
 > {
+    /// Input pins of the pcb matrix
     input_pins: [In; INPUT_PIN_NUM],
+    /// Output pins of the pcb matrix
     output_pins: [Out; OUTPUT_PIN_NUM],
+    /// Debouncer
     pub debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
     /// Key state matrix
     pub key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
@@ -109,21 +111,21 @@ impl<
     /// When a key is pressed, some callbacks some be called, such as `start_timer`
     pub fn key_pressed(&mut self, row: usize, col: usize) {
         // COL2ROW
-        #[cfg(not(feature = "ROW2COL"))]
+        #[cfg(feature = "col2row")]
         self.key_states[col][row].start_timer();
 
         // ROW2COL
-        #[cfg(feature = "ROW2COL")]
+        #[cfg(not(feature = "col2row"))]
         self.key_states[row][col].start_timer();
     }
 
     pub fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
         // COL2ROW
-        #[cfg(not(feature = "ROW2COL"))]
+        #[cfg(feature = "col2row")]
         return self.key_states[col][row];
 
         // ROW2COL
-        #[cfg(feature = "ROW2COL")]
+        #[cfg(not(feature = "col2row"))]
         return self.key_states[row][col];
     }
 }

@@ -3,8 +3,8 @@ use log::warn;
 
 /// KeyMap represents the stack of layers.
 /// The conception of KeyMap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
-/// Keymap should be bind to the actual pcb matrix definition by KeyPos.
-/// RMK detects hardware key strokes, uses KeyPos to retrieve the action from KeyMap.
+/// Keymap should be bind to the actual pcb matrix definition.
+/// RMK detects hardware key strokes, uses (row,col) to retrieve the action from KeyMap.
 pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],

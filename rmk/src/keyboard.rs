@@ -59,9 +59,37 @@ impl<
         const NUM_LAYER: usize,
     > Keyboard<In, Out, ROW, COL, NUM_LAYER>
 {
+    #[cfg(feature = "col2row")]
     pub fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
+        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    ) -> Self {
+        Keyboard {
+            matrix: Matrix::new(input_pins, output_pins),
+            keymap: KeyMap::new(keymap),
+            report: KeyboardReport {
+                modifier: 0,
+                reserved: 0,
+                leds: 0,
+                keycodes: [0; 6],
+            },
+            media_report: MediaKeyboardReport { usage_id: 0 },
+            system_control_report: SystemControlReport { usage_id: 0 },
+            via_report: ViaReport {
+                input_data: [0; 32],
+                output_data: [0; 32],
+            },
+            need_send_key_report: false,
+            need_send_consumer_control_report: false,
+            need_send_system_control_report: false,
+        }
+    }
+
+    #[cfg(not(feature = "col2row"))]
+    pub fn new(
+        input_pins: [In; COL],
+        output_pins: [Out; ROW],
         keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
         Keyboard {
@@ -201,6 +229,7 @@ impl<
     async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
         // TODO: when the tap is triggered, once the key is pressed or when it's released?
         if key_state.changed && key_state.pressed {
+            // FIXME: change a tmp key_state here!
             key_state.pressed = true;
             self.process_key_action_normal(action, key_state);
 
