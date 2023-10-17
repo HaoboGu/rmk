@@ -32,19 +32,16 @@ Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boar
 3. Create `.cargo/config.toml` in your project's root, specify your target here. See [`boards/stm32h7/.cargo/config.toml`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/.cargo/config.toml)
 4. Create `main.rs`, initialize your MCU in rtic's `mod app`, create usb polling task and keyboard task. See [`boards/stm32h7/src/main.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/src/main.rs)
 
-## Compile
+## Compile the firmware
 
-Just run
 ```
 # Compile stm32 example
 cd boards/stm32h7
-
-# Compile rp2040 example
-# cd boards/rp2040
 cargo build
 
-# Check binary size after build
-cargo size
+# Compile rp2040 example
+cd boards/rp2040
+cargo build
 ```
 
 ## Flash
@@ -62,7 +59,7 @@ Requires `openocd`.
 
 VSCode: Press `F5`, the firmware will be automatically compiled and flashed. A debug session is started after flashing. Check `.vscode/tasks.json` for details.
 
-Or you can do it manually using this command after compile:
+Or you can do it manually using the following command to flash the firmware after compiling:
 ```shell
 openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
 ``` 
