@@ -9,7 +9,10 @@ license = "Apache-2.0"
 forced-target = "thumbv6m-none-eabi"
 
 [dependencies]
-rmk = { version = "0.0.2", path = "../../rmk" }
+rmk = { version = "0.0.3", path = "../../rmk", features = [
+    "eeprom",
+    "col2row",
+] }
 
 # Use pico as the BSP crate
 rp-pico = "0.8"

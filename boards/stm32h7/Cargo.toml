@@ -2,14 +2,17 @@ cargo-features = ["per-package-target"]
 
 [package]
 name = "rmk-stm32h7"
-version = "0.0.1"
+version = "0.0.2"
 description = ""
 edition = "2021"
 license = "Apache-2.0"
 forced-target = "thumbv7em-none-eabihf"
 
 [dependencies]
-rmk = { version = "0.0.2", path = "../../rmk" , features = ["eeprom", "col2row"]}
+rmk = { version = "0.0.3", path = "../../rmk", features = [
+    "eeprom",
+    "col2row",
+] }
 stm32h7xx-hal = { version = "0.14.0", features = [
     "stm32h7b0",
     "rt",
@@ -27,4 +30,4 @@ rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 usb-device = "0.2.9"
 usbd-hid = "0.6.1"
 packed_struct = { version = "0.10.1", default-features = false }
-embedded-storage ={ version = "0.3"}
+embedded-storage = { version = "0.3" }
