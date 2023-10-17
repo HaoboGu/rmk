@@ -2,6 +2,7 @@
 
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
+![IMG_2627](https://github.com/HaoboGu/rmk/assets/8640918/9789dbf7-c974-467e-bbdd-5fa3cc80c66c)
 
 ## Features & TODOs
 
@@ -16,7 +17,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [ ] macro
 - [ ] encoder
 - [ ] RGB
-- [ ] cli
+- [ ] cli tools
 
 ## Prerequisites
 
@@ -37,6 +38,7 @@ Just run
 ```
 # Compile stm32 example
 cd boards/stm32h7
+
 # Compile rp2040 example
 # cd boards/rp2040
 cargo build
