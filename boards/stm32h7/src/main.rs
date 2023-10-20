@@ -16,10 +16,12 @@ use rtic::app;
 mod app {
     use crate::rtt_logger;
     use log::info;
+    use rmk::eeprom;
     use rmk::keyboard::Keyboard;
     use rmk::usb::KeyboardUsbDevice;
     use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
     use rtic_monotonics::systick::*;
+    use stm32h7xx_hal::flash::UnlockedFlashBank;
     use stm32h7xx_hal::{
         gpio::{ErasedPin, Input, Output, PE3},
         pac::rcc::cdccip2r::USBSEL_A::Hsi48,
@@ -93,14 +95,6 @@ mod app {
         )
         .unwrap();
 
-        // let (mut flash, _) = dp.FLASH.split();
-        // let mut unlocked = flash.unlocked();
-        // unlocked.erase_sector(14).unwrap();
-        // unlocked.erase_sector(15).unwrap();
-        // let mut bytes = [8u8;16];
-        // const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
-        // unlocked.read(FLASH_SECTOR_15_ADDR, &mut bytes).unwrap();
-
         // Initialize keyboard matrix pins
         let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
         // Initialize keyboard
@@ -111,6 +105,17 @@ mod app {
             output_pins,
             crate::keymap::KEYMAP,
         );
+
+        let (mut flash, _) = dp.FLASH.split();
+        let unlocked = flash.unlocked();
+        const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+        let eep = eeprom::Eeprom::<UnlockedFlashBank, FLASH_SECTOR_15_ADDR, 8192, 256>::new(unlocked, &keyboard.keymap);
+        let au = eep.get_audio_config();
+        let rgb = eep.get_rgb_light_config();
+        info!("au: {:?}", au);
+        info!("rgb: {:?}", rgb);
+        // embedded_storage::nor_flash::ReadNorFlash::read(&mut unlocked, FLASH_SECTOR_15_ADDR, &mut bytes).unwrap();
+
 
         // Led config
         let mut led = gpioe.pe3.into_push_pull_output();

@@ -1,4 +1,4 @@
-use super::Eeprom;
+use super::{Eeprom, EepromRecord};
 use byteorder::{BigEndian, ByteOrder};
 use embedded_storage::nor_flash::NorFlash;
 use log::error;
@@ -39,7 +39,7 @@ const LAYOUT_OPTION_ADDR: u16 = 12;
 const LAYOUT_OPTION_SIZE: usize = 4;
 
 /// Start index of dynamic keymap
-pub(crate) const DYNAMIC_KEYMAP_ADDR: u16 = 15;
+pub(crate) const DYNAMIC_KEYMAP_ADDR: u16 = 16;
 
 impl<
         F: NorFlash,
@@ -83,10 +83,10 @@ impl<
         self.set_rgb_light_config(EeRgbLightConfig {
             enable: false,
             mode: 0,
-            hue: 0,
-            sat: 0,
-            val: 0,
-            speed: 0,
+            hue: 1,
+            sat: 1,
+            val: 1,
+            speed: 1,
         });
         self.set_layout_option(0);
     }
@@ -106,11 +106,14 @@ impl<
 
     /// Returns eeprom magic value stored in EEPROM
     pub fn get_magic(&mut self) -> u16 {
-        // ALWAYS read magic from backend store
-        if let Some(record) = self.read_record(0) {
-            record.data
-        } else {
-            EEPROM_DISABLED_MAGIC
+        // ALWAYS read magic from the start address of the backend store
+        let mut bytes = [0_u8;4];
+        match self.storage.read(STORAGE_START_ADDR, &mut bytes) {
+            Ok(_) => {
+                let record = EepromRecord::from_bytes(bytes);
+                record.data
+            }
+            Err(_) => EEPROM_DISABLED_MAGIC,
         }
     }
 

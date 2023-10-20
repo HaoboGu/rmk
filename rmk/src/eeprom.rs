@@ -34,6 +34,7 @@ impl EepromRecord {
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
 /// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
+/// TODO: Add page-size, use compact keymap storage, create eeprom using given config
 pub struct Eeprom<
     F: NorFlash,
     const STORAGE_START_ADDR: u32,
@@ -72,7 +73,11 @@ impl<
         };
 
         // Initialize eeprom using default config
-        if eeprom.get_magic() != EEPROM_MAGIC {
+        let current_magic = eeprom.get_magic();
+        // if current_magic != 0 {
+        if current_magic != EEPROM_MAGIC {
+            // Need initialize the eeprom, erase the storage first
+            eeprom.storage.erase(STORAGE_START_ADDR, STORAGE_START_ADDR + STORAGE_SIZE).unwrap();
             // TODO: support user custom config
             eeprom.init_with_default_config();
             eeprom.set_keymap(keymap);
@@ -81,17 +86,20 @@ impl<
         // Restore eeprom from storage
         let mut buf: [u8; 4] = [0xFF; 4];
         while eeprom.pos < STORAGE_SIZE {
-            match eeprom.storage.read(eeprom.pos, &mut buf) {
+            match eeprom.storage.read(STORAGE_START_ADDR + eeprom.pos, &mut buf) {
                 Ok(_) => {
                     let record = EepromRecord::from_bytes(buf);
                     if record.address >= EEPROM_SIZE as u16 {
                         break;
                     }
-                    eeprom.cache[record.address as usize] = record.data as u8;
-                    eeprom.cache[record.address as usize + 1] = (record.data >> 8) as u8;
-                    eeprom.pos += 4;
+                    eeprom.cache[record.address as usize] = (record.data >> 8) as u8;
+                    eeprom.cache[record.address as usize + 1] = record.data as u8;
+                    eeprom.pos += 16;
                 }
-                Err(_) => break,
+                Err(e) => {
+                    error!("Restore eeprom value at pos {:x} error: {:?}", eeprom.pos, e);
+                    break;
+                },
             }
         }
 
@@ -125,15 +133,17 @@ impl<
             let data;
             if i + 1 == data_len {
                 // Last byte, append 0xFF
-                data = (0xFF << 8) | (self.cache[data_idx] as u16);
+                data = ((self.cache[data_idx] as u16) << 8) | (0xFF << 8);
             } else {
-                data = ((self.cache[data_idx + 1] as u16) << 8) | (self.cache[data_idx] as u16);
+                data = ((self.cache[data_idx] as u16) << 8) | (self.cache[data_idx + 1] as u16);
             }
             let record = EepromRecord { address, data };
 
             // If the storage is full, do consolidation
             if self.check_consolidation() {
                 self.write_record(record);
+            } else {
+                warn!("Write eeprom error, the backend storage is full")
             }
 
             address += 2;
@@ -146,27 +156,77 @@ impl<
         &self.cache[address as usize..(address as usize + read_size)]
     }
 
+    // Each write should be aligned to 16 bytes / 32 bytes for
     fn write_record(&mut self, record: EepromRecord) {
-        match self
-            .storage
-            .write(STORAGE_START_ADDR + self.pos, &record.to_bytes())
-        {
-            Ok(_) => self.pos += 4,
-            Err(_) => error!("Failed to write record to storage"),
+        let mut buf = [0xFF; 16];
+
+        // Find a free page to write
+        while self.pos <= STORAGE_SIZE {
+            match self.storage.read(STORAGE_START_ADDR + self.pos, &mut buf) {
+                Ok(_) => {
+                    // Check buf
+                    if buf[0] == 0xFF {
+                        break;
+                    } else {
+                        warn!(
+                            "Writing addr {:X} is not 0xFF",
+                            STORAGE_START_ADDR + self.pos
+                        );
+                        self.pos += 16;
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        "Check addr {:X} error before writing: {:?}",
+                        STORAGE_START_ADDR + self.pos,
+                        e
+                    );
+                    // Go to next possible addr
+                    self.pos += 16;
+                }
+            }
+        }
+
+        let bytes = record.to_bytes();
+        buf[..bytes.len()].copy_from_slice(&bytes);
+        info!(
+            "Write buf: {:02X?} at {:X}",
+            buf,
+            STORAGE_START_ADDR + self.pos
+        );
+
+        match self.storage.write(STORAGE_START_ADDR + self.pos, &buf) {
+            // MUST BE ALIGNED HERE!
+            Ok(_) => self.pos += 16,
+            Err(e) => {
+                error!(
+                    "Failed to write record to storage at {:X}: {:?}",
+                    STORAGE_START_ADDR + self.pos,
+                    e
+                )
+            }
         }
     }
 
     /// Read a eeprom record at the given address from the storage
     fn read_record(&mut self, address: u16) -> Option<EepromRecord> {
         let mut bytes = [0u8; 4];
+        let mut end = self.pos;
+        // Before the eeprom initialized, check all the storage to read a record
+        if self.pos == 0 {
+            end = STORAGE_SIZE;
+        }
         // Scan the storage, find the record with the given address
-        for p in (0..self.pos).step_by(4) {
+        for p in (0..end).step_by(16) {
             match self.storage.read(STORAGE_START_ADDR + p, &mut bytes) {
                 Ok(_) => {
                     // Check address
                     let record = EepromRecord::from_bytes(bytes);
                     if record.address == address {
                         return Some(record);
+                    } else if record.address == 0xFFFF {
+                        // Reach the end of current records
+                        break;
                     }
                 }
                 Err(_) => error!("Failed to read record from storage"),
@@ -177,11 +237,11 @@ impl<
     }
 
     fn check_consolidation(&mut self) -> bool {
-        if self.pos + 4 > STORAGE_SIZE {
+        if self.pos + 16 > STORAGE_SIZE {
             info!("Backend storage is full, consolidating records");
             self.consolidate_records();
             // Check position again
-            if self.pos + 4 > STORAGE_SIZE {
+            if self.pos + 16 > STORAGE_SIZE {
                 error!("Backend storage is full, failed to write record");
                 return false;
             }
