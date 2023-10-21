@@ -3,9 +3,7 @@ pub mod eekeymap;
 
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
-
 use crate::keymap::KeyMap;
-
 use self::eeconfig::EEPROM_MAGIC;
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
@@ -30,23 +28,32 @@ impl EepromRecord {
     }
 }
 
+/// Configuration of eeprom's backend storage.
+pub struct EepromStorageConfig {
+    /// The start address in the backend storage.
+    pub start_addr: u32,
+    /// Total used size in backend storage for eeprom.
+    pub storage_size: u32,
+    /// Minimal write size of backend storage.
+    /// For example, stm32h7's internal flash allows 256-bit(32 bytes) or 128-bit(16 bytes) write, so page_size should be 32/16 for stm32h7.
+    pub page_size: u32,
+}
 /// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
 /// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
 /// TODO: Add page-size, use compact keymap storage, create eeprom using given config
-pub struct Eeprom<
-    F: NorFlash,
-    const STORAGE_START_ADDR: u32,
-    const STORAGE_SIZE: u32,
-    const EEPROM_SIZE: usize,
-> {
+pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     /// Current position in the storage
     pos: u32,
     /// Backend storage, implements `embedded-storage::NorFlash` trait
     storage: F,
     /// A eeprom cache in ram to speed up reads, whose size is same as the logical eeprom capacity
     cache: [u8; EEPROM_SIZE],
+
+    /// Configuration of the backend storage
+    storage_config: EepromStorageConfig,
+
     /// Size for dynamic keymap.
     /// Each key in keymap used 2 bytes, so the size should be at least 2 * NUM_LAYER * ROW * COL.
     ///
@@ -54,20 +61,24 @@ pub struct Eeprom<
     ///  EEPROM_SIZE should be at least 1008(keymap) + 15(eeconfig) + 100(macro)
     dynamic_keymap_size: usize,
 }
-impl<
-        F: NorFlash,
-        const STORAGE_START_ADDR: u32,
-        const STORAGE_SIZE: u32,
-        const EEPROM_SIZE: usize,
-    > Eeprom<F, STORAGE_START_ADDR, STORAGE_SIZE, EEPROM_SIZE>
-{
+impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
+        storage_config: EepromStorageConfig,
         keymap: &KeyMap<ROW, COL, NUM_LAYER>,
-    ) -> Self {
+    ) -> Option<Self> {
+        // Check backend storage config
+        if (!is_power_of_two(storage_config.page_size))
+            || storage_config.start_addr == 0
+            || storage_config.storage_size == 0
+        {
+            return None;
+        }
+
         let mut eeprom = Eeprom {
             pos: 0,
             storage,
+            storage_config,
             cache: [0xFF; EEPROM_SIZE],
             dynamic_keymap_size: ROW * COL * NUM_LAYER * 2,
         };
@@ -77,7 +88,13 @@ impl<
         // if current_magic != 0 {
         if current_magic != EEPROM_MAGIC {
             // Need initialize the eeprom, erase the storage first
-            eeprom.storage.erase(STORAGE_START_ADDR, STORAGE_START_ADDR + STORAGE_SIZE).unwrap();
+            eeprom
+                .storage
+                .erase(
+                    eeprom.storage_config.start_addr,
+                    eeprom.storage_config.start_addr + eeprom.storage_config.storage_size,
+                )
+                .unwrap();
             // TODO: support user custom config
             eeprom.init_with_default_config();
             eeprom.set_keymap(keymap);
@@ -85,8 +102,11 @@ impl<
 
         // Restore eeprom from storage
         let mut buf: [u8; 4] = [0xFF; 4];
-        while eeprom.pos < STORAGE_SIZE {
-            match eeprom.storage.read(STORAGE_START_ADDR + eeprom.pos, &mut buf) {
+        while eeprom.pos < eeprom.storage_config.storage_size {
+            match eeprom
+                .storage
+                .read(eeprom.storage_config.start_addr + eeprom.pos, &mut buf)
+            {
                 Ok(_) => {
                     let record = EepromRecord::from_bytes(buf);
                     if record.address >= EEPROM_SIZE as u16 {
@@ -94,16 +114,19 @@ impl<
                     }
                     eeprom.cache[record.address as usize] = (record.data >> 8) as u8;
                     eeprom.cache[record.address as usize + 1] = record.data as u8;
-                    eeprom.pos += 16;
+                    eeprom.pos += eeprom.storage_config.page_size;
                 }
                 Err(e) => {
-                    error!("Restore eeprom value at pos {:x} error: {:?}", eeprom.pos, e);
+                    error!(
+                        "Restore eeprom value at pos {:x} error: {:?}",
+                        eeprom.pos, e
+                    );
                     break;
-                },
+                }
             }
         }
 
-        eeprom
+        Some(eeprom)
     }
 
     pub fn write_byte(&mut self, mut address: u16, data: &[u8]) {
@@ -158,11 +181,14 @@ impl<
 
     // Each write should be aligned to 16 bytes / 32 bytes for
     fn write_record(&mut self, record: EepromRecord) {
-        let mut buf = [0xFF; 16];
+        let mut buf = [0xFF; 1];
 
         // Find a free page to write
-        while self.pos <= STORAGE_SIZE {
-            match self.storage.read(STORAGE_START_ADDR + self.pos, &mut buf) {
+        while self.pos <= self.storage_config.storage_size {
+            match self
+                .storage
+                .read(self.storage_config.start_addr + self.pos, &mut buf)
+            {
                 Ok(_) => {
                     // Check buf
                     if buf[0] == 0xFF {
@@ -170,19 +196,19 @@ impl<
                     } else {
                         warn!(
                             "Writing addr {:X} is not 0xFF",
-                            STORAGE_START_ADDR + self.pos
+                            self.storage_config.start_addr + self.pos
                         );
-                        self.pos += 16;
+                        self.pos += self.storage_config.page_size;
                     }
                 }
                 Err(e) => {
                     warn!(
                         "Check addr {:X} error before writing: {:?}",
-                        STORAGE_START_ADDR + self.pos,
+                        self.storage_config.start_addr + self.pos,
                         e
                     );
                     // Go to next possible addr
-                    self.pos += 16;
+                    self.pos += self.storage_config.page_size;
                 }
             }
         }
@@ -192,16 +218,19 @@ impl<
         info!(
             "Write buf: {:02X?} at {:X}",
             buf,
-            STORAGE_START_ADDR + self.pos
+            self.storage_config.start_addr + self.pos
         );
 
-        match self.storage.write(STORAGE_START_ADDR + self.pos, &buf) {
+        match self
+            .storage
+            .write(self.storage_config.start_addr + self.pos, &buf)
+        {
             // MUST BE ALIGNED HERE!
-            Ok(_) => self.pos += 16,
+            Ok(_) => self.pos += self.storage_config.page_size,
             Err(e) => {
                 error!(
                     "Failed to write record to storage at {:X}: {:?}",
-                    STORAGE_START_ADDR + self.pos,
+                    self.storage_config.start_addr + self.pos,
                     e
                 )
             }
@@ -214,11 +243,14 @@ impl<
         let mut end = self.pos;
         // Before the eeprom initialized, check all the storage to read a record
         if self.pos == 0 {
-            end = STORAGE_SIZE;
+            end = self.storage_config.storage_size;
         }
         // Scan the storage, find the record with the given address
         for p in (0..end).step_by(16) {
-            match self.storage.read(STORAGE_START_ADDR + p, &mut bytes) {
+            match self
+                .storage
+                .read(self.storage_config.start_addr + p, &mut bytes)
+            {
                 Ok(_) => {
                     // Check address
                     let record = EepromRecord::from_bytes(bytes);
@@ -237,11 +269,11 @@ impl<
     }
 
     fn check_consolidation(&mut self) -> bool {
-        if self.pos + 16 > STORAGE_SIZE {
+        if self.pos + self.storage_config.page_size > self.storage_config.storage_size {
             info!("Backend storage is full, consolidating records");
             self.consolidate_records();
             // Check position again
-            if self.pos + 16 > STORAGE_SIZE {
+            if self.pos + self.storage_config.page_size > self.storage_config.storage_size {
                 error!("Backend storage is full, failed to write record");
                 return false;
             }
@@ -252,10 +284,10 @@ impl<
 
     fn consolidate_records(&mut self) {
         // Erase the flash page first
-        match self
-            .storage
-            .erase(STORAGE_START_ADDR, STORAGE_START_ADDR + self.pos)
-        {
+        match self.storage.erase(
+            self.storage_config.start_addr,
+            self.storage_config.start_addr + self.pos,
+        ) {
             Ok(_) => {
                 // Consolidate records
                 // TODO: lock the eeprom while reconstructing
@@ -276,4 +308,8 @@ impl<
             Err(_) => error!("Failed to erase storage"),
         }
     }
+}
+
+fn is_power_of_two(n: u32) -> bool {
+    n > 0 && (n & (n - 1)) == 0
 }

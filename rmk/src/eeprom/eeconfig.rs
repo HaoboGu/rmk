@@ -41,13 +41,7 @@ const LAYOUT_OPTION_SIZE: usize = 4;
 /// Start index of dynamic keymap
 pub(crate) const DYNAMIC_KEYMAP_ADDR: u16 = 16;
 
-impl<
-        F: NorFlash,
-        const STORAGE_START_ADDR: u32,
-        const STORAGE_SIZE: u32,
-        const EEPROM_SIZE: usize,
-    > Eeprom<F, STORAGE_START_ADDR, STORAGE_SIZE, EEPROM_SIZE>
-{
+impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     /// Initialize eeprom with default eeconfig
     pub fn init_with_default_config(&mut self) {
         self.set_enable(true);
@@ -107,8 +101,11 @@ impl<
     /// Returns eeprom magic value stored in EEPROM
     pub fn get_magic(&mut self) -> u16 {
         // ALWAYS read magic from the start address of the backend store
-        let mut bytes = [0_u8;4];
-        match self.storage.read(STORAGE_START_ADDR, &mut bytes) {
+        let mut bytes = [0_u8; 4];
+        match self
+            .storage
+            .read(self.storage_config.start_addr, &mut bytes)
+        {
             Ok(_) => {
                 let record = EepromRecord::from_bytes(bytes);
                 record.data

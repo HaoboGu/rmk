@@ -16,7 +16,7 @@ use rtic::app;
 mod app {
     use crate::rtt_logger;
     use log::info;
-    use rmk::eeprom;
+    use rmk::eeprom::{self, EepromStorageConfig};
     use rmk::keyboard::Keyboard;
     use rmk::usb::KeyboardUsbDevice;
     use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
@@ -109,13 +109,22 @@ mod app {
         let (mut flash, _) = dp.FLASH.split();
         let unlocked = flash.unlocked();
         const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
-        let eep = eeprom::Eeprom::<UnlockedFlashBank, FLASH_SECTOR_15_ADDR, 8192, 256>::new(unlocked, &keyboard.keymap);
+        let storage_config = EepromStorageConfig {
+            start_addr: FLASH_SECTOR_15_ADDR,
+            storage_size: 8192,
+            page_size: 16,
+        };
+        let eep = eeprom::Eeprom::<UnlockedFlashBank, 256>::new(
+            unlocked,
+            storage_config,
+            &keyboard.keymap,
+        )
+        .unwrap();
         let au = eep.get_audio_config();
         let rgb = eep.get_rgb_light_config();
         info!("au: {:?}", au);
         info!("rgb: {:?}", rgb);
         // embedded_storage::nor_flash::ReadNorFlash::read(&mut unlocked, FLASH_SECTOR_15_ADDR, &mut bytes).unwrap();
-
 
         // Led config
         let mut led = gpioe.pe3.into_push_pull_output();
