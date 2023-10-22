@@ -1,10 +1,12 @@
+pub mod compact_eeprom;
 pub mod eeconfig;
 pub mod eekeymap;
 
+use self::eeconfig::EEPROM_MAGIC;
+use crate::keymap::KeyMap;
+use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
-use crate::keymap::KeyMap;
-use self::eeconfig::EEPROM_MAGIC;
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
@@ -54,6 +56,9 @@ pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     /// Configuration of the backend storage
     storage_config: EepromStorageConfig,
 
+    /// Lock
+    lock: AtomicBool,
+
     /// Size for dynamic keymap.
     /// Each key in keymap used 2 bytes, so the size should be at least 2 * NUM_LAYER * ROW * COL.
     ///
@@ -79,6 +84,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             pos: 0,
             storage,
             storage_config,
+            lock: AtomicBool::new(false),
             cache: [0xFF; EEPROM_SIZE],
             dynamic_keymap_size: ROW * COL * NUM_LAYER * 2,
         };
@@ -283,6 +289,12 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     fn consolidate_records(&mut self) {
+        // Lock the eeprom when reconstructing
+        match self.lock.compare_exchange(false, true, SeqCst, SeqCst) {
+            Ok(_) => (),
+            Err(_) => return,
+        };
+
         // Erase the flash page first
         match self.storage.erase(
             self.storage_config.start_addr,
@@ -290,7 +302,6 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         ) {
             Ok(_) => {
                 // Consolidate records
-                // TODO: lock the eeprom while reconstructing
                 self.pos = 0;
                 for idx in (0..self.cache.len()).step_by(2) {
                     // Skip default value
@@ -307,6 +318,9 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             }
             Err(_) => error!("Failed to erase storage"),
         }
+
+        // Unlock
+        self.lock.store(false, SeqCst);
     }
 }
 
