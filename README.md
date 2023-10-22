@@ -13,7 +13,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] layer
 - [x] system/media keys
 - [x] vial support
-- [ ] eeprom
+- [x] eeprom
 - [ ] macro
 - [ ] encoder
 - [ ] RGB
