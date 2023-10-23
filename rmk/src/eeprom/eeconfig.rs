@@ -46,42 +46,10 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn init_with_default_config(&mut self) {
         self.set_enable(true);
         self.set_default_layer(0);
-        // TODO: move all default configs to a single place
-        self.set_keymap_config(EeKeymapConfig {
-            swap_control_capslock: false,
-            capslock_to_control: false,
-            swap_lalt_lgui: false,
-            swap_ralt_rgui: false,
-            no_gui: false,
-            swap_grave_esc: false,
-            swap_backslash_backspace: false,
-            nkro: false,
-            swap_lctl_lgui: false,
-            swap_rctl_rgui: false,
-            oneshot_enable: false,
-            swap_escape_capslock: false,
-            autocorrect_enable: false,
-            ..EeKeymapConfig::default()
-        });
-        self.set_backlight_config(EeBacklightConfig {
-            enable: false,
-            breathing: false,
-            reserved: false,
-            level: 0,
-        });
-        self.set_audio_config(EeAudioConfig {
-            enable: false,
-            clicky_enable: false,
-            level: 1,
-        });
-        self.set_rgb_light_config(EeRgbLightConfig {
-            enable: false,
-            mode: 0,
-            hue: 1,
-            sat: 1,
-            val: 1,
-            speed: 1,
-        });
+        self.set_keymap_config(EeKeymapConfig::default());
+        self.set_backlight_config(EeBacklightConfig::default());
+        self.set_audio_config(EeAudioConfig::default());
+        self.set_rgb_light_config(EeRgbLightConfig::default()); 
         self.set_layout_option(0);
     }
 
@@ -267,7 +235,7 @@ pub struct EeKeymapConfig {
     _reserved: ReservedOne<packed_bits::Bits<3>>,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeBacklightConfig {
     #[packed_field(bits = "0")]
@@ -280,7 +248,7 @@ pub struct EeBacklightConfig {
     level: u8,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeAudioConfig {
     #[packed_field(bits = "0")]
@@ -291,7 +259,7 @@ pub struct EeAudioConfig {
     level: u8,
 }
 
-#[derive(PackedStruct, Debug)]
+#[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
 pub struct EeRgbLightConfig {
     #[packed_field(bits = "0")]

@@ -227,9 +227,7 @@ impl<
 
     /// Tap action, send a key when the key is pressed, then release the key.
     async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
-        // TODO: when the tap is triggered, once the key is pressed or when it's released?
         if key_state.changed && key_state.pressed {
-            // FIXME: change a tmp key_state here!
             key_state.pressed = true;
             self.process_key_action_normal(action, key_state);
 

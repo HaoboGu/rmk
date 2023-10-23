@@ -44,7 +44,6 @@ pub struct EepromStorageConfig {
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
 /// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
-/// TODO: Add page-size, use compact keymap storage, create eeprom using given config
 pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     /// Current position in the storage
     pos: u32,
