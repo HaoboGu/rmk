@@ -2,7 +2,7 @@ pub mod eeconfig;
 pub mod eekeymap;
 
 use self::eeconfig::EEPROM_MAGIC;
-use crate::action::KeyAction;
+use crate::{action::KeyAction, keymap::KeyMapConfig};
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
@@ -58,12 +58,12 @@ pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     /// Lock
     lock: AtomicBool,
 
-    /// Size for dynamic keymap.
+    /// Layout info of dynamic keymap.
     /// Each key in keymap used 2 bytes, so the size should be at least 2 * NUM_LAYER * ROW * COL.
     ///
     ///  For a 104-key keyboard, with 4 layers, 6 rows and 21 columns, the size is 1008 bytes,
     ///  EEPROM_SIZE should be at least 1008(keymap) + 15(eeconfig) + 100(macro)
-    dynamic_keymap_size: usize,
+    keymap_config: KeyMapConfig,
 }
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
@@ -85,7 +85,11 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             storage_config,
             lock: AtomicBool::new(false),
             cache: [0xFF; EEPROM_SIZE],
-            dynamic_keymap_size: ROW * COL * NUM_LAYER * 2,
+            keymap_config: KeyMapConfig {
+                row: ROW,
+                col: COL,
+                layer: NUM_LAYER,
+            },
         };
 
         // Initialize eeprom using default config

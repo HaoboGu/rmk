@@ -1,6 +1,7 @@
-use crate::action::KeyAction;
+use crate::{action::KeyAction, via::keycode_convert::from_via_keycode};
 use byteorder::{BigEndian, ByteOrder};
 use embedded_storage::nor_flash::NorFlash;
+use log::debug;
 
 use super::{eeconfig::DYNAMIC_KEYMAP_ADDR, Eeprom};
 
@@ -21,5 +22,39 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                 BigEndian::write_u16(&mut buf, action.to_u16());
                 self.write_byte(addr, &buf);
             });
+    }
+
+    pub fn set_keymap_action(&mut self, row: usize, col: usize, layer: usize, action: KeyAction) {
+        let addr = self.get_keymap_addr(row, col, layer);
+        let mut buf: [u8; 2] = [0xFF; 2];
+        BigEndian::write_u16(&mut buf, action.to_u16());
+        self.write_byte(addr, &buf);
+    }
+
+    pub fn read_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+        &self,
+        keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    ) {
+        for (layer, layer_data) in keymap.iter_mut().enumerate() {
+            for (row, row_data) in layer_data.iter_mut().enumerate() {
+                for (col, value) in row_data.iter_mut().enumerate() {
+                    let addr = self.get_keymap_addr(row, col, layer);
+                    let data = self.read_byte(addr, 2);
+                    *value = from_via_keycode(BigEndian::read_u16(data));
+                    debug!(
+                        "LAYER: {}, ROW: {}, COL: {}, Value: {:?}",
+                        layer, row, col, *value
+                    );
+                }
+            }
+        }
+    }
+
+    fn get_keymap_addr(&self, row: usize, col: usize, layer: usize) -> u16 {
+        DYNAMIC_KEYMAP_ADDR
+            + ((self.keymap_config.col * self.keymap_config.row * layer
+                + self.keymap_config.col * row
+                + col)
+                * 2) as u16
     }
 }

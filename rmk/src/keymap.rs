@@ -1,6 +1,15 @@
 use crate::{action::KeyAction, matrix::KeyState};
 use log::warn;
 
+pub struct KeyMapConfig {
+    /// Number of rows.
+    pub row: usize,
+    /// Number of columns.
+    pub col: usize,
+    /// Number of layer
+    pub layer: usize
+}
+
 /// KeyMap represents the stack of layers.
 /// The conception of KeyMap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
 /// Keymap should be bind to the actual pcb matrix definition.

@@ -1,16 +1,25 @@
 use super::{descriptor::*, protocol::*, *};
 use crate::{
+    eeprom::Eeprom,
     keymap::KeyMap,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use log::{info, warn, debug};
+use embedded_storage::nor_flash::NorFlash;
+use log::{debug, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
 use rtic_monotonics::{systick::Systick, Monotonic};
 
-pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub fn process_via_packet<
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
     report: &mut ViaReport,
     keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
+    eeprom: &mut Option<Eeprom<F, EEPROM_SIZE>>,
 ) {
     let command_id = report.output_data[0];
 
@@ -53,8 +62,11 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
             match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                 Ok(v) => match v {
                     ViaKeyboardInfo::LayoutOptions => {
-                        let _layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                        warn!("SetKeyboardValue - LayoutOptions: need eeprom");
+                        let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
+                        match eeprom {
+                            Some(e) => e.set_layout_option(layout_option),
+                            None => (),
+                        }
                     }
                     ViaKeyboardInfo::DeviceIndication => {
                         let _device_indication = report.output_data[2];
@@ -86,7 +98,12 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                 "Setting keycode: {:02X?} at ({},{}), layer {}",
                 keycode, row, col, layer
             );
-            keymap.set_action_at(row, col, layer, from_via_keycode(keycode));
+            let action = from_via_keycode(keycode);
+            keymap.set_action_at(row, col, layer, action.clone());
+            match eeprom {
+                Some(e) => e.set_keymap_action(row, col, layer, action),
+                None => (),
+            }
         }
         ViaCommand::DynamicKeymapReset => {
             warn!("Dynamic keymap reset -- not supported")
@@ -149,7 +166,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                 .flatten()
                 .flatten()
                 .skip(offset as usize)
-                .take((size/2) as usize)
+                .take((size / 2) as usize)
                 .for_each(|a| {
                     let kc = to_via_keycode(*a);
                     BigEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
@@ -157,6 +174,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                 });
         }
         ViaCommand::DynamicKeymapSetBuffer => {
+            debug!("Dynamic keymap set buffer");
             let offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
             let size = report.output_data[3];
@@ -173,6 +191,7 @@ pub fn process_via_packet<const ROW: usize, const COL: usize, const NUM_LAYER: u
                     let action = from_via_keycode(via_keycode);
                     *a = action;
                     idx += 2;
+                    // TODO: Set buffer
                 })
         }
         ViaCommand::DynamicKeymapGetEncoder => {

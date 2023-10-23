@@ -73,12 +73,23 @@ impl<
         output_pins: [Out; COL],
         storage: Option<F>,
         eeprom_storage_config: EepromStorageConfig,
-        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
         let eeprom = match storage {
-            Some(s) => Eeprom::new(s, eeprom_storage_config, &keymap),
+            Some(s) => {
+                let e = Eeprom::new(s, eeprom_storage_config, &keymap);
+                // If eeprom is initialized, read keymap from it.
+                match e {
+                    Some(e) => {
+                        e.read_keymap(&mut keymap);
+                        Some(e)
+                    }
+                    None => None,
+                }
+            }
             None => None,
         };
+
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
             keymap: KeyMap::new(keymap),
@@ -107,9 +118,25 @@ impl<
         output_pins: [Out; ROW],
         keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
+        let eeprom = match storage {
+            Some(s) => {
+                let e = Eeprom::new(s, eeprom_storage_config, &keymap);
+                // If eeprom is initialized, read keymap from it.
+                match e {
+                    Some(e) => {
+                        e.read_keymap(&mut keymap);
+                        Some(e)
+                    }
+                    None => None,
+                }
+            }
+            None => None,
+        };
+
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
             keymap: KeyMap::new(keymap),
+            eeprom,
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
@@ -151,7 +178,7 @@ impl<
     /// Read hid report.
     pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
         if usb_device.read_via_report(&mut self.via_report) > 0 {
-            process_via_packet(&mut self.via_report, &mut self.keymap);
+            process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
 
             // Send via report back after processing
             usb_device.send_via_report(&self.via_report);
