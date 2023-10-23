@@ -4,6 +4,7 @@ use usb_config::UsbHidConfig;
 
 pub struct KeyboardConfig<'a> {
     pub usb_config: UsbHidConfig<'a>,
+    pub enable_eeprom: bool,
 }
 
 pub static KEYBOARD_CONFIG: KeyboardConfig = KeyboardConfig {
@@ -14,4 +15,5 @@ pub static KEYBOARD_CONFIG: KeyboardConfig = KeyboardConfig {
         product: "RMK product",
         serial_number: "vial:f64c2b3c:000001",
     },
+    enable_eeprom: true,
 };

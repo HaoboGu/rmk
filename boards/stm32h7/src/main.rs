@@ -8,20 +8,24 @@ mod macros;
 mod keymap;
 #[macro_use]
 pub mod rtt_logger;
+mod flash;
 
 use panic_rtt_target as _;
 use rtic::app;
 
 #[app(device = stm32h7xx_hal::pac, peripherals = true)]
 mod app {
-    use crate::rtt_logger;
+    use crate::{
+        flash::FlashWrapper,
+        keymap::{COL, NUM_LAYER, ROW},
+        rtt_logger,
+    };
     use log::info;
-    use rmk::eeprom::{self, EepromStorageConfig};
+    use rmk::eeprom::EepromStorageConfig;
     use rmk::keyboard::Keyboard;
     use rmk::usb::KeyboardUsbDevice;
     use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
     use rtic_monotonics::systick::*;
-    use stm32h7xx_hal::flash::UnlockedFlashBank;
     use stm32h7xx_hal::{
         gpio::{ErasedPin, Input, Output, PE3},
         pac::rcc::cdccip2r::USBSEL_A::Hsi48,
@@ -30,7 +34,8 @@ mod app {
     };
 
     static mut EP_MEMORY: [u32; 1024] = [0; 1024];
-    const FLASH_SECTOR_15_ADDR: u32 = 14 * 8192;
+    const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+    const EEPROM_SIZE: usize = 256;
 
     #[shared]
     struct Shared {
@@ -40,7 +45,15 @@ mod app {
 
     #[local]
     struct Local {
-        keyboard: Keyboard<ErasedPin<Input>, ErasedPin<Output>, 4, 3, 2>,
+        keyboard: Keyboard<
+            ErasedPin<Input>,
+            ErasedPin<Output>,
+            FlashWrapper,
+            EEPROM_SIZE,
+            ROW,
+            COL,
+            NUM_LAYER,
+        >,
     }
 
     #[init]
@@ -97,34 +110,26 @@ mod app {
 
         // Initialize keyboard matrix pins
         let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
-        // Initialize keyboard
-        let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
-            usb_allocator,
-            &KEYBOARD_CONFIG,
-            input_pins,
-            output_pins,
-            crate::keymap::KEYMAP,
-        );
 
-        let (mut flash, _) = dp.FLASH.split();
-        let unlocked = flash.unlocked();
-        const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+        // Get flash for eeprom
+        let (flash, _) = dp.FLASH.split();
+        let internal_flash = crate::flash::FlashWrapper::new(flash);
         let storage_config = EepromStorageConfig {
             start_addr: FLASH_SECTOR_15_ADDR,
             storage_size: 8192,
             page_size: 16,
         };
-        let eep = eeprom::Eeprom::<UnlockedFlashBank, 256>::new(
-            unlocked,
+
+        // Initialize keyboard
+        let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
+            usb_allocator,
+            &KEYBOARD_CONFIG,
+            Some(internal_flash),
             storage_config,
-            &keyboard.keymap,
-        )
-        .unwrap();
-        let au = eep.get_audio_config();
-        let rgb = eep.get_rgb_light_config();
-        info!("au: {:?}", au);
-        info!("rgb: {:?}", rgb);
-        // embedded_storage::nor_flash::ReadNorFlash::read(&mut unlocked, FLASH_SECTOR_15_ADDR, &mut bytes).unwrap();
+            input_pins,
+            output_pins,
+            crate::keymap::KEYMAP,
+        );
 
         // Led config
         let mut led = gpioe.pe3.into_push_pull_output();

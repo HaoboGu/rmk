@@ -1,5 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
+    eeprom::{Eeprom, EepromStorageConfig},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -8,6 +9,7 @@ use crate::{
 };
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_storage::nor_flash::NorFlash;
 use log::info;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
@@ -16,6 +18,8 @@ use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlRep
 pub struct Keyboard<
     In: InputPin,
     Out: OutputPin,
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -34,6 +38,8 @@ pub struct Keyboard<
 
     /// Media internal report
     media_report: MediaKeyboardReport,
+
+    eeprom: Option<Eeprom<F, EEPROM_SIZE>>,
 
     /// System control internal report
     system_control_report: SystemControlReport,
@@ -54,20 +60,29 @@ pub struct Keyboard<
 impl<
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
+        F: NorFlash,
+        const EEPROM_SIZE: usize,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<In, Out, ROW, COL, NUM_LAYER>
+    > Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
+        storage: Option<F>,
+        eeprom_storage_config: EepromStorageConfig,
         keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
+        let eeprom = match storage {
+            Some(s) => Eeprom::new(s, eeprom_storage_config, &keymap),
+            None => None,
+        };
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
             keymap: KeyMap::new(keymap),
+            eeprom,
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,

@@ -10,4 +10,5 @@
     "rust-analyzer.linkedProjects": [
         "./rmk/Cargo.toml"
     ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
 }

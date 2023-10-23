@@ -1,9 +1,8 @@
-pub mod compact_eeprom;
 pub mod eeconfig;
 pub mod eekeymap;
 
 use self::eeconfig::EEPROM_MAGIC;
-use crate::keymap::KeyMap;
+use crate::action::KeyAction;
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use embedded_storage::nor_flash::NorFlash;
 use log::{error, info, warn};
@@ -40,6 +39,7 @@ pub struct EepromStorageConfig {
     /// For example, stm32h7's internal flash allows 256-bit(32 bytes) or 128-bit(16 bytes) write, so page_size should be 32/16 for stm32h7.
     pub page_size: u32,
 }
+
 /// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
@@ -69,7 +69,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
         storage_config: EepromStorageConfig,
-        keymap: &KeyMap<ROW, COL, NUM_LAYER>,
+        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Option<Self> {
         // Check backend storage config
         if (!is_power_of_two(storage_config.page_size))

@@ -1,8 +1,8 @@
 use rmk::action::KeyAction;
 use rmk::{a, k, layer, mo};
-const COL: usize = 3;
-const ROW: usize = 4;
-const NUM_LAYER: usize = 2;
+pub(crate) const COL: usize = 3;
+pub(crate) const ROW: usize = 4;
+pub(crate) const NUM_LAYER: usize = 2;
 
 #[rustfmt::skip]
 pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
@@ -19,6 +19,3 @@ pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
         [mo!(1), a!(No), k!(Kp0)]
     ]),
 ];
-
-// Tested: for 80% keyboard(16 cols * 6 rows * 4 layers)
-// KeyState: u32 -> u16: 31.9KB -> 31.2KB, aka 768bytes
