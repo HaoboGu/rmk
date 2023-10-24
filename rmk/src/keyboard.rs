@@ -10,7 +10,7 @@ use crate::{
 use core::convert::Infallible;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::info;
+use log::debug;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
@@ -168,7 +168,7 @@ impl<
         }
 
         if self.need_send_consumer_control_report {
-            info!("Sending consumer report: {:?}", self.media_report);
+            debug!("Sending consumer report: {:?}", self.media_report);
             usb_device.send_consumer_control_report(&self.media_report);
             self.media_report.usage_id = 0;
             self.need_send_consumer_control_report = false;

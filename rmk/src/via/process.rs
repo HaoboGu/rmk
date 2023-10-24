@@ -26,10 +26,7 @@ pub fn process_via_packet<
     // `report.input_data` is initialized using `report.output_data`
     report.input_data = report.output_data;
     let via_command = ViaCommand::from_primitive(command_id);
-    debug!(
-        "Received via report: {:02X?}, command_id: {:?}",
-        report.output_data, via_command
-    );
+    // debug!("Received via command: {:?}, report: {:02X?}", via_command, report.output_data);
     match via_command {
         ViaCommand::GetProtocolVersion => {
             BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
@@ -95,7 +92,7 @@ pub fn process_via_packet<
             let col = report.output_data[3] as usize;
             let keycode = BigEndian::read_u16(&report.output_data[4..6]);
             info!(
-                "Setting keycode: {:02X?} at ({},{}), layer {}",
+                "Setting keycode: 0x{:02X?} at ({},{}), layer {}",
                 keycode, row, col, layer
             );
             let action = from_via_keycode(keycode);

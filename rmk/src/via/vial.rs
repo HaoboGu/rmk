@@ -1,5 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian};
-use log::info;
+use log::debug;
 use num_enum::FromPrimitive;
 
 use super::descriptor::ViaReport;
@@ -57,17 +57,17 @@ pub fn process_vial(report: &mut ViaReport) {
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
     match vial_command {
         VialCommand::GetKeyboardId => {
-            info!("Received Vial - GetKeyboardId");
+            debug!("Received Vial - GetKeyboardId");
             // Returns vial protocol version + vial keyboard id
             LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
             report.input_data[4..12].clone_from_slice(&VIAL_KEYBOARD_ID);
         }
         VialCommand::GetSize => {
-            info!("Received Vial - GetSize");
+            debug!("Received Vial - GetSize");
             LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_KEYBOARD_DEF.len() as u32);
         }
         VialCommand::GetKeyboardDef => {
-            info!("Received Vial - GetKeyboardDef");
+            debug!("Received Vial - GetKeyboardDefinition");
             let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
             let start = page * VIAL_EP_SIZE;
             let mut end = start + VIAL_EP_SIZE;
@@ -85,7 +85,7 @@ pub fn process_vial(report: &mut ViaReport) {
                 });
         }
         VialCommand::GetUnlockStatus => {
-            info!("Received Vial - GetUnlockStatus");
+            debug!("Received Vial - GetUnlockStatus");
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
             // Unlocked

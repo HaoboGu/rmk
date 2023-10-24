@@ -5,7 +5,7 @@ use self::eeconfig::EEPROM_MAGIC;
 use crate::{action::KeyAction, keymap::KeyMapConfig};
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use embedded_storage::nor_flash::NorFlash;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
@@ -223,18 +223,20 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         }
 
         let bytes = record.to_bytes();
+        // TODO: Use a buf whose length equals storage_write_size
+        let mut buf = [0xFF_u8; 16];
         buf[..bytes.len()].copy_from_slice(&bytes);
-        info!(
-            "Write buf: {:02X?} at {:X}",
+        debug!(
+            "EEPROM write storage at 0x{:X}: {:02X?} ",
+            self.storage_config.start_addr + self.pos,
             buf,
-            self.storage_config.start_addr + self.pos
         );
 
         match self
             .storage
             .write(self.storage_config.start_addr + self.pos, &buf)
         {
-            // MUST BE ALIGNED HERE!
+            // `pos` should be aligned by write size
             Ok(_) => self.pos += self.storage_config.page_size,
             Err(e) => {
                 error!(

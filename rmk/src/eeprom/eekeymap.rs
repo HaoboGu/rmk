@@ -1,7 +1,6 @@
 use crate::{action::KeyAction, via::keycode_convert::from_via_keycode};
 use byteorder::{BigEndian, ByteOrder};
 use embedded_storage::nor_flash::NorFlash;
-use log::debug;
 
 use super::{eeconfig::DYNAMIC_KEYMAP_ADDR, Eeprom};
 
@@ -41,10 +40,6 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                     let addr = self.get_keymap_addr(row, col, layer);
                     let data = self.read_byte(addr, 2);
                     *value = from_via_keycode(BigEndian::read_u16(data));
-                    debug!(
-                        "LAYER: {}, ROW: {}, COL: {}, Value: {:?}",
-                        layer, row, col, *value
-                    );
                 }
             }
         }
