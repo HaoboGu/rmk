@@ -1,6 +1,6 @@
 <p align="center">
 <a href="https://github.com/haobogu/rmk">
-<img src="https://haobogu-md.oss-cn-hangzhou.aliyuncs.com/markdown/imgs/light.svg" alt="logo" style="zoom:33%;" />
+<img src="https://github.com/HaoboGu/rmk/assets/8640918/24a01f8e-4958-4c8e-8652-d729d21c4667" alt="logo" width="300" />
 </a>
 <h2 align="center">RMK</h2>
 </p>
