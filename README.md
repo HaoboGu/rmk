@@ -2,9 +2,13 @@
 <a href="https://github.com/haobogu/rmk">
 <img src="https://haobogu-md.oss-cn-hangzhou.aliyuncs.com/markdown/imgs/light.svg" alt="logo" style="zoom:33%;" />
 </a>
-<h2 align="center">RMK</h2>
+<h3 align="center">RMK</h3>
+
+<img align="center" href="https://discord.gg/VvveE25E7S" src="https://dcbadge.vercel.app/api/server/VvveE25E7S?style=flat&compact=true" alt="logo" />
+
 </p>
 
+---
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
 ![IMG_2627](https://github.com/HaoboGu/rmk/assets/8640918/9789dbf7-c974-467e-bbdd-5fa3cc80c66c)
