@@ -5,8 +5,6 @@
 <h2 align="center">RMK</h2>
 </p>
 
----
-
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
 ![IMG_2627](https://github.com/HaoboGu/rmk/assets/8640918/9789dbf7-c974-467e-bbdd-5fa3cc80c66c)
