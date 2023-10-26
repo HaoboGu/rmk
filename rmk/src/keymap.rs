@@ -7,7 +7,7 @@ pub struct KeyMapConfig {
     /// Number of columns.
     pub col: usize,
     /// Number of layer
-    pub layer: usize
+    pub layer: usize,
 }
 
 /// KeyMap represents the stack of layers.

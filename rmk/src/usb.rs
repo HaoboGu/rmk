@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::error;
 use usb_device::{
     class_prelude::{UsbBus, UsbBusAllocator},
     prelude::{UsbDevice, UsbDeviceBuilder, UsbVidPid},
@@ -132,7 +132,7 @@ impl<'a, B: UsbBus> KeyboardUsbDevice<'a, B> {
         match self.consumer_control_hid.push_input(report) {
             Ok(_) => (),
             Err(UsbError::WouldBlock) => (),
-            Err(e) => info!("Send consumer control report error: {:?}", e),
+            Err(e) => error!("Send consumer control report error: {:?}", e),
         }
     }
 
