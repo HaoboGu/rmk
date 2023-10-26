@@ -5,19 +5,16 @@ default-members = ["boards/stm32h7", "rmk"]
 
 # Profile dev: optimize for fast compiling with debug info
 [profile.dev]
+codegen-units = 1      # better optimizations
 debug = true
 opt-level = 1
 overflow-checks = true
 lto = false
+panic = 'unwind'
 
 [profile.release]
-codegen-units = 1 # For better optimizations
-debug = true # no overhead for bare-metal
-# opt-level = "z" # For small binary
-opt-level = 3 # For speed
+codegen-units = 1       # better optimizations
+debug = true            # no overhead for bare-metal
+opt-level = "z"         # optimize for binary size
 overflow-checks = false
 lto = "fat"
-
-# [profile.release.package."*"]
-# codegen-units = 1 # better optimizations
-# opt-level = "z"
