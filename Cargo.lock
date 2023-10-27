@@ -183,6 +183,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
+name = "embedded-alloc"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8931e47e33c5d3194fbcf9cc82df0919193bd2fa40008f388eb1d28fd9c9ea6b"
+dependencies = [
+ "critical-section",
+ "linked_list_allocator",
+]
+
+[[package]]
 name = "embedded-dma"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -327,6 +337,12 @@ checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
 ]
+
+[[package]]
+name = "linked_list_allocator"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afa463f5405ee81cdb9cc2baf37e08ec7e4c8209442b5d72c04cfb2cd6e6286"
 
 [[package]]
 name = "log"
@@ -520,6 +536,7 @@ dependencies = [
  "byteorder",
  "cortex-m",
  "cortex-m-rt",
+ "embedded-alloc",
  "embedded-hal",
  "embedded-storage",
  "log",

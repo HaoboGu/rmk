@@ -8,12 +8,16 @@ use crate::{
     via::{descriptor::ViaReport, process::process_via_packet},
 };
 use core::convert::Infallible;
+use embedded_alloc::Heap;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use log::debug;
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
+
+#[global_allocator]
+static HEAP: Heap = Heap::empty();
 
 pub struct Keyboard<
     In: InputPin,
@@ -75,6 +79,17 @@ impl<
         eeprom_storage_config: EepromStorageConfig,
         mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
+        // Initialize the allocator at the very beginning of the initialization of the keyboard
+        {
+            use core::mem::MaybeUninit;
+            // 1KB heap size
+            const HEAP_SIZE: usize = 1024;
+            // Check page_size and heap size
+            assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
+            static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+            unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+        }
+
         let eeprom = match storage {
             Some(s) => {
                 let e = Eeprom::new(s, eeprom_storage_config, &keymap);

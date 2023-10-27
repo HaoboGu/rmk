@@ -1,8 +1,11 @@
 pub mod eeconfig;
 pub mod eekeymap;
 
+extern crate alloc;
+
 use self::eeconfig::EEPROM_MAGIC;
 use crate::{action::KeyAction, keymap::KeyMapConfig};
+use alloc::vec;
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, error, info, warn};
@@ -65,6 +68,7 @@ pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     ///  EEPROM_SIZE should be at least 1008(keymap) + 15(eeconfig) + 100(macro)
     keymap_config: KeyMapConfig,
 }
+
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
@@ -223,8 +227,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         }
 
         let bytes = record.to_bytes();
-        // TODO: Use a buf whose length equals storage_write_size
-        let mut buf = [0xFF_u8; 16];
+        let mut buf = vec![0xFF_u8; self.storage_config.page_size as usize];
         buf[..bytes.len()].copy_from_slice(&bytes);
         debug!(
             "EEPROM write storage at 0x{:X}: {:02X?} ",
