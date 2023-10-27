@@ -5,7 +5,7 @@
 <h3 align="center">RMK</h3>
 
 <img align="center" href="https://discord.gg/VvveE25E7S" src="https://dcbadge.vercel.app/api/server/VvveE25E7S?style=flat&compact=true" alt="logo" />
-<img align="center" src="https://github.com/haobogu/rmk/actions/workflows/rust.yml/badge.svg" alt="ci" />
+<img align="center" src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg" alt="ci" />
 
 </p>
 
