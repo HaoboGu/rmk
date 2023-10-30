@@ -81,4 +81,3 @@ Or you can do it manually using the following command to flash the firmware afte
 ```shell
 openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
 ```
-
