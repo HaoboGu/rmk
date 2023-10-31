@@ -241,8 +241,16 @@ impl<
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
-            KeyAction::LayerTapHold(_, _) => todo!(),
-            KeyAction::ModifierTapHold(_, _) => todo!(),
+            KeyAction::LayerTapHold(tap_action, layer_num) => {
+                let layer_action = Action::LayerOn(layer_num);
+                self.process_key_action_tap_hold(tap_action, layer_action)
+                    .await;
+            }
+            KeyAction::ModifierTapHold(tap_action, modifier) => {
+                let modifier_action = Action::Modifier(modifier);
+                self.process_key_action_tap_hold(tap_action, modifier_action)
+                    .await;
+            }
         }
     }
 

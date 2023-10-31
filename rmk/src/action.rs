@@ -93,7 +93,7 @@ impl KeyAction {
                     0x0000
                 }
             }
-            KeyAction::TapHold(_, _) => {
+            KeyAction::TapHold(_tap, _hold) => {
                 error!("Unsupported TapHold action: {:?}", self);
                 0x0000
             }

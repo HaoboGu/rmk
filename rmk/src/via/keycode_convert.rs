@@ -59,7 +59,7 @@ pub fn to_via_keycode(key_action: KeyAction) -> u16 {
 
             0x6000 | ((m.to_bits() as u16) << 8) | keycode
         }
-        KeyAction::TapHold(_, _) => todo!(),
+        KeyAction::TapHold(_tap, _hold) => todo!(),
     }
 }
 
@@ -91,24 +91,29 @@ pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::OneShot(Action::Modifier(m))
         }
         0x5700..=0x57FF => {
-            // Tap Dance
-            todo!()
+            // TODO: Tap Dance
+            warn!("Tap dance 0x{:X} not supported", via_keycode);
+            KeyAction::No
         }
         0x5C00..=0x5CFF => {
-            // QMK functions, such as reset, swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
-            todo!()
+            // TODO: QMK functions, such as reset, swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
+            warn!("QMK functions 0x{:X} not supported", via_keycode);
+            KeyAction::No
         }
         0x5D00..=0x5D0F => {
-            // DM Rec/Stop/Play
-            todo!()
+            // TODO: DM Rec/Stop/Play
+            warn!("DM Rec/Stop/Play 0x{:X} not supported", via_keycode);
+            KeyAction::No
         }
         0x5F12..=0x5F21 => {
-            // Macro 1-16
-            todo!()
+            // TODO: Macro 1-16
+            warn!("Macro 0x{:X} not supported", via_keycode);
+            KeyAction::No
         }
         0x5F80..=0x5F8F => {
-            // User 1-16
-            todo!()
+            // TODO: User 1-16
+            warn!("User 0x{:X} not supported", via_keycode);
+            KeyAction::No
         }
         0x6000..=0x7FFF => {
             // Modifier Tap/Hold
@@ -125,7 +130,10 @@ pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::LayerTapHold(Action::Key(keycode), layer as u8)
         }
 
-        _ => KeyAction::No,
+        _ => {
+            warn!("Via keycode 0x{:X} is not processed", via_keycode);
+            KeyAction::No
+        }
     }
 }
 
