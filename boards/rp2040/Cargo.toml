@@ -40,3 +40,8 @@ usbd-hid = "0.6.1"
 # avoid having to use --allow-multiple-definition linker flag
 # on macOS with Apple Silicon at least
 default = ["rp-pico/disable-intrinsics"]
+
+[[bin]]
+name = "rmk-rp2040"
+test = false
+bench = false

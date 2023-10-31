@@ -15,8 +15,8 @@ mod app {
     use defmt::*;
     use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};
     use rmk::{
-        config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device, keyboard::Keyboard,
-        usb::KeyboardUsbDevice,
+        config::KEYBOARD_CONFIG, eeprom::EepromStorageConfig, flash::EmptyFlashWrapper,
+        initialize_keyboard_and_usb_device, keyboard::Keyboard, usb::KeyboardUsbDevice,
     };
     use rp_pico::{
         hal::{
@@ -41,6 +41,8 @@ mod app {
         keyboard: Keyboard<
             Pin<DynPinId, FunctionSio<SioInput>, PullDown>,
             Pin<DynPinId, FunctionSio<SioOutput>, PullDown>,
+            EmptyFlashWrapper,
+            0,
             4,
             3,
             2,
@@ -122,6 +124,8 @@ mod app {
         let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
             unsafe { USB_BUS.as_ref().unwrap() },
             &KEYBOARD_CONFIG,
+            None,
+            EepromStorageConfig::default(),
             input_pins,
             output_pins,
             crate::keymap::KEYMAP,

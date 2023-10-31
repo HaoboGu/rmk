@@ -33,6 +33,7 @@ impl EepromRecord {
 }
 
 /// Configuration of eeprom's backend storage.
+#[derive(Default)]
 pub struct EepromStorageConfig {
     /// The start address in the backend storage.
     pub start_addr: u32,
@@ -298,10 +299,12 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     fn consolidate_records(&mut self) {
         // Lock the eeprom when reconstructing
-        match self.lock.compare_exchange(false, true, SeqCst, SeqCst) {
-            Ok(_) => (),
-            Err(_) => return,
-        };
+        // Some targets doesn't support CAS operation, so we cannot use `self.lock.compare_exchange`
+        let locked = self.lock.load(SeqCst);
+        if locked {
+            return;
+        }
+        self.lock.store(true, SeqCst);
 
         // Erase the flash page first
         match self.storage.erase(
