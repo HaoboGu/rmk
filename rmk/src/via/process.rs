@@ -176,6 +176,7 @@ pub fn process_via_packet<
             // size <= 28
             let size = report.output_data[3];
             let mut idx = 4;
+            let (row_num, col_num, _layer_num) = keymap.get_keymap_config();
             keymap
                 .layers
                 .iter_mut()
@@ -183,13 +184,20 @@ pub fn process_via_packet<
                 .flatten()
                 .skip(offset as usize)
                 .take(size as usize)
-                .for_each(|a| {
+                .enumerate()
+                .for_each(|(i, a)| {
                     let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
-                    let action = from_via_keycode(via_keycode);
+                    let action: crate::action::KeyAction = from_via_keycode(via_keycode);
                     *a = action;
                     idx += 2;
-                    // TODO: Set buffer
-                })
+                    let current_offset = offset as usize + i;
+                    let (row, col, layer) = get_position_from_offset(current_offset, row_num, col_num);
+                    info!("Setting keymap buffer of offset: {}, row,col,layer: {},{},{}", offset, row, col, layer);
+                    match eeprom {
+                        Some(e) => e.set_keymap_action(row, col, layer, action),
+                        None => (),
+                    }
+                });
         }
         ViaCommand::DynamicKeymapGetEncoder => {
             warn!("Keymap get encoder -- not supported");
@@ -200,4 +208,16 @@ pub fn process_via_packet<
         ViaCommand::Vial => vial::process_vial(report),
         ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
     }
+}
+
+pub fn get_position_from_offset(
+    offset: usize,
+    max_row: usize,
+    max_col: usize,
+) -> (usize, usize, usize) {
+    let layer = offset / (max_col * max_row);
+    let current_layer_offset = offset % (max_col * max_row);
+    let row = current_layer_offset / max_col;
+    let col = current_layer_offset % max_col;
+    (row, col, layer)
 }

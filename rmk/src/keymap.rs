@@ -36,6 +36,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
     }
 
+    pub fn get_keymap_config(&self) -> (usize, usize, usize) {
+        (ROW, COL, NUM_LAYER)
+    }
+
     pub fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {
         self.layers[layer_num][row][col] = action;
     }
