@@ -19,6 +19,7 @@ pub mod action;
 pub mod config;
 pub mod debounce;
 pub mod eeprom;
+pub mod flash;
 pub mod keyboard;
 pub mod keycode;
 pub mod keymap;
