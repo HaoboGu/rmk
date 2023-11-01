@@ -191,7 +191,7 @@ impl<
     }
 
     /// Read hid report.
-    pub fn read_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
+    pub fn process_via_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
         if usb_device.read_via_report(&mut self.via_report) > 0 {
             process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
 

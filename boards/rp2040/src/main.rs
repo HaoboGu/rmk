@@ -143,15 +143,19 @@ mod app {
         info!("Start matrix scanning");
         loop {
             cx.local.keyboard.keyboard_task().await.unwrap();
-            cx.shared.usb_device.lock(|d| {
-                cx.local.keyboard.send_report(d);
+            cx.shared.usb_device.lock(|usb_device| {
+                // Send keyboard report
+                cx.local.keyboard.send_report(usb_device);
+
+                // Process via report
+                cx.local.keyboard.process_via_report(usb_device);
             });
 
             // Blink LED
             let _ = cx.local.led.toggle();
 
-            // Scanning frequency: 1KHZ
-            Systick::delay(1.millis()).await;
+            // Scanning frequency: 10KHZ
+            Systick::delay(100.micros()).await;
         }
     }
 
