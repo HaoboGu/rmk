@@ -11,7 +11,7 @@ use core::convert::Infallible;
 use embedded_alloc::Heap;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::debug;
+use log::{debug, warn};
 use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
@@ -306,11 +306,11 @@ impl<
     }
 
     async fn process_key_action_tap_hold(&mut self, _tap_action: Action, _hold_action: Action) {
-        todo!("tap or hold not implemented");
+        warn!("tap or hold not implemented");
     }
 
     async fn process_key_action_oneshot(&mut self, _oneshot_action: Action) {
-        todo!("oneshot action not implemented");
+        warn!("oneshot action not implemented");
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
