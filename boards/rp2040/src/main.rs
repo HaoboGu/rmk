@@ -126,6 +126,7 @@ mod app {
             &KEYBOARD_CONFIG,
             None,
             EepromStorageConfig::default(),
+            None,
             input_pins,
             output_pins,
             crate::keymap::KEYMAP,

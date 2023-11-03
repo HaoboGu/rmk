@@ -1,6 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
-    eeprom::{Eeprom, EepromStorageConfig},
+    eeprom::{eeconfig::Eeconfig, Eeprom, EepromStorageConfig},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -77,9 +77,11 @@ impl<
         output_pins: [Out; COL],
         storage: Option<F>,
         eeprom_storage_config: EepromStorageConfig,
+        eeconfig: Option<Eeconfig>,
         mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
         // Initialize the allocator at the very beginning of the initialization of the keyboard
+
         {
             use core::mem::MaybeUninit;
             // 1KB heap size
@@ -92,7 +94,7 @@ impl<
 
         let eeprom = match storage {
             Some(s) => {
-                let e = Eeprom::new(s, eeprom_storage_config, &keymap);
+                let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &keymap);
                 // If eeprom is initialized, read keymap from it.
                 match e {
                     Some(e) => {

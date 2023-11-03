@@ -3,7 +3,7 @@ pub mod eekeymap;
 
 extern crate alloc;
 
-use self::eeconfig::EEPROM_MAGIC;
+use self::eeconfig::{Eeconfig, EEPROM_MAGIC};
 use crate::{action::KeyAction, keymap::KeyMapConfig};
 use alloc::vec;
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
@@ -74,6 +74,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
         storage_config: EepromStorageConfig,
+        eeconfig: Option<Eeconfig>,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Option<Self> {
         // Check backend storage config
@@ -109,8 +110,10 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                     eeprom.storage_config.start_addr + eeprom.storage_config.storage_size,
                 )
                 .unwrap();
-            // TODO: support user custom config
-            eeprom.init_with_default_config();
+            match eeconfig {
+                Some(eeprom_config) => eeprom.init_with_config(eeprom_config),
+                None => eeprom.init_with_default_config(),
+            }
             eeprom.set_keymap(keymap);
         }
 

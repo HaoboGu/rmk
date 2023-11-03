@@ -129,6 +129,7 @@ mod app {
             &KEYBOARD_CONFIG,
             Some(internal_flash),
             storage_config,
+            None,
             input_pins,
             output_pins,
             crate::keymap::KEYMAP,

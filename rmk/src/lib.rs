@@ -8,7 +8,7 @@
 use action::KeyAction;
 use config::KeyboardConfig;
 use core::convert::Infallible;
-use eeprom::EepromStorageConfig;
+use eeprom::{eeconfig::Eeconfig, EepromStorageConfig};
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
@@ -44,6 +44,7 @@ pub fn initialize_keyboard_and_usb_device<
     config: &KeyboardConfig<'a>,
     storage: Option<F>,
     eeprom_storage_config: EepromStorageConfig,
+    eeconfig: Option<Eeconfig>,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -57,6 +58,7 @@ pub fn initialize_keyboard_and_usb_device<
             output_pins,
             storage,
             eeprom_storage_config,
+            eeconfig,
             keymap,
         ),
         KeyboardUsbDevice::new(usb_allocator, config),

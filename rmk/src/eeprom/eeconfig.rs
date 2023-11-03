@@ -49,8 +49,19 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         self.set_keymap_config(EeKeymapConfig::default());
         self.set_backlight_config(EeBacklightConfig::default());
         self.set_audio_config(EeAudioConfig::default());
-        self.set_rgb_light_config(EeRgbLightConfig::default()); 
+        self.set_rgb_light_config(EeRgbLightConfig::default());
         self.set_layout_option(0);
+    }
+
+    /// Initialize eeprom with given eeconfig
+    pub fn init_with_config(&mut self, config: Eeconfig) {
+        self.set_enable(config.eeprom_enable);
+        self.set_default_layer(config.default_layer);
+        self.set_keymap_config(config.keymap_config);
+        self.set_backlight_config(config.backlight_config);
+        self.set_audio_config(config.audio_config);
+        self.set_rgb_light_config(config.rgb_light_config);
+        self.set_layout_option(config.layout_option);
     }
 
     /// Enable or disable eeprom by writing magic value
@@ -201,6 +212,17 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn get_layout_option(&self) -> u32 {
         BigEndian::read_u32(self.read_byte(LAYOUT_OPTION_ADDR, LAYOUT_OPTION_SIZE))
     }
+}
+
+#[derive(Default)]
+pub struct Eeconfig {
+    eeprom_enable: bool,
+    default_layer: u8,
+    keymap_config: EeKeymapConfig,
+    backlight_config: EeBacklightConfig,
+    audio_config: EeAudioConfig,
+    rgb_light_config: EeRgbLightConfig,
+    layout_option: u32,
 }
 
 #[derive(PackedStruct, Debug, Default)]
