@@ -81,7 +81,6 @@ impl<
         mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
         // Initialize the allocator at the very beginning of the initialization of the keyboard
-
         {
             use core::mem::MaybeUninit;
             // 1KB heap size
