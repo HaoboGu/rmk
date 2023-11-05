@@ -283,7 +283,6 @@ impl<
         key_state: KeyState,
     ) {
         // Process modifier first
-        // TODO: check the order when release a key
         let (keycodes, n) = modifier.to_modifier_keycodes();
         for i in 0..n {
             self.process_action_keycode(keycodes[i], key_state);
