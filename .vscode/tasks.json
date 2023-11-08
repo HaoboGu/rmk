@@ -112,7 +112,7 @@
                 "rp2040",
                 "stm32h7"
             ],
-            "default": "rp2040"
+            "default": "stm32h7"
         }
     ]
 }
