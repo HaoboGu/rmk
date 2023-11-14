@@ -1,7 +1,7 @@
 use crate::matrix::KeyState;
 use rtic_monotonics::{systick::Systick, Monotonic};
 
-/// Default DEBOUNCE_THRESHOLD.
+/// Default DEBOUNCE_THRESHOLD in ms.
 static DEBOUNCE_THRESHOLD: u16 = 10;
 
 /// Debounce info for each key.
@@ -47,7 +47,13 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub fn debounce(&mut self, in_idx: usize, out_idx: usize, pin_state: bool, key_state: &mut KeyState) {
+    pub fn debounce(
+        &mut self,
+        in_idx: usize,
+        out_idx: usize,
+        pin_state: bool,
+        key_state: &mut KeyState,
+    ) {
         // Record debounce state per ms
         let cur_tick = Systick::now().ticks();
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
@@ -61,15 +67,16 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
                 return;
             }
 
-            if state.counter < DEBOUNCE_THRESHOLD {
+            // rmk uses 10khz tick, so the debounce threshold should * 10
+            if state.counter < DEBOUNCE_THRESHOLD * 10 {
                 state.increase(elapsed_ms);
                 return;
             }
 
-            key_state.pressed = !key_state.pressed;
-            state.counter = 0;
-            key_state.changed = true;
             self.last_tick = cur_tick;
+            state.counter = 0;
+            key_state.pressed = !key_state.pressed;
+            key_state.changed = true;
         }
     }
 }
