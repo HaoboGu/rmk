@@ -1,6 +1,4 @@
 use crate::keycode::{KeyCode, ModifierCombination};
-use log::error;
-use packed_struct::prelude::*;
 
 /// A KeyAction is the action of a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like TapHold
@@ -55,55 +53,56 @@ pub enum KeyAction {
 }
 
 impl KeyAction {
-    pub fn to_u16(&self) -> u16 {
-        match self {
-            KeyAction::No => 0x0000,
-            KeyAction::Transparent => 0x0001,
-            KeyAction::Single(a) => a.to_u16(),
-            KeyAction::Tap(a) => 0x0001 | a.to_u16(),
-            KeyAction::OneShot(a) => 0x0010 | a.to_u16(),
-            KeyAction::WithModifier(a, m) => {
-                let mut modifier_bits = [0];
-                // Ignore packing error
-                ModifierCombination::pack_to_slice(m, &mut modifier_bits).unwrap_or_default();
-                0x4000 | ((modifier_bits[0] as u16) << 8) | a.to_u16()
-            }
-            KeyAction::ModifierTapHold(action, modifier) => match action {
-                Action::Key(k) => {
-                    if k.is_basic() {
-                        let mut modifier_bits = [0];
-                        // Ignore packing error
-                        ModifierCombination::pack_to_slice(modifier, &mut modifier_bits)
-                            .unwrap_or_default();
-                        0x6000 | ((modifier_bits[0] as u16) << 8) | *k as u16
-                    } else {
-                        0x000
-                    }
-                }
-                _ => {
-                    error!("ModifierTapHold supports basic keycodes");
-                    0x0000
-                }
-            },
-            KeyAction::LayerTapHold(action, layer) => {
-                if *layer < 8 {
-                    0x8000 | ((*layer as u16) << 15) | action.to_u16()
-                } else {
-                    error!("LayerTapHold supports layers 0~7, got {}", layer);
-                    0x0000
-                }
-            }
-            KeyAction::TapHold(_tap, _hold) => {
-                error!("Unsupported TapHold action: {:?}", self);
-                0x0000
-            }
-        }
-    }
-
-    
+    // FIXME: remove it later
+    // Depreciated, uses to_via_keycode
+    // pub fn to_u16(&self) -> u16 {
+        // match self {
+        //     KeyAction::No => 0x0000,
+        //     KeyAction::Transparent => 0x0001,
+        //     KeyAction::Single(a) => a.to_u16(),
+        //     KeyAction::Tap(a) => 0x0001 | a.to_u16(),
+        //     KeyAction::OneShot(a) => 0x0010 | a.to_u16(),
+        //     KeyAction::WithModifier(a, m) => {
+        //         let mut modifier_bits = [0];
+        //         // Ignore packing error
+        //         ModifierCombination::pack_to_slice(m, &mut modifier_bits).unwrap_or_default();
+        //         0x4000 | ((modifier_bits[0] as u16) << 8) | a.to_u16()
+        //     }
+        //     KeyAction::ModifierTapHold(action, modifier) => match action {
+        //         Action::Key(k) => {
+        //             if k.is_basic() {
+        //                 let mut modifier_bits = [0];
+        //                 // Ignore packing error
+        //                 ModifierCombination::pack_to_slice(modifier, &mut modifier_bits)
+        //                     .unwrap_or_default();
+        //                 0x6000 | ((modifier_bits[0] as u16) << 8) | *k as u16
+        //             } else {
+        //                 0x000
+        //             }
+        //         }
+        //         _ => {
+        //             error!("ModifierTapHold supports basic keycodes");
+        //             0x0000
+        //         }
+        //     },
+        //     KeyAction::LayerTapHold(action, layer) => {
+        //         if *layer < 8 {
+        //             0x8000 | ((*layer as u16) << 15) | action.to_u16()
+        //         } else {
+        //             error!("LayerTapHold supports layers 0~7, got {}", layer);
+        //             0x0000
+        //         }
+        //     }
+        //     KeyAction::TapHold(_tap, _hold) => {
+        //         error!("Unsupported TapHold action: {:?}", self);
+        //         0x0000
+        //     }
+        // }
+    // }
 }
 
 /// A single basic action that a keyboard can execute.
+/// An Action can be represented in 12 bits, aka 0x000 ~ 0xFFF
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Action {
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
@@ -119,13 +118,14 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn to_u16(&self) -> u16 {
-        match self {
-            Action::Key(k) => *k as u16,
-            Action::LayerOn(layer) => *layer as u16,
-            Action::LayerOff(layer) => *layer as u16,
-            Action::LayerToggle(layer) => *layer as u16,
-            Action::Modifier(m) => m.to_bits() as u16,
-        }
-    }
+    // FIXME: remove it later
+    // pub fn to_u16(&self) -> u16 {
+    //     match self {
+    //         Action::Key(k) => *k as u16,
+    //         Action::LayerOn(layer) => 0x5100 & (*layer as u16),
+    //         Action::LayerOff(layer) => *layer as u16,
+    //         Action::LayerToggle(layer) => *layer as u16,
+    //         Action::Modifier(m) => m.to_bits() as u16,
+    //     }
+    // }
 }

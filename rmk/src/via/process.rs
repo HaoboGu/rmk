@@ -91,11 +91,11 @@ pub fn process_via_packet<
             let row = report.output_data[2] as usize;
             let col = report.output_data[3] as usize;
             let keycode = BigEndian::read_u16(&report.output_data[4..6]);
-            info!(
-                "Setting keycode: 0x{:02X?} at ({},{}), layer {}",
-                keycode, row, col, layer
-            );
             let action = from_via_keycode(keycode);
+            info!(
+                "Setting keycode: 0x{:02X?} at ({},{}), layer {} as {:?}",
+                keycode, row, col, layer, action
+            );
             keymap.set_action_at(row, col, layer, action.clone());
             match eeprom {
                 Some(e) => e.set_keymap_action(row, col, layer, action),
@@ -156,6 +156,8 @@ pub fn process_via_packet<
             let offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
             let size = report.output_data[3];
+            // FIXME: Cannot get complete keymap
+            info!("Getting keymap buffer, offset: {}, size: {}", offset, size);
             let mut idx = 4;
             keymap
                 .layers
