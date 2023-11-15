@@ -156,7 +156,6 @@ pub fn process_via_packet<
             let offset = BigEndian::read_u16(&report.output_data[1..3]);
             // size <= 28
             let size = report.output_data[3];
-            // FIXME: Cannot get complete keymap
             info!("Getting keymap buffer, offset: {}, size: {}", offset, size);
             let mut idx = 4;
             keymap
@@ -164,7 +163,7 @@ pub fn process_via_packet<
                 .iter()
                 .flatten()
                 .flatten()
-                .skip(offset as usize)
+                .skip((offset / 2) as usize)
                 .take((size / 2) as usize)
                 .for_each(|a| {
                     let kc = to_via_keycode(*a);
