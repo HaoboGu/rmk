@@ -135,7 +135,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                 }
                 Err(e) => {
                     error!(
-                        "Restore eeprom value at pos {:x} error: {:?}",
+                        "Restore eeprom value at pos {:X} error: {:?}",
                         eeprom.pos, e
                     );
                     break;

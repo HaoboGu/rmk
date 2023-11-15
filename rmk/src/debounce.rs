@@ -67,7 +67,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
                 return;
             }
 
-            // rmk uses 10khz tick, so the debounce threshold should * 10
+            // Use 10khz tick, so the debounce threshold should * 10
             if state.counter < DEBOUNCE_THRESHOLD * 10 {
                 state.increase(elapsed_ms);
                 return;

@@ -116,15 +116,15 @@ pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x6000..=0x7FFF => {
-            // Modifier Tap/Hold
-            // The via equivalent of Modifier Tap/Hold is called Mod-tap, whose keycode representation is same with RMK
+            // Modifier tap/hold
+            // The via equivalent of Modifier tap/hold is called Mod-tap, whose keycode representation is same with RMK
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
             KeyAction::ModifierTapHold(Action::Key(keycode), modifier)
         }
         0x4000..=0x4FFF => {
-            // Layer Tap/Hold
-            // The via equivalent of Modifier Tap/Hold is called Mod-tap,
+            // Layer tap/hold
+            // The via equivalent of Modifier tap/hold is called Mod-tap,
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             KeyAction::LayerTapHold(Action::Key(keycode), layer as u8)

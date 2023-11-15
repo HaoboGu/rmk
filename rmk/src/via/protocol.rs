@@ -10,8 +10,8 @@ pub enum ViaCommand {
     GetProtocolVersion = 0x01, // always 0x01
     GetKeyboardValue = 0x02,
     SetKeyboardValue = 0x03,
-    DynamicKeymapGetKeycode = 0x04,
-    DynamicKeymapSetKeycode = 0x05,
+    DynamicKeymapGetKeyCode = 0x04,
+    DynamicKeymapSetKeyCode = 0x05,
     DynamicKeymapReset = 0x06,
     CustomSetValue = 0x07,
     CustomGetValue = 0x08,

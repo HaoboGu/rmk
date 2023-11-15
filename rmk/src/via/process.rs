@@ -74,7 +74,7 @@ pub fn process_via_packet<
                 Err(e) => error!("Invalid subcommand: {} of GetKeyboardValue", e.number),
             }
         }
-        ViaCommand::DynamicKeymapGetKeycode => {
+        ViaCommand::DynamicKeymapGetKeyCode => {
             let layer = report.output_data[1] as usize;
             let row = report.output_data[2] as usize;
             let col = report.output_data[3] as usize;
@@ -86,7 +86,7 @@ pub fn process_via_packet<
             );
             BigEndian::write_u16(&mut report.input_data[4..6], keycode);
         }
-        ViaCommand::DynamicKeymapSetKeycode => {
+        ViaCommand::DynamicKeymapSetKeyCode => {
             let layer = report.output_data[1] as usize;
             let row = report.output_data[2] as usize;
             let col = report.output_data[3] as usize;
@@ -192,8 +192,12 @@ pub fn process_via_packet<
                     *a = action;
                     idx += 2;
                     let current_offset = offset as usize + i;
-                    let (row, col, layer) = get_position_from_offset(current_offset, row_num, col_num);
-                    info!("Setting keymap buffer of offset: {}, row,col,layer: {},{},{}", offset, row, col, layer);
+                    let (row, col, layer) =
+                        get_position_from_offset(current_offset, row_num, col_num);
+                    info!(
+                        "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
+                        offset, row, col, layer
+                    );
                     match eeprom {
                         Some(e) => e.set_keymap_action(row, col, layer, action),
                         None => (),
