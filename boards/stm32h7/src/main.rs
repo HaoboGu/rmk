@@ -94,8 +94,8 @@ mod app {
         let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
 
         // USB config
-        let usb_dm = gpioa.pa11.into_alternate();
-        let usb_dp = gpioa.pa12.into_alternate();
+        let usb_dm = gpioa.pa11.into_analog();
+        let usb_dp = gpioa.pa12.into_analog();
         let usb: USB1 = USB1::new(
             dp.OTG1_HS_GLOBAL,
             dp.OTG1_HS_DEVICE,

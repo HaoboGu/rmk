@@ -18,7 +18,7 @@ rmk = { version = "0.0.5", path = "../../rmk", features = [
     "eeprom",
     "col2row",
 ] }
-stm32h7xx-hal = { version = "0.14.0", features = [
+stm32h7xx-hal = { version = "0.15.1", features = [
     "stm32h7b0",
     "rt",
     "log-rtt",
