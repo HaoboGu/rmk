@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Cortex-Debug - stm32h7",
-            "preLaunchTask": "Flash stm32h7",
+            "preLaunchTask": "flash stm32h7",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
@@ -18,11 +18,14 @@
                 "${workspaceFolder}/boards/stm32h7/openocd.cfg"
             ],
             "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
+            "postRestartCommands": [
+                "monitor rtt start",
+            ],
             "rttConfig": {
                 "enabled": true,
                 "address": "auto",
                 "clearSearch": false,
-                "polling_interval": 20,
+                "polling_interval": 10,
                 "rtt_start_retry": 2000,
                 "decoders": [
                     {
@@ -32,6 +35,22 @@
                     }
                 ]
             },
+        },
+        {
+            "name": "Cortex-Debug - rp2040",
+            "type": "cortex-debug",
+            "request": "launch",
+            "gdbPath" : "gdb-multiarch",
+            // "preLaunchTask": "flash rp2040",
+            "cwd": "${workspaceFolder}/boards/rp2040",
+            "device": "RP2040",
+            "servertype": "openocd",
+            "showDevDebugOutput": "parsed",
+            "executable": "${workspaceFolder}/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+            "runToEntryPoint": "main",
+            "configFiles": [
+                "openocd.cfg"
+            ]
         },
         {
             "name": "Probe-rs - rp2040",
