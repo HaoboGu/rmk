@@ -12,12 +12,9 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 embedded-storage = { version = "0.3" }
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
 num_enum = { version = "0.7.0", default-features = false }
 log = "0.4.19"
 rtic-monotonics = { version = "1", features = [
-    "cortex-m-systick",
     "systick-10khz",
 ] }
 usb-device = "0.2.9"
