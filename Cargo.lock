@@ -556,8 +556,6 @@ dependencies = [
  "rp-pico",
  "rtic",
  "rtic-monotonics",
- "usb-device",
- "usbd-hid",
 ]
 
 [[package]]
@@ -575,8 +573,6 @@ dependencies = [
  "rtic-monotonics",
  "rtt-target 0.4.0",
  "stm32h7xx-hal",
- "usb-device",
- "usbd-hid",
 ]
 
 [[package]]

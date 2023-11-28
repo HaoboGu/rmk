@@ -32,8 +32,6 @@ rtt-target = "0.4.0"
 log = "0.4.19"
 rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
-usb-device = "0.2.9"
-usbd-hid = "0.6.1"
 packed_struct = { version = "0.10.1", default-features = false }
 embedded-storage = { version = "0.3" }
 

@@ -15,6 +15,9 @@ use keyboard::Keyboard;
 use usb::KeyboardUsbDevice;
 use usb_device::class_prelude::{UsbBus, UsbBusAllocator};
 
+pub use usb_device;
+pub use usbd_hid;
+
 pub mod action;
 pub mod config;
 pub mod debounce;

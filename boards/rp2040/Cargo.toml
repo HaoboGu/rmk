@@ -33,8 +33,6 @@ cortex-m-rt = "0.7.3"
 log = "0.4.19"
 rtic = { version = "2.0.0", features = ["thumbv6-backend"] }
 rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
-usb-device = "0.2.9"
-usbd-hid = "0.6.1"
 
 [features]
 # avoid having to use --allow-multiple-definition linker flag

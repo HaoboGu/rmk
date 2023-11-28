@@ -17,6 +17,7 @@ mod app {
     use rmk::{
         config::KEYBOARD_CONFIG, eeprom::EepromStorageConfig, flash::EmptyFlashWrapper,
         initialize_keyboard_and_usb_device, keyboard::Keyboard, usb::KeyboardUsbDevice,
+        usb_device::class_prelude::UsbBusAllocator,
     };
     use rp_pico::{
         hal::{
@@ -25,7 +26,6 @@ mod app {
         Pins, XOSC_CRYSTAL_FREQ,
     };
     use rtic_monotonics::systick::*;
-    use usb_device::class_prelude::UsbBusAllocator;
 
     // Static usb bus instance
     static mut USB_BUS: Option<UsbBusAllocator<UsbBus>> = None;

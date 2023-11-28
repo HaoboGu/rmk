@@ -106,7 +106,7 @@ mod app {
             &ccdr.clocks,
         );
         let usb_allocator = cortex_m::singleton!(
-            : usb_device::class_prelude::UsbBusAllocator<UsbBus<USB1>> =
+            : rmk::usb_device::class_prelude::UsbBusAllocator<UsbBus<USB1>> =
                 UsbBus::new(usb, unsafe { &mut EP_MEMORY })
         )
         .unwrap();
