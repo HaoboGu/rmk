@@ -15,6 +15,7 @@ embedded-storage = { version = "0.3" }
 num_enum = { version = "0.7.0", default-features = false }
 log = "0.4.19"
 rtic-monotonics = { version = "1", features = [
+    "cortex-m-systick",
     "systick-10khz",
 ] }
 usb-device = "0.2.9"
