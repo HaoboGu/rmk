@@ -4,9 +4,11 @@
 </a>
 <h3 align="center">RMK</h3>
 
-<img align="center" href="https://discord.gg/VvveE25E7S" src="https://dcbadge.vercel.app/api/server/VvveE25E7S?style=flat&compact=true" alt="logo" /> <img align="center" src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg" alt="ci" />
-
 </p>
+
+[![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
+[![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
+[![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
 ---
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
