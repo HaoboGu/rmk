@@ -12,17 +12,14 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 embedded-storage = { version = "0.3" }
+embedded-alloc = "0.5.0"
+embassy-time = {version = "0.1.5", git = "https://github.com/embassy-rs/embassy", features = ["tick-hz-1_000_000"] }
 num_enum = { version = "0.7.0", default-features = false }
 log = "0.4.19"
-rtic-monotonics = { version = "1.0.0", features = [
-    "cortex-m-systick",
-    "systick-10khz",
-] }
 usb-device = "0.2.9"
 usbd-hid = "0.6.1"
 packed_struct = { version = "0.10.1", default-features = false }
 byteorder = { version = "1.4", default-features = false }
-embedded-alloc = "0.5.0"
 
 [features]
 default = ["col2row"]

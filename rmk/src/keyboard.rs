@@ -8,11 +8,11 @@ use crate::{
     via::{descriptor::ViaReport, process::process_via_packet},
 };
 use core::convert::Infallible;
+use embassy_time::Timer;
 use embedded_alloc::Heap;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, warn};
-use rtic_monotonics::systick::*;
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
@@ -298,7 +298,7 @@ impl<
 
             // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
             // Wait 10ms, then send release
-            Systick::delay(10.millis()).await;
+            Timer::after_millis(10).await;
 
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state);

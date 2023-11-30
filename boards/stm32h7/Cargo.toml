@@ -28,6 +28,8 @@ stm32h7xx-hal = { version = "0.15.1", features = [
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
+embassy-time = {version = "0.1.5", git = "https://github.com/embassy-rs/embassy", features = ["tick-hz-1_000_000"] }
+embassy-stm32 = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt", "stm32h7b0vb", "time-driver-any", "exti", "memory-x", "unstable-pac", "chrono"] }
 rtt-target = "0.4.0"
 log = "0.4.19"
 rtic = { version = "2.0.1", features = ["thumbv7-backend"] }

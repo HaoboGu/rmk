@@ -5,10 +5,10 @@ use crate::{
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use embassy_time::Instant;
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
-use rtic_monotonics::{systick::Systick, Monotonic};
 
 pub fn process_via_packet<
     F: NorFlash,
@@ -36,7 +36,7 @@ pub fn process_via_packet<
             match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                 Ok(v) => match v {
                     ViaKeyboardInfo::Uptime => {
-                        let value = Systick::now().ticks();
+                        let value = Instant::now().as_ticks() as u32;
                         BigEndian::write_u32(&mut report.input_data[2..6], value);
                     }
                     ViaKeyboardInfo::LayoutOptions => {

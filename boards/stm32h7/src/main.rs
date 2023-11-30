@@ -21,11 +21,12 @@ mod app {
         rtt_logger,
     };
     use log::info;
+    use embassy_time;
     use rmk::eeprom::EepromStorageConfig;
     use rmk::keyboard::Keyboard;
     use rmk::usb::KeyboardUsbDevice;
     use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
-    use rtic_monotonics::systick::*;
+    use rtic_monotonics::systick::Systick;
     use stm32h7xx_hal::{
         gpio::{ErasedPin, Input, Output, PE3},
         pac::rcc::cdccip2r::USBSEL_A::Hsi48,
@@ -65,9 +66,10 @@ mod app {
         let cp = cx.core;
         let dp = cx.device;
 
+        let p = embassy_stm32::init(Default::default());
         // Initialize the systick interrupt & obtain the token to prove that we did
         let systick_mono_token = rtic_monotonics::create_systick_token!();
-        // Default clock rate is 225MHz
+        // // Default clock rate is 225MHz
         Systick::start(cp.SYST, 225_000_000, systick_mono_token);
 
         // Power config
@@ -159,7 +161,8 @@ mod app {
                 cx.local.keyboard.process_via_report(usb_device);
             });
             // Scanning frequency: 10KHZ
-            Systick::delay(100.micros()).await;
+            embassy_time::Timer::after_micros(100).await;
+            // Systick::delay(100.micros()).await;
         }
     }
 
