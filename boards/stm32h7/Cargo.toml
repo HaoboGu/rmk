@@ -14,7 +14,7 @@ license = "MIT OR Apache-2.0"
 forced-target = "thumbv7em-none-eabihf"
 
 [dependencies]
-rmk = { version = "0.0.5", path = "../../rmk", features = [
+rmk = { version = "0.0.6", path = "../../rmk", features = [
     "eeprom",
     "col2row",
 ] }
