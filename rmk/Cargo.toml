@@ -14,7 +14,7 @@ embedded-hal = { version = "0.2.7", features = ["unproven"] }
 embedded-storage = { version = "0.3" }
 num_enum = { version = "0.7.0", default-features = false }
 log = "0.4.19"
-rtic-monotonics = { version = "1.0.1", features = [
+rtic-monotonics = { version = "1.0.0", features = [
     "cortex-m-systick",
     "systick-10khz",
 ] }
