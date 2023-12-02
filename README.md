@@ -1,16 +1,18 @@
-<p align="center">
 <a href="https://github.com/haobogu/rmk">
 <!-- <img src="https://github.com/HaoboGu/rmk/assets/8640918/24a01f8e-4958-4c8e-8652-d729d21c4667" alt="logo" width="300" /> -->
-</a>
-<h2 align="center">RMK</h2>
+<h2 align="center">RMK
 
-</p>
+<br>
+<p align="left">
 
 [![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
----
+</p>
+</h2>
+</a>
+
 Keyboard firmware written in Rust. Tested on stm32 and rp2040.
 
 ![IMG_2627](https://github.com/HaoboGu/rmk/assets/8640918/9789dbf7-c974-467e-bbdd-5fa3cc80c66c)
