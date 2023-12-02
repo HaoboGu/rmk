@@ -4,7 +4,7 @@
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
-Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, tested on stm32 and rp2040.
+Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, written in Rust and tested on stm32 and rp2040.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ step-to-step instruction for creating your own firmware:
 
 #### rp2040
 
-1. Install `probe-rs`
+1. Install [probe-rs](https://github.com/probe-rs/probe-rs)
    ```shell
       cargo install probe-rs --features cli
    ```
