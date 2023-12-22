@@ -20,3 +20,6 @@ jobs:
       run: rustup target add thumbv7em-none-eabihf
     - name: Build
       run: cargo build --verbose
+    - name: Build rp2040
+      working-directory: ./boards/rp2040
+      run: cargo build --verbose
