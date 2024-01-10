@@ -83,7 +83,7 @@ dependencies = [
  "bare-metal 0.2.5",
  "bitfield",
  "critical-section",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "volatile-register",
 ]
 
@@ -204,6 +204,12 @@ dependencies = [
  "nb 0.1.3",
  "void",
 ]
+
+[[package]]
+name = "embedded-hal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
 name = "embedded-storage"
@@ -529,7 +535,7 @@ version = "0.0.6"
 dependencies = [
  "byteorder",
  "embedded-alloc",
- "embedded-hal",
+ "embedded-hal 1.0.0",
  "embedded-storage",
  "log",
  "num_enum 0.7.0",
@@ -547,7 +553,7 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
  "defmt-rtt",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "log",
  "panic-probe",
  "rmk",
@@ -604,7 +610,7 @@ dependencies = [
  "cortex-m",
  "critical-section",
  "embedded-dma",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "frunk",
  "fugit",
  "itertools",
@@ -810,7 +816,7 @@ dependencies = [
  "cast",
  "cortex-m",
  "embedded-dma",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "embedded-storage",
  "fugit",
  "nb 1.1.0",
@@ -849,7 +855,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "678f3707a7b1fd4863023292c42f73c6bab0e9b0096f41ae612d1af0ff221b45"
 dependencies = [
  "cortex-m",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "usb-device",
  "vcell",
 ]

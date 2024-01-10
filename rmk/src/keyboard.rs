@@ -9,7 +9,7 @@ use crate::{
 };
 use core::convert::Infallible;
 use embedded_alloc::Heap;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, warn};
 use rtic_monotonics::systick::*;

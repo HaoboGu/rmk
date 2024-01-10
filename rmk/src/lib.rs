@@ -10,7 +10,7 @@ use action::KeyAction;
 use config::KeyboardConfig;
 use core::convert::Infallible;
 use eeprom::{eeconfig::Eeconfig, EepromStorageConfig};
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use usb::KeyboardUsbDevice;

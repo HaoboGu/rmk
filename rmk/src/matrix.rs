@@ -1,6 +1,6 @@
 use crate::debounce::Debouncer;
 use core::convert::Infallible;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use rtic_monotonics::{systick::*, Monotonic};
 
 /// KeyState represents the state of a key.
@@ -88,7 +88,7 @@ impl<
             // Pull up output pin, wait 1us ensuring the change comes into effect
             out_pin.set_high()?;
             Systick::delay(1.micros()).await;
-            for (in_idx, in_pin) in self.input_pins.iter().enumerate() {
+            for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
                 self.debouncer.debounce(
                     in_idx,
