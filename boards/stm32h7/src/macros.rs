@@ -1,5 +1,5 @@
 macro_rules! config_matrix_pins {
-    (input: [$($in_port:ident.$in_pin:ident), *], output: [$($out_port: ident.$out_pin: ident), +]) => {
+    (input: [$($in_port:ident.$in_pin:ident), *], output: [$($out_port:ident.$out_pin:ident), +]) => {
         {
             $(
                 let $in_pin = $in_port.$in_pin.into_pull_down_input().erase();
@@ -17,3 +17,21 @@ macro_rules! config_matrix_pins {
     };
 }
 
+macro_rules! config_matrix_pins_embassy {
+    (peripherals: $p:ident, input: [$($in_pin:ident), *], output: [$($out_pin:ident), +]) => {
+        {
+            $(
+                let $in_pin = Input::new($p.$in_pin, embassy_stm32::gpio::Pull::Down).degrade();
+            )*
+            $(
+                let mut $out_pin = Output::new($p.$out_pin, embassy_stm32::gpio::Level::Low, embassy_stm32::gpio::Speed::VeryHigh).degrade();
+            )+
+            $(
+                $out_pin.set_low();
+            )+
+            let output_pins = [$($out_pin), +];
+            let input_pins = [$($in_pin), +];
+            (input_pins, output_pins)
+        }
+    };
+}

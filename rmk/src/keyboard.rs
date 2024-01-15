@@ -4,15 +4,16 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::KeyboardUsbDevice,
+    usb2::KeyboardUsbDevice2,
     via::{descriptor::ViaReport, process::process_via_packet},
 };
 use core::convert::Infallible;
 use embassy_time::Timer;
+use embassy_usb::{driver::Driver, class::hid::HidReaderWriter};
 use embedded_alloc::Heap;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, warn};
+use log::{debug, warn, error};
 use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
@@ -172,10 +173,17 @@ impl<
     }
 
     /// Send hid report. The report is sent only when key state changes.
-    pub fn send_report<B: UsbBus>(&mut self, usb_device: &KeyboardUsbDevice<'_, B>) {
+    pub async fn send_report<'d, D: Driver<'d>>(
+        &mut self,
+        usb_device: &mut HidReaderWriter<'d, D, 1, 8>,
+    ) {
         // TODO: refine changed, separate hid/media/system
         if self.need_send_key_report {
-            usb_device.send_keyboard_report(&self.report);
+            // usb_device.send_keyboard_report(&self.report).await;
+            match usb_device.write_serialize(&self.report).await {
+                Ok(()) => {}
+                Err(e) => error!("Send keyboard report error: {:?}", e),
+            };
             // Reset report key states
             for bit in &mut self.report.keycodes {
                 *bit = 0;
@@ -185,20 +193,23 @@ impl<
 
         if self.need_send_consumer_control_report {
             debug!("Sending consumer report: {:?}", self.media_report);
-            usb_device.send_consumer_control_report(&self.media_report);
+            // usb_device.send_consumer_control_report(&self.media_report);
             self.media_report.usage_id = 0;
             self.need_send_consumer_control_report = false;
         }
     }
 
     /// Read hid report.
-    pub fn process_via_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
-        if usb_device.read_via_report(&mut self.via_report) > 0 {
-            process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
+    pub fn process_via_report<'d, D: Driver<'d>>(
+        &mut self,
+        usb_device: &KeyboardUsbDevice2<'d, D>,
+    ) {
+        // if usb_device.read_via_report(&mut self.via_report) > 0 {
+        //     process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
 
-            // Send via report back after processing
-            usb_device.send_via_report(&self.via_report);
-        }
+        //     // Send via report back after processing
+        //     usb_device.send_via_report(&self.via_report);
+        // }
     }
 
     /// Main keyboard task, it scans matrix, processes active keys
