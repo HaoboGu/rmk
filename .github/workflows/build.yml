@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install target
-      run: rustup target add thumbv7em-none-eabihf
+      run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi
     - name: Build
+      run: cargo build --verbose
+    - name: Build rp2040
+      working-directory: ./boards/rp2040
       run: cargo build --verbose
