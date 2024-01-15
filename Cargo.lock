@@ -367,6 +367,12 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
+
+[[package]]
+name = "embedded-hal"
 version = "1.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e57ec6ad0bc8eb967cf9c9f144177f5e8f2f6f02dad0b8b683f9f05f6b22def"
@@ -826,7 +832,7 @@ dependencies = [
  "byteorder",
  "embassy-time",
  "embedded-alloc",
- "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
  "embedded-storage",
  "log",
  "num_enum 0.7.0",
@@ -843,6 +849,7 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
  "defmt-rtt",
+ "embedded-hal 0.2.7",
  "embedded-hal 0.2.7",
  "log",
  "panic-probe",

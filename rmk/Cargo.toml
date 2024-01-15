@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-embedded-hal = { version = "0.2.7", features = ["unproven"] }
+embedded-hal = "1.0.0"
 embedded-storage = { version = "0.3" }
 embedded-alloc = "0.5.0"
 embassy-time = {version = "0.1.5", git = "https://github.com/embassy-rs/embassy", features = ["tick-hz-1_000_000"] }

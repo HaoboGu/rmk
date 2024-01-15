@@ -10,7 +10,7 @@ use crate::{
 use core::convert::Infallible;
 use embassy_time::Timer;
 use embedded_alloc::Heap;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, warn};
 use usb_device::class_prelude::UsbBus;
