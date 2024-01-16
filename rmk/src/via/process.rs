@@ -1,13 +1,14 @@
-use super::{descriptor::*, protocol::*, *};
+use super::{protocol::*, vial::process_vial};
 use crate::{
     eeprom::Eeprom,
     keymap::KeyMap,
+    usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Instant;
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub fn process_via_packet<
@@ -210,7 +211,7 @@ pub fn process_via_packet<
         ViaCommand::DynamicKeymapSetEncoder => {
             warn!("Keymap get encoder -- not supported");
         }
-        ViaCommand::Vial => vial::process_vial(report),
+        ViaCommand::Vial => process_vial(report),
         ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
     }
 }

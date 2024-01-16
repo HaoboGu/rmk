@@ -9,11 +9,11 @@
 use action::KeyAction;
 use core::convert::Infallible;
 use eeprom::{eeconfig::Eeconfig, EepromStorageConfig};
+use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use usb::KeyboardUsbDevice;
-use embassy_usb::{class::hid::State, driver::Driver};
 
 pub use embassy_sync;
 pub use embassy_usb;
@@ -72,8 +72,7 @@ pub mod via;
 
 /// Initialize keyboard core and keyboard usb device
 pub fn initialize_keyboard_and_usb_device2<
-    'd,
-    D: Driver<'d>,
+    D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     F: NorFlash,
@@ -83,7 +82,6 @@ pub fn initialize_keyboard_and_usb_device2<
     const NUM_LAYER: usize,
 >(
     driver: D,
-    state: &'d mut State<'d>,
     storage: Option<F>,
     eeprom_storage_config: EepromStorageConfig,
     eeconfig: Option<Eeconfig>,
@@ -92,7 +90,7 @@ pub fn initialize_keyboard_and_usb_device2<
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
 ) -> (
     Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    KeyboardUsbDevice<'d, D>,
+    KeyboardUsbDevice<'static, D>,
 ) {
     (
         Keyboard::new(
@@ -103,6 +101,6 @@ pub fn initialize_keyboard_and_usb_device2<
             eeconfig,
             keymap,
         ),
-        KeyboardUsbDevice::new(driver, state),
+        KeyboardUsbDevice::new(driver),
     )
 }

@@ -52,6 +52,7 @@ rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 packed_struct = { version = "0.10.1", default-features = false }
 embedded-storage = { version = "0.3" }
+static_cell = { version = "2" }
 
 [[bin]]
 name = "rmk-stm32h7"

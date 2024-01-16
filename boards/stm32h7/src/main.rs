@@ -22,10 +22,8 @@ use embassy_stm32::{
     Config,
 };
 use panic_rtt_target as _;
-use rmk::{
-    eeprom::EepromStorageConfig, embassy_usb::class::hid::State,
-    initialize_keyboard_and_usb_device2,
-};
+use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device2};
+use static_cell::StaticCell;
 
 use crate::flash::DummyFlash;
 
@@ -70,7 +68,7 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
-    let mut ep_out_buffer = [0u8; 256];
+    static EP_OUT_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
     let mut config = embassy_stm32::usb_otg::Config::default();
     config.vbus_detection = false;
     let driver = Driver::new_fs(
@@ -78,11 +76,10 @@ async fn main(_spawner: Spawner) {
         Irqs,
         p.PA12,
         p.PA11,
-        &mut ep_out_buffer,
+        &mut EP_OUT_BUFFER.init([0; 256])[..],
         config,
     );
 
-    let mut state = State::new();
     const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
     let storage_config = EepromStorageConfig {
         start_addr: FLASH_SECTOR_15_ADDR,
@@ -103,7 +100,6 @@ async fn main(_spawner: Spawner) {
         2,
     >(
         driver,
-        &mut state,
         None,
         storage_config,
         None,
@@ -116,7 +112,7 @@ async fn main(_spawner: Spawner) {
     let keyboard_fut = async {
         loop {
             let _ = keyboard.keyboard_task().await;
-            keyboard.send_report(&mut device.hid).await;
+            keyboard.send_report(&mut device.keyboard_hid).await;
         }
         // TODO: sleep
     };

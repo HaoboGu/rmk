@@ -969,6 +969,7 @@ dependencies = [
  "rtic",
  "rtic-monotonics",
  "rtt-target 0.5.0",
+ "static_cell",
 ]
 
 [[package]]

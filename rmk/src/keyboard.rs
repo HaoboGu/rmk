@@ -4,16 +4,16 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::KeyboardUsbDevice,
-    via::{descriptor::ViaReport, process::process_via_packet},
+    usb::{descriptor::ViaReport, KeyboardUsbDevice},
+    via::process::process_via_packet,
 };
 use core::convert::Infallible;
 use embassy_time::Timer;
-use embassy_usb::{driver::Driver, class::hid::HidReaderWriter};
+use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use embedded_alloc::Heap;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, warn, error};
+use log::{debug, error, warn};
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
 #[global_allocator]
@@ -200,15 +200,15 @@ impl<
 
     /// Read hid report.
     /// TODO: via
-    pub fn process_via_report<'d, D: Driver<'d>>(
+    pub async fn process_via_report<D: Driver<'static>>(
         &mut self,
-        usb_device: &mut KeyboardUsbDevice<'d, D>,
+        usb_device: &mut KeyboardUsbDevice<'static, D>,
     ) {
-        if usb_device.read_via_report(&mut self.via_report) > 0 {
+        if usb_device.read_via_report(&mut self.via_report).await > 0 {
             process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
 
             // Send via report back after processing
-            usb_device.send_via_report(&self.via_report);
+            usb_device.send_via_report(&self.via_report).await;
         }
     }
 
