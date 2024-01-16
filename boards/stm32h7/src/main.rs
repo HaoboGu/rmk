@@ -90,8 +90,7 @@ async fn main(_spawner: Spawner) {
         page_size: 16,
     };
 
-    // TODO: GPIOs
-    let (input_pins, output_pins) = config_matrix_pins_embassy!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
+    let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
 
     let (mut keyboard, mut device) = initialize_keyboard_and_usb_device2::<
         embassy_stm32::usb_otg::Driver<'_, USB_OTG_HS>,

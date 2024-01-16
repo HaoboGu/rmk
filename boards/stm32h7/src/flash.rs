@@ -56,18 +56,18 @@ impl NorFlash for DummyFlash {
     const WRITE_SIZE: usize = 0;
     const ERASE_SIZE: usize = 0;
 
-    fn erase(&mut self, from: u32, to: u32) -> Result<(), Self::Error> {
+    fn erase(&mut self, _from: u32, _to: u32) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
+    fn write(&mut self, _offset: u32, _bytes: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
 impl ReadNorFlash for DummyFlash {
     const READ_SIZE: usize = 1;
-    fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
+    fn read(&mut self, _offset: u32, _bytes: &mut [u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 

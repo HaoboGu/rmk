@@ -4,7 +4,7 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb2::KeyboardUsbDevice2,
+    usb::KeyboardUsbDevice,
     via::{descriptor::ViaReport, process::process_via_packet},
 };
 use core::convert::Infallible;
@@ -14,7 +14,6 @@ use embedded_alloc::Heap;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, warn, error};
-use usb_device::class_prelude::UsbBus;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
 #[global_allocator]
@@ -200,16 +199,17 @@ impl<
     }
 
     /// Read hid report.
+    /// TODO: via
     pub fn process_via_report<'d, D: Driver<'d>>(
         &mut self,
-        usb_device: &KeyboardUsbDevice2<'d, D>,
+        usb_device: &mut KeyboardUsbDevice<'d, D>,
     ) {
-        // if usb_device.read_via_report(&mut self.via_report) > 0 {
-        //     process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
+        if usb_device.read_via_report(&mut self.via_report) > 0 {
+            process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
 
-        //     // Send via report back after processing
-        //     usb_device.send_via_report(&self.via_report);
-        // }
+            // Send via report back after processing
+            usb_device.send_via_report(&self.via_report);
+        }
     }
 
     /// Main keyboard task, it scans matrix, processes active keys
