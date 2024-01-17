@@ -18,13 +18,6 @@ rmk = { version = "0.0.6", path = "../../rmk", features = [
     "eeprom",
     "col2row",
 ] }
-# stm32h7xx-hal = { version = "0.15.1", features = [
-#     "stm32h7b0",
-#     "rt",
-#     "log-rtt",
-#     "usb_hs",
-# ] }
-# Workspace dependencies
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.3"
 panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
@@ -35,12 +28,9 @@ embassy-stm32 = { version = "0.1.0", git = "https://github.com/embassy-rs/embass
     "stm32h7b0vb",
     "time-driver-any",
     "exti",
-    "memory-x",
-    "unstable-pac",
-    "chrono",
+    "time",
 ] }
 embassy-executor = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = [
-    "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",
@@ -48,11 +38,14 @@ embassy-executor = { version = "0.5.0", git = "https://github.com/embassy-rs/emb
 embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy" }
 rtt-target = "0.5.0"
 log = "0.4.19"
-rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
-rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 packed_struct = { version = "0.10.1", default-features = false }
 embedded-storage = { version = "0.3" }
 static_cell = { version = "2" }
+
+# defmt deps
+# defmt = "0.3.5"
+# defmt-rtt = "0.4.0"
+# panic-probe = "0.3.1"
 
 [[bin]]
 name = "rmk-stm32h7"

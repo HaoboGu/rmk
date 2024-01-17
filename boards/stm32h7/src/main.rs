@@ -21,8 +21,9 @@ use embassy_stm32::{
     usb_otg::{Driver, InterruptHandler},
     Config,
 };
+use log::info;
 use panic_rtt_target as _;
-use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device2};
+use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device};
 use static_cell::StaticCell;
 
 use crate::flash::DummyFlash;
@@ -36,7 +37,7 @@ static SUSPENDED: AtomicBool = AtomicBool::new(false);
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     rtt_logger::init(log::LevelFilter::Info);
-    log::info!("Start embassy main!");
+    info!("Rmk start!");
     let mut config = Config::default();
     {
         use embassy_stm32::rcc::*;
@@ -68,7 +69,7 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
-    static EP_OUT_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
+    static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
     let mut config = embassy_stm32::usb_otg::Config::default();
     config.vbus_detection = false;
     let driver = Driver::new_fs(
@@ -76,7 +77,7 @@ async fn main(_spawner: Spawner) {
         Irqs,
         p.PA12,
         p.PA11,
-        &mut EP_OUT_BUFFER.init([0; 256])[..],
+        &mut EP_OUT_BUFFER.init([0; 1024])[..],
         config,
     );
 
@@ -89,10 +90,10 @@ async fn main(_spawner: Spawner) {
 
     let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
 
-    let (mut keyboard, mut device) = initialize_keyboard_and_usb_device2::<
-        embassy_stm32::usb_otg::Driver<'_, USB_OTG_HS>,
-        embassy_stm32::gpio::Input<'_, AnyPin>,
-        embassy_stm32::gpio::Output<'_, AnyPin>,
+    let (mut keyboard, mut device) = initialize_keyboard_and_usb_device::<
+        Driver<'_, USB_OTG_HS>,
+        Input<'_, AnyPin>,
+        Output<'_, AnyPin>,
         DummyFlash,
         0,
         4,

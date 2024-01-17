@@ -41,7 +41,8 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
-    // println!("cargo:rustc-link-arg-bins=-Tdefmt.x");
+    // Set the extra linker script from defmt
+    // println!("cargo:rustc-link-arg=-Tdefmt.x");
 
     println!("cargo:rustc-linker=flip-link");
 }
