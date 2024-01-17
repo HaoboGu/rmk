@@ -17,7 +17,6 @@ use usb::KeyboardUsbDevice;
 
 pub use embassy_sync;
 pub use embassy_usb;
-pub use usb_device;
 pub use usbd_hid;
 
 pub mod action;
@@ -71,7 +70,7 @@ pub mod via;
 // }
 
 /// Initialize keyboard core and keyboard usb device
-pub fn initialize_keyboard_and_usb_device2<
+pub fn initialize_keyboard_and_usb_device<
     D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
