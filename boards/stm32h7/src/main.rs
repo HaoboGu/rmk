@@ -103,10 +103,10 @@ async fn main(_spawner: Spawner) {
         page_size: 32,
     };
     // Use internal flash to emulate eeprom
-    let _f = Flash::new_blocking(p.FLASH);
+    let f = Flash::new_blocking(p.FLASH);
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
-        None,
+        Some(f),
         eeprom_storage_config,
         None,
     )));
