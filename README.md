@@ -6,6 +6,10 @@
 
 Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, written in Rust and tested on stm32 and rp2040.
 
+## News
+
+Rmk just released version 0.1.0, migrate to [Embassy](https://github.com/embassy-rs/embassy)! By migrating to Embassy, Rmk now has better async support, supports more MCUs  much easier APIs than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+
 ## Prerequisites
 
 This crate requires **nightly** Rust. `openocd`(stm32) or `probe-rs`(rp2040) is used for flashing & debugging.
@@ -73,8 +77,15 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] system/media keys
 - [x] vial support
 - [x] eeprom
-- [ ] support embassy runtime
-- [ ] macro
+- [ ] keyboard macro
 - [ ] encoder
 - [ ] RGB
 - [ ] cli tools
+
+## License
+Rmk is licensed under either of
+
+- Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license (LICENSE-MIT or http://opensource.org/licenses/MIT)
+
+at your option.
