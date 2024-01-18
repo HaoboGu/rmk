@@ -234,7 +234,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         let mut buf = vec![0xFF_u8; self.storage_config.page_size as usize];
         buf[..bytes.len()].copy_from_slice(&bytes);
         debug!(
-            "EEPROM write storage at 0x{:X}: {:02X?} ",
+            "EEPROM write storage length {:?} at 0x{:X}: {:X?} ",
+            buf.len(),
             self.storage_config.start_addr + self.pos,
             buf,
         );
@@ -247,7 +248,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             Ok(_) => self.pos += self.storage_config.page_size,
             Err(e) => {
                 error!(
-                    "Failed to write record to storage at {:X}: {:?}",
+                    "Failed to write record to storage at 0x{:X}: {:?}",
                     self.storage_config.start_addr + self.pos,
                     e
                 )

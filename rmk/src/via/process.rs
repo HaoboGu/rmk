@@ -2,8 +2,6 @@ use core::cell::RefCell;
 
 use super::{protocol::*, vial::process_vial};
 use crate::{
-    eeprom::Eeprom,
-    flash::EmptyFlashWrapper,
     keymap::KeyMap,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -20,29 +18,26 @@ use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub struct VialService<
     'a,
-    // F: NorFlash,
+    F: NorFlash,
     const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 > {
-    pub keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
-    // pub eeprom: &'a RefCell<Option<Eeprom<F, EEPROM_SIZE>>>,
+    // VialService holds a reference of keymap, for updating
+    pub keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
 }
 
 impl<
         'a,
-        // F: NorFlash,
+        F: NorFlash,
         const EEPROM_SIZE: usize,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > VialService<'a, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
-    pub fn new(
-        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
-        // eeprom: &'a RefCell<Option<Eeprom<F, EEPROM_SIZE>>>,
-    ) -> Self {
+    pub fn new(keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>) -> Self {
         Self { keymap }
     }
 
@@ -54,13 +49,10 @@ impl<
             input_data: [0; 32],
             output_data: [0; 32],
         };
-        let mut dummy_eeprom: Option<Eeprom<EmptyFlashWrapper, 128>> = None;
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
                 {
-                    let km = &mut self.keymap.borrow_mut();
-                    // process_via_packet(&mut via_report, km, &mut self.eeprom.borrow_mut());
-                    process_via_packet(&mut via_report, km, &mut dummy_eeprom);
+                    process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
                 }
 
                 // Send via report back after processing
@@ -88,8 +80,7 @@ pub fn process_via_packet<
     const NUM_LAYER: usize,
 >(
     report: &mut ViaReport,
-    keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
-    eeprom: &mut Option<Eeprom<F, EEPROM_SIZE>>,
+    keymap: &mut KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
 ) {
     let command_id = report.output_data[0];
 
@@ -130,7 +121,7 @@ pub fn process_via_packet<
                 Ok(v) => match v {
                     ViaKeyboardInfo::LayoutOptions => {
                         let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                        match eeprom {
+                        match &mut keymap.eeprom {
                             Some(e) => e.set_layout_option(layout_option),
                             None => (),
                         }
@@ -167,7 +158,7 @@ pub fn process_via_packet<
                 keycode, row, col, layer, action
             );
             keymap.set_action_at(row, col, layer, action.clone());
-            match eeprom {
+            match &mut keymap.eeprom {
                 Some(e) => e.set_keymap_action(row, col, layer, action),
                 None => (),
             }
@@ -268,7 +259,7 @@ pub fn process_via_packet<
                         "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                         offset, row, col, layer
                     );
-                    match eeprom {
+                    match &mut keymap.eeprom {
                         Some(e) => e.set_keymap_action(row, col, layer, action),
                         None => (),
                     }
