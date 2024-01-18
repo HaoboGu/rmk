@@ -5,11 +5,9 @@ use embassy_usb::{
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
-use log::{error, info};
+use log::info;
 use static_cell::StaticCell;
-use usbd_hid::descriptor::{
-    KeyboardReport, MediaKeyboardReport, SerializedDescriptor, SystemControlReport,
-};
+use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescriptor};
 
 pub mod descriptor;
 
@@ -77,7 +75,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         );
 
         let other_hid_config = Config {
-            report_descriptor: SystemControlReport::desc(),
+            report_descriptor: MediaKeyboardReport::desc(),
             request_handler: Some(&request_handler),
             poll_ms: 60,
             max_packet_size: 64,
@@ -107,57 +105,6 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             other_hid,
             via_hid,
         };
-    }
-
-    pub async fn run() {}
-
-    /// Send keyboard hid report
-    pub async fn send_keyboard_report(&mut self, report: &KeyboardReport) {
-        match self.keyboard_hid.write_serialize(report).await {
-            Ok(_) => {}
-            Err(e) => error!("Send keyboard report error: {:?}", e),
-        };
-    }
-
-    /// Read via report, returns the length of the report, 0 if no report is available.
-    pub async fn read_via_report(&mut self, report: &mut ViaReport) -> usize {
-        // Use output_data: host to device data
-        match self.via_hid.read(&mut report.output_data).await {
-            Ok(l) => l,
-            Err(e) => {
-                error!("Read via report error: {:?}", e);
-                0
-            }
-        }
-    }
-
-    pub async fn send_via_report(&mut self, report: &ViaReport) {
-        match self.via_hid.write_serialize(report).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Send via report error: {:?}", e);
-            }
-        }
-    }
-
-    /// Send consumer control report, commonly used in keyboard media control
-    pub async fn send_consumer_control_report(&mut self, report: &MediaKeyboardReport) {
-        match self.other_hid.write_serialize(report).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Send via report error: {:?}", e);
-            }
-        }
-    }
-
-    /// Send system control report
-    pub async fn send_system_control_report(&mut self, report: &SystemControlReport) {
-        match self.other_hid.write_serialize(report).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Send via report error: {:?}", e);
-            }
-        }
     }
 }
 

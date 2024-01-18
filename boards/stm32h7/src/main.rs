@@ -10,26 +10,38 @@ mod keymap;
 pub mod rtt_logger;
 mod flash;
 
-use core::sync::atomic::AtomicBool;
+use core::{cell::RefCell, sync::atomic::AtomicBool};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_stm32::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
-    peripherals::{self, USB_OTG_HS},
+    peripherals::USB_OTG_HS,
     time::Hertz,
     usb_otg::{Driver, InterruptHandler},
     Config,
 };
-use log::info;
+use embassy_time::Timer;
+use embedded_storage::nor_flash::NorFlash;
+use log::{error, info};
 use panic_rtt_target as _;
-use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device};
+use rmk::{embassy_usb::class::hid::{HidReaderWriter, ReadError}, eeprom, via::process::VialService};
+use rmk::{
+    eeprom::EepromStorageConfig,
+    initialize_keyboard_and_usb_device,
+    keyboard::Keyboard,
+    keymap::KeyMap,
+    usb::{descriptor::ViaReport, KeyboardUsbDevice},
+};
 use static_cell::StaticCell;
 
-use crate::flash::DummyFlash;
+use crate::{
+    flash::DummyFlash,
+    keymap::{COL, NUM_LAYER, ROW},
+};
 
 bind_interrupts!(struct Irqs {
-    OTG_HS => InterruptHandler<peripherals::USB_OTG_HS>;
+    OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
 static SUSPENDED: AtomicBool = AtomicBool::new(false);
@@ -90,6 +102,9 @@ async fn main(_spawner: Spawner) {
 
     let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
 
+    static MY_KEYMAP: StaticCell<RefCell<KeyMap<ROW, COL, NUM_LAYER>>> = StaticCell::new();
+    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(crate::keymap::KEYMAP)));
+    // eeprom::Eeprom::new(storage, storage_config, eeconfig, keymap)
     let (mut keyboard, mut device) = initialize_keyboard_and_usb_device::<
         Driver<'_, USB_OTG_HS>,
         Input<'_, AnyPin>,
@@ -106,17 +121,24 @@ async fn main(_spawner: Spawner) {
         None,
         input_pins,
         output_pins,
-        crate::keymap::KEYMAP,
+        // crate::keymap::KEYMAP,
+        keymap,
     );
-
+    let vial: VialService<'_, 128, 4, 3, 2> = VialService::new(keymap);
     let usb_fut = device.device.run();
     let keyboard_fut = async {
         loop {
             let _ = keyboard.keyboard_task().await;
             keyboard.send_report(&mut device.keyboard_hid).await;
+            keyboard.send_media_report(&mut device.other_hid).await;
         }
-        // TODO: sleep
     };
 
-    join(usb_fut, keyboard_fut).await;
+    let via_fut = async {
+        loop {
+            vial.process_via_report(&mut device.via_hid).await;
+            Timer::after_millis(1).await;
+        }
+    };
+    join(usb_fut, join(keyboard_fut, via_fut)).await;
 }

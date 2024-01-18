@@ -6,13 +6,13 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 
-use action::KeyAction;
-use core::convert::Infallible;
+use core::{cell::RefCell, convert::Infallible};
 use eeprom::{eeconfig::Eeconfig, EepromStorageConfig};
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
+use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
 
 pub use embassy_sync;
@@ -86,7 +86,8 @@ pub fn initialize_keyboard_and_usb_device<
     eeconfig: Option<Eeconfig>,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    // keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    keymap: &'static RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 ) -> (
     Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
     KeyboardUsbDevice<'static, D>,

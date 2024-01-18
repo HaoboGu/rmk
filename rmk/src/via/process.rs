@@ -1,15 +1,84 @@
+use core::cell::RefCell;
+
 use super::{protocol::*, vial::process_vial};
 use crate::{
     eeprom::Eeprom,
+    flash::EmptyFlashWrapper,
     keymap::KeyMap,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Instant;
+use embassy_usb::{
+    class::hid::{HidReaderWriter, ReadError},
+    driver::Driver,
+};
 use embedded_storage::nor_flash::NorFlash;
 use log::{debug, error, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
+
+pub struct VialService<
+    'a,
+    // F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> {
+    pub keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    // pub eeprom: &'a RefCell<Option<Eeprom<F, EEPROM_SIZE>>>,
+}
+
+impl<
+        'a,
+        // F: NorFlash,
+        const EEPROM_SIZE: usize,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+    > VialService<'a, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+{
+    pub fn new(
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+        // eeprom: &'a RefCell<Option<Eeprom<F, EEPROM_SIZE>>>,
+    ) -> Self {
+        Self { keymap }
+    }
+
+    pub async fn process_via_report<D: Driver<'a>>(
+        &self,
+        hid_interface: &mut HidReaderWriter<'a, D, 32, 32>,
+    ) {
+        let mut via_report = ViaReport {
+            input_data: [0; 32],
+            output_data: [0; 32],
+        };
+        let mut dummy_eeprom: Option<Eeprom<EmptyFlashWrapper, 128>> = None;
+        match hid_interface.read(&mut via_report.output_data).await {
+            Ok(_) => {
+                {
+                    let km = &mut self.keymap.borrow_mut();
+                    // process_via_packet(&mut via_report, km, &mut self.eeprom.borrow_mut());
+                    process_via_packet(&mut via_report, km, &mut dummy_eeprom);
+                }
+
+                // Send via report back after processing
+                match hid_interface.write_serialize(&mut via_report).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Send via report error: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                if e != ReadError::Disabled {
+                    error!("Read via report error: {:?}", e);
+                }
+            }
+        }
+    }
+}
 
 pub fn process_via_packet<
     F: NorFlash,

@@ -14,7 +14,8 @@ embedded-hal = "1.0.0"
 embedded-storage = { version = "0.3" }
 embedded-alloc = "0.5"
 embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", features = [
-    "tick-hz-1_000_000",
+    # "tick-hz-1_000_000",
+    "tick-hz-32_768",
 ] }
 embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = [
     "usbd-hid",

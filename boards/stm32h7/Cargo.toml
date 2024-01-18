@@ -22,7 +22,8 @@ cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.3"
 panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
 embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", features = [
-    "tick-hz-1_000_000",
+    # "tick-hz-1_000_000",
+    "tick-hz-32_768",
 ] }
 embassy-stm32 = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = [
     "stm32h7b0vb",

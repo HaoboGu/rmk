@@ -4,10 +4,9 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::{descriptor::ViaReport, KeyboardUsbDevice},
-    via::process::process_via_packet,
+    usb::descriptor::ViaReport,
 };
-use core::convert::Infallible;
+use core::{cell::RefCell, convert::Infallible};
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use embedded_alloc::Heap;
@@ -20,6 +19,7 @@ use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlRep
 static HEAP: Heap = Heap::empty();
 
 pub struct Keyboard<
+    'a,
     In: InputPin,
     Out: OutputPin,
     F: NorFlash,
@@ -35,8 +35,8 @@ pub struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub keymap: KeyMap<ROW, COL, NUM_LAYER>,
-
+    pub keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    // pub keymap: Mutex<CriticalSectionRawMutex, &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>>,
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
@@ -62,6 +62,7 @@ pub struct Keyboard<
 }
 
 impl<
+        'a,
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
         F: NorFlash,
@@ -69,7 +70,7 @@ impl<
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub fn new(
@@ -78,38 +79,38 @@ impl<
         storage: Option<F>,
         eeprom_storage_config: EepromStorageConfig,
         eeconfig: Option<Eeconfig>,
-        mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         // Initialize the allocator at the very beginning of the initialization of the keyboard
-        {
-            use core::mem::MaybeUninit;
-            // 1KB heap size
-            const HEAP_SIZE: usize = 1024;
-            // Check page_size and heap size
-            assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
-            static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-            unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
-        }
+        // {
+        //     use core::mem::MaybeUninit;
+        //     // 1KB heap size
+        //     const HEAP_SIZE: usize = 1024;
+        //     // Check page_size and heap size
+        //     assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
+        //     static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+        //     unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+        // }
 
-        let eeprom = match storage {
-            Some(s) => {
-                let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &keymap);
-                // If eeprom is initialized, read keymap from it.
-                match e {
-                    Some(e) => {
-                        e.read_keymap(&mut keymap);
-                        Some(e)
-                    }
-                    None => None,
-                }
-            }
-            None => None,
-        };
+        // let eeprom = match storage {
+        //     Some(s) => {
+        //         let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &keymap);
+        //         // If eeprom is initialized, read keymap from it.
+        //         match e {
+        //             Some(e) => {
+        //                 e.read_keymap(&mut keymap);
+        //                 Some(e)
+        //             }
+        //             None => None,
+        //         }
+        //     }
+        //     None => None,
+        // };
 
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
-            keymap: KeyMap::new(keymap),
-            eeprom,
+            keymap,
+            eeprom: None,
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
@@ -174,12 +175,11 @@ impl<
     /// Send hid report. The report is sent only when key state changes.
     pub async fn send_report<'d, D: Driver<'d>>(
         &mut self,
-        usb_device: &mut HidReaderWriter<'d, D, 1, 8>,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
-        // TODO: refine changed, separate hid/media/system
         if self.need_send_key_report {
             // usb_device.send_keyboard_report(&self.report).await;
-            match usb_device.write_serialize(&self.report).await {
+            match hid_interface.write_serialize(&self.report).await {
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {:?}", e),
             };
@@ -189,26 +189,20 @@ impl<
             }
             self.need_send_key_report = false;
         }
-
-        if self.need_send_consumer_control_report {
-            debug!("Sending consumer report: {:?}", self.media_report);
-            // usb_device.send_consumer_control_report(&self.media_report);
-            self.media_report.usage_id = 0;
-            self.need_send_consumer_control_report = false;
-        }
     }
 
-    /// Read hid report.
-    /// TODO: via
-    pub async fn process_via_report<D: Driver<'static>>(
+    pub async fn send_media_report<'d, D: Driver<'d>>(
         &mut self,
-        usb_device: &mut KeyboardUsbDevice<'static, D>,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
-        if usb_device.read_via_report(&mut self.via_report).await > 0 {
-            process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
-
-            // Send via report back after processing
-            usb_device.send_via_report(&self.via_report).await;
+        if self.need_send_consumer_control_report {
+            debug!("Sending consumer report: {:?}", self.media_report);
+            match hid_interface.write_serialize(&self.media_report).await {
+                Ok(()) => {}
+                Err(e) => error!("Send media(consumer control) report error: {:?}", e),
+            };
+            self.media_report.usage_id = 0;
+            self.need_send_consumer_control_report = false;
         }
     }
 
@@ -240,7 +234,10 @@ impl<
 
         // Process key
         let key_state = self.matrix.get_key_state(row, col);
-        let action = self.keymap.get_action_with_layer_cache(row, col, key_state);
+        let action = self
+            .keymap
+            .borrow_mut()
+            .get_action_with_layer_cache(row, col, key_state);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
@@ -274,13 +271,13 @@ impl<
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if key_state.changed && key_state.pressed {
-                    self.keymap.deactivate_layer(layer_num);
+                    self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
                 if key_state.changed && !key_state.pressed {
-                    self.keymap.toggle_layer(layer_num);
+                    self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
             _ => (),
@@ -355,9 +352,9 @@ impl<
             return;
         }
         if key_state.pressed {
-            self.keymap.activate_layer(layer_num);
+            self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
-            self.keymap.deactivate_layer(layer_num);
+            self.keymap.borrow_mut().deactivate_layer(layer_num);
         }
     }
 
