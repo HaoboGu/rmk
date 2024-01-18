@@ -1,169 +1,108 @@
-#![no_std]
 #![no_main]
+#![no_std]
 #![feature(type_alias_impl_trait)]
 
+#[macro_use]
 mod keymap;
 
+#[macro_use]
+mod macros;
+
+use core::cell::RefCell;
+use embassy_executor::Spawner;
+use embassy_futures::join::join;
+use embassy_rp::{
+    bind_interrupts,
+    flash::{Blocking, Flash},
+    gpio::{AnyPin, Input, Output},
+    peripherals::{self, USB},
+    usb::{Driver, InterruptHandler},
+};
+use embassy_time::Timer;
+
+use defmt::*;
 use defmt_rtt as _;
 use panic_probe as _;
+use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device, keymap::KeyMap};
+use static_cell::StaticCell;
 
-#[rtic::app(
-    device = rp_pico::hal::pac,
-    dispatchers = [TIMER_IRQ_1]
-)]
-mod app {
-    use defmt::*;
-    use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};
-    use rmk::{
-        config::KEYBOARD_CONFIG, eeprom::EepromStorageConfig, flash::EmptyFlashWrapper,
-        initialize_keyboard_and_usb_device, keyboard::Keyboard, usb::KeyboardUsbDevice,
-        usb_device::class_prelude::UsbBusAllocator,
-    };
-    use rp_pico::{
-        hal::{
-            clocks::init_clocks_and_plls, gpio::*, sio, sio::Sio, usb::UsbBus, watchdog::Watchdog,
-        },
-        Pins, XOSC_CRYSTAL_FREQ,
-    };
-    use rtic_monotonics::systick::*;
+use crate::keymap::{COL, NUM_LAYER, ROW};
 
-    // Static usb bus instance
-    static mut USB_BUS: Option<UsbBusAllocator<UsbBus>> = None;
+bind_interrupts!(struct Irqs {
+    USBCTRL_IRQ => InterruptHandler<USB>;
+});
 
-    #[shared]
-    struct Shared {
-        usb_device: KeyboardUsbDevice<'static, UsbBus>,
-    }
+// static SUSPENDED: AtomicBool = AtomicBool::new(false);
+const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+const EEPROM_SIZE: usize = 128;
+const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
-    #[local]
-    struct Local {
-        led: Pin<bank0::Gpio25, FunctionSio<SioOutput>, PullDown>,
-        keyboard: Keyboard<
-            Pin<DynPinId, FunctionSio<SioInput>, PullDown>,
-            Pin<DynPinId, FunctionSio<SioOutput>, PullDown>,
-            EmptyFlashWrapper,
-            0,
-            4,
-            3,
-            2,
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    info!("Rmk start!");
+    // Initialize peripherals
+    let p = embassy_rp::init(Default::default());
+
+    // Create the usb driver, from the HAL
+    let driver = Driver::new(p.USB, Irqs);
+
+    // Pin config
+    let (input_pins, output_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
+
+    // Keymap + eeprom config
+    static MY_KEYMAP: StaticCell<
+        RefCell<
+            KeyMap<
+                Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
+                EEPROM_SIZE,
+                ROW,
+                COL,
+                NUM_LAYER,
+            >,
         >,
-    }
+    > = StaticCell::new();
+    let eeprom_storage_config = EepromStorageConfig {
+        start_addr: FLASH_SECTOR_15_ADDR,
+        storage_size: 8192, // uses 8KB for eeprom
+        page_size: 32,
+    };
+    // Use internal flash to emulate eeprom
+    // let f = Flash::new_blocking(p.FLASH);
+    let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
+    // let mut flash = Flash::new_blocking(p.FLASH);
+    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
+        crate::keymap::KEYMAP,
+        Some(flash),
+        eeprom_storage_config,
+        None,
+    )));
 
-    #[init]
-    fn init(c: init::Context) -> (Shared, Local) {
-        // Soft-reset does not release the hardware spinlocks
-        // Release them now to avoid a deadlock after debug or watchdog reset
-        unsafe {
-            sio::spinlock_reset();
-        }
+    // Initialize all utilities: keyboard, usb and keymap
+    let (mut keyboard, mut usb_device, vial) = initialize_keyboard_and_usb_device::<
+        Driver<'_, USB>,
+        Input<'_, AnyPin>,
+        Output<'_, AnyPin>,
+        Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
+        EEPROM_SIZE,
+        ROW,
+        COL,
+        NUM_LAYER,
+    >(driver, input_pins, output_pins, keymap);
 
-        // Initialize the systick interrupt & obtain the token to prove that we did
-        let systick_mono_token = rtic_monotonics::create_systick_token!();
-        // Default rp2040 clock-rate is 125MHz
-        Systick::start(c.core.SYST, 125_000_000, systick_mono_token);
-
-        let mut resets = c.device.RESETS;
-        // Initialize clocks
-        let mut watchdog = Watchdog::new(c.device.WATCHDOG);
-        let clocks = init_clocks_and_plls(
-            XOSC_CRYSTAL_FREQ,
-            c.device.XOSC,
-            c.device.CLOCKS,
-            c.device.PLL_SYS,
-            c.device.PLL_USB,
-            &mut resets,
-            &mut watchdog,
-        )
-        .ok()
-        .unwrap();
-
-        // GPIO config
-        let sio = Sio::new(c.device.SIO);
-        let pins = Pins::new(
-            c.device.IO_BANK0,
-            c.device.PADS_BANK0,
-            sio.gpio_bank0,
-            &mut resets,
-        );
-        let mut led = pins.led.into_push_pull_output();
-        led.set_low().unwrap();
-
-        // Usb config
-        let usb_bus = UsbBusAllocator::new(UsbBus::new(
-            c.device.USBCTRL_REGS,
-            c.device.USBCTRL_DPRAM,
-            clocks.usb_clock,
-            true,
-            &mut resets,
-        ));
-
-        unsafe {
-            USB_BUS = Some(usb_bus);
-        }
-
-        // Matrix config
-        let gp6 = pins.gpio6.into_pull_down_input().into_dyn_pin();
-        let gp7 = pins.gpio7.into_pull_down_input().into_dyn_pin();
-        let gp8 = pins.gpio8.into_pull_down_input().into_dyn_pin();
-        let gp9 = pins.gpio9.into_pull_down_input().into_dyn_pin();
-        let gp19 = pins
-            .gpio19
-            .into_push_pull_output_in_state(PinState::Low)
-            .into_dyn_pin();
-        let gp20 = pins
-            .gpio20
-            .into_push_pull_output_in_state(PinState::Low)
-            .into_dyn_pin();
-        let gp21 = pins
-            .gpio21
-            .into_push_pull_output_in_state(PinState::Low)
-            .into_dyn_pin();
-        let output_pins = [gp19, gp20, gp21];
-        let input_pins = [gp6, gp7, gp8, gp9];
-
-        let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
-            unsafe { USB_BUS.as_ref().unwrap() },
-            &KEYBOARD_CONFIG,
-            None,
-            EepromStorageConfig::default(),
-            None,
-            input_pins,
-            output_pins,
-            crate::keymap::KEYMAP,
-        );
-
-        // Spawn heartbeat task
-        scan::spawn().ok();
-
-        (Shared { usb_device }, Local { led, keyboard })
-    }
-
-    #[task(local = [keyboard, led], priority = 1, shared = [usb_device])]
-    async fn scan(mut cx: scan::Context) {
-        // Keyboard scan task
-        info!("Start matrix scanning");
+    let usb_fut = usb_device.device.run();
+    let keyboard_fut = async {
         loop {
-            cx.local.keyboard.keyboard_task().await.unwrap();
-            cx.shared.usb_device.lock(|usb_device| {
-                // Send keyboard report
-                cx.local.keyboard.send_report(usb_device);
-
-                // Process via report
-                cx.local.keyboard.process_via_report(usb_device);
-            });
-
-            // Blink LED
-            let _ = cx.local.led.toggle();
-
-            // Scanning frequency: 10KHZ
-            Systick::delay(100.micros()).await;
+            let _ = keyboard.keyboard_task().await;
+            keyboard.send_report(&mut usb_device.keyboard_hid).await;
+            keyboard.send_media_report(&mut usb_device.other_hid).await;
         }
-    }
+    };
 
-    #[task(binds = USBCTRL_IRQ, priority = 2, shared = [usb_device])]
-    fn usb_poll(mut cx: usb_poll::Context) {
-        cx.shared.usb_device.lock(|usb_device| {
-            usb_device.usb_poll();
-        });
-    }
+    let via_fut = async {
+        loop {
+            vial.process_via_report(&mut usb_device.via_hid).await;
+            Timer::after_millis(1).await;
+        }
+    };
+    join(usb_fut, join(keyboard_fut, via_fut)).await;
 }
