@@ -8,165 +8,136 @@ mod macros;
 mod keymap;
 #[macro_use]
 pub mod rtt_logger;
-mod flash;
 
+use core::{cell::RefCell, sync::atomic::AtomicBool};
+use embassy_executor::Spawner;
+use embassy_futures::join::join;
+use embassy_stm32::{
+    bind_interrupts,
+    flash::{Blocking, Flash},
+    gpio::{AnyPin, Input, Output},
+    peripherals::USB_OTG_HS,
+    time::Hertz,
+    usb_otg::{Driver, InterruptHandler},
+    Config,
+};
+use embassy_time::Timer;
+use log::info;
 use panic_rtt_target as _;
-use rtic::app;
+use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device, keymap::KeyMap};
+use static_cell::StaticCell;
 
-#[app(device = stm32h7xx_hal::pac, peripherals = true)]
-mod app {
-    use crate::{
-        flash::FlashWrapper,
-        keymap::{COL, NUM_LAYER, ROW},
-        rtt_logger,
-    };
-    use log::info;
-    use rmk::eeprom::EepromStorageConfig;
-    use rmk::keyboard::Keyboard;
-    use rmk::usb::KeyboardUsbDevice;
-    use rmk::{config::KEYBOARD_CONFIG, initialize_keyboard_and_usb_device};
-    use rtic_monotonics::systick::*;
-    use stm32h7xx_hal::{
-        gpio::{ErasedPin, Input, Output, PE3},
-        pac::rcc::cdccip2r::USBSEL_A::Hsi48,
-        prelude::*,
-        usb_hs::{UsbBus, USB1},
-    };
+use crate::keymap::{COL, NUM_LAYER, ROW};
 
-    static mut EP_MEMORY: [u32; 1024] = [0; 1024];
-    const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
-    const EEPROM_SIZE: usize = 256;
+bind_interrupts!(struct Irqs {
+    OTG_HS => InterruptHandler<USB_OTG_HS>;
+});
 
-    #[shared]
-    struct Shared {
-        usb_device: KeyboardUsbDevice<'static, UsbBus<USB1>>,
-        led: PE3<Output>,
+static SUSPENDED: AtomicBool = AtomicBool::new(false);
+const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
+const EEPROM_SIZE: usize = 128;
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    if cfg!(debug_assertions) {
+        rtt_logger::init(log::LevelFilter::Info);
     }
-
-    #[local]
-    struct Local {
-        keyboard: Keyboard<
-            ErasedPin<Input>,
-            ErasedPin<Output>,
-            FlashWrapper,
-            EEPROM_SIZE,
-            ROW,
-            COL,
-            NUM_LAYER,
-        >,
-    }
-
-    #[init]
-    fn init(cx: init::Context) -> (Shared, Local) {
-        if cfg!(debug_assertions) {
-            rtt_logger::init(log::LevelFilter::Info);
-        }
-
-        let cp = cx.core;
-        let dp = cx.device;
-
-        // Initialize the systick interrupt & obtain the token to prove that we did
-        let systick_mono_token = rtic_monotonics::create_systick_token!();
-        // Default clock rate is 225MHz
-        Systick::start(cp.SYST, 225_000_000, systick_mono_token);
-
-        // Power config
-        let pwr = dp.PWR.constrain();
-        let pwrcfg = pwr.freeze();
-
-        // Clock config
-        let rcc = dp.RCC.constrain();
-        let mut ccdr = rcc
-            .use_hse(25.MHz())
-            .sys_ck(225.MHz())
-            .hclk(225.MHz())
-            .per_ck(225.MHz())
-            .freeze(pwrcfg, &dp.SYSCFG);
-        // Check HSI 48MHZ
-        let _ = ccdr.clocks.hsi48_ck().expect("HSI48 must run");
-        // Config HSI
-        ccdr.peripheral.kernel_usb_clk_mux(Hsi48);
-
-        // GPIO config
-        let gpioa = dp.GPIOA.split(ccdr.peripheral.GPIOA);
-        let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
-        let gpiod = dp.GPIOD.split(ccdr.peripheral.GPIOD);
-        let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
-
-        // USB config
-        let usb_dm = gpioa.pa11.into_analog();
-        let usb_dp = gpioa.pa12.into_analog();
-        let usb: USB1 = USB1::new(
-            dp.OTG1_HS_GLOBAL,
-            dp.OTG1_HS_DEVICE,
-            dp.OTG1_HS_PWRCLK,
-            usb_dm,
-            usb_dp,
-            ccdr.peripheral.USB1OTG,
-            &ccdr.clocks,
-        );
-        let usb_allocator = cortex_m::singleton!(
-            : rmk::usb_device::class_prelude::UsbBusAllocator<UsbBus<USB1>> =
-                UsbBus::new(usb, unsafe { &mut EP_MEMORY })
-        )
-        .unwrap();
-
-        // Initialize keyboard matrix pins
-        let (input_pins, output_pins) = config_matrix_pins!(input: [gpiod.pd9, gpiod.pd8, gpiob.pb13, gpiob.pb12], output: [gpioe.pe13,gpioe.pe14,gpioe.pe15]);
-
-        // Get flash for eeprom
-        let (flash, _) = dp.FLASH.split();
-        let internal_flash = crate::flash::FlashWrapper::new(flash);
-        let storage_config = EepromStorageConfig {
-            start_addr: FLASH_SECTOR_15_ADDR,
-            storage_size: 8192,
-            page_size: 16,
-        };
-
-        // Initialize keyboard
-        let (keyboard, usb_device) = initialize_keyboard_and_usb_device(
-            usb_allocator,
-            &KEYBOARD_CONFIG,
-            Some(internal_flash),
-            storage_config,
-            None,
-            input_pins,
-            output_pins,
-            crate::keymap::KEYMAP,
-        );
-
-        // Led config
-        let mut led = gpioe.pe3.into_push_pull_output();
-        led.set_high();
-
-        // Spawn keyboard task
-        scan::spawn().ok();
-
-        // RTIC resources
-        (Shared { usb_device, led }, Local { keyboard })
-    }
-
-    #[task(local = [keyboard], shared = [usb_device])]
-    async fn scan(mut cx: scan::Context) {
-        // Keyboard scan task
-        info!("Start matrix scanning");
-        loop {
-            cx.local.keyboard.keyboard_task().await.unwrap();
-            cx.shared.usb_device.lock(|usb_device| {
-                // Send keyboard report
-                cx.local.keyboard.send_report(usb_device);
-                // Process via report
-                cx.local.keyboard.process_via_report(usb_device);
-            });
-            // Scanning frequency: 10KHZ
-            Systick::delay(100.micros()).await;
-        }
-    }
-
-    #[task(binds = OTG_HS, shared = [usb_device])]
-    fn usb_poll(mut cx: usb_poll::Context) {
-        cx.shared.usb_device.lock(|usb_device| {
-            usb_device.usb_poll();
+    info!("Rmk start!");
+    // RCC config
+    let mut config = Config::default();
+    {
+        use embassy_stm32::rcc::*;
+        config.rcc.hsi = Some(HSIPrescaler::DIV1);
+        config.rcc.csi = true;
+        // Needed for USB
+        config.rcc.hsi48 = Some(Hsi48Config {
+            sync_from_usb: true,
         });
+        // External oscillator 25MHZ
+        config.rcc.hse = Some(Hse {
+            freq: Hertz(25_000_000),
+            mode: HseMode::Oscillator,
+        });
+        config.rcc.pll1 = Some(Pll {
+            source: PllSource::HSE,
+            prediv: PllPreDiv::DIV5,
+            mul: PllMul::MUL112,
+            divp: Some(PllDiv::DIV2),
+            divq: Some(PllDiv::DIV2),
+            divr: Some(PllDiv::DIV2),
+        });
+        config.rcc.sys = Sysclk::PLL1_P;
+        config.rcc.ahb_pre = AHBPrescaler::DIV2;
+        config.rcc.apb1_pre = APBPrescaler::DIV2;
+        config.rcc.apb2_pre = APBPrescaler::DIV2;
+        config.rcc.apb3_pre = APBPrescaler::DIV2;
+        config.rcc.apb4_pre = APBPrescaler::DIV2;
+        config.rcc.voltage_scale = VoltageScale::Scale0;
     }
+
+    // Initialize peripherals
+    let p = embassy_stm32::init(config);
+
+    // Usb config
+    static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
+    let mut usb_config = embassy_stm32::usb_otg::Config::default();
+    usb_config.vbus_detection = false;
+    let driver = Driver::new_fs(
+        p.USB_OTG_HS,
+        Irqs,
+        p.PA12,
+        p.PA11,
+        &mut EP_OUT_BUFFER.init([0; 1024])[..],
+        usb_config,
+    );
+
+    // Pin config
+    let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
+
+    // Keymap + eeprom config
+    static MY_KEYMAP: StaticCell<
+        RefCell<KeyMap<Flash<'_, Blocking>, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    > = StaticCell::new();
+    let eeprom_storage_config = EepromStorageConfig {
+        start_addr: FLASH_SECTOR_15_ADDR,
+        storage_size: 8192, // uses 8KB for eeprom
+        page_size: 32,
+    };
+    // Use internal flash to emulate eeprom
+    let f = Flash::new_blocking(p.FLASH);
+    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
+        crate::keymap::KEYMAP,
+        Some(f),
+        eeprom_storage_config,
+        None,
+    )));
+
+    // Initialize all utilities: keyboard, usb and keymap
+    let (mut keyboard, mut usb_device, vial) = initialize_keyboard_and_usb_device::<
+        Driver<'_, USB_OTG_HS>,
+        Input<'_, AnyPin>,
+        Output<'_, AnyPin>,
+        Flash<'_, Blocking>,
+        EEPROM_SIZE,
+        ROW,
+        COL,
+        NUM_LAYER,
+    >(driver, input_pins, output_pins, keymap);
+
+    let usb_fut = usb_device.device.run();
+    let keyboard_fut = async {
+        loop {
+            let _ = keyboard.keyboard_task().await;
+            keyboard.send_report(&mut usb_device.keyboard_hid).await;
+            keyboard.send_media_report(&mut usb_device.other_hid).await;
+        }
+    };
+
+    let via_fut = async {
+        loop {
+            vial.process_via_report(&mut usb_device.via_hid).await;
+            Timer::after_millis(1).await;
+        }
+    };
+    join(usb_fut, join(keyboard_fut, via_fut)).await;
 }

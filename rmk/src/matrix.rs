@@ -1,14 +1,14 @@
 use crate::debounce::Debouncer;
 use core::convert::Infallible;
 use embedded_hal::digital::{InputPin, OutputPin};
-use rtic_monotonics::{systick::*, Monotonic};
+use embassy_time::{Instant, Duration, Timer};
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug)]
 pub struct KeyState {
     pub pressed: bool,
     pub changed: bool,
-    pub hold_start: Option<<Systick as Monotonic>::Instant>,
+    pub hold_start: Option<Instant>,
 }
 
 impl Default for KeyState {
@@ -27,12 +27,12 @@ impl KeyState {
     }
 
     pub fn start_timer(&mut self) {
-        self.hold_start = Some(Systick::now());
+        self.hold_start = Some(Instant::now());
     }
 
-    pub fn elapsed(&self) -> Option<<Systick as Monotonic>::Duration> {
+    pub fn elapsed(&self) -> Option<Duration> {
         match self.hold_start {
-            Some(t) => Systick::now().checked_duration_since(t),
+            Some(t) => Instant::now().checked_duration_since(t),
             None => None,
         }
     }
@@ -87,7 +87,7 @@ impl<
         for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
             // Pull up output pin, wait 1us ensuring the change comes into effect
             out_pin.set_high()?;
-            Systick::delay(1.micros()).await;
+            Timer::after_micros(1).await;
             for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
                 self.debouncer.debounce(

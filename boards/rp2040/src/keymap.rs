@@ -1,9 +1,10 @@
 use rmk::action::KeyAction;
 use rmk::{a, k, layer, mo};
-const COL: usize = 3;
-const ROW: usize = 4;
-const NUM_LAYER: usize = 2;
+pub(crate) const COL: usize = 3;
+pub(crate) const ROW: usize = 4;
+pub(crate) const NUM_LAYER: usize = 2;
 
+#[rustfmt::skip]
 pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
     layer!([
         [k!(A), k!(B), k!(C)],

@@ -5,7 +5,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 # uncomment ONE of these three option to make `cargo run` start a GDB session
 # which option to pick depends on your system
-runner = "arm-none-eabi-gdb -q -x openocd.gdb"
+runner = "probe-rs run --chip STM32H7B0VBTx"
 # runner = "gdb-multiarch -q -x openocd.gdb"
 # runner = "gdb -q -x openocd.gdb"
 

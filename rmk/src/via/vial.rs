@@ -2,7 +2,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::debug;
 use num_enum::FromPrimitive;
 
-use super::descriptor::ViaReport;
+use crate::usb::descriptor::ViaReport;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]

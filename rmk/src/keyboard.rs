@@ -1,25 +1,20 @@
 use crate::{
     action::{Action, KeyAction},
-    eeprom::{eeconfig::Eeconfig, Eeprom, EepromStorageConfig},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::KeyboardUsbDevice,
-    via::{descriptor::ViaReport, process::process_via_packet},
+    usb::descriptor::ViaReport,
 };
-use core::convert::Infallible;
-use embedded_alloc::Heap;
+use core::{cell::RefCell, convert::Infallible};
+use embassy_time::Timer;
+use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, warn};
-use rtic_monotonics::systick::*;
-use usb_device::class_prelude::UsbBus;
+use log::{debug, error, warn};
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
-#[global_allocator]
-static HEAP: Heap = Heap::empty();
-
 pub struct Keyboard<
+    'a,
     In: InputPin,
     Out: OutputPin,
     F: NorFlash,
@@ -35,15 +30,13 @@ pub struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub keymap: KeyMap<ROW, COL, NUM_LAYER>,
+    pub keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
     /// Media internal report
     media_report: MediaKeyboardReport,
-
-    eeprom: Option<Eeprom<F, EEPROM_SIZE>>,
 
     /// System control internal report
     system_control_report: SystemControlReport,
@@ -62,6 +55,7 @@ pub struct Keyboard<
 }
 
 impl<
+        'a,
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
         F: NorFlash,
@@ -69,47 +63,17 @@ impl<
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
-        storage: Option<F>,
-        eeprom_storage_config: EepromStorageConfig,
-        eeconfig: Option<Eeconfig>,
-        mut keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
     ) -> Self {
-        // Initialize the allocator at the very beginning of the initialization of the keyboard
-        {
-            use core::mem::MaybeUninit;
-            // 1KB heap size
-            const HEAP_SIZE: usize = 1024;
-            // Check page_size and heap size
-            assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
-            static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-            unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
-        }
-
-        let eeprom = match storage {
-            Some(s) => {
-                let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &keymap);
-                // If eeprom is initialized, read keymap from it.
-                match e {
-                    Some(e) => {
-                        e.read_keymap(&mut keymap);
-                        Some(e)
-                    }
-                    None => None,
-                }
-            }
-            None => None,
-        };
-
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
-            keymap: KeyMap::new(keymap),
-            eeprom,
+            keymap,
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
@@ -172,32 +136,36 @@ impl<
     }
 
     /// Send hid report. The report is sent only when key state changes.
-    pub fn send_report<B: UsbBus>(&mut self, usb_device: &KeyboardUsbDevice<'_, B>) {
-        // TODO: refine changed, separate hid/media/system
+    pub async fn send_report<'d, D: Driver<'d>>(
+        &mut self,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
+    ) {
         if self.need_send_key_report {
-            usb_device.send_keyboard_report(&self.report);
+            // usb_device.send_keyboard_report(&self.report).await;
+            match hid_interface.write_serialize(&self.report).await {
+                Ok(()) => {}
+                Err(e) => error!("Send keyboard report error: {:?}", e),
+            };
             // Reset report key states
             for bit in &mut self.report.keycodes {
                 *bit = 0;
             }
             self.need_send_key_report = false;
         }
-
-        if self.need_send_consumer_control_report {
-            debug!("Sending consumer report: {:?}", self.media_report);
-            usb_device.send_consumer_control_report(&self.media_report);
-            self.media_report.usage_id = 0;
-            self.need_send_consumer_control_report = false;
-        }
     }
 
-    /// Read hid report.
-    pub fn process_via_report<B: UsbBus>(&mut self, usb_device: &mut KeyboardUsbDevice<'_, B>) {
-        if usb_device.read_via_report(&mut self.via_report) > 0 {
-            process_via_packet(&mut self.via_report, &mut self.keymap, &mut self.eeprom);
-
-            // Send via report back after processing
-            usb_device.send_via_report(&self.via_report);
+    pub async fn send_media_report<'d, D: Driver<'d>>(
+        &mut self,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
+    ) {
+        if self.need_send_consumer_control_report {
+            debug!("Sending consumer report: {:?}", self.media_report);
+            match hid_interface.write_serialize(&self.media_report).await {
+                Ok(()) => {}
+                Err(e) => error!("Send media(consumer control) report error: {:?}", e),
+            };
+            self.media_report.usage_id = 0;
+            self.need_send_consumer_control_report = false;
         }
     }
 
@@ -229,7 +197,10 @@ impl<
 
         // Process key
         let key_state = self.matrix.get_key_state(row, col);
-        let action = self.keymap.get_action_with_layer_cache(row, col, key_state);
+        let action = self
+            .keymap
+            .borrow_mut()
+            .get_action_with_layer_cache(row, col, key_state);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
@@ -263,13 +234,13 @@ impl<
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if key_state.changed && key_state.pressed {
-                    self.keymap.deactivate_layer(layer_num);
+                    self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
                 if key_state.changed && !key_state.pressed {
-                    self.keymap.toggle_layer(layer_num);
+                    self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
             _ => (),
@@ -298,7 +269,7 @@ impl<
 
             // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
             // Wait 10ms, then send release
-            Systick::delay(10.millis()).await;
+            Timer::after_millis(10).await;
 
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state);
@@ -344,9 +315,9 @@ impl<
             return;
         }
         if key_state.pressed {
-            self.keymap.activate_layer(layer_num);
+            self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
-            self.keymap.deactivate_layer(layer_num);
+            self.keymap.borrow_mut().deactivate_layer(layer_num);
         }
     }
 

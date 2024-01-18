@@ -1,5 +1,14 @@
-use crate::{action::KeyAction, matrix::KeyState};
+use crate::{
+    action::KeyAction,
+    eeprom::{eeconfig::Eeconfig, Eeprom, EepromStorageConfig},
+    matrix::KeyState,
+};
+use embedded_alloc::Heap;
+use embedded_storage::nor_flash::NorFlash;
 use log::warn;
+
+#[global_allocator]
+static HEAP: Heap = Heap::empty();
 
 pub struct KeyMapConfig {
     /// Number of rows.
@@ -14,7 +23,13 @@ pub struct KeyMapConfig {
 /// The conception of KeyMap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
 /// Keymap should be bind to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses (row,col) to retrieve the action from KeyMap.
-pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct KeyMap<
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> {
     /// Layers
     pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Current state of each layer
@@ -23,16 +38,58 @@ pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     default_layer: u8,
     /// Layer cache
     layer_cache: [[u8; COL]; ROW],
+    /// Eeprom for storing keymap
+    pub(crate) eeprom: Option<Eeprom<F, EEPROM_SIZE>>,
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
+impl<
+        F: NorFlash,
+        const EEPROM_SIZE: usize,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+    > KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+{
     /// Initialize a keymap from a matrix of actions
-    pub fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> KeyMap<ROW, COL, NUM_LAYER> {
+    pub fn new(
+        mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        storage: Option<F>,
+        eeprom_storage_config: EepromStorageConfig,
+        eeconfig: Option<Eeconfig>,
+    ) -> KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER> {
+        // Initialize the allocator at the very beginning of the initialization of the keymap
+        {
+            use core::mem::MaybeUninit;
+            // 1KB heap size
+            const HEAP_SIZE: usize = 512;
+            // Check page_size and heap size
+            assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
+            static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+            unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+        }
+
+        // Initialize eeprom, if success, re-load keymap from it
+        let eeprom = match storage {
+            Some(s) => {
+                let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &mut action_map);
+                // If eeprom is initialized, read keymap from it.
+                match e {
+                    Some(e) => {
+                        e.read_keymap(&mut action_map);
+                        Some(e)
+                    }
+                    None => None,
+                }
+            }
+            None => None,
+        };
+
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
+            eeprom,
         }
     }
 

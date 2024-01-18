@@ -1,14 +1,76 @@
-use super::{descriptor::*, protocol::*, *};
+use core::cell::RefCell;
+
+use super::{protocol::*, vial::process_vial};
 use crate::{
-    eeprom::Eeprom,
     keymap::KeyMap,
+    usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use embassy_time::Instant;
+use embassy_usb::{
+    class::hid::{HidReaderWriter, ReadError},
+    driver::Driver,
+};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
-use rtic_monotonics::{systick::Systick, Monotonic};
+
+pub struct VialService<
+    'a,
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> {
+    // VialService holds a reference of keymap, for updating
+    pub keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+}
+
+impl<
+        'a,
+        F: NorFlash,
+        const EEPROM_SIZE: usize,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+    > VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+{
+    pub fn new(keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>) -> Self {
+        Self { keymap }
+    }
+
+    pub async fn process_via_report<D: Driver<'a>>(
+        &self,
+        hid_interface: &mut HidReaderWriter<'a, D, 32, 32>,
+    ) {
+        let mut via_report = ViaReport {
+            input_data: [0; 32],
+            output_data: [0; 32],
+        };
+        match hid_interface.read(&mut via_report.output_data).await {
+            Ok(_) => {
+                {
+                    process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
+                }
+
+                // Send via report back after processing
+                match hid_interface.write_serialize(&mut via_report).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Send via report error: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                if e != ReadError::Disabled {
+                    error!("Read via report error: {:?}", e);
+                }
+            }
+        }
+    }
+}
 
 pub fn process_via_packet<
     F: NorFlash,
@@ -18,8 +80,7 @@ pub fn process_via_packet<
     const NUM_LAYER: usize,
 >(
     report: &mut ViaReport,
-    keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
-    eeprom: &mut Option<Eeprom<F, EEPROM_SIZE>>,
+    keymap: &mut KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
 ) {
     let command_id = report.output_data[0];
 
@@ -36,7 +97,7 @@ pub fn process_via_packet<
             match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                 Ok(v) => match v {
                     ViaKeyboardInfo::Uptime => {
-                        let value = Systick::now().ticks();
+                        let value = Instant::now().as_ticks() as u32;
                         BigEndian::write_u32(&mut report.input_data[2..6], value);
                     }
                     ViaKeyboardInfo::LayoutOptions => {
@@ -60,7 +121,7 @@ pub fn process_via_packet<
                 Ok(v) => match v {
                     ViaKeyboardInfo::LayoutOptions => {
                         let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                        match eeprom {
+                        match &mut keymap.eeprom {
                             Some(e) => e.set_layout_option(layout_option),
                             None => (),
                         }
@@ -97,7 +158,7 @@ pub fn process_via_packet<
                 keycode, row, col, layer, action
             );
             keymap.set_action_at(row, col, layer, action.clone());
-            match eeprom {
+            match &mut keymap.eeprom {
                 Some(e) => e.set_keymap_action(row, col, layer, action),
                 None => (),
             }
@@ -198,7 +259,7 @@ pub fn process_via_packet<
                         "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                         offset, row, col, layer
                     );
-                    match eeprom {
+                    match &mut keymap.eeprom {
                         Some(e) => e.set_keymap_action(row, col, layer, action),
                         None => (),
                     }
@@ -210,7 +271,7 @@ pub fn process_via_packet<
         ViaCommand::DynamicKeymapSetEncoder => {
             warn!("Keymap get encoder -- not supported");
         }
-        ViaCommand::Vial => vial::process_vial(report),
+        ViaCommand::Vial => process_vial(report),
         ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
     }
 }
