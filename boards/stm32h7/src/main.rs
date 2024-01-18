@@ -8,7 +8,6 @@ mod macros;
 mod keymap;
 #[macro_use]
 pub mod rtt_logger;
-mod flash;
 
 use core::{cell::RefCell, sync::atomic::AtomicBool};
 use embassy_executor::Spawner;
@@ -40,7 +39,9 @@ const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    rtt_logger::init(log::LevelFilter::Info);
+    if cfg!(debug_assertions) {
+        rtt_logger::init(log::LevelFilter::Info);
+    }
     info!("Rmk start!");
     // RCC config
     let mut config = Config::default();
