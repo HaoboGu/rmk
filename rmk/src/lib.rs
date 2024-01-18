@@ -20,7 +20,6 @@ pub use usbd_hid;
 use via::process::VialService;
 
 pub mod action;
-pub mod config;
 pub mod debounce;
 pub mod eeprom;
 pub mod flash;
