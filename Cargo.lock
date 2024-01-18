@@ -1270,7 +1270,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.0.6"
+version = "0.1.0"
 dependencies = [
  "byteorder",
  "embassy-sync",
@@ -1288,7 +1288,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-rp2040"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-stm32h7"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",

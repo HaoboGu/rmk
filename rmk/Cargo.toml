@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.0.6"
+version = "0.1.0"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -20,11 +20,11 @@ embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy"
     "max-handler-count-8",
 ] }
 embassy-sync = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy" }
-num_enum = { version = "0.7.2", default-features = false }
+num_enum = { version = "0.7", default-features = false }
 log = "0.4"
 static_cell = { version = "2" }
 usbd-hid = "0.6.1"
-packed_struct = { version = "0.10.1", default-features = false }
+packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
 
 [features]
