@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["rmk", "boards/*"]
+members = [
+    "rmk",
+    "boards/rp2040",
+    # Uncomment to choose one chip you want to use
+    "boards/stm32h7",
+    #"boards/stm32f4"
+]
 default-members = ["boards/stm32h7", "rmk"]
 
 # Profile dev: optimize for fast compiling with debug info

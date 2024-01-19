@@ -1,0 +1,57 @@
+cargo-features = ["per-package-target"]
+
+[package]
+name = "rmk-stm32f4"
+version = "0.1.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+forced-target = "thumbv7em-none-eabihf"
+
+[dependencies]
+rmk = { version = "0.1.0", path = "../../rmk", features = [
+    "eeprom",
+    "col2row",
+] }
+cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
+cortex-m-rt = "0.7.3"
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", features = [
+    # "tick-hz-1_000_000",
+    "tick-hz-32_768",
+    "defmt",
+] }
+embassy-stm32 = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = [
+    "stm32f411ce",
+    "defmt",
+    "time-driver-any",
+    "exti",
+    "time",
+] }
+embassy-executor = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = [
+    "defmt",
+    "arch-cortex-m",
+    "executor-thread",
+    "executor-interrupt",
+    "integrated-timers",
+] }
+embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy" }
+rtt-target = "0.5.0"
+log = "0.4.19"
+packed_struct = { version = "0.10.1", default-features = false }
+embedded-storage = { version = "0.3" }
+static_cell = { version = "2" }
+
+# defmt deps
+defmt = "0.3.5"
+defmt-rtt = "0.4.0"
+panic-probe = {version = "0.3", features = ["print-defmt"] }
+
+[[bin]]
+name = "rmk-stm32f4"
+test = false
+bench = false
