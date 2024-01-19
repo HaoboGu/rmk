@@ -32,8 +32,8 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
     pub fn new(driver: D) -> Self {
         // Create embassy-usb Config
         let mut usb_config = embassy_usb::Config::new(0xc0de, 0xcafe);
-        usb_config.manufacturer = Some("rmk");
-        usb_config.product = Some("demo keyboard");
+        usb_config.manufacturer = Some("RMK");
+        usb_config.product = Some("Hid Keyboard");
         usb_config.serial_number = Some("00000001");
 
         // Create embassy-usb DeviceBuilder using the driver and config.
