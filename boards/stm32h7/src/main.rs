@@ -8,6 +8,7 @@ mod macros;
 mod keymap;
 #[macro_use]
 pub mod rtt_logger;
+mod vial;
 
 use core::{cell::RefCell, sync::atomic::AtomicBool};
 use embassy_executor::Spawner;
@@ -122,7 +123,14 @@ async fn main(_spawner: Spawner) {
         ROW,
         COL,
         NUM_LAYER,
-    >(driver, input_pins, output_pins, keymap);
+    >(
+        driver,
+        input_pins,
+        output_pins,
+        keymap,
+        &vial::VIAL_KEYBOARD_ID,
+        &vial::VIAL_KEYBOARD_DEF,
+    );
 
     let usb_fut = usb_device.device.run();
     let keyboard_fut = async {

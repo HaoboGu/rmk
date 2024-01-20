@@ -46,14 +46,16 @@ pub fn initialize_keyboard_and_usb_device<
     input_pins: [In; ROW],
     output_pins: [Out; COL],
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    vial_keyboard_Id: &'static [u8],
+    vial_keyboard_def: &'static [u8],
 ) -> (
-    Keyboard<In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+    Keyboard<'static, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
     KeyboardUsbDevice<'static, D>,
     VialService<'static, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
 ) {
     (
         Keyboard::new(input_pins, output_pins, keymap),
         KeyboardUsbDevice::new(driver),
-        VialService::new(keymap),
+        VialService::new(keymap, vial_keyboard_Id, vial_keyboard_def),
     )
 }
