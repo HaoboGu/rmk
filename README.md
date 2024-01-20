@@ -4,11 +4,11 @@
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
-Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, written in Rust and tested on stm32 and rp2040.
+Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, written in Rust.
 
 ## News
 
-Rmk just released version 0.1.0, migrate to [Embassy](https://github.com/embassy-rs/embassy)! By migrating to Embassy, Rmk now has better async support, supports more MCUs  much easier APIs than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+Rmk just released version 0.1.0, migrate to [Embassy](https://github.com/embassy-rs/embassy)! By migrating to Embassy, Rmk now has better async support, more supported MCUs and much easier usages than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
 
 ## Prerequisites
 
