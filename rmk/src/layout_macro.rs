@@ -1,4 +1,4 @@
-/// Macro for creating layout of actions
+/// Create a layer in keymap
 #[macro_export]
 macro_rules! layer {
     ([$([$($x: expr), +]), +]) => {
@@ -6,6 +6,7 @@ macro_rules! layer {
     };
 }
 
+/// Create a normal keycode
 #[macro_export]
 macro_rules! k {
     ($k: ident) => {
@@ -13,6 +14,7 @@ macro_rules! k {
     };
 }
 
+/// Create a normal action
 #[macro_export]
 macro_rules! a {
     ($a: ident) => {
@@ -20,7 +22,7 @@ macro_rules! a {
     };
 }
 
-/// Macro for mouse key action
+/// Create a mouse key action
 #[macro_export]
 macro_rules! mk {
     ($k: ident) => {
@@ -30,7 +32,7 @@ macro_rules! mk {
     };
 }
 
-/// Macro for system control action
+/// Create a control action
 #[macro_export]
 macro_rules! sc {
     ($k: ident) => {
@@ -40,7 +42,7 @@ macro_rules! sc {
     };
 }
 
-/// Macro for consumer control action
+/// Create a consumer control action
 #[macro_export]
 macro_rules! cc {
     ($k: ident) => {
@@ -50,7 +52,7 @@ macro_rules! cc {
     };
 }
 
-/// Macro for layer activate
+/// Create a layer activate action
 #[macro_export]
 macro_rules! mo {
     ($x: literal) => {
@@ -58,7 +60,7 @@ macro_rules! mo {
     };
 }
 
-/// Macro for layer activate with modifier
+/// Create a layer activate with modifier action
 #[macro_export]
 macro_rules! lm {
     ($x: literal, $m: expr) => {
@@ -66,7 +68,7 @@ macro_rules! lm {
     };
 }
 
-/// Macro for layer or tap key
+/// Create a layer activate action or tap key(tap/hold)
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
@@ -77,7 +79,7 @@ macro_rules! lt {
     };
 }
 
-/// Macro for oneshot layer
+/// Create an oneshot layer key in keymap
 #[macro_export]
 macro_rules! osl {
     ($x: literal) => {
@@ -85,7 +87,7 @@ macro_rules! osl {
     };
 }
 
-/// Macro for layer toggle
+/// Create a layer toggle action
 #[macro_export]
 macro_rules! tg {
     ($x: literal) => {
@@ -93,7 +95,7 @@ macro_rules! tg {
     };
 }
 
-/// Macro for layer or tap toggle
+/// Create a layer activate or tap toggle action
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {

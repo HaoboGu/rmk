@@ -5,7 +5,7 @@ members = [
     "boards/rp2040",
     # Uncomment to choose one chip you want to use
     "boards/stm32h7",
-    #"boards/stm32f4"
+    # "boards/stm32f4"
 ]
 default-members = ["boards/stm32h7", "rmk"]
 

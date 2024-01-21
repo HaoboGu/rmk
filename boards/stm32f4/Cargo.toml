@@ -55,3 +55,5 @@ panic-probe = {version = "0.3", features = ["print-defmt"] }
 name = "rmk-stm32f4"
 test = false
 bench = false
+
+[workspace]

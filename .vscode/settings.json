@@ -8,7 +8,7 @@
         "--message-format=json"
     ],
     "rust-analyzer.linkedProjects": [
-        "./rmk/Cargo.toml"
+        "rmk/Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
 }

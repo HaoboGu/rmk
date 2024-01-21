@@ -13,11 +13,10 @@ use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
+use via::process::VialService;
 
-pub use embassy_sync;
 pub use embassy_usb;
 pub use usbd_hid;
-use via::process::VialService;
 
 pub mod action;
 pub mod debounce;
