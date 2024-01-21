@@ -4,7 +4,7 @@
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
-Keyboard firmware for cortex-m, with layer/dynamic keymap/vial support, written in Rust.
+Keyboard firmware for cortex-m, with layer/dynamic keymap/[vial](https://get.vial.today) support, written in Rust.
 
 ## News
 
@@ -78,6 +78,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] vial support
 - [x] eeprom
 - [ ] keyboard macro
+- [ ] wireless
 - [ ] encoder
 - [ ] RGB
 - [ ] cli tools
