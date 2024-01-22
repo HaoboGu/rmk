@@ -12,7 +12,6 @@ use core::{cell::RefCell, sync::atomic::AtomicBool};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_stm32::{
     bind_interrupts,
     flash::{Blocking, Flash},
@@ -21,9 +20,8 @@ use embassy_stm32::{
     usb_otg::{Driver, InterruptHandler},
     Config,
 };
-use embassy_time::Timer;
 use panic_probe as _;
-use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_usb_device, keymap::KeyMap};
+use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_run, keymap::KeyMap};
 use static_cell::StaticCell;
 
 use crate::keymap::{COL, NUM_LAYER, ROW};
@@ -80,7 +78,7 @@ async fn main(_spawner: Spawner) {
     )));
 
     // Initialize all utilities: keyboard, usb and keymap
-    let (mut keyboard, mut usb_device, vial) = initialize_keyboard_and_usb_device::<
+    initialize_keyboard_and_run::<
         Driver<'_, USB_OTG_FS>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
@@ -96,22 +94,5 @@ async fn main(_spawner: Spawner) {
         keymap,
         &vial::VIAL_KEYBOARD_ID,
         &vial::VIAL_KEYBOARD_DEF,
-    );
-
-    let usb_fut = usb_device.device.run();
-    let keyboard_fut = async {
-        loop {
-            let _ = keyboard.keyboard_task().await;
-            keyboard.send_report(&mut usb_device.keyboard_hid).await;
-            keyboard.send_media_report(&mut usb_device.other_hid).await;
-        }
-    };
-
-    let via_fut = async {
-        loop {
-            vial.process_via_report(&mut usb_device.via_hid).await;
-            Timer::after_millis(1).await;
-        }
-    };
-    join(usb_fut, join(keyboard_fut, via_fut)).await;
+    ).await;
 }

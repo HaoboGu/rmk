@@ -7,6 +7,8 @@
 #![cfg_attr(not(test), no_std)]
 
 use core::{cell::RefCell, convert::Infallible};
+use embassy_futures::join::join;
+use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
@@ -30,6 +32,7 @@ pub mod matrix;
 pub mod usb;
 pub mod via;
 
+/// DEPRECIATED: Use `initialize_keyboard_and_run` instead.
 /// Initialize keyboard core and keyboard usb device
 pub fn initialize_keyboard_and_usb_device<
     D: Driver<'static>,
@@ -57,4 +60,50 @@ pub fn initialize_keyboard_and_usb_device<
         KeyboardUsbDevice::new(driver),
         VialService::new(keymap, vial_keyboard_Id, vial_keyboard_def),
     )
+}
+
+/// Initialize and run the keyboard service, this function never returns.
+pub async fn initialize_keyboard_and_run<
+    D: Driver<'static>,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    driver: D,
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    vial_keyboard_Id: &'static [u8],
+    vial_keyboard_def: &'static [u8],
+) -> ! {
+    let (mut keyboard, mut usb_device, vial_service) = (
+        Keyboard::new(input_pins, output_pins, keymap),
+        KeyboardUsbDevice::new(driver),
+        VialService::new(keymap, vial_keyboard_Id, vial_keyboard_def),
+    );
+
+    let usb_fut = usb_device.device.run();
+    let keyboard_fut = async {
+        loop {
+            let _ = keyboard.keyboard_task().await;
+            keyboard.send_report(&mut usb_device.keyboard_hid).await;
+            keyboard.send_media_report(&mut usb_device.other_hid).await;
+        }
+    };
+
+    let via_fut = async {
+        loop {
+            vial_service
+                .process_via_report(&mut usb_device.via_hid)
+                .await;
+            Timer::after_millis(1).await;
+        }
+    };
+    join(usb_fut, join(keyboard_fut, via_fut)).await;
+
+    panic!("Keyboard service is died")
 }

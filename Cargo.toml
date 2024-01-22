@@ -7,7 +7,13 @@ members = [
     "boards/stm32h7",
     # "boards/stm32f4"
 ]
-default-members = ["boards/stm32h7", "rmk"]
+default-members = [
+    "rmk", 
+    # Uncomment to choose one chip you want to use as default
+    # "boards/rp2040",
+    "boards/stm32h7",
+    # "boards/stm32f4"
+]
 
 # Profile dev: optimize for fast compiling with debug info
 [profile.dev]

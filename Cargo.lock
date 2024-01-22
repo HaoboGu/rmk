@@ -1273,6 +1273,7 @@ name = "rmk"
 version = "0.1.1"
 dependencies = [
  "byteorder",
+ "embassy-futures",
  "embassy-sync",
  "embassy-time",
  "embassy-usb",
@@ -1315,7 +1316,6 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "embassy-executor",
- "embassy-futures",
  "embassy-stm32",
  "embassy-time",
  "embedded-storage",

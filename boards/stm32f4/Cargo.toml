@@ -36,10 +36,8 @@ embassy-executor = { version = "0.5.0", git = "https://github.com/embassy-rs/emb
     "defmt",
     "arch-cortex-m",
     "executor-thread",
-    "executor-interrupt",
     "integrated-timers",
 ] }
-embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy" }
 rtt-target = "0.5.0"
 log = "0.4.19"
 packed_struct = { version = "0.10.1", default-features = false }
@@ -49,11 +47,9 @@ static_cell = { version = "2" }
 # defmt deps
 defmt = "0.3.5"
 defmt-rtt = "0.4.0"
-panic-probe = {version = "0.3", features = ["print-defmt"] }
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 [[bin]]
 name = "rmk-stm32f4"
 test = false
 bench = false
-
-[workspace]
