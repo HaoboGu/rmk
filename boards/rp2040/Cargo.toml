@@ -1,4 +1,4 @@
-cargo-features = ["per-package-target"]
+# cargo-features = ["per-package-target"]
 
 [package]
 name = "rmk-rp2040"
@@ -11,7 +11,7 @@ readme = "../../README.md"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
-forced-target = "thumbv6m-none-eabi"
+# forced-target = "thumbv6m-none-eabi"
 
 [dependencies]
 rmk = { version = "0.1.1", path = "../../rmk", features = [

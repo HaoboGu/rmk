@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "rmk",
-    "boards/rp2040",
     # Uncomment to choose one chip you want to use
+    "boards/rp2040",
     "boards/stm32h7",
     # "boards/stm32f4"
 ]

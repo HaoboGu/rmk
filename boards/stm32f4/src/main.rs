@@ -1,14 +1,12 @@
 #![no_main]
 #![no_std]
-#![feature(type_alias_impl_trait)]
-#![allow(dead_code)]
 
 #[macro_use]
 mod macros;
 mod keymap;
 mod vial;
 
-use core::{cell::RefCell, sync::atomic::AtomicBool};
+use core::cell::RefCell;
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -30,7 +28,6 @@ bind_interrupts!(struct Irqs {
     OTG_FS => InterruptHandler<USB_OTG_FS>;
 });
 
-static SUSPENDED: AtomicBool = AtomicBool::new(false);
 const FLASH_SECTOR_7_ADDR: u32 = 0x60000;
 const EEPROM_SIZE: usize = 128;
 

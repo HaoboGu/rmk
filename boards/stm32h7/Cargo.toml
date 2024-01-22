@@ -1,4 +1,4 @@
-cargo-features = ["per-package-target"]
+# cargo-features = ["per-package-target"]
 
 [package]
 name = "rmk-stm32h7"
@@ -11,7 +11,7 @@ readme = "../../README.md"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
-forced-target = "thumbv7em-none-eabihf"
+# forced-target = "thumbv7em-none-eabihf"
 
 [dependencies]
 rmk = { version = "0.1.1", path = "../../rmk", features = [

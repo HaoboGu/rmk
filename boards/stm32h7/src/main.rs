@@ -1,7 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(type_alias_impl_trait)]
-#![allow(dead_code)]
 
 #[macro_use]
 mod macros;
@@ -10,7 +8,7 @@ mod keymap;
 pub mod rtt_logger;
 mod vial;
 
-use core::{cell::RefCell, sync::atomic::AtomicBool};
+use core::cell::RefCell;
 use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
@@ -32,7 +30,6 @@ bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
-static SUSPENDED: AtomicBool = AtomicBool::new(false);
 const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
 const EEPROM_SIZE: usize = 128;
 
@@ -106,7 +103,7 @@ async fn main(_spawner: Spawner) {
     let f = Flash::new_blocking(p.FLASH);
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
-        Some(f),
+        None,
         eeprom_storage_config,
         None,
     )));

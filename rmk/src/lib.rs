@@ -1,5 +1,4 @@
 #![doc = include_str!("../../README.md")]
-#![feature(type_alias_impl_trait)]
 #![allow(dead_code)]
 // Make rust analyzer happy with num-enum crate
 #![allow(non_snake_case, non_upper_case_globals)]

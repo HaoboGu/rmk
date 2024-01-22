@@ -12,7 +12,7 @@ Rmk just released version 0.1.0, migrate to [Embassy](https://github.com/embassy
 
 ## Prerequisites
 
-This crate requires **nightly** Rust. `openocd`(stm32) or `probe-rs`(stm32/rp2040) is used for flashing & debugging.
+This crate requires Rust 1.75 and up. `openocd`(stm32) or `probe-rs`(stm32/rp2040) is used for flashing & debugging.
 
 ## Usage
 
