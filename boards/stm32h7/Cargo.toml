@@ -2,7 +2,7 @@
 
 [package]
 name = "rmk-stm32h7"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -14,7 +14,7 @@ license = "MIT OR Apache-2.0"
 # forced-target = "thumbv7em-none-eabihf"
 
 [dependencies]
-rmk = { version = "0.1.1", path = "../../rmk", features = [
+rmk = { version = "0.1.2", path = "../../rmk", features = [
     "eeprom",
     "col2row",
 ] }
