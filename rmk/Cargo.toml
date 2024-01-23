@@ -13,14 +13,14 @@ license = "MIT OR Apache-2.0"
 embedded-hal = "1.0.0"
 embedded-storage = "0.3"
 embedded-alloc = "0.5"
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy" }
-embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = [
+embassy-time = { version = "0.3" }
+embassy-usb = { version = "0.1", features = [
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
-embassy-sync = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy" }
-embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy" }
+embassy-sync = { version = "0.5" }
+embassy-futures = { version = "0.1" }
 num_enum = { version = "0.7", default-features = false }
 log = "0.4"
 static_cell = { version = "2" }

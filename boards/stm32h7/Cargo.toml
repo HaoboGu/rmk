@@ -16,17 +16,14 @@ rmk = { version = "0.1.2", path = "../../rmk", features = [
 ] }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.3"
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", features = [
-    # "tick-hz-1_000_000",
-    "tick-hz-32_768",
-] }
-embassy-stm32 = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = [
+embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
+embassy-stm32 = { version = "0.1", features = [
     "stm32h7b0vb",
+    "defmt",
     "time-driver-any",
-    "exti",
-    "time",
 ] }
-embassy-executor = { version = "0.5.0", git = "https://github.com/embassy-rs/embassy", features = [
+embassy-executor = { version = "0.5", features = [
+    "defmt",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",
