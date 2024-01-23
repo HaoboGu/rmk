@@ -6,6 +6,7 @@ mod macros;
 mod keymap;
 mod vial;
 
+use crate::keymap::{COL, NUM_LAYER, ROW};
 use core::cell::RefCell;
 use defmt::*;
 use defmt_rtt as _;
@@ -22,8 +23,6 @@ use panic_probe as _;
 use rmk::{initialize_keyboard_and_run, keymap::KeyMap};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-use crate::keymap::{COL, NUM_LAYER, ROW};
 
 bind_interrupts!(struct Irqs {
     OTG_FS => InterruptHandler<USB_OTG_FS>;
