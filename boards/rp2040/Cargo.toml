@@ -44,3 +44,18 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 name = "rmk-rp2040"
 test = false
 bench = false
+
+[profile.dev]
+codegen-units = 1      # better optimizations
+debug = true
+opt-level = 1
+overflow-checks = true
+lto = false
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1       # better optimizations
+debug = true            # no overhead for bare-metal
+opt-level = "z"         # optimize for binary size
+overflow-checks = false
+lto = "fat"

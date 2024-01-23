@@ -7,3 +7,6 @@ target
 *.hex
 
 .idea
+
+# ignore Cargo.lock of library, but keep it for binaries
+rmk/Cargo.lock
