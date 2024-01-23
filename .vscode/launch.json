@@ -53,6 +53,57 @@
             ]
         },
         {
+            "name": "Probe-rs - stm32f4",
+            // "preLaunchTask": "build stm32h7 --debug",
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/boards/stm32f4",
+            "chip": "STM32F411CEUx",
+            "speed": 24000,
+            "runtimeExecutable": "probe-rs",
+            "runtimeArgs": [
+                "dap-server"
+            ],
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "resetAfterFlashing": true,
+                "haltAfterReset": false,
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32f4",
+                    "chip": "STM32F411CEUx",
+                    // "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            // Format RTT data as String data
+                            "dataFormat": "String",
+                            // Include host-side timestamps for every line of data transferred from the target RTT output
+                            "showTimestamps": true
+                        },
+                        {
+                            "channelNumber": 1,
+                            // Treat data as raw binary data, and do not format in any way
+                            "dataFormat": "BinaryLE"
+                        }
+                    ],
+                    "options": {
+                        "env": {
+                            "DEFMT_LOG": "debug"
+                        }
+                    },
+                }
+            ],
+            "consoleLogLevel": "Debug", //Error, Warn, Info, Debug, Trace
+            "wireProtocol": "Swd",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
             "name": "Probe-rs - stm32h7",
             "preLaunchTask": "build stm32h7 --debug",
             "type": "probe-rs-debug",

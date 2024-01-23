@@ -118,8 +118,8 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         keymap,
-        &VIAL_KEYBOARD_ID,
-        &VIAL_KEYBOARD_DEF,
+        VIAL_KEYBOARD_ID,
+        VIAL_KEYBOARD_DEF,
     )
     .await;
 }
