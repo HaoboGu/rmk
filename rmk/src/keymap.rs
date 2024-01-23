@@ -54,7 +54,6 @@ impl<
     pub fn new(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<F>,
-        eeprom_storage_config: EepromStorageConfig,
         eeconfig: Option<Eeconfig>,
     ) -> KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER> {
         // Initialize the allocator at the very beginning of the initialization of the keymap
@@ -63,7 +62,7 @@ impl<
             // 1KB heap size
             const HEAP_SIZE: usize = 512;
             // Check page_size and heap size
-            assert!((eeprom_storage_config.page_size as usize) < HEAP_SIZE);
+            assert!(F::WRITE_SIZE < HEAP_SIZE);
             static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
             unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
         }
@@ -71,6 +70,12 @@ impl<
         // Initialize eeprom, if success, re-load keymap from it
         let eeprom = match storage {
             Some(s) => {
+                // TODO: Refactor Eeprom so that we don't need this anymore
+                let eeprom_storage_config = EepromStorageConfig {
+                    start_addr: (F::ERASE_SIZE * (s.capacity() / F::ERASE_SIZE - 1)) as u32,
+                    storage_size: F::ERASE_SIZE as u32,
+                    page_size: F::WRITE_SIZE as u32,
+                };
                 let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &mut action_map);
                 // If eeprom is initialized, read keymap from it.
                 match e {

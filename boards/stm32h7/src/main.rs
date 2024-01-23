@@ -4,11 +4,15 @@
 #[macro_use]
 mod macros;
 mod keymap;
-#[macro_use]
-pub mod rtt_logger;
 mod vial;
+// #[macro_use]
+// pub mod rtt_logger;
+// use log::info;
 
+use crate::keymap::{COL, NUM_LAYER, ROW};
 use core::cell::RefCell;
+use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
@@ -19,25 +23,22 @@ use embassy_stm32::{
     usb_otg::{Driver, InterruptHandler},
     Config,
 };
-use log::info;
-use panic_rtt_target as _;
-use rmk::{eeprom::EepromStorageConfig, initialize_keyboard_and_run, keymap::KeyMap};
+use panic_probe as _;
+use rmk::{initialize_keyboard_and_run, keymap::KeyMap};
 use static_cell::StaticCell;
-
-use crate::keymap::{COL, NUM_LAYER, ROW};
+use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
-const FLASH_SECTOR_15_ADDR: u32 = 15 * 8192;
 const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    if cfg!(debug_assertions) {
-        rtt_logger::init(log::LevelFilter::Info);
-    }
+    // if cfg!(debug_assertions) {
+    //     rtt_logger::init(log::LevelFilter::Info);
+    // }
     info!("Rmk start!");
     // RCC config
     let mut config = Config::default();
@@ -90,21 +91,15 @@ async fn main(_spawner: Spawner) {
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
 
+    // Use internal flash to emulate eeprom
+    let f = Flash::new_blocking(p.FLASH);
     // Keymap + eeprom config
     static MY_KEYMAP: StaticCell<
         RefCell<KeyMap<Flash<'_, Blocking>, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
     > = StaticCell::new();
-    let eeprom_storage_config = EepromStorageConfig {
-        start_addr: FLASH_SECTOR_15_ADDR,
-        storage_size: 8192, // uses 8KB for eeprom
-        page_size: 32,
-    };
-    // Use internal flash to emulate eeprom
-    let f = Flash::new_blocking(p.FLASH);
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
         Some(f),
-        eeprom_storage_config,
         None,
     )));
 
@@ -123,8 +118,8 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         keymap,
-        &vial::VIAL_KEYBOARD_ID,
-        &vial::VIAL_KEYBOARD_DEF,
+        &VIAL_KEYBOARD_ID,
+        &VIAL_KEYBOARD_DEF,
     )
     .await;
 }
