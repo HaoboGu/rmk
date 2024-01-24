@@ -16,24 +16,21 @@ use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
-pub use embassy_usb;
-pub use usbd_hid;
-
 pub mod action;
-pub mod debounce;
-pub mod eeprom;
-pub mod flash;
-pub mod keyboard;
+mod debounce;
+mod eeprom;
+mod flash;
+mod keyboard;
 pub mod keycode;
 pub mod keymap;
-pub mod layout_macro;
-pub mod matrix;
-pub mod usb;
-pub mod via;
+mod layout_macro;
+mod matrix;
+mod usb;
+mod via;
 
 /// DEPRECIATED: Use `initialize_keyboard_and_run` instead.
 /// Initialize keyboard core and keyboard usb device
-pub fn initialize_keyboard_and_usb_device<
+pub(crate) fn initialize_keyboard_and_usb_device<
     D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,

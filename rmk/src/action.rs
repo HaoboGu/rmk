@@ -53,7 +53,7 @@ pub enum KeyAction {
 
 impl KeyAction {
     /// Convert a `KeyAction` to corresponding key action code.
-    pub fn to_key_action_code(&self) -> u16 {
+    pub(crate) fn to_key_action_code(&self) -> u16 {
         match self {
             KeyAction::No => 0x0000,
             KeyAction::Transparent => 0x0001,
@@ -87,7 +87,7 @@ impl KeyAction {
         }
     }
 
-    pub fn from_key_action_code(code: u16) -> KeyAction {
+    pub(crate) fn from_key_action_code(code: u16) -> KeyAction {
         match code {
             0x0..=0xFFF => KeyAction::Single(Action::from_action_code(code)),
             0x1000..=0x1FFF => KeyAction::Tap(Action::from_action_code(code & 0xFFF)),
@@ -146,7 +146,7 @@ pub enum Action {
 
 impl Action {
     /// Convert an `Action` to 12-bit action code
-    pub fn to_action_code(&self) -> u16 {
+    pub(crate) fn to_action_code(&self) -> u16 {
         match self {
             Action::Key(k) => *k as u16,
             Action::Modifier(m) => 0xE00 | (m.to_bits() as u16),
@@ -157,7 +157,7 @@ impl Action {
     }
 
     /// Create an `Action` from action_code, returns Key(KeyCode::No) if the action code is not valid.
-    pub fn from_action_code(action_code: u16) -> Action {
+    pub(crate) fn from_action_code(action_code: u16) -> Action {
         match action_code {
             0x000..=0xCFF => Action::Key(KeyCode::from_primitive(action_code)),
             0xE00..=0xE1F => {
@@ -184,7 +184,7 @@ impl Action {
     }
 
     /// Convert an `Action` to 8-bit basic action code, only applicable for `Key(BasicKeyCode)`
-    pub fn to_basic_action_code(&self) -> u16 {
+    pub(crate) fn to_basic_action_code(&self) -> u16 {
         match self {
             Action::Key(kc) => {
                 if kc.is_basic() {

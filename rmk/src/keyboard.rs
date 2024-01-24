@@ -13,7 +13,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
-pub struct Keyboard<
+pub(crate) struct Keyboard<
     'a,
     In: InputPin,
     Out: OutputPin,
@@ -25,12 +25,12 @@ pub struct Keyboard<
 > {
     /// Keyboard matrix, use COL2ROW by default
     #[cfg(feature = "col2row")]
-    pub matrix: Matrix<In, Out, ROW, COL>,
+    pub(crate) matrix: Matrix<In, Out, ROW, COL>,
     #[cfg(not(feature = "col2row"))]
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -66,7 +66,7 @@ impl<
     > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
-    pub fn new(
+    pub(crate) fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
         keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
@@ -93,7 +93,7 @@ impl<
     }
 
     #[cfg(not(feature = "col2row"))]
-    pub fn new(
+    pub(crate) fn new(
         input_pins: [In; COL],
         output_pins: [Out; ROW],
         keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -136,7 +136,7 @@ impl<
     }
 
     /// Send hid report. The report is sent only when key state changes.
-    pub async fn send_report<'d, D: Driver<'d>>(
+    pub(crate) async fn send_report<'d, D: Driver<'d>>(
         &mut self,
         hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
@@ -154,7 +154,7 @@ impl<
         }
     }
 
-    pub async fn send_media_report<'d, D: Driver<'d>>(
+    pub(crate) async fn send_media_report<'d, D: Driver<'d>>(
         &mut self,
         hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
@@ -170,7 +170,7 @@ impl<
 
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
-    pub async fn keyboard_task(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn keyboard_task(&mut self) -> Result<(), Infallible> {
         // Matrix scan
         self.matrix.scan().await?;
 

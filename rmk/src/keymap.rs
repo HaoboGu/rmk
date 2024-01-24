@@ -3,20 +3,20 @@ use crate::{
     eeprom::{eeconfig::Eeconfig, Eeprom, EepromStorageConfig},
     matrix::KeyState,
 };
+use defmt::warn;
 use embedded_alloc::Heap;
 use embedded_storage::nor_flash::NorFlash;
-use defmt::warn;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
 pub struct KeyMapConfig {
     /// Number of rows.
-    pub row: usize,
+    pub(crate) row: usize,
     /// Number of columns.
-    pub col: usize,
+    pub(crate) col: usize,
     /// Number of layer
-    pub layer: usize,
+    pub(crate) layer: usize,
 }
 
 /// KeyMap represents the stack of layers.
@@ -102,21 +102,27 @@ impl<
         }
     }
 
-    pub fn get_keymap_config(&self) -> (usize, usize, usize) {
+    pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         (ROW, COL, NUM_LAYER)
     }
 
-    pub fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {
+    pub(crate) fn set_action_at(
+        &mut self,
+        row: usize,
+        col: usize,
+        layer_num: usize,
+        action: KeyAction,
+    ) {
         self.layers[layer_num][row][col] = action;
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub fn get_action_at(&mut self, row: usize, col: usize, layer_num: usize) -> KeyAction {
+    pub(crate) fn get_action_at(&mut self, row: usize, col: usize, layer_num: usize) -> KeyAction {
         self.layers[layer_num][row][col]
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub fn get_action_with_layer_cache(
+    pub(crate) fn get_action_with_layer_cache(
         &mut self,
         row: usize,
         col: usize,
@@ -168,27 +174,36 @@ impl<
     }
 
     /// Activate given layer
-    pub fn activate_layer(&mut self, layer_num: u8) {
+    pub(crate) fn activate_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
+            warn!(
+                "Not a valid layer {}, keyboard supports only {} layers",
+                layer_num, NUM_LAYER
+            );
             return;
         }
         self.layer_state[layer_num as usize] = true;
     }
 
     /// Deactivate given layer
-    pub fn deactivate_layer(&mut self, layer_num: u8) {
+    pub(crate) fn deactivate_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
+            warn!(
+                "Not a valid layer {}, keyboard supports only {} layers",
+                layer_num, NUM_LAYER
+            );
             return;
         }
         self.layer_state[layer_num as usize] = false;
     }
 
     /// Toggle given layer
-    pub fn toggle_layer(&mut self, layer_num: u8) {
+    pub(crate) fn toggle_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
+            warn!(
+                "Not a valid layer {}, keyboard supports only {} layers",
+                layer_num, NUM_LAYER
+            );
             return;
         }
 

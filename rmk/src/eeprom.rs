@@ -1,5 +1,5 @@
-pub mod eeconfig;
-pub mod eekeymap;
+pub(crate) mod eeconfig;
+pub(crate) mod eekeymap;
 
 extern crate alloc;
 
@@ -12,7 +12,7 @@ use embedded_storage::nor_flash::NorFlash;
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
-pub struct EepromRecord {
+pub(crate) struct EepromRecord {
     address: u16,
     data: u16,
 }
@@ -34,21 +34,21 @@ impl EepromRecord {
 
 /// Configuration of eeprom's backend storage.
 #[derive(Default)]
-pub struct EepromStorageConfig {
+pub(crate) struct EepromStorageConfig {
     /// The start address in the backend storage.
-    pub start_addr: u32,
+    pub(crate) start_addr: u32,
     /// Total used size in backend storage for eeprom.
-    pub storage_size: u32,
+    pub(crate) storage_size: u32,
     /// Minimal write size of backend storage.
     /// For example, stm32h7's internal flash allows 256-bit(32 bytes) or 128-bit(16 bytes) write, so page_size should be 32/16 for stm32h7.
-    pub page_size: u32,
+    pub(crate) page_size: u32,
 }
 
 /// Eeprom based on any storage device which implements `embedded-storage::NorFlash` trait
 /// Data in eeprom is saved in a 4-byte `record`, with 2-byte address in the first 16 bits and 2-byte data in the next 16 bits.
 /// Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the logical eeprom capacity.
 /// User can specify the size of the logical size of eeprom(maximum 64KB), Eeprom struct maintains a cache in ram to speed up reads, whose size is same as the user defined logical eeprom capacity.
-pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
+pub(crate) struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
     /// Current position in the storage
     pos: u32,
     /// Backend storage, implements `embedded-storage::NorFlash` trait
@@ -71,7 +71,7 @@ pub struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
 }
 
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
-    pub fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    pub(crate) fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
         storage_config: EepromStorageConfig,
         eeconfig: Option<Eeconfig>,
@@ -143,7 +143,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         Some(eeprom)
     }
 
-    pub fn write_byte(&mut self, mut address: u16, data: &[u8]) {
+    pub(crate) fn write_byte(&mut self, mut address: u16, data: &[u8]) {
         if data.len() == 0 {
             warn!("No data to write to eeprom, skip");
             return;
@@ -189,7 +189,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     /// Read bytes from eeprom, starting from the given address, and reading `read_size` bytes.
     /// Returns a slice of eeprom cache, which is immutable
-    pub fn read_byte(&self, address: u16, read_size: usize) -> &[u8] {
+    pub(crate) fn read_byte(&self, address: u16, read_size: usize) -> &[u8] {
         &self.cache[address as usize..(address as usize + read_size)]
     }
 

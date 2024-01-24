@@ -7,8 +7,8 @@ static DEBOUNCE_THRESHOLD: u16 = 10;
 
 /// Debounce info for each key.
 #[derive(Copy, Clone, Debug)]
-pub struct DebounceState {
-    pub counter: u16,
+pub(crate) struct DebounceState {
+    pub(crate) counter: u16,
 }
 
 impl DebounceState {
@@ -31,16 +31,16 @@ impl DebounceState {
 }
 
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/19613128b901723f7b78c136792d72e6ca7cf4fc/app/module/lib/zmk_debounce/debounce.c)
-pub struct Debouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
+pub(crate) struct Debouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_tick: u32,
-    pub debounce_state: [[DebounceState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    pub(crate) debounce_state: [[DebounceState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
 impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a default debouncer
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Debouncer {
             debounce_state: [[DebounceState { counter: 0 }; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_tick: 0,
@@ -48,7 +48,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub fn debounce(
+    pub(crate) fn debounce(
         &mut self,
         in_idx: usize,
         out_idx: usize,

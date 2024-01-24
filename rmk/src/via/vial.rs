@@ -6,7 +6,7 @@ use crate::usb::descriptor::ViaReport;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
-pub enum VialCommand {
+enum VialCommand {
     GetKeyboardId = 0x00,
     GetSize = 0x01,
     GetKeyboardDef = 0x02,
@@ -29,7 +29,11 @@ const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
 ///
 /// Note: vial uses litte endian, while via uses big endian
-pub fn process_vial(report: &mut ViaReport, vial_keyboard_Id: &[u8], vial_keyboard_def: &[u8]) {
+pub(crate) fn process_vial(
+    report: &mut ViaReport,
+    vial_keyboard_Id: &[u8],
+    vial_keyboard_def: &[u8],
+) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
     match vial_command {

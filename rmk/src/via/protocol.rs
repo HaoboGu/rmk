@@ -6,7 +6,7 @@ pub(crate) const VIA_FIRMWARE_VERSION: u32 = 0x0001;
 /// Via communication commands. Check [qmk/quantum/via.h`](https://github.com/qmk/qmk_firmware/blob/2fad45132f0777002934e07d17bfe8ec7aa95740/quantum/via.h#L74)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
-pub enum ViaCommand {
+pub(crate) enum ViaCommand {
     GetProtocolVersion = 0x01, // always 0x01
     GetKeyboardValue = 0x02,
     SetKeyboardValue = 0x03,
@@ -36,7 +36,7 @@ pub enum ViaCommand {
 /// Information of a via keyboard.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, TryFromPrimitive)]
 #[repr(u8)]
-pub enum ViaKeyboardInfo {
+pub(crate) enum ViaKeyboardInfo {
     Uptime = 0x01,
     LayoutOptions = 0x02,
     SwitchMatrixState = 0x03,

@@ -1,4 +1,4 @@
 pub(crate) mod keycode_convert;
-pub mod process;
+pub(crate) mod process;
 mod protocol;
 mod vial;

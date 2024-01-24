@@ -1,11 +1,14 @@
-use crate::{action::KeyAction, via::keycode_convert::{from_via_keycode, to_via_keycode}};
+use crate::{
+    action::KeyAction,
+    via::keycode_convert::{from_via_keycode, to_via_keycode},
+};
 use byteorder::{BigEndian, ByteOrder};
 use embedded_storage::nor_flash::NorFlash;
 
 use super::{eeconfig::DYNAMIC_KEYMAP_ADDR, Eeprom};
 
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
-    pub fn set_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    pub(crate) fn set_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) {
@@ -23,14 +26,20 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             });
     }
 
-    pub fn set_keymap_action(&mut self, row: usize, col: usize, layer: usize, action: KeyAction) {
+    pub(crate) fn set_keymap_action(
+        &mut self,
+        row: usize,
+        col: usize,
+        layer: usize,
+        action: KeyAction,
+    ) {
         let addr = self.get_keymap_addr(row, col, layer);
         let mut buf: [u8; 2] = [0xFF; 2];
         BigEndian::write_u16(&mut buf, to_via_keycode(action));
         self.write_byte(addr, &buf);
     }
 
-    pub fn read_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    pub(crate) fn read_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         &self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) {

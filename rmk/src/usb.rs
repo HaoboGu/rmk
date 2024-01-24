@@ -1,15 +1,15 @@
 use core::sync::atomic::{AtomicBool, Ordering};
+use defmt::info;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
-use defmt::info;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescriptor};
 
-pub mod descriptor;
+pub(crate) mod descriptor;
 
 use crate::usb::descriptor::ViaReport;
 
@@ -21,15 +21,15 @@ static SUSPENDED: AtomicBool = AtomicBool::new(false);
 // 1. Boot keyboard: 1 endpoint in
 // 2. Other: Mouse + System control + Consumer control: 1 endpoint in
 // 3. Via: used to communicate with via: 2 endpoints(in/out)
-pub struct KeyboardUsbDevice<'d, D: Driver<'d>> {
-    pub device: UsbDevice<'d, D>,
-    pub keyboard_hid: HidReaderWriter<'d, D, 1, 8>,
-    pub other_hid: HidReaderWriter<'d, D, 1, 8>,
-    pub via_hid: HidReaderWriter<'d, D, 32, 32>,
+pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
+    pub(crate) device: UsbDevice<'d, D>,
+    pub(crate) keyboard_hid: HidReaderWriter<'d, D, 1, 8>,
+    pub(crate) other_hid: HidReaderWriter<'d, D, 1, 8>,
+    pub(crate) via_hid: HidReaderWriter<'d, D, 32, 32>,
 }
 
 impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
-    pub fn new(driver: D) -> Self {
+    pub(crate) fn new(driver: D) -> Self {
         // Create embassy-usb Config
         let mut usb_config = embassy_usb::Config::new(0x4c4b, 0x4643);
         usb_config.manufacturer = Some("Haobo");

@@ -16,7 +16,7 @@ use embassy_usb::{
 use embedded_storage::nor_flash::NorFlash;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
-pub struct VialService<
+pub(crate) struct VialService<
     'a,
     F: NorFlash,
     const EEPROM_SIZE: usize,
@@ -25,7 +25,7 @@ pub struct VialService<
     const NUM_LAYER: usize,
 > {
     // VialService holds a reference of keymap, for updating
-    pub keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
 
     // Vial config
     vial_keyboard_id: &'a [u8],
@@ -42,7 +42,7 @@ impl<
         const NUM_LAYER: usize,
     > VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
-    pub fn new(
+    pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
         vial_keyboard_id: &'a [u8],
         vial_keyboard_def: &'a [u8],
@@ -54,7 +54,7 @@ impl<
         }
     }
 
-    pub async fn process_via_report<D: Driver<'a>>(
+    pub(crate) async fn process_via_report<D: Driver<'a>>(
         &self,
         hid_interface: &mut HidReaderWriter<'a, D, 32, 32>,
     ) {
@@ -84,7 +84,7 @@ impl<
         }
     }
 
-    pub fn process_via_packet(
+    fn process_via_packet(
         &self,
         report: &mut ViaReport,
         keymap: &mut KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
@@ -286,7 +286,8 @@ impl<
         }
     }
 }
-pub fn get_position_from_offset(
+
+fn get_position_from_offset(
     offset: usize,
     max_row: usize,
     max_col: usize,

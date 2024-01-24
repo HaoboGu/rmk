@@ -10,9 +10,9 @@ use usbd_hid::descriptor::generator_prelude::*;
         };
     }
 )]
-pub struct ViaReport {
-    pub input_data: [u8; 32],
-    pub output_data: [u8; 32],
+pub(crate) struct ViaReport {
+    pub(crate) input_data: [u8; 32],
+    pub(crate) output_data: [u8; 32],
 }
 
 // TODO: Composite hid report
@@ -47,11 +47,11 @@ pub struct ViaReport {
 // )]
 // #[allow(dead_code)]
 // pub struct MyKeyboardReport {
-//     pub modifier: u8,
-//     pub reserved: u8,
-//     pub leds: u8,
-//     pub keycodes: [u8; 6],
-//     pub usage_id: u16,
+//     pub(crate) modifier: u8,
+//     pub(crate) reserved: u8,
+//     pub(crate) leds: u8,
+//     pub(crate) keycodes: [u8; 6],
+//     pub(crate) usage_id: u16,
 // }
 
 // impl AsInputReport for MyKeyboardReport {

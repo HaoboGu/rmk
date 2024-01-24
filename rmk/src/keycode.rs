@@ -23,7 +23,7 @@ pub struct ModifierCombination {
 }
 
 impl ModifierCombination {
-    pub fn new(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
+    pub(crate) fn new(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
         ModifierCombination {
             ctrl,
             shift,
@@ -35,7 +35,7 @@ impl ModifierCombination {
 
     /// Convert modifier combination to a list of modifier keycodes.
     /// Returns a list of modifiers keycodes, and the length of the list.
-    pub fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
+    pub(crate) fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
         let mut keycodes = [KeyCode::No; 8];
         let mut i = 0;
         if self.right {
@@ -78,7 +78,7 @@ impl ModifierCombination {
     }
 
     /// Get modifier hid report bits from modifier combination
-    pub fn to_hid_modifier_bits(&self) -> u8 {
+    pub(crate) fn to_hid_modifier_bits(&self) -> u8 {
         let (keycodes, n) = self.to_modifier_keycodes();
         let mut hid_modifier_bits = 0;
         for i in 0..n {
@@ -89,12 +89,12 @@ impl ModifierCombination {
     }
 
     /// Convert modifier combination to bits
-    pub fn to_bits(&self) -> u8 {
+    pub(crate) fn to_bits(&self) -> u8 {
         ModifierCombination::pack(&self).unwrap_or_default()[0]
     }
 
     /// Convert from bits
-    pub fn from_bits(bits: u8) -> Self {
+    pub(crate) fn from_bits(bits: u8) -> Self {
         ModifierCombination::unpack_from_slice(&[bits]).unwrap_or_default()
     }
 }
@@ -819,18 +819,18 @@ pub enum KeyCode {
 
 impl KeyCode {
     /// Returns `true` if the keycode is basic keycode
-    pub fn is_basic(self) -> bool {
+    pub(crate) fn is_basic(self) -> bool {
         KeyCode::No <= self && self <= KeyCode::RGui
     }
 
     /// Returns `true` if the keycode is a modifier keycode
-    pub fn is_modifier(self) -> bool {
+    pub(crate) fn is_modifier(self) -> bool {
         KeyCode::LCtrl <= self && self <= KeyCode::RGui
     }
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
-    pub fn as_modifier_bit(self) -> u8 {
+    pub(crate) fn as_modifier_bit(self) -> u8 {
         if self.is_modifier() {
             1 << (self as u16 as u8 - KeyCode::LCtrl as u16 as u8)
         } else {
@@ -839,88 +839,88 @@ impl KeyCode {
     }
 
     /// Returns `true` if the keycode is a system keycode
-    pub fn is_system(self) -> bool {
+    pub(crate) fn is_system(self) -> bool {
         KeyCode::SystemPower <= self && self <= KeyCode::SystemWake
     }
 
     /// Returns `true` if the keycode is a keycode in consumer page
-    pub fn is_consumer(self) -> bool {
+    pub(crate) fn is_consumer(self) -> bool {
         KeyCode::AudioMute <= self && self <= KeyCode::Launchpad
     }
 
     /// Returns `true` if the keycode is a mouse keycode
-    pub fn is_mouse_key(self) -> bool {
+    pub(crate) fn is_mouse_key(self) -> bool {
         KeyCode::MouseUp <= self && self <= KeyCode::MouseAccel2
     }
 
     /// Returns `true` if the keycode is a magic keycode
-    pub fn is_magic(self) -> bool {
+    pub(crate) fn is_magic(self) -> bool {
         KeyCode::MagicSwapControlCapsLock <= self && self <= KeyCode::MagicToggleEscapeCapsLock
     }
 
     /// Returns `true` if the keycode is a midi keycode
-    pub fn is_midi(self) -> bool {
+    pub(crate) fn is_midi(self) -> bool {
         KeyCode::MidiOn <= self && self <= KeyCode::MidiPitchBendUp
     }
 
     /// Returns `true` if the keycode is a sequencer keycode
-    pub fn is_sequencer(self) -> bool {
+    pub(crate) fn is_sequencer(self) -> bool {
         KeyCode::SequencerOn <= self && self <= KeyCode::SequencerStepsClear
     }
 
     /// Returns `true` if the keycode is a joystick keycode
-    pub fn is_joystick(self) -> bool {
+    pub(crate) fn is_joystick(self) -> bool {
         KeyCode::JoystickButton0 <= self && self <= KeyCode::JoystickButton31
     }
 
     /// Returns `true` if the keycode is a programmable button keycode
-    pub fn is_programmable_button(self) -> bool {
+    pub(crate) fn is_programmable_button(self) -> bool {
         KeyCode::ProgrammableButton1 <= self && self <= KeyCode::ProgrammableButton32
     }
 
     /// Returns `true` if the keycode is a audio keycode
     /// Note: Basic audio keycodes are not included
-    pub fn is_audio(self) -> bool {
+    pub(crate) fn is_audio(self) -> bool {
         KeyCode::AudioOn <= self && self <= KeyCode::AudioVoicePrevious
     }
 
     /// Returns `true` if the keycode is a steno keycode
-    pub fn is_steno(self) -> bool {
+    pub(crate) fn is_steno(self) -> bool {
         KeyCode::StenoBolt <= self && self <= KeyCode::StenoCombMax
     }
 
     /// Returns `true` if the keycode is a macro keycode
-    pub fn is_macro(self) -> bool {
+    pub(crate) fn is_macro(self) -> bool {
         KeyCode::Macro0 <= self && self <= KeyCode::Macro31
     }
 
     /// Returns `true` if the keycode is a backlight keycode
-    pub fn is_backlight(self) -> bool {
+    pub(crate) fn is_backlight(self) -> bool {
         KeyCode::BacklightOn <= self && self <= KeyCode::BacklightToggleBreathing
     }
 
     /// Returns `true` if the keycode is a rgb keycode
-    pub fn is_rgb(self) -> bool {
+    pub(crate) fn is_rgb(self) -> bool {
         KeyCode::RgbTog <= self && self <= KeyCode::RgbModeTwinkle
     }
 
     /// Returns `true` if the keycode is defined by rmk to achieve special functionalities, such as reboot keyboard, goto bootloader, etc.
-    pub fn is_rmk(self) -> bool {
+    pub(crate) fn is_rmk(self) -> bool {
         KeyCode::Bootloader <= self && self <= KeyCode::AltRepeatKey
     }
 
     /// Returns `true` if the keycode is a kb keycode
-    pub fn is_kb(self) -> bool {
+    pub(crate) fn is_kb(self) -> bool {
         KeyCode::Kb0 <= self && self <= KeyCode::Kb31
     }
 
     /// Returns `true` if the keycode is a user keycode
-    pub fn is_user(self) -> bool {
+    pub(crate) fn is_user(self) -> bool {
         KeyCode::User0 <= self && self <= KeyCode::User31
     }
 
     /// Convert a keycode to usb hid media key
-    pub fn as_consumer_control_usage_id(self) -> MediaKey {
+    pub(crate) fn as_consumer_control_usage_id(self) -> MediaKey {
         match self {
             KeyCode::AudioMute => MediaKey::Mute,
             KeyCode::AudioVolUp => MediaKey::VolumeIncrement,
@@ -944,7 +944,7 @@ impl KeyCode {
     }
 
     /// Convert a keycode to usb hid media key
-    pub fn as_system_control_usage_id(self) -> Option<SystemControlKey> {
+    pub(crate) fn as_system_control_usage_id(self) -> Option<SystemControlKey> {
         match self {
             KeyCode::SystemPower => Some(SystemControlKey::PowerDown),
             KeyCode::SystemSleep => Some(SystemControlKey::Sleep),

@@ -6,7 +6,7 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
 };
 
-pub fn to_via_keycode(key_action: KeyAction) -> u16 {
+pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
         KeyAction::No => 0x0000,
         KeyAction::Transparent => 0x0001,
@@ -64,7 +64,7 @@ pub fn to_via_keycode(key_action: KeyAction) -> u16 {
 }
 
 /// Convert via keycode to KeyAction.
-pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
+pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
     match via_keycode {
         0x0000 => KeyAction::No,
         0x0001 => KeyAction::Transparent,

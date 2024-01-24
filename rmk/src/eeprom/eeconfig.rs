@@ -43,7 +43,7 @@ pub(crate) const DYNAMIC_KEYMAP_ADDR: u16 = 16;
 
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     /// Initialize eeprom with default eeconfig
-    pub fn init_with_default_config(&mut self) {
+    pub(crate) fn init_with_default_config(&mut self) {
         self.set_enable(true);
         self.set_default_layer(0);
         self.set_keymap_config(EeKeymapConfig::default());
@@ -54,7 +54,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Initialize eeprom with given eeconfig
-    pub fn init_with_config(&mut self, config: Eeconfig) {
+    pub(crate) fn init_with_config(&mut self, config: Eeconfig) {
         self.set_enable(config.eeprom_enable);
         self.set_default_layer(config.default_layer);
         self.set_keymap_config(config.keymap_config);
@@ -65,7 +65,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Enable or disable eeprom by writing magic value
-    pub fn set_enable(&mut self, enabled: bool) {
+    pub(crate) fn set_enable(&mut self, enabled: bool) {
         let magic = if enabled {
             EEPROM_MAGIC
         } else {
@@ -78,7 +78,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Returns eeprom magic value stored in EEPROM
-    pub fn get_magic(&mut self) -> u16 {
+    pub(crate) fn get_magic(&mut self) -> u16 {
         // ALWAYS read magic from the start address of the backend store
         let mut bytes = [0_u8; 4];
         match self
@@ -94,17 +94,17 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Set default layer
-    pub fn set_default_layer(&mut self, default_layer: u8) {
+    pub(crate) fn set_default_layer(&mut self, default_layer: u8) {
         self.write_byte(DEFAULT_LAYER_START as u16, &[default_layer]);
     }
 
     /// Returns current default layer
-    pub fn get_default_layer(&self) -> u8 {
+    pub(crate) fn get_default_layer(&self) -> u8 {
         self.cache[DEFAULT_LAYER_START]
     }
 
     /// Set keymap config
-    pub fn set_keymap_config(&mut self, config: EeKeymapConfig) {
+    pub(crate) fn set_keymap_config(&mut self, config: EeKeymapConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
@@ -116,7 +116,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Returns keymap config as `EeKeymapConfig`
-    pub fn get_keymap_config(&self) -> Option<EeKeymapConfig> {
+    pub(crate) fn get_keymap_config(&self) -> Option<EeKeymapConfig> {
         match EeKeymapConfig::unpack_from_slice(
             self.read_byte(KEYMAP_CONFIG_ADDR, KEYMAP_CONFIG_SIZE),
         ) {
@@ -129,7 +129,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Set backlight config
-    pub fn set_backlight_config(&mut self, config: EeBacklightConfig) {
+    pub(crate) fn set_backlight_config(&mut self, config: EeBacklightConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
@@ -141,7 +141,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Returns backlight config as `EeBacklightConfig`
-    pub fn get_backlight_config(&self) -> Option<EeBacklightConfig> {
+    pub(crate) fn get_backlight_config(&self) -> Option<EeBacklightConfig> {
         match EeBacklightConfig::unpack_from_slice(
             self.read_byte(BACKLIGHT_CONFIG_ADDR, BACKLIGHT_CONFIG_SIZE),
         ) {
@@ -154,7 +154,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Set audio config
-    pub fn set_audio_config(&mut self, config: EeAudioConfig) {
+    pub(crate) fn set_audio_config(&mut self, config: EeAudioConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
@@ -166,7 +166,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Returns audio config as `EeAudioConfig`
-    pub fn get_audio_config(&self) -> Option<EeAudioConfig> {
+    pub(crate) fn get_audio_config(&self) -> Option<EeAudioConfig> {
         match EeAudioConfig::unpack_from_slice(self.read_byte(AUDIO_CONFIG_ADDR, AUDIO_CONFIG_SIZE))
         {
             Ok(config) => Some(config),
@@ -178,7 +178,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Set rgb light config
-    pub fn set_rgb_light_config(&mut self, config: EeRgbLightConfig) {
+    pub(crate) fn set_rgb_light_config(&mut self, config: EeRgbLightConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
@@ -190,7 +190,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Returns rgb light config as `EeRgbLightConfig`
-    pub fn get_rgb_light_config(&self) -> Option<EeRgbLightConfig> {
+    pub(crate) fn get_rgb_light_config(&self) -> Option<EeRgbLightConfig> {
         match EeRgbLightConfig::unpack_from_slice(self.read_byte(RGB_CONFIG_ADDR, RGB_CONFIG_SIZE))
         {
             Ok(config) => Some(config),
@@ -202,14 +202,14 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     /// Set layout option
-    pub fn set_layout_option(&mut self, option: u32) {
+    pub(crate) fn set_layout_option(&mut self, option: u32) {
         let mut buf = [0xFF; 4];
         BigEndian::write_u32(&mut buf, option);
         self.write_byte(LAYOUT_OPTION_ADDR, &mut buf);
     }
 
     /// Returns layout option
-    pub fn get_layout_option(&self) -> u32 {
+    pub(crate) fn get_layout_option(&self) -> u32 {
         BigEndian::read_u32(self.read_byte(LAYOUT_OPTION_ADDR, LAYOUT_OPTION_SIZE))
     }
 }
@@ -227,7 +227,7 @@ pub struct Eeconfig {
 
 #[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0", bytes = "2")]
-pub struct EeKeymapConfig {
+pub(crate) struct EeKeymapConfig {
     #[packed_field(bits = "0")]
     swap_control_capslock: bool,
     #[packed_field(bits = "1")]
@@ -259,7 +259,7 @@ pub struct EeKeymapConfig {
 
 #[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
-pub struct EeBacklightConfig {
+pub(crate) struct EeBacklightConfig {
     #[packed_field(bits = "0")]
     enable: bool,
     #[packed_field(bits = "1")]
@@ -272,7 +272,7 @@ pub struct EeBacklightConfig {
 
 #[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
-pub struct EeAudioConfig {
+pub(crate) struct EeAudioConfig {
     #[packed_field(bits = "0")]
     enable: bool,
     #[packed_field(bits = "1")]
@@ -283,7 +283,7 @@ pub struct EeAudioConfig {
 
 #[derive(PackedStruct, Debug, Default)]
 #[packed_struct(bit_numbering = "msb0")]
-pub struct EeRgbLightConfig {
+pub(crate) struct EeRgbLightConfig {
     #[packed_field(bits = "0")]
     enable: bool,
     #[packed_field(bits = "1..=7")]
