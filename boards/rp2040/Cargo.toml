@@ -30,7 +30,7 @@ cortex-m-rt = "0.7.3"
 embedded-storage = "0.3"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
 packed_struct = { version = "0.10.1", default-features = false }
-static_cell = { version = "2" }
+static_cell = "2"
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }

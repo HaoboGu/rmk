@@ -1,4 +1,4 @@
-use log::warn;
+use defmt::warn;
 use num_enum::FromPrimitive;
 
 use crate::{
@@ -92,27 +92,27 @@ pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x5700..=0x57FF => {
             // TODO: Tap Dance
-            warn!("Tap dance 0x{:X} not supported", via_keycode);
+            warn!("Tap dance {:#X} not supported", via_keycode);
             KeyAction::No
         }
         0x5C00..=0x5CFF => {
             // TODO: QMK functions, such as reset, swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
-            warn!("QMK functions 0x{:X} not supported", via_keycode);
+            warn!("QMK functions {:#X} not supported", via_keycode);
             KeyAction::No
         }
         0x5D00..=0x5D0F => {
             // TODO: DM Rec/Stop/Play
-            warn!("DM Rec/Stop/Play 0x{:X} not supported", via_keycode);
+            warn!("DM Rec/Stop/Play {:#X} not supported", via_keycode);
             KeyAction::No
         }
         0x5F12..=0x5F21 => {
             // TODO: Macro 1-16
-            warn!("Macro 0x{:X} not supported", via_keycode);
+            warn!("Macro {:#X} not supported", via_keycode);
             KeyAction::No
         }
         0x5F80..=0x5F8F => {
             // TODO: User 1-16
-            warn!("User 0x{:X} not supported", via_keycode);
+            warn!("User {:#X} not supported", via_keycode);
             KeyAction::No
         }
         0x6000..=0x7FFF => {
@@ -131,7 +131,7 @@ pub fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
 
         _ => {
-            warn!("Via keycode 0x{:X} is not processed", via_keycode);
+            warn!("Via keycode {:#X} is not processed", via_keycode);
             KeyAction::No
         }
     }

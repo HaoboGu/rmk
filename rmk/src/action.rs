@@ -1,5 +1,5 @@
 use crate::keycode::{KeyCode, ModifierCombination};
-use log::{error, warn};
+use defmt::{error, warn, Format};
 use num_enum::FromPrimitive;
 use packed_struct::PackedStructSlice;
 
@@ -15,7 +15,7 @@ use packed_struct::PackedStructSlice;
 /// The `BasicAction` represents only a single key action of keycodes defined in HID spec. The `Action` represents all actions defined in the following `Action` enum, including modifier combination and layer switch.
 ///
 /// The KeyActionType bits varies between different types of a KeyAction, see docs of each enum variant.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Format, Copy, Clone, PartialEq, Eq)]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.
     No,
@@ -120,7 +120,7 @@ impl KeyAction {
 
 /// A single basic action that a keyboard can execute.
 /// An Action can be represented in 12 bits, aka 0x000 ~ 0xFFF
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq)]
 pub enum Action {
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
     ///
@@ -177,7 +177,7 @@ impl Action {
                 Action::LayerToggle(layer)
             }
             _ => {
-                warn!("Not a valid 12-bit action code: {:X}", action_code);
+                warn!("Not a valid 12-bit action code: {:#X}", action_code);
                 Action::Key(KeyCode::No)
             }
         }

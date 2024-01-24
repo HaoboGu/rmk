@@ -10,21 +10,23 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-embedded-hal = "1.0.0"
+embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-alloc = "0.5"
-embassy-time = { version = "0.3" }
+embassy-time = { version = "0.3", features = ["defmt"] }
 embassy-usb = { version = "0.1", features = [
+    "defmt",
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
-embassy-sync = { version = "0.5" }
-embassy-futures = { version = "0.1" }
-num_enum = { version = "0.7", default-features = false }
+embassy-sync = { version = "0.5", features = ["defmt"] }
+embassy-futures = { version = "0.1", features = ["defmt"] }
+usbd-hid = { version = "0.6.1", features = ["defmt"] }
+defmt = "0.3"
 log = "0.4"
-static_cell = { version = "2" }
-usbd-hid = "0.6.1"
+static_cell = "2" 
+num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
 

@@ -256,6 +256,9 @@ name = "embassy-futures"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
+dependencies = [
+ "defmt",
+]
 
 [[package]]
 name = "embassy-hal-internal"
@@ -396,6 +399,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1587e58ed8f7e0215246e6bb8d7ef4837db682e209e5ef7410a81c500dc949e5"
 dependencies = [
+ "defmt",
  "embassy-futures",
  "embassy-net-driver-channel",
  "embassy-sync 0.5.0",
@@ -439,6 +443,9 @@ name = "embedded-hal"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
+dependencies = [
+ "defmt",
+]
 
 [[package]]
 name = "embedded-hal-async"
@@ -811,6 +818,7 @@ name = "rmk"
 version = "0.1.2"
 dependencies = [
  "byteorder",
+ "defmt",
  "embassy-futures",
  "embassy-sync 0.5.0",
  "embassy-time",
@@ -1032,6 +1040,9 @@ name = "usb-device"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
+dependencies = [
+ "defmt",
+]
 
 [[package]]
 name = "usbd-hid"
@@ -1039,6 +1050,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "975bd411f4a939986751ea09992a24fa47c4d25c6ed108d04b4c2999a4fd0132"
 dependencies = [
+ "defmt",
  "serde",
  "ssmarshal",
  "usb-device",

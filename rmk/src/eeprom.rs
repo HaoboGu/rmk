@@ -7,8 +7,8 @@ use self::eeconfig::{Eeconfig, EEPROM_MAGIC};
 use crate::{action::KeyAction, keymap::KeyMapConfig};
 use alloc::vec;
 use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use defmt::{debug, error, info, warn};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, error, info, warn};
 
 /// A record in the eeprom, with 2-byte address and 2-byte data
 /// A record is 4-byte long, so the tracking pos in the `Eeprom` implementation must be a multiple of 4
@@ -133,11 +133,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                     eeprom.cache[record.address as usize + 1] = record.data as u8;
                     eeprom.pos += eeprom.storage_config.page_size;
                 }
-                Err(e) => {
-                    error!(
-                        "Restore eeprom value at pos {:X} error: {:?}",
-                        eeprom.pos, e
-                    );
+                Err(_) => {
+                    error!("Restore eeprom value at pos {} error", eeprom.pos);
                     break;
                 }
             }
@@ -212,17 +209,16 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                         break;
                     } else {
                         warn!(
-                            "Writing addr {:X} is not 0xFF",
+                            "Writing addr {:#X} is not 0xFF",
                             self.storage_config.start_addr + self.pos
                         );
                         self.pos += self.storage_config.page_size;
                     }
                 }
-                Err(e) => {
+                Err(_) => {
                     warn!(
-                        "Check addr {:X} error before writing: {:?}",
-                        self.storage_config.start_addr + self.pos,
-                        e
+                        "Check addr {:#X} error before writing",
+                        self.storage_config.start_addr + self.pos
                     );
                     // Go to next possible addr
                     self.pos += self.storage_config.page_size;
@@ -234,7 +230,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         let mut buf = vec![0xFF_u8; self.storage_config.page_size as usize];
         buf[..bytes.len()].copy_from_slice(&bytes);
         debug!(
-            "EEPROM write storage length {:?} at 0x{:X}: {:X?} ",
+            "EEPROM write storage length {} at {:#X}: {=[u8]:#X} ",
             buf.len(),
             self.storage_config.start_addr + self.pos,
             buf,
@@ -246,11 +242,10 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         {
             // `pos` should be aligned by write size
             Ok(_) => self.pos += self.storage_config.page_size,
-            Err(e) => {
+            Err(_) => {
                 error!(
-                    "Failed to write record to storage at 0x{:X}: {:?}",
-                    self.storage_config.start_addr + self.pos,
-                    e
+                    "Failed to write record to storage at 0x{:#X}",
+                    self.storage_config.start_addr + self.pos
                 )
             }
         }

@@ -1,5 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian};
-use log::debug;
+use defmt::debug;
 use num_enum::FromPrimitive;
 
 use crate::usb::descriptor::ViaReport;
@@ -25,7 +25,7 @@ pub enum VialCommand {
     Unhandled = 0xFF,
 }
 
-const VIAL_PROTOCOL_VERSION: u32 = 3;
+const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
 ///
 /// Note: vial uses litte endian, while via uses big endian

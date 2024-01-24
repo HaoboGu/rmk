@@ -7,13 +7,13 @@ use crate::{
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use embassy_usb::{
     class::hid::{HidReaderWriter, ReadError},
     driver::Driver,
 };
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, error, info, warn};
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub struct VialService<
@@ -72,13 +72,13 @@ impl<
                 match hid_interface.write_serialize(&mut via_report).await {
                     Ok(_) => {}
                     Err(e) => {
-                        error!("Send via report error: {:?}", e);
+                        error!("Send via report error: {}", e);
                     }
                 }
             }
             Err(e) => {
                 if e != ReadError::Disabled {
-                    error!("Read via report error: {:?}", e);
+                    error!("Read via report error: {}", e);
                 }
             }
         }
@@ -94,7 +94,7 @@ impl<
         // `report.input_data` is initialized using `report.output_data`
         report.input_data = report.output_data;
         let via_command = ViaCommand::from_primitive(command_id);
-        // debug!("Received via command: {:?}, report: {:02X?}", via_command, report.output_data);
+        // debug!("Received via command: {}, report: {:02X?}", via_command, report.output_data);
         match via_command {
             ViaCommand::GetProtocolVersion => {
                 BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
@@ -152,7 +152,7 @@ impl<
                 let action = keymap.get_action_at(row, col, layer);
                 let keycode = to_via_keycode(action);
                 info!(
-                    "Getting keycode: {:02X?} at ({},{}), layer {}",
+                    "Getting keycode: {:02X} at ({},{}), layer {}",
                     keycode, row, col, layer
                 );
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
@@ -164,7 +164,7 @@ impl<
                 let keycode = BigEndian::read_u16(&report.output_data[4..6]);
                 let action = from_via_keycode(keycode);
                 info!(
-                    "Setting keycode: 0x{:02X?} at ({},{}), layer {} as {:?}",
+                    "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
                     keycode, row, col, layer, action
                 );
                 keymap.set_action_at(row, col, layer, action.clone());
@@ -208,7 +208,7 @@ impl<
                 let _offset = BigEndian::read_u16(&report.output_data[1..3]);
                 let size = report.output_data[3];
                 if size <= 28 {
-                    debug!("Current returned data: {:02X?}", report.input_data);
+                    debug!("Current returned data: {:02X}", report.input_data);
                 } else {
                     report.input_data[0] = 0xFF;
                 }

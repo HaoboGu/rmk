@@ -6,11 +6,11 @@ use crate::{
     usb::descriptor::ViaReport,
 };
 use core::{cell::RefCell, convert::Infallible};
+use defmt::{error, warn};
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use log::{debug, error, warn};
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
 pub struct Keyboard<
@@ -144,7 +144,7 @@ impl<
             // usb_device.send_keyboard_report(&self.report).await;
             match hid_interface.write_serialize(&self.report).await {
                 Ok(()) => {}
-                Err(e) => error!("Send keyboard report error: {:?}", e),
+                Err(e) => error!("Send keyboard report error: {}", e),
             };
             // Reset report key states
             for bit in &mut self.report.keycodes {
@@ -159,10 +159,9 @@ impl<
         hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
         if self.need_send_consumer_control_report {
-            debug!("Sending consumer report: {:?}", self.media_report);
             match hid_interface.write_serialize(&self.media_report).await {
                 Ok(()) => {}
-                Err(e) => error!("Send media(consumer control) report error: {:?}", e),
+                Err(e) => error!("Send media(consumer control) report error: {}", e),
             };
             self.media_report.usage_id = 0;
             self.need_send_consumer_control_report = false;

@@ -1,3 +1,4 @@
+use defmt::Format;
 use num_enum::FromPrimitive;
 use packed_struct::prelude::*;
 use usbd_hid::descriptor::{MediaKey, SystemControlKey};
@@ -6,7 +7,7 @@ use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 /// 1 bit for Left/Right, 4 bits for modifier type.
 /// |  x  |  x  |  x  |  x  |  x  |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
-#[derive(PackedStruct, Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(PackedStruct, Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
 pub struct ModifierCombination {
     #[packed_field(bits = "0")]
@@ -100,7 +101,7 @@ impl ModifierCombination {
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
 pub enum KeyCode {
     /// Reserved, no-key.

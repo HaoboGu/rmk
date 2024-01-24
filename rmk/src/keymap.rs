@@ -5,7 +5,7 @@ use crate::{
 };
 use embedded_alloc::Heap;
 use embedded_storage::nor_flash::NorFlash;
-use log::warn;
+use defmt::warn;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
@@ -170,7 +170,7 @@ impl<
     /// Activate given layer
     pub fn activate_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {layer_num}, keyboard supports only {NUM_LAYER} layers");
+            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
             return;
         }
         self.layer_state[layer_num as usize] = true;
@@ -179,7 +179,7 @@ impl<
     /// Deactivate given layer
     pub fn deactivate_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {layer_num}, keyboard supports only {NUM_LAYER} layers");
+            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
             return;
         }
         self.layer_state[layer_num as usize] = false;
@@ -188,7 +188,7 @@ impl<
     /// Toggle given layer
     pub fn toggle_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
-            warn!("Not a valid layer {layer_num}, keyboard supports only {NUM_LAYER} layers");
+            warn!("Not a valid layer {}, keyboard supports only {} layers", layer_num, NUM_LAYER);
             return;
         }
 

@@ -1,7 +1,7 @@
 use super::{Eeprom, EepromRecord};
 use byteorder::{BigEndian, ByteOrder};
+use defmt::error;
 use embedded_storage::nor_flash::NorFlash;
-use log::error;
 use packed_struct::prelude::*;
 
 /// EEPROM magic value.
@@ -107,8 +107,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn set_keymap_config(&mut self, config: EeKeymapConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
-            Err(e) => {
-                error!("Pack keymap config error: {:?}", e);
+            Err(_) => {
+                error!("Pack keymap config error");
                 [0xFF; 2]
             }
         };
@@ -121,8 +121,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             self.read_byte(KEYMAP_CONFIG_ADDR, KEYMAP_CONFIG_SIZE),
         ) {
             Ok(config) => Some(config),
-            Err(e) => {
-                error!("Unpack keymap config error: {:?}", e);
+            Err(_) => {
+                error!("Unpack keymap config error");
                 None
             }
         }
@@ -132,8 +132,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn set_backlight_config(&mut self, config: EeBacklightConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
-            Err(e) => {
-                error!("Pack backlight config error: {:?}", e);
+            Err(_) => {
+                error!("Pack backlight config error");
                 [0xFF; 1]
             }
         };
@@ -146,8 +146,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
             self.read_byte(BACKLIGHT_CONFIG_ADDR, BACKLIGHT_CONFIG_SIZE),
         ) {
             Ok(config) => Some(config),
-            Err(e) => {
-                error!("Unpack backlight config error: {:?}", e);
+            Err(_) => {
+                error!("Unpack backlight config error");
                 None
             }
         }
@@ -157,8 +157,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn set_audio_config(&mut self, config: EeAudioConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
-            Err(e) => {
-                error!("Pack audio config error: {:?}", e);
+            Err(_) => {
+                error!("Pack audio config error");
                 [0xFF; 1]
             }
         };
@@ -170,8 +170,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         match EeAudioConfig::unpack_from_slice(self.read_byte(AUDIO_CONFIG_ADDR, AUDIO_CONFIG_SIZE))
         {
             Ok(config) => Some(config),
-            Err(e) => {
-                error!("Unpack audio config error: {:?}", e);
+            Err(_) => {
+                error!("Unpack audio config error");
                 None
             }
         }
@@ -181,8 +181,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub fn set_rgb_light_config(&mut self, config: EeRgbLightConfig) {
         let mut buf = match config.pack() {
             Ok(b) => b,
-            Err(e) => {
-                error!("Pack rgb light config error: {:?}", e);
+            Err(_) => {
+                error!("Pack rgb light config error");
                 [0xFF; 5]
             }
         };
@@ -194,8 +194,8 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         match EeRgbLightConfig::unpack_from_slice(self.read_byte(RGB_CONFIG_ADDR, RGB_CONFIG_SIZE))
         {
             Ok(config) => Some(config),
-            Err(e) => {
-                error!("Unpack rgb light config error: {:?}", e);
+            Err(_) => {
+                error!("Unpack rgb light config error");
                 None
             }
         }
