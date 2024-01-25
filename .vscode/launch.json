@@ -8,7 +8,7 @@
             "name": "Cortex-Debug - stm32h7",
             "preLaunchTask": "flash stm32h7",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
+            "executable": "${workspaceFolder}/boards/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
             "type": "cortex-debug",
             "servertype": "openocd",
@@ -46,7 +46,7 @@
             "device": "RP2040",
             "servertype": "openocd",
             "showDevDebugOutput": "parsed",
-            "executable": "${workspaceFolder}/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+            "executable": "${workspaceFolder}/boards/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
             "runToEntryPoint": "main",
             "configFiles": [
                 "openocd.cfg"
@@ -72,9 +72,9 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32f4",
+                    "programBinary": "${workspaceFolder}/boards/stm32f4/target/thumbv7em-none-eabihf/debug/rmk-stm32f4",
                     "chip": "STM32F411CEUx",
-                    // "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
+                    "svdFile": "${workspaceFolder}/boards/stm32f4/STM32F411.svd",
                     "rttEnabled": true,
                     "rttChannelFormats": [
                         {
@@ -123,7 +123,7 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
+                    "programBinary": "${workspaceFolder}/boards/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
                     "chip": "STM32H7B0VBTx",
                     "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
                     "rttEnabled": true,
@@ -176,7 +176,7 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+                    "programBinary": "${workspaceFolder}/boards/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
                     "chip": "RP2040",
                     "svdFile": "${workspaceFolder}/boards/rp2040/rp2040.svd",
                     "rttEnabled": true,
