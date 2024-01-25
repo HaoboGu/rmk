@@ -31,6 +31,6 @@ packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
 
 [features]
-default = ["col2row"]
+default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
