@@ -6,9 +6,11 @@
 
 Keyboard firmware for cortex-m, with layer/dynamic keymap/[vial](https://get.vial.today) support, written in Rust.
 
+RMK is under active development, breaking changes may happen. Please check the latest doc or file an issue if you have any problem.
+
 ## News
 
-Rmk just released version 0.1.0, migrate to [Embassy](https://github.com/embassy-rs/embassy)! By migrating to Embassy, Rmk now has better async support, more supported MCUs and much easier usages than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+RMK just released version 0.1.0, migrate to [Embassy](https://github.com/embassy-rs/embassy)! By migrating to Embassy, RMK now has better async support, more supported MCUs and much easier usages than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
 
 ## Prerequisites
 
@@ -16,6 +18,7 @@ This crate requires Rust 1.75 and up. `openocd`(stm32) or `probe-rs`(stm32/rp204
 
 ## Usage
 
+NOTE: RMK
 You can build your own keyboard firmware using RMK or try built-in firmware example for stm32h7 & rp2040.
 
 ### Build your own firmware
@@ -93,7 +96,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [ ] cli tools
 
 ## License
-Rmk is licensed under either of
+RMK is licensed under either of
 
 - Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license (LICENSE-MIT or http://opensource.org/licenses/MIT)

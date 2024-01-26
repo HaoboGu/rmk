@@ -33,7 +33,7 @@ const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    info!("Rmk start!");
+    info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
 

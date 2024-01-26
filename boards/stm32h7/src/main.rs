@@ -5,9 +5,6 @@
 mod macros;
 mod keymap;
 mod vial;
-// #[macro_use]
-// pub mod rtt_logger;
-// use log::info;
 
 use crate::keymap::{COL, NUM_LAYER, ROW};
 use core::cell::RefCell;
@@ -39,7 +36,7 @@ async fn main(_spawner: Spawner) {
     // if cfg!(debug_assertions) {
     //     rtt_logger::init(log::LevelFilter::Info);
     // }
-    info!("Rmk start!");
+    info!("RMK start!");
     // RCC config
     let mut config = Config::default();
     {

@@ -32,7 +32,7 @@ const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    info!("Rmk start!");
+    info!("RMK start!");
     // RCC config
     let config = Config::default();
 
