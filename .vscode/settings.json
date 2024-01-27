@@ -11,6 +11,7 @@
         "rmk/Cargo.toml",
         "boards/stm32h7/Cargo.toml",
         "boards/stm32f4/Cargo.toml",
+        "boards/nrf52840/Cargo.toml",
         "boards/rp2040/Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
