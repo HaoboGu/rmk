@@ -11,7 +11,7 @@ use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescri
 
 pub(crate) mod descriptor;
 
-use crate::usb::descriptor::ViaReport;
+use crate::{keyboard::KeyboardUsbConfig, usb::descriptor::ViaReport};
 
 static SUSPENDED: AtomicBool = AtomicBool::new(false);
 
@@ -29,12 +29,13 @@ pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
 }
 
 impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
-    pub(crate) fn new(driver: D) -> Self {
+    pub(crate) fn new(driver: D, keyboard_config: KeyboardUsbConfig<'static>) -> Self {
         // Create embassy-usb Config
-        let mut usb_config = embassy_usb::Config::new(0x4c4b, 0x4643);
-        usb_config.manufacturer = Some("Haobo");
-        usb_config.product = Some("RMK Keyboard");
-        usb_config.serial_number = Some("00000001");
+        let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
+        usb_config.manufacturer = keyboard_config.manufacturer;
+        usb_config.product = keyboard_config.product_name;
+        usb_config.serial_number = keyboard_config.serial_number;
+        usb_config.max_power = 499;
 
         // Create embassy-usb DeviceBuilder using the driver and config.
         static DEVICE_DESC: StaticCell<[u8; 256]> = StaticCell::new();

@@ -13,6 +13,45 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
 
+#[derive(Debug)]
+pub struct KeyboardUsbConfig<'a> {
+    pub vid: u16,
+    pub pid: u16,
+    pub manufacturer: Option<&'a str>,
+    pub product_name: Option<&'a str>,
+    pub serial_number: Option<&'a str>,
+}
+
+impl<'a> KeyboardUsbConfig<'a> {
+    pub fn new(
+        vid: u16,
+        pid: u16,
+        manufacturer: Option<&'a str>,
+        product_name: Option<&'a str>,
+        serial_number: Option<&'a str>,
+    ) -> Self {
+        Self {
+            vid,
+            pid,
+            manufacturer,
+            product_name,
+            serial_number,
+        }
+    }
+}
+
+impl<'a> Default for KeyboardUsbConfig<'a> {
+    fn default() -> Self {
+        Self {
+            vid: 0x4c4b,
+            pid: 0x4643,
+            manufacturer: Some("Haobo"),
+            product_name: Some("RMK Keyboard"),
+            serial_number: Some("00000001"),
+        }
+    }
+}
+
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,

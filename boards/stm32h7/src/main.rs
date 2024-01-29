@@ -21,7 +21,7 @@ use embassy_stm32::{
     Config,
 };
 use panic_probe as _;
-use rmk::{initialize_keyboard_and_run, keymap::KeyMap};
+use rmk::{initialize_keyboard_with_config_and_run, keyboard::KeyboardUsbConfig, keymap::KeyMap};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -100,8 +100,16 @@ async fn main(_spawner: Spawner) {
         None,
     )));
 
+    let keyboard_usb_config = KeyboardUsbConfig::new(
+        0x4c4b,
+        0x4643,
+        Some("Haobo"),
+        Some("RMK Keyboard"),
+        Some("00000001"),
+    );
+
     // Start serving
-    initialize_keyboard_and_run::<
+    initialize_keyboard_with_config_and_run::<
         Driver<'_, USB_OTG_HS>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
@@ -115,6 +123,7 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         keymap,
+        keyboard_usb_config,
         VIAL_KEYBOARD_ID,
         VIAL_KEYBOARD_DEF,
     )
