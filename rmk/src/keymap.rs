@@ -1,6 +1,6 @@
 use crate::{
     action::KeyAction,
-    eeprom::{eeconfig::Eeconfig, Eeprom, EepromStorageConfig},
+    eeprom::{eeconfig::Eeconfig, Eeprom},
     matrix::KeyState,
 };
 use defmt::warn;
@@ -70,17 +70,7 @@ impl<
         // Initialize eeprom, if success, re-load keymap from it
         let eeprom = match storage {
             Some(s) => {
-                // TODO: Refactor Eeprom so that we don't need this anymore
-                let mut eeprom_storage_config = EepromStorageConfig {
-                    start_addr: (F::ERASE_SIZE * (s.capacity() / F::ERASE_SIZE - 1)) as u32,
-                    storage_size: F::ERASE_SIZE as u32,
-                    page_size: F::WRITE_SIZE as u32,
-                };
-                // At least write 4 byte(1 record)
-                if eeprom_storage_config.page_size < 4 {
-                    eeprom_storage_config.page_size = 4;
-                }
-                let e = Eeprom::new(s, eeprom_storage_config, eeconfig, &mut action_map);
+                let e = Eeprom::new(s, eeconfig, &mut action_map);
                 // If eeprom is initialized, read keymap from it.
                 match e {
                     Some(e) => {

@@ -73,10 +73,18 @@ pub(crate) struct Eeprom<F: NorFlash, const EEPROM_SIZE: usize> {
 impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub(crate) fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         storage: F,
-        storage_config: EepromStorageConfig,
         eeconfig: Option<Eeconfig>,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Option<Self> {
+        let mut storage_config = EepromStorageConfig {
+            start_addr: (F::ERASE_SIZE * (storage.capacity() / F::ERASE_SIZE - 1)) as u32,
+            storage_size: F::ERASE_SIZE as u32,
+            page_size: F::WRITE_SIZE as u32,
+        };
+        // At least write 4 byte(1 record)
+        if storage_config.page_size < 4 {
+            storage_config.page_size = 4;
+        }
         // Check backend storage config
         if (!is_power_of_two(storage_config.page_size))
             || storage_config.start_addr == 0
