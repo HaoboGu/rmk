@@ -20,7 +20,7 @@ This crate requires stable Rust 1.75 and up. `openocd`(stm32) or `probe-rs`(stm3
 
 ## Usage
 
-### Initialize from template
+### Option 1: Initialize from template
 You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
 
 ```
@@ -28,7 +28,7 @@ cargo install cargo-generate
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
 
-### Try built-in examples
+### Option 2: Try built-in examples
 
 Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boards). The following is a simple
 step-to-step instruction for rp2040 and stm32h7
