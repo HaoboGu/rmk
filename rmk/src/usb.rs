@@ -1,3 +1,5 @@
+pub(crate) mod descriptor;
+
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
 use embassy_usb::{
@@ -9,13 +11,13 @@ use embassy_usb::{
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
-pub(crate) mod descriptor;
-
-use crate::{keyboard::KeyboardUsbConfig, usb::descriptor::{MyKeyboardReport, ViaReport}};
+use crate::{
+    keyboard::KeyboardUsbConfig,
+    usb::descriptor::{CompositeReport, ViaReport},
+};
 
 static SUSPENDED: AtomicBool = AtomicBool::new(false);
 
-// TODO: Use a composite hid device for Keyboard + Mouse + System control + Consumer control
 // In this case, report id should be used.
 // The keyboard usb device should have 3 hid instances:
 // 1. Boot keyboard: 1 endpoint in
@@ -24,7 +26,7 @@ static SUSPENDED: AtomicBool = AtomicBool::new(false);
 pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
     pub(crate) device: UsbDevice<'d, D>,
     pub(crate) keyboard_hid: HidReaderWriter<'d, D, 1, 8>,
-    pub(crate) other_hid: HidReaderWriter<'d, D, 1, 8>,
+    pub(crate) other_hid: HidReaderWriter<'d, D, 1, 9>,
     pub(crate) via_hid: HidReaderWriter<'d, D, 32, 32>,
 }
 
@@ -76,13 +78,13 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         );
 
         let other_hid_config = Config {
-            report_descriptor: MyKeyboardReport::desc(),
+            report_descriptor: CompositeReport::desc(),
             request_handler: Some(&request_handler),
             poll_ms: 60,
             max_packet_size: 64,
         };
         static OTHER_HID_STATE: StaticCell<State> = StaticCell::new();
-        let other_hid: HidReaderWriter<'_, D, 1, 8> = HidReaderWriter::new(
+        let other_hid: HidReaderWriter<'_, D, 1, 9> = HidReaderWriter::new(
             &mut builder,
             OTHER_HID_STATE.init(State::new()),
             other_hid_config,

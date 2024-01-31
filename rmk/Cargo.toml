@@ -23,6 +23,7 @@ embassy-usb = { version = "0.1", features = [
 embassy-sync = { version = "0.5", features = ["defmt"] }
 embassy-futures = { version = "0.1", features = ["defmt"] }
 usbd-hid = { version = "0.6.1", features = ["defmt"] }
+ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
 log = "0.4"
 static_cell = "2" 

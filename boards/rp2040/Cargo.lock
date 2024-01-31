@@ -1321,6 +1321,7 @@ dependencies = [
  "log",
  "num_enum 0.7.2",
  "packed_struct",
+ "ssmarshal",
  "static_cell",
  "usbd-hid",
 ]

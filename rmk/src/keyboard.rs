@@ -3,15 +3,15 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::descriptor::{MyKeyboardReport, ViaReport},
+    usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, warn};
+use defmt::{debug, error, warn};
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SystemControlReport};
+use usbd_hid::descriptor::KeyboardReport;
 
 #[derive(Debug)]
 pub struct KeyboardUsbConfig<'a> {
@@ -74,16 +74,13 @@ pub(crate) struct Keyboard<
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
-    /// Media internal report
-    media_report: MyKeyboardReport,
-
-    /// System control internal report
-    system_control_report: SystemControlReport,
+    /// Internal composite report: mouse + media(consumer) + system control
+    other_report: CompositeReport,
 
     /// Via report
     via_report: ViaReport,
 
-    /// Should send a new report?
+    /// Should send a new keyboard report?
     need_send_key_report: bool,
 
     /// Should send a consumer control report?
@@ -91,6 +88,9 @@ pub(crate) struct Keyboard<
 
     /// Should send a system control report?
     need_send_system_control_report: bool,
+
+    /// Should send a mouse report?
+    need_send_mouse_report: bool,
 }
 
 impl<
@@ -119,8 +119,7 @@ impl<
                 leds: 0,
                 keycodes: [0; 6],
             },
-            media_report: MyKeyboardReport::default(),
-            system_control_report: SystemControlReport { usage_id: 0 },
+            other_report: CompositeReport::default(),
             via_report: ViaReport {
                 input_data: [0; 32],
                 output_data: [0; 32],
@@ -128,6 +127,7 @@ impl<
             need_send_key_report: false,
             need_send_consumer_control_report: false,
             need_send_system_control_report: false,
+            need_send_mouse_report: false,
         }
     }
 
@@ -193,20 +193,42 @@ impl<
         }
     }
 
-    pub(crate) async fn send_media_report<'d, D: Driver<'d>>(
+    pub(crate) async fn send_other_report<'d, D: Driver<'d>>(
         &mut self,
-        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 9>,
     ) {
         if self.need_send_consumer_control_report {
-            let mut buf: [u8; 9] = [0; 9];
-            // Report id for media(consumer)
-            buf[0] = 0x02;
-            match hid_interface.write_serialize(&self.media_report).await {
-                Ok(()) => {}
-                Err(e) => error!("Send media(consumer control) report error: {}", e),
-            };
-            self.media_report.usage_id = 0;
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Consumer)
+                .await;
+            self.other_report.media_usage_id = 0;
             self.need_send_consumer_control_report = false;
+        }
+
+        if self.need_send_system_control_report {
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::System)
+                .await;
+            self.other_report.system_usage_id = 0;
+            self.need_send_system_control_report = false;
+        }
+    }
+
+    async fn serialize_and_send_composite_report<'d, D: Driver<'d>>(
+        &mut self,
+        hid_interface: &mut HidReaderWriter<'d, D, 1, 9>,
+        report_type: CompositeReportType,
+    ) {
+        let mut buf: [u8; 9] = [0; 9];
+        // Prepend report id
+        buf[0] = report_type as u8;
+        match self.other_report.serialize(&mut buf[1..], report_type) {
+            Ok(_) => {
+                debug!("Sending other report: {=[u8]:#X}", buf);
+                match hid_interface.write(&buf).await {
+                    Ok(()) => {}
+                    Err(e) => error!("Send other report error: {}", e),
+                };
+            }
+            Err(_) => error!("Serialize other report error"),
         }
     }
 
@@ -367,10 +389,10 @@ impl<
         if key.is_consumer() {
             if key_state.pressed {
                 let media_key = key.as_consumer_control_usage_id();
-                self.media_report.usage_id = media_key as u16;
+                self.other_report.media_usage_id = media_key as u16;
                 self.need_send_consumer_control_report = true;
             } else {
-                self.media_report.usage_id = 0;
+                self.other_report.media_usage_id = 0;
                 self.need_send_consumer_control_report = true;
             }
         }
@@ -381,11 +403,11 @@ impl<
         if key.is_system() {
             if key_state.pressed {
                 if let Some(system_key) = key.as_system_control_usage_id() {
-                    self.system_control_report.usage_id = system_key as u8;
+                    self.other_report.system_usage_id = system_key as u8;
                     self.need_send_system_control_report = true;
                 }
             } else {
-                self.system_control_report.usage_id = 0;
+                self.other_report.system_usage_id = 0;
                 self.need_send_system_control_report = true;
             }
         }

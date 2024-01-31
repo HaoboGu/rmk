@@ -89,7 +89,7 @@ pub async fn initialize_keyboard_with_config_and_run<
         loop {
             let _ = keyboard.keyboard_task().await;
             keyboard.send_report(&mut usb_device.keyboard_hid).await;
-            keyboard.send_media_report(&mut usb_device.other_hid).await;
+            keyboard.send_other_report(&mut usb_device.other_hid).await;
         }
     };
 
@@ -135,7 +135,7 @@ pub async fn initialize_keyboard_and_run<
         loop {
             let _ = keyboard.keyboard_task().await;
             keyboard.send_report(&mut usb_device.keyboard_hid).await;
-            keyboard.send_media_report(&mut usb_device.other_hid).await;
+            keyboard.send_other_report(&mut usb_device.other_hid).await;
         }
     };
 

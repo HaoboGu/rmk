@@ -93,11 +93,11 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] vial support
 - [x] eeprom
 - [x] project template
+- [ ] mouse key
 - [ ] keyboard macro
-- [ ] wireless
 - [ ] encoder
 - [ ] RGB
-- [ ] cli tools
+- [ ] wireless
 
 ## License
 
