@@ -3,7 +3,7 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
-    usb::descriptor::ViaReport,
+    usb::descriptor::{MyKeyboardReport, ViaReport},
 };
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, warn};
@@ -75,7 +75,7 @@ pub(crate) struct Keyboard<
     report: KeyboardReport,
 
     /// Media internal report
-    media_report: MediaKeyboardReport,
+    media_report: MyKeyboardReport,
 
     /// System control internal report
     system_control_report: SystemControlReport,
@@ -119,7 +119,7 @@ impl<
                 leds: 0,
                 keycodes: [0; 6],
             },
-            media_report: MediaKeyboardReport { usage_id: 0 },
+            media_report: MyKeyboardReport::default(),
             system_control_report: SystemControlReport { usage_id: 0 },
             via_report: ViaReport {
                 input_data: [0; 32],
@@ -198,6 +198,9 @@ impl<
         hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
     ) {
         if self.need_send_consumer_control_report {
+            let mut buf: [u8; 9] = [0; 9];
+            // Report id for media(consumer)
+            buf[0] = 0x02;
             match hid_interface.write_serialize(&self.media_report).await {
                 Ok(()) => {}
                 Err(e) => error!("Send media(consumer control) report error: {}", e),

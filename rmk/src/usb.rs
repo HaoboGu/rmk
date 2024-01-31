@@ -7,11 +7,11 @@ use embassy_usb::{
     Builder, Handler, UsbDevice,
 };
 use static_cell::StaticCell;
-use usbd_hid::descriptor::{KeyboardReport, MediaKeyboardReport, SerializedDescriptor};
+use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 pub(crate) mod descriptor;
 
-use crate::{keyboard::KeyboardUsbConfig, usb::descriptor::ViaReport};
+use crate::{keyboard::KeyboardUsbConfig, usb::descriptor::{MyKeyboardReport, ViaReport}};
 
 static SUSPENDED: AtomicBool = AtomicBool::new(false);
 
@@ -35,7 +35,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.manufacturer = keyboard_config.manufacturer;
         usb_config.product = keyboard_config.product_name;
         usb_config.serial_number = keyboard_config.serial_number;
-        usb_config.max_power = 499;
+        usb_config.max_power = 450;
 
         // Create embassy-usb DeviceBuilder using the driver and config.
         static DEVICE_DESC: StaticCell<[u8; 256]> = StaticCell::new();
@@ -76,7 +76,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         );
 
         let other_hid_config = Config {
-            report_descriptor: MediaKeyboardReport::desc(),
+            report_descriptor: MyKeyboardReport::desc(),
             request_handler: Some(&request_handler),
             poll_ms: 60,
             max_packet_size: 64,
