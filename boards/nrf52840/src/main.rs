@@ -33,9 +33,6 @@ const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    // if cfg!(debug_assertions) {
-    //     rtt_logger::init(log::LevelFilter::Info);
-    // }
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_nrf::init(Default::default());

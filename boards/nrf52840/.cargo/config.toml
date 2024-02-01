@@ -4,8 +4,8 @@
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 # Have to use simmsb's elf2uf2 fork to flash https://github.com/simmsb/elf2uf2-rs 
-runner = "elf2uf2-rs -d"
-# runner = "probe-rs run --chip nRF52840_xxAA"
+# runner = "elf2uf2-rs -d"
+runner = "probe-rs run --chip nRF52840_xxAA"
 
 rustflags = [
   # Previously, the linker arguments --nmagic and -Tlink.x were set here.
@@ -35,4 +35,4 @@ target = "thumbv7em-none-eabi"       # Cortex-M4 and Cortex-M7 (no FPU)
 # target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
 
 [env]
-DEFMT_LOG = "error"
+DEFMT_LOG = "trace"
