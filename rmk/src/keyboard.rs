@@ -193,12 +193,13 @@ impl<
         }
     }
 
+    /// Send other report(media/system/mouse) if needed
     pub(crate) async fn send_other_report<'d, D: Driver<'d>>(
         &mut self,
         hid_interface: &mut HidReaderWriter<'d, D, 1, 9>,
     ) {
         if self.need_send_consumer_control_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Consumer)
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
                 .await;
             self.other_report.media_usage_id = 0;
             self.need_send_consumer_control_report = false;
@@ -209,6 +210,13 @@ impl<
                 .await;
             self.other_report.system_usage_id = 0;
             self.need_send_system_control_report = false;
+        }
+
+        if self.need_send_mouse_report {
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Mouse)
+                .await;
+            self.other_report.reset_mouse();
+            self.need_send_mouse_report = false;
         }
     }
 
@@ -221,9 +229,9 @@ impl<
         // Prepend report id
         buf[0] = report_type as u8;
         match self.other_report.serialize(&mut buf[1..], report_type) {
-            Ok(_) => {
-                debug!("Sending other report: {=[u8]:#X}", buf);
-                match hid_interface.write(&buf).await {
+            Ok(s) => {
+                debug!("Sending other report: {=[u8]:#X}", buf[0..s]);
+                match hid_interface.write(&buf[0..s]).await {
                     Ok(()) => {}
                     Err(e) => error!("Send other report error: {}", e),
                 };
@@ -417,36 +425,74 @@ impl<
 
     /// Process mouse key action.
     fn process_action_mouse(&mut self, key: KeyCode, key_state: KeyState) {
-        if key.is_system() {
+        if key.is_mouse_key() {
+            // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
             if key_state.pressed {
+                // Update mouse report
                 match key {
-                    // TODO: Update mouse report
-                    // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
-                    KeyCode::MouseUp => {},
-                    KeyCode::MouseDown => {},
-                    KeyCode::MouseLeft => {},
-                    KeyCode::MouseRight => {},
-                    KeyCode::MouseWheelUp => {},
-                    KeyCode::MouseWheelDown => {},
-                    KeyCode::MouseBtn1 => {},
-                    KeyCode::MouseBtn2 => {},
-                    KeyCode::MouseBtn3 => {},
-                    KeyCode::MouseBtn4 => {},
-                    KeyCode::MouseBtn5 => {},
-                    KeyCode::MouseBtn6 => {},
-                    KeyCode::MouseBtn7 => {},
-                    KeyCode::MouseBtn8 => {},
-                    KeyCode::MouseWheelLeft => {},
-                    KeyCode::MouseWheelRight => {},
-                    KeyCode::MouseAccel0 => {},
-                    KeyCode::MouseAccel1 => {},
-                    KeyCode::MouseAccel2 => {},
+                    KeyCode::MouseUp => {
+                        self.other_report.y = -1;
+                    }
+                    KeyCode::MouseDown => {
+                        self.other_report.y = 1;
+                    }
+                    KeyCode::MouseLeft => {
+                        self.other_report.x = -1;
+                    }
+                    KeyCode::MouseRight => {
+                        self.other_report.x = 1;
+                    }
+                    KeyCode::MouseWheelUp => {
+                        self.other_report.wheel = -1;
+                    }
+                    KeyCode::MouseWheelDown => {
+                        self.other_report.wheel = 1;
+                    }
+                    KeyCode::MouseBtn1 => self.other_report.buttons |= 0b1,
+                    KeyCode::MouseBtn2 => self.other_report.buttons |= 0b10,
+                    KeyCode::MouseBtn3 => self.other_report.buttons |= 0b100,
+                    KeyCode::MouseBtn4 => self.other_report.buttons |= 0b1000,
+                    KeyCode::MouseBtn5 => self.other_report.buttons |= 0b10000,
+                    KeyCode::MouseBtn6 => self.other_report.buttons |= 0b100000,
+                    KeyCode::MouseBtn7 => self.other_report.buttons |= 0b1000000,
+                    KeyCode::MouseBtn8 => self.other_report.buttons |= 0b10000000,
+                    KeyCode::MouseWheelLeft => {
+                        self.other_report.pan = -1;
+                    }
+                    KeyCode::MouseWheelRight => {
+                        self.other_report.pan = 1;
+                    }
+                    KeyCode::MouseAccel0 => {}
+                    KeyCode::MouseAccel1 => {}
+                    KeyCode::MouseAccel2 => {}
                     _ => {}
                 }
             } else {
-                self.other_report.system_usage_id = 0;
-                self.need_send_system_control_report = true;
+                match key {
+                    KeyCode::MouseUp | KeyCode::MouseDown => {
+                        self.other_report.y = 0;
+                    }
+                    KeyCode::MouseLeft | KeyCode::MouseRight => {
+                        self.other_report.x = 0;
+                    }
+                    KeyCode::MouseWheelUp | KeyCode::MouseWheelDown => {
+                        self.other_report.wheel = 0;
+                    }
+                    KeyCode::MouseWheelLeft | KeyCode::MouseWheelRight => {
+                        self.other_report.pan = 0;
+                    }
+                    KeyCode::MouseBtn1 => self.other_report.buttons &= 0b0,
+                    KeyCode::MouseBtn2 => self.other_report.buttons &= 0b01,
+                    KeyCode::MouseBtn3 => self.other_report.buttons &= 0b011,
+                    KeyCode::MouseBtn4 => self.other_report.buttons &= 0b0111,
+                    KeyCode::MouseBtn5 => self.other_report.buttons &= 0b01111,
+                    KeyCode::MouseBtn6 => self.other_report.buttons &= 0b011111,
+                    KeyCode::MouseBtn7 => self.other_report.buttons &= 0b0111111,
+                    KeyCode::MouseBtn8 => self.other_report.buttons &= 0b01111111,
+                    _ => {}
+                }
             }
+            self.need_send_mouse_report = true;
         }
     }
 

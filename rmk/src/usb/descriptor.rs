@@ -27,7 +27,7 @@ pub(crate) struct ViaReport {
 pub(crate) enum CompositeReportType {
     None = 0x00,
     Mouse = 0x01,
-    Consumer = 0x02,
+    Media = 0x02,
     System = 0x03,
 }
 
@@ -35,7 +35,7 @@ impl CompositeReportType {
     fn from_u8(report_id: u8) -> Self {
         match report_id {
             0x01 => Self::Mouse,
-            0x02 => Self::Consumer,
+            0x02 => Self::Media,
             0x03 => Self::System,
             _ => Self::None,
         }
@@ -91,6 +91,14 @@ pub struct CompositeReport {
 }
 
 impl CompositeReport {
+    pub(crate) fn reset_mouse(&mut self) {
+        self.x = 0;
+        self.y = 0;
+        self.buttons = 0;
+        self.wheel = 0;
+        self.pan = 0;
+    }
+
     pub(crate) fn serialize(
         &self,
         mut data: &mut [u8],
@@ -110,7 +118,7 @@ impl CompositeReport {
                 };
                 Ok(serialize(&mut data, &mouse_report)?)
             }
-            CompositeReportType::Consumer => {
+            CompositeReportType::Media => {
                 let consumer_report = MediaKeyboardReport {
                     usage_id: self.media_usage_id,
                 };

@@ -39,6 +39,13 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.serial_number = keyboard_config.serial_number;
         usb_config.max_power = 450;
 
+        // Required for windows compatibility.
+        usb_config.max_packet_size_0 = 64;
+        usb_config.device_class = 0xEF;
+        usb_config.device_sub_class = 0x02;
+        usb_config.device_protocol = 0x01;
+        usb_config.composite_with_iads = true;
+
         // Create embassy-usb DeviceBuilder using the driver and config.
         static DEVICE_DESC: StaticCell<[u8; 256]> = StaticCell::new();
         static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
