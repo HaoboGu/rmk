@@ -361,6 +361,8 @@ impl<
             } else {
                 self.unregister_modifier(modifier_bit);
             }
+        } else if key.is_mouse_key() {
+            self.process_action_mouse(key, key_state);
         } else if key.is_basic() {
             // 6KRO implementation
             if key_state.pressed {
@@ -405,6 +407,41 @@ impl<
                 if let Some(system_key) = key.as_system_control_usage_id() {
                     self.other_report.system_usage_id = system_key as u8;
                     self.need_send_system_control_report = true;
+                }
+            } else {
+                self.other_report.system_usage_id = 0;
+                self.need_send_system_control_report = true;
+            }
+        }
+    }
+
+    /// Process mouse key action.
+    fn process_action_mouse(&mut self, key: KeyCode, key_state: KeyState) {
+        if key.is_system() {
+            if key_state.pressed {
+                match key {
+                    // TODO: Update mouse report
+                    // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
+                    KeyCode::MouseUp => {},
+                    KeyCode::MouseDown => {},
+                    KeyCode::MouseLeft => {},
+                    KeyCode::MouseRight => {},
+                    KeyCode::MouseWheelUp => {},
+                    KeyCode::MouseWheelDown => {},
+                    KeyCode::MouseBtn1 => {},
+                    KeyCode::MouseBtn2 => {},
+                    KeyCode::MouseBtn3 => {},
+                    KeyCode::MouseBtn4 => {},
+                    KeyCode::MouseBtn5 => {},
+                    KeyCode::MouseBtn6 => {},
+                    KeyCode::MouseBtn7 => {},
+                    KeyCode::MouseBtn8 => {},
+                    KeyCode::MouseWheelLeft => {},
+                    KeyCode::MouseWheelRight => {},
+                    KeyCode::MouseAccel0 => {},
+                    KeyCode::MouseAccel1 => {},
+                    KeyCode::MouseAccel2 => {},
+                    _ => {}
                 }
             } else {
                 self.other_report.system_usage_id = 0;
