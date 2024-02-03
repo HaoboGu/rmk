@@ -431,6 +431,8 @@ impl<
             if key_state.pressed {
                 // Update mouse report
                 match key {
+                    // TODO: Add accerated mode when pressing the mouse key
+                    // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
                         self.other_report.y = -1;
                     }
@@ -444,10 +446,10 @@ impl<
                         self.other_report.x = 1;
                     }
                     KeyCode::MouseWheelUp => {
-                        self.other_report.wheel = -1;
+                        self.other_report.wheel = 1;
                     }
                     KeyCode::MouseWheelDown => {
-                        self.other_report.wheel = 1;
+                        self.other_report.wheel = -1;
                     }
                     KeyCode::MouseBtn1 => self.other_report.buttons |= 0b1,
                     KeyCode::MouseBtn2 => self.other_report.buttons |= 0b10,
