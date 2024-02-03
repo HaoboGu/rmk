@@ -3,7 +3,7 @@ pub(crate) mod descriptor;
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
 use embassy_usb::{
-    class::hid::{Config, HidReaderWriter, ReportId, RequestHandler, State},
+    class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
     Builder, Handler, UsbDevice,
@@ -26,7 +26,7 @@ static SUSPENDED: AtomicBool = AtomicBool::new(false);
 pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
     pub(crate) device: UsbDevice<'d, D>,
     pub(crate) keyboard_hid: HidReaderWriter<'d, D, 1, 8>,
-    pub(crate) other_hid: HidReaderWriter<'d, D, 1, 9>,
+    pub(crate) other_hid: HidWriter<'d, D, 9>,
     pub(crate) via_hid: HidReaderWriter<'d, D, 32, 32>,
 }
 
@@ -91,7 +91,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             max_packet_size: 64,
         };
         static OTHER_HID_STATE: StaticCell<State> = StaticCell::new();
-        let other_hid: HidReaderWriter<'_, D, 1, 9> = HidReaderWriter::new(
+        let other_hid: HidWriter<'_, D, 9> = HidWriter::new(
             &mut builder,
             OTHER_HID_STATE.init(State::new()),
             other_hid_config,

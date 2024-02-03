@@ -8,7 +8,7 @@ use crate::{
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::Timer;
-use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
+use embassy_usb::{class::hid::{HidReaderWriter, HidWriter}, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
@@ -196,7 +196,7 @@ impl<
     /// Send other report(media/system/mouse) if needed
     pub(crate) async fn send_other_report<'d, D: Driver<'d>>(
         &mut self,
-        hid_interface: &mut HidReaderWriter<'d, D, 1, 9>,
+        hid_interface: &mut HidWriter<'d, D, 9>,
     ) {
         if self.need_send_consumer_control_report {
             self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
@@ -222,7 +222,7 @@ impl<
 
     async fn serialize_and_send_composite_report<'d, D: Driver<'d>>(
         &mut self,
-        hid_interface: &mut HidReaderWriter<'d, D, 1, 9>,
+        hid_interface: &mut HidWriter<'d, D, 9>,
         report_type: CompositeReportType,
     ) {
         let mut buf: [u8; 9] = [0; 9];
@@ -230,8 +230,8 @@ impl<
         buf[0] = report_type as u8;
         match self.other_report.serialize(&mut buf[1..], report_type) {
             Ok(s) => {
-                debug!("Sending other report: {=[u8]:#X}", buf[0..s]);
-                match hid_interface.write(&buf[0..s]).await {
+                debug!("Sending other report: {=[u8]:#X}", buf[0..s+1]);
+                match hid_interface.write(&buf[0..s+1]).await {
                     Ok(()) => {}
                     Err(e) => error!("Send other report error: {}", e),
                 };
