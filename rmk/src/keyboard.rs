@@ -357,12 +357,12 @@ impl<
 
     // Process a single keycode, typically a basic key or a modifier key.
     fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
-        self.need_send_key_report = true;
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
             self.process_action_system_control(key, key_state);
         } else if key.is_modifier() {
+            self.need_send_key_report = true;
             let modifier_bit = key.as_modifier_bit();
             if key_state.pressed {
                 self.register_modifier(modifier_bit);
@@ -372,6 +372,7 @@ impl<
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_state);
         } else if key.is_basic() {
+            self.need_send_key_report = true;
             // 6KRO implementation
             if key_state.pressed {
                 self.register_keycode(key);
