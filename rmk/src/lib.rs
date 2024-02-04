@@ -6,6 +6,7 @@
 #![cfg_attr(not(test), no_std)]
 
 use core::{cell::RefCell, convert::Infallible};
+use defmt::{error, info};
 use embassy_futures::join::join;
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -78,6 +79,8 @@ pub async fn initialize_keyboard_with_config_and_run<
     vial_keyboard_Id: &'static [u8],
     vial_keyboard_def: &'static [u8],
 ) -> ! {
+    // Keyboard state defined in protocol, aka capslock/numslock/scrolllock
+    let keyboard_state = RefCell::new(0);
     let (mut keyboard, mut usb_device, vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
         KeyboardUsbDevice::new(driver, keyboard_config),
@@ -88,8 +91,28 @@ pub async fn initialize_keyboard_with_config_and_run<
     let keyboard_fut = async {
         loop {
             let _ = keyboard.keyboard_task().await;
-            keyboard.send_report(&mut usb_device.keyboard_hid).await;
+            keyboard
+                .send_report(&mut usb_device.keyboard_hid_writer)
+                .await;
             keyboard.send_other_report(&mut usb_device.other_hid).await;
+        }
+    };
+
+    let led_reader_fut = async {
+        let mut read_state: [u8; 1] = [0; 1];
+        loop {
+            match usb_device.keyboard_hid_reader.read(&mut read_state).await {
+                Ok(_) => {
+                    info!("Read keyboard state: {}", read_state);
+                    let mut c = keyboard_state.borrow_mut();
+                    *c = read_state[0];
+                    // TODO: Updating of keyboard state should trigger changing of LED, or other actions
+                    // Option 1: Update keyboard state only, the state is checked at main loop, GPIO is updated accordingly then
+                    // Option 2: Trigger updating of LED after read a new keyboard state value
+                }
+                Err(e) => error!("Read keyboard state error: {}", e),
+            };
+            Timer::after_millis(10).await;
         }
     };
 
@@ -101,7 +124,7 @@ pub async fn initialize_keyboard_with_config_and_run<
             Timer::after_millis(1).await;
         }
     };
-    join(usb_fut, join(keyboard_fut, via_fut)).await;
+    join(usb_fut, join(join(keyboard_fut, led_reader_fut), via_fut)).await;
 
     panic!("Keyboard service is died")
 }
@@ -124,6 +147,7 @@ pub async fn initialize_keyboard_and_run<
     vial_keyboard_Id: &'static [u8],
     vial_keyboard_def: &'static [u8],
 ) -> ! {
+    let keyboard_state = RefCell::new(0);
     let (mut keyboard, mut usb_device, vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
         KeyboardUsbDevice::new(driver, KeyboardUsbConfig::default()),
@@ -134,8 +158,28 @@ pub async fn initialize_keyboard_and_run<
     let keyboard_fut = async {
         loop {
             let _ = keyboard.keyboard_task().await;
-            keyboard.send_report(&mut usb_device.keyboard_hid).await;
+            keyboard
+                .send_report(&mut usb_device.keyboard_hid_writer)
+                .await;
             keyboard.send_other_report(&mut usb_device.other_hid).await;
+        }
+    };
+
+    let led_reader_fut = async {
+        let mut read_state: [u8; 1] = [0; 1];
+        loop {
+            match usb_device.keyboard_hid_reader.read(&mut read_state).await {
+                Ok(_) => {
+                    info!("Read keyboard state: {}", read_state);
+                    let mut c = keyboard_state.borrow_mut();
+                    *c = read_state[0];
+                    // TODO: Updating of keyboard state should trigger changing of LED, or other actions
+                    // Option 1: Update keyboard state only, the state is checked at main loop, GPIO is updated accordingly then
+                    // Option 2: Trigger updating of LED after read a new keyboard state value
+                }
+                Err(e) => error!("Read keyboard state error: {}", e),
+            };
+            Timer::after_millis(10).await;
         }
     };
 
@@ -147,7 +191,7 @@ pub async fn initialize_keyboard_and_run<
             Timer::after_millis(1).await;
         }
     };
-    join(usb_fut, join(keyboard_fut, via_fut)).await;
+    join(usb_fut, join(join(keyboard_fut, led_reader_fut), via_fut)).await;
 
     panic!("Keyboard service is died")
 }

@@ -8,7 +8,7 @@ use crate::{
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::Timer;
-use embassy_usb::{class::hid::{HidReaderWriter, HidWriter}, driver::Driver};
+use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
@@ -137,33 +137,16 @@ impl<
         output_pins: [Out; ROW],
         keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Self {
-        let eeprom = match storage {
-            Some(s) => {
-                let e = Eeprom::new(s, eeprom_storage_config, &keymap);
-                // If eeprom is initialized, read keymap from it.
-                match e {
-                    Some(e) => {
-                        e.read_keymap(&mut keymap);
-                        Some(e)
-                    }
-                    None => None,
-                }
-            }
-            None => None,
-        };
-
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
-            keymap: KeyMap::new(keymap),
-            eeprom,
+            keymap,
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
                 leds: 0,
                 keycodes: [0; 6],
             },
-            media_report: MediaKeyboardReport { usage_id: 0 },
-            system_control_report: SystemControlReport { usage_id: 0 },
+            other_report: CompositeReport::default(),
             via_report: ViaReport {
                 input_data: [0; 32],
                 output_data: [0; 32],
@@ -171,13 +154,14 @@ impl<
             need_send_key_report: false,
             need_send_consumer_control_report: false,
             need_send_system_control_report: false,
+            need_send_mouse_report: false,
         }
     }
 
     /// Send hid report. The report is sent only when key state changes.
     pub(crate) async fn send_report<'d, D: Driver<'d>>(
         &mut self,
-        hid_interface: &mut HidReaderWriter<'d, D, 1, 8>,
+        hid_interface: &mut HidWriter<'d, D, 8>,
     ) {
         if self.need_send_key_report {
             // usb_device.send_keyboard_report(&self.report).await;
