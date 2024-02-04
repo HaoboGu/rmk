@@ -96,8 +96,7 @@ async fn main(_spawner: Spawner) {
     > = StaticCell::new();
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
-        // Some(f),
-        None,
+        Some(f),
         None,
     )));
 
