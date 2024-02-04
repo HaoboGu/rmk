@@ -93,7 +93,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] vial support
 - [x] eeprom
 - [x] project template
-- [ ] mouse key
+- [x] mouse key
 - [ ] keyboard macro
 - [ ] encoder
 - [ ] RGB
