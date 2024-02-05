@@ -1,6 +1,8 @@
 #![no_main]
 #![no_std]
 
+///! NOTE: This example compiles on latest main branch, which may be different from released version
+
 #[macro_use]
 mod macros;
 mod keymap;
@@ -21,7 +23,11 @@ use embassy_stm32::{
     Config,
 };
 use panic_probe as _;
-use rmk::{initialize_keyboard_with_config_and_run, keyboard::KeyboardUsbConfig, keymap::KeyMap};
+use rmk::{
+    config::{KeyboardAdvancedConfig, KeyboardUsbConfig},
+    initialize_keyboard_with_config_and_run,
+    keymap::KeyMap,
+};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -33,9 +39,6 @@ const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    // if cfg!(debug_assertions) {
-    //     rtt_logger::init(log::LevelFilter::Info);
-    // }
     info!("RMK start!");
     // RCC config
     let mut config = Config::default();
@@ -108,6 +111,11 @@ async fn main(_spawner: Spawner) {
         Some("00000001"),
     );
 
+    let keyboard_config = KeyboardAdvancedConfig {
+        usb_config: keyboard_usb_config,
+        ..Default::default()
+    };
+
     // Start serving
     initialize_keyboard_with_config_and_run::<
         Driver<'_, USB_OTG_HS>,
@@ -123,7 +131,7 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         keymap,
-        keyboard_usb_config,
+        keyboard_config,
         VIAL_KEYBOARD_ID,
         VIAL_KEYBOARD_DEF,
     )
