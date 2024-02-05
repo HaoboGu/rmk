@@ -13,45 +13,6 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
-#[derive(Debug)]
-pub struct KeyboardUsbConfig<'a> {
-    pub vid: u16,
-    pub pid: u16,
-    pub manufacturer: Option<&'a str>,
-    pub product_name: Option<&'a str>,
-    pub serial_number: Option<&'a str>,
-}
-
-impl<'a> KeyboardUsbConfig<'a> {
-    pub fn new(
-        vid: u16,
-        pid: u16,
-        manufacturer: Option<&'a str>,
-        product_name: Option<&'a str>,
-        serial_number: Option<&'a str>,
-    ) -> Self {
-        Self {
-            vid,
-            pid,
-            manufacturer,
-            product_name,
-            serial_number,
-        }
-    }
-}
-
-impl<'a> Default for KeyboardUsbConfig<'a> {
-    fn default() -> Self {
-        Self {
-            vid: 0x4c4b,
-            pid: 0x4643,
-            manufacturer: Some("Haobo"),
-            product_name: Some("RMK Keyboard"),
-            serial_number: Some("00000001"),
-        }
-    }
-}
-
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
@@ -95,6 +56,10 @@ pub(crate) struct Keyboard<
     /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
     /// The last tick of mouse is recorded to control the reporting rate.
     last_mouse_tick: u64,
+
+    /// The current distance of mouse key moving
+    mouse_key_move_delta: i8,
+    mouse_wheel_move_delta: i8,
 }
 
 impl<
@@ -133,6 +98,8 @@ impl<
             need_send_system_control_report: false,
             need_send_mouse_report: false,
             last_mouse_tick: 0,
+            mouse_key_move_delta: 8,
+            mouse_wheel_move_delta: 1,
         }
     }
 
@@ -204,7 +171,8 @@ impl<
         if self.need_send_mouse_report {
             // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
             let cur_tick = Instant::now().as_millis();
-            // The default internal of sending mouse report is 20 ms, same as qmk
+            // The default internal of sending mouse report is 20 ms, same as qmk accelerated mode
+            // TODO: make it configurable
             if cur_tick - self.last_mouse_tick > 20 {
                 self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Mouse)
                     .await;
@@ -431,27 +399,26 @@ impl<
         if key.is_mouse_key() {
             // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
             if key_state.pressed {
-                // Update mouse report
                 match key {
                     // TODO: Add accerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
-                        self.other_report.y = -10;
+                        self.other_report.y = -self.mouse_key_move_delta;
                     }
                     KeyCode::MouseDown => {
-                        self.other_report.y = 10;
+                        self.other_report.y = self.mouse_key_move_delta;
                     }
                     KeyCode::MouseLeft => {
-                        self.other_report.x = -10;
+                        self.other_report.x = -self.mouse_key_move_delta;
                     }
                     KeyCode::MouseRight => {
-                        self.other_report.x = 10;
+                        self.other_report.x = self.mouse_key_move_delta;
                     }
                     KeyCode::MouseWheelUp => {
-                        self.other_report.wheel = 1;
+                        self.other_report.wheel = self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseWheelDown => {
-                        self.other_report.wheel = -1;
+                        self.other_report.wheel = -self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseBtn1 => self.other_report.buttons |= 0b1,
                     KeyCode::MouseBtn2 => self.other_report.buttons |= 0b10,
@@ -462,10 +429,10 @@ impl<
                     KeyCode::MouseBtn7 => self.other_report.buttons |= 0b1000000,
                     KeyCode::MouseBtn8 => self.other_report.buttons |= 0b10000000,
                     KeyCode::MouseWheelLeft => {
-                        self.other_report.pan = -1;
+                        self.other_report.pan = -self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseWheelRight => {
-                        self.other_report.pan = 1;
+                        self.other_report.pan = self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseAccel0 => {}
                     KeyCode::MouseAccel1 => {}

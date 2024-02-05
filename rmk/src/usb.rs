@@ -12,7 +12,7 @@ use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 use crate::{
-    keyboard::KeyboardUsbConfig,
+    config::KeyboardUsbConfig,
     usb::descriptor::{CompositeReport, ViaReport},
 };
 

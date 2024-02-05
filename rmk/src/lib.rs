@@ -12,12 +12,14 @@ use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use keyboard::{Keyboard, KeyboardUsbConfig};
+use keyboard::Keyboard;
+use config::{KeyboardAdvancedConfig, KeyboardUsbConfig};
 use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
+pub mod config;
 mod debounce;
 mod eeprom;
 mod flash;
@@ -75,7 +77,7 @@ pub async fn initialize_keyboard_with_config_and_run<
     input_pins: [In; ROW],
     output_pins: [Out; COL],
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-    keyboard_config: KeyboardUsbConfig<'static>,
+    keyboard_config: KeyboardAdvancedConfig<'static>,
     vial_keyboard_Id: &'static [u8],
     vial_keyboard_def: &'static [u8],
 ) -> ! {
@@ -83,7 +85,7 @@ pub async fn initialize_keyboard_with_config_and_run<
     let keyboard_state = RefCell::new(0);
     let (mut keyboard, mut usb_device, vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
-        KeyboardUsbDevice::new(driver, keyboard_config),
+        KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
         VialService::new(keymap, vial_keyboard_Id, vial_keyboard_def),
     );
 
