@@ -7,7 +7,7 @@ use crate::{
 };
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
-use embassy_time::Timer;
+use embassy_time::{Instant, Timer};
 use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
@@ -91,6 +91,10 @@ pub(crate) struct Keyboard<
 
     /// Should send a mouse report?
     need_send_mouse_report: bool,
+
+    /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
+    /// The last tick of mouse is recorded to control the reporting rate.
+    last_mouse_tick: u64,
 }
 
 impl<
@@ -128,6 +132,7 @@ impl<
             need_send_consumer_control_report: false,
             need_send_system_control_report: false,
             need_send_mouse_report: false,
+            last_mouse_tick: 0,
         }
     }
 
@@ -197,10 +202,23 @@ impl<
         }
 
         if self.need_send_mouse_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Mouse)
-                .await;
-            self.other_report.reset_mouse();
-            self.need_send_mouse_report = false;
+            // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
+            let cur_tick = Instant::now().as_millis();
+            // The default internal of sending mouse report is 20 ms, same as qmk
+            if cur_tick - self.last_mouse_tick > 20 {
+                self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Mouse)
+                    .await;
+                self.last_mouse_tick = cur_tick;
+            }
+            // Do nothing
+            if self.other_report.x == 0
+                && self.other_report.y == 0
+                && self.other_report.wheel == 0
+                && self.other_report.pan == 0
+            {
+                // Release, stop report mouse report
+                self.need_send_mouse_report = false;
+            }
         }
     }
 
@@ -214,8 +232,8 @@ impl<
         buf[0] = report_type as u8;
         match self.other_report.serialize(&mut buf[1..], report_type) {
             Ok(s) => {
-                debug!("Sending other report: {=[u8]:#X}", buf[0..s+1]);
-                match hid_interface.write(&buf[0..s+1]).await {
+                debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
+                match hid_interface.write(&buf[0..s + 1]).await {
                     Ok(()) => {}
                     Err(e) => error!("Send other report error: {}", e),
                 };
@@ -418,16 +436,16 @@ impl<
                     // TODO: Add accerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
-                        self.other_report.y = -1;
+                        self.other_report.y = -10;
                     }
                     KeyCode::MouseDown => {
-                        self.other_report.y = 1;
+                        self.other_report.y = 10;
                     }
                     KeyCode::MouseLeft => {
-                        self.other_report.x = -1;
+                        self.other_report.x = -10;
                     }
                     KeyCode::MouseRight => {
-                        self.other_report.x = 1;
+                        self.other_report.x = 10;
                     }
                     KeyCode::MouseWheelUp => {
                         self.other_report.wheel = 1;

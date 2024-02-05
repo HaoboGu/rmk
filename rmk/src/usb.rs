@@ -75,7 +75,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let keyboard_hid_config = Config {
             report_descriptor: KeyboardReport::desc(),
             request_handler: Some(&request_handler),
-            poll_ms: 60,
+            poll_ms: 1,
             max_packet_size: 64,
         };
         static KEYBOARD_HID_STATE: StaticCell<State> = StaticCell::new();
@@ -88,7 +88,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let other_hid_config = Config {
             report_descriptor: CompositeReport::desc(),
             request_handler: Some(&request_handler),
-            poll_ms: 60,
+            poll_ms: 1,
             max_packet_size: 64,
         };
         static OTHER_HID_STATE: StaticCell<State> = StaticCell::new();
