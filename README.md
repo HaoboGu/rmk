@@ -88,16 +88,21 @@ step-to-step instruction for rp2040 and stm32h7
 
 A lot of todos at the list, any contributions are welcomed :)
 
-- [x] layer
+- [x] layer support
 - [x] system/media keys
+- [x] mouse keys
 - [x] vial support
 - [x] eeprom
 - [x] project template
-- [x] mouse key
+- [ ] easy keyboard configuration with good default
+- [ ] LED
+- [ ] RGB
+- [ ] better documentation
 - [ ] keyboard macro
 - [ ] encoder
-- [ ] RGB
 - [ ] wireless
+- [ ] default bootloader/DFU
+- [ ] a good gui configurator
 
 ## License
 
