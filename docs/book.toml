@@ -1,0 +1,28 @@
+[book]
+authors = ["Haobo Gu"]
+language = "en"
+multilingual = false
+src = "src"
+title = "RMK Documentation"
+
+[build]
+build-dir = "book"                # the directory where the output is placed
+create-missing = true             # whether or not to create missing pages
+use-default-preprocessors = true  # use the default preprocessors
+extra-watch-dirs = []             # directories to watch for triggering builds
+
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "ayu"
+curly-quotes = false
+mathjax-support = false
+copy-fonts = true
+# additional-css = ["custom.css", "custom2.css"]
+# additional-js = ["custom.js"]
+no-section-label = false
+git-repository-url = "https://github.com/HaoboGu/rmk"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/HaoboGu/rmk/docs/{path}"
+# site-url = "/example-book/" # TODO: deploy!
+# input-404 = "404.md"
