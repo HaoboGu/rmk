@@ -6,11 +6,17 @@ pub struct KeyboardAdvancedConfig<'a> {
     pub usb_config: KeyboardUsbConfig<'a>,
 }
 
+/// Configuration for debouncing
+pub struct DebounceConfig {
+    pub debounce_time: u32
+}
+
 /// Configurations for mouse functionalities
 #[derive(Debug)]
 pub struct MouseConfig {
     pub mouse_key_interval: u32,
     pub mouse_wheel_interval: u32,
+    pub mouse_time_to_max: u32,
 }
 
 impl Default for MouseConfig {
@@ -18,8 +24,18 @@ impl Default for MouseConfig {
         Self {
             mouse_key_interval: 20,
             mouse_wheel_interval: 80,
+            mouse_time_to_max: 80,
         }
     }
+}
+
+/// Configurations for RGB light
+pub struct RGBLightConfig {
+    pub enabled: bool,
+    pub rgb_led_num: u32,
+    pub rgb_hue_step: u32,
+    pub rgb_val_step: u32,
+    pub rgb_sat_step: u32,
 }
 
 /// Configurations for usb
