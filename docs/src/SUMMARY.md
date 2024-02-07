@@ -6,7 +6,7 @@
 
 # User Guide
 
-- [Setup Rust environment]()
+- [Setup your RMK environment](setup_environment.md)
 - [Create RMK project]()
 - [Choose your microcontroller]()
 - [Compile and flash!]()
