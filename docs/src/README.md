@@ -4,7 +4,7 @@
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
-Keyboard firmware with layer/dynamic keymap/[vial](https://get.vial.today) support, written in Rust.
+RMK is a Rust keyboard firmware crate with layer/dynamic keymap/[vial](https://get.vial.today) support. 
 
 <div class="warning">
 RMK is under active development, breaking changes may happen. If you have any problem please check the latest doc or file an issue.

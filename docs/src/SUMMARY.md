@@ -6,7 +6,8 @@
 
 # User Guide
 
-- [Setup your RMK environment](setup_environment.md)
+- [Overview](guide_overview.md)
+- [Setup RMK environment](setup_environment.md)
 - [Create RMK project](create_project.md)
 - [Choose your microcontroller]()
 - [Compile and flash!]()

@@ -2,7 +2,7 @@
 
 RMK provides a project [template](https://github.com/HaoboGu/rmk-template), making it much easier to create your own firmware using your favorate microcontroller. 
 
-## Create from template
+## 1. Create from template
 
 `cargo-generate` is required to use the template, you can install it using the following command:
 
@@ -35,6 +35,7 @@ $ cargo generate --git https://github.com/HaoboGu/rmk-template
 
 A RMK firmware project will be automatically created after you fill out all required fields. Use `code <your-project-name>` to open the project in VSCode.
 
-## Mofify the template project
+## 2. Modify the template project
 
-If you're lucky enough, you could just compile your firmware using `cargo build`. But most of the cases, there are minor modifications you have to do.
+If you're lucky enough, you could just compile your firmware using `cargo build`. But for the most of the cases, there are minor modifications you have to do.
+
