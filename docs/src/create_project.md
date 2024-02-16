@@ -47,3 +47,23 @@ The followings are the detailed steps:
 
 ### 2.2 Update USB interrupt binding in `main.rs`
 
+Next, you have to check generated `src/main.rs`, make sure that the binded USB interrupt is right. Different microcontrollers have different types of USB peripheral, so does binded interrupt. You can check out [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind the USB interrupt correctly.
+
+For example, if you're using stm32f4, there is a [usb serial example](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs) there. And code for binding USB interrupt is at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs#L15-L17):
+
+```rust
+bind_interrupts!(struct Irqs {
+    OTG_FS => usb_otg::InterruptHandler<peripherals::USB_OTG_FS>;
+});
+```
+
+Don't forget to import all used items!
+
+### 2.3 Add your own keymap
+
+The next step is to add your own keymap for your firmware. RMK supports [vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be imported to the firmware project. 
+
+Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and convert it to `vial.json` following vial's doc **[here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK would do all the rest things for you.
+
+### 
+
