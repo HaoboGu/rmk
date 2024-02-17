@@ -59,11 +59,14 @@ bind_interrupts!(struct Irqs {
 
 Don't forget to import all used items!
 
-### 2.3 Add your own keymap
+### 2.3 Add your own layout
 
-The next step is to add your own keymap for your firmware. RMK supports [vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be imported to the firmware project. 
+The next step is to add your own keymap layout for your firmware. RMK supports [vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be imported to the firmware project. 
 
 Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and convert it to `vial.json` following vial's doc **[here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK would do all the rest things for you.
 
-### 
+### 2.4 Add your default keymap
 
+After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keycode(TODO)]() chapter for more details.
+
+So far so good, you've done all necessary modifications of your firmware project. The next step is compiling and flashing your firmware!
