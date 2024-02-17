@@ -42,7 +42,7 @@ macro_rules! sc {
     };
 }
 
-/// Create a consumer control action
+/// Create a consumer control(media) action
 #[macro_export]
 macro_rules! cc {
     ($k: ident) => {
