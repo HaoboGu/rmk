@@ -10,11 +10,13 @@ Keyboard firmware with layer/dynamic keymap/[vial](https://get.vial.today) suppo
 
 ## News
 
-- [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
+- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
 
 <details>
 
 <summary>Click to checkout more news</summary>
+
+- [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 
 - [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
 
