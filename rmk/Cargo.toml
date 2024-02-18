@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
