@@ -10,7 +10,7 @@ use embedded_storage::nor_flash::NorFlash;
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-pub struct KeyMapConfig {
+pub(crate) struct KeyMapConfig {
     /// Number of rows.
     pub(crate) row: usize,
     /// Number of columns.
@@ -19,10 +19,12 @@ pub struct KeyMapConfig {
     pub(crate) layer: usize,
 }
 
-/// KeyMap represents the stack of layers.
-/// The conception of KeyMap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
-/// Keymap should be bind to the actual pcb matrix definition.
-/// RMK detects hardware key strokes, uses (row,col) to retrieve the action from KeyMap.
+/// Keymap represents the stack of layers.
+/// 
+/// The conception of Keymap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
+/// 
+/// Keymap should be binded to the actual pcb matrix definition.
+/// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
 pub struct KeyMap<
     F: NorFlash,
     const EEPROM_SIZE: usize,
@@ -51,6 +53,12 @@ impl<
     > KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     /// Initialize a keymap from a matrix of actions
+    /// 
+    /// # Arguments
+    /// 
+    /// * `action_map` - [KeyAction] matrix defined in keymap
+    /// * `storage` - backend storage for eeprom, used for saving keyboard data persistently
+    /// * `eeconfig` - keyboard configurations which should be stored in eeprom
     pub fn new(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<F>,
@@ -59,7 +67,7 @@ impl<
         // Initialize the allocator at the very beginning of the initialization of the keymap
         {
             use core::mem::MaybeUninit;
-            // 1KB heap size
+            // 512 bytes heap size
             const HEAP_SIZE: usize = 512;
             // Check page_size and heap size
             assert!(F::WRITE_SIZE < HEAP_SIZE);

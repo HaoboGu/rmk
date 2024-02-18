@@ -214,6 +214,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 }
 
+/// Keyboard configurations which should be saved in eeprom.
 #[derive(Default)]
 pub struct Eeconfig {
     eeprom_enable: bool,
