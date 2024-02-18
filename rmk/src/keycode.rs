@@ -3,9 +3,11 @@ use num_enum::FromPrimitive;
 use packed_struct::prelude::*;
 use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 
-/// To represent all combinations of modifiers, at least 5 bits are needed:
+/// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type.
-/// |  x  |  x  |  x  |  x  |  x  |
+///
+/// | bit0 | bit1 | bit2 | bit3 | bit4 |
+/// | --- | --- | --- | --- | --- |  
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[derive(PackedStruct, Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]

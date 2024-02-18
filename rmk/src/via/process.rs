@@ -2,6 +2,7 @@ use core::cell::RefCell;
 
 use super::{protocol::*, vial::process_vial};
 use crate::{
+    config::VialConfig,
     keymap::KeyMap,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -28,9 +29,7 @@ pub(crate) struct VialService<
     keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
 
     // Vial config
-    vial_keyboard_id: &'a [u8],
-
-    vial_keyboard_def: &'a [u8],
+    vial_config: VialConfig<'a>,
 }
 
 impl<
@@ -44,13 +43,11 @@ impl<
 {
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-        vial_keyboard_id: &'a [u8],
-        vial_keyboard_def: &'a [u8],
+        vial_config: VialConfig<'a>,
     ) -> Self {
         Self {
             keymap,
-            vial_keyboard_id,
-            vial_keyboard_def,
+            vial_config,
         }
     }
 
@@ -281,7 +278,11 @@ impl<
             ViaCommand::DynamicKeymapSetEncoder => {
                 warn!("Keymap get encoder -- not supported");
             }
-            ViaCommand::Vial => process_vial(report, self.vial_keyboard_id, self.vial_keyboard_def),
+            ViaCommand::Vial => process_vial(
+                report,
+                self.vial_config.vial_keyboard_id,
+                self.vial_config.vial_keyboard_def,
+            ),
             ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
         }
     }
