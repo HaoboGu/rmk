@@ -20,9 +20,9 @@ pub(crate) struct KeyMapConfig {
 }
 
 /// Keymap represents the stack of layers.
-/// 
+///
 /// The conception of Keymap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
-/// 
+///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
 pub struct KeyMap<
@@ -53,9 +53,9 @@ impl<
     > KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
 {
     /// Initialize a keymap from a matrix of actions
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `action_map` - [KeyAction] matrix defined in keymap
     /// * `storage` - backend storage for eeprom, used for saving keyboard data persistently
     /// * `eeconfig` - keyboard configurations which should be stored in eeprom

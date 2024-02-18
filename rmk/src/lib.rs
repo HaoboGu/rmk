@@ -5,7 +5,7 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 
-use config::{RmkConfig, KeyboardUsbConfig, VialConfig};
+use config::{KeyboardUsbConfig, RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, info};
 use embassy_futures::join::join;
@@ -62,9 +62,9 @@ pub(crate) fn initialize_keyboard_and_usb_device<
 }
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
@@ -138,9 +138,9 @@ pub async fn initialize_keyboard_with_config_and_run<
 }
 
 /// Initialize and run the keyboard service, this function never returns.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins

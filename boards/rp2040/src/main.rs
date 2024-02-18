@@ -20,7 +20,11 @@ use embassy_rp::{
     usb::{Driver, InterruptHandler},
 };
 use panic_probe as _;
-use rmk::{config::{RmkConfig, KeyboardUsbConfig, VialConfig}, initialize_keyboard_with_config_and_run, keymap::KeyMap};
+use rmk::{
+    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    initialize_keyboard_with_config_and_run,
+    keymap::KeyMap,
+};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 

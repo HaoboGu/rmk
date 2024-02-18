@@ -19,4 +19,3 @@ pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
         [mo!(1), a!(No), k!(Kp0)]
     ]),
 ];
-

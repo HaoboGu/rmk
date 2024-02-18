@@ -24,7 +24,7 @@ use embassy_stm32::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{RmkConfig, KeyboardUsbConfig, VialConfig},
+    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     initialize_keyboard_with_config_and_run,
     keymap::KeyMap,
 };
