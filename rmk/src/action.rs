@@ -15,7 +15,7 @@ use packed_struct::PackedStructSlice;
 /// The `BasicAction` represents only a single key action of keycodes defined in HID spec. The `Action` represents all actions defined in the following `Action` enum, including modifier combination and layer switch.
 ///
 /// The KeyActionType bits varies between different types of a KeyAction, see docs of each enum variant.
-#[derive(Format, Copy, Clone, PartialEq, Eq)]
+#[derive(Format, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.
     No,
