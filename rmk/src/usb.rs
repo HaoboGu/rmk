@@ -27,7 +27,7 @@ pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
     pub(crate) device: UsbDevice<'d, D>,
     pub(crate) keyboard_hid_writer: HidWriter<'d, D, 8>,
     pub(crate) keyboard_hid_reader: HidReader<'d, D, 1>,
-    pub(crate) other_hid: HidWriter<'d, D, 9>,
+    pub(crate) other_hid_writer: HidWriter<'d, D, 9>,
     pub(crate) via_hid: HidReaderWriter<'d, D, 32, 32>,
 }
 
@@ -115,7 +115,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             device: usb,
             keyboard_hid_reader: reader,
             keyboard_hid_writer: writer,
-            other_hid,
+            other_hid_writer: other_hid,
             via_hid,
         };
     }
