@@ -174,7 +174,5 @@ pub async fn initialize_keyboard_and_run<
         keymap,
         keyboard_config,
     )
-    .await;
-
-    panic!("Keyboard service is died")
+    .await
 }
