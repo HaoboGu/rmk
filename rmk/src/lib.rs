@@ -48,7 +48,6 @@ mod via;
 /// * `keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 pub async fn initialize_keyboard_with_config_and_run<
-    'a,
     D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,

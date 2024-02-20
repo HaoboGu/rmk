@@ -1,9 +1,4 @@
 use defmt::Format;
-///! Lighting in keyboard
-///!
-///! Two types of light: single color LED, RGB LED(ws2812).
-///!
-///! Three usages of LEDs: single/matrix/underglow(RGB only).
 use embedded_hal::digital::{OutputPin, PinState};
 use packed_struct::prelude::*;
 
