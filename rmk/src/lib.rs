@@ -5,18 +5,21 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 
-use config::{KeyboardUsbConfig, RmkConfig, VialConfig};
+use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, info};
 use embassy_futures::join::join;
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
-use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
+use packed_struct::PackedStructSlice;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
+
+use crate::light::{LedIndicator, LightService};
 
 pub mod action;
 pub mod config;
@@ -31,36 +34,6 @@ mod light;
 mod matrix;
 mod usb;
 mod via;
-
-/// DEPRECIATED: Use `initialize_keyboard_and_run` instead.
-/// Initialize keyboard core and keyboard usb device
-pub(crate) fn initialize_keyboard_and_usb_device<
-    D: Driver<'static>,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    driver: D,
-    input_pins: [In; ROW],
-    output_pins: [Out; COL],
-    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-    vial_keyboard_id: &'static [u8],
-    vial_keyboard_def: &'static [u8],
-) -> (
-    Keyboard<'static, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    KeyboardUsbDevice<'static, D>,
-    VialService<'static, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-) {
-    (
-        Keyboard::new(input_pins, output_pins, keymap),
-        KeyboardUsbDevice::new(driver, KeyboardUsbConfig::default()),
-        VialService::new(keymap, VialConfig::new(vial_keyboard_id, vial_keyboard_def)),
-    )
-}
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
@@ -88,13 +61,14 @@ pub async fn initialize_keyboard_with_config_and_run<
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
     keyboard_config: RmkConfig<'static>,
 ) -> ! {
-    // Keyboard state defined in protocol, aka capslock/numslock/scrolllock
-    let keyboard_state = RefCell::new(0);
     let (mut keyboard, mut usb_device, vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
         KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
         VialService::new(keymap, keyboard_config.vial_config),
     );
+
+    // TODO: Config struct for keyboard light service
+    let mut light_service: LightService<Out> = LightService::new(None, None, None, PinState::Low);
 
     let usb_fut = usb_device.device.run();
     let keyboard_fut = async {
@@ -107,17 +81,26 @@ pub async fn initialize_keyboard_with_config_and_run<
         }
     };
 
+    // Keyboard state defined in protocol, aka capslock/numslock/scrolllock
     let led_reader_fut = async {
-        let mut read_state: [u8; 1] = [0; 1];
+        let mut led_indicator_data: [u8; 1] = [0; 1];
         loop {
-            match usb_device.keyboard_hid_reader.read(&mut read_state).await {
+            match usb_device
+                .keyboard_hid_reader
+                .read(&mut led_indicator_data)
+                .await
+            {
                 Ok(_) => {
-                    info!("Read keyboard state: {}", read_state);
-                    let mut c = keyboard_state.borrow_mut();
-                    *c = read_state[0];
-                    // TODO: Updating of keyboard state should trigger changing of LED, or other actions
-                    // Option 1: Update keyboard state only, the state is checked at main loop, GPIO is updated accordingly then
-                    // Option 2: Trigger updating of LED after read a new keyboard state value
+                    let indicator = match LedIndicator::unpack_from_slice(&led_indicator_data) {
+                        Ok(p) => p,
+                        Err(_) => {
+                            info!("packing error: {:b}", led_indicator_data[0]);
+                            LedIndicator::default()
+                        }
+                    };
+                    info!("Read keyboard state: {:?}", indicator);
+                    // Ignore the result, which is `Infallible` in most cases
+                    light_service.set_leds(indicator).ok();
                 }
                 Err(e) => error!("Read keyboard state error: {}", e),
             };
@@ -146,7 +129,7 @@ pub async fn initialize_keyboard_with_config_and_run<
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `keymap` - default keymap definition
-/// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs)
+/// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate them automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs)
 pub async fn initialize_keyboard_and_run<
     D: Driver<'static>,
     In: InputPin<Error = Infallible>,
