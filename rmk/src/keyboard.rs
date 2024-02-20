@@ -136,7 +136,7 @@ impl<
         hid_interface: &mut HidWriter<'d, D, 8>,
     ) {
         if self.need_send_key_report {
-            // usb_device.send_keyboard_report(&self.report).await;
+            debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
             match hid_interface.write_serialize(&self.report).await {
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {}", e),
