@@ -47,9 +47,9 @@ bench = false
 [profile.dev]
 codegen-units = 1      # better optimizations
 debug = true
-opt-level = 1
+opt-level = "s"
 overflow-checks = true
-lto = false
+lto = "fat"
 panic = 'unwind'
 
 [profile.release]
