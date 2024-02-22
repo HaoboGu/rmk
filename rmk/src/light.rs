@@ -129,6 +129,9 @@ impl<P: OutputPin> LightService<P> {
         Ok(())
     }
 
+    /// Check led indicator and update led status.
+    ///
+    /// If there's an error, print a message and ignore error types 
     pub(crate) async fn check_led_indicator<'a, D: Driver<'a>>(
         &mut self,
         keyboard_hid_reader: &mut HidReader<'a, D, 1>,
@@ -142,20 +145,17 @@ impl<P: OutputPin> LightService<P> {
                 match LedIndicator::unpack_from_slice(&self.led_indicator_data) {
                     Ok(indicator) => {
                         debug!("Read keyboard state: {:?}", indicator);
-                        // Ignore the result, which is `Infallible` in most cases
-                        self.set_leds(indicator).ok();
-                        Ok(())
+                        // Ignore the error, which is `Infallible` in most cases
+                        self.set_leds(indicator).map_err(|_| ())
                     }
                     Err(_) => {
                         error!("packing error: {:b}", self.led_indicator_data[0]);
-                        // If there's an error, wait 1 seconds and retry
                         Err(())
                     }
                 }
             }
             Err(e) => {
                 error!("Read keyboard state error: {}", e);
-                // If there's an error, wait 1 seconds and retry
                 Err(())
             }
         }
