@@ -1,5 +1,3 @@
-use core::cell::RefCell;
-
 use super::{protocol::*, vial::process_vial};
 use crate::{
     config::VialConfig,
@@ -8,6 +6,7 @@ use crate::{
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use embassy_usb::{
@@ -54,29 +53,32 @@ impl<
     pub(crate) async fn process_via_report<D: Driver<'a>>(
         &self,
         hid_interface: &mut HidReaderWriter<'a, D, 32, 32>,
-    ) {
+    ) -> Result<(), ()> {
         let mut via_report = ViaReport {
             input_data: [0; 32],
             output_data: [0; 32],
         };
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
-                {
-                    self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
-                }
+                self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
 
                 // Send via report back after processing
                 match hid_interface.write_serialize(&mut via_report).await {
-                    Ok(_) => {}
+                    Ok(_) => Ok(()),
                     Err(e) => {
                         error!("Send via report error: {}", e);
+                        // Printed error message, ignore the error type
+                        Err(())
                     }
                 }
             }
             Err(e) => {
                 if e != ReadError::Disabled {
+                    // Don't print message if the USB endpoint is disabled(aka not connected)
                     error!("Read via report error: {}", e);
                 }
+                // Printed error message, ignore the error type
+                Err(())
             }
         }
     }

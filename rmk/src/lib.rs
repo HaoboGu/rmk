@@ -5,9 +5,9 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 
+use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{debug, error};
 use embassy_futures::join::join;
 use embassy_time::Timer;
 use embassy_usb::{
@@ -18,11 +18,8 @@ use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
-use packed_struct::PackedStructSlice;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
-
-use crate::light::{LedIndicator, LightService};
 
 pub mod action;
 pub mod config;
@@ -153,24 +150,11 @@ async fn led_task<'a, D: Driver<'a>, Out: OutputPin>(
     keyboard_hid_reader: &mut HidReader<'a, D, 1>,
     light_service: &mut LightService<Out>,
 ) -> ! {
-    let mut led_indicator_data: [u8; 1] = [0; 1];
     loop {
-        match keyboard_hid_reader.read(&mut led_indicator_data).await {
-            Ok(_) => {
-                match LedIndicator::unpack_from_slice(&led_indicator_data) {
-                    Ok(indicator) => {
-                        debug!("Read keyboard state: {:?}", indicator);
-                        // Ignore the result, which is `Infallible` in most cases
-                        light_service.set_leds(indicator).ok();
-                    }
-                    Err(_) => {
-                        error!("packing error: {:b}", led_indicator_data[0]);
-                    }
-                };
-            }
-            Err(e) => error!("Read keyboard state error: {}", e),
-        };
-        Timer::after_millis(10).await;
+        match light_service.check_led_indicator(keyboard_hid_reader).await {
+            Ok(_) => Timer::after_millis(50).await,
+            Err(_) => Timer::after_secs(2).await,
+        }
     }
 }
 
@@ -187,7 +171,9 @@ async fn vial_task<
     vial_service: &mut VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
 ) -> ! {
     loop {
-        vial_service.process_via_report(via_hid).await;
-        Timer::after_millis(1).await;
+        match vial_service.process_via_report(via_hid).await {
+            Ok(_) => Timer::after_millis(1).await,
+            Err(_) => Timer::after_millis(500).await,
+        }
     }
 }
