@@ -24,9 +24,9 @@ use embassy_stm32::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{KeyboardUsbConfig, LightConfig, RmkConfig, VialConfig},
     initialize_keyboard_with_config_and_run,
-    keymap::KeyMap,
+    keymap::KeyMap, PinState,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -113,9 +113,16 @@ async fn main(_spawner: Spawner) {
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
+    let light_config = LightConfig {
+        capslock: output_pin_stm32!(peripherals: p, output: PE3, initial_level: Low),
+        scrolllock: None,
+        numslock: output_pin_stm32!(peripherals: p, output: PA2, initial_level: Low),
+        on_state: PinState::High,
+    };
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
+        light_config,
         ..Default::default()
     };
 
