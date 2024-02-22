@@ -14,7 +14,7 @@ use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter},
     driver::Driver,
 };
-use embedded_hal::digital::{InputPin, OutputPin, PinState};
+pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
@@ -58,7 +58,7 @@ pub async fn initialize_keyboard_with_config_and_run<
     input_pins: [In; ROW],
     output_pins: [Out; COL],
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-    keyboard_config: RmkConfig<'static>,
+    keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // TODO: Config struct for keyboard services
     // Create keyboard services and devices
@@ -67,7 +67,9 @@ pub async fn initialize_keyboard_with_config_and_run<
         KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
         VialService::new(keymap, keyboard_config.vial_config),
     );
-    let mut light_service: LightService<Out> = LightService::new(None, None, None, PinState::Low);
+
+    let mut light_service: LightService<Out> =
+        LightService::from_config(keyboard_config.light_config);
 
     // Create 4 tasks: usb, keyboard, led, vial
     let usb_fut = usb_device.device.run();

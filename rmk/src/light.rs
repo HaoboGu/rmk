@@ -1,3 +1,4 @@
+use crate::config::LightConfig;
 use defmt::{debug, error, Format};
 use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{OutputPin, PinState};
@@ -114,6 +115,29 @@ impl<P: OutputPin> LightService<P> {
             numslock: numslock_pin.map(|p| SingleLED::new(p, on_state)),
         }
     }
+
+    pub(crate) fn from_config(light_config: LightConfig<P>) -> Self {
+        let mut enabled = true;
+        if light_config.capslock.is_none()
+            && light_config.numslock.is_none()
+            && light_config.scrolllock.is_none()
+        {
+            enabled = false;
+        }
+        Self {
+            enabled,
+            led_indicator_data: [0; 1],
+            capslock: light_config
+                .capslock
+                .map(|p| SingleLED::new(p, light_config.on_state)),
+            scrolllock: light_config
+                .scrolllock
+                .map(|p| SingleLED::new(p, light_config.on_state)),
+            numslock: light_config
+                .numslock
+                .map(|p| SingleLED::new(p, light_config.on_state)),
+        }
+    }
 }
 
 impl<P: OutputPin> LightService<P> {
@@ -131,7 +155,7 @@ impl<P: OutputPin> LightService<P> {
 
     /// Check led indicator and update led status.
     ///
-    /// If there's an error, print a message and ignore error types 
+    /// If there's an error, print a message and ignore error types
     pub(crate) async fn check_led_indicator<'a, D: Driver<'a>>(
         &mut self,
         keyboard_hid_reader: &mut HidReader<'a, D, 1>,

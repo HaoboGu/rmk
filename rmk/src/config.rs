@@ -1,10 +1,45 @@
+use embedded_hal::digital::{OutputPin, PinState};
+
 // TODO: more configs need to be added, easy configuration(from config file)
 /// Configurations for RMK keyboard.
-#[derive(Debug, Default)]
-pub struct RmkConfig<'a> {
+#[derive(Debug)]
+pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
+    pub light_config: LightConfig<O>,
+}
+
+impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
+    fn default() -> Self {
+        Self {
+            mouse_config: MouseConfig::default(),
+            usb_config: KeyboardUsbConfig::default(),
+            vial_config: VialConfig::default(),
+            light_config: LightConfig::default(),
+        }
+    }
+}
+
+/// Config for lights
+#[derive(Debug)]
+pub struct LightConfig<O: OutputPin> {
+    pub capslock: Option<O>,
+    pub scrolllock: Option<O>,
+    pub numslock: Option<O>,
+    /// At this state, the light is on
+    pub on_state: PinState,
+}
+
+impl<O: OutputPin> Default for LightConfig<O> {
+    fn default() -> Self {
+        Self {
+            capslock: None,
+            scrolllock: None,
+            numslock: None,
+            on_state: PinState::Low,
+        }
+    }
 }
 
 /// Config for [vial](https://get.vial.today/).
