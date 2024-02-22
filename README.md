@@ -60,7 +60,7 @@ step-to-step instruction for rp2040 and stm32h7
    cargo build
    ```
 
-3. Flash it
+3. Flash
 
    ```shell
    cd boards/rp2040
@@ -106,11 +106,11 @@ A lot of todos at the list, any contributions are welcomed :)
 - [x] vial support
 - [x] eeprom
 - [x] project template
-- [ ] easy keyboard configuration with good default
-- [ ] LED
-- [ ] RGB
-- [ ] better documentation
+- [ ] ~~easy keyboard configuration with good default~~(haven't found a good way to achieve this, if you got any idea, ping me pls)
+- [x] LED
 - [ ] keyboard macro
+- [ ] better documentation
+- [ ] RGB
 - [ ] encoder
 - [ ] wireless
 - [ ] default bootloader/DFU
