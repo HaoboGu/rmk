@@ -1146,6 +1146,7 @@ dependencies = [
  "panic-probe",
  "rmk",
  "static_cell",
+ "usbd-hid",
  "xz2",
 ]
 
