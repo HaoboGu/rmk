@@ -74,7 +74,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
         // Write eeprom
         let mut buf = [0xFF; 2];
         BigEndian::write_u16(&mut buf, magic);
-        self.write_byte(0, &mut buf);
+        self.write_byte(0, &buf);
     }
 
     /// Returns eeprom magic value stored in EEPROM
@@ -105,14 +105,14 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     /// Set keymap config
     pub(crate) fn set_keymap_config(&mut self, config: EeKeymapConfig) {
-        let mut buf = match config.pack() {
+        let buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
                 error!("Pack keymap config error");
                 [0xFF; 2]
             }
         };
-        self.write_byte(KEYMAP_CONFIG_ADDR, &mut buf);
+        self.write_byte(KEYMAP_CONFIG_ADDR, &buf);
     }
 
     /// Returns keymap config as `EeKeymapConfig`
@@ -130,14 +130,14 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     /// Set backlight config
     pub(crate) fn set_backlight_config(&mut self, config: EeBacklightConfig) {
-        let mut buf = match config.pack() {
+        let buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
                 error!("Pack backlight config error");
                 [0xFF; 1]
             }
         };
-        self.write_byte(BACKLIGHT_CONFIG_ADDR, &mut buf);
+        self.write_byte(BACKLIGHT_CONFIG_ADDR, &buf);
     }
 
     /// Returns backlight config as `EeBacklightConfig`
@@ -155,14 +155,14 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     /// Set audio config
     pub(crate) fn set_audio_config(&mut self, config: EeAudioConfig) {
-        let mut buf = match config.pack() {
+        let buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
                 error!("Pack audio config error");
                 [0xFF; 1]
             }
         };
-        self.write_byte(AUDIO_CONFIG_ADDR, &mut buf);
+        self.write_byte(AUDIO_CONFIG_ADDR, &buf);
     }
 
     /// Returns audio config as `EeAudioConfig`
@@ -179,14 +179,14 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
     /// Set rgb light config
     pub(crate) fn set_rgb_light_config(&mut self, config: EeRgbLightConfig) {
-        let mut buf = match config.pack() {
+        let buf = match config.pack() {
             Ok(b) => b,
             Err(_) => {
                 error!("Pack rgb light config error");
                 [0xFF; 5]
             }
         };
-        self.write_byte(RGB_CONFIG_ADDR, &mut buf);
+        self.write_byte(RGB_CONFIG_ADDR, &buf);
     }
 
     /// Returns rgb light config as `EeRgbLightConfig`
@@ -205,7 +205,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     pub(crate) fn set_layout_option(&mut self, option: u32) {
         let mut buf = [0xFF; 4];
         BigEndian::write_u32(&mut buf, option);
-        self.write_byte(LAYOUT_OPTION_ADDR, &mut buf);
+        self.write_byte(LAYOUT_OPTION_ADDR, &buf);
     }
 
     /// Returns layout option

@@ -107,7 +107,7 @@ impl CompositeReport {
 
     pub(crate) fn serialize(
         &self,
-        mut data: &mut [u8],
+        data: &mut [u8],
         report_type: CompositeReportType,
     ) -> Result<usize, ssmarshal::Error> {
         // TODO: Optimize it
@@ -122,19 +122,19 @@ impl CompositeReport {
                     wheel: self.wheel,
                     pan: self.pan,
                 };
-                Ok(serialize(&mut data, &mouse_report)?)
+                Ok(serialize(data, &mouse_report)?)
             }
             CompositeReportType::Media => {
                 let consumer_report = MediaKeyboardReport {
                     usage_id: self.media_usage_id,
                 };
-                Ok(serialize(&mut data, &consumer_report)?)
+                Ok(serialize(data, &consumer_report)?)
             }
             CompositeReportType::System => {
                 let system_report = SystemControlReport {
-                    usage_id: self.system_usage_id as u8,
+                    usage_id: self.system_usage_id,
                 };
-                Ok(serialize(&mut data, &system_report)?)
+                Ok(serialize(data, &system_report)?)
             }
         }
     }

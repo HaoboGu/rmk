@@ -111,13 +111,13 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         // Build usb device
         let usb = builder.build();
         let (reader, writer) = keyboard_hid.split();
-        return Self {
+        Self {
             device: usb,
             keyboard_hid_reader: reader,
             keyboard_hid_writer: writer,
             other_hid_writer: other_hid,
             via_hid,
-        };
+        }
     }
 }
 

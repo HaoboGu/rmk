@@ -37,7 +37,7 @@ impl ModifierCombination {
 
     /// Convert modifier combination to a list of modifier keycodes.
     /// Returns a list of modifiers keycodes, and the length of the list.
-    pub(crate) fn to_modifier_keycodes(&self) -> ([KeyCode; 8], usize) {
+    pub(crate) fn to_modifier_keycodes(self) -> ([KeyCode; 8], usize) {
         let mut keycodes = [KeyCode::No; 8];
         let mut i = 0;
         if self.right {
@@ -80,18 +80,21 @@ impl ModifierCombination {
     }
 
     /// Get modifier hid report bits from modifier combination
-    pub(crate) fn to_hid_modifier_bits(&self) -> u8 {
+    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
         let (keycodes, n) = self.to_modifier_keycodes();
         let mut hid_modifier_bits = 0;
-        for i in 0..n {
-            hid_modifier_bits |= keycodes[i].as_modifier_bit();
+        for item in keycodes.iter().take(n) {
+            hid_modifier_bits |= item.as_modifier_bit();
         }
+        // for i in 0..n {
+            // hid_modifier_bits |= keycodes[i].as_modifier_bit();
+        // }
 
         hid_modifier_bits
     }
 
     /// Convert modifier combination to bits
-    pub(crate) fn to_bits(&self) -> u8 {
+    pub(crate) fn to_bits(self) -> u8 {
         ModifierCombination::pack(&self).unwrap_or_default()[0]
     }
 

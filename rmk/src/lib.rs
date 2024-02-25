@@ -4,6 +4,7 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
+#![allow(clippy::if_same_then_else)]
 
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
@@ -113,8 +114,10 @@ pub async fn initialize_keyboard_and_run<
     vial_keyboard_id: &'static [u8],
     vial_keyboard_def: &'static [u8],
 ) -> ! {
-    let mut keyboard_config = RmkConfig::default();
-    keyboard_config.vial_config = VialConfig::new(vial_keyboard_id, vial_keyboard_def);
+    let keyboard_config = RmkConfig {
+        vial_config: VialConfig::new(vial_keyboard_id, vial_keyboard_def),
+        ..Default::default()
+    };
 
     initialize_keyboard_with_config_and_run(
         driver,

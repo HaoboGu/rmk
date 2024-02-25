@@ -78,7 +78,7 @@ impl<
         // Initialize eeprom, if success, re-load keymap from it
         let eeprom = match storage {
             Some(s) => {
-                let e = Eeprom::new(s, eeconfig, &mut action_map);
+                let e = Eeprom::new(s, eeconfig, &action_map);
                 // If eeprom is initialized, read keymap from it.
                 match e {
                     Some(e) => {

@@ -41,7 +41,7 @@ pub(crate) fn process_vial(
             debug!("Received Vial - GetKeyboardId");
             // Returns vial protocol version + vial keyboard id
             LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
-            report.input_data[4..12].clone_from_slice(&vial_keyboard_Id);
+            report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
         }
         VialCommand::GetSize => {
             debug!("Received Vial - GetSize");
