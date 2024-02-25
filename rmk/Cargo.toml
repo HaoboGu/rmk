@@ -26,12 +26,23 @@ usbd-hid = { version = "0.6.1", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
 log = "0.4"
-static_cell = "2" 
+static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
+nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", features = [
+    "defmt",
+    "ble-peripheral",
+    "ble-central",
+    "critical-section-impl",
+    "nrf52840",
+    "s140",
+    "ble-gatt-server",
+    "ble-sec",
+], optional = true }
 
 [features]
 default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
+ble = ["dep:nrf-softdevice"]

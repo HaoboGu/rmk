@@ -18,10 +18,14 @@ pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
+#[cfg(feature = "ble")]
+pub use nrf_softdevice;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
+#[cfg(feature = "ble")]
+pub mod ble;
 pub mod config;
 mod debounce;
 mod eeprom;
