@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 
-///! NOTE: This example compiles on latest main branch, which may be different from released version
+//! NOTE: This example compiles on latest main branch, which may be different from released version
 
 #[macro_use]
 mod macros;
