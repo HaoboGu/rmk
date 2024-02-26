@@ -1,33 +1,34 @@
 #![no_std]
 #![no_main]
 
-use core::mem;
-use defmt::{info, *};
+#[macro_use]
+mod macros;
+mod keymap;
+mod vial;
+
+use crate::keymap::{COL, NUM_LAYER, ROW};
+use core::{cell::RefCell, mem};
+use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_nrf as _;
+use embassy_nrf::{
+    self as _,
+    gpio::{AnyPin, Input, Output},
+    nvmc::Nvmc,
+};
 use panic_probe as _;
 use rmk::{
-    ble::{HidSecurityHandler, Server},
-    nrf_softdevice::{
-        self,
-        ble::{
-            advertisement_builder::{
-                AdvertisementDataType, Flag, LegacyAdvertisementBuilder,
-                LegacyAdvertisementPayload, ServiceList, ServiceUuid16,
-            },
-            gatt_server, peripheral,
-        },
-        raw, Softdevice,
-    },
+    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    keymap::KeyMap,
+    nrf_softdevice::{self, raw},
 };
-#[embassy_executor::task]
-async fn softdevice_task(sd: &'static Softdevice) -> ! {
-    sd.run().await
-}
+use static_cell::StaticCell;
+use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+
+const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("Hello NRF BLE!");
 
     let config = nrf_softdevice::Config {
@@ -64,52 +65,41 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let sd = Softdevice::enable(&config);
-    let server = unwrap!(Server::new(sd, "12345678"));
-    unwrap!(spawner.spawn(softdevice_task(sd)));
+    let p = embassy_nrf::init(Default::default());
 
-    static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
-        .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
-        .services_16(
-            ServiceList::Incomplete,
-            &[
-                ServiceUuid16::BATTERY,
-                ServiceUuid16::HUMAN_INTERFACE_DEVICE,
-            ],
-        )
-        .full_name("HelloRust")
-        // Change the appearance (icon of the bluetooth device) to a keyboard
-        .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
-        .build();
+    // Pin config
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_07, P0_08, P0_11, P0_12], output: [P0_13, P0_14, P0_15]);
+    // Use internal flash to emulate eeprom
+    let f = Nvmc::new(p.NVMC);
+    // Keymap + eeprom config
+    static MY_KEYMAP: StaticCell<RefCell<KeyMap<Nvmc, EEPROM_SIZE, ROW, COL, NUM_LAYER>>> =
+        StaticCell::new();
+    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
+        crate::keymap::KEYMAP,
+        Some(f),
+        None,
+    )));
 
-    static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
-        .services_16(
-            ServiceList::Complete,
-            &[
-                ServiceUuid16::DEVICE_INFORMATION,
-                ServiceUuid16::BATTERY,
-                ServiceUuid16::HUMAN_INTERFACE_DEVICE,
-            ],
-        )
-        .build();
+    let keyboard_usb_config = KeyboardUsbConfig::new(
+        0x4c4b,
+        0x4643,
+        Some("Haobo"),
+        Some("RMK Keyboard"),
+        Some("00000001"),
+    );
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let keyboard_config = RmkConfig {
+        usb_config: keyboard_usb_config,
+        vial_config,
+        ..Default::default()
+    };
 
-    static SEC: HidSecurityHandler = HidSecurityHandler {};
-
-    loop {
-        let config = peripheral::Config::default();
-        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &ADV_DATA,
-            scan_data: &SCAN_DATA,
-        };
-        let conn = peripheral::advertise_pairable(sd, adv, &config, &SEC)
-            .await
-            .unwrap();
-
-        info!("advertising done!");
-
-        // Run the GATT server on the connection. This returns when the connection gets disconnected.
-        let e = gatt_server::run(&conn, &server, |_| {}).await;
-
-        info!("gatt_server run exited with error: {:?}", e);
-    }
+    rmk::initialize_ble_keyboard_with_config_and_run(
+        keymap,
+        input_pins,
+        output_pins,
+        config,
+        keyboard_config,
+    )
+    .await;
 }
