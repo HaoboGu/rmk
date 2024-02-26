@@ -152,7 +152,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
     }
 
     pub(crate) fn write_byte(&mut self, mut address: u16, data: &[u8]) {
-        if data.len() == 0 {
+        if data.is_empty() {
             warn!("No data to write to eeprom, skip");
             return;
         }
@@ -175,13 +175,12 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
 
         for i in (0..data_len).step_by(2) {
             let data_idx = address as usize + i;
-            let data;
-            if i + 1 == data_len {
+            let data = if i + 1 == data_len {
                 // Last byte, append 0xFF
-                data = ((self.cache[data_idx] as u16) << 8) | (0xFF << 8);
+                ((self.cache[data_idx] as u16) << 8) | (0xFF << 8)
             } else {
-                data = ((self.cache[data_idx] as u16) << 8) | (self.cache[data_idx + 1] as u16);
-            }
+                ((self.cache[data_idx] as u16) << 8) | (self.cache[data_idx + 1] as u16)
+            };
             let record = EepromRecord { address, data };
 
             // If the storage is full, do consolidation

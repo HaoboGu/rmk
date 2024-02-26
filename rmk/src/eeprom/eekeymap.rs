@@ -21,7 +21,7 @@ impl<F: NorFlash, const EEPROM_SIZE: usize> Eeprom<F, EEPROM_SIZE> {
                 // 2-byte value, relative addr should be i*2
                 let addr = DYNAMIC_KEYMAP_ADDR + (i * 2) as u16;
                 let mut buf: [u8; 2] = [0xFF; 2];
-                BigEndian::write_u16(&mut buf, to_via_keycode(action.clone()));
+                BigEndian::write_u16(&mut buf, to_via_keycode(*action));
                 self.write_byte(addr, &buf);
             });
     }

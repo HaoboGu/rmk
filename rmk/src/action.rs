@@ -53,7 +53,7 @@ pub enum KeyAction {
 
 impl KeyAction {
     /// Convert a `KeyAction` to corresponding key action code.
-    pub(crate) fn to_key_action_code(&self) -> u16 {
+    pub(crate) fn to_key_action_code(self) -> u16 {
         match self {
             KeyAction::No => 0x0000,
             KeyAction::Transparent => 0x0001,
@@ -63,19 +63,19 @@ impl KeyAction {
             KeyAction::WithModifier(a, m) => {
                 let mut modifier_bits = [0];
                 // Ignore packing error
-                ModifierCombination::pack_to_slice(m, &mut modifier_bits).unwrap_or_default();
+                ModifierCombination::pack_to_slice(&m, &mut modifier_bits).unwrap_or_default();
                 0x4000 | ((modifier_bits[0] as u16) << 8) | a.to_basic_action_code()
             }
             KeyAction::ModifierTapHold(action, modifier) => {
                 let mut modifier_bits = [0];
                 // Ignore packing error
-                ModifierCombination::pack_to_slice(modifier, &mut modifier_bits)
+                ModifierCombination::pack_to_slice(&modifier, &mut modifier_bits)
                     .unwrap_or_default();
                 0x6000 | ((modifier_bits[0] as u16) << 8) | action.to_basic_action_code()
             }
             KeyAction::LayerTapHold(action, layer) => {
-                if *layer < 16 {
-                    0x3000 | ((*layer as u16) << 15) | action.to_basic_action_code()
+                if layer < 16 {
+                    0x3000 | ((layer as u16) << 15) | action.to_basic_action_code()
                 } else {
                     error!("LayerTapHold supports only layer 0~15, got {}", layer);
                     0x0000
@@ -146,13 +146,13 @@ pub enum Action {
 
 impl Action {
     /// Convert an `Action` to 12-bit action code
-    pub(crate) fn to_action_code(&self) -> u16 {
+    pub(crate) fn to_action_code(self) -> u16 {
         match self {
-            Action::Key(k) => *k as u16,
+            Action::Key(k) => k as u16,
             Action::Modifier(m) => 0xE00 | (m.to_bits() as u16),
-            Action::LayerOn(layer) => 0xE20 | (*layer as u16),
-            Action::LayerOff(layer) => 0xE40 | (*layer as u16),
-            Action::LayerToggle(layer) => 0xE60 | (*layer as u16),
+            Action::LayerOn(layer) => 0xE20 | (layer as u16),
+            Action::LayerOff(layer) => 0xE40 | (layer as u16),
+            Action::LayerToggle(layer) => 0xE60 | (layer as u16),
         }
     }
 
@@ -184,11 +184,11 @@ impl Action {
     }
 
     /// Convert an `Action` to 8-bit basic action code, only applicable for `Key(BasicKeyCode)`
-    pub(crate) fn to_basic_action_code(&self) -> u16 {
+    pub(crate) fn to_basic_action_code(self) -> u16 {
         match self {
             Action::Key(kc) => {
                 if kc.is_basic() {
-                    *kc as u16
+                    kc as u16
                 } else {
                     0
                 }

@@ -63,7 +63,7 @@ impl<
                 self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
 
                 // Send via report back after processing
-                match hid_interface.write_serialize(&mut via_report).await {
+                match hid_interface.write_serialize(&via_report).await {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         error!("Send via report error: {}", e);
@@ -166,7 +166,7 @@ impl<
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
                     keycode, row, col, layer, action
                 );
-                keymap.set_action_at(row, col, layer, action.clone());
+                keymap.set_action_at(row, col, layer, action);
                 match &mut keymap.eeprom {
                     Some(e) => e.set_keymap_action(row, col, layer, action),
                     None => (),
