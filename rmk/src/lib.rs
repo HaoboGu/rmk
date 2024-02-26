@@ -9,6 +9,7 @@
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
+use defmt::error;
 use embassy_futures::join::join;
 use embassy_time::Timer;
 use embassy_usb::{
@@ -72,20 +73,23 @@ pub async fn initialize_keyboard_with_config_and_run<
     let mut light_service: LightService<Out> =
         LightService::from_config(keyboard_config.light_config);
 
-    // Create 4 tasks: usb, keyboard, led, vial
-    let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(
-        &mut keyboard,
-        &mut usb_device.keyboard_hid_writer,
-        &mut usb_device.other_hid_writer,
-    );
-    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-    let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+    loop {
+        // Create 4 tasks: usb, keyboard, led, vial
+        let usb_fut = usb_device.device.run();
+        let keyboard_fut = keyboard_task(
+            &mut keyboard,
+            &mut usb_device.keyboard_hid_writer,
+            &mut usb_device.other_hid_writer,
+        );
+        let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
+        let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
 
-    // Run all tasks
-    join(usb_fut, join(join(keyboard_fut, led_reader_fut), via_fut)).await;
+        // Run all tasks
+        join(usb_fut, join(join(keyboard_fut, led_reader_fut), via_fut)).await;
 
-    panic!("Keyboard service is died")
+        error!("Keyboard service is died");
+        Timer::after_secs(1).await;
+    }
 }
 
 /// Initialize and run the keyboard service, this function never returns.
