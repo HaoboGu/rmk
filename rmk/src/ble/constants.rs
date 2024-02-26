@@ -1,4 +1,12 @@
-use nrf_softdevice::ble::Uuid;
+use nrf_softdevice::ble::{
+    advertisement_builder::{
+        AdvertisementDataType, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
+        ServiceList, ServiceUuid16,
+    },
+    Uuid,
+};
+
+use super::HidSecurityHandler;
 
 /// Specification uuid used in keyboards
 ///
@@ -43,3 +51,30 @@ impl BleCharacteristics {
 
 pub const KEYBOARD_ID: u8 = 0x01;
 pub const MEDIA_KEYS_ID: u8 = 0x02;
+// TODO: Customize ADV name
+pub static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
+    .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
+    .services_16(
+        ServiceList::Incomplete,
+        &[
+            ServiceUuid16::BATTERY,
+            ServiceUuid16::HUMAN_INTERFACE_DEVICE,
+        ],
+    )
+    .full_name("RMK")
+    // Change the appearance (icon of the bluetooth device) to a keyboard
+    .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
+    .build();
+
+pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
+    .services_16(
+        ServiceList::Complete,
+        &[
+            ServiceUuid16::DEVICE_INFORMATION,
+            ServiceUuid16::BATTERY,
+            ServiceUuid16::HUMAN_INTERFACE_DEVICE,
+        ],
+    )
+    .build();
+
+pub static HID_SECURITY_HANDLER: HidSecurityHandler = HidSecurityHandler {};

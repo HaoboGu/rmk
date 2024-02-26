@@ -1,4 +1,7 @@
 pub mod constants;
+
+use crate::config::KeyboardUsbConfig;
+use constants::{BleCharacteristics, BleSpecification, KEYBOARD_ID, MEDIA_KEYS_ID};
 use defmt::*;
 use nrf_softdevice::{
     ble::{
@@ -14,8 +17,6 @@ use nrf_softdevice::{
     raw, Softdevice,
 };
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
-
-use self::constants::{BleCharacteristics, BleSpecification, KEYBOARD_ID, MEDIA_KEYS_ID};
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -307,14 +308,17 @@ impl HidService {
     }
 }
 
-pub struct Server {
+pub struct BleServer {
     _dis: DeviceInformationService,
     bas: BatteryService,
     hid: HidService,
 }
 
-impl Server {
-    pub fn new(sd: &mut Softdevice, serial_number: &'static str) -> Result<Self, RegisterError> {
+impl BleServer {
+    pub fn new(
+        sd: &mut Softdevice,
+        usb_config: KeyboardUsbConfig<'static>,
+    ) -> Result<Self, RegisterError> {
         let dis = DeviceInformationService::new(
             sd,
             &PnPID {
@@ -324,9 +328,9 @@ impl Server {
                 product_version: 0x0000,
             },
             DeviceInformation {
-                manufacturer_name: Some("Embassy"),
-                model_number: Some("M1234"),
-                serial_number: Some(serial_number),
+                manufacturer_name: usb_config.manufacturer,
+                model_number: usb_config.product_name,
+                serial_number: usb_config.serial_number,
                 ..Default::default()
             },
         )?;
@@ -343,7 +347,7 @@ impl Server {
     }
 }
 
-impl gatt_server::Server for Server {
+impl gatt_server::Server for BleServer {
     type Event = ();
 
     fn on_write(

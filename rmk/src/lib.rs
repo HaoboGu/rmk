@@ -190,3 +190,69 @@ async fn vial_task<
         }
     }
 }
+
+#[cfg(feature = "ble")]
+/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+///
+/// # Arguments
+///
+/// * `driver` - embassy usb driver instance
+/// * `input_pins` - input gpio pins
+/// * `output_pins` - output gpio pins
+/// * `keymap` - default keymap definition
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+pub async fn initialize_ble_keyboard_with_config_and_run<
+    F: NorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    ble_config: nrf_softdevice::Config,
+    keyboard_config: RmkConfig<'static, Out>,
+) -> ! {
+    use defmt::unwrap;
+    // FIXME: add auto recognition of ble/usb
+    use nrf_softdevice::ble::{gatt_server, peripheral};
+    use crate::ble::BleServer;
+
+    use crate::ble::constants::{ADV_DATA, HID_SECURITY_HANDLER, SCAN_DATA};
+
+    let mut _keyboard = Keyboard::new(input_pins, output_pins, keymap);
+    // let (sd, ble_server) = create_ble_service(ble_config, keyboard_config.usb_config);
+    let sd = nrf_softdevice::Softdevice::enable(&ble_config);
+    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
+    loop {
+        let softdevice_fut = sd.run();
+
+        // Create connection
+        let config = peripheral::Config::default();
+        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &ADV_DATA,
+            scan_data: &SCAN_DATA,
+        };
+        // FIXME: remove unwrap
+        let conn = peripheral::advertise_pairable(sd, adv, &config, &HID_SECURITY_HANDLER)
+            .await
+            .unwrap();
+
+        // Run the GATT server on the connection. This returns when the connection gets disconnected.
+        let gatt_fut = gatt_server::run(&conn, &ble_server, |_| {});
+
+        // FIXME: add keyboard task, add ble send to keyboard send_hid_report
+        let (_, disconnected_error) = join(softdevice_fut, gatt_fut).await;
+
+        error!(
+            "BLE gatt_server run exited with error: {:?}",
+            disconnected_error
+        );
+
+        // Retry after 1 second
+        Timer::after_secs(1).await;
+    }
+}
