@@ -1111,6 +1111,7 @@ version = "0.1.4"
 dependencies = [
  "byteorder",
  "defmt",
+ "embassy-executor",
  "embassy-futures",
  "embassy-sync 0.5.0",
  "embassy-time",

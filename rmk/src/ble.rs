@@ -306,12 +306,17 @@ impl HidService {
             info!("HID input media keys: {:?}", data);
         }
     }
+
+    pub fn write_keyboard_report(&self, conn: &Connection, data: &[u8]) {
+        info!("Writing");
+        gatt_server::notify_value(conn, self.input_keyboard, data).unwrap();
+    }
 }
 
 pub struct BleServer {
     _dis: DeviceInformationService,
     bas: BatteryService,
-    hid: HidService,
+    pub(crate) hid: HidService,
 }
 
 impl BleServer {

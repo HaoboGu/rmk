@@ -61,7 +61,7 @@ pub static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::ne
             ServiceUuid16::HUMAN_INTERFACE_DEVICE,
         ],
     )
-    .full_name("RMK")
+    .full_name("RMK KBD")
     // Change the appearance (icon of the bluetooth device) to a keyboard
     .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
     .build();

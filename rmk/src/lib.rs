@@ -7,6 +7,7 @@
 #![allow(clippy::if_same_then_else)]
 
 use crate::light::LightService;
+use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
 use defmt::error;
@@ -192,6 +193,15 @@ async fn vial_task<
 }
 
 #[cfg(feature = "ble")]
+#[embassy_executor::task]
+async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    sd.run().await
+}
+
+#[cfg(feature = "ble")]
+use crate::ble::BleServer;
+use embassy_executor::Spawner;
+#[cfg(feature = "ble")]
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
 /// # Arguments
@@ -210,49 +220,85 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     input_pins: [In; ROW],
     output_pins: [Out; COL],
     ble_config: nrf_softdevice::Config,
     keyboard_config: RmkConfig<'static, Out>,
+    spawner: Spawner,
 ) -> ! {
-    use defmt::unwrap;
+    use defmt::*;
+    use nrf_softdevice::Softdevice;
     // FIXME: add auto recognition of ble/usb
-    use nrf_softdevice::ble::{gatt_server, peripheral};
-    use crate::ble::BleServer;
-
     use crate::ble::constants::{ADV_DATA, HID_SECURITY_HANDLER, SCAN_DATA};
-
-    let mut _keyboard = Keyboard::new(input_pins, output_pins, keymap);
-    // let (sd, ble_server) = create_ble_service(ble_config, keyboard_config.usb_config);
-    let sd = nrf_softdevice::Softdevice::enable(&ble_config);
+    use nrf_softdevice::ble::{gatt_server, peripheral};
+    let sd = Softdevice::enable(&ble_config);
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
-    loop {
-        let softdevice_fut = sd.run();
+    unwrap!(spawner.spawn(softdevice_task(sd)));
 
+    let keymap = RefCell::new(KeyMap::<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>::new(
+        keymap, None, None,
+    ));
+    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+
+    loop {
+        info!("Advertising");
         // Create connection
         let config = peripheral::Config::default();
         let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
             adv_data: &ADV_DATA,
             scan_data: &SCAN_DATA,
         };
-        // FIXME: remove unwrap
-        let conn = peripheral::advertise_pairable(sd, adv, &config, &HID_SECURITY_HANDLER)
-            .await
-            .unwrap();
 
-        // Run the GATT server on the connection. This returns when the connection gets disconnected.
-        let gatt_fut = gatt_server::run(&conn, &ble_server, |_| {});
+        match peripheral::advertise_pairable(sd, adv, &config, &HID_SECURITY_HANDLER).await {
+            Ok(conn) => {
+                info!("Starting GATT server");
+                // Run the GATT server on the connection. This returns when the connection gets disconnected.
+                // FIXME: add keyboard task, add ble send to keyboard send_hid_report
+                let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
+                let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
+                let (disconnected_error, _) = join(ble_fut, keyboard_fut).await;
 
-        // FIXME: add keyboard task, add ble send to keyboard send_hid_report
-        let (_, disconnected_error) = join(softdevice_fut, gatt_fut).await;
-
-        error!(
-            "BLE gatt_server run exited with error: {:?}",
-            disconnected_error
-        );
+                error!(
+                    "BLE gatt_server run exited with error: {:?}",
+                    disconnected_error
+                );
+            }
+            Err(e) => {
+                error!("Advertise error: {}", e)
+            }
+        }
 
         // Retry after 1 second
         Timer::after_secs(1).await;
+    }
+}
+
+async fn keyboard_ble_task<
+    'a,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    F: NorFlash,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+    ble_server: &BleServer,
+    conn: &nrf_softdevice::ble::Connection,
+) {
+    loop {
+        let _ = keyboard.keyboard_task().await;
+        ble_server.hid.write_keyboard_report(
+            conn,
+            &[
+                0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
+                0, // Reserved
+                0x00, 0x04, 0, 0, 0,
+                0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
+            ],
+        );
+        Timer::after_secs(5).await;
     }
 }
