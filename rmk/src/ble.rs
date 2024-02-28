@@ -2,21 +2,25 @@ pub mod constants;
 
 use crate::config::KeyboardUsbConfig;
 use constants::{BleCharacteristics, BleSpecification, KEYBOARD_ID, MEDIA_KEYS_ID};
+use core::cell::{Cell, RefCell};
 use defmt::*;
+use heapless::Vec;
 use nrf_softdevice::{
     ble::{
         gatt_server::{
             self,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Presentation, Properties},
-            CharacteristicHandles, RegisterError, WriteOp,
+            get_sys_attrs, set_sys_attrs, CharacteristicHandles, RegisterError, WriteOp,
         },
-        security::SecurityHandler,
-        Connection, Uuid,
+        security::{IoCapabilities, SecurityHandler},
+        Connection, EncryptionInfo, IdentityKey, MasterId, SecurityMode, Uuid,
     },
     raw, Softdevice,
 };
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
+
+use self::constants::BleDescriptor;
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -208,41 +212,52 @@ impl HidService {
     pub fn new(sd: &mut Softdevice) -> Result<Self, RegisterError> {
         let mut service_builder = ServiceBuilder::new(sd, Uuid::new_16(0x1812))?;
 
-        let hid_info = service_builder.add_characteristic(
-            BleCharacteristics::HidInfo.uuid(),
-            Attribute::new([0x11u8, 0x1u8, 0x00u8, 0x01u8]),
-            Metadata::new(Properties::new().read()),
-        )?;
-        let hid_info_handle = hid_info.build();
+        let hid_info_handle = service_builder
+            .add_characteristic(
+                BleCharacteristics::HidInfo.uuid(),
+                Attribute::new([
+                    0x1u8, 0x1u8,  // HID version: 1.1
+                    0x00u8, // Country Code
+                    0x03u8, // Remote wake + Normally Connectable
+                ])
+                .read_security(SecurityMode::JustWorks),
+                Metadata::new(Properties::new().read()),
+            )?
+            .build();
 
-        let report_map = service_builder.add_characteristic(
-            BleCharacteristics::ReportMap.uuid(),
-            Attribute::new(KeyboardReport::desc()),
-            Metadata::new(Properties::new().read()),
-        )?;
-        let report_map_handle = report_map.build();
+        let report_map_handle = service_builder
+            .add_characteristic(
+                BleCharacteristics::ReportMap.uuid(),
+                Attribute::new(KeyboardReport::desc()).read_security(SecurityMode::JustWorks),
+                Metadata::new(Properties::new().read()),
+            )?
+            .build();
 
-        let hid_control = service_builder.add_characteristic(
-            BleCharacteristics::HidControlPoint.uuid(),
-            Attribute::new([0u8]),
-            Metadata::new(Properties::new().write_without_response()),
-        )?;
-        let hid_control_handle = hid_control.build();
+        let hid_control_handle = service_builder
+            .add_characteristic(
+                BleCharacteristics::HidControlPoint.uuid(),
+                Attribute::new([0u8]),
+                Metadata::new(Properties::new().write_without_response()),
+            )?
+            .build();
 
-        let protocol_mode = service_builder.add_characteristic(
-            BleCharacteristics::ProtocolMode.uuid(),
-            Attribute::new([1u8]),
-            Metadata::new(Properties::new().read().write_without_response()),
-        )?;
-        let protocol_mode_handle = protocol_mode.build();
+        let protocol_mode_handle = service_builder
+            .add_characteristic(
+                BleCharacteristics::ProtocolMode.uuid(),
+                Attribute::new([1u8]),
+                Metadata::new(Properties::new().read().write_without_response()),
+            )?
+            .build();
 
         let mut input_keyboard = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
             Attribute::new([0u8; 8]),
             Metadata::new(Properties::new().read().notify()),
         )?;
-        let input_keyboard_desc = input_keyboard
-            .add_descriptor(Uuid::new_16(0x2908), Attribute::new([KEYBOARD_ID, 1u8]))?; // First is ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+        let input_keyboard_desc = input_keyboard.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([KEYBOARD_ID, 1u8]), // First is ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+        )?;
         let input_keyboard_handle = input_keyboard.build();
 
         let mut output_keyboard = service_builder.add_characteristic(
@@ -250,8 +265,10 @@ impl HidService {
             Attribute::new([0u8; 8]),
             Metadata::new(Properties::new().read().write().write_without_response()),
         )?;
-        let output_keyboard_desc = output_keyboard
-            .add_descriptor(Uuid::new_16(0x2908), Attribute::new([KEYBOARD_ID, 2u8]))?; // First is ID (e.g. 1 for keyboard 2 for media keys)
+        let output_keyboard_desc = output_keyboard.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([KEYBOARD_ID, 2u8]),
+        )?;
         let output_keyboard_handle = output_keyboard.build();
 
         let mut input_media_keys = service_builder.add_characteristic(
@@ -259,8 +276,10 @@ impl HidService {
             Attribute::new([0u8; 16]),
             Metadata::new(Properties::new().read().notify()),
         )?;
-        let input_media_keys_desc = input_media_keys
-            .add_descriptor(Uuid::new_16(0x2908), Attribute::new([MEDIA_KEYS_ID, 1u8]))?;
+        let input_media_keys_desc = input_media_keys.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([MEDIA_KEYS_ID, 1u8]),
+        )?;
         let input_media_keys_handle = input_media_keys.build();
 
         let _service_handle = service_builder.build();
@@ -287,8 +306,6 @@ impl HidService {
             0, // Reserved
             0x0E, 0, 0, 0, 0, 0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
         ];
-        // gatt_server::notify_value(conn, self.input_keyboard_cccd, val).unwrap();
-        // gatt_server::notify_value(conn, self.input_keyboard_descriptor, val).unwrap();
         if handle == self.input_keyboard_cccd {
             info!("HID input keyboard notify: {:?}", data);
         } else if handle == self.output_keyboard {
@@ -307,9 +324,10 @@ impl HidService {
         }
     }
 
-    pub fn write_keyboard_report(&self, conn: &Connection, data: &[u8]) {
-        info!("Writing");
+    // TODO: use with usb version of hid write
+    pub fn send_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data).unwrap();
+        // gatt_server::notify_value(conn, self.output_keyboard, data).unwrap();
     }
 }
 
@@ -369,6 +387,120 @@ impl gatt_server::Server for BleServer {
     }
 }
 
-pub struct HidSecurityHandler {}
+#[derive(Clone, Copy)]
+struct Peer {
+    master_id: MasterId,
+    key: EncryptionInfo,
+    peer_id: IdentityKey,
+}
 
-impl SecurityHandler for HidSecurityHandler {}
+// TODO: Finish `Bonder`, store keys after pairing, add encryption approach
+pub struct Bonder {
+    peer: Cell<Option<Peer>>,
+    sys_attrs: RefCell<Vec<u8, 62>>,
+}
+
+impl Default for Bonder {
+    fn default() -> Self {
+        Bonder {
+            peer: Cell::new(None),
+            sys_attrs: Default::default(),
+        }
+    }
+}
+
+impl SecurityHandler for Bonder {
+    fn io_capabilities(&self) -> IoCapabilities {
+        IoCapabilities::None
+    }
+
+    fn can_bond(&self, _conn: &Connection) -> bool {
+        true
+    }
+
+    // fn display_passkey(&self, passkey: &[u8; 6]) {
+    //     info!("[BT_HID] Passkey: {}", Debug2Format(passkey));
+    // }
+
+    // fn enter_passkey(&self, _reply: nrf_softdevice::ble::PasskeyReply) {}
+
+    fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
+        debug!(
+            "[BT_HID] new security mode: {}",
+            Debug2Format(&security_mode)
+        );
+    }
+
+    fn on_bonded(
+        &self,
+        _conn: &Connection,
+        master_id: MasterId,
+        key: EncryptionInfo,
+        peer_id: IdentityKey,
+    ) {
+        // First time
+        debug!("[BT_HID] storing bond for: id: {}, key: {}", master_id, key);
+
+        // TODO: save keys
+        self.sys_attrs.borrow_mut().clear();
+        self.peer.set(Some(Peer {
+            master_id,
+            key,
+            peer_id,
+        }))
+    }
+
+    fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+        // Reconnecting with an existing bond
+        debug!("[BT_HID] getting bond for: id: {}", master_id);
+
+        self.peer
+            .get()
+            .and_then(|peer| (master_id == peer.master_id).then_some(peer.key))
+    }
+
+    fn save_sys_attrs(&self, conn: &Connection) {
+        // On disconnect usually
+        debug!(
+            "[BT_HID] saving system attributes for: {}",
+            conn.peer_address()
+        );
+
+        if let Some(peer) = self.peer.get() {
+            if peer.peer_id.is_match(conn.peer_address()) {
+                let mut sys_attrs = self.sys_attrs.borrow_mut();
+                let capacity = sys_attrs.capacity();
+                sys_attrs.resize(capacity, 0).unwrap();
+                let len = get_sys_attrs(conn, &mut sys_attrs).unwrap() as u16;
+                sys_attrs.truncate(len as usize);
+                // TODO: save sys_attrs for peer
+            }
+        }
+    }
+
+    fn load_sys_attrs(&self, conn: &Connection) {
+        let addr = conn.peer_address();
+        debug!("[BT_HID] loading system attributes for: {}", addr);
+
+        let attrs = self.sys_attrs.borrow();
+
+        // TODO: search stored peers
+        let attrs = if self
+            .peer
+            .get()
+            .map(|peer| peer.peer_id.is_match(addr))
+            .unwrap_or(false)
+        {
+            (!attrs.is_empty()).then_some(attrs.as_slice())
+        } else {
+            None
+        };
+
+        if let Err(err) = set_sys_attrs(conn, attrs) {
+            warn!(
+                "[BT_HID] SecurityHandler failed to set sys attrs: {:?}",
+                err
+            );
+        }
+    }
+}

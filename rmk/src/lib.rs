@@ -229,8 +229,12 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 ) -> ! {
     use defmt::*;
     use nrf_softdevice::Softdevice;
+    use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
-    use crate::ble::constants::{ADV_DATA, HID_SECURITY_HANDLER, SCAN_DATA};
+    use crate::ble::{
+        constants::{ADV_DATA, SCAN_DATA},
+        Bonder,
+    };
     use nrf_softdevice::ble::{gatt_server, peripheral};
     let sd = Softdevice::enable(&ble_config);
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
@@ -241,6 +245,9 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     ));
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
 
+    static BONDER: StaticCell<Bonder> = StaticCell::new();
+    let bonder = BONDER.init(Bonder::default());
+
     loop {
         info!("Advertising");
         // Create connection
@@ -250,7 +257,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             scan_data: &SCAN_DATA,
         };
 
-        match peripheral::advertise_pairable(sd, adv, &config, &HID_SECURITY_HANDLER).await {
+        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
                 info!("Starting GATT server");
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
@@ -289,16 +296,17 @@ async fn keyboard_ble_task<
     conn: &nrf_softdevice::ble::Connection,
 ) {
     loop {
+        Timer::after_secs(5).await;
+        // FIXME: Send report only after all connections are ready, otherwise a BleGattsSysAttrMissing would occur
         let _ = keyboard.keyboard_task().await;
-        ble_server.hid.write_keyboard_report(
+        ble_server.hid.send_keyboard_report(
             conn,
             &[
                 0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
                 0, // Reserved
-                0x00, 0x04, 0, 0, 0,
+                0x04, 0x00, 0, 0, 0,
                 0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
             ],
         );
-        Timer::after_secs(5).await;
     }
 }

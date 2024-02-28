@@ -6,8 +6,6 @@ use nrf_softdevice::ble::{
     Uuid,
 };
 
-use super::HidSecurityHandler;
-
 /// Specification uuid used in keyboards
 ///
 /// Full reference: https://www.bluetooth.com/specifications/assigned-numbers/
@@ -37,6 +35,16 @@ pub enum BleCharacteristics {
     ProtocolMode = 0x2a4e,
 }
 
+pub enum BleDescriptor {
+    ReportReference = 0x2908,
+}
+
+impl BleDescriptor {
+    pub fn uuid(self) -> Uuid {
+        Uuid::new_16(self as u16)
+    }
+}
+
 impl BleSpecification {
     pub fn uuid(self) -> Uuid {
         Uuid::new_16(self as u16)
@@ -51,6 +59,7 @@ impl BleCharacteristics {
 
 pub const KEYBOARD_ID: u8 = 0x01;
 pub const MEDIA_KEYS_ID: u8 = 0x02;
+
 // TODO: Customize ADV name
 pub static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
     .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
@@ -76,5 +85,3 @@ pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::n
         ],
     )
     .build();
-
-pub static HID_SECURITY_HANDLER: HidSecurityHandler = HidSecurityHandler {};
