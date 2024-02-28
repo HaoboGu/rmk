@@ -219,8 +219,7 @@ impl HidService {
                     0x1u8, 0x1u8,  // HID version: 1.1
                     0x00u8, // Country Code
                     0x03u8, // Remote wake + Normally Connectable
-                ])
-                .read_security(SecurityMode::JustWorks),
+                ]),
                 Metadata::new(Properties::new().read()),
             )?
             .build();
@@ -228,7 +227,7 @@ impl HidService {
         let report_map_handle = service_builder
             .add_characteristic(
                 BleCharacteristics::ReportMap.uuid(),
-                Attribute::new(KeyboardReport::desc()).read_security(SecurityMode::JustWorks),
+                Attribute::new(KeyboardReport::desc()),
                 Metadata::new(Properties::new().read()),
             )?
             .build();
@@ -326,8 +325,9 @@ impl HidService {
 
     // TODO: use with usb version of hid write
     pub fn send_keyboard_report(&self, conn: &Connection, data: &[u8]) {
-        gatt_server::notify_value(conn, self.input_keyboard, data).unwrap();
-        // gatt_server::notify_value(conn, self.output_keyboard, data).unwrap();
+        gatt_server::notify_value(conn, self.input_keyboard, data)
+            .map_err(|e| error!("send keyboard report error: {}", e))
+            .ok();
     }
 }
 
