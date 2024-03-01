@@ -8,7 +8,8 @@ There are a bunch of things to do with RMK in the near future. The following is 
 - [ ] keyboard macro
 - [ ] RGB
 - [ ] encoder
-- [ ] wireless
+- [ ] 🚧 wireless
+- [ ] split keyboard support
 - [ ] default bootloader/DFU
 - [ ] a good gui configurator
 - [ ] ~~easy keyboard configuration with good default~~(haven't found a good way to achieve this, if you got any idea, ping me pls)
