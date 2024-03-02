@@ -14,10 +14,9 @@ use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
 #[cfg(feature = "ble")]
-use crate::BleServer;
+use crate::ble::server::BleServer;
 #[cfg(feature = "ble")]
 use nrf_softdevice::ble::Connection;
-
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
@@ -346,7 +345,6 @@ impl<
             key_state.pressed = true;
             self.process_key_action_normal(action, key_state);
 
-            // TODO: need to trigger hid send manually, then, release the key to perform a tap operation
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
 

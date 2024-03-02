@@ -6,8 +6,9 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
 
+#[cfg(feature = "ble")]
+use crate::ble::{keyboard_ble_task, softdevice_task};
 use crate::light::LightService;
-use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
 use defmt::error;
@@ -65,7 +66,6 @@ pub async fn initialize_keyboard_with_config_and_run<
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    // TODO: Config struct for keyboard services
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
@@ -191,27 +191,23 @@ async fn vial_task<
 }
 
 #[cfg(feature = "ble")]
-#[embassy_executor::task]
-async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
-    sd.run().await
-}
-
-#[cfg(feature = "ble")]
-pub use nrf_softdevice;
-#[cfg(feature = "ble")]
-use crate::ble::BleServer;
+use action::KeyAction;
 #[cfg(feature = "ble")]
 use embassy_executor::Spawner;
+#[cfg(feature = "ble")]
+pub use nrf_softdevice;
 #[cfg(feature = "ble")]
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
 /// # Arguments
 ///
+/// * `keymap` - default keymap definition
 /// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
-/// * `keymap` - default keymap definition
+/// * `ble_config` - nrf_softdevice config
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_ble_keyboard_with_config_and_run<
     F: NorFlash,
     In: InputPin<Error = Infallible>,
@@ -233,8 +229,9 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
+        bonder::Bonder,
         constants::{ADV_DATA, SCAN_DATA},
-        Bonder,
+        server::BleServer,
     };
     use nrf_softdevice::ble::{gatt_server, peripheral};
     let sd = Softdevice::enable(&ble_config);
@@ -278,30 +275,5 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 
         // Retry after 1 second
         Timer::after_secs(1).await;
-    }
-}
-
-#[cfg(feature = "ble")]
-async fn keyboard_ble_task<
-    'a,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    ble_server: &BleServer,
-    conn: &nrf_softdevice::ble::Connection,
-) {
-    // Wait 2 seconds, ensure that gatt server is started
-    Timer::after_secs(2).await;
-    // TODO: A real battery service
-    ble_server.set_battery_value(conn, &50);
-    loop {
-        let _ = keyboard.keyboard_task().await;
-        keyboard.send_ble_report(ble_server, conn).await;
     }
 }
