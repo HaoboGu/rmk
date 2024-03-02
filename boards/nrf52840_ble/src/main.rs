@@ -30,7 +30,7 @@ const EEPROM_SIZE: usize = 128;
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello NRF BLE!");
-
+    let keyboard_name = "RMK Keyboard";
     let ble_config = nrf_softdevice::Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
             source: raw::NRF_CLOCK_LF_SRC_RC as u8,
@@ -54,9 +54,9 @@ async fn main(spawner: Spawner) {
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: b"RMK KBD" as *const u8 as _,
-            current_len: 7,
-            max_len: 9,
+            p_value: keyboard_name.as_ptr() as _,
+            current_len: keyboard_name.len() as u16,
+            max_len: keyboard_name.len() as u16,
             write_perm: unsafe { mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
                 raw::BLE_GATTS_VLOC_STACK as u8,
@@ -77,7 +77,7 @@ async fn main(spawner: Spawner) {
         0x4c4b,
         0x4643,
         Some("Haobo"),
-        Some("RMK Keyboard"),
+        Some(keyboard_name),
         Some("00000001"),
     );
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);

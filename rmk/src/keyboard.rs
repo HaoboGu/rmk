@@ -170,7 +170,7 @@ impl<
                         self.report.keycodes,
                         size
                     );
-                    ble_server.hid.send_keyboard_report(conn, &buf)
+                    ble_server.hid.send_ble_keyboard_report(conn, &buf)
                 }
                 Err(_) => {
                     error!("Serialize keyboard report error");

@@ -1,3 +1,4 @@
+pub(crate) mod advertise;
 mod battery_service;
 pub(crate) mod bonder;
 pub(crate) mod constants;

@@ -1,7 +1,6 @@
 use nrf_softdevice::ble::{
     advertisement_builder::{
-        AdvertisementDataType, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
-        ServiceList, ServiceUuid16,
+        LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList, ServiceUuid16,
     },
     Uuid,
 };
@@ -59,21 +58,6 @@ impl BleCharacteristics {
 
 pub const KEYBOARD_ID: u8 = 0x01;
 pub const MEDIA_KEYS_ID: u8 = 0x02;
-
-// TODO: Customize ADV name
-pub static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
-    .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
-    .services_16(
-        ServiceList::Incomplete,
-        &[
-            ServiceUuid16::BATTERY,
-            ServiceUuid16::HUMAN_INTERFACE_DEVICE,
-        ],
-    )
-    .full_name("RMK KBD")
-    // Change the appearance (icon of the bluetooth device) to a keyboard
-    .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
-    .build();
 
 pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
     .services_16(

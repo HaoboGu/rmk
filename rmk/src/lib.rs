@@ -229,12 +229,15 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
-        bonder::Bonder,
-        constants::{ADV_DATA, SCAN_DATA},
+        advertise::create_advertisement_data, bonder::Bonder, constants::SCAN_DATA,
         server::BleServer,
     };
     use nrf_softdevice::ble::{gatt_server, peripheral};
     let sd = Softdevice::enable(&ble_config);
+    let keyboard_name = keyboard_config
+        .usb_config
+        .product_name
+        .unwrap_or("RMK Keyboard");
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
@@ -243,15 +246,17 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     ));
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
 
+    // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::default());
 
     loop {
-        info!("Advertising");
+        info!("BLE Advertising");
         // Create connection
         let config = peripheral::Config::default();
+        let adv_data = create_advertisement_data(keyboard_name);
         let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &ADV_DATA,
+            adv_data: &adv_data,
             scan_data: &SCAN_DATA,
         };
 

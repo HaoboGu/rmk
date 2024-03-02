@@ -149,8 +149,7 @@ impl HidService {
         }
     }
 
-    // TODO: unify with usb version of hid write
-    pub(crate) fn send_keyboard_report(&self, conn: &Connection, data: &[u8]) {
+    pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
             .map_err(|e| error!("send keyboard report error: {}", e))
             .ok();
