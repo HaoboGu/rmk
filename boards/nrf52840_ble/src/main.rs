@@ -55,7 +55,7 @@ async fn main(spawner: Spawner) {
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
             p_value: b"RMK KBD" as *const u8 as _,
-            current_len: 9,
+            current_len: 7,
             max_len: 9,
             write_perm: unsafe { mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(

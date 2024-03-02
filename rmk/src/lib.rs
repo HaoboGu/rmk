@@ -21,8 +21,6 @@ pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
 use keyboard::Keyboard;
 use keymap::KeyMap;
-#[cfg(feature = "ble")]
-pub use nrf_softdevice;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
@@ -199,7 +197,10 @@ async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
 }
 
 #[cfg(feature = "ble")]
+pub use nrf_softdevice;
+#[cfg(feature = "ble")]
 use crate::ble::BleServer;
+#[cfg(feature = "ble")]
 use embassy_executor::Spawner;
 #[cfg(feature = "ble")]
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
@@ -281,6 +282,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     }
 }
 
+#[cfg(feature = "ble")]
 async fn keyboard_ble_task<
     'a,
     In: InputPin<Error = Infallible>,
@@ -305,6 +307,16 @@ async fn keyboard_ble_task<
                 0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
                 0, // Reserved
                 0x04, 0x00, 0, 0, 0,
+                0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
+            ],
+        );
+        Timer::after_millis(100).await;
+        ble_server.hid.send_keyboard_report(
+            conn,
+            &[
+                0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
+                0, // Reserved
+                0x00, 0x00, 0, 0, 0,
                 0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
             ],
         );

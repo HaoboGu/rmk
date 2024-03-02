@@ -1119,6 +1119,7 @@ dependencies = [
  "embedded-alloc",
  "embedded-hal 1.0.0",
  "embedded-storage",
+ "heapless 0.8.0",
  "log",
  "nrf-softdevice",
  "num_enum",

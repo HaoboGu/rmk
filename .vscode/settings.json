@@ -5,7 +5,15 @@
         "cargo",
         "check",
         "--quiet",
-        "--message-format=json"
+        "--message-format=json",
+        "--all-features"
+    ],
+    "rust-analyzer.cargo.buildScripts.overrideCommand": [
+        "cargo",
+        "check",
+        "--quiet",
+        "--message-format=json",
+        "--all-features"
     ],
     "rust-analyzer.linkedProjects": [
         "rmk/Cargo.toml",
@@ -15,5 +23,4 @@
         "boards/nrf52840_ble/Cargo.toml",
         "boards/rp2040/Cargo.toml"
     ],
-    "rust-analyzer.showUnlinkedFileNotification": false,
 }
