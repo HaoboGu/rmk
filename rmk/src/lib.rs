@@ -262,7 +262,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             Ok(conn) => {
                 info!("Starting GATT server");
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
-                // FIXME: add keyboard task, add ble send to keyboard send_hid_report
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
                 let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
                 let (disconnected_error, _) = join(ble_fut, keyboard_fut).await;
@@ -297,28 +296,12 @@ async fn keyboard_ble_task<
     ble_server: &BleServer,
     conn: &nrf_softdevice::ble::Connection,
 ) {
+    // Wait 2 seconds, ensure that gatt server is started
+    Timer::after_secs(2).await;
+    // TODO: A real battery service
+    ble_server.set_battery_value(conn, &50);
     loop {
-        Timer::after_secs(5).await;
-        // FIXME: Send report only after all connections are ready, otherwise a BleGattsSysAttrMissing would occur
         let _ = keyboard.keyboard_task().await;
-        ble_server.hid.send_keyboard_report(
-            conn,
-            &[
-                0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
-                0, // Reserved
-                0x04, 0x00, 0, 0, 0,
-                0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
-            ],
-        );
-        Timer::after_millis(100).await;
-        ble_server.hid.send_keyboard_report(
-            conn,
-            &[
-                0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
-                0, // Reserved
-                0x00, 0x00, 0, 0, 0,
-                0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
-            ],
-        );
+        keyboard.send_ble_report(ble_server, conn).await;
     }
 }

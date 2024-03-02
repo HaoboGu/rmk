@@ -1,4 +1,7 @@
 use usbd_hid::descriptor::generator_prelude::*;
+
+/// HID Descriptor used in BLE keyboard, which might be different from USB HID device
+
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
 /// keyboard LEDs.

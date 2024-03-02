@@ -71,7 +71,7 @@ async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(nrf_config);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_07, P0_08, P0_11, P0_12], output: [P0_13, P0_14, P0_15]);
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_00, P1_01, P1_02, P1_03], output: [P1_05, P1_06, P1_07]);
 
     let keyboard_usb_config = KeyboardUsbConfig::new(
         0x4c4b,

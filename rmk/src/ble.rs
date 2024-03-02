@@ -11,13 +11,13 @@ use nrf_softdevice::{
         gatt_server::{
             self,
             builder::ServiceBuilder,
-            characteristic::{Attribute, Metadata, Presentation, Properties},
-            get_sys_attrs, set_sys_attrs, CharacteristicHandles, RegisterError, WriteOp,
+            characteristic::{Attribute, Metadata, Properties},
+            get_sys_attrs, set_sys_attrs, CharacteristicHandles, RegisterError, Service, WriteOp,
         },
         security::{IoCapabilities, SecurityHandler},
         Connection, EncryptionInfo, IdentityKey, MasterId, SecurityMode, Uuid,
     },
-    raw, Softdevice,
+    Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor;
 
@@ -132,65 +132,10 @@ impl DeviceInformationService {
     }
 }
 
+#[nrf_softdevice::gatt_service(uuid = "180f")]
 pub struct BatteryService {
-    value_handle: u16,
-    cccd_handle: u16,
-}
-
-impl BatteryService {
-    pub fn new(sd: &mut Softdevice) -> Result<Self, RegisterError> {
-        let mut service_builder = ServiceBuilder::new(sd, BleSpecification::BatteryService.uuid())?;
-
-        let attr = Attribute::new(&[0u8]);
-        let metadata =
-            Metadata::new(Properties::new().read().notify()).presentation(Presentation {
-                format: raw::BLE_GATT_CPF_FORMAT_UINT8 as u8,
-                exponent: 0,  /* Value * 10 ^ 0 */
-                unit: 0x27AD, /* Percentage */
-                name_space: raw::BLE_GATT_CPF_NAMESPACE_BTSIG as u8,
-                description: raw::BLE_GATT_CPF_NAMESPACE_DESCRIPTION_UNKNOWN as u16,
-            });
-        let characteristic_builder = service_builder.add_characteristic(
-            BleCharacteristics::BatteryLevel.uuid(),
-            attr,
-            metadata,
-        )?;
-        let characteristic_handles = characteristic_builder.build();
-
-        let _service_handle = service_builder.build();
-
-        Ok(BatteryService {
-            value_handle: characteristic_handles.value_handle,
-            cccd_handle: characteristic_handles.cccd_handle,
-        })
-    }
-
-    pub fn battery_level_get(&self, sd: &Softdevice) -> Result<u8, gatt_server::GetValueError> {
-        let buf = &mut [0u8];
-        gatt_server::get_value(sd, self.value_handle, buf)?;
-        Ok(buf[0])
-    }
-
-    pub fn battery_level_set(
-        &self,
-        sd: &Softdevice,
-        val: u8,
-    ) -> Result<(), gatt_server::SetValueError> {
-        gatt_server::set_value(sd, self.value_handle, &[val])
-    }
-    pub fn battery_level_notify(
-        &self,
-        conn: &Connection,
-        val: u8,
-    ) -> Result<(), gatt_server::NotifyValueError> {
-        gatt_server::notify_value(conn, self.value_handle, &[val])
-    }
-
-    pub fn on_write(&self, handle: u16, data: &[u8]) {
-        if handle == self.cccd_handle && !data.is_empty() {
-            info!("battery notifications: {}", (data[0] & 0x01) != 0);
-        }
-    }
+    #[characteristic(uuid = "2a19", read, notify)]
+    battery_level: u8,
 }
 
 #[allow(dead_code)]
@@ -319,13 +264,13 @@ impl HidService {
                 gatt_server::notify_value(conn, self.input_keyboard, &[0u8; 8]).unwrap();
                 info!("Keyboard report cleared");
             }
-        // } else if handle == self.input_media_keys_cccd {
+            // } else if handle == self.input_media_keys_cccd {
             // info!("HID input media keys: {:?}", data);
         }
     }
 
-    // TODO: use with usb version of hid write
-    pub fn send_keyboard_report(&self, conn: &Connection, data: &[u8]) {
+    // TODO: unify with usb version of hid write
+    pub(crate) fn send_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
             .map_err(|e| error!("send keyboard report error: {}", e))
             .ok();
@@ -334,7 +279,7 @@ impl HidService {
 
 pub struct BleServer {
     _dis: DeviceInformationService,
-    bas: BatteryService,
+    pub(crate) bas: BatteryService,
     pub(crate) hid: HidService,
 }
 
@@ -369,6 +314,16 @@ impl BleServer {
             hid,
         })
     }
+
+    pub(crate) fn set_battery_value(&self, conn: &Connection, val: &u8) {
+        match self.bas.battery_level_notify(conn, val) {
+            Ok(_) => info!("Battery value: {}", val),
+            Err(e) => match self.bas.battery_level_set(val) {
+                Ok(_) => info!("Battery value set: {}", val),
+                Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+            },
+        }
+    }
 }
 
 impl gatt_server::Server for BleServer {
@@ -396,6 +351,7 @@ struct Peer {
 }
 
 // TODO: Finish `Bonder`, store keys after pairing, add encryption approach
+// FIXME: Reconnection issue
 pub struct Bonder {
     peer: Cell<Option<Peer>>,
     sys_attrs: RefCell<Vec<u8, 62>>,

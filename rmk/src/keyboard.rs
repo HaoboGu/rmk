@@ -13,6 +13,11 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
+#[cfg(feature = "ble")]
+use crate::BleServer;
+#[cfg(feature = "ble")]
+use nrf_softdevice::ble::Connection;
+
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
@@ -141,6 +146,38 @@ impl<
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {}", e),
             };
+            // Reset report key states
+            for bit in &mut self.report.keycodes {
+                *bit = 0;
+            }
+            self.need_send_key_report = false;
+        }
+    }
+
+    /// Send ble hid report. The report is sent only when key state changes.
+    #[cfg(feature = "ble")]
+    pub(crate) async fn send_ble_report(
+        &mut self,
+        ble_server: &BleServer,
+        conn: &Connection,
+    ) {
+        use ssmarshal::serialize;
+        if self.need_send_key_report {
+            let mut buf: [u8; 8] = [0; 8];
+            match serialize(&mut buf, &self.report) {
+                Ok(size) => {
+                    debug!(
+                        "Sending ble keyboard report: {=[u8]:#X}, size: {}",
+                        self.report.keycodes,
+                        size
+                    );
+                    ble_server.hid.send_keyboard_report(conn, &buf)
+                }
+                Err(_) => {
+                    error!("Serialize keyboard report error");
+                }
+            };
+
             // Reset report key states
             for bit in &mut self.report.keycodes {
                 *bit = 0;
@@ -299,8 +336,7 @@ impl<
         for kc in keycodes.iter().take(n) {
             self.process_action_keycode(*kc, key_state);
         }
-        for _i in 0..n {
-        }
+        for _i in 0..n {}
         self.process_key_action_normal(action, key_state);
     }
 
