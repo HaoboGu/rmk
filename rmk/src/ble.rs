@@ -7,17 +7,47 @@ mod device_information_service;
 mod hid_service;
 pub(crate) mod server;
 
-use self::server::BleServer;
-use crate::keyboard::Keyboard;
+use self::{bonder::StoredBondInfo, server::BleServer};
+use crate::{
+    ble::bonder::FLASH_CHANNEL,
+    keyboard::Keyboard,
+};
 use core::convert::Infallible;
+use defmt::info;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
+use embedded_storage_async::nor_flash::NorFlash as _;
+use nrf_softdevice::Flash;
 
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     sd.run().await
+}
+
+#[embassy_executor::task]
+pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
+    loop {
+        let info: StoredBondInfo = FLASH_CHANNEL.receive().await;
+        match info {
+            StoredBondInfo::Peer(p) => {
+                info!("Received Peer {}", p);
+                let mut s = [0_u8; 52];
+                s[0..50].copy_from_slice(&p.to_slice());
+                info!("Peer Slice: {:#X}", s);
+                f.erase(0x80000, 0x81000).await.unwrap();
+                f.write(0x80000, &s).await.unwrap();
+            }
+            StoredBondInfo::SystemAttribute(sys_attr) => {
+                info!("Received SystemAttr {:#X}", sys_attr.data[0..sys_attr.length]);
+                let s = sys_attr.to_slice();
+                info!("SysAttr Slice: {:#X}", s);
+                f.erase(0x81000, 0x82000).await.unwrap();
+                f.write(0x81000, &s).await.unwrap();
+            }
+        };
+    }
 }
 
 /// BLE keyboard task, run the keyboard with the ble server

@@ -224,15 +224,25 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
+    use core::cell::Cell;
+
     use defmt::*;
-    use nrf_softdevice::Softdevice;
+    use embedded_storage::nor_flash::ReadNorFlash;
+    use embedded_storage_async::nor_flash::NorFlash;
+    use nrf_softdevice::{Softdevice};
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
-        advertise::create_advertisement_data, bonder::Bonder, constants::SCAN_DATA,
+        advertise::create_advertisement_data,
+        bonder::{Bonder, Peer, SystemAttribute},
+        constants::SCAN_DATA,
+        flash_task,
         server::BleServer,
     };
-    use nrf_softdevice::ble::{gatt_server, peripheral};
+    use nrf_softdevice::{
+        ble::{gatt_server, peripheral},
+        Flash,
+    };
     let sd = Softdevice::enable(&ble_config);
     let keyboard_name = keyboard_config
         .usb_config
@@ -245,10 +255,34 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
         keymap, None, None,
     ));
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
+    let f = NRF_FLASH.init(Flash::take(sd));
+
+    // Saved bond info
+    let mut slice: [u8; 64] = [0; 64];
+    f.read(0x81000, &mut slice).unwrap();
+    let bond_info = SystemAttribute::from_slice(slice);
+    let mut peer_bytes = [0_u8; 50];
+    f.read(0x80000, &mut slice).unwrap();
+    peer_bytes.copy_from_slice(&slice[0..50]);
+    let peer_info = Peer::from_slice(peer_bytes);
+    // TODO: If peer and bond are both empty
+    info!("Loaded bond info: {}", bond_info);
+    info!("Loaded peer info: {}", peer_info);
 
     // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();
-    let bonder = BONDER.init(Bonder::default());
+    let bonder = if peer_info.master_id.ediv == 65535 {
+        f.erase(0x80000, 0x81000).await.unwrap();
+        warn!("Erased");
+        BONDER.init(Default::default())
+    } else {
+        BONDER.init(Bonder::new(
+            RefCell::new(bond_info),
+            Cell::new(Some(peer_info)),
+        ))
+    };
+    unwrap!(spawner.spawn(flash_task(f)));
 
     loop {
         info!("BLE Advertising");
@@ -262,6 +296,9 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
+                Timer::after_secs(2).await;
+                // 手动Load sys attr
+                // bonder.load_sys_attrs(&conn);
                 info!("Starting GATT server");
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});

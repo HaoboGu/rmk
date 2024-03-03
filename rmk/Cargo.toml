@@ -13,6 +13,7 @@ resolver = "2"
 [dependencies]
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
+embedded-storage-async = "0.4"
 embedded-alloc = "0.5"
 embassy-time = { version = "0.3", features = ["defmt"] }
 embassy-usb = { version = "0.1", features = [
@@ -45,7 +46,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
 ], optional = true }
 
 [features]
-default = ["eeprom", "col2row"]
+default = ["eeprom", "col2row", "ble"]
 col2row = []
 eeprom = []
 ble = ["dep:nrf-softdevice"]

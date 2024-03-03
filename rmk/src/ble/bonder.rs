@@ -1,24 +1,92 @@
-use core::cell::{Cell, RefCell};
-use defmt::{debug, warn};
-use heapless::Vec;
+use core::{
+    cell::{Cell, RefCell},
+    mem, 
+};
+use defmt::{error, info, warn, Format};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::channel::Channel;
 use nrf_softdevice::ble::{
     gatt_server::{get_sys_attrs, set_sys_attrs},
     security::{IoCapabilities, SecurityHandler},
     Connection, EncryptionInfo, IdentityKey, MasterId, SecurityMode,
 };
 
-#[derive(Clone, Copy)]
-struct Peer {
-    master_id: MasterId,
-    key: EncryptionInfo,
-    peer_id: IdentityKey,
+pub(crate) enum StoredBondInfo {
+    Peer(Peer),
+    SystemAttribute(SystemAttribute),
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Format)]
+pub(crate) struct Peer {
+    pub(crate) master_id: MasterId,
+    pub(crate) key: EncryptionInfo,
+    pub(crate) peer_id: IdentityKey,
+}
+
+impl Peer {
+    pub(crate) fn to_slice(&self) -> [u8; 50] {
+        let buf = unsafe { mem::transmute_copy(self) };
+        buf
+    }
+
+    pub(crate) fn from_slice(s: [u8; 50]) -> Self {
+        let data = unsafe { mem::transmute(s) };
+        data
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Format)]
+pub(crate) struct SystemAttribute {
+    pub(crate) length: usize,
+    pub(crate) data: [u8; 62],
+}
+
+impl Default for SystemAttribute {
+    fn default() -> Self {
+        Self {
+            length: 0,
+            data: [0; 62],
+        }
+    }
+}
+
+impl SystemAttribute {
+    pub(crate) const fn new() -> Self {
+        Self {
+            length: 0,
+            data: [0; 62],
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.length = 0;
+        self.data.fill(0);
+    }
+
+    pub(crate) fn to_slice(&self) -> [u8; 64] {
+        let mut serialized = [0; 64];
+        serialized[0] = self.length as u8;
+        serialized[2..64].copy_from_slice(&self.data);
+        serialized
+    }
+
+    pub(crate) fn from_slice(s: [u8; 64]) -> Self {
+        let mut data: [u8; 62] = [0; 62];
+        data.copy_from_slice(&s[2..64]);
+        Self {
+            length: s[0] as usize,
+            data,
+        }
+    }
 }
 
 // TODO: Finish `Bonder`, store keys after pairing, add encryption approach
 // FIXME: Reconnection issue
 pub(crate) struct Bonder {
     peer: Cell<Option<Peer>>,
-    sys_attrs: RefCell<Vec<u8, 62>>,
+    pub(crate) sys_attrs: RefCell<SystemAttribute>,
 }
 
 impl Default for Bonder {
@@ -30,6 +98,17 @@ impl Default for Bonder {
     }
 }
 
+impl Bonder {
+    pub(crate) fn new(sys_attr: RefCell<SystemAttribute>, peer_info: Cell<Option<Peer>>) -> Self {
+        Self {
+            peer: peer_info,
+            sys_attrs: sys_attr,
+        }
+    }
+}
+
+pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, StoredBondInfo, 2> = Channel::new();
+
 impl SecurityHandler for Bonder {
     fn io_capabilities(&self) -> IoCapabilities {
         IoCapabilities::None
@@ -39,14 +118,12 @@ impl SecurityHandler for Bonder {
         true
     }
 
-    // fn display_passkey(&self, passkey: &[u8; 6]) {
-    //     info!("[BT_HID] Passkey: {}", Debug2Format(passkey));
-    // }
-
-    // fn enter_passkey(&self, _reply: nrf_softdevice::ble::PasskeyReply) {}
+    fn display_passkey(&self, passkey: &[u8; 6]) {
+        info!("BLE passkey: {:#X}", passkey);
+    }
 
     fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
-        debug!("[BT_HID] new security mode: {}", security_mode);
+        info!("on_security_update, new security mode: {}", security_mode);
     }
 
     fn on_bonded(
@@ -57,20 +134,24 @@ impl SecurityHandler for Bonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        debug!("[BT_HID] storing bond for: id: {}, key: {}", master_id, key);
+        info!("storing bond for: id: {}, key: {}", master_id, key);
 
-        // TODO: save keys
         self.sys_attrs.borrow_mut().clear();
         self.peer.set(Some(Peer {
             master_id,
             key,
             peer_id,
-        }))
+        }));
+
+        match FLASH_CHANNEL.try_send(StoredBondInfo::Peer(self.peer.get().clone().unwrap())) {
+            Ok(_) => info!("Send peer"),
+            Err(_e) => error!("Send peer error:"),
+        }
     }
 
     fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
-        debug!("[BT_HID] getting bond for: id: {}", master_id);
+        info!("Getting bond for: id: {}", master_id);
 
         self.peer
             .get()
@@ -79,46 +160,65 @@ impl SecurityHandler for Bonder {
 
     fn save_sys_attrs(&self, conn: &Connection) {
         // On disconnect usually
-        debug!(
-            "[BT_HID] saving system attributes for: {}",
-            conn.peer_address()
-        );
+        info!("Saving system attributes for: {}", conn.peer_address());
 
         if let Some(peer) = self.peer.get() {
             if peer.peer_id.is_match(conn.peer_address()) {
+                info!("Peer {} matched: {}", peer.peer_id, conn.peer_address());
+
                 let mut sys_attrs = self.sys_attrs.borrow_mut();
-                let capacity = sys_attrs.capacity();
-                sys_attrs.resize(capacity, 0).unwrap();
-                let len = get_sys_attrs(conn, &mut sys_attrs).unwrap() as u16;
-                sys_attrs.truncate(len as usize);
-                // TODO: save sys_attrs for peer
+                let len = get_sys_attrs(conn, &mut sys_attrs.data).unwrap() as u16;
+                sys_attrs.length = len as usize;
+                let info: StoredBondInfo = StoredBondInfo::SystemAttribute(sys_attrs.clone());
+                match FLASH_CHANNEL.try_send(info) {
+                    Ok(_) => info!("Send sys attr"),
+                    Err(_e) => error!("Send sys attr error:"),
+                }
+            } else {
+                info!(
+                    "Peer {} Doesn't match: {}",
+                    peer.peer_id,
+                    conn.peer_address()
+                );
             }
         }
     }
 
     fn load_sys_attrs(&self, conn: &Connection) {
         let addr = conn.peer_address();
-        debug!("[BT_HID] loading system attributes for: {}", addr);
+        info!("loading system attributes for: {}", addr);
 
-        let attrs = self.sys_attrs.borrow();
-
-        // TODO: search stored peers
+        let sys_attrs = self.sys_attrs.borrow();
+        info!(
+            "loaded system attributes for: {}: len: {} data: {}",
+            addr, sys_attrs.length, sys_attrs.data
+        );
+        info!(
+            "condition: {}, data: {}",
+            sys_attrs.length == 0,
+            sys_attrs.data.as_slice()
+        );
+        info!("peer id: {}", self.peer.get().unwrap().peer_id);
         let attrs = if self
             .peer
             .get()
             .map(|peer| peer.peer_id.is_match(addr))
             .unwrap_or(false)
         {
-            (!attrs.is_empty()).then_some(attrs.as_slice())
+            if sys_attrs.length == 0 {
+                None
+            } else {
+                Some(&sys_attrs.data[0..sys_attrs.length])
+            }
+            // (!sys_attrs.length == 0).then_some(sys_attrs.data.as_slice())
         } else {
             None
         };
 
+        info!("Loaded system attributes: {:#X}", attrs);
+
         if let Err(err) = set_sys_attrs(conn, attrs) {
-            warn!(
-                "[BT_HID] SecurityHandler failed to set sys attrs: {:?}",
-                err
-            );
+            warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }
     }
 }
