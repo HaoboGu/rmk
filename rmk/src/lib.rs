@@ -11,8 +11,8 @@ use crate::ble::{keyboard_ble_task, softdevice_task};
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::error;
-use embassy_futures::join::join;
+use defmt::{error, warn};
+use embassy_futures::select::{select4, Either4};
 use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter},
@@ -87,10 +87,15 @@ pub async fn initialize_keyboard_with_config_and_run<
         let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
         let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
 
-        // Run all tasks
-        join(usb_fut, join(join(keyboard_fut, led_reader_fut), via_fut)).await;
+        // Run all tasks, if one of them fails, wait 1 second and then restart
+        match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
+            Either4::First(_) => error!("Usb task is died"),
+            Either4::Second(_) => error!("Keyboard task is died"),
+            Either4::Third(_) => error!("Led task is died"),
+            Either4::Fourth(_) => error!("Via task is died"),
+        }
 
-        error!("Keyboard service is died");
+        warn!("Detected failure, restarting keyboard sevice after 1 second");
         Timer::after_secs(1).await;
     }
 }
