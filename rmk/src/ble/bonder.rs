@@ -2,7 +2,7 @@ use core::{
     cell::{Cell, RefCell},
     mem, 
 };
-use defmt::{error, info, warn, Format};
+use defmt::{debug, error, info, warn, Format};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use nrf_softdevice::ble::{
@@ -134,7 +134,7 @@ impl SecurityHandler for Bonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        info!("storing bond for: id: {}, key: {}", master_id, key);
+        info!("On bonded: storing bond for: id: {}, key: {}", master_id, key);
 
         self.sys_attrs.borrow_mut().clear();
         self.peer.set(Some(Peer {
@@ -144,8 +144,8 @@ impl SecurityHandler for Bonder {
         }));
 
         match FLASH_CHANNEL.try_send(StoredBondInfo::Peer(self.peer.get().clone().unwrap())) {
-            Ok(_) => info!("Send peer"),
-            Err(_e) => error!("Send peer error:"),
+            Ok(_) => debug!("Sent peer to flash channel"),
+            Err(_e) => error!("Send peer to flash channel error"),
         }
     }
 
@@ -186,18 +186,9 @@ impl SecurityHandler for Bonder {
 
     fn load_sys_attrs(&self, conn: &Connection) {
         let addr = conn.peer_address();
-        info!("loading system attributes for: {}", addr);
+        info!("Loading system attributes for: {}", addr);
 
         let sys_attrs = self.sys_attrs.borrow();
-        info!(
-            "loaded system attributes for: {}: len: {} data: {}",
-            addr, sys_attrs.length, sys_attrs.data
-        );
-        info!(
-            "condition: {}, data: {}",
-            sys_attrs.length == 0,
-            sys_attrs.data.as_slice()
-        );
         info!("peer id: {}", self.peer.get().unwrap().peer_id);
         let attrs = if self
             .peer
@@ -210,7 +201,6 @@ impl SecurityHandler for Bonder {
             } else {
                 Some(&sys_attrs.data[0..sys_attrs.length])
             }
-            // (!sys_attrs.length == 0).then_some(sys_attrs.data.as_slice())
         } else {
             None
         };
