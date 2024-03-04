@@ -20,22 +20,19 @@ jobs:
       run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi
     - name: Build rmk
       working-directory: ./rmk
-      run: cargo build
+      run: cargo build --release
     - name: Build rp2040
       working-directory: ./boards/rp2040
-      run: cargo build
+      run: cargo build --release
     - name: Build stm32h7
       working-directory: ./boards/stm32h7
-      run: cargo build
+      run: cargo build --release
     - name: Build stm32f1
       working-directory: ./boards/stm32f1
-      run: cargo build
+      run: cargo build --release
     - name: Build stm32f4
       working-directory: ./boards/stm32f4
-      run: cargo build
+      run: cargo build --release
     - name: Build nrf52840
       working-directory: ./boards/nrf52840
-      run: cargo build
-    - name: Build nrf52840
-      working-directory: ./boards/nrf52840
-      run: cargo build
+      run: cargo build --release
