@@ -884,6 +884,7 @@ dependencies = [
  "embedded-alloc",
  "embedded-hal 1.0.0",
  "embedded-storage",
+ "futures",
  "log",
  "num_enum",
  "packed_struct",

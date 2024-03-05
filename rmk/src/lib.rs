@@ -8,6 +8,7 @@
 
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
+use futures::pin_mut;
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, warn};
 use embassy_futures::select::{select4, Either4};
@@ -83,6 +84,11 @@ pub async fn initialize_keyboard_with_config_and_run<
         );
         let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
         let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+
+        pin_mut!(usb_fut);
+        pin_mut!(keyboard_fut);
+        pin_mut!(led_reader_fut);
+        pin_mut!(via_fut);
 
         // Run all tasks, if one of them fails, wait 1 second and then restart
         match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
