@@ -10,7 +10,6 @@
 use crate::ble::{keyboard_ble_task, softdevice_task};
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
-use futures::pin_mut;
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, warn};
 use embassy_futures::select::{select4, Either4};
@@ -21,6 +20,7 @@ use embassy_usb::{
 };
 pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
+use futures::pin_mut;
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
@@ -243,11 +243,13 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use embedded_storage_async::nor_flash::NorFlash;
     use nrf_softdevice::Softdevice;
     use static_cell::StaticCell;
-    use usbd_hid::descriptor::SerializedDescriptor;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
-        advertise::create_advertisement_data, bonder::{Bonder, Peer, SystemAttribute}, constants::SCAN_DATA, descriptor::BleKeyboardReport, flash_task, hid_service2::*
-        // server::BleServer,
+        advertise::create_advertisement_data,
+        bonder::{Bonder, Peer, SystemAttribute},
+        constants::SCAN_DATA,
+        flash_task,
+        server::BleServer,
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},
@@ -260,7 +262,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
         .product_name
         .unwrap_or("RMK Keyboard");
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
-    // let ble_server = unwrap!(BleServer2::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
     let keymap = RefCell::new(KeyMap::<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>::new(
@@ -311,34 +312,36 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
                 info!("Starting GATT server 1 second later");
                 Timer::after_secs(1).await;
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
-                let ble_fut = gatt_server::run(&conn, &ble_server, |e| match e {
-                    BleServer2Event::BatteryService(battery_service_event) => {
-                        match battery_service_event {
-                            BatteryServiceEvent::BatteryLevelCccdWrite {
-                                notifications,
-                            } => info!("Battery service event: BatteryLevelCccdWrite.notificatiosn: {}", notifications),
-                        }
-                    }
-                    BleServer2Event::DeviceInformationService(_device_info_event) => {
-                        info!("Device info event");
-                    }
-                    BleServer2Event::HidService(hid_event) => {
-                        match hid_event {
-                            HidService2Event::InputReportWrite(d) => {
-                                info!("Hid service: Input report write: {}", d);
-                            }
-                            HidService2Event::InputReportCccdWrite { notifications } => {
-                                 info!("Hid service event: InputReportCccdWrite.notificatiosn: {}", notifications);
-                            }
-                            HidService2Event::ProtocolModeWrite(d) => {
-                                info!("Hid service: Protocol mode write: {}", d);
-                            }
-                            HidService2Event::HidControlWrite(d) => {
-                                info!("Hid service: Hid control write: {}", d);
-                            }
-                        }
-                    }
-                });
+                let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
+                // let ble_fut = gatt_server::run(&conn, &ble_server, |e| match e {
+                //     BleServer2Event::BatteryService(battery_service_event) => {
+                //         match battery_service_event {
+                //             BatteryServiceEvent::BatteryLevelCccdWrite {
+                //                 notifications,
+                //             } => info!("Battery service event: BatteryLevelCccdWrite.notificatiosn: {}", notifications),
+                //         }
+                //     }
+                //     BleServer2Event::DeviceInformationService(_device_info_event) => {
+                //         info!("Device info event");
+                //     }
+                //     BleServer2Event::HidService(hid_event) => {
+                //         match hid_event {
+                //             HidService2Event::InputReportWrite(d) => {
+                //                 info!("Hid service: Input report write: {}", d);
+                //             }
+                //             HidService2Event::InputReportCccdWrite { notifications } => {
+                //                  info!("Hid service event: InputReportCccdWrite.notificatiosn: {}", notifications);
+                //             }
+                //             HidService2Event::ProtocolModeWrite(d) => {
+                //                 info!("Hid service: Protocol mode write: {}", d);
+                //             }
+                //             HidService2Event::HidControlWrite(d) => {
+                //                 info!("Hid service: Hid control write: {}", d);
+                //             }
+                //         }
+                //     }
+                // });
+
                 let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
                 match select(ble_fut, keyboard_fut).await {
                     Either::First(disconnected_error) => error!(

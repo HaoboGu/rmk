@@ -5,6 +5,9 @@ use nrf_softdevice::ble::{
     Uuid,
 };
 
+/// HID service uuid defined in BLE protocol
+pub const BLE_HID_SERVICE_UUID: Uuid = Uuid::new_16(0x1812);
+
 /// Specification uuid used in keyboards
 ///
 /// Full reference: https://www.bluetooth.com/specifications/assigned-numbers/

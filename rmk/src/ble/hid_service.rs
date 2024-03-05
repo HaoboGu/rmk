@@ -7,14 +7,14 @@ use nrf_softdevice::{
             characteristic::{Attribute, Metadata, Properties},
             RegisterError,
         },
-        Connection, Uuid,
+        Connection,
     },
     Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use super::{
-    constants::{BleCharacteristics, BleDescriptor, KEYBOARD_ID},
+    constants::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID, KEYBOARD_ID},
     descriptor::BleKeyboardReport,
 };
 
@@ -36,7 +36,7 @@ pub struct HidService {
 
 impl HidService {
     pub fn new(sd: &mut Softdevice) -> Result<Self, RegisterError> {
-        let mut service_builder = ServiceBuilder::new(sd, Uuid::new_16(0x1812))?;
+        let mut service_builder = ServiceBuilder::new(sd, BLE_HID_SERVICE_UUID)?;
 
         let hid_info_handle = service_builder
             .add_characteristic(

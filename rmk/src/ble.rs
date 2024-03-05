@@ -8,7 +8,7 @@ mod hid_service;
 pub(crate) mod hid_service2;
 pub(crate) mod server;
 
-use self::{bonder::StoredBondInfo, hid_service2::BleServer2, server::BleServer};
+use self::{bonder::StoredBondInfo, server::BleServer};
 use crate::{ble::bonder::FLASH_CHANNEL, keyboard::Keyboard};
 use core::convert::Infallible;
 use defmt::info;
@@ -67,7 +67,7 @@ pub(crate) async fn keyboard_ble_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    ble_server: &BleServer2,
+    ble_server: &BleServer,
     conn: &nrf_softdevice::ble::Connection,
 ) {
     // Wait 2 seconds, ensure that gatt server has been started

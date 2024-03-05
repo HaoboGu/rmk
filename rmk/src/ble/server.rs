@@ -27,8 +27,8 @@ impl BleServer {
             sd,
             &PnPID {
                 vid_source: VidSource::UsbIF,
-                vendor_id: 0xDEAD,
-                product_id: 0xBEEF,
+                vendor_id: 0x4C4B,
+                product_id: 0x4643,
                 product_version: 0x0000,
             },
             DeviceInformation {
