@@ -7,7 +7,7 @@ use nrf_softdevice::{
             characteristic::{Attribute, Metadata, Properties},
             RegisterError,
         },
-        Connection,
+        Connection, SecurityMode,
     },
     Softdevice,
 };
@@ -45,7 +45,8 @@ impl HidService {
                     0x1u8, 0x1u8,  // HID version: 1.1
                     0x00u8, // Country Code
                     0x03u8, // Remote wake + Normally Connectable
-                ]),
+                ])
+                .security(SecurityMode::JustWorks),
                 Metadata::new(Properties::new().read()),
             )?
             .build();
@@ -53,7 +54,7 @@ impl HidService {
         let report_map_handle = service_builder
             .add_characteristic(
                 BleCharacteristics::ReportMap.uuid(),
-                Attribute::new(BleKeyboardReport::desc()),
+                Attribute::new(BleKeyboardReport::desc()).security(SecurityMode::JustWorks),
                 Metadata::new(Properties::new().read()),
             )?
             .build();
@@ -61,38 +62,38 @@ impl HidService {
         let hid_control_handle = service_builder
             .add_characteristic(
                 BleCharacteristics::HidControlPoint.uuid(),
-                Attribute::new([0u8]),
-                Metadata::new(Properties::new().write_without_response()),
+                Attribute::new([0u8]).security(SecurityMode::JustWorks),
+                Metadata::new(Properties::new().read().write_without_response()),
             )?
             .build();
 
         let protocol_mode_handle = service_builder
             .add_characteristic(
                 BleCharacteristics::ProtocolMode.uuid(),
-                Attribute::new([1u8]),
+                Attribute::new([1u8]).security(SecurityMode::JustWorks),
                 Metadata::new(Properties::new().read().write_without_response()),
             )?
             .build();
 
         let mut input_keyboard = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
-            Attribute::new([0u8; 8]),
-            Metadata::new(Properties::new().read().notify()),
+            Attribute::new([0u8; 8]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().notify()),
         )?;
         let input_keyboard_desc = input_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([KEYBOARD_ID, 1u8]), // First is ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([KEYBOARD_ID, 1u8]).security(SecurityMode::JustWorks), // First is ID (e.g. 1 for keyboard 2 for media keys), second is in/out
         )?;
         let input_keyboard_handle = input_keyboard.build();
 
         let mut output_keyboard = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
-            Attribute::new([0u8; 8]),
+            Attribute::new([0u8; 8]).security(SecurityMode::JustWorks),
             Metadata::new(Properties::new().read().write().write_without_response()),
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([KEYBOARD_ID, 2u8]),
+            Attribute::new([KEYBOARD_ID, 2u8]).security(SecurityMode::JustWorks),
         )?;
         let output_keyboard_handle = output_keyboard.build();
 
