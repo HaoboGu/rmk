@@ -127,25 +127,12 @@ impl HidService {
     }
 
     pub fn on_write(&self, conn: &Connection, handle: u16, data: &[u8]) {
-        let val = &[
-            0, // Modifiers (Shift, Ctrl, Alt, GUI, etc.)
-            0, // Reserved
-            0x0E, 0, 0, 0, 0, 0, // Key code array - 0x04 is 'a' and 0x1d is 'z' - for example
-        ];
         if handle == self.input_keyboard_cccd {
             info!("HID input keyboard notify: {:?}", data);
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             info!("HID output keyboard: {:?}", data);
-
-            if *data.get(0).unwrap() == 1 {
-                gatt_server::notify_value(conn, self.input_keyboard, val).unwrap();
-                info!("Keyboard report sent");
-            } else {
-                gatt_server::notify_value(conn, self.input_keyboard, &[0u8; 8]).unwrap();
-                info!("Keyboard report cleared");
-            }
-            // } else if handle == self.input_media_keys_cccd {
+        // } else if handle == self.input_media_keys_cccd {
             // info!("HID input media keys: {:?}", data);
         }
     }
