@@ -1,6 +1,6 @@
 use core::{
     cell::{Cell, RefCell},
-    mem, 
+    mem,
 };
 use defmt::{debug, error, info, warn, Format};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -14,6 +14,7 @@ use nrf_softdevice::ble::{
 pub(crate) enum StoredBondInfo {
     Peer(Peer),
     SystemAttribute(SystemAttribute),
+    Clear,
 }
 
 #[repr(C)]
@@ -134,7 +135,10 @@ impl SecurityHandler for Bonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        info!("On bonded: storing bond for: id: {}, key: {}", master_id, key);
+        info!(
+            "On bonded: storing bond for: id: {}, key: {}",
+            master_id, key
+        );
 
         self.sys_attrs.borrow_mut().clear();
         self.peer.set(Some(Peer {
@@ -180,6 +184,10 @@ impl SecurityHandler for Bonder {
                     peer.peer_id,
                     conn.peer_address()
                 );
+                match FLASH_CHANNEL.try_send(StoredBondInfo::Clear) {
+                    Ok(_) => info!("Send clear bond info"),
+                    Err(_e) => error!("Send clear bond info error:"),
+                }
             }
         }
     }

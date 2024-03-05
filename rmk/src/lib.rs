@@ -232,28 +232,29 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use core::cell::Cell;
 
     use defmt::*;
+    use embassy_futures::select::{select, Either};
     use embedded_storage::nor_flash::ReadNorFlash;
     use embedded_storage_async::nor_flash::NorFlash;
-    use nrf_softdevice::{Softdevice};
+    use nrf_softdevice::Softdevice;
     use static_cell::StaticCell;
+    use usbd_hid::descriptor::SerializedDescriptor;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
-        advertise::create_advertisement_data,
-        bonder::{Bonder, Peer, SystemAttribute},
-        constants::SCAN_DATA,
-        flash_task,
-        server::BleServer,
+        advertise::create_advertisement_data, bonder::{Bonder, Peer, SystemAttribute}, constants::SCAN_DATA, descriptor::BleKeyboardReport, flash_task, hid_service2::*
+        // server::BleServer,
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},
         Flash,
     };
+
     let sd = Softdevice::enable(&ble_config);
     let keyboard_name = keyboard_config
         .usb_config
         .product_name
         .unwrap_or("RMK Keyboard");
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
+    // let ble_server = unwrap!(BleServer2::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
     let keymap = RefCell::new(KeyMap::<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>::new(
@@ -301,26 +302,52 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
-                Timer::after_secs(2).await;
-                // 手动Load sys attr
-                // bonder.load_sys_attrs(&conn);
-                info!("Starting GATT server");
+                info!("Starting GATT server 1 second later");
+                Timer::after_secs(1).await;
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
-                let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
+                let ble_fut = gatt_server::run(&conn, &ble_server, |e| match e {
+                    BleServer2Event::BatteryService(battery_service_event) => {
+                        match battery_service_event {
+                            BatteryServiceEvent::BatteryLevelCccdWrite {
+                                notifications,
+                            } => info!("Battery service event: BatteryLevelCccdWrite.notificatiosn: {}", notifications),
+                        }
+                    }
+                    BleServer2Event::DeviceInformationService(_device_info_event) => {
+                        info!("Device info event");
+                    }
+                    BleServer2Event::HidService(hid_event) => {
+                        match hid_event {
+                            HidService2Event::InputReportWrite(d) => {
+                                info!("Hid service: Input report write: {}", d);
+                            }
+                            HidService2Event::InputReportCccdWrite { notifications } => {
+                                 info!("Hid service event: InputReportCccdWrite.notificatiosn: {}", notifications);
+                            }
+                            HidService2Event::ProtocolModeWrite(d) => {
+                                info!("Hid service: Protocol mode write: {}", d);
+                            }
+                            HidService2Event::HidControlWrite(d) => {
+                                info!("Hid service: Hid control write: {}", d);
+                            }
+                        }
+                    }
+                });
                 let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
-                let (disconnected_error, _) = join(ble_fut, keyboard_fut).await;
-
-                error!(
-                    "BLE gatt_server run exited with error: {:?}",
-                    disconnected_error
-                );
+                match select(ble_fut, keyboard_fut).await {
+                    Either::First(disconnected_error) => error!(
+                        "BLE gatt_server run exited with error: {:?}",
+                        disconnected_error
+                    ),
+                    Either::Second(_) => error!("Keyboard task exited"),
+                }
             }
             Err(e) => {
                 error!("Advertise error: {}", e)
             }
         }
 
-        // Retry after 1 second
-        Timer::after_secs(1).await;
+        // Retry after 3 second
+        Timer::after_secs(3).await;
     }
 }

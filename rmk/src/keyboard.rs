@@ -16,6 +16,8 @@ use usbd_hid::descriptor::KeyboardReport;
 #[cfg(feature = "ble")]
 use crate::ble::server::BleServer;
 #[cfg(feature = "ble")]
+use crate::ble::hid_service2::BleServer2;
+#[cfg(feature = "ble")]
 use nrf_softdevice::ble::Connection;
 pub(crate) struct Keyboard<
     'a,
@@ -157,10 +159,11 @@ impl<
     #[cfg(feature = "ble")]
     pub(crate) async fn send_ble_report(
         &mut self,
-        ble_server: &BleServer,
+        ble_server: &BleServer2,
         conn: &Connection,
     ) {
         use ssmarshal::serialize;
+
         if self.need_send_key_report {
             let mut buf: [u8; 8] = [0; 8];
             match serialize(&mut buf, &self.report) {
@@ -170,7 +173,10 @@ impl<
                         self.report.keycodes,
                         size
                     );
-                    ble_server.hid.send_ble_keyboard_report(conn, &buf)
+                    // ble_server.hid.send_ble_keyboard_report(conn, &buf)
+                    ble_server.hid_service.input_report_set(&buf).unwrap();
+                    ble_server.hid_service.input_report_notify(conn, &buf).ok();
+                    // ble_server.hid_service.input_report_notify(conn, &buf).unwrap();
                 }
                 Err(_) => {
                     error!("Serialize keyboard report error");
