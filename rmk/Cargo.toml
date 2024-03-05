@@ -45,6 +45,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/HaoboGu/nrf-soft
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
+futures = { version = "0.3", default-features = false}
 
 [features]
 default = ["eeprom", "col2row"]
