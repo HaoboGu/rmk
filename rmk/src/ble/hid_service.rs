@@ -126,7 +126,7 @@ impl HidService {
         })
     }
 
-    pub fn on_write(&self, conn: &Connection, handle: u16, data: &[u8]) {
+    pub fn on_write(&self, _conn: &Connection, handle: u16, data: &[u8]) {
         if handle == self.input_keyboard_cccd {
             info!("HID input keyboard notify: {:?}", data);
         } else if handle == self.output_keyboard {

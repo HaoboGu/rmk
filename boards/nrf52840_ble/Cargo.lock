@@ -791,7 +791,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 [[package]]
 name = "nrf-softdevice"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/HaoboGu/nrf-softdevice?rev=8db29ff#8db29ff45c950bba8a78d4b2d03c4da1eac99c21"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -813,7 +813,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-macro"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/HaoboGu/nrf-softdevice?rev=8db29ff#8db29ff45c950bba8a78d4b2d03c4da1eac99c21"
 dependencies = [
  "Inflector",
  "darling 0.13.4",
@@ -826,7 +826,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-s140"
 version = "0.1.2"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/HaoboGu/nrf-softdevice?rev=8db29ff#8db29ff45c950bba8a78d4b2d03c4da1eac99c21"
 
 [[package]]
 name = "nrf52805-pac"
@@ -1119,11 +1119,14 @@ dependencies = [
  "embedded-alloc",
  "embedded-hal 1.0.0",
  "embedded-storage",
+ "embedded-storage-async",
+ "futures",
  "heapless 0.8.0",
  "log",
  "nrf-softdevice",
  "num_enum",
  "packed_struct",
+ "sequential-storage",
  "ssmarshal",
  "static_cell",
  "usbd-hid",
@@ -1195,6 +1198,16 @@ name = "semver-parser"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
+
+[[package]]
+name = "sequential-storage"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a4436f77b36958b8092ddea907a21d371dda9b5cd6fbe7036fba2a8479b8ace"
+dependencies = [
+ "defmt",
+ "embedded-storage-async",
+]
 
 [[package]]
 name = "serde"

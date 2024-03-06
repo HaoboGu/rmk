@@ -26,6 +26,7 @@ embassy-nrf = { version = "0.1.0", features = [
 usbd-hid = "0.6"
 embassy-executor = { version = "0.5", features = [
     "defmt",
+    "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",

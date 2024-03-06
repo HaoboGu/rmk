@@ -46,6 +46,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/HaoboGu/nrf-soft
     "ble-sec",
 ], optional = true }
 futures = { version = "0.3", default-features = false }
+sequential-storage = { version = "1.0", features = ["defmt-03"] }
 
 [features]
 default = ["eeprom", "col2row"]

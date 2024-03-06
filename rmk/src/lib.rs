@@ -202,6 +202,8 @@ async fn vial_task<
 }
 
 #[cfg(feature = "ble")]
+use heapless::Vec;
+#[cfg(feature = "ble")]
 use action::KeyAction;
 #[cfg(feature = "ble")]
 use embassy_executor::Spawner;
@@ -235,21 +237,19 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
-    use core::cell::Cell;
-
     use defmt::*;
     use embassy_futures::select::{select, Either};
-    use embedded_storage::nor_flash::ReadNorFlash;
-    use embedded_storage_async::nor_flash::NorFlash;
     use nrf_softdevice::Softdevice;
+    use sequential_storage::{cache::NoCache, map::fetch_item};
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
         advertise::create_advertisement_data,
-        bonder::{Bonder, Peer, SystemAttribute},
+        bonder::{BondInfo, Bonder, BONDED_DEVICE_NUM},
         constants::SCAN_DATA,
         flash_task,
         server::BleServer,
+        CONFIG_FLASH_RANGE,
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},
@@ -272,29 +272,27 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     let f = NRF_FLASH.init(Flash::take(sd));
 
     // Saved bond info
-    let mut slice: [u8; 64] = [0; 64];
-    f.read(0x81000, &mut slice).unwrap();
-    let bond_info = SystemAttribute::from_slice(slice);
-    let mut peer_bytes = [0_u8; 50];
-    f.read(0x80000, &mut slice).unwrap();
-    peer_bytes.copy_from_slice(&slice[0..50]);
-    let peer_info = Peer::from_slice(peer_bytes);
-    // TODO: If peer and bond are both empty
-    info!("Loaded bond info: {}", bond_info);
-    info!("Loaded peer info: {}", peer_info);
+    let mut buf: [u8; 128] = [0; 128];
+
+    let mut bond_info: Vec<BondInfo, 3> = Vec::new();
+    for key in 0..BONDED_DEVICE_NUM {
+        if let Ok(Some(info)) =
+            fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)
+                .await
+        {
+            match bond_info.push(info) {
+                Ok(_) => (),
+                Err(_) => error!("Add bond info error"),
+            }
+        }
+    }
+
+    info!("Loaded bond info: {}", bond_info.len());
 
     // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();
-    let bonder = if peer_info.master_id.ediv == 65535 {
-        f.erase(0x80000, 0x81000).await.unwrap();
-        warn!("Erased");
-        BONDER.init(Default::default())
-    } else {
-        BONDER.init(Bonder::new(
-            RefCell::new(bond_info),
-            Cell::new(Some(peer_info)),
-        ))
-    };
+    let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+
     unwrap!(spawner.spawn(flash_task(f)));
 
     loop {
@@ -313,34 +311,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
                 Timer::after_secs(1).await;
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
-                // let ble_fut = gatt_server::run(&conn, &ble_server, |e| match e {
-                //     BleServer2Event::BatteryService(battery_service_event) => {
-                //         match battery_service_event {
-                //             BatteryServiceEvent::BatteryLevelCccdWrite {
-                //                 notifications,
-                //             } => info!("Battery service event: BatteryLevelCccdWrite.notificatiosn: {}", notifications),
-                //         }
-                //     }
-                //     BleServer2Event::DeviceInformationService(_device_info_event) => {
-                //         info!("Device info event");
-                //     }
-                //     BleServer2Event::HidService(hid_event) => {
-                //         match hid_event {
-                //             HidService2Event::InputReportWrite(d) => {
-                //                 info!("Hid service: Input report write: {}", d);
-                //             }
-                //             HidService2Event::InputReportCccdWrite { notifications } => {
-                //                  info!("Hid service event: InputReportCccdWrite.notificatiosn: {}", notifications);
-                //             }
-                //             HidService2Event::ProtocolModeWrite(d) => {
-                //                 info!("Hid service: Protocol mode write: {}", d);
-                //             }
-                //             HidService2Event::HidControlWrite(d) => {
-                //                 info!("Hid service: Hid control write: {}", d);
-                //             }
-                //         }
-                //     }
-                // });
 
                 let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
                 match select(ble_fut, keyboard_fut).await {
