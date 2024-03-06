@@ -885,11 +885,13 @@ dependencies = [
  "embedded-alloc",
  "embedded-hal 1.0.0",
  "embedded-storage",
+ "embedded-storage-async",
  "futures",
  "heapless 0.8.0",
  "log",
  "num_enum",
  "packed_struct",
+ "sequential-storage",
  "ssmarshal",
  "static_cell",
  "usbd-hid",
@@ -966,6 +968,16 @@ name = "semver-parser"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
+
+[[package]]
+name = "sequential-storage"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a4436f77b36958b8092ddea907a21d371dda9b5cd6fbe7036fba2a8479b8ace"
+dependencies = [
+ "defmt",
+ "embedded-storage-async",
+]
 
 [[package]]
 name = "serde"
