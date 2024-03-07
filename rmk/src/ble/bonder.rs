@@ -10,10 +10,11 @@ use nrf_softdevice::ble::{
 };
 use sequential_storage::map::StorageItem;
 
-/// Maximum number of bonded devices
-pub const BONDED_DEVICE_NUM: usize = 8;
+use super::BONDED_DEVICE_NUM;
+
 // Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 2> = Channel::new();
+pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 2> =
+    Channel::new();
 
 // Bond info which will be stored in flash
 #[derive(Clone, Copy, Debug, Format)]
@@ -231,7 +232,6 @@ impl SecurityHandler for Bonder {
             .for_each(|i| info!("Saved bond info: {}", i));
 
         let bond_info = self.bond_info.borrow_mut();
-
 
         if let Some(idx) = bond_info
             .iter()

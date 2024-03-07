@@ -202,11 +202,11 @@ async fn vial_task<
 }
 
 #[cfg(feature = "ble")]
-use heapless::Vec;
-#[cfg(feature = "ble")]
 use action::KeyAction;
 #[cfg(feature = "ble")]
 use embassy_executor::Spawner;
+#[cfg(feature = "ble")]
+use heapless::Vec;
 #[cfg(feature = "ble")]
 pub use nrf_softdevice;
 #[cfg(feature = "ble")]
@@ -245,11 +245,11 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
         advertise::create_advertisement_data,
-        bonder::{BondInfo, Bonder, BONDED_DEVICE_NUM},
+        bonder::{BondInfo, Bonder},
         constants::SCAN_DATA,
         flash_task,
         server::BleServer,
-        CONFIG_FLASH_RANGE,
+        BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},

@@ -14,7 +14,7 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use super::{
-    constants::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID, KEYBOARD_ID},
+    constants::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID},
     descriptor::BleKeyboardReport,
 };
 
@@ -82,7 +82,7 @@ impl HidService {
         )?;
         let input_keyboard_desc = input_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([KEYBOARD_ID, 1u8]).security(SecurityMode::JustWorks), // First is ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([1u8, 1u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
         )?;
         let input_keyboard_handle = input_keyboard.build();
 
@@ -93,7 +93,7 @@ impl HidService {
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([KEYBOARD_ID, 2u8]).security(SecurityMode::JustWorks),
+            Attribute::new([1u8, 2u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
         )?;
         let output_keyboard_handle = output_keyboard.build();
 
@@ -132,7 +132,7 @@ impl HidService {
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             info!("HID output keyboard: {:?}", data);
-        // } else if handle == self.input_media_keys_cccd {
+            // } else if handle == self.input_media_keys_cccd {
             // info!("HID input media keys: {:?}", data);
         }
     }

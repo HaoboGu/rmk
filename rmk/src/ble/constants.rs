@@ -59,9 +59,6 @@ impl BleCharacteristics {
     }
 }
 
-pub const KEYBOARD_ID: u8 = 0x01;
-pub const MEDIA_KEYS_ID: u8 = 0x02;
-
 pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
     .services_16(
         ServiceList::Complete,

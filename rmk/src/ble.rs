@@ -24,6 +24,12 @@ use sequential_storage::{
     map::{remove_item, store_item},
 };
 
+
+/// Flash range which used to save bonding info
+pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
+/// Maximum number of bonded devices
+pub const BONDED_DEVICE_NUM: usize = 2;
+
 /// Create default nrf ble config
 pub fn nrf_ble_config(keyboard_name: &str) -> Config {
     Config {
@@ -66,10 +72,6 @@ pub fn nrf_ble_config(keyboard_name: &str) -> Config {
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     sd.run().await
 }
-
-pub(crate) const FLASH_START: u32 = 0x80000;
-pub(crate) const FLASH_END: u32 = 0x82000;
-pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
 
 #[embassy_executor::task]
 pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
