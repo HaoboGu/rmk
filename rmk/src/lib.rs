@@ -274,7 +274,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     // Saved bond info
     let mut buf: [u8; 128] = [0; 128];
 
-    let mut bond_info: Vec<BondInfo, 3> = Vec::new();
+    let mut bond_info: Vec<BondInfo, BONDED_DEVICE_NUM> = Vec::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(info)) =
             fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)

@@ -8,7 +8,7 @@ mod hid_service;
 pub(crate) mod hid_service2;
 pub(crate) mod server;
 
-use self::{bonder::StoredBondInfo, server::BleServer};
+use self::{bonder::FlashOperationMessage, server::BleServer};
 use crate::{
     ble::bonder::{BondInfo, FLASH_CHANNEL},
     keyboard::Keyboard,
@@ -38,11 +38,10 @@ pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
 pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
     let mut storage_data_buffer = [0_u8; 128];
     loop {
-        let info: StoredBondInfo = FLASH_CHANNEL.receive().await;
+        let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
         match info {
-            StoredBondInfo::Clear(key) => {
+            FlashOperationMessage::Clear(key) => {
                 info!("Clearing bond info slot_num: {}", key);
-                // TODO: verify clear
                 remove_item::<BondInfo, _>(
                     f,
                     CONFIG_FLASH_RANGE,
@@ -53,7 +52,7 @@ pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
                 .await
                 .unwrap();
             }
-            StoredBondInfo::BondInfo(b) => {
+            FlashOperationMessage::BondInfo(b) => {
                 info!("Saving item: {}", info);
                 store_item::<BondInfo, _>(
                     f,

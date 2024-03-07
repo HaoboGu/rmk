@@ -11,8 +11,9 @@ use nrf_softdevice::ble::{
 use sequential_storage::map::StorageItem;
 
 /// Maximum number of bonded devices
-pub const BONDED_DEVICE_NUM: usize = 3;
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, StoredBondInfo, 2> = Channel::new();
+pub const BONDED_DEVICE_NUM: usize = 8;
+// Sync messages from server to flash
+pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 2> = Channel::new();
 
 // Bond info which will be stored in flash
 #[derive(Clone, Copy, Debug, Format)]
@@ -33,6 +34,7 @@ impl StorageItem for BondInfo {
         if buffer.len() < 120 {
             return Err(StorageError::BufferTooSmall);
         }
+
         // Must be 120
         // info!("size of BondInfo: {}", size_of_val(self));
 
@@ -63,7 +65,7 @@ impl StorageItem for BondInfo {
 }
 
 #[derive(Clone, Copy, Debug, Format)]
-pub(crate) enum StoredBondInfo {
+pub(crate) enum FlashOperationMessage {
     BondInfo(BondInfo),
     // Clear info of given slot number
     Clear(u8),
@@ -182,8 +184,11 @@ impl SecurityHandler for Bonder {
 
         // Check free-slot first
         if new_bond_id == self.bond_info.borrow_mut().capacity() {
-            // TODO: slot full, remove oldest device
-            warn!("Reach maximum number of bonded devices");
+            warn!("Reach maximum number of bonded devices, a device which is not lucky today will be removed:(");
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::Clear(4)) {
+                Ok(_) => debug!("Sent clear to flash channel"),
+                Err(_e) => error!("Send clear to flash channel error"),
+            }
         } else {
             let new_bond_info = BondInfo {
                 sys_attr: SystemAttribute::new(),
@@ -198,7 +203,7 @@ impl SecurityHandler for Bonder {
             // Should be OK
             let _ = self.bond_info.borrow_mut().push(new_bond_info);
 
-            match FLASH_CHANNEL.try_send(StoredBondInfo::BondInfo(new_bond_info)) {
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(new_bond_info)) {
                 Ok(_) => debug!("Sent bond info to flash channel"),
                 Err(_e) => error!("Send bond info to flash channel error"),
             }
@@ -225,27 +230,23 @@ impl SecurityHandler for Bonder {
             .iter()
             .for_each(|i| info!("Saved bond info: {}", i));
 
-        if let Some(idx) = self
-            .bond_info
-            .borrow()
+        let bond_info = self.bond_info.borrow_mut();
+
+
+        if let Some(idx) = bond_info
             .iter()
             .position(|info| info.peer.peer_id.is_match(conn.peer_address()))
         {
             // Find a match, get sys attr and save
-            let mut info = self.bond_info.borrow_mut()[idx];
+            let mut info = bond_info[idx];
             info.sys_attr.length = get_sys_attrs(conn, &mut info.sys_attr.data).unwrap();
 
-            match FLASH_CHANNEL.try_send(StoredBondInfo::BondInfo(info)) {
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info)) {
                 Ok(_) => debug!("Sent bond info to flash channel"),
                 Err(_e) => error!("Send bond info to flash channel error"),
             }
         } else {
             info!("Peer doesn't match: {}", conn.peer_address());
-            // FIXME: How to do clearing?
-            // match FLASH_CHANNEL.try_send(StoredBondInfo::Clear(0)) {
-            // Ok(_) => info!("Send clear bond info"),
-            // Err(_e) => error!("Send clear bond info error:"),
-            // }
         }
     }
 
