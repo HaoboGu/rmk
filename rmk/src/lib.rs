@@ -6,9 +6,10 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
 
+#[cfg(feature = "ble")]
+use crate::ble::{keyboard_ble_task, softdevice_task};
 use crate::light::LightService;
 use config::{RmkConfig, VialConfig};
-use futures::pin_mut;
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, warn};
 use embassy_futures::select::{select4, Either4};
@@ -19,12 +20,15 @@ use embassy_usb::{
 };
 pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
 use embedded_storage::nor_flash::NorFlash;
+use futures::pin_mut;
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
+#[cfg(feature = "ble")]
+pub mod ble;
 pub mod config;
 mod debounce;
 mod eeprom;
@@ -63,7 +67,6 @@ pub async fn initialize_keyboard_with_config_and_run<
     keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    // TODO: Config struct for keyboard services
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service) = (
         Keyboard::new(input_pins, output_pins, keymap),
@@ -195,5 +198,135 @@ async fn vial_task<
             Ok(_) => Timer::after_millis(1).await,
             Err(_) => Timer::after_millis(500).await,
         }
+    }
+}
+
+#[cfg(feature = "ble")]
+use heapless::Vec;
+#[cfg(feature = "ble")]
+use action::KeyAction;
+#[cfg(feature = "ble")]
+use embassy_executor::Spawner;
+#[cfg(feature = "ble")]
+pub use nrf_softdevice;
+#[cfg(feature = "ble")]
+/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+///
+/// # Arguments
+///
+/// * `keymap` - default keymap definition
+/// * `driver` - embassy usb driver instance
+/// * `input_pins` - input gpio pins
+/// * `output_pins` - output gpio pins
+/// * `ble_config` - nrf_softdevice config
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
+pub async fn initialize_ble_keyboard_with_config_and_run<
+    F: NorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const EEPROM_SIZE: usize,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    ble_config: nrf_softdevice::Config,
+    keyboard_config: RmkConfig<'static, Out>,
+    spawner: Spawner,
+) -> ! {
+    use defmt::*;
+    use embassy_futures::select::{select, Either};
+    use nrf_softdevice::Softdevice;
+    use sequential_storage::{cache::NoCache, map::fetch_item};
+    use static_cell::StaticCell;
+    // FIXME: add auto recognition of ble/usb
+    use crate::ble::{
+        advertise::create_advertisement_data,
+        bonder::{BondInfo, Bonder, BONDED_DEVICE_NUM},
+        constants::SCAN_DATA,
+        flash_task,
+        server::BleServer,
+        CONFIG_FLASH_RANGE,
+    };
+    use nrf_softdevice::{
+        ble::{gatt_server, peripheral},
+        Flash,
+    };
+
+    let sd = Softdevice::enable(&ble_config);
+    let keyboard_name = keyboard_config
+        .usb_config
+        .product_name
+        .unwrap_or("RMK Keyboard");
+    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
+    unwrap!(spawner.spawn(softdevice_task(sd)));
+
+    let keymap = RefCell::new(KeyMap::<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>::new(
+        keymap, None, None,
+    ));
+    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
+    let f = NRF_FLASH.init(Flash::take(sd));
+
+    // Saved bond info
+    let mut buf: [u8; 128] = [0; 128];
+
+    let mut bond_info: Vec<BondInfo, BONDED_DEVICE_NUM> = Vec::new();
+    for key in 0..BONDED_DEVICE_NUM {
+        if let Ok(Some(info)) =
+            fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)
+                .await
+        {
+            match bond_info.push(info) {
+                Ok(_) => (),
+                Err(_) => error!("Add bond info error"),
+            }
+        }
+    }
+
+    info!("Loaded bond info: {}", bond_info.len());
+
+    // BLE bonder
+    static BONDER: StaticCell<Bonder> = StaticCell::new();
+    let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+
+    unwrap!(spawner.spawn(flash_task(f)));
+
+    loop {
+        info!("BLE Advertising");
+        // Create connection
+        let config = peripheral::Config::default();
+        let adv_data = create_advertisement_data(keyboard_name);
+        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &adv_data,
+            scan_data: &SCAN_DATA,
+        };
+
+        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
+            Ok(conn) => {
+                info!("Starting GATT server 1 second later");
+                Timer::after_secs(1).await;
+                // Run the GATT server on the connection. This returns when the connection gets disconnected.
+                let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
+
+                let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
+                match select(ble_fut, keyboard_fut).await {
+                    Either::First(disconnected_error) => error!(
+                        "BLE gatt_server run exited with error: {:?}",
+                        disconnected_error
+                    ),
+                    Either::Second(_) => error!("Keyboard task exited"),
+                }
+            }
+            Err(e) => {
+                error!("Advertise error: {}", e)
+            }
+        }
+
+        // Retry after 3 second
+        Timer::after_secs(3).await;
     }
 }
