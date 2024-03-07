@@ -10,6 +10,8 @@ Keyboard firmware with layer/dynamic keymap/[vial](https://get.vial.today) suppo
 
 ## News
 
+- [2024.03.07] Experimental BLE support for nrf52840 has beed added! Checkout [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) for details.
+
 - [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
 
 <details>
@@ -112,7 +114,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [ ] better documentation
 - [ ] RGB
 - [ ] encoder
-- [ ] wireless
+- [x] (experimental) wireless
 - [ ] default bootloader/DFU
 - [ ] a good gui configurator
 
