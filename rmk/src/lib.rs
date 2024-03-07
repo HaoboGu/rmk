@@ -240,7 +240,10 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use defmt::*;
     use embassy_futures::select::{select, Either};
     use nrf_softdevice::Softdevice;
-    use sequential_storage::{cache::NoCache, map::fetch_item};
+    use sequential_storage::{
+        cache::NoCache,
+        map::{fetch_item, remove_item},
+    };
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
@@ -280,9 +283,28 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)
                 .await
         {
-            match bond_info.push(info) {
-                Ok(_) => (),
-                Err(_) => error!("Add bond info error"),
+            // Iterate through bond_info, remove same devices by comparing peer address
+            if bond_info
+                .iter()
+                .filter(|i| i.peer.peer_id.addr == info.peer.peer_id.addr)
+                .count()
+                > 0
+            {
+                info!("Peer exists, removing current");
+                remove_item::<BondInfo, _>(
+                    f,
+                    CONFIG_FLASH_RANGE,
+                    NoCache::new(),
+                    &mut buf,
+                    key as u8,
+                )
+                .await
+                .unwrap();
+            } else {
+                match bond_info.push(info) {
+                    Ok(_) => (),
+                    Err(_) => error!("Add bond info error"),
+                }
             }
         }
     }

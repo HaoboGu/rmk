@@ -19,8 +19,8 @@ pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessa
 // Bond info which will be stored in flash
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) struct BondInfo {
-    slot_num: u8,
-    peer: Peer,
+    pub(crate) slot_num: u8,
+    pub(crate) peer: Peer,
     sys_attr: SystemAttribute,
 }
 
