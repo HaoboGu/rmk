@@ -111,7 +111,7 @@ A lot of todos at the list, any contributions are welcomed :)
 - [ ] ~~easy keyboard configuration with good default~~(haven't found a good way to achieve this, if you got any idea, ping me pls)
 - [x] LED
 - [x] (experimental) wireless - BLE
-- [ ] (BLE) auto switch between BLE/USB, on-the-fly mutliple device support
+- [ ] (BLE) auto switch between BLE/USB, on-the-fly mutliple device support, battery service from ADC  
 - [ ] keyboard macro
 - [ ] better documentation
 - [ ] RGB
