@@ -1,8 +1,9 @@
-use core::{cell::RefCell, mem};
+use core::{borrow::BorrowMut, cell::RefCell, mem};
 use defmt::{debug, error, info, warn, Format};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
-use heapless::Vec;
+use futures::future::ok;
+use heapless::{FnvIndexMap, Vec};
 use nrf_softdevice::ble::{
     gatt_server::{get_sys_attrs, set_sys_attrs},
     security::{IoCapabilities, SecurityHandler},
@@ -134,19 +135,19 @@ impl SystemAttribute {
 }
 
 pub(crate) struct Bonder {
-    bond_info: RefCell<Vec<BondInfo, BONDED_DEVICE_NUM>>,
+    bond_info: RefCell<FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM>>,
 }
 
 impl Default for Bonder {
     fn default() -> Self {
         Bonder {
-            bond_info: RefCell::new(Vec::new()),
+            bond_info: RefCell::new(FnvIndexMap::new()),
         }
     }
 }
 
 impl Bonder {
-    pub(crate) fn new(bond_info: RefCell<Vec<BondInfo, BONDED_DEVICE_NUM>>) -> Self {
+    pub(crate) fn new(bond_info: RefCell<FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM>>) -> Self {
         Self { bond_info }
     }
 }
@@ -181,15 +182,26 @@ impl SecurityHandler for Bonder {
             master_id, key
         );
 
-        let new_bond_id = self.bond_info.borrow_mut().len();
+        // Get slot num first
+        // Still use iterator here, because using peer as key will lead to a lot more complexity
+        let slot_num = self
+            .bond_info
+            .borrow()
+            .iter()
+            .find(|(i, b)| b.peer.peer_id.addr == peer_id.addr)
+            .map(|(i, b)| *i)
+            .unwrap_or(self.bond_info.borrow().len() as u8);
 
         // Check free-slot first
-        if new_bond_id == self.bond_info.borrow_mut().capacity() {
+        if (slot_num as usize) == self.bond_info.borrow().capacity() {
             warn!("Reach maximum number of bonded devices, a device which is not lucky today will be removed:(");
-            match FLASH_CHANNEL.try_send(FlashOperationMessage::Clear(4)) {
+            // The unlucky number is 4
+            let unlucky: u8 = 4;
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::Clear(unlucky)) {
                 Ok(_) => debug!("Sent clear to flash channel"),
                 Err(_e) => error!("Send clear to flash channel error"),
             }
+            self.bond_info.borrow_mut().remove(&unlucky);
         } else {
             let new_bond_info = BondInfo {
                 sys_attr: SystemAttribute::new(),
@@ -198,14 +210,15 @@ impl SecurityHandler for Bonder {
                     key,
                     peer_id,
                 },
-                slot_num: new_bond_id as u8,
+                slot_num: slot_num as u8,
             };
 
-            // Should be OK
-            let _ = self.bond_info.borrow_mut().push(new_bond_info);
-
             match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(new_bond_info)) {
-                Ok(_) => debug!("Sent bond info to flash channel"),
+                Ok(_) => {
+                    // Update self.bond_info as well
+                    debug!("Sent bond info to flash channel");
+                    self.bond_info.borrow_mut().insert(slot_num, new_bond_info);
+                }
                 Err(_e) => error!("Send bond info to flash channel error"),
             }
         }
@@ -218,36 +231,49 @@ impl SecurityHandler for Bonder {
         self.bond_info
             .borrow()
             .iter()
-            .find(|info| info.peer.master_id == master_id)
-            .and_then(|d| Some(d.peer.key))
+            .find(|(i, info)| info.peer.master_id == master_id)
+            .and_then(|(_, d)| Some(d.peer.key))
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {
         // On disconnect usually
         info!("Saving system attributes for: {}", conn.peer_address());
 
-        self.bond_info
-            .borrow()
-            .iter()
-            .for_each(|i| info!("Saved bond info: {}", i));
+        // self.bond_info
+        //     .borrow()
+        //     .iter()
+        //     .for_each(|i| info!("Saved bond info: {}", i));
 
-        let bond_info = self.bond_info.borrow_mut();
+        let mut bond_info = self.bond_info.borrow_mut();
 
-        if let Some(idx) = bond_info
-            .iter()
-            .position(|info| info.peer.peer_id.is_match(conn.peer_address()))
-        {
-            // Find a match, get sys attr and save
-            let mut info = bond_info[idx];
-            info.sys_attr.length = get_sys_attrs(conn, &mut info.sys_attr.data).unwrap();
+        let bonded_info = bond_info
+            .iter_mut()
+            .find(|(_, info)| info.peer.peer_id.is_match(conn.peer_address()));
 
-            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info)) {
-                Ok(_) => debug!("Sent bond info to flash channel"),
-                Err(_e) => error!("Send bond info to flash channel error"),
+        match bonded_info {
+            Some((idx, info)) => {
+                // Find a match, get sys attr and save
+                // TODO: Check data 是否已经更新
+                info!("Before: {}", info);
+                info.sys_attr.length = get_sys_attrs(conn, &mut info.sys_attr.data).unwrap();
+                info!("After: {}", info);
+
+                match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
+                    Ok(_) => {
+                        debug!("Sent bond info to flash channel");
+                        // bond_info.insert(*idx, info.clone());
+                    }
+                    Err(_e) => error!("Send bond info to flash channel error"),
+                };
             }
-        } else {
-            info!("Peer doesn't match: {}", conn.peer_address());
+            None => {
+                info!("Peer doesn't match: {}", conn.peer_address());
+            }
         }
+
+        bond_info.iter().for_each(|(idx, info)| {
+            info!("Double Check: {}: {}", idx, info);
+        })
     }
 
     fn load_sys_attrs(&self, conn: &Connection) {
@@ -258,9 +284,9 @@ impl SecurityHandler for Bonder {
 
         let sys_attr = bond_info
             .iter()
-            .find(|b| b.peer.peer_id.is_match(addr))
-            .filter(|b| b.sys_attr.length != 0)
-            .map(|b| &b.sys_attr.data[0..b.sys_attr.length]);
+            .find(|(i, b)| b.peer.peer_id.is_match(addr))
+            // .filter(|(i, b)| b.sys_attr.length != 0)
+            .map(|(i, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
         info!(
             "System attributes found for peer with address {}: {:?}",
