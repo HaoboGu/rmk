@@ -21,7 +21,7 @@ use embedded_storage::nor_flash::NorFlash;
 use nrf_softdevice::{raw, Config, Flash};
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, remove_item, store_item},
+    map::{remove_item, store_item},
 };
 
 /// Flash range which used to save bonding info
@@ -88,28 +88,10 @@ pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
                     key,
                 )
                 .await
-                .unwrap();
+                .ok();
             }
-            FlashOperationMessage::BondInfo(mut b) => {
+            FlashOperationMessage::BondInfo(b) => {
                 info!("Saving item: {}", info);
-                for key in 0..BONDED_DEVICE_NUM {
-                    if let Ok(Some(info)) = fetch_item::<BondInfo, _>(
-                        f,
-                        CONFIG_FLASH_RANGE,
-                        NoCache::new(),
-                        &mut storage_data_buffer,
-                        key as u8,
-                    )
-                    .await
-                    {
-                        // The device has been stored in flash, update
-                        if b.peer.peer_id.addr == info.peer.peer_id.addr {
-                            info!("Peer exists in flash, replace it");
-                            b.slot_num = info.slot_num;
-                            break;
-                        }
-                    }
-                }
 
                 store_item::<BondInfo, _>(
                     f,
@@ -119,7 +101,7 @@ pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
                     &b,
                 )
                 .await
-                .unwrap();
+                .ok();
             }
         };
     }

@@ -206,8 +206,6 @@ use action::KeyAction;
 #[cfg(feature = "ble")]
 use embassy_executor::Spawner;
 #[cfg(feature = "ble")]
-use heapless::Vec;
-#[cfg(feature = "ble")]
 pub use nrf_softdevice;
 #[cfg(feature = "ble")]
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
@@ -239,13 +237,9 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 ) -> ! {
     use defmt::*;
     use embassy_futures::select::{select, Either};
-    use embedded_storage_async::nor_flash::NorFlash;
     use heapless::FnvIndexMap;
     use nrf_softdevice::Softdevice;
-    use sequential_storage::{
-        cache::NoCache,
-        map::{fetch_item, remove_item},
-    };
+    use sequential_storage::{cache::NoCache, map::fetch_item};
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
@@ -276,9 +270,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
     let f = NRF_FLASH.init(Flash::take(sd));
 
-    f.erase(0x80000, 0x82000).await;
-
-    // Saved bond info
+    // Get all saved bond info
     let mut buf: [u8; 128] = [0; 128];
 
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
@@ -287,33 +279,11 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)
                 .await
         {
-            // // Iterate through bond_info, remove same devices by comparing peer address
-            // if bond_info
-            //     .iter()
-            //     .filter(|(i, b)| b.peer.peer_id.addr == info.peer.peer_id.addr)
-            //     .count()
-            //     > 0
-            // {
-            //     info!("Peer exists, removing current");
-            //     remove_item::<BondInfo, _>(
-            //         f,
-            //         CONFIG_FLASH_RANGE,
-            //         NoCache::new(),
-            //         &mut buf,
-            //         key as u8,
-            //     )
-            //     .await
-            //     .unwrap();
-            // } else {
-            match bond_info.insert(key as u8, info) {
-                Ok(_) => (),
-                Err(_) => error!("Add bond info error"),
-            }
-            // }
+            bond_info.insert(key as u8, info).ok();
         }
     }
 
-    info!("Loaded bond info: {}", bond_info.len());
+    info!("Loaded saved bond info: {}", bond_info.len());
 
     // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();

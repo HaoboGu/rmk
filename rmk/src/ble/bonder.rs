@@ -1,9 +1,9 @@
-use core::{borrow::BorrowMut, cell::RefCell, mem};
+use super::BONDED_DEVICE_NUM;
+use core::{cell::RefCell, mem};
 use defmt::{debug, error, info, warn, Format};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
-use futures::future::ok;
-use heapless::{FnvIndexMap, Vec};
+use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{
     gatt_server::{get_sys_attrs, set_sys_attrs},
     security::{IoCapabilities, SecurityHandler},
@@ -11,10 +11,8 @@ use nrf_softdevice::ble::{
 };
 use sequential_storage::map::StorageItem;
 
-use super::BONDED_DEVICE_NUM;
-
 // Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 2> =
+pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 4> =
     Channel::new();
 
 // Bond info which will be stored in flash
@@ -23,6 +21,13 @@ pub(crate) struct BondInfo {
     pub(crate) slot_num: u8,
     pub(crate) peer: Peer,
     sys_attr: SystemAttribute,
+}
+
+// Error when saving bond info into storage
+#[derive(Clone, Copy, Debug, Format)]
+pub enum StorageError {
+    BufferTooSmall,
+    ItemWrongSize,
 }
 
 // `sequential-storage` is used for saving bond info
@@ -66,8 +71,10 @@ impl StorageItem for BondInfo {
     }
 }
 
+// Message send from bonder to flash task, which will do saving or clearing operation
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) enum FlashOperationMessage {
+    // Bond info to be saved
     BondInfo(BondInfo),
     // Clear info of given slot number
     Clear(u8),
@@ -79,13 +86,6 @@ pub(crate) struct Peer {
     pub(crate) master_id: MasterId,
     pub(crate) key: EncryptionInfo,
     pub(crate) peer_id: IdentityKey,
-}
-
-// Error when saving bond info into storage
-#[derive(Clone, Copy, Debug, Format)]
-pub enum StorageError {
-    BufferTooSmall,
-    ItemWrongSize,
 }
 
 #[repr(C)]
@@ -104,37 +104,10 @@ impl Default for SystemAttribute {
     }
 }
 
-impl SystemAttribute {
-    pub(crate) const fn new() -> Self {
-        Self {
-            length: 0,
-            data: [0; 62],
-        }
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.length = 0;
-        self.data.fill(0);
-    }
-
-    pub(crate) fn to_slice(&self) -> [u8; 64] {
-        let mut serialized = [0; 64];
-        serialized[0] = self.length as u8;
-        serialized[2..64].copy_from_slice(&self.data);
-        serialized
-    }
-
-    pub(crate) fn from_slice(s: [u8; 64]) -> Self {
-        let mut data: [u8; 62] = [0; 62];
-        data.copy_from_slice(&s[2..64]);
-        Self {
-            length: s[0] as usize,
-            data,
-        }
-    }
-}
-
+// Bonder aka security handler used in advertising & pairing
 pub(crate) struct Bonder {
+    // Info of all bonded devices
+    // `slot_num` is used as the key, because using peer as key will bring a lot more complexity
     bond_info: RefCell<FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM>>,
 }
 
@@ -177,22 +150,18 @@ impl SecurityHandler for Bonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        info!(
-            "On bonded: storing bond for: id: {}, key: {}",
-            master_id, key
-        );
+        debug!("On bonded: storing bond for {}", master_id);
 
-        // Get slot num first
-        // Still use iterator here, because using peer as key will lead to a lot more complexity
+        // Get slot num, if the device has been bonded, reuse the slot num. Otherwise get a new slot num
         let slot_num = self
             .bond_info
             .borrow()
             .iter()
-            .find(|(i, b)| b.peer.peer_id.addr == peer_id.addr)
-            .map(|(i, b)| *i)
+            .find(|(_, b)| b.peer.peer_id.addr == peer_id.addr)
+            .map(|(i, _)| *i)
             .unwrap_or(self.bond_info.borrow().len() as u8);
 
-        // Check free-slot first
+        // Check whether all slots are full, if so randomly remove one
         if (slot_num as usize) == self.bond_info.borrow().capacity() {
             warn!("Reach maximum number of bonded devices, a device which is not lucky today will be removed:(");
             // The unlucky number is 4
@@ -203,95 +172,85 @@ impl SecurityHandler for Bonder {
             }
             self.bond_info.borrow_mut().remove(&unlucky);
         } else {
+            // Save bond info
             let new_bond_info = BondInfo {
-                sys_attr: SystemAttribute::new(),
+                sys_attr: SystemAttribute::default(),
                 peer: Peer {
                     master_id,
                     key,
                     peer_id,
                 },
-                slot_num: slot_num as u8,
+                slot_num,
             };
 
             match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(new_bond_info)) {
                 Ok(_) => {
                     // Update self.bond_info as well
                     debug!("Sent bond info to flash channel");
-                    self.bond_info.borrow_mut().insert(slot_num, new_bond_info);
+                    self.bond_info
+                        .borrow_mut()
+                        .insert(slot_num, new_bond_info)
+                        .ok();
                 }
-                Err(_e) => error!("Send bond info to flash channel error"),
+                Err(_) => error!("Send bond info to flash channel error"),
             }
         }
     }
 
     fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
-        info!("Getting bond for: id: {}", master_id);
+        debug!("Getting bond for {}", master_id);
 
         self.bond_info
             .borrow()
             .iter()
-            .find(|(i, info)| info.peer.master_id == master_id)
+            .find(|(_, info)| info.peer.master_id == master_id)
             .and_then(|(_, d)| Some(d.peer.key))
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {
         // On disconnect usually
-        info!("Saving system attributes for: {}", conn.peer_address());
-
-        // self.bond_info
-        //     .borrow()
-        //     .iter()
-        //     .for_each(|i| info!("Saved bond info: {}", i));
+        let addr = conn.peer_address();
+        info!("Saving system attributes for {}", addr);
 
         let mut bond_info = self.bond_info.borrow_mut();
 
-        let bonded_info = bond_info
+        // Get bonded peer
+        let bonded = bond_info
             .iter_mut()
-            .find(|(_, info)| info.peer.peer_id.is_match(conn.peer_address()));
+            .find(|(_, info)| info.peer.peer_id.is_match(addr));
 
-        match bonded_info {
-            Some((idx, info)) => {
-                // Find a match, get sys attr and save
-                // TODO: Check data 是否已经更新
-                info!("Before: {}", info);
-                info.sys_attr.length = get_sys_attrs(conn, &mut info.sys_attr.data).unwrap();
-                info!("After: {}", info);
+        if let Some((_, info)) = bonded {
+            // Get system attr and save to flash
+            info.sys_attr.length = match get_sys_attrs(conn, &mut info.sys_attr.data) {
+                Ok(length) => length,
+                Err(e) => {
+                    error!("Get system attr for {} erro: {}", info, e);
+                    0
+                }
+            };
 
-                match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
-                    Ok(_) => {
-                        debug!("Sent bond info to flash channel");
-                        // bond_info.insert(*idx, info.clone());
-                    }
-                    Err(_e) => error!("Send bond info to flash channel error"),
-                };
-            }
-            None => {
-                info!("Peer doesn't match: {}", conn.peer_address());
-            }
+            // Correctly get system attr, save to flash
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
+                Ok(_) => debug!("Sent bond info to flash channel"),
+                Err(_e) => error!("Send bond info to flash channel error"),
+            };
+        } else {
+            info!("Peer doesn't match: {}", conn.peer_address());
         }
-
-        bond_info.iter().for_each(|(idx, info)| {
-            info!("Double Check: {}: {}", idx, info);
-        })
     }
 
     fn load_sys_attrs(&self, conn: &Connection) {
         let addr = conn.peer_address();
-        info!("Loading system attributes for: {}", addr);
+        info!("Loading system attributes for {}", addr);
 
         let bond_info = self.bond_info.borrow();
 
         let sys_attr = bond_info
             .iter()
-            .find(|(i, b)| b.peer.peer_id.is_match(addr))
-            // .filter(|(i, b)| b.sys_attr.length != 0)
-            .map(|(i, b)| &b.sys_attr.data[0..b.sys_attr.length]);
-
-        info!(
-            "System attributes found for peer with address {}: {:?}",
-            addr, sys_attr
-        );
+            .filter(|(_, b)| b.sys_attr.length != 0)
+            .find(|(_, b)| b.peer.peer_id.is_match(addr))
+            .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
