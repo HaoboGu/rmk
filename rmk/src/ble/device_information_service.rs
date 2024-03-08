@@ -10,7 +10,7 @@ use nrf_softdevice::{
     Softdevice,
 };
 
-use super::constants::{BleCharacteristics, BleSpecification};
+use super::spec::{BleCharacteristics, BleSpecification};
 
 #[repr(u8)]
 #[derive(Clone, Copy)]

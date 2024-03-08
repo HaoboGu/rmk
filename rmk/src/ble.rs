@@ -1,12 +1,11 @@
 pub(crate) mod advertise;
 mod battery_service;
 pub(crate) mod bonder;
-pub(crate) mod constants;
 pub(crate) mod descriptor;
 mod device_information_service;
 mod hid_service;
-pub(crate) mod hid_service2;
 pub(crate) mod server;
+pub(crate) mod spec;
 
 use self::{bonder::FlashOperationMessage, server::BleServer};
 use crate::{

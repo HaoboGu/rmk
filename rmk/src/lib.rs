@@ -243,9 +243,8 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
-        advertise::create_advertisement_data,
+        advertise::{create_advertisement_data, SCAN_DATA},
         bonder::{BondInfo, Bonder},
-        constants::SCAN_DATA,
         flash_task,
         server::BleServer,
         BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,

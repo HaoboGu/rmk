@@ -14,8 +14,8 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use super::{
-    constants::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID},
     descriptor::BleKeyboardReport,
+    spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID},
 };
 
 #[allow(dead_code)]
