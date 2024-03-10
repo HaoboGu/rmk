@@ -12,7 +12,7 @@
 - [Compile and flash!](compile_and_flash.md)
 
 # Features
-- [Keymap configuration]()
+- [Keymap configuration](keymap_configuration.md)
 - [Layers]()
 - [Vial support]()
 - [Tap hold]()
