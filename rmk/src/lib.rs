@@ -208,7 +208,9 @@ use embassy_executor::Spawner;
 #[cfg(feature = "ble")]
 pub use nrf_softdevice;
 #[cfg(feature = "ble")]
-/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+/// Initialize and run the BLE keyboard service, with given keyboard usb config.
+/// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
+/// This function never returns.
 ///
 /// # Arguments
 ///
