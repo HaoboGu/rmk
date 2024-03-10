@@ -37,7 +37,7 @@ mod flash;
 pub mod keyboard;
 pub mod keycode;
 pub mod keymap;
-mod layout_macro;
+pub mod layout_macro;
 mod light;
 mod matrix;
 mod usb;
