@@ -40,6 +40,7 @@ pub mod keymap;
 mod layout_macro;
 mod light;
 mod matrix;
+mod rgb;
 mod usb;
 mod via;
 
