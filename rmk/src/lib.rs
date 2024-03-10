@@ -18,7 +18,8 @@ use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter},
     driver::Driver,
 };
-pub use embedded_hal::digital::{InputPin, OutputPin, PinState};
+pub use embedded_hal;
+use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use futures::pin_mut;
 use keyboard::Keyboard;

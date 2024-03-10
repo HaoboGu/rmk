@@ -26,7 +26,7 @@ use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, LightConfig, RmkConfig, VialConfig},
     initialize_keyboard_with_config_and_run,
-    keymap::KeyMap, PinState,
+    keymap::KeyMap, embedded_hal::digital::PinState,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
