@@ -29,7 +29,7 @@ pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
 ];
 ```
 
-First of all, the keyboard matrix's basic info is defined as consts:
+First of all, the keyboard matrix's basic info(number of rows, cols and layers) is defined as consts:
 
 ```rust
 pub(crate) const COL: usize = 3;
@@ -45,7 +45,6 @@ pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
 ]
 ```
 
-`KEYMAP` is defined as a slice of layers and a layer is defined as a slice of rows and a row is defined as a slice of cols. So the order of keymap matrix is fixed. 
+A keymap in RMK is a 3-level hierarchy: layer - row - column. Each keymap is a slice of layers whose length is `NUM_LAYER`. Each layer is a slice of rows whose length is `ROW`, and each row is a slice of `KeyAction`s whose length is `COL`.
 
-RMK provides a bunch of macros which simplify the keymap definition a lot. You can check all the macros [here](https://docs.rs/rmk/latest/rmk/index.html#macros). For example, `layer!` macro is used to define a layer. Each layer contains several row slices. And in each row slice, the `KeyAction` is defined. To define a normal key in the keymap, `k!` macro is used. If there is no actual key at a position, you can use `a!(No)` to represent `KeyAction::No`.
-
+RMK provides a bunch of macros which simplify the keymap definition a lot. You can check all available macros in [RMK doc](https://docs.rs/rmk/latest/rmk/index.html#macros). For example, `layer!` macro is used to define a layer. `k!` macro is used to define a normal key in the keymap. If there is no actual key at a position, you can use `a!(No)` to represent `KeyAction::No`.

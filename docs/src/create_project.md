@@ -67,6 +67,20 @@ Fortunately, RMK does most of the heavy things for you, all you need to do is to
 
 ### 2.4 Add your default keymap
 
-After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keycode(TODO)]() chapter for more details.
+After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check out [keymap_configuration](https://haobogu.github.io/rmk/keymap_configuration.html) chapter for more details.
+
+### 2.5 Define your matrix
+
+Next, you're going to change the IO pins of keyboard matrix making RMK run on your own PCB. Generally, IO pins are defined in `src/main.rs`. RMK will generate a helper macro to help you defining the matrix. For example, if you're using rp2040, you can define your pins using `config_matrix_pins_rp!`:
+
+```rust
+let (input_pins, output_pins) = config_matrix_pins_rp!(
+    peripherals: p,
+    input: [PIN_6, PIN_7, PIN_8, PIN_9],
+    output: [PIN_19, PIN_20, PIN_21]
+);
+```
+
+`input` and `output` are lists of used pins, change them accorrdingly.
 
 So far so good, you've done all necessary modifications of your firmware project. The next step is compiling and flashing your firmware!

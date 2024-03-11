@@ -13,13 +13,10 @@
 
 # Features
 - [Keymap configuration](keymap_configuration.md)
+- [Vial support](vial.md)
 - [Layers]()
-- [Vial support]()
 - [Tap hold]()
 
 # Development
-- [For Developers]()
-
-# [Roadmap](roadmap.md)
-
 - [Roadmap](roadmap.md)
+- [For Developers]()
