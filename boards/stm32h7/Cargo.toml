@@ -25,15 +25,7 @@ embassy-executor = { version = "0.5", features = [
     "executor-thread",
     "integrated-timers",
 ] }
-packed_struct = { version = "0.10.1", default-features = false }
-embedded-storage = "0.3"
 static_cell = "2"
-
-# rtt-target = "0.5.0"
-# panic-rtt-target = { version = "0.1.2", features = ["cortex-m"] }
-# log = "0.4.19"
-
-# defmt deps
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }

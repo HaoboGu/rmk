@@ -1144,13 +1144,9 @@ dependencies = [
  "embassy-executor",
  "embassy-nrf",
  "embassy-time",
- "embedded-storage",
  "json",
- "packed_struct",
  "panic-probe",
  "rmk",
- "static_cell",
- "usbd-hid",
  "xz2",
 ]
 
