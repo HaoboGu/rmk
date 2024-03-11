@@ -6,13 +6,12 @@
 
 A feature-rich Rust keyboard firmware. 
 
-Why RMK:
+## Features
 
-- Support many series microcontrollers, like stm32/rp2040/nrf 
-- Compile-time layout customization, read-time keymap editing using [vial](https://get.vial.today)
-- Support advanced keyboard functionalities such as media control, system control, mouse control, etc
-- Built-in layer support
-- (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 microcontrollers, tested on nrf52840
+- **Support a wide range of microcontrollers**: Powered by `embassy`, RMK supports a wide range of microcontrollers, such as stm32/nrf/esp32/rp2040
+- **Real-time keymap customization**: Keyboard layout can be customized at the compile-time with read-time keymap editing using [vial](https://get.vial.today)
+- **Advance keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
+- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 microcontrollers, tested on nrf52840
 
 ## News
 
