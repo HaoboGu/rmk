@@ -137,5 +137,6 @@ pub(crate) async fn ble_battery_task(ble_server: &BleServer, conn: &Connection) 
     ble_server.set_battery_value(conn, &50);
     loop {
         // TODO: A real battery service
+        Timer::after_secs(10).await
     }
 }
