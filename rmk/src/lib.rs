@@ -314,6 +314,10 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
                     BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
                 let mut ble_media_writer =
                     BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
+                let mut ble_system_control_writer =
+                    BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
+                let mut ble_mouse_writer =
+                    BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
 
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
@@ -321,6 +325,8 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
                     &mut keyboard,
                     &mut ble_keyboard_writer,
                     &mut ble_media_writer,
+                    &mut ble_system_control_writer,
+                    &mut ble_mouse_writer,
                 );
                 let battery_fut = ble_battery_task(&ble_server, &conn);
 
