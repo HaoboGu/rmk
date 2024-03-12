@@ -3,7 +3,7 @@ use super::{
     device_information_service::{DeviceInformation, DeviceInformationService, PnPID, VidSource},
     hid_service::HidService,
 };
-use crate::config::KeyboardUsbConfig;
+use crate::{config::KeyboardUsbConfig, hid::HidWriterWrapper};
 use nrf_softdevice::{
     ble::{
         gatt_server::{self, RegisterError, Service, WriteOp},
@@ -11,7 +11,40 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
+use usbd_hid::descriptor::AsInputReport;
 
+/// Wrapper struct for writing via BLE
+pub(crate) struct BleHidWriter<'a, const N: usize> {
+    conn: &'a Connection,
+    ble_server: &'a BleServer,
+}
+
+impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), ()> {
+        use ssmarshal::serialize;
+        let mut buf: [u8; N] = [0; N];
+        match serialize(&mut buf, &r) {
+            Ok(_) => self.write(&buf).await,
+            Err(_) => Err(()),
+        }
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), ()> {
+        // TODO: process send error
+        self.ble_server
+            .hid
+            .send_ble_keyboard_report(self.conn, report);
+        Ok(())
+    }
+}
+
+impl<'a, const N: usize> BleHidWriter<'a, N> {
+    pub(crate) fn new(conn: &'a Connection, ble_server: &'a BleServer) -> Self {
+        Self { conn, ble_server }
+    }
+}
+
+// BleServer
 pub(crate) struct BleServer {
     _dis: DeviceInformationService,
     pub(crate) bas: BatteryService,

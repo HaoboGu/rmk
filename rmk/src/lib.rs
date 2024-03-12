@@ -14,14 +14,12 @@ use core::{cell::RefCell, convert::Infallible};
 use defmt::{error, warn};
 use embassy_futures::select::{select4, Either4};
 use embassy_time::Timer;
-use embassy_usb::{
-    class::hid::{HidReader, HidReaderWriter, HidWriter},
-    driver::Driver,
-};
+use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use futures::pin_mut;
+use hid::{HidReaderWrapper, HidReaderWriterWrapper, HidWriterWrapper};
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use usb::KeyboardUsbDevice;
@@ -34,6 +32,7 @@ pub mod config;
 mod debounce;
 mod eeprom;
 mod flash;
+mod hid;
 pub mod keyboard;
 pub mod keycode;
 pub mod keymap;
@@ -150,7 +149,8 @@ pub async fn initialize_keyboard_and_run<
 
 async fn keyboard_task<
     'a,
-    D: Driver<'a>,
+    W: HidWriterWrapper,
+    W2: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     F: NorFlash,
@@ -160,18 +160,18 @@ async fn keyboard_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    keyboard_hid_writer: &mut HidWriter<'a, D, 8>,
-    other_hid_writer: &mut HidWriter<'a, D, 9>,
+    keyboard_hid_writer: &mut W,
+    other_hid_writer: &mut W2,
 ) -> ! {
     loop {
-        let _ = keyboard.keyboard_task().await;
+        let _ = keyboard.scan_matrix().await;
         keyboard.send_report(keyboard_hid_writer).await;
         keyboard.send_other_report(other_hid_writer).await;
     }
 }
 
-async fn led_task<'a, D: Driver<'a>, Out: OutputPin>(
-    keyboard_hid_reader: &mut HidReader<'a, D, 1>,
+async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
+    keyboard_hid_reader: &mut R,
     light_service: &mut LightService<Out>,
 ) -> ! {
     loop {
@@ -184,14 +184,14 @@ async fn led_task<'a, D: Driver<'a>, Out: OutputPin>(
 
 async fn vial_task<
     'a,
-    D: Driver<'a>,
+    Hid: HidReaderWriterWrapper,
     F: NorFlash,
     const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    via_hid: &mut HidReaderWriter<'a, D, 32, 32>,
+    via_hid: &mut Hid,
     vial_service: &mut VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
 ) -> ! {
     loop {
@@ -239,7 +239,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     spawner: Spawner,
 ) -> ! {
     use defmt::*;
-    use embassy_futures::select::{select, Either};
+    use embassy_futures::select::{select3, Either3};
     use heapless::FnvIndexMap;
     use nrf_softdevice::Softdevice;
     use sequential_storage::{cache::NoCache, map::fetch_item};
@@ -247,9 +247,10 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     // FIXME: add auto recognition of ble/usb
     use crate::ble::{
         advertise::{create_advertisement_data, SCAN_DATA},
+        ble_battery_task,
         bonder::{BondInfo, Bonder},
         flash_task,
-        server::BleServer,
+        server::{BleHidWriter, BleServer},
         BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,
     };
     use nrf_softdevice::{
@@ -307,16 +308,21 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             Ok(conn) => {
                 info!("Starting GATT server 1 second later");
                 Timer::after_secs(1).await;
+                let mut ble_writer = BleHidWriter::<'_, 8>::new(&conn, &ble_server);
+
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
+                let keyboard_fut = keyboard_ble_task(&mut keyboard, &mut ble_writer);
+                let battery_fut = ble_battery_task(&ble_server, &conn);
 
-                let keyboard_fut = keyboard_ble_task(&mut keyboard, &ble_server, &conn);
-                match select(ble_fut, keyboard_fut).await {
-                    Either::First(disconnected_error) => error!(
+                // Exit if anyone of three futures exits
+                match select3(ble_fut, keyboard_fut, battery_fut).await {
+                    Either3::First(disconnected_error) => error!(
                         "BLE gatt_server run exited with error: {:?}",
                         disconnected_error
                     ),
-                    Either::Second(_) => error!("Keyboard task exited"),
+                    Either3::Second(_) => error!("Keyboard task exited"),
+                    Either3::Third(_) => error!("Battery task exited"),
                 }
             }
             Err(e) => {

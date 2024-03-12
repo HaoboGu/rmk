@@ -1,6 +1,5 @@
-use crate::config::LightConfig;
+use crate::{config::LightConfig, hid::HidReaderWrapper};
 use defmt::{debug, error, Format};
-use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{OutputPin, PinState};
 use packed_struct::prelude::*;
 
@@ -156,9 +155,9 @@ impl<P: OutputPin> LightService<P> {
     /// Check led indicator and update led status.
     ///
     /// If there's an error, print a message and ignore error types
-    pub(crate) async fn check_led_indicator<'a, D: Driver<'a>>(
+    pub(crate) async fn check_led_indicator<R: HidReaderWrapper>(
         &mut self,
-        keyboard_hid_reader: &mut HidReader<'a, D, 1>,
+        keyboard_hid_reader: &mut R,
     ) -> Result<(), ()> {
         // If light service is not enabled, wait 2 seconds and recheck
         if !self.enabled {

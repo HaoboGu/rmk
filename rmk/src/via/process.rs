@@ -1,6 +1,7 @@
 use super::{protocol::*, vial::process_vial};
 use crate::{
     config::VialConfig,
+    hid::HidReaderWriterWrapper,
     keymap::KeyMap,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -9,10 +10,7 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
-use embassy_usb::{
-    class::hid::{HidReaderWriter, ReadError},
-    driver::Driver,
-};
+use embassy_usb::class::hid::ReadError;
 use embedded_storage::nor_flash::NorFlash;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
@@ -50,9 +48,9 @@ impl<
         }
     }
 
-    pub(crate) async fn process_via_report<D: Driver<'a>>(
+    pub(crate) async fn process_via_report<Hid: HidReaderWriterWrapper>(
         &self,
-        hid_interface: &mut HidReaderWriter<'a, D, 32, 32>,
+        hid_interface: &mut Hid,
     ) -> Result<(), ()> {
         let mut via_report = ViaReport {
             input_data: [0; 32],

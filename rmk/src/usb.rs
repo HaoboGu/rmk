@@ -3,7 +3,7 @@ pub(crate) mod descriptor;
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
 use embassy_usb::{
-    class::hid::{Config, HidReader, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
+    class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
     Builder, Handler, UsbDevice,
@@ -13,6 +13,7 @@ use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 use crate::{
     config::KeyboardUsbConfig,
+    hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
 };
 
@@ -25,10 +26,10 @@ static SUSPENDED: AtomicBool = AtomicBool::new(false);
 // 3. Via: used to communicate with via: 2 endpoints(in/out)
 pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
     pub(crate) device: UsbDevice<'d, D>,
-    pub(crate) keyboard_hid_writer: HidWriter<'d, D, 8>,
-    pub(crate) keyboard_hid_reader: HidReader<'d, D, 1>,
-    pub(crate) other_hid_writer: HidWriter<'d, D, 9>,
-    pub(crate) via_hid: HidReaderWriter<'d, D, 32, 32>,
+    pub(crate) keyboard_hid_writer: UsbHidWriter<'d, D, 8>,
+    pub(crate) keyboard_hid_reader: UsbHidReader<'d, D, 1>,
+    pub(crate) other_hid_writer: UsbHidWriter<'d, D, 9>,
+    pub(crate) via_hid: UsbHidReaderWriter<'d, D, 32, 32>,
 }
 
 impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
@@ -113,10 +114,10 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let (reader, writer) = keyboard_hid.split();
         Self {
             device: usb,
-            keyboard_hid_reader: reader,
-            keyboard_hid_writer: writer,
-            other_hid_writer: other_hid,
-            via_hid,
+            keyboard_hid_reader: UsbHidReader::new(reader),
+            keyboard_hid_writer: UsbHidWriter::new(writer),
+            other_hid_writer: UsbHidWriter::new(other_hid),
+            via_hid: UsbHidReaderWriter::new(via_hid),
         }
     }
 }

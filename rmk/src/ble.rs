@@ -10,6 +10,7 @@ pub(crate) mod spec;
 use self::{bonder::FlashOperationMessage, server::BleServer};
 use crate::{
     ble::bonder::{BondInfo, FLASH_CHANNEL},
+    hid::HidWriterWrapper,
     keyboard::Keyboard,
 };
 use core::{convert::Infallible, mem, ops::Range};
@@ -17,7 +18,7 @@ use defmt::info;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
-use nrf_softdevice::{raw, Config, Flash};
+use nrf_softdevice::{ble::Connection, raw, Config, Flash};
 use sequential_storage::{
     cache::NoCache,
     map::{remove_item, store_item},
@@ -109,6 +110,7 @@ pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
 /// BLE keyboard task, run the keyboard with the ble server
 pub(crate) async fn keyboard_ble_task<
     'a,
+    W: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     F: NorFlash,
@@ -118,15 +120,22 @@ pub(crate) async fn keyboard_ble_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    ble_server: &BleServer,
-    conn: &nrf_softdevice::ble::Connection,
+    ble_writer: &mut W,
 ) {
     // Wait 2 seconds, ensure that gatt server has been started
     Timer::after_secs(2).await;
-    // TODO: A real battery service
+    loop {
+        let _ = keyboard.scan_matrix().await;
+        keyboard.send_report(ble_writer).await;
+    }
+}
+
+/// BLE keyboard task, run the keyboard with the ble server
+pub(crate) async fn ble_battery_task(ble_server: &BleServer, conn: &Connection) {
+    // Wait 2 seconds, ensure that gatt server has been started
+    Timer::after_secs(2).await;
     ble_server.set_battery_value(conn, &50);
     loop {
-        let _ = keyboard.keyboard_task().await;
-        keyboard.send_ble_report(ble_server, conn).await;
+        // TODO: A real battery service
     }
 }

@@ -34,8 +34,7 @@ static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
-# nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", features = [
-nrf-softdevice = { version = "0.1.0", git = "https://github.com/HaoboGu/nrf-softdevice", rev = "8db29ff", features = [
+nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", features = [
     "defmt",
     "ble-peripheral",
     "ble-central",

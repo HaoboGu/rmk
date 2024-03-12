@@ -1,5 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
+    hid::HidWriterWrapper,
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -8,15 +9,10 @@ use crate::{
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
-use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
-#[cfg(feature = "ble")]
-use crate::ble::server::BleServer;
-#[cfg(feature = "ble")]
-use nrf_softdevice::ble::Connection;
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
@@ -134,14 +130,10 @@ impl<
         }
     }
 
-    /// Send hid report. The report is sent only when key state changes.
-    pub(crate) async fn send_report<'d, D: Driver<'d>>(
-        &mut self,
-        hid_interface: &mut HidWriter<'d, D, 8>,
-    ) {
+    pub(crate) async fn send_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
         if self.need_send_key_report {
             debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
-            match hid_interface.write_serialize(&self.report).await {
+            match writer.write_serialize(&self.report).await {
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {}", e),
             };
@@ -153,44 +145,8 @@ impl<
         }
     }
 
-    /// Send ble hid report. The report is sent only when key state changes.
-    #[cfg(feature = "ble")]
-    pub(crate) async fn send_ble_report(
-        &mut self,
-        ble_server: &BleServer,
-        conn: &Connection,
-    ) {
-        use ssmarshal::serialize;
-
-        if self.need_send_key_report {
-            let mut buf: [u8; 8] = [0; 8];
-            match serialize(&mut buf, &self.report) {
-                Ok(size) => {
-                    debug!(
-                        "Sending ble keyboard report: {=[u8]:#X}, size: {}",
-                        self.report.keycodes,
-                        size
-                    );
-                    ble_server.hid.send_ble_keyboard_report(conn, &buf)
-                }
-                Err(_) => {
-                    error!("Serialize keyboard report error");
-                }
-            };
-
-            // Reset report key states
-            for bit in &mut self.report.keycodes {
-                *bit = 0;
-            }
-            self.need_send_key_report = false;
-        }
-    }
-
     /// Send other report(media/system/mouse) if needed
-    pub(crate) async fn send_other_report<'d, D: Driver<'d>>(
-        &mut self,
-        hid_interface: &mut HidWriter<'d, D, 9>,
-    ) {
+    pub(crate) async fn send_other_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
         if self.need_send_consumer_control_report {
             self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
                 .await;
@@ -227,9 +183,9 @@ impl<
         }
     }
 
-    async fn serialize_and_send_composite_report<'d, D: Driver<'d>>(
+    async fn serialize_and_send_composite_report<W: HidWriterWrapper>(
         &mut self,
-        hid_interface: &mut HidWriter<'d, D, 9>,
+        hid_interface: &mut W,
         report_type: CompositeReportType,
     ) {
         let mut buf: [u8; 9] = [0; 9];
@@ -249,7 +205,7 @@ impl<
 
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
-    pub(crate) async fn keyboard_task(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn scan_matrix(&mut self) -> Result<(), Infallible> {
         // Matrix scan
         self.matrix.scan().await?;
 
