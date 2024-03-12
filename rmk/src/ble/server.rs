@@ -3,7 +3,11 @@ use super::{
     device_information_service::{DeviceInformation, DeviceInformationService, PnPID, VidSource},
     hid_service::HidService,
 };
-use crate::{config::KeyboardUsbConfig, hid::HidWriterWrapper};
+use crate::{
+    config::KeyboardUsbConfig,
+    hid::{ConnectionType, ConnectionTypeWrapper, HidWriterWrapper},
+};
+use defmt::error;
 use nrf_softdevice::{
     ble::{
         gatt_server::{self, RegisterError, Service, WriteOp},
@@ -16,7 +20,13 @@ use usbd_hid::descriptor::AsInputReport;
 /// Wrapper struct for writing via BLE
 pub(crate) struct BleHidWriter<'a, const N: usize> {
     conn: &'a Connection,
-    ble_server: &'a BleServer,
+    handle: u16,
+}
+
+impl<'a, const N: usize> ConnectionTypeWrapper for BleHidWriter<'a, N> {
+    fn get_conn_type(&self) -> crate::hid::ConnectionType {
+        ConnectionType::BLE
+    }
 }
 
 impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
@@ -30,17 +40,16 @@ impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), ()> {
-        // TODO: process send error
-        self.ble_server
-            .hid
-            .send_ble_keyboard_report(self.conn, report);
+        gatt_server::notify_value(self.conn, self.handle, report)
+            .map_err(|e| error!("send ble report error: {}", e))
+            .ok();
         Ok(())
     }
 }
 
 impl<'a, const N: usize> BleHidWriter<'a, N> {
-    pub(crate) fn new(conn: &'a Connection, ble_server: &'a BleServer) -> Self {
-        Self { conn, ble_server }
+    pub(crate) fn new(conn: &'a Connection, handle: u16) -> Self {
+        Self { conn, handle }
     }
 }
 

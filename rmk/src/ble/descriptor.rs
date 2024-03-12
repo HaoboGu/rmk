@@ -7,7 +7,7 @@ use usbd_hid::descriptor::generator_prelude::*;
 /// keyboard LEDs.
 #[gen_hid_descriptor(
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = KEYBOARD) = {
-        (report_id = 0x01,) = {
+        (report_id = 0x00,) = {
             (usage_page = KEYBOARD, usage_min = 0xE0, usage_max = 0xE7) = {
                 #[packed_bits 8] #[item_settings data,variable,absolute] modifier=input;
             };
@@ -21,6 +21,13 @@ use usbd_hid::descriptor::generator_prelude::*;
                 #[item_settings data,array,absolute] keycodes=input;
             };
         };
+    },
+    (collection = APPLICATION, usage_page = CONSUMER, usage = CONSUMER_CONTROL) = {
+        (report_id = 0x01,) = {
+            (usage_page = CONSUMER, usage_min = 0x00, usage_max = 0x514) = {
+            #[item_settings data,array,absolute,not_null] media_usage_id=input;
+            }
+        };
     }
 )]
 #[allow(dead_code)]
@@ -29,4 +36,5 @@ pub struct BleKeyboardReport {
     pub reserved: u8,
     pub leds: u8,
     pub keycodes: [u8; 6],
+    pub media_usage_id: u16,
 }

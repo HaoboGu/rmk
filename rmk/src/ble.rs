@@ -111,6 +111,7 @@ pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
 pub(crate) async fn keyboard_ble_task<
     'a,
     W: HidWriterWrapper,
+    W2: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     F: NorFlash,
@@ -120,13 +121,15 @@ pub(crate) async fn keyboard_ble_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    ble_writer: &mut W,
+    ble_keyboard_writer: &mut W,
+    ble_media_writer: &mut W2,
 ) {
     // Wait 2 seconds, ensure that gatt server has been started
     Timer::after_secs(2).await;
     loop {
         let _ = keyboard.scan_matrix().await;
-        keyboard.send_report(ble_writer).await;
+        keyboard.send_report(ble_keyboard_writer).await;
+        keyboard.send_other_report(ble_media_writer).await;
     }
 }
 

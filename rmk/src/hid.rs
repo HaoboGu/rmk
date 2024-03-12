@@ -6,13 +6,22 @@ use embassy_usb::{
 };
 use usbd_hid::descriptor::AsInputReport;
 
+pub(crate) enum ConnectionType {
+    USB,
+    BLE,
+}
+
+pub(crate) trait ConnectionTypeWrapper {
+    fn get_conn_type(&self) -> ConnectionType;
+}
+
 /// Wrapper trait for hid reading
-pub(crate) trait HidReaderWrapper {
+pub(crate) trait HidReaderWrapper: ConnectionTypeWrapper {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, ReadError>;
 }
 
 /// Wrapper trait for hid writing
-pub(crate) trait HidWriterWrapper {
+pub(crate) trait HidWriterWrapper: ConnectionTypeWrapper {
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), ()>;
     async fn write(&mut self, report: &[u8]) -> Result<(), ()>;
 }
@@ -22,6 +31,12 @@ pub(crate) trait HidReaderWriterWrapper: HidReaderWrapper + HidWriterWrapper {}
 /// Wrapper struct for writing via USB
 pub(crate) struct UsbHidWriter<'d, D: Driver<'d>, const N: usize> {
     usb_writer: HidWriter<'d, D, N>,
+}
+
+impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidWriter<'d, D, N> {
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::USB
+    }
 }
 
 impl<'d, D: Driver<'d>, const N: usize> HidWriterWrapper for UsbHidWriter<'d, D, N> {
@@ -43,6 +58,12 @@ impl<'d, D: Driver<'d>, const N: usize> UsbHidWriter<'d, D, N> {
 /// Wrapper struct for reading via USB
 pub(crate) struct UsbHidReader<'d, D: Driver<'d>, const N: usize> {
     usb_reader: HidReader<'d, D, N>,
+}
+
+impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidReader<'d, D, N> {
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::USB
+    }
 }
 
 impl<'d, D: Driver<'d>, const N: usize> HidReaderWrapper for UsbHidReader<'d, D, N> {
@@ -73,6 +94,14 @@ impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize>
 impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidReaderWriterWrapper
     for UsbHidReaderWriter<'d, D, READ_N, WRITE_N>
 {
+}
+
+impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> ConnectionTypeWrapper
+    for UsbHidReaderWriter<'d, D, READ_N, WRITE_N>
+{
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::USB
+    }
 }
 
 impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidReaderWrapper

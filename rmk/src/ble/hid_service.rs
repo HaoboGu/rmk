@@ -24,14 +24,14 @@ pub struct HidService {
     report_map: u16,
     hid_control: u16,
     protocol_mode: u16,
-    input_keyboard: u16,
+    pub(crate) input_keyboard: u16,
     input_keyboard_cccd: u16,
     input_keyboard_descriptor: u16,
     output_keyboard: u16,
     output_keyboard_descriptor: u16,
-    // input_media_keys: u16,
-    // input_media_keys_cccd: u16,
-    // input_media_keys_descriptor: u16,
+    pub(crate) input_media_keys: u16,
+    input_media_keys_cccd: u16,
+    input_media_keys_descriptor: u16,
 }
 
 impl HidService {
@@ -82,7 +82,7 @@ impl HidService {
         )?;
         let input_keyboard_desc = input_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([1u8, 1u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([0u8, 1u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
         )?;
         let input_keyboard_handle = input_keyboard.build();
 
@@ -93,20 +93,20 @@ impl HidService {
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([1u8, 2u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([0u8, 2u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
         )?;
         let output_keyboard_handle = output_keyboard.build();
 
-        // let mut input_media_keys = service_builder.add_characteristic(
-        //     BleCharacteristics::HidReport.uuid(),
-        //     Attribute::new([0u8; 16]),
-        //     Metadata::new(Properties::new().read().notify()),
-        // )?;
-        // let input_media_keys_desc = input_media_keys.add_descriptor(
-        //     BleDescriptor::ReportReference.uuid(),
-        //     Attribute::new([MEDIA_KEYS_ID, 1u8]),
-        // )?;
-        // let input_media_keys_handle = input_media_keys.build();
+        let mut input_media_keys = service_builder.add_characteristic(
+            BleCharacteristics::HidReport.uuid(),
+            Attribute::new([0u8; 16]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().notify()),
+        )?;
+        let input_media_keys_desc = input_media_keys.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([1u8, 1u8]).security(SecurityMode::JustWorks),
+        )?;
+        let input_media_keys_handle = input_media_keys.build();
 
         let _service_handle = service_builder.build();
 
@@ -120,9 +120,9 @@ impl HidService {
             input_keyboard_descriptor: input_keyboard_desc.handle(),
             output_keyboard: output_keyboard_handle.value_handle,
             output_keyboard_descriptor: output_keyboard_desc.handle(),
-            // input_media_keys: input_media_keys_handle.value_handle,
-            // input_media_keys_cccd: input_media_keys_handle.cccd_handle,
-            // input_media_keys_descriptor: input_media_keys_desc.handle(),
+            input_media_keys: input_media_keys_handle.value_handle,
+            input_media_keys_cccd: input_media_keys_handle.cccd_handle,
+            input_media_keys_descriptor: input_media_keys_desc.handle(),
         })
     }
 
@@ -132,13 +132,19 @@ impl HidService {
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             info!("HID output keyboard: {:?}", data);
-            // } else if handle == self.input_media_keys_cccd {
-            // info!("HID input media keys: {:?}", data);
+        } else if handle == self.input_media_keys_cccd {
+            info!("HID input media keys: {:?}", data);
         }
     }
 
     pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
+            .map_err(|e| error!("send keyboard report error: {}", e))
+            .ok();
+    }
+
+    pub(crate) fn send_ble_media_report(&self, conn: &Connection, data: &[u8]) {
+        gatt_server::notify_value(conn, self.input_media_keys, data)
             .map_err(|e| error!("send keyboard report error: {}", e))
             .ok();
     }

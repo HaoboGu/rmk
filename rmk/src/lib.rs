@@ -308,11 +308,14 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             Ok(conn) => {
                 info!("Starting GATT server 1 second later");
                 Timer::after_secs(1).await;
-                let mut ble_writer = BleHidWriter::<'_, 8>::new(&conn, &ble_server);
+                let mut ble_keyboard_writer =
+                    BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
+                let mut ble_media_writer =
+                    BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
 
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
-                let keyboard_fut = keyboard_ble_task(&mut keyboard, &mut ble_writer);
+                let keyboard_fut = keyboard_ble_task(&mut keyboard, &mut ble_keyboard_writer, &mut ble_media_writer);
                 let battery_fut = ble_battery_task(&ble_server, &conn);
 
                 // Exit if anyone of three futures exits

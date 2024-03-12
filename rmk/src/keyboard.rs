@@ -1,6 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
-    hid::HidWriterWrapper,
+    hid::{ConnectionType, HidWriterWrapper},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -194,10 +194,13 @@ impl<
         match self.other_report.serialize(&mut buf[1..], report_type) {
             Ok(s) => {
                 debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
-                match hid_interface.write(&buf[0..s + 1]).await {
-                    Ok(()) => {}
+                match match hid_interface.get_conn_type() {
+                    ConnectionType::USB => hid_interface.write(&buf[0..s + 1]).await,
+                    ConnectionType::BLE => hid_interface.write(&buf[1..s + 1]).await,
+                } {
+                    Ok(_) => {}
                     Err(e) => error!("Send other report error: {}", e),
-                };
+                }
             }
             Err(_) => error!("Serialize other report error"),
         }
