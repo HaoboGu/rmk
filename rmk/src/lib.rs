@@ -165,8 +165,10 @@ async fn keyboard_task<
 ) -> ! {
     loop {
         let _ = keyboard.scan_matrix().await;
-        keyboard.send_report(keyboard_hid_writer).await;
-        keyboard.send_other_report(other_hid_writer).await;
+        keyboard.send_keyboard_report(keyboard_hid_writer).await;
+        keyboard.send_media_report(other_hid_writer).await;
+        keyboard.send_mouse_report(other_hid_writer).await;
+        keyboard.send_system_control_report(other_hid_writer).await;
     }
 }
 
@@ -315,7 +317,11 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 
                 // Run the GATT server on the connection. This returns when the connection gets disconnected.
                 let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
-                let keyboard_fut = keyboard_ble_task(&mut keyboard, &mut ble_keyboard_writer, &mut ble_media_writer);
+                let keyboard_fut = keyboard_ble_task(
+                    &mut keyboard,
+                    &mut ble_keyboard_writer,
+                    &mut ble_media_writer,
+                );
                 let battery_fut = ble_battery_task(&ble_server, &conn);
 
                 // Exit if anyone of three futures exits

@@ -130,7 +130,7 @@ impl<
         }
     }
 
-    pub(crate) async fn send_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
+    pub(crate) async fn send_keyboard_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
         if self.need_send_key_report {
             debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
             match writer.write_serialize(&self.report).await {
@@ -145,22 +145,31 @@ impl<
         }
     }
 
-    /// Send other report(media/system/mouse) if needed
-    pub(crate) async fn send_other_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
-        if self.need_send_consumer_control_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
-                .await;
-            self.other_report.media_usage_id = 0;
-            self.need_send_consumer_control_report = false;
-        }
-
+    /// Send system control report if needed
+    pub(crate) async fn send_system_control_report<W: HidWriterWrapper>(
+        &mut self,
+        hid_interface: &mut W,
+    ) {
         if self.need_send_system_control_report {
             self.serialize_and_send_composite_report(hid_interface, CompositeReportType::System)
                 .await;
             self.other_report.system_usage_id = 0;
             self.need_send_system_control_report = false;
         }
+    }
 
+    /// Send media report if needed
+    pub(crate) async fn send_media_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
+        if self.need_send_consumer_control_report {
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
+                .await;
+            self.other_report.media_usage_id = 0;
+            self.need_send_consumer_control_report = false;
+        }
+    }
+
+    /// Send mouse report if needed
+    pub(crate) async fn send_mouse_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
         if self.need_send_mouse_report {
             // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
             let cur_tick = Instant::now().as_millis();
