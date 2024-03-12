@@ -1,6 +1,20 @@
 use usbd_hid::descriptor::generator_prelude::*;
 
-/// HID Descriptor used in BLE keyboard, which might be different from USB HID device
+///! HID Descriptor used in BLE keyboard, which might be different from USB HID device
+
+/// Predefined report ids for composite hid report.
+/// Should be same with `#[gen_hid_descriptor]`
+/// DO NOT EDIT
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+
+pub(crate) enum BleCompositeReportType {
+    Keyboard = 0x00,
+    Mouse = 0x01,
+    Media = 0x02,
+    System = 0x03,
+    Vial = 0x04,
+}
 
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
@@ -22,11 +36,53 @@ use usbd_hid::descriptor::generator_prelude::*;
             };
         };
     },
+    (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = MOUSE) = {
+        (collection = PHYSICAL, usage = POINTER) = {
+            (report_id = 0x01,) = {
+                (usage_page = BUTTON, usage_min = BUTTON_1, usage_max = BUTTON_8) = {
+                    #[packed_bits 8] #[item_settings data,variable,absolute] buttons=input;
+                };
+                (usage_page = GENERIC_DESKTOP,) = {
+                    (usage = X,) = {
+                        #[item_settings data,variable,relative] x=input;
+                    };
+                    (usage = Y,) = {
+                        #[item_settings data,variable,relative] y=input;
+                    };
+                    (usage = WHEEL,) = {
+                        #[item_settings data,variable,relative] wheel=input;
+                    };
+                };
+                (usage_page = CONSUMER,) = {
+                    (usage = AC_PAN,) = {
+                        #[item_settings data,variable,relative] pan=input;
+                    };
+                };
+            };
+        };
+    },
     (collection = APPLICATION, usage_page = CONSUMER, usage = CONSUMER_CONTROL) = {
-        (report_id = 0x01,) = {
+        (report_id = 0x02,) = {
             (usage_page = CONSUMER, usage_min = 0x00, usage_max = 0x514) = {
             #[item_settings data,array,absolute,not_null] media_usage_id=input;
             }
+        };
+    },
+    (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
+        (report_id = 0x03,) = {
+            (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
+                #[item_settings data,array,absolute,not_null] system_usage_id=input;
+            };
+        };
+    },
+    (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
+        (report_id = 0x04,) = {
+            (usage = 0x62, logical_min = 0x0) = {
+                #[item_settings data,variable,absolute] vial_input_data=input;
+            };
+            (usage = 0x63, logical_min = 0x0) = {
+                #[item_settings data,variable,absolute] vial_output_data=output;
+            };
         };
     }
 )]
@@ -36,5 +92,13 @@ pub struct BleKeyboardReport {
     pub reserved: u8,
     pub leds: u8,
     pub keycodes: [u8; 6],
-    pub media_usage_id: u16,
+    pub(crate) buttons: u8,
+    pub(crate) x: i8,
+    pub(crate) y: i8,
+    pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units
+    pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
+    pub(crate) media_usage_id: u16,
+    pub(crate) system_usage_id: u8,
+    pub(crate) vial_input_data: [u8; 32],
+    pub(crate) vial_output_data: [u8; 32],
 }

@@ -14,7 +14,7 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use super::{
-    descriptor::BleKeyboardReport,
+    descriptor::{BleCompositeReportType, BleKeyboardReport},
     spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID},
 };
 
@@ -27,11 +27,22 @@ pub struct HidService {
     pub(crate) input_keyboard: u16,
     input_keyboard_cccd: u16,
     input_keyboard_descriptor: u16,
-    output_keyboard: u16,
+    pub(crate) output_keyboard: u16,
     output_keyboard_descriptor: u16,
     pub(crate) input_media_keys: u16,
     input_media_keys_cccd: u16,
     input_media_keys_descriptor: u16,
+    pub(crate) input_mouse_keys: u16,
+    input_mouse_keys_cccd: u16,
+    input_mouse_keys_descriptor: u16,
+    pub(crate) input_system_keys: u16,
+    input_system_keys_cccd: u16,
+    input_system_keys_descriptor: u16,
+    pub(crate) input_vial_keys: u16,
+    input_vial_keys_cccd: u16,
+    input_vial_keys_descriptor: u16,
+    pub(crate) output_vial: u16,
+    output_vial_descriptor: u16,
 }
 
 impl HidService {
@@ -82,7 +93,8 @@ impl HidService {
         )?;
         let input_keyboard_desc = input_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([0u8, 1u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([BleCompositeReportType::Keyboard as u8, 1u8]) // First is report ID, second is in/out
+                .security(SecurityMode::JustWorks),
         )?;
         let input_keyboard_handle = input_keyboard.build();
 
@@ -93,20 +105,70 @@ impl HidService {
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([0u8, 2u8]).security(SecurityMode::JustWorks), // First is report ID (e.g. 1 for keyboard 2 for media keys), second is in/out
+            Attribute::new([BleCompositeReportType::Keyboard as u8, 2u8])
+                .security(SecurityMode::JustWorks),
         )?;
         let output_keyboard_handle = output_keyboard.build();
 
         let mut input_media_keys = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
-            Attribute::new([0u8; 16]).security(SecurityMode::JustWorks),
+            Attribute::new([0u8; 2]).security(SecurityMode::JustWorks),
             Metadata::new(Properties::new().read().write().notify()),
         )?;
         let input_media_keys_desc = input_media_keys.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([1u8, 1u8]).security(SecurityMode::JustWorks),
+            Attribute::new([BleCompositeReportType::Media as u8, 1u8])
+                .security(SecurityMode::JustWorks),
         )?;
         let input_media_keys_handle = input_media_keys.build();
+
+        let mut input_system_keys = service_builder.add_characteristic(
+            BleCharacteristics::HidReport.uuid(),
+            Attribute::new([0u8; 1]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().notify()),
+        )?;
+        let input_system_keys_desc = input_system_keys.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([BleCompositeReportType::System as u8, 1u8])
+                .security(SecurityMode::JustWorks),
+        )?;
+        let input_system_keys_handle = input_system_keys.build();
+
+        let mut input_mouse = service_builder.add_characteristic(
+            BleCharacteristics::HidReport.uuid(),
+            Attribute::new([0u8; 5]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().notify()),
+        )?;
+        let input_mouse_desc = input_mouse.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([BleCompositeReportType::Mouse as u8, 1u8])
+                .security(SecurityMode::JustWorks),
+        )?;
+        let input_mouse_handle = input_mouse.build();
+
+        let mut input_vial = service_builder.add_characteristic(
+            BleCharacteristics::HidReport.uuid(),
+            Attribute::new([0u8; 32]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().notify()),
+        )?;
+        let input_vial_desc = input_vial.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([BleCompositeReportType::Vial as u8, 1u8])
+                .security(SecurityMode::JustWorks),
+        )?;
+        let input_vial_handle = input_vial.build();
+
+        let mut output_vial = service_builder.add_characteristic(
+            BleCharacteristics::HidReport.uuid(),
+            Attribute::new([0u8; 8]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().write_without_response()),
+        )?;
+        let output_vial_desc = output_vial.add_descriptor(
+            BleDescriptor::ReportReference.uuid(),
+            Attribute::new([BleCompositeReportType::Vial as u8, 2u8]) // First is report ID, second is in/out
+                .security(SecurityMode::JustWorks),
+        )?;
+        let output_vial_handle = output_vial.build();
 
         let _service_handle = service_builder.build();
 
@@ -123,6 +185,17 @@ impl HidService {
             input_media_keys: input_media_keys_handle.value_handle,
             input_media_keys_cccd: input_media_keys_handle.cccd_handle,
             input_media_keys_descriptor: input_media_keys_desc.handle(),
+            input_system_keys: input_system_keys_handle.value_handle,
+            input_system_keys_cccd: input_system_keys_handle.cccd_handle,
+            input_system_keys_descriptor: input_system_keys_desc.handle(),
+            input_mouse_keys: input_mouse_handle.value_handle,
+            input_mouse_keys_cccd: input_mouse_handle.cccd_handle,
+            input_mouse_keys_descriptor: input_mouse_desc.handle(),
+            input_vial_keys: input_vial_handle.value_handle,
+            input_vial_keys_cccd: input_vial_handle.cccd_handle,
+            input_vial_keys_descriptor: input_vial_desc.handle(),
+            output_vial: output_vial_handle.value_handle,
+            output_vial_descriptor: output_vial_desc.handle(),
         })
     }
 

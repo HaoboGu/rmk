@@ -128,8 +128,10 @@ pub(crate) async fn keyboard_ble_task<
     Timer::after_secs(2).await;
     loop {
         let _ = keyboard.scan_matrix().await;
-        keyboard.send_report(ble_keyboard_writer).await;
-        keyboard.send_other_report(ble_media_writer).await;
+        keyboard.send_keyboard_report(ble_keyboard_writer).await;
+        keyboard.send_media_report(ble_media_writer).await;
+        keyboard.send_system_control_report(ble_media_writer).await;
+        keyboard.send_mouse_report(ble_media_writer).await;
     }
 }
 
