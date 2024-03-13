@@ -14,6 +14,7 @@
 # Features
 - [Keymap configuration](keymap_configuration.md)
 - [Vial support](vial.md)
+- [Storage]()
 - [Layers]()
 - [Tap hold]()
 
