@@ -39,8 +39,6 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-peripheral",
     "ble-central",
     "critical-section-impl",
-    "nrf52840",
-    "s140",
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
@@ -52,3 +50,5 @@ default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
 ble = ["dep:nrf-softdevice"]
+nrf52840 = ["nrf-softdevice/nrf52840", "nrf-softdevice/s140"]
+nrf52832 = ["nrf-softdevice/nrf52832", "nrf-softdevice/s132"]
