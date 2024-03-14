@@ -137,10 +137,7 @@ impl<
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {}", e),
             };
-            // Reset report key states
-            for bit in &mut self.report.keycodes {
-                *bit = 0;
-            }
+
             self.need_send_key_report = false;
         }
     }
