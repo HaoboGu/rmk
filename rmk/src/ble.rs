@@ -25,9 +25,9 @@ use sequential_storage::{
 };
 
 /// Flash range which used to save bonding info
-#[cfg(feature = "nrf52840")]
+#[cfg(feature = "nrf52840_ble")]
 pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
-#[cfg(feature = "nrf52832")]
+#[cfg(feature = "nrf52832_ble")]
 pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x7E000..0x80000;
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
