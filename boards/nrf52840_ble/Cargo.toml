@@ -11,8 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { version = "0.1.5", path = "../../rmk", features = [
-    "ble",
-    "nrf52840",
+    "nrf52840_ble",
     "eeprom",
     "col2row",
 ] }
