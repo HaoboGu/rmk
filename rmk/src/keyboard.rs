@@ -475,21 +475,15 @@ impl<
 
     /// Register a key to be sent in hid report.
     fn register_keycode(&mut self, key: KeyCode) {
-        for bit in &mut self.report.keycodes {
-            if *bit == 0 {
-                *bit = key as u8;
-                break;
-            }
+        if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+            self.report.keycodes[index] = key as u8;
         }
     }
 
     /// Unregister a key from hid report.
     fn unregister_keycode(&mut self, key: KeyCode) {
-        for bit in &mut self.report.keycodes {
-            if *bit == (key as u8) {
-                *bit = 0;
-                break;
-            }
+        if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+            self.report.keycodes[index] = 0;
         }
     }
 
