@@ -9,10 +9,11 @@
 #[cfg(feature = "ble")]
 use crate::ble::{keyboard_ble_task, softdevice_task};
 use crate::light::LightService;
+use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, warn};
-use embassy_futures::select::{select4, Either4};
+use defmt::{error, info, warn};
+use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
@@ -22,6 +23,7 @@ use futures::pin_mut;
 use hid::{HidReaderWrapper, HidReaderWriterWrapper, HidWriterWrapper};
 use keyboard::Keyboard;
 use keymap::KeyMap;
+use storage::Storage;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
@@ -39,6 +41,7 @@ pub mod keymap;
 pub mod layout_macro;
 mod light;
 mod matrix;
+pub mod storage;
 mod usb;
 mod via;
 
@@ -52,11 +55,10 @@ mod via;
 /// * `keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 pub async fn initialize_keyboard_with_config_and_run<
+    F: NorFlash,
     D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -64,21 +66,32 @@ pub async fn initialize_keyboard_with_config_and_run<
     driver: D,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    mut f: F,
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
+    // Storage
+    let mut storage = Storage::new(
+        embassy_embedded_hal::adapter::BlockingAsync::new(f),
+        &keymap,
+    )
+    .await;
+
+    let keymap =
+        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, &mut storage).await);
+
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service) = (
-        Keyboard::new(input_pins, output_pins, keymap),
+        Keyboard::new(input_pins, output_pins, &keymap),
         KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
-        VialService::new(keymap, keyboard_config.vial_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
     );
 
     let mut light_service: LightService<Out> =
         LightService::from_config(keyboard_config.light_config);
 
     loop {
-        // Create 4 tasks: usb, keyboard, led, vial
+        // Create 5 tasks: usb, keyboard, led, vial, storage
         let usb_fut = usb_device.device.run();
         let keyboard_fut = keyboard_task(
             &mut keyboard,
@@ -87,16 +100,28 @@ pub async fn initialize_keyboard_with_config_and_run<
         );
         let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
         let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
 
         pin_mut!(usb_fut);
         pin_mut!(keyboard_fut);
         pin_mut!(led_reader_fut);
         pin_mut!(via_fut);
+        pin_mut!(storage_fut);
 
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
-            Either4::First(_) => error!("Usb task is died"),
-            Either4::Second(_) => error!("Keyboard task is died"),
+        match select4(
+            select(usb_fut, keyboard_fut),
+            storage_fut,
+            led_reader_fut,
+            via_fut,
+        )
+        .await
+        {
+            Either4::First(e) => match e {
+                Either::First(_) => error!("Usb task is died"),
+                Either::Second(_) => error!("Keyboard task is died"),
+            },
+            Either4::Second(_) => error!("storage task is died"),
             Either4::Third(_) => error!("Led task is died"),
             Either4::Fourth(_) => error!("Via task is died"),
         }
@@ -120,7 +145,6 @@ pub async fn initialize_keyboard_and_run<
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -128,7 +152,8 @@ pub async fn initialize_keyboard_and_run<
     driver: D,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    keymap: &'static RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    f: F,
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     vial_keyboard_id: &'static [u8],
     vial_keyboard_def: &'static [u8],
 ) -> ! {
@@ -141,6 +166,7 @@ pub async fn initialize_keyboard_and_run<
         driver,
         input_pins,
         output_pins,
+        f,
         keymap,
         keyboard_config,
     )
@@ -153,13 +179,11 @@ async fn keyboard_task<
     W2: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     keyboard_hid_writer: &mut W,
     other_hid_writer: &mut W2,
 ) -> ! {
@@ -187,14 +211,12 @@ async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
 async fn vial_task<
     'a,
     Hid: HidReaderWriterWrapper,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     via_hid: &mut Hid,
-    vial_service: &mut VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+    vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
 ) -> ! {
     loop {
         match vial_service.process_via_report(via_hid).await {
@@ -204,8 +226,6 @@ async fn vial_task<
     }
 }
 
-#[cfg(feature = "ble")]
-use action::KeyAction;
 #[cfg(feature = "ble")]
 use embassy_executor::Spawner;
 #[cfg(feature = "ble")]
@@ -225,10 +245,8 @@ pub use nrf_softdevice;
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_ble_keyboard_with_config_and_run<
-    F: NorFlash,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -241,19 +259,21 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     spawner: Spawner,
 ) -> ! {
     use defmt::*;
-    use embassy_futures::select::{select3, Either3};
+    use embassy_futures::select::{select4, Either4};
     use heapless::FnvIndexMap;
     use nrf_softdevice::Softdevice;
     use sequential_storage::{cache::NoCache, map::fetch_item};
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
-    use crate::ble::{
-        advertise::{create_advertisement_data, SCAN_DATA},
-        ble_battery_task,
-        bonder::{BondInfo, Bonder},
-        flash_task,
-        server::{BleHidWriter, BleServer},
-        BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,
+    use crate::{
+        ble::{
+            advertise::{create_advertisement_data, SCAN_DATA},
+            ble_battery_task,
+            bonder::{BondInfo, Bonder},
+            server::{BleHidWriter, BleServer},
+            BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,
+        },
+        storage::{get_bond_info_key, Storage, StorageData},
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},
@@ -268,21 +288,30 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    let keymap = RefCell::new(KeyMap::<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>::new(
-        keymap, None, None,
-    ));
-    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
-    static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
-    let f = NRF_FLASH.init(Flash::take(sd));
+    let mut flash = Flash::take(sd);
+    // flash.erase(0x80000, 0x82000).await;
+    let mut storage = Storage::new(flash, &keymap).await;
+    // static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
+    // let f = NRF_FLASH.init(Flash::take(sd));
+    let keymap =
+        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, &mut storage).await);
+    let mut keyboard: Keyboard<'_, In, Out, ROW, COL, NUM_LAYER> =
+        Keyboard::new(input_pins, output_pins, &keymap);
 
     // Get all saved bond info
     let mut buf: [u8; 128] = [0; 128];
 
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
-        if let Ok(Some(info)) =
-            fetch_item::<BondInfo, _>(f, CONFIG_FLASH_RANGE, NoCache::new(), &mut buf, key as u8)
-                .await
+        if let Ok(Some(StorageData::BondInfo(info))) =
+            fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
+                &mut storage.flash,
+                CONFIG_FLASH_RANGE,
+                NoCache::new(),
+                &mut buf,
+                get_bond_info_key(key as u8),
+            )
+            .await
         {
             bond_info.insert(key as u8, info).ok();
         }
@@ -294,7 +323,8 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
-    unwrap!(spawner.spawn(flash_task(f)));
+    // TODO: storage task
+    // unwrap!(spawner.spawn(flash_task(f)));
 
     loop {
         info!("BLE Advertising");
@@ -329,15 +359,17 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
                     &mut ble_mouse_writer,
                 );
                 let battery_fut = ble_battery_task(&ble_server, &conn);
+                let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
 
                 // Exit if anyone of three futures exits
-                match select3(ble_fut, keyboard_fut, battery_fut).await {
-                    Either3::First(disconnected_error) => error!(
+                match select4(ble_fut, keyboard_fut, battery_fut, storage_fut).await {
+                    Either4::First(disconnected_error) => error!(
                         "BLE gatt_server run exited with error: {:?}",
                         disconnected_error
                     ),
-                    Either3::Second(_) => error!("Keyboard task exited"),
-                    Either3::Third(_) => error!("Battery task exited"),
+                    Either4::Second(_) => error!("Keyboard task exited"),
+                    Either4::Third(_) => error!("Battery task exited"),
+                    Either4::Fourth(_) => error!("Storage task exited"),
                 }
             }
             Err(e) => {

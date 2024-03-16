@@ -10,15 +10,12 @@ use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
     Out: OutputPin,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -30,7 +27,7 @@ pub(crate) struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -66,18 +63,16 @@ impl<
         'a,
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
-        F: NorFlash,
-        const EEPROM_SIZE: usize,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub(crate) fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
-        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),

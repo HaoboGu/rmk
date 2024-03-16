@@ -1,5 +1,6 @@
 //! A thin hid wrapper layer which supports write/read HID reports via USB and BLE
 
+use defmt::error;
 use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
     driver::Driver,
@@ -41,7 +42,11 @@ impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidWriter<'
 
 impl<'d, D: Driver<'d>, const N: usize> HidWriterWrapper for UsbHidWriter<'d, D, N> {
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), ()> {
-        self.usb_writer.write_serialize(r).await.map_err(|_e| ())
+        if let Err(e) = self.usb_writer.write_serialize(r).await {
+            error!("Write to usb error: {}", e);
+        }
+        Ok(())
+        // map_err(|_e| ())
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), ()> {

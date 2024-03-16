@@ -49,7 +49,7 @@ async fn main(_spawner: Spawner) {
     // Use internal flash to emulate eeprom
     let f = Nvmc::new(p.NVMC);
     // Keymap + eeprom config
-    static MY_KEYMAP: StaticCell<RefCell<KeyMap<Nvmc, EEPROM_SIZE, ROW, COL, NUM_LAYER>>> =
+    static MY_KEYMAP: StaticCell<RefCell<KeyMap<Nvmc,  ROW, COL, NUM_LAYER>>> =
         StaticCell::new();
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
@@ -63,7 +63,7 @@ async fn main(_spawner: Spawner) {
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         Nvmc,
-        EEPROM_SIZE,
+        
         ROW,
         COL,
         NUM_LAYER,

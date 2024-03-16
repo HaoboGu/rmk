@@ -9,7 +9,6 @@ mod keymap;
 mod vial;
 
 use crate::keymap::{COL, NUM_LAYER, ROW};
-use core::cell::RefCell;
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -25,8 +24,8 @@ use embassy_stm32::{
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, LightConfig, RmkConfig, VialConfig},
+    embedded_hal::digital::PinState,
     initialize_keyboard_with_config_and_run,
-    keymap::KeyMap, embedded_hal::digital::PinState,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -35,7 +34,7 @@ bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
-const EEPROM_SIZE: usize = 128;
+// const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -93,15 +92,6 @@ async fn main(_spawner: Spawner) {
 
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);
-    // Keymap + eeprom config
-    static MY_KEYMAP: StaticCell<
-        RefCell<KeyMap<Flash<'_, Blocking>, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-    > = StaticCell::new();
-    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
-        crate::keymap::KEYMAP,
-        Some(f),
-        None,
-    )));
 
     let keyboard_usb_config = KeyboardUsbConfig::new(
         0x4c4b,
@@ -128,14 +118,20 @@ async fn main(_spawner: Spawner) {
 
     // Start serving
     initialize_keyboard_with_config_and_run::<
+        Flash<'_, Blocking>,
         Driver<'_, USB_OTG_HS>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        Flash<'_, Blocking>,
-        EEPROM_SIZE,
         ROW,
         COL,
         NUM_LAYER,
-    >(driver, input_pins, output_pins, keymap, keyboard_config)
+    >(
+        driver,
+        input_pins,
+        output_pins,
+        f,
+        crate::keymap::KEYMAP,
+        keyboard_config,
+    )
     .await;
 }

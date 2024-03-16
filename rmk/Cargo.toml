@@ -14,7 +14,7 @@ resolver = "2"
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embedded-alloc = "0.5"
+embassy-embedded-hal = { version = "0.1"  }
 embassy-time = { version = "0.3", features = ["defmt"] }
 embassy-usb = { version = "0.1", features = [
     "defmt",

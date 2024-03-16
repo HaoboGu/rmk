@@ -59,7 +59,7 @@ async fn main(_spawner: Spawner) {
     let f = Flash::new_blocking(p.FLASH);
     // Keymap + eeprom config
     static MY_KEYMAP: StaticCell<
-        RefCell<KeyMap<Flash<'_, Blocking>, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        RefCell<KeyMap<Flash<'_, Blocking>,  ROW, COL, NUM_LAYER>>,
     > = StaticCell::new();
     let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
         crate::keymap::KEYMAP,
@@ -73,7 +73,7 @@ async fn main(_spawner: Spawner) {
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         Flash<'_, Blocking>,
-        EEPROM_SIZE,
+        
         ROW,
         COL,
         NUM_LAYER,

@@ -14,7 +14,6 @@ use embassy_nrf::{
     self as _,
     gpio::{AnyPin, Input, Output},
     interrupt::Priority,
-    nvmc::Nvmc,
 };
 use panic_probe as _;
 use rmk::{
@@ -23,8 +22,6 @@ use rmk::{
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -55,10 +52,8 @@ async fn main(spawner: Spawner) {
     };
 
     rmk::initialize_ble_keyboard_with_config_and_run::<
-        Nvmc<'_>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        EEPROM_SIZE,
         ROW,
         COL,
         NUM_LAYER,

@@ -11,35 +11,27 @@ use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use embassy_usb::class::hid::ReadError;
-use embedded_storage::nor_flash::NorFlash;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub(crate) struct VialService<
     'a,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
+    
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 > {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
     // Vial config
     vial_config: VialConfig<'a>,
 }
 
-impl<
-        'a,
-        F: NorFlash,
-        const EEPROM_SIZE: usize,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    > VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+impl<'a,  const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    VialService<'a,  ROW, COL, NUM_LAYER>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
         vial_config: VialConfig<'a>,
     ) -> Self {
         Self {
@@ -58,7 +50,8 @@ impl<
         };
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
-                self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
+                self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut())
+                    .await;
 
                 // Send via report back after processing
                 match hid_interface.write_serialize(&via_report).await {
@@ -81,10 +74,10 @@ impl<
         }
     }
 
-    fn process_via_packet(
+    async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &mut KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+        keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
     ) {
         let command_id = report.output_data[0];
 
@@ -127,11 +120,12 @@ impl<
                 match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                     Ok(v) => match v {
                         ViaKeyboardInfo::LayoutOptions => {
-                            let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                            match &mut keymap.eeprom {
-                                Some(e) => e.set_layout_option(layout_option),
-                                None => (),
-                            }
+                            let _layout_option = BigEndian::read_u32(&report.output_data[2..6]);
+                            // FIXME: set layout option
+                            // match &mut keymap.eeprom {
+                            //     Some(e) => e.set_layout_option(layout_option).await,
+                            //     None => (),
+                            // }
                         }
                         ViaKeyboardInfo::DeviceIndication => {
                             let _device_indication = report.output_data[2];
@@ -165,10 +159,11 @@ impl<
                     keycode, row, col, layer, action
                 );
                 keymap.set_action_at(row, col, layer, action);
-                match &mut keymap.eeprom {
-                    Some(e) => e.set_keymap_action(row, col, layer, action),
-                    None => (),
-                }
+                // FIXME: set action at position
+                // match &mut keymap.eeprom {
+                //     Some(e) => e.set_keymap_action(row, col, layer, action).await,
+                //     None => (),
+                // }
             }
             ViaCommand::DynamicKeymapReset => {
                 warn!("Dynamic keymap reset -- not supported")
@@ -266,10 +261,11 @@ impl<
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
                         );
-                        match &mut keymap.eeprom {
-                            Some(e) => e.set_keymap_action(row, col, layer, action),
-                            None => (),
-                        }
+                        // FIXME set all keymap actions
+                        // match &mut keymap.eeprom {
+                        //     Some(e) => block_on(e.set_keymap_action(row, col, layer, action)),
+                        //     None => (),
+                        // }
                     });
             }
             ViaCommand::DynamicKeymapGetEncoder => {

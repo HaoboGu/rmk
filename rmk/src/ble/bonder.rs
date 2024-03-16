@@ -1,26 +1,23 @@
+use crate::storage::{FlashOperationMessage, StorageData, FLASH_CHANNEL};
+
 use super::BONDED_DEVICE_NUM;
-use core::{cell::RefCell, mem};
+use core::{cell::RefCell, ops::Add};
 use defmt::{debug, error, info, warn, Format};
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::channel::Channel;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{
     gatt_server::{get_sys_attrs, set_sys_attrs},
     security::{IoCapabilities, SecurityHandler},
-    Connection, EncryptionInfo, IdentityKey, MasterId, SecurityMode,
+    Address, AddressType, Connection, EncryptionInfo, IdentityKey, IdentityResolutionKey, MasterId,
+    SecurityMode,
 };
-use sequential_storage::map::StorageItem;
-
-// Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 4> =
-    Channel::new();
 
 // Bond info which will be stored in flash
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug, Format, Default)]
 pub(crate) struct BondInfo {
     pub(crate) slot_num: u8,
     pub(crate) peer: Peer,
     sys_attr: SystemAttribute,
+    pub(crate) removed: bool,
 }
 
 // Error when saving bond info into storage
@@ -30,55 +27,46 @@ pub enum StorageError {
     ItemWrongSize,
 }
 
-// `sequential-storage` is used for saving bond info
-// Hence `StorageItem` should be implemented
-impl StorageItem for BondInfo {
-    type Key = u8;
+// // `sequential-storage` is used for saving bond info
+// // Hence `StorageItem` should be implemented
+// impl StorageItem for BondInfo {
+//     type Key = u8;
 
-    type Error = StorageError;
+//     type Error = StorageError;
 
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
-        if buffer.len() < 120 {
-            return Err(StorageError::BufferTooSmall);
-        }
+//     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+//         if buffer.len() < 120 {
+//             return Err(StorageError::BufferTooSmall);
+//         }
 
-        // Must be 120
-        // info!("size of BondInfo: {}", size_of_val(self));
+//         // Must be 120
+//         // info!("size of BondInfo: {}", size_of_val(self));
 
-        let buf: [u8; 120] = unsafe { mem::transmute_copy(self) };
-        buffer[0..120].copy_from_slice(&buf);
-        Ok(buf.len())
-    }
+//         let buf: [u8; 120] = unsafe { mem::transmute_copy(self) };
+//         buffer[0..120].copy_from_slice(&buf);
+//         Ok(buf.len())
+//     }
 
-    fn deserialize_from(buffer: &[u8]) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        if buffer.len() != 120 {
-            return Err(StorageError::ItemWrongSize);
-        }
-        // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
-        let mut buf = [0_u8; 120];
-        buf.copy_from_slice(buffer);
+//     fn deserialize_from(buffer: &[u8]) -> Result<Self, Self::Error>
+//     where
+//         Self: Sized,
+//     {
+//         if buffer.len() != 120 {
+//             return Err(StorageError::ItemWrongSize);
+//         }
+//         // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
+//         let mut buf = [0_u8; 120];
+//         buf.copy_from_slice(buffer);
 
-        let info = unsafe { mem::transmute_copy(&buf) };
+//         let info = unsafe { mem::transmute_copy(&buf) };
 
-        Ok(info)
-    }
+//         Ok(info)
+//     }
 
-    fn key(&self) -> Self::Key {
-        self.slot_num
-    }
-}
-
-// Message send from bonder to flash task, which will do saving or clearing operation
-#[derive(Clone, Copy, Debug, Format)]
-pub(crate) enum FlashOperationMessage {
-    // Bond info to be saved
-    BondInfo(BondInfo),
-    // Clear info of given slot number
-    Clear(u8),
-}
+//     fn key(&self) -> Self::Key {
+//         self.slot_num
+//     }
+// }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Format)]
@@ -86,6 +74,19 @@ pub(crate) struct Peer {
     pub(crate) master_id: MasterId,
     pub(crate) key: EncryptionInfo,
     pub(crate) peer_id: IdentityKey,
+}
+
+impl Default for Peer {
+    fn default() -> Self {
+        Self {
+            master_id: Default::default(),
+            key: Default::default(),
+            peer_id: IdentityKey {
+                addr: Address::new(AddressType::Public, [0; 6]),
+                irk: IdentityResolutionKey::default(),
+            },
+        }
+    }
 }
 
 #[repr(C)]
@@ -157,7 +158,7 @@ impl SecurityHandler for Bonder {
             .bond_info
             .borrow()
             .iter()
-            .find(|(_, b)| b.peer.peer_id.addr == peer_id.addr)
+            .find(|(_, b)| b.peer.peer_id.addr == peer_id.addr && b.removed == false)
             .map(|(i, _)| *i)
             .unwrap_or(self.bond_info.borrow().len() as u8);
 
@@ -181,6 +182,7 @@ impl SecurityHandler for Bonder {
                     peer_id,
                 },
                 slot_num,
+                removed: false,
             };
 
             match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(new_bond_info)) {
@@ -204,7 +206,7 @@ impl SecurityHandler for Bonder {
         self.bond_info
             .borrow()
             .iter()
-            .find(|(_, info)| info.peer.master_id == master_id)
+            .find(|(_, info)| info.peer.master_id == master_id && info.removed == false)
             .and_then(|(_, d)| Some(d.peer.key))
     }
 
@@ -248,7 +250,7 @@ impl SecurityHandler for Bonder {
 
         let sys_attr = bond_info
             .iter()
-            .filter(|(_, b)| b.sys_attr.length != 0)
+            .filter(|(_, b)| b.sys_attr.length != 0 && b.removed == false)
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 

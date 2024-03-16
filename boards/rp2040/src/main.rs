@@ -54,7 +54,7 @@ async fn main(_spawner: Spawner) {
         RefCell<
             KeyMap<
                 Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
-                EEPROM_SIZE,
+                
                 ROW,
                 COL,
                 NUM_LAYER,
@@ -89,7 +89,7 @@ async fn main(_spawner: Spawner) {
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
-        EEPROM_SIZE,
+        
         ROW,
         COL,
         NUM_LAYER,

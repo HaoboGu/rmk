@@ -55,10 +55,9 @@ async fn main(spawner: Spawner) {
     };
 
     rmk::initialize_ble_keyboard_with_config_and_run::<
-        Nvmc<'_>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        EEPROM_SIZE,
+        
         ROW,
         COL,
         NUM_LAYER,
