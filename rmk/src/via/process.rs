@@ -1,7 +1,7 @@
 use super::{protocol::*, vial::process_vial};
 use crate::{
     config::VialConfig,
-    hid::HidReaderWriterWrapper,
+    hid::{HidError, HidReaderWriterWrapper},
     keymap::KeyMap,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -10,16 +10,9 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
-use embassy_usb::class::hid::ReadError;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
-pub(crate) struct VialService<
-    'a,
-    
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
+pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
@@ -27,8 +20,8 @@ pub(crate) struct VialService<
     vial_config: VialConfig<'a>,
 }
 
-impl<'a,  const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    VialService<'a,  ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    VialService<'a, ROW, COL, NUM_LAYER>
 {
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
@@ -64,7 +57,7 @@ impl<'a,  const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 }
             }
             Err(e) => {
-                if e != ReadError::Disabled {
+                if e != HidError::UsbDisabled && e != HidError::BleDisconnected {
                     // Don't print message if the USB endpoint is disabled(aka not connected)
                     error!("Read via report error: {}", e);
                 }

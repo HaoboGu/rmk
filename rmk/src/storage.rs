@@ -284,7 +284,9 @@ impl<F: AsyncNorFlash> Storage<F> {
                         NoCache::new(),
                         &mut storage_data_buffer,
                         &data,
-                    );
+                    )
+                    .await
+                    .ok();
                 }
                 #[cfg(feature = "ble")]
                 FlashOperationMessage::BondInfo(b) => {
@@ -349,15 +351,6 @@ impl<F: AsyncNorFlash> Storage<F> {
                                 layer, col, row, k.action
                             );
                             k.action
-                        }
-                        Ok(Some(sd)) => {
-                            match sd {
-                                StorageData::StorageConfig(_) => error!("sc"),
-                                StorageData::LayoutConfig(_) => error!("lc"),
-                                StorageData::KeymapConfig(_) => error!("kc"),
-                                StorageData::KeymapKey(_) => error!("kk"),
-                            }
-                            KeyAction::No
                         }
                         Ok(None) => {
                             error!("None (layer,col,row)=({},{},{})", layer, col, row);

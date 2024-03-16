@@ -8,15 +8,11 @@ pub(crate) mod server;
 pub(crate) mod spec;
 
 use self::server::BleServer;
-use crate::{
-    hid::HidWriterWrapper,
-    keyboard::Keyboard,
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
-};
-use core::{convert::Infallible, mem, ops::Range};
+use crate::{hid::HidWriterWrapper, keyboard::Keyboard};
+use core::{convert::Infallible, mem};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
-use nrf_softdevice::{ble::Connection, raw, Config, Flash};
+use nrf_softdevice::{ble::Connection, raw, Config};
 
 /// Flash range which used to save bonding info
 // #[cfg(feature = "nrf52840_ble")]
@@ -67,41 +63,6 @@ pub fn nrf_ble_config(keyboard_name: &str) -> Config {
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     sd.run().await
-}
-
-#[embassy_executor::task]
-pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
-    let mut storage_data_buffer = [0_u8; 128];
-    loop {
-        let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
-        match info {
-            _ => {} // FlashOperationMessage::Clear(key) => {
-                    //     info!("Clearing bond info slot_num: {}", key);
-                    //     remove_item::<BondInfo, _>(
-                    //         f,
-                    //         CONFIG_FLASH_RANGE,
-                    //         NoCache::new(),
-                    //         &mut storage_data_buffer,
-                    //         key,
-                    //     )
-                    //     .await
-                    //     .ok();
-                    // }
-                    // FlashOperationMessage::BondInfo(b) => {
-                    //     info!("Saving item: {}", info);
-
-                    //     store_item::<BondInfo, _>(
-                    //         f,
-                    //         CONFIG_FLASH_RANGE,
-                    //         NoCache::new(),
-                    //         &mut storage_data_buffer,
-                    //         &b,
-                    //     )
-                    //     .await
-                    //     .ok();
-                    // }
-        };
-    }
 }
 
 /// BLE keyboard task, run the keyboard with the ble server

@@ -66,7 +66,7 @@ pub async fn initialize_keyboard_with_config_and_run<
     driver: D,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    mut f: F,
+    f: F,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
@@ -259,7 +259,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     spawner: Spawner,
 ) -> ! {
     use defmt::*;
-    use embassy_futures::select::{select4, Either4};
     use heapless::FnvIndexMap;
     use nrf_softdevice::Softdevice;
     use sequential_storage::{cache::NoCache, map::fetch_item};
@@ -271,9 +270,10 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             ble_battery_task,
             bonder::{BondInfo, Bonder},
             server::{BleHidWriter, BleServer},
-            BONDED_DEVICE_NUM, CONFIG_FLASH_RANGE,
+            BONDED_DEVICE_NUM,
         },
-        storage::{get_bond_info_key, Storage, StorageData},
+        config::CONFIG_FLASH_RANGE,
+        storage::{get_bond_info_key, StorageData},
     };
     use nrf_softdevice::{
         ble::{gatt_server, peripheral},
@@ -288,11 +288,8 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    let mut flash = Flash::take(sd);
-    // flash.erase(0x80000, 0x82000).await;
+    let flash = Flash::take(sd);
     let mut storage = Storage::new(flash, &keymap).await;
-    // static NRF_FLASH: StaticCell<Flash> = StaticCell::new();
-    // let f = NRF_FLASH.init(Flash::take(sd));
     let keymap =
         RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, &mut storage).await);
     let mut keyboard: Keyboard<'_, In, Out, ROW, COL, NUM_LAYER> =

@@ -1,7 +1,6 @@
-use crate::storage::{FlashOperationMessage, StorageData, FLASH_CHANNEL};
-
 use super::BONDED_DEVICE_NUM;
-use core::{cell::RefCell, ops::Add};
+use crate::storage::{FlashOperationMessage, FLASH_CHANNEL};
+use core::cell::RefCell;
 use defmt::{debug, error, info, warn, Format};
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{
