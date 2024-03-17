@@ -84,7 +84,7 @@ impl<
             Timer::after_micros(1).await;
             for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
-                let changed = self.debouncer.has_changed(
+                let changed = self.debouncer.detect_change_with_debounce(
                     in_idx,
                     out_idx,
                     in_pin.is_high()?,

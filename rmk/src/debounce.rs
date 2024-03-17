@@ -48,7 +48,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub(crate) fn has_changed(
+    pub(crate) fn detect_change_with_debounce(
         &mut self,
         in_idx: usize,
         out_idx: usize,
