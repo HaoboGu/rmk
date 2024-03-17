@@ -84,12 +84,19 @@ impl<
             Timer::after_micros(1).await;
             for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
-                self.debouncer.debounce(
+                let changed = self.debouncer.detect_change_with_debounce(
                     in_idx,
                     out_idx,
                     in_pin.is_high()?,
-                    &mut self.key_states[out_idx][in_idx],
+                    &self.key_states[out_idx][in_idx],
                 );
+
+                if changed {
+                    self.key_states[out_idx][in_idx].pressed =
+                        !self.key_states[out_idx][in_idx].pressed;
+                }
+
+                self.key_states[out_idx][in_idx].changed = changed;
             }
             out_pin.set_low()?;
         }

@@ -48,13 +48,13 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     }
 
     /// Per-key debounce, same with zmk's debounce algorithm
-    pub(crate) fn debounce(
+    pub(crate) fn detect_change_with_debounce(
         &mut self,
         in_idx: usize,
         out_idx: usize,
         pin_state: bool,
-        key_state: &mut KeyState,
-    ) {
+        key_state: &KeyState,
+    ) -> bool {
         // Record debounce state per ms
         let cur_tick = Instant::now().as_ticks() as u32;
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
@@ -62,23 +62,20 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
         if elapsed_ms > 0 {
             let state: &mut DebounceState = &mut self.debounce_state[out_idx][in_idx];
 
-            key_state.changed = false;
             if key_state.pressed == pin_state {
                 state.decrease(elapsed_ms);
-                return;
+            } else {
+                // Use 10khz tick, so the debounce threshold should * 10
+                if state.counter < DEBOUNCE_THRESHOLD * 10 {
+                    state.increase(elapsed_ms);
+                } else {
+                    self.last_tick = cur_tick;
+                    state.counter = 0;
+                    return true;
+                }
             }
-
-            // Use 10khz tick, so the debounce threshold should * 10
-            if state.counter < DEBOUNCE_THRESHOLD * 10 {
-                state.increase(elapsed_ms);
-                return;
-            }
-
-            self.last_tick = cur_tick;
-            state.counter = 0;
-            key_state.pressed = !key_state.pressed;
-            key_state.changed = true;
         }
+        false
     }
 }
 
