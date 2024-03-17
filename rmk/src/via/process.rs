@@ -3,6 +3,7 @@ use crate::{
     config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keymap::KeyMap,
+    storage::{FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
@@ -91,6 +92,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                             BigEndian::write_u32(&mut report.input_data[2..6], value);
                         }
                         ViaKeyboardInfo::LayoutOptions => {
+                            // TODO: retrieve layout option from storage
                             let layout_option: u32 = 0;
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
@@ -113,12 +115,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                     Ok(v) => match v {
                         ViaKeyboardInfo::LayoutOptions => {
-                            let _layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                            // FIXME: set layout option
-                            // match &mut keymap.eeprom {
-                            //     Some(e) => e.set_layout_option(layout_option).await,
-                            //     None => (),
-                            // }
+                            let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::LayoutOptions(layout_option))
+                                .await;
                         }
                         ViaKeyboardInfo::DeviceIndication => {
                             let _device_indication = report.output_data[2];
@@ -142,21 +142,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
             }
             ViaCommand::DynamicKeymapSetKeyCode => {
-                let layer = report.output_data[1] as usize;
-                let row = report.output_data[2] as usize;
-                let col = report.output_data[3] as usize;
+                let layer = report.output_data[1];
+                let row = report.output_data[2];
+                let col = report.output_data[3];
                 let keycode = BigEndian::read_u16(&report.output_data[4..6]);
                 let action = from_via_keycode(keycode);
                 info!(
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
                     keycode, row, col, layer, action
                 );
-                keymap.set_action_at(row, col, layer, action);
-                // FIXME: set action at position
-                // match &mut keymap.eeprom {
-                //     Some(e) => e.set_keymap_action(row, col, layer, action).await,
-                //     None => (),
-                // }
+                keymap.set_action_at(row as usize, col as usize, layer as usize, action);
+                FLASH_CHANNEL
+                    .send(FlashOperationMessage::KeymapKey {
+                        layer,
+                        col,
+                        row,
+                        action,
+                    })
+                    .await;
             }
             ViaCommand::DynamicKeymapReset => {
                 warn!("Dynamic keymap reset -- not supported")
@@ -254,11 +257,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
                         );
-                        // FIXME set all keymap actions
-                        // match &mut keymap.eeprom {
-                        //     Some(e) => block_on(e.set_keymap_action(row, col, layer, action)),
-                        //     None => (),
-                        // }
+                        if let Err(e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
+                            layer: layer as u8,
+                            col: col as u8,
+                            row: row as u8,
+                            action,
+                        }) {
+                            error!("Set keymap buffer error: {} ", e)
+                        }
                     });
             }
             ViaCommand::DynamicKeymapGetEncoder => {

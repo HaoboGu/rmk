@@ -25,17 +25,27 @@ use crate::{
 };
 
 // Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 4> =
+pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 8> =
     Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) enum FlashOperationMessage {
-    // // Bond info to be saved
+    // Bond info to be saved
     #[cfg(feature = "ble")]
     BondInfo(BondInfo),
     // Clear info of given slot number
     Clear(u8),
+    // Layout option
+    LayoutOptions(u32),
+    // Default layer number
+    DefaultLayer(u8),
+    KeymapKey {
+        layer: u8,
+        col: u8,
+        row: u8,
+        action: KeyAction,
+    },
 }
 
 #[repr(usize)]
@@ -262,15 +272,82 @@ pub struct Storage<F: AsyncNorFlash> {
     pub(crate) flash: F,
 }
 
+/// Read out storage config, update and then save back.
+/// This macro applies to only some of the configs.
+macro_rules! update_storage_config {
+    ($f: expr, $buf: expr, $c:ident, $o:ident) => {
+        if let Ok(Some(StorageData::$c(mut saved))) =
+            fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
+                $f,
+                CONFIG_FLASH_RANGE,
+                NoCache::new(),
+                $buf,
+                StorageKeys::$c as usize,
+            )
+            .await
+        {
+            saved.$o = $o;
+            store_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
+                $f,
+                CONFIG_FLASH_RANGE,
+                NoCache::new(),
+                $buf,
+                &StorageData::$c(saved),
+            )
+            .await
+            .unwrap();
+        }
+    };
+}
+
 impl<F: AsyncNorFlash> Storage<F> {
     pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         &mut self,
     ) -> ! {
-        // TODO: Save keymap key
         let mut storage_data_buffer = [0_u8; 128];
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             match info {
+                FlashOperationMessage::LayoutOptions(layout_option) => {
+                    // Read out layout options, update layer option and save back
+                    update_storage_config!(
+                        &mut self.flash,
+                        &mut storage_data_buffer,
+                        LayoutConfig,
+                        layout_option
+                    );
+                }
+                FlashOperationMessage::DefaultLayer(default_layer) => {
+                    // Read out layout options, update layer option and save back
+                    update_storage_config!(
+                        &mut self.flash,
+                        &mut storage_data_buffer,
+                        LayoutConfig,
+                        default_layer
+                    );
+                }
+                FlashOperationMessage::KeymapKey {
+                    layer,
+                    col,
+                    row,
+                    action,
+                } => {
+                    store_item(
+                        &mut self.flash,
+                        CONFIG_FLASH_RANGE,
+                        NoCache::new(),
+                        &mut storage_data_buffer,
+                        &StorageData::KeymapKey(KeymapKey::<ROW, COL, NUM_LAYER> {
+                            row: row as usize,
+                            col: col as usize,
+                            layer: layer as usize,
+                            action,
+                        }),
+                    )
+                    .await
+                    .unwrap();
+                }
+
                 #[cfg(feature = "ble")]
                 FlashOperationMessage::Clear(key) => {
                     info!("Clearing bond info slot_num: {}", key);
