@@ -31,11 +31,13 @@ pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
     pub async fn new_from_storage<F: NorFlash>(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        storage: &mut Storage<F>,
+        storage: Option<&mut Storage<F>>,
     ) -> Self {
         // TODO: If storage is just initialize, just action map
         // Or, reload keymap from flash
-        storage.read_keymap(&mut action_map).await;
+        if let Some(storage) = storage {
+            storage.read_keymap(&mut action_map).await;
+        }
 
         // TODO: If error, reinit
 

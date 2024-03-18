@@ -8,19 +8,23 @@
 
 #[cfg(feature = "ble")]
 use crate::ble::{keyboard_ble_task, softdevice_task};
-use crate::light::LightService;
+use crate::{
+    keyboard::keyboard_task,
+    light::{led_task, LightService},
+    via::vial_task,
+};
 use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, info, warn};
+use defmt::{error, warn};
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
+use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
-use hid::{HidReaderWrapper, HidReaderWriterWrapper, HidWriterWrapper};
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use storage::Storage;
@@ -45,92 +49,6 @@ pub mod storage;
 mod usb;
 mod via;
 
-/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
-///
-/// # Arguments
-///
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-pub async fn initialize_keyboard_with_config_and_run<
-    F: NorFlash,
-    D: Driver<'static>,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    driver: D,
-    input_pins: [In; ROW],
-    output_pins: [Out; COL],
-    f: F,
-    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: RmkConfig<'static, Out>,
-) -> ! {
-    // Storage
-    let mut storage = Storage::new(
-        embassy_embedded_hal::adapter::BlockingAsync::new(f),
-        &keymap,
-    )
-    .await;
-
-    let keymap =
-        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, &mut storage).await);
-
-    // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service) = (
-        Keyboard::new(input_pins, output_pins, &keymap),
-        KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-    );
-
-    let mut light_service: LightService<Out> =
-        LightService::from_config(keyboard_config.light_config);
-
-    loop {
-        // Create 5 tasks: usb, keyboard, led, vial, storage
-        let usb_fut = usb_device.device.run();
-        let keyboard_fut = keyboard_task(
-            &mut keyboard,
-            &mut usb_device.keyboard_hid_writer,
-            &mut usb_device.other_hid_writer,
-        );
-        let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-        let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-
-        pin_mut!(usb_fut);
-        pin_mut!(keyboard_fut);
-        pin_mut!(led_reader_fut);
-        pin_mut!(via_fut);
-        pin_mut!(storage_fut);
-
-        // Run all tasks, if one of them fails, wait 1 second and then restart
-        match select4(
-            select(usb_fut, keyboard_fut),
-            storage_fut,
-            led_reader_fut,
-            via_fut,
-        )
-        .await
-        {
-            Either4::First(e) => match e {
-                Either::First(_) => error!("Usb task is died"),
-                Either::Second(_) => error!("Keyboard task is died"),
-            },
-            Either4::Second(_) => error!("storage task is died"),
-            Either4::Third(_) => error!("Led task is died"),
-            Either4::Fourth(_) => error!("Via task is died"),
-        }
-
-        warn!("Detected failure, restarting keyboard sevice after 1 second");
-        Timer::after_secs(1).await;
-    }
-}
-
 /// Initialize and run the keyboard service, this function never returns.
 ///
 /// # Arguments
@@ -138,6 +56,7 @@ pub async fn initialize_keyboard_with_config_and_run<
 /// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
+/// * `flash` - optional flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
 /// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate them automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs)
 pub async fn initialize_keyboard_and_run<
@@ -152,7 +71,7 @@ pub async fn initialize_keyboard_and_run<
     driver: D,
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    f: F,
+    flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     vial_keyboard_id: &'static [u8],
     vial_keyboard_def: &'static [u8],
@@ -166,63 +85,153 @@ pub async fn initialize_keyboard_and_run<
         driver,
         input_pins,
         output_pins,
-        f,
+        flash,
         keymap,
         keyboard_config,
     )
     .await
 }
 
-async fn keyboard_task<
-    'a,
-    W: HidWriterWrapper,
-    W2: HidWriterWrapper,
+/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+///
+/// # Arguments
+///
+/// * `driver` - embassy usb driver instance
+/// * `input_pins` - input gpio pins
+/// * `output_pins` - output gpio pins
+/// * `flash` - optional flash storage, which is used for storing keymap and keyboard configs
+/// * `keymap` - default keymap definition
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+pub async fn initialize_keyboard_with_config_and_run<
+    F: NorFlash,
+    D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
-    keyboard_hid_writer: &mut W,
-    other_hid_writer: &mut W2,
+    driver: D,
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    flash: Option<F>,
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    loop {
-        let _ = keyboard.scan_matrix().await;
-        keyboard.send_keyboard_report(keyboard_hid_writer).await;
-        keyboard.send_media_report(other_hid_writer).await;
-        keyboard.send_mouse_report(other_hid_writer).await;
-        keyboard.send_system_control_report(other_hid_writer).await;
-    }
+    // Wrap `embedded-storage` to `embedded-storage-async`
+    let async_flash = flash.map(|f| embassy_embedded_hal::adapter::BlockingAsync::new(f));
+
+    initialize_keyboard_with_config_and_run_async_flash(
+        driver,
+        input_pins,
+        output_pins,
+        async_flash,
+        keymap,
+        keyboard_config,
+    )
+    .await
 }
 
-async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
-    keyboard_hid_reader: &mut R,
-    light_service: &mut LightService<Out>,
-) -> ! {
-    loop {
-        match light_service.check_led_indicator(keyboard_hid_reader).await {
-            Ok(_) => Timer::after_millis(50).await,
-            Err(_) => Timer::after_secs(2).await,
-        }
-    }
-}
-
-async fn vial_task<
-    'a,
-    Hid: HidReaderWriterWrapper,
+/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+///
+/// # Arguments
+///
+/// * `driver` - embassy usb driver instance
+/// * `input_pins` - input gpio pins
+/// * `output_pins` - output gpio pins
+/// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
+/// * `keymap` - default keymap definition
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+pub async fn initialize_keyboard_with_config_and_run_async_flash<
+    F: AsyncNorFlash,
+    D: Driver<'static>,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    via_hid: &mut Hid,
-    vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
+    driver: D,
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    flash: Option<F>,
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    loop {
-        match vial_service.process_via_report(via_hid).await {
-            Ok(_) => Timer::after_millis(1).await,
-            Err(_) => Timer::after_millis(500).await,
+    // Initialize storage and keymap
+    let (mut storage, keymap) = match flash {
+        Some(f) => {
+            let mut s = Storage::new(f, &keymap).await;
+            let keymap = RefCell::new(
+                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut s)).await,
+            );
+            (Some(s), keymap)
         }
+        None => {
+            let keymap = RefCell::new(
+                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<F>(keymap, None).await,
+            );
+            (None, keymap)
+        }
+    };
+
+    // Create keyboard services and devices
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(input_pins, output_pins, &keymap),
+        KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
+
+    loop {
+        // Create tasks: usb, keyboard, led, vial, storage(optional)
+        let usb_fut = usb_device.device.run();
+        let keyboard_fut = keyboard_task(
+            &mut keyboard,
+            &mut usb_device.keyboard_hid_writer,
+            &mut usb_device.other_hid_writer,
+        );
+        let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
+        let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+        pin_mut!(usb_fut);
+        pin_mut!(keyboard_fut);
+        pin_mut!(led_reader_fut);
+        pin_mut!(via_fut);
+
+        // Run all tasks, if one of them fails, wait 1 second and then restart
+        if let Some(ref mut s) = storage {
+            // Run 5 tasks: usb, keyboard, led, vial, storage
+            let storage_fut = s.run::<ROW, COL, NUM_LAYER>();
+            pin_mut!(storage_fut);
+
+            match select4(
+                select(usb_fut, keyboard_fut),
+                storage_fut,
+                led_reader_fut,
+                via_fut,
+            )
+            .await
+            {
+                Either4::First(e) => match e {
+                    Either::First(_) => error!("Usb task is died"),
+                    Either::Second(_) => error!("Keyboard task is died"),
+                },
+                Either4::Second(_) => error!("Storage task is died"),
+                Either4::Third(_) => error!("Led task is died"),
+                Either4::Fourth(_) => error!("Via task is died"),
+            }
+        } else {
+            // Run 4 tasks: usb, keyboard, led, vial
+            match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
+                Either4::First(_) => error!("Usb task is died"),
+                Either4::Second(_) => error!("Keyboard task is died"),
+                Either4::Third(_) => error!("Led task is died"),
+                Either4::Fourth(_) => error!("Via task is died"),
+            }
+        }
+
+        warn!("Detected failure, restarting keyboard sevice after 1 second");
+        Timer::after_secs(1).await;
     }
 }
 
@@ -241,7 +250,6 @@ pub use nrf_softdevice;
 /// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
-/// * `ble_config` - nrf_softdevice config
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_ble_keyboard_with_config_and_run<
@@ -254,7 +262,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    ble_config: nrf_softdevice::Config,
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
@@ -269,6 +276,7 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
             advertise::{create_advertisement_data, SCAN_DATA},
             ble_battery_task,
             bonder::{BondInfo, Bonder},
+            nrf_ble_config,
             server::{BleHidWriter, BleServer},
             BONDED_DEVICE_NUM,
         },
@@ -280,18 +288,21 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
         Flash,
     };
 
-    let sd = Softdevice::enable(&ble_config);
     let keyboard_name = keyboard_config
         .usb_config
         .product_name
         .unwrap_or("RMK Keyboard");
+    let ble_config = nrf_ble_config(keyboard_name);
+
+    let sd = Softdevice::enable(&ble_config);
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
     let flash = Flash::take(sd);
     let mut storage = Storage::new(flash, &keymap).await;
-    let keymap =
-        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, &mut storage).await);
+    let keymap = RefCell::new(
+        KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut storage)).await,
+    );
     let mut keyboard: Keyboard<'_, In, Out, ROW, COL, NUM_LAYER> =
         Keyboard::new(input_pins, output_pins, &keymap);
 
@@ -319,9 +330,6 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
     // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
-
-    // TODO: storage task
-    // unwrap!(spawner.spawn(flash_task(f)));
 
     loop {
         info!("BLE Advertising");
@@ -376,5 +384,11 @@ pub async fn initialize_ble_keyboard_with_config_and_run<
 
         // Retry after 3 second
         Timer::after_secs(3).await;
+    }
+}
+
+async fn dummy_task() -> ! {
+    loop {
+        Timer::after_secs(u64::MAX).await
     }
 }

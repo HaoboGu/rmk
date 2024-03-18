@@ -379,6 +379,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     .await
                     .ok();
                 }
+                #[cfg(not(feature = "ble"))]
                 _ => (),
             };
         }

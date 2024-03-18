@@ -12,6 +12,30 @@ use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use usbd_hid::descriptor::KeyboardReport;
 
+
+pub(crate) async fn keyboard_task<
+    'a,
+    W: HidWriterWrapper,
+    W2: HidWriterWrapper,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard_hid_writer: &mut W,
+    other_hid_writer: &mut W2,
+) -> ! {
+    loop {
+        let _ = keyboard.scan_matrix().await;
+        keyboard.send_keyboard_report(keyboard_hid_writer).await;
+        keyboard.send_media_report(other_hid_writer).await;
+        keyboard.send_mouse_report(other_hid_writer).await;
+        keyboard.send_system_control_report(other_hid_writer).await;
+    }
+}
+
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,

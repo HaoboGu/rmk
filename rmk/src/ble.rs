@@ -23,7 +23,7 @@ use nrf_softdevice::{ble::Connection, raw, Config};
 pub const BONDED_DEVICE_NUM: usize = 8;
 
 /// Create default nrf ble config
-pub fn nrf_ble_config(keyboard_name: &str) -> Config {
+pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
             source: raw::NRF_CLOCK_LF_SRC_RC as u8,

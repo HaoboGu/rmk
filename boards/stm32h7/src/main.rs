@@ -129,7 +129,7 @@ async fn main(_spawner: Spawner) {
         driver,
         input_pins,
         output_pins,
-        f,
+        Some(f),
         crate::keymap::KEYMAP,
         keyboard_config,
     )
