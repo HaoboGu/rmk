@@ -299,7 +299,6 @@ impl<
         for kc in keycodes.iter().take(n) {
             self.process_action_keycode(*kc, key_state);
         }
-        for _i in 0..n {}
         self.process_key_action_normal(action, key_state);
     }
 
