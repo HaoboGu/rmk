@@ -40,6 +40,10 @@ impl KeyState {
     fn clear_timer(&mut self) {
         self.hold_start = None;
     }
+
+    fn toggle_pressed(&mut self) {
+        self.pressed = !self.pressed;
+    }
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
@@ -92,8 +96,7 @@ impl<
                 );
 
                 if changed {
-                    self.key_states[out_idx][in_idx].pressed =
-                        !self.key_states[out_idx][in_idx].pressed;
+                    self.key_states[out_idx][in_idx].toggle_pressed();
                 }
 
                 self.key_states[out_idx][in_idx].changed = changed;
