@@ -14,23 +14,15 @@ use embassy_nrf::{
     self as _,
     gpio::{AnyPin, Input, Output},
     interrupt::Priority,
-    nvmc::Nvmc,
 };
 use panic_probe as _;
-use rmk::{
-    ble::nrf_ble_config,
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-};
+use rmk::config::{KeyboardUsbConfig, RmkConfig, VialConfig};
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello NRF BLE!");
-    let keyboard_name = "RMK Keyboard";
-    let ble_config = nrf_ble_config(keyboard_name);
 
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.gpiote_interrupt_priority = Priority::P2;
@@ -44,7 +36,7 @@ async fn main(spawner: Spawner) {
         0x4c4b,
         0x4643,
         Some("Haobo"),
-        Some(keyboard_name),
+        Some("RMK Keyboard"),
         Some("00000001"),
     );
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
@@ -57,7 +49,6 @@ async fn main(spawner: Spawner) {
     rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        
         ROW,
         COL,
         NUM_LAYER,
@@ -65,7 +56,6 @@ async fn main(spawner: Spawner) {
         crate::keymap::KEYMAP,
         input_pins,
         output_pins,
-        ble_config,
         keyboard_config,
         spawner,
     )

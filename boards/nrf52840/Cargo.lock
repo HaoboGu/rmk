@@ -996,7 +996,6 @@ dependencies = [
  "json",
  "panic-probe",
  "rmk",
- "static_cell",
  "xz2",
 ]
 
