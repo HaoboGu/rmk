@@ -48,7 +48,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    rmk::initialize_ble_keyboard_with_config_and_run::<
+    rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         ROW,

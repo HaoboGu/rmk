@@ -252,7 +252,7 @@ pub use nrf_softdevice;
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
-pub async fn initialize_ble_keyboard_with_config_and_run<
+pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     const ROW: usize,
