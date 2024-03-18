@@ -279,7 +279,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             server::{BleHidWriter, BleServer},
             BONDED_DEVICE_NUM,
         },
-        config::CONFIG_FLASH_RANGE,
         storage::{get_bond_info_key, StorageData},
     };
     use nrf_softdevice::{
@@ -313,7 +312,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         if let Ok(Some(StorageData::BondInfo(info))) =
             fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                 &mut storage.flash,
-                CONFIG_FLASH_RANGE,
+                storage.storage_range.clone(),
                 NoCache::new(),
                 &mut buf,
                 get_bond_info_key(key as u8),

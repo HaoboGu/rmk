@@ -16,10 +16,10 @@ use sequential_storage::{
 use crate::ble::bonder::BondInfo;
 #[cfg(feature = "ble")]
 use core::mem;
+use core::ops::Range;
 
 use crate::{
     action::KeyAction,
-    config::CONFIG_FLASH_RANGE,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 
@@ -243,7 +243,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
                 let kk = *k;
-                
                 get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer)
             }
         }
@@ -271,16 +270,17 @@ pub(crate) struct KeymapKey<const ROW: usize, const COL: usize, const NUM_LAYER:
 
 pub struct Storage<F: AsyncNorFlash> {
     pub(crate) flash: F,
+    pub(crate) storage_range: Range<u32>,
 }
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
 macro_rules! update_storage_config {
-    ($f: expr, $buf: expr, $c:ident, $o:ident) => {
+    ($f: expr, $buf: expr, $c:ident, $o:ident, $range:expr) => {
         if let Ok(Some(StorageData::$c(mut saved))) =
             fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                 $f,
-                CONFIG_FLASH_RANGE,
+                $range,
                 NoCache::new(),
                 $buf,
                 StorageKeys::$c as usize,
@@ -290,7 +290,7 @@ macro_rules! update_storage_config {
             saved.$o = $o;
             store_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                 $f,
-                CONFIG_FLASH_RANGE,
+                $range,
                 NoCache::new(),
                 $buf,
                 &StorageData::$c(saved),
@@ -302,6 +302,34 @@ macro_rules! update_storage_config {
 }
 
 impl<F: AsyncNorFlash> Storage<F> {
+    pub async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+        flash: F,
+        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+    ) -> Self {
+        let storage_range = (flash.capacity() - 2 * F::ERASE_SIZE) as u32..flash.capacity() as u32;
+        // TODO: initialize all keymap & config stuffs
+        let mut storage = Self {
+            flash,
+            storage_range,
+        };
+        // Check whether keymap and configs have been storaged in flash
+
+        if !storage.check_enable::<ROW, COL, NUM_LAYER>().await {
+            // Initialize storage from keymap and config
+            if let Err(e) = storage.initialize_storage_with_config(keymap).await {
+                error!("Initialize storage error: {}", e)
+            }
+            // TODO: ignore read from flash if it's just initialized
+        }
+
+        storage
+    }
+
+    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
+    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
+        // Self { flash }
+    }
+
     pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         &mut self,
     ) -> ! {
@@ -315,7 +343,8 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         &mut storage_data_buffer,
                         LayoutConfig,
-                        layout_option
+                        layout_option,
+                        self.storage_range.clone()
                     );
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
@@ -324,7 +353,8 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         &mut storage_data_buffer,
                         LayoutConfig,
-                        default_layer
+                        default_layer,
+                        self.storage_range.clone()
                     );
                 }
                 FlashOperationMessage::KeymapKey {
@@ -335,7 +365,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 } => {
                     store_item(
                         &mut self.flash,
-                        CONFIG_FLASH_RANGE,
+                        self.storage_range.clone(),
                         NoCache::new(),
                         &mut storage_data_buffer,
                         &StorageData::KeymapKey(KeymapKey::<ROW, COL, NUM_LAYER> {
@@ -358,7 +388,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     let data = StorageData::BondInfo(empty);
                     store_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
-                        CONFIG_FLASH_RANGE,
+                        self.storage_range.clone(),
                         NoCache::new(),
                         &mut storage_data_buffer,
                         &data,
@@ -372,7 +402,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     let data = StorageData::BondInfo(b);
                     store_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
-                        CONFIG_FLASH_RANGE,
+                        self.storage_range.clone(),
                         NoCache::new(),
                         &mut storage_data_buffer,
                         &data,
@@ -384,25 +414,6 @@ impl<F: AsyncNorFlash> Storage<F> {
                 _ => (),
             };
         }
-    }
-
-    pub async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-        flash: F,
-        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-    ) -> Self {
-        // TODO: initialize all keymap & config stuffs
-        let mut storage = Self { flash };
-        // Check whether keymap and configs have been storaged in flash
-
-        if !storage.check_enable::<ROW, COL, NUM_LAYER>().await {
-            // Initialize storage from keymap and config
-            if let Err(e) = storage.initialize_storage_with_config(keymap).await {
-                error!("Initialize storage error: {}", e)
-            }
-            // TODO: ignore read from flash if it's just initialized
-        }
-
-        storage
     }
 
     pub(crate) async fn read_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
@@ -417,7 +428,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     info!("Reading key: {},{},{}: {}", layer, col, row, key);
                     let item = match fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
-                        CONFIG_FLASH_RANGE,
+                        self.storage_range.clone(),
                         NoCache::new(),
                         &mut buf,
                         key,
@@ -461,7 +472,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         // Save storage config
         store_item(
             &mut self.flash,
-            CONFIG_FLASH_RANGE,
+            self.storage_range.clone(),
             NoCache::new(),
             &mut buf,
             &StorageData::<ROW, COL, NUM_LAYER>::StorageConfig(StorageConfig { enable: true }),
@@ -473,7 +484,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         // Save layout config
         store_item(
             &mut self.flash,
-            CONFIG_FLASH_RANGE,
+            self.storage_range.clone(),
             NoCache::new(),
             &mut buf,
             &StorageData::<ROW, COL, NUM_LAYER>::LayoutConfig(LayoutConfig {
@@ -507,7 +518,7 @@ impl<F: AsyncNorFlash> Storage<F> {
 
                     store_item(
                         &mut self.flash,
-                        CONFIG_FLASH_RANGE,
+                        self.storage_range.clone(),
                         NoCache::new(),
                         &mut buf,
                         &item,
@@ -529,7 +540,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         if let Ok(Some(StorageData::StorageConfig(config))) =
             fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                 &mut self.flash,
-                CONFIG_FLASH_RANGE,
+                self.storage_range.clone(),
                 NoCache::new(),
                 &mut buf,
                 StorageKeys::StorageConfig as usize,
@@ -540,10 +551,5 @@ impl<F: AsyncNorFlash> Storage<F> {
         } else {
             false
         }
-    }
-
-    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
-    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
-        // Self { flash }
     }
 }

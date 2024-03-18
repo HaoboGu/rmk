@@ -1,14 +1,5 @@
 use embedded_hal::digital::{OutputPin, PinState};
 
-/// Flash range which used to save bonding info
-#[cfg(feature = "nrf52840_ble")]
-pub(crate) const CONFIG_FLASH_RANGE: core::ops::Range<u32> = 0x80000..0x82000;
-#[cfg(feature = "nrf52832_ble")]
-pub(crate) const CONFIG_FLASH_RANGE: core::ops::Range<u32> = 0x7E000..0x80000;
-#[cfg(not(any(feature = "nrf52832_ble", feature = "nrf52840_ble")))]
-// TODO: calculate flash range? it can be done automatically with NorFlash, using latest 2 sectors of flash
-pub(crate) const CONFIG_FLASH_RANGE: core::ops::Range<u32> = 0x1A000..0x20000;
-
 // TODO: more configs need to be added, easy configuration(from config file)
 /// Configurations for RMK keyboard.
 #[derive(Debug)]
