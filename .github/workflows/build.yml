@@ -41,4 +41,4 @@ jobs:
       run: cargo build --release
     - name: Build nrf52832_ble
       working-directory: ./boards/nrf52832_ble
-      run: cargo clean && cargo build --release
+      run: cargo build --release
