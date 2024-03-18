@@ -25,7 +25,7 @@ pub(crate) struct BleHidWriter<'a, const N: usize> {
 
 impl<'a, const N: usize> ConnectionTypeWrapper for BleHidWriter<'a, N> {
     fn get_conn_type(&self) -> crate::hid::ConnectionType {
-        ConnectionType::BLE
+        ConnectionType::Ble
     }
 }
 

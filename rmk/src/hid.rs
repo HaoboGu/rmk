@@ -19,8 +19,8 @@ pub(crate) enum HidError {
 
 /// Type of connection
 pub(crate) enum ConnectionType {
-    USB,
-    BLE,
+    Usb,
+    Ble,
 }
 
 /// Trait for getting connection type
@@ -48,7 +48,7 @@ pub(crate) struct UsbHidWriter<'d, D: Driver<'d>, const N: usize> {
 
 impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidWriter<'d, D, N> {
     fn get_conn_type(&self) -> ConnectionType {
-        ConnectionType::USB
+        ConnectionType::Usb
     }
 }
 
@@ -84,7 +84,7 @@ pub(crate) struct UsbHidReader<'d, D: Driver<'d>, const N: usize> {
 
 impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidReader<'d, D, N> {
     fn get_conn_type(&self) -> ConnectionType {
-        ConnectionType::USB
+        ConnectionType::Usb
     }
 }
 
@@ -126,7 +126,7 @@ impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> ConnectionTyp
     for UsbHidReaderWriter<'d, D, READ_N, WRITE_N>
 {
     fn get_conn_type(&self) -> ConnectionType {
-        ConnectionType::USB
+        ConnectionType::Usb
     }
 }
 

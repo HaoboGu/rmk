@@ -223,8 +223,8 @@ impl<
             Ok(s) => {
                 debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
                 match match hid_interface.get_conn_type() {
-                    ConnectionType::USB => hid_interface.write(&buf[0..s + 1]).await,
-                    ConnectionType::BLE => hid_interface.write(&buf[1..s + 1]).await,
+                    ConnectionType::Usb => hid_interface.write(&buf[0..s + 1]).await,
+                    ConnectionType::Ble => hid_interface.write(&buf[1..s + 1]).await,
                 } {
                     Ok(_) => {}
                     Err(e) => error!("Send other report error: {}", e),

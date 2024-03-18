@@ -128,7 +128,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
                     Ok(_) => Ok(3),
                     Err(_) => {
                         error!("Packing EeKeymapConfig error");
-                        return Err(StorageError::PackedStructError);
+                        Err(StorageError::PackedStructError)
                     }
                 }
             }
@@ -160,7 +160,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
     where
         Self: Sized,
     {
-        if buffer.len() < 1 {
+        if buffer.is_empty() {
             return Err(StorageError::ItemWrongSize);
         }
 
@@ -243,8 +243,8 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
                 let kk = *k;
-                let key = get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer);
-                key
+                
+                get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer)
             }
         }
     }
