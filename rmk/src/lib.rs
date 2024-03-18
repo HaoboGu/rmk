@@ -36,7 +36,6 @@ pub mod action;
 pub mod ble;
 pub mod config;
 mod debounce;
-mod eeprom;
 mod flash;
 mod hid;
 pub mod keyboard;
@@ -45,7 +44,7 @@ pub mod keymap;
 pub mod layout_macro;
 mod light;
 mod matrix;
-pub mod storage;
+mod storage;
 mod usb;
 mod via;
 

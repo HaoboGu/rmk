@@ -1,4 +1,4 @@
-// Storage wraps both `` and `embedded_storage_async`
+mod eeconfig;
 
 use byteorder::{BigEndian, ByteOrder};
 use defmt::{error, info, Format};
@@ -20,9 +20,10 @@ use core::mem;
 use crate::{
     action::KeyAction,
     config::CONFIG_FLASH_RANGE,
-    eeprom::eeconfig::EeKeymapConfig,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
+
+use self::eeconfig::EeKeymapConfig;
 
 // Sync messages from server to flash
 pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 8> =

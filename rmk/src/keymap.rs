@@ -49,41 +49,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
     }
 
-    /// Initialize a keymap from a matrix of actions
-    ///
-    /// # Arguments
-    ///
-    /// * `action_map` - [KeyAction] matrix defined in keymap
-    /// * `storage` - backend storage for eeprom, used for saving keyboard data persistently
-    /// * `eeconfig` - keyboard configurations which should be stored in eeprom
-    // pub async fn new(
-    //     action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    // ) -> KeyMap< ROW, COL, NUM_LAYER> {
-    // Initialize eeprom, if success, re-load keymap from it
-    // let eeprom = match storage {
-    //     Some(s) => {
-    //         let e = Eeprom::new(s, eeconfig, &action_map).await;
-    //         // If eeprom is initialized, read keymap from it.
-    //         match e {
-    //             Some(e) => {
-    //                 e.read_keymap(&mut action_map);
-    //                 Some(e)
-    //             }
-    //             None => None,
-    //         }
-    //     }
-    //     None => None,
-    // };
-
-    //     KeyMap {
-    //         layers: action_map,
-    //         layer_state: [false; NUM_LAYER],
-    //         default_layer: 0,
-    //         layer_cache: [[0; COL]; ROW],
-    //         // eeprom,
-    //     }
-    // }
-
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         (ROW, COL, NUM_LAYER)
     }
