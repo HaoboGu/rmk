@@ -2,7 +2,7 @@ mod eeconfig;
 
 use byteorder::{BigEndian, ByteOrder};
 use defmt::{error, info, Format};
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -26,7 +26,7 @@ use crate::{
 use self::eeconfig::EeKeymapConfig;
 
 // Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<ThreadModeRawMutex, FlashOperationMessage, 8> =
+pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperationMessage, 8> =
     Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
