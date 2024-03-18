@@ -26,47 +26,6 @@ pub enum StorageError {
     ItemWrongSize,
 }
 
-// // `sequential-storage` is used for saving bond info
-// // Hence `StorageItem` should be implemented
-// impl StorageItem for BondInfo {
-//     type Key = u8;
-
-//     type Error = StorageError;
-
-//     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
-//         if buffer.len() < 120 {
-//             return Err(StorageError::BufferTooSmall);
-//         }
-
-//         // Must be 120
-//         // info!("size of BondInfo: {}", size_of_val(self));
-
-//         let buf: [u8; 120] = unsafe { mem::transmute_copy(self) };
-//         buffer[0..120].copy_from_slice(&buf);
-//         Ok(buf.len())
-//     }
-
-//     fn deserialize_from(buffer: &[u8]) -> Result<Self, Self::Error>
-//     where
-//         Self: Sized,
-//     {
-//         if buffer.len() != 120 {
-//             return Err(StorageError::ItemWrongSize);
-//         }
-//         // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
-//         let mut buf = [0_u8; 120];
-//         buf.copy_from_slice(buffer);
-
-//         let info = unsafe { mem::transmute_copy(&buf) };
-
-//         Ok(info)
-//     }
-
-//     fn key(&self) -> Self::Key {
-//         self.slot_num
-//     }
-// }
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) struct Peer {
