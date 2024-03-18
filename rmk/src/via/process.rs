@@ -35,7 +35,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     pub(crate) async fn process_via_report<Hid: HidReaderWriterWrapper>(
-        &self,
+        &mut self,
         hid_interface: &mut Hid,
     ) -> Result<(), ()> {
         let mut via_report = ViaReport {
@@ -44,8 +44,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         };
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
-                self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut())
-                    .await;
+                self.process_via_packet(&mut via_report, self.keymap).await;
 
                 // Send via report back after processing
                 match hid_interface.write_serialize(&via_report).await {
@@ -71,7 +70,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &mut KeyMap<ROW, COL, NUM_LAYER>,
+        keymap: &RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) {
         let command_id = report.output_data[0];
 
@@ -133,7 +132,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap.get_action_at(row, col, layer);
+                let action = keymap.borrow_mut().get_action_at(row, col, layer);
                 let keycode = to_via_keycode(action);
                 info!(
                     "Getting keycode: {:02X} at ({},{}), layer {}",
@@ -151,7 +150,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
                     keycode, row, col, layer, action
                 );
-                keymap.set_action_at(row as usize, col as usize, layer as usize, action);
+                keymap.borrow_mut().set_action_at(
+                    row as usize,
+                    col as usize,
+                    layer as usize,
+                    action,
+                );
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::KeymapKey {
                         layer,
@@ -218,6 +222,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 info!("Getting keymap buffer, offset: {}, size: {}", offset, size);
                 let mut idx = 4;
                 keymap
+                    .borrow()
                     .layers
                     .iter()
                     .flatten()
@@ -236,8 +241,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // size <= 28
                 let size = report.output_data[3];
                 let mut idx = 4;
-                let (row_num, col_num, _layer_num) = keymap.get_keymap_config();
+                let (row_num, col_num, _layer_num) = keymap.borrow().get_keymap_config();
                 keymap
+                    .borrow_mut()
                     .layers
                     .iter_mut()
                     .flatten()
