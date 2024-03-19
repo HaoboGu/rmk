@@ -222,7 +222,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
                 let mut buf = [0_u8; 120];
                 buf.copy_from_slice(&buffer[1..121]);
                 let info: BondInfo = unsafe { mem::transmute_copy(&buf) };
-                info!("Reading bond info key: {}", info);
 
                 Ok(StorageData::BondInfo(info))
             }
@@ -425,7 +424,6 @@ impl<F: AsyncNorFlash> Storage<F> {
             for (row, row_data) in layer_data.iter_mut().enumerate() {
                 for (col, value) in row_data.iter_mut().enumerate() {
                     let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
-                    info!("Reading key: {},{},{}: {}", layer, col, row, key);
                     let item = match fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -436,10 +434,6 @@ impl<F: AsyncNorFlash> Storage<F> {
                     .await
                     {
                         Ok(Some(StorageData::KeymapKey(k))) => {
-                            info!(
-                                "Read keymap key: (layer,col,row)=({},{},{}): {}",
-                                layer, col, row, k.action
-                            );
                             k.action
                         }
                         Ok(None) => {
@@ -505,16 +499,6 @@ impl<F: AsyncNorFlash> Storage<F> {
                         layer,
                         action: *action,
                     });
-                    if let StorageData::KeymapKey(k) = item {
-                        info!(
-                            "stoing item: {},{},{}, {}, {}",
-                            layer,
-                            col,
-                            row,
-                            get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer),
-                            k
-                        );
-                    }
 
                     store_item(
                         &mut self.flash,
