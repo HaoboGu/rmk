@@ -495,16 +495,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded-alloc"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddae17915accbac2cfbc64ea0ae6e3b330e6ea124ba108dada63646fd3c6f815"
-dependencies = [
- "critical-section",
- "linked_list_allocator",
-]
-
-[[package]]
 name = "embedded-hal"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -729,12 +719,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13e3bf6590cbc649f4d1a3eefc9d5d6eb746f5200ffb04e5e142700b8faa56e7"
 
 [[package]]
-name = "linked_list_allocator"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9afa463f5405ee81cdb9cc2baf37e08ec7e4c8209442b5d72c04cfb2cd6e6286"
-
-[[package]]
 name = "litrs"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -791,7 +775,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 [[package]]
 name = "nrf-softdevice"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -813,7 +797,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-macro"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
 dependencies = [
  "Inflector",
  "darling 0.13.4",
@@ -826,7 +810,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-s132"
 version = "0.1.2"
-source = "git+https://github.com/embassy-rs/nrf-softdevice#1a017b4101407c37fe16e495fafa5c07a7ed2360"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
 
 [[package]]
 name = "nrf52805-pac"
@@ -1111,12 +1095,12 @@ version = "0.1.5"
 dependencies = [
  "byteorder",
  "defmt",
+ "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
  "embassy-sync 0.5.0",
  "embassy-time",
  "embassy-usb",
- "embedded-alloc",
  "embedded-hal 1.0.0",
  "embedded-storage",
  "embedded-storage-async",
