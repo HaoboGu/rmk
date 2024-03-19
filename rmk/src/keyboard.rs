@@ -390,14 +390,12 @@ impl<
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
     fn process_action_consumer_control(&mut self, key: KeyCode, key_state: KeyState) {
         if key.is_consumer() {
-            if key_state.pressed {
-                let media_key = key.as_consumer_control_usage_id();
-                self.other_report.media_usage_id = media_key as u16;
-                self.need_send_consumer_control_report = true;
+            self.other_report.media_usage_id = if key_state.pressed {
+                key.as_consumer_control_usage_id() as u16
             } else {
-                self.other_report.media_usage_id = 0;
-                self.need_send_consumer_control_report = true;
-            }
+                0
+            };
+            self.need_send_consumer_control_report = true;
         }
     }
 
