@@ -1,8 +1,9 @@
 use super::{protocol::*, vial::process_vial};
 use crate::{
     config::VialConfig,
-    hid::HidReaderWriterWrapper,
+    hid::{HidError, HidReaderWriterWrapper},
     keymap::KeyMap,
+    storage::{FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
@@ -10,36 +11,21 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
-use embassy_usb::class::hid::ReadError;
-use embedded_storage::nor_flash::NorFlash;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
-pub(crate) struct VialService<
-    'a,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
+pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
     // Vial config
     vial_config: VialConfig<'a>,
 }
 
-impl<
-        'a,
-        F: NorFlash,
-        const EEPROM_SIZE: usize,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    > VialService<'a, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    VialService<'a, ROW, COL, NUM_LAYER>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
         vial_config: VialConfig<'a>,
     ) -> Self {
         Self {
@@ -49,7 +35,7 @@ impl<
     }
 
     pub(crate) async fn process_via_report<Hid: HidReaderWriterWrapper>(
-        &self,
+        &mut self,
         hid_interface: &mut Hid,
     ) -> Result<(), ()> {
         let mut via_report = ViaReport {
@@ -58,7 +44,7 @@ impl<
         };
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
-                self.process_via_packet(&mut via_report, &mut self.keymap.borrow_mut());
+                self.process_via_packet(&mut via_report, self.keymap).await;
 
                 // Send via report back after processing
                 match hid_interface.write_serialize(&via_report).await {
@@ -71,7 +57,7 @@ impl<
                 }
             }
             Err(e) => {
-                if e != ReadError::Disabled {
+                if e != HidError::UsbDisabled && e != HidError::BleDisconnected {
                     // Don't print message if the USB endpoint is disabled(aka not connected)
                     error!("Read via report error: {}", e);
                 }
@@ -81,10 +67,10 @@ impl<
         }
     }
 
-    fn process_via_packet(
+    async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &mut KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+        keymap: &RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) {
         let command_id = report.output_data[0];
 
@@ -105,6 +91,7 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], value);
                         }
                         ViaKeyboardInfo::LayoutOptions => {
+                            // TODO: retrieve layout option from storage
                             let layout_option: u32 = 0;
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
@@ -128,10 +115,9 @@ impl<
                     Ok(v) => match v {
                         ViaKeyboardInfo::LayoutOptions => {
                             let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
-                            match &mut keymap.eeprom {
-                                Some(e) => e.set_layout_option(layout_option),
-                                None => (),
-                            }
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::LayoutOptions(layout_option))
+                                .await;
                         }
                         ViaKeyboardInfo::DeviceIndication => {
                             let _device_indication = report.output_data[2];
@@ -146,7 +132,7 @@ impl<
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap.get_action_at(row, col, layer);
+                let action = keymap.borrow_mut().get_action_at(row, col, layer);
                 let keycode = to_via_keycode(action);
                 info!(
                     "Getting keycode: {:02X} at ({},{}), layer {}",
@@ -155,20 +141,29 @@ impl<
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
             }
             ViaCommand::DynamicKeymapSetKeyCode => {
-                let layer = report.output_data[1] as usize;
-                let row = report.output_data[2] as usize;
-                let col = report.output_data[3] as usize;
+                let layer = report.output_data[1];
+                let row = report.output_data[2];
+                let col = report.output_data[3];
                 let keycode = BigEndian::read_u16(&report.output_data[4..6]);
                 let action = from_via_keycode(keycode);
                 info!(
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
                     keycode, row, col, layer, action
                 );
-                keymap.set_action_at(row, col, layer, action);
-                match &mut keymap.eeprom {
-                    Some(e) => e.set_keymap_action(row, col, layer, action),
-                    None => (),
-                }
+                keymap.borrow_mut().set_action_at(
+                    row as usize,
+                    col as usize,
+                    layer as usize,
+                    action,
+                );
+                FLASH_CHANNEL
+                    .send(FlashOperationMessage::KeymapKey {
+                        layer,
+                        col,
+                        row,
+                        action,
+                    })
+                    .await;
             }
             ViaCommand::DynamicKeymapReset => {
                 warn!("Dynamic keymap reset -- not supported")
@@ -227,6 +222,7 @@ impl<
                 info!("Getting keymap buffer, offset: {}, size: {}", offset, size);
                 let mut idx = 4;
                 keymap
+                    .borrow()
                     .layers
                     .iter()
                     .flatten()
@@ -245,8 +241,9 @@ impl<
                 // size <= 28
                 let size = report.output_data[3];
                 let mut idx = 4;
-                let (row_num, col_num, _layer_num) = keymap.get_keymap_config();
+                let (row_num, col_num, _layer_num) = keymap.borrow().get_keymap_config();
                 keymap
+                    .borrow_mut()
                     .layers
                     .iter_mut()
                     .flatten()
@@ -266,9 +263,13 @@ impl<
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
                         );
-                        match &mut keymap.eeprom {
-                            Some(e) => e.set_keymap_action(row, col, layer, action),
-                            None => (),
+                        if let Err(e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
+                            layer: layer as u8,
+                            col: col as u8,
+                            row: row as u8,
+                            action,
+                        }) {
+                            error!("Set keymap buffer error: {} ", e)
                         }
                     });
             }

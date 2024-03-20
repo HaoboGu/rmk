@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     config::KeyboardUsbConfig,
-    hid::{ConnectionType, ConnectionTypeWrapper, HidWriterWrapper},
+    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidWriterWrapper},
 };
 use defmt::error;
 use nrf_softdevice::{
@@ -25,25 +25,28 @@ pub(crate) struct BleHidWriter<'a, const N: usize> {
 
 impl<'a, const N: usize> ConnectionTypeWrapper for BleHidWriter<'a, N> {
     fn get_conn_type(&self) -> crate::hid::ConnectionType {
-        ConnectionType::BLE
+        ConnectionType::Ble
     }
 }
 
 impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
-    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), ()> {
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
         use ssmarshal::serialize;
         let mut buf: [u8; N] = [0; N];
         match serialize(&mut buf, &r) {
             Ok(_) => self.write(&buf).await,
-            Err(_) => Err(()),
+            Err(_) => Err(HidError::ReportSerializeError),
         }
     }
 
-    async fn write(&mut self, report: &[u8]) -> Result<(), ()> {
-        gatt_server::notify_value(self.conn, self.handle, report)
-            .map_err(|e| error!("send ble report error: {}", e))
-            .ok();
-        Ok(())
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        gatt_server::notify_value(self.conn, self.handle, report).map_err(|e| {
+            error!("Send ble report error: {}", e);
+            match e {
+                gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
+                gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
+            }
+        })
     }
 }
 

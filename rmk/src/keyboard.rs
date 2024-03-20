@@ -10,15 +10,36 @@ use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
+
+
+pub(crate) async fn keyboard_task<
+    'a,
+    W: HidWriterWrapper,
+    W2: HidWriterWrapper,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard_hid_writer: &mut W,
+    other_hid_writer: &mut W2,
+) -> ! {
+    loop {
+        let _ = keyboard.scan_matrix().await;
+        keyboard.send_keyboard_report(keyboard_hid_writer).await;
+        keyboard.send_media_report(other_hid_writer).await;
+        keyboard.send_mouse_report(other_hid_writer).await;
+        keyboard.send_system_control_report(other_hid_writer).await;
+    }
+}
 
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
     Out: OutputPin,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -30,7 +51,7 @@ pub(crate) struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -66,18 +87,16 @@ impl<
         'a,
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
-        F: NorFlash,
-        const EEPROM_SIZE: usize,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub(crate) fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
-        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
@@ -204,8 +223,8 @@ impl<
             Ok(s) => {
                 debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
                 match match hid_interface.get_conn_type() {
-                    ConnectionType::USB => hid_interface.write(&buf[0..s + 1]).await,
-                    ConnectionType::BLE => hid_interface.write(&buf[1..s + 1]).await,
+                    ConnectionType::Usb => hid_interface.write(&buf[0..s + 1]).await,
+                    ConnectionType::Ble => hid_interface.write(&buf[1..s + 1]).await,
                 } {
                     Ok(_) => {}
                     Err(e) => error!("Send other report error: {}", e),

@@ -7,7 +7,6 @@ mod keymap;
 mod vial;
 
 use crate::keymap::{COL, NUM_LAYER, ROW};
-use core::cell::RefCell;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::{
@@ -20,8 +19,7 @@ use embassy_stm32::{
 };
 use embassy_time::Timer;
 use panic_halt as _;
-use rmk::{initialize_keyboard_and_run, keymap::KeyMap};
-use static_cell::StaticCell;
+use rmk::initialize_keyboard_and_run;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 #[defmt::global_logger]
@@ -37,8 +35,6 @@ unsafe impl defmt::Logger for Logger {
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => InterruptHandler<USB>;
 });
-
-const EEPROM_SIZE: usize = 128;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -67,15 +63,6 @@ async fn main(_spawner: Spawner) {
 
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);
-    // Keymap + eeprom config
-    static MY_KEYMAP: StaticCell<
-        RefCell<KeyMap<Flash<'_, Blocking>, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
-    > = StaticCell::new();
-    let keymap = MY_KEYMAP.init(RefCell::new(KeyMap::new(
-        crate::keymap::KEYMAP,
-        Some(f),
-        None,
-    )));
 
     // Start serving
     initialize_keyboard_and_run::<
@@ -83,7 +70,6 @@ async fn main(_spawner: Spawner) {
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         Flash<'_, Blocking>,
-        EEPROM_SIZE,
         ROW,
         COL,
         NUM_LAYER,
@@ -91,7 +77,8 @@ async fn main(_spawner: Spawner) {
         driver,
         input_pins,
         output_pins,
-        keymap,
+        Some(f),
+        crate::keymap::KEYMAP,
         &VIAL_KEYBOARD_ID,
         &VIAL_KEYBOARD_DEF,
     )

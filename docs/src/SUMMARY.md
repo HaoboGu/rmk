@@ -15,7 +15,7 @@
 # Features
 - [Keymap configuration](keymap_configuration.md)
 - [Vial support](vial.md)
-- [Storage]()
+- [Storage](storage.md)
 - [Layers]()
 - [Tap hold]()
 - [Binary size optimization](binary_size.md)

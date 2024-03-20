@@ -7,33 +7,18 @@ mod hid_service;
 pub(crate) mod server;
 pub(crate) mod spec;
 
-use self::{bonder::FlashOperationMessage, server::BleServer};
-use crate::{
-    ble::bonder::{BondInfo, FLASH_CHANNEL},
-    hid::HidWriterWrapper,
-    keyboard::Keyboard,
-};
-use core::{convert::Infallible, mem, ops::Range};
-use defmt::info;
+use self::server::BleServer;
+use crate::{hid::HidWriterWrapper, keyboard::Keyboard};
+use core::{convert::Infallible, mem};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_storage::nor_flash::NorFlash;
-use nrf_softdevice::{ble::Connection, raw, Config, Flash};
-use sequential_storage::{
-    cache::NoCache,
-    map::{remove_item, store_item},
-};
+use nrf_softdevice::{ble::Connection, raw, Config};
 
-/// Flash range which used to save bonding info
-#[cfg(feature = "nrf52840_ble")]
-pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
-#[cfg(feature = "nrf52832_ble")]
-pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x7E000..0x80000;
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
 /// Create default nrf ble config
-pub fn nrf_ble_config(keyboard_name: &str) -> Config {
+pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
             source: raw::NRF_CLOCK_LF_SRC_RC as u8,
@@ -75,41 +60,6 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
     sd.run().await
 }
 
-#[embassy_executor::task]
-pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
-    let mut storage_data_buffer = [0_u8; 128];
-    loop {
-        let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
-        match info {
-            FlashOperationMessage::Clear(key) => {
-                info!("Clearing bond info slot_num: {}", key);
-                remove_item::<BondInfo, _>(
-                    f,
-                    CONFIG_FLASH_RANGE,
-                    NoCache::new(),
-                    &mut storage_data_buffer,
-                    key,
-                )
-                .await
-                .ok();
-            }
-            FlashOperationMessage::BondInfo(b) => {
-                info!("Saving item: {}", info);
-
-                store_item::<BondInfo, _>(
-                    f,
-                    CONFIG_FLASH_RANGE,
-                    NoCache::new(),
-                    &mut storage_data_buffer,
-                    &b,
-                )
-                .await
-                .ok();
-            }
-        };
-    }
-}
-
 /// BLE keyboard task, run the keyboard with the ble server
 pub(crate) async fn keyboard_ble_task<
     'a,
@@ -119,13 +69,11 @@ pub(crate) async fn keyboard_ble_task<
     W4: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     ble_keyboard_writer: &mut W,
     ble_media_writer: &mut W2,
     ble_system_control_writer: &mut W3,
@@ -137,7 +85,9 @@ pub(crate) async fn keyboard_ble_task<
         let _ = keyboard.scan_matrix().await;
         keyboard.send_keyboard_report(ble_keyboard_writer).await;
         keyboard.send_media_report(ble_media_writer).await;
-        keyboard.send_system_control_report(ble_system_control_writer).await;
+        keyboard
+            .send_system_control_report(ble_system_control_writer)
+            .await;
         keyboard.send_mouse_report(ble_mouse_writer).await;
     }
 }

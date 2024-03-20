@@ -22,6 +22,7 @@ embassy-stm32 = { version = "0.1", features = [
 embassy-executor = { version = "0.5", features = [
     "defmt",
     "arch-cortex-m",
+    "task-arena-size-8192",
     "executor-thread",
     "integrated-timers",
 ] }
