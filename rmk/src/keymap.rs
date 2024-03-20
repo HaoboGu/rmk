@@ -1,5 +1,5 @@
 use crate::{action::KeyAction, matrix::KeyState, storage::Storage};
-use defmt::warn;
+use defmt::{error, warn};
 use embedded_storage_async::nor_flash::NorFlash;
 
 pub(crate) struct KeyMapConfig {
@@ -33,13 +33,12 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,
     ) -> Self {
-        // TODO: If storage is just initialize, just action map
-        // Or, reload keymap from flash
+        // If the storage is initialized, read keymap from storage
         if let Some(storage) = storage {
-            storage.read_keymap(&mut action_map).await;
+            if let Err(_) = storage.read_keymap(&mut action_map).await {
+                error!("Keymap reading aborted!");
+            }
         }
-
-        // TODO: If error, reinit
 
         KeyMap {
             layers: action_map,

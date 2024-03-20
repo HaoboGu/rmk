@@ -384,9 +384,3 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         Timer::after_secs(3).await;
     }
 }
-
-async fn dummy_task() -> ! {
-    loop {
-        Timer::after_secs(u64::MAX).await
-    }
-}
