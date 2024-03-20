@@ -72,6 +72,28 @@ In this case, you have to implement an empty defmt logger.
 
 ```
 
+## Enable unstable feature
+
+According to [embassy's doc](https://embassy.dev/book/dev/faq.html#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the following in your `.cargo/config.toml`
+
+```toml
+[unstable]
+build-std = ["core"]
+build-std-features = ["panic_immediate_abort"]
+```
+
+And then compile your project with **nightly** Rust:
+
+```
+cargo +nightly build --release
+# Or
+cargo +nightly size --release
+```
+
+This config will reduce about 4-6kb of bianry size further more.
+
+After applying all above approaches, total binary size of stm32h7 example can be reduced from about 93KB to 54KB, which means the binary size decreases about 42%!
+
 ## Make storage optional
 
 Making storage feature optional and marking `sequential-storage` dependency as optional could also reduce the binary size a lot. 
