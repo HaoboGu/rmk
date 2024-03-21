@@ -100,8 +100,9 @@ impl HidService {
 
         let mut output_keyboard = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
-            Attribute::new([0u8; 8]).security(SecurityMode::JustWorks),
-            Metadata::new(Properties::new().read().write().write_without_response()),
+            Attribute::new([0u8; 1]).security(SecurityMode::JustWorks),
+            Metadata::new(Properties::new().read().write().write_without_response())
+                .security(SecurityMode::JustWorks),
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
@@ -160,7 +161,7 @@ impl HidService {
 
         let mut output_vial = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
-            Attribute::new([0u8; 8]).security(SecurityMode::JustWorks),
+            Attribute::new([0u8; 32]).security(SecurityMode::JustWorks),
             Metadata::new(Properties::new().read().write().write_without_response()),
         )?;
         let output_vial_desc = output_vial.add_descriptor(
@@ -201,10 +202,15 @@ impl HidService {
 
     pub fn on_write(&self, _conn: &Connection, handle: u16, data: &[u8]) {
         if handle == self.input_keyboard_cccd {
-            info!("HID input keyboard notify: {:?}", data);
+            info!("HID input keyboard cccd: {:?}", data);
+        } else if handle == self.input_keyboard {
+            info!("HID input keyboard: {:?}", data);
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
+            // TODO: Update capslock LED
             info!("HID output keyboard: {:?}", data);
+        } else if handle == self.input_vial_keys_cccd {
+            info!("HID input via keys: {:?}", data);
         } else if handle == self.input_media_keys_cccd {
             info!("HID input media keys: {:?}", data);
         }
