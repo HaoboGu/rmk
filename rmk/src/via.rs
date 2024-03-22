@@ -16,7 +16,7 @@ pub(crate) async fn vial_task<
 >(
     via_hid: &mut Hid,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
-) -> ! {
+) {
     loop {
         match vial_service.process_via_report(via_hid).await {
             Ok(_) => Timer::after_millis(1).await,

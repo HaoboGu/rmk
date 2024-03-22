@@ -1027,6 +1027,10 @@ name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+dependencies = [
+ "critical-section",
+ "portable-atomic",
+]
 
 [[package]]
 name = "packed_struct"
@@ -1308,6 +1312,7 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "num_enum 0.7.2",
+ "once_cell",
  "packed_struct",
  "sequential-storage",
  "ssmarshal",

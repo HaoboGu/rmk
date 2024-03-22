@@ -7,7 +7,12 @@
 #![allow(clippy::if_same_then_else)]
 
 #[cfg(feature = "ble")]
-use crate::ble::{keyboard_ble_task, softdevice_task};
+use crate::ble::{
+    ble_battery_task, keyboard_ble_task,
+    server::{BleHidWriter, BleServer},
+    softdevice_task,
+};
+
 use crate::{
     keyboard::keyboard_task,
     light::{led_task, LightService},
@@ -16,17 +21,18 @@ use crate::{
 use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, warn};
+use defmt::{error, info, warn};
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
-use embassy_usb::driver::Driver;
+use embassy_usb::{driver::Driver, UsbDevice};
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use futures::pin_mut;
+use futures::{pin_mut, Future};
 use keyboard::Keyboard;
 use keymap::KeyMap;
+
 use storage::Storage;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
@@ -183,46 +189,34 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     );
 
     loop {
-        // Create tasks: usb, keyboard, led, vial, storage(optional)
-        let usb_fut = usb_device.device.run();
-        let keyboard_fut = keyboard_task(
-            &mut keyboard,
-            &mut usb_device.keyboard_hid_writer,
-            &mut usb_device.other_hid_writer,
-        );
-        let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-        let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-        pin_mut!(usb_fut);
-        pin_mut!(keyboard_fut);
-        pin_mut!(led_reader_fut);
-        pin_mut!(via_fut);
-
         // Run all tasks, if one of them fails, wait 1 second and then restart
         if let Some(ref mut s) = storage {
-            // Run 5 tasks: usb, keyboard, led, vial, storage
-            let storage_fut = s.run::<ROW, COL, NUM_LAYER>();
-            pin_mut!(storage_fut);
-
-            match select4(
-                select(usb_fut, keyboard_fut),
-                storage_fut,
-                led_reader_fut,
-                via_fut,
+            run_usb_keyboard_forever(
+                &mut usb_device,
+                &mut keyboard,
+                s,
+                &mut light_service,
+                &mut vial_service,
             )
-            .await
-            {
-                Either4::First(e) => match e {
-                    Either::First(_) => error!("Usb task is died"),
-                    Either::Second(_) => error!("Keyboard task is died"),
-                },
-                Either4::Second(_) => error!("Storage task is died"),
-                Either4::Third(_) => error!("Led task is died"),
-                Either4::Fourth(_) => error!("Via task is died"),
-            }
+            .await;
         } else {
             // Run 4 tasks: usb, keyboard, led, vial
+            let usb_fut = usb_device.device.run();
+            let keyboard_fut = keyboard_task(
+                &mut keyboard,
+                &mut usb_device.keyboard_hid_writer,
+                &mut usb_device.other_hid_writer,
+            );
+            let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
+            let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+            pin_mut!(usb_fut);
+            pin_mut!(keyboard_fut);
+            pin_mut!(led_reader_fut);
+            pin_mut!(via_fut);
             match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
-                Either4::First(_) => error!("Usb task is died"),
+                Either4::First(_) => {
+                    error!("Usb task is died");
+                }
                 Either4::Second(_) => error!("Keyboard task is died"),
                 Either4::Third(_) => error!("Led task is died"),
                 Either4::Fourth(_) => error!("Via task is died"),
@@ -239,6 +233,8 @@ use embassy_executor::Spawner;
 #[cfg(feature = "ble")]
 pub use nrf_softdevice;
 #[cfg(feature = "ble")]
+use nrf_softdevice::ble::{gatt_server, Connection};
+#[cfg(feature = "ble")]
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
 /// This function never returns.
@@ -252,6 +248,7 @@ pub use nrf_softdevice;
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
+    D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     const ROW: usize,
@@ -261,30 +258,25 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     input_pins: [In; ROW],
     output_pins: [Out; COL],
+    usb_driver: Option<D>,
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
     use defmt::*;
     use heapless::FnvIndexMap;
-    use nrf_softdevice::Softdevice;
+    use nrf_softdevice::{ble::peripheral, Flash, Softdevice};
     use sequential_storage::{cache::NoCache, map::fetch_item};
     use static_cell::StaticCell;
     // FIXME: add auto recognition of ble/usb
     use crate::{
         ble::{
             advertise::{create_advertisement_data, SCAN_DATA},
-            ble_battery_task,
             bonder::{BondInfo, Bonder},
-            nrf_ble_config,
-            server::{BleHidWriter, BleServer},
-            BONDED_DEVICE_NUM,
+            nrf_ble_config, BONDED_DEVICE_NUM, SOFTWARE_VBUS,
         },
         storage::{get_bond_info_key, StorageData},
     };
-    use nrf_softdevice::{
-        ble::{gatt_server, peripheral},
-        Flash,
-    };
+    use embassy_nrf::usb::vbus_detect::{SoftwareVbusDetect, VbusDetect};
 
     let keyboard_name = keyboard_config
         .usb_config
@@ -301,6 +293,8 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let keymap = RefCell::new(
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut storage)).await,
     );
+
+    let mut usb_device = usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config));
     let mut keyboard: Keyboard<'_, In, Out, ROW, COL, NUM_LAYER> =
         Keyboard::new(input_pins, output_pins, &keymap);
 
@@ -329,7 +323,24 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
+    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
+    let mut light_service = LightService::from_config(keyboard_config.light_config);
+
     loop {
+        // Check and run via USB first
+        warn!("RUN until suspend");
+        let mut vbus: &SoftwareVbusDetect = SOFTWARE_VBUS.get().unwrap();
+        // if let Some(ref mut usb_device) = usb_device  {
+        //         run_usb_keyboard_until_suspend(
+        //             usb_device,
+        //             &mut keyboard,
+        //             &mut storage,
+        //             &mut light_service,
+        //             &mut vial_service,
+        //         )
+        //         .await;
+        // }
+
         info!("BLE Advertising");
         // Create connection
         let config = peripheral::Config::default();
@@ -338,49 +349,191 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             adv_data: &adv_data,
             scan_data: &SCAN_DATA,
         };
-
-        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
-            Ok(conn) => {
-                info!("Starting GATT server 1 second later");
-                Timer::after_secs(1).await;
-                let mut ble_keyboard_writer =
-                    BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
-                let mut ble_media_writer =
-                    BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
-                let mut ble_system_control_writer =
-                    BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
-                let mut ble_mouse_writer =
-                    BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
-
-                // Run the GATT server on the connection. This returns when the connection gets disconnected.
-                let ble_fut = gatt_server::run(&conn, &ble_server, |_| {});
-                let keyboard_fut = keyboard_ble_task(
-                    &mut keyboard,
-                    &mut ble_keyboard_writer,
-                    &mut ble_media_writer,
-                    &mut ble_system_control_writer,
-                    &mut ble_mouse_writer,
-                );
-                let battery_fut = ble_battery_task(&ble_server, &conn);
-                let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-
-                // Exit if anyone of three futures exits
-                match select4(ble_fut, keyboard_fut, battery_fut, storage_fut).await {
-                    Either4::First(disconnected_error) => error!(
-                        "BLE gatt_server run exited with error: {:?}",
-                        disconnected_error
-                    ),
-                    Either4::Second(_) => error!("Keyboard task exited"),
-                    Either4::Third(_) => error!("Battery task exited"),
-                    Either4::Fourth(_) => error!("Storage task exited"),
+        let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+        let power_fut = vbus.wait_power_ready();
+        // Wait for BLE or USB connection
+        if let Some(ref mut usb_device) = usb_device {
+            let usb_fut = run_usb_keyboard_until_suspend(
+                usb_device,
+                &mut keyboard,
+                &mut storage,
+                &mut light_service,
+                &mut vial_service,
+            );
+            match select(adv_fut, select(power_fut, usb_fut)).await {
+                Either::First(re) => match re {
+                    Ok(conn) => {
+                        run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage).await
+                    }
+                    Err(e) => error!("Advertise error: {}", e),
+                },
+                Either::Second(_) => {
+                    // Received USB resume, continue
+                    run_usb_keyboard_until_suspend(
+                        usb_device,
+                        &mut keyboard,
+                        &mut storage,
+                        &mut light_service,
+                        &mut vial_service,
+                    ).await;
+                    info!("WAIT resume!");
+                    usb_device.device.wait_resume().await;
+                    Timer::after_secs(1).await;
+                    continue;
                 }
             }
-            Err(e) => {
-                error!("Advertise error: {}", e)
+        } else {
+            match adv_fut.await {
+                Ok(conn) => run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage).await,
+                Err(e) => error!("Advertise error: {}", e),
             }
         }
 
         // Retry after 3 second
         Timer::after_secs(3).await;
+    }
+}
+
+async fn run_usb_keyboard_with_futures(
+    usb_fut: impl Future<Output = ()>,
+    keyboard_fut: impl Future<Output = ()>,
+    led_reader_fut: impl Future<Output = ()>,
+    via_fut: impl Future<Output = ()>,
+    storage_fut: impl Future<Output = ()>,
+) {
+    pin_mut!(usb_fut);
+    pin_mut!(keyboard_fut);
+    pin_mut!(led_reader_fut);
+    pin_mut!(via_fut);
+    pin_mut!(storage_fut);
+    match select4(
+        select(usb_fut, keyboard_fut),
+        storage_fut,
+        led_reader_fut,
+        via_fut,
+    )
+    .await
+    {
+        Either4::First(e) => match e {
+            Either::First(_) => error!("Usb task is died"),
+            Either::Second(_) => error!("Keyboard task is died"),
+        },
+        Either4::Second(_) => error!("Storage task is died"),
+        Either4::Third(_) => error!("Led task is died"),
+        Either4::Fourth(_) => error!("Via task is died"),
+    }
+}
+
+async fn run_usb_keyboard_forever<
+    'a,
+    'b,
+    D: Driver<'a>,
+    F: AsyncNorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    usb_device: &mut KeyboardUsbDevice<'a, D>,
+    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F>,
+    light_service: &mut LightService<Out>,
+    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
+) {
+    let usb_fut = run_usb_forever(&mut usb_device.device);
+    let keyboard_fut = keyboard_task(
+        keyboard,
+        &mut usb_device.keyboard_hid_writer,
+        &mut usb_device.other_hid_writer,
+    );
+    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
+    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
+    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    run_usb_keyboard_with_futures(usb_fut, keyboard_fut, led_reader_fut, via_fut, storage_fut)
+        .await;
+}
+
+async fn run_usb_forever<'a, D: Driver<'a>>(device: &mut UsbDevice<'a, D>) {
+    loop {
+        device.run_until_suspend().await;
+        device.wait_resume().await;
+    }
+}
+
+async fn run_usb_keyboard_until_suspend<
+    'a,
+    'b,
+    D: Driver<'a>,
+    F: AsyncNorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    usb_device: &mut KeyboardUsbDevice<'a, D>,
+    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F>,
+    light_service: &mut LightService<Out>,
+    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
+) {
+    let usb_fut = usb_device.device.run_until_suspend();
+    let keyboard_fut = keyboard_task(
+        keyboard,
+        &mut usb_device.keyboard_hid_writer,
+        &mut usb_device.other_hid_writer,
+    );
+    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
+    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
+    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    run_usb_keyboard_with_futures(usb_fut, keyboard_fut, led_reader_fut, via_fut, storage_fut)
+        .await;
+}
+
+#[cfg(feature = "ble")]
+async fn run_ble_keyboard<
+    'a,
+    F: AsyncNorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    conn: &Connection,
+    ble_server: &BleServer,
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F>,
+) {
+    info!("Starting GATT server 1 second later");
+    Timer::after_secs(1).await;
+    let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
+    let mut ble_media_writer = BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
+    let mut ble_system_control_writer =
+        BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
+    let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
+
+    // Run the GATT server on the connection. This returns when the connection gets disconnected.
+    let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
+    let keyboard_fut = keyboard_ble_task(
+        keyboard,
+        &mut ble_keyboard_writer,
+        &mut ble_media_writer,
+        &mut ble_system_control_writer,
+        &mut ble_mouse_writer,
+    );
+    let battery_fut = ble_battery_task(&ble_server, &conn);
+    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+
+    // Exit if anyone of three futures exits
+    match select4(ble_fut, keyboard_fut, battery_fut, storage_fut).await {
+        Either4::First(disconnected_error) => error!(
+            "BLE gatt_server run exited with error: {:?}",
+            disconnected_error
+        ),
+        Either4::Second(_) => error!("Keyboard task exited"),
+        Either4::Third(_) => error!("Battery task exited"),
+        Either4::Fourth(_) => error!("Storage task exited"),
     }
 }

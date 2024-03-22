@@ -14,7 +14,7 @@ resolver = "2"
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embassy-embedded-hal = { version = "0.1"  }
+embassy-embedded-hal = { version = "0.1" }
 embassy-time = { version = "0.3", features = ["defmt"] }
 embassy-usb = { version = "0.1", features = [
     "defmt",
@@ -26,6 +26,7 @@ heapless = "0.8.0"
 embassy-sync = { version = "0.5", features = ["defmt"] }
 embassy-futures = { version = "0.1", features = ["defmt"] }
 embassy-executor = { version = "0.5", features = ["defmt"] }
+
 usbd-hid = { version = "0.6.1", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
@@ -34,6 +35,11 @@ static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
+futures = { version = "0.3", default-features = false }
+sequential-storage = { version = "1.0", features = ["defmt-03"] }
+once_cell = { version = "1.19", features = [
+    "atomic-polyfill",
+], default-features = false }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
     "defmt",
     "ble-peripheral",
@@ -42,13 +48,27 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
-futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "1.0", features = ["defmt-03"] }
+embassy-nrf = { version = "0.1.0", features = [
+    "defmt",
+    "unstable-pac",
+    "time",
+], optional = true }
 
 [features]
+# default = ["eeprom", "col2row", "nrf52840_ble"]
 default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
 ble = ["dep:nrf-softdevice"]
-nrf52840_ble = ["ble", "nrf-softdevice/nrf52840", "nrf-softdevice/s140"]
-nrf52832_ble = ["ble", "nrf-softdevice/nrf52832", "nrf-softdevice/s132"]
+nrf52840_ble = [
+    "ble",
+    "dep:embassy-nrf",
+    "nrf-softdevice/nrf52840",
+    "nrf-softdevice/s140",
+]
+nrf52832_ble = [
+    "ble",
+    "dep:embassy-nrf",
+    "nrf-softdevice/nrf52832",
+    "nrf-softdevice/s132",
+]
