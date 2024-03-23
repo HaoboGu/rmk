@@ -2,6 +2,7 @@ pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
+use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
@@ -17,7 +18,31 @@ use crate::{
     usb::descriptor::{CompositeReport, ViaReport},
 };
 
-static SUSPENDED: AtomicBool = AtomicBool::new(false);
+pub(crate) static USB_SUSPENDED: AtomicBool = AtomicBool::new(false);
+pub(crate) static USB_CONFIGURED: AtomicBool = AtomicBool::new(false);
+pub(crate) static USB_DEVICE_ENABLED: AtomicBool = AtomicBool::new(false);
+
+pub(crate) async fn wait_for_usb_suspend() {
+    loop {
+        let suspended = USB_SUSPENDED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended {
+            break;
+        }
+        // Check usb suspended state every 10ms
+        Timer::after_millis(10).await
+    }
+}
+
+pub(crate) async fn wait_for_usb_configured() {
+    loop {
+        let suspended = USB_CONFIGURED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended {
+            break;
+        }
+        // Check usb configured state every 10ms
+        Timer::after_millis(10).await
+    }
+}
 
 // In this case, report id should be used.
 // The keyboard usb device should have 3 hid instances:
@@ -66,11 +91,11 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             &mut CONTROL_BUF.init([0; 128])[..],
         );
 
-        static device_handler: StaticCell<MyDeviceHandler> = StaticCell::new();
-        builder.handler(device_handler.init(MyDeviceHandler::new()));
+        static device_handler: StaticCell<UsbDeviceHandler> = StaticCell::new();
+        builder.handler(device_handler.init(UsbDeviceHandler::new()));
 
         // Create classes on the builder.
-        static request_handler: MyRequestHandler = MyRequestHandler {};
+        static request_handler: UsbRequestHandler = UsbRequestHandler {};
 
         // Initialize two hid interfaces: keyboard & via
         let keyboard_hid_config = Config {
@@ -122,9 +147,9 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
     }
 }
 
-struct MyRequestHandler {}
+struct UsbRequestHandler {}
 
-impl RequestHandler for MyRequestHandler {
+impl RequestHandler for UsbRequestHandler {
     fn get_report(&self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
         info!("Get report for {}", id);
         None
@@ -145,41 +170,39 @@ impl RequestHandler for MyRequestHandler {
     }
 }
 
-struct MyDeviceHandler {
-    configured: AtomicBool,
-}
+struct UsbDeviceHandler {}
 
-impl MyDeviceHandler {
+impl UsbDeviceHandler {
     fn new() -> Self {
-        MyDeviceHandler {
-            configured: AtomicBool::new(false),
-        }
+        UsbDeviceHandler {}
     }
 }
 
-impl Handler for MyDeviceHandler {
+impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
-        self.configured.store(false, Ordering::Relaxed);
-        SUSPENDED.store(false, Ordering::Release);
+        USB_CONFIGURED.store(false, Ordering::Relaxed);
+        USB_SUSPENDED.store(false, Ordering::Release);
         if enabled {
+            USB_DEVICE_ENABLED.store(true, Ordering::Release);
             info!("Device enabled");
         } else {
+            USB_DEVICE_ENABLED.store(false, Ordering::Release);
             info!("Device disabled");
         }
     }
 
     fn reset(&mut self) {
-        self.configured.store(false, Ordering::Relaxed);
+        USB_CONFIGURED.store(false, Ordering::Relaxed);
         info!("Bus reset, the Vbus current limit is 100mA");
     }
 
     fn addressed(&mut self, addr: u8) {
-        self.configured.store(false, Ordering::Relaxed);
+        USB_CONFIGURED.store(false, Ordering::Relaxed);
         info!("USB address set to: {}", addr);
     }
 
     fn configured(&mut self, configured: bool) {
-        self.configured.store(configured, Ordering::Relaxed);
+        USB_CONFIGURED.store(configured, Ordering::Relaxed);
         if configured {
             info!(
                 "Device configured, it may now draw up to the configured current limit from Vbus."
@@ -192,10 +215,10 @@ impl Handler for MyDeviceHandler {
     fn suspended(&mut self, suspended: bool) {
         if suspended {
             info!("Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
-            SUSPENDED.store(true, Ordering::Release);
+            USB_SUSPENDED.store(true, Ordering::Release);
         } else {
-            SUSPENDED.store(false, Ordering::Release);
-            if self.configured.load(Ordering::Relaxed) {
+            USB_SUSPENDED.store(false, Ordering::Release);
+            if USB_CONFIGURED.load(Ordering::Relaxed) {
                 info!(
                     "Device resumed, it may now draw up to the configured current limit from Vbus"
                 );

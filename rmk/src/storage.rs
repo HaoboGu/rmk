@@ -323,9 +323,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         // Self { flash }
     }
 
-    pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-        &mut self,
-    ) -> ! {
+    pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(&mut self) {
         let mut storage_data_buffer = [0_u8; 128];
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
@@ -420,7 +418,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
-        let mut buf = [0u8; 8];
+        let mut buf = [0u8; 128];
         for (layer, layer_data) in keymap.iter_mut().enumerate() {
             for (row, row_data) in layer_data.iter_mut().enumerate() {
                 for (col, value) in row_data.iter_mut().enumerate() {
@@ -437,6 +435,22 @@ impl<F: AsyncNorFlash> Storage<F> {
                         Ok(Some(StorageData::KeymapKey(k))) => k.action,
                         Ok(None) => {
                             error!("Got none when reading keymap from storage at (layer,col,row)=({},{},{})", layer, col, row);
+                            return Err(());
+                        }
+                        Err(e) => {
+                            match e {
+                                sequential_storage::Error::Storage { value: _ } => error!("Flash error"),
+                                sequential_storage::Error::FullStorage => error!("Storage is full"),
+                                sequential_storage::Error::Corrupted {} => error!("Storage is corrupted"),
+                                sequential_storage::Error::BufferTooBig => error!("Buffer too big"),
+                                sequential_storage::Error::BufferTooSmall(_) => error!("Buffer too small"),
+                                sequential_storage::Error::Item(item_e) => error!("Storage error: {}", item_e),
+                                _ => error!("Unknown storage error"),
+                            };
+                            error!(
+                                "Load keymap key from storage error: (layer,col,row)=({},{},{})",
+                                layer, col, row
+                            ); 
                             return Err(());
                         }
                         _ => {

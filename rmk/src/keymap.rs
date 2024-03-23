@@ -35,7 +35,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         if let Some(storage) = storage {
-            if let Err(_) = storage.read_keymap(&mut action_map).await {
+            if storage.read_keymap(&mut action_map).await.is_err() {
                 error!("Keymap reading aborted!");
             }
         }
