@@ -6,13 +6,6 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
 
-#[cfg(feature = "ble")]
-use crate::ble::{
-    ble_battery_task, keyboard_ble_task,
-    server::{BleHidWriter, BleServer},
-    softdevice_task,
-};
-
 use crate::{
     keyboard::keyboard_task,
     light::{led_task, LightService},
@@ -21,7 +14,7 @@ use crate::{
 use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, warn};
+use defmt::*;
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -268,7 +261,8 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         ble::{
             advertise::{create_advertisement_data, SCAN_DATA},
             bonder::{BondInfo, Bonder},
-            nrf_ble_config, BONDED_DEVICE_NUM,
+            nrf_ble_config,
+            softdevice_task, BONDED_DEVICE_NUM,
         },
         storage::{get_bond_info_key, StorageData},
         usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
@@ -450,6 +444,8 @@ async fn run_usb_keyboard<
 }
 
 #[cfg(feature = "ble")]
+use crate::ble::server::BleServer;
+#[cfg(feature = "ble")]
 // Run ble keyboard task for once
 async fn run_ble_keyboard<
     'a,
@@ -465,8 +461,10 @@ async fn run_ble_keyboard<
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
 ) {
-    info!("Starting GATT server 1 second later");
-    Timer::after_secs(1).await;
+    use crate::ble::{ble_battery_task, keyboard_ble_task, server::BleHidWriter};
+
+    info!("Starting GATT server 200 ms later");
+    Timer::after_millis(200).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
     let mut ble_media_writer = BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
     let mut ble_system_control_writer =

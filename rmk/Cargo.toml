@@ -37,9 +37,11 @@ packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
 futures = { version = "0.3", default-features = false }
 sequential-storage = { version = "1.0", features = ["defmt-03"] }
+
+# Optional dependencies
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
-], default-features = false }
+], default-features = false, optional = true}
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
     "defmt",
     "ble-peripheral",
@@ -63,12 +65,14 @@ ble = ["dep:nrf-softdevice"]
 nrf52840_ble = [
     "ble",
     "dep:embassy-nrf",
+    "dep:once_cell",
     "nrf-softdevice/nrf52840",
     "nrf-softdevice/s140",
 ]
 nrf52832_ble = [
     "ble",
     "dep:embassy-nrf",
+    "dep:once_cell",
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
