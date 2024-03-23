@@ -2,18 +2,16 @@ use usbd_hid::descriptor::generator_prelude::*;
 
 ///! HID Descriptor used in BLE keyboard, which might be different from USB HID device
 
-/// Predefined report ids for composite hid report.
+/// Predefined report ids for composite BLE hid report. The report id of BLE should start from 0x01
 /// Should be same with `#[gen_hid_descriptor]`
-/// DO NOT EDIT
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-
 pub(crate) enum BleCompositeReportType {
-    Keyboard = 0x00,
-    Mouse = 0x01,
-    Media = 0x02,
-    System = 0x03,
-    Vial = 0x04,
+    Keyboard = 0x01,
+    Mouse = 0x02,
+    Media = 0x03,
+    System = 0x04,
+    Vial = 0x05,
 }
 
 /// KeyboardReport describes a report and its companion descriptor that can be
@@ -21,7 +19,7 @@ pub(crate) enum BleCompositeReportType {
 /// keyboard LEDs.
 #[gen_hid_descriptor(
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = KEYBOARD) = {
-        (report_id = 0x00,) = {
+        (report_id = 0x01,) = {
             (usage_page = KEYBOARD, usage_min = 0xE0, usage_max = 0xE7) = {
                 #[packed_bits 8] #[item_settings data,variable,absolute] modifier=input;
             };
@@ -38,7 +36,7 @@ pub(crate) enum BleCompositeReportType {
     },
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = MOUSE) = {
         (collection = PHYSICAL, usage = POINTER) = {
-            (report_id = 0x01,) = {
+            (report_id = 0x02,) = {
                 (usage_page = BUTTON, usage_min = BUTTON_1, usage_max = BUTTON_8) = {
                     #[packed_bits 8] #[item_settings data,variable,absolute] buttons=input;
                 };
@@ -62,21 +60,21 @@ pub(crate) enum BleCompositeReportType {
         };
     },
     (collection = APPLICATION, usage_page = CONSUMER, usage = CONSUMER_CONTROL) = {
-        (report_id = 0x02,) = {
+        (report_id = 0x03,) = {
             (usage_page = CONSUMER, usage_min = 0x00, usage_max = 0x514) = {
             #[item_settings data,array,absolute,not_null] media_usage_id=input;
             }
         };
     },
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
-        (report_id = 0x03,) = {
+        (report_id = 0x04,) = {
             (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
                 #[item_settings data,array,absolute,not_null] system_usage_id=input;
             };
         };
     },
     (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
-        (report_id = 0x04,) = {
+        (report_id = 0x05,) = {
             (usage = 0x62, logical_min = 0x0) = {
                 #[item_settings data,variable,absolute] vial_input_data=input;
             };

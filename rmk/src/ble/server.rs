@@ -5,15 +5,13 @@ use super::{
 };
 use crate::{
     config::KeyboardUsbConfig,
-    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidWriterWrapper},
+    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
-use defmt::error;
+use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
-        gatt_server::{self, RegisterError, Service, WriteOp},
-        Connection,
-    },
-    Softdevice,
+        gatt_server::{self, RegisterError, Service, WriteOp}, Connection
+    }, Softdevice
 };
 use usbd_hid::descriptor::AsInputReport;
 
@@ -53,6 +51,41 @@ impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
 impl<'a, const N: usize> BleHidWriter<'a, N> {
     pub(crate) fn new(conn: &'a Connection, handle: u16) -> Self {
         Self { conn, handle }
+    }
+}
+
+/// Wrapper struct for writing via BLE
+pub(crate) struct BleHidReader<'a, const N: usize> {
+    sd: &'a Softdevice,
+    conn: &'a Connection,
+    handle: u16,
+}
+
+impl<'a, const N: usize> ConnectionTypeWrapper for BleHidReader<'a, N> {
+    fn get_conn_type(&self) -> crate::hid::ConnectionType {
+        ConnectionType::Ble
+    }
+}
+
+impl<'a, const N: usize> HidReaderWrapper for BleHidReader<'a, N> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+        let mut buffer = [0u8; 16];
+        gatt_server::get_value(self.sd, self.handle, &mut buffer)
+            .map_err(|e| {
+                error!("Read value from ble error: {}", e);
+                HidError::BleRawError
+            })
+            .map(|s| {
+                info!("READ FROM BLE HID {:?}", buffer);
+                buf[0] = buffer[0];
+                s
+            })
+    }
+}
+
+impl<'a, const N: usize> BleHidReader<'a, N> {
+    pub(crate) fn new(sd: &'a Softdevice, conn: &'a Connection, handle: u16) -> Self {
+        Self { sd, conn, handle }
     }
 }
 

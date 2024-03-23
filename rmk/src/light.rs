@@ -4,11 +4,10 @@ use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
 use packed_struct::prelude::*;
 
-
 pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
     light_service: &mut LightService<Out>,
-) -> ! {
+) {
     loop {
         match light_service.check_led_indicator(keyboard_hid_reader).await {
             Ok(_) => Timer::after_millis(50).await,
@@ -86,7 +85,7 @@ impl<P: OutputPin> SingleLED<P> {
 }
 
 pub(crate) struct LightService<P: OutputPin> {
-    enabled: bool,
+    pub(crate) enabled: bool,
     led_indicator_data: [u8; 1],
     capslock: Option<SingleLED<P>>,
     scrolllock: Option<SingleLED<P>>,

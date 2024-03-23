@@ -11,6 +11,7 @@ There are a bunch of things to do with RMK in the near future. The following is 
 - [x] LED
 - [x] (experimental) wireless - BLE
 - [ ] (BLE) auto switch between BLE/USB, on-the-fly mutliple device support, battery service from ADC  
+- [ ] esp32 support
 - [ ] keyboard macro
 - [ ] better documentation
 - [ ] RGB

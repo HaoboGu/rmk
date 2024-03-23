@@ -17,6 +17,48 @@ use nrf_softdevice::{ble::Connection, raw, Config};
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
+// TODO: Be compatible with more nRF chip models
+#[cfg(feature = "nrf52840_ble")]
+use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
+#[cfg(feature = "nrf52840_ble")]
+use once_cell::sync::OnceCell;
+#[cfg(feature = "nrf52840_ble")]
+/// Software Vbus detect when using BLE + USB
+pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
+
+#[cfg(feature = "nrf52840_ble")]
+/// Background task of nrf_softdevice
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    use nrf_softdevice::SocEvent;
+
+    unsafe {
+        nrf_softdevice::raw::sd_power_usbpwrrdy_enable(1);
+        nrf_softdevice::raw::sd_power_usbdetected_enable(1);
+        nrf_softdevice::raw::sd_power_usbremoved_enable(1);
+        // nrf_softdevice::raw::sd_clock_hfclk_request();
+    };
+
+    let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, true));
+
+    sd.run_with_callback(|event: SocEvent| {
+        match event {
+            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
+            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbPowerReady => software_vbus.ready(),
+            _ => {}
+        };
+    })
+    .await
+}
+
+// nRF52832 doesn't have USB, so the softdevice_task is different
+#[cfg(feature = "nrf52832_ble")]
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    sd.run().await
+}
+
 /// Create default nrf ble config
 pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     Config {
@@ -54,12 +96,6 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     }
 }
 
-/// Background task of nrf_softdevice
-#[embassy_executor::task]
-pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
-    sd.run().await
-}
-
 /// BLE keyboard task, run the keyboard with the ble server
 pub(crate) async fn keyboard_ble_task<
     'a,
@@ -83,6 +119,7 @@ pub(crate) async fn keyboard_ble_task<
     Timer::after_secs(2).await;
     loop {
         let _ = keyboard.scan_matrix().await;
+
         keyboard.send_keyboard_report(ble_keyboard_writer).await;
         keyboard.send_media_report(ble_media_writer).await;
         keyboard
@@ -96,7 +133,7 @@ pub(crate) async fn keyboard_ble_task<
 pub(crate) async fn ble_battery_task(ble_server: &BleServer, conn: &Connection) {
     // Wait 2 seconds, ensure that gatt server has been started
     Timer::after_secs(2).await;
-    ble_server.set_battery_value(conn, &50);
+    ble_server.set_battery_value(conn, &80);
     loop {
         // TODO: A real battery service
         Timer::after_secs(10).await
