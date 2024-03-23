@@ -10,7 +10,7 @@ pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
 ) {
     loop {
         match light_service.check_led_indicator(keyboard_hid_reader).await {
-            Ok(_) => Timer::after_millis(1000).await,
+            Ok(_) => Timer::after_millis(50).await,
             Err(_) => Timer::after_secs(2).await,
         }
     }
