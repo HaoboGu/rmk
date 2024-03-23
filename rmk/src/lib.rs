@@ -241,7 +241,7 @@ use nrf_softdevice::ble::{gatt_server, Connection};
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
-    D: Driver<'static>,
+    #[cfg(not(feature = "nrf52832_ble"))] D: Driver<'static>,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
     const ROW: usize,
@@ -251,22 +251,22 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    usb_driver: Option<D>,
+    #[cfg(not(feature = "nrf52832_ble"))] usb_driver: Option<D>,
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
-    use core::sync::atomic::Ordering;
-
+    #[cfg(not(feature = "nrf52832_ble"))]
+    use crate::usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED};
     use crate::{
         ble::{
             advertise::{create_advertisement_data, SCAN_DATA},
             bonder::{BondInfo, Bonder},
-            nrf_ble_config,
-            softdevice_task, BONDED_DEVICE_NUM,
+            nrf_ble_config, softdevice_task, BONDED_DEVICE_NUM,
         },
         storage::{get_bond_info_key, StorageData},
-        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
     };
+    #[cfg(not(feature = "nrf52832_ble"))]
+    use core::sync::atomic::Ordering;
     use defmt::*;
     use heapless::FnvIndexMap;
     use nrf_softdevice::{ble::peripheral, Flash, Softdevice};
@@ -313,8 +313,9 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
     // Keyboard services
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(input_pins, output_pins, &keymap),
+    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    #[cfg(not(feature = "nrf52832_ble"))]
+    let (mut usb_device, mut vial_service, mut light_service) = (
         usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
@@ -335,6 +336,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         // Remember that USB ALWAYS has higher priority than BLE.
         //
         // If no USB device, just start BLE advertising
+        #[cfg(not(feature = "nrf52832_ble"))]
         if let Some(ref mut usb_device) = usb_device {
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
@@ -388,6 +390,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             }
         }
 
+        #[cfg(feature = "nrf52832_ble")]
+        match adv_fut.await {
+            Ok(conn) => run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage).await,
+            Err(e) => error!("Advertise error: {}", e),
+        }
         // Retry after 3 second
         Timer::after_millis(100).await;
     }

@@ -10,17 +10,54 @@ pub(crate) mod spec;
 use self::server::BleServer;
 use crate::{hid::HidWriterWrapper, keyboard::Keyboard};
 use core::{convert::Infallible, mem};
-use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
-use nrf_softdevice::{ble::Connection, raw, Config, SocEvent};
-use once_cell::sync::OnceCell;
+use nrf_softdevice::{ble::Connection, raw, Config};
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
+// TODO: Be compatible with more nRF chip models
+#[cfg(feature = "nrf52840_ble")]
+use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
+#[cfg(feature = "nrf52840_ble")]
+use once_cell::sync::OnceCell;
+#[cfg(feature = "nrf52840_ble")]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
+
+#[cfg(feature = "nrf52840_ble")]
+/// Background task of nrf_softdevice
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    use nrf_softdevice::SocEvent;
+
+    unsafe {
+        nrf_softdevice::raw::sd_power_usbpwrrdy_enable(1);
+        nrf_softdevice::raw::sd_power_usbdetected_enable(1);
+        nrf_softdevice::raw::sd_power_usbremoved_enable(1);
+        // nrf_softdevice::raw::sd_clock_hfclk_request();
+    };
+
+    let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, true));
+
+    sd.run_with_callback(|event: SocEvent| {
+        match event {
+            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
+            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbPowerReady => software_vbus.ready(),
+            _ => {}
+        };
+    })
+    .await
+}
+
+// nRF52832 doesn't have USB, so the softdevice_task is different
+#[cfg(feature = "nrf52832_ble")]
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    sd.run().await
+}
 
 /// Create default nrf ble config
 pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
@@ -57,29 +94,6 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
         }),
         ..Default::default()
     }
-}
-
-/// Background task of nrf_softdevice
-#[embassy_executor::task]
-pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
-    unsafe {
-        nrf_softdevice::raw::sd_power_usbpwrrdy_enable(1);
-        nrf_softdevice::raw::sd_power_usbdetected_enable(1);
-        nrf_softdevice::raw::sd_power_usbremoved_enable(1);
-        // nrf_softdevice::raw::sd_clock_hfclk_request();
-    };
-
-    let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, true));
-
-    sd.run_with_callback(|event: SocEvent| {
-        match event {
-            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
-            SocEvent::PowerUsbDetected => software_vbus.detected(true),
-            SocEvent::PowerUsbPowerReady => software_vbus.ready(),
-            _ => {}
-        };
-    })
-    .await
 }
 
 /// BLE keyboard task, run the keyboard with the ble server
