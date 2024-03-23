@@ -21,15 +21,15 @@ use crate::{
 use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
-use defmt::{error, info, warn};
+use defmt::{error, warn};
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
-use embassy_usb::{driver::Driver, UsbDevice};
+use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use futures::{pin_mut, Future};
+use futures::pin_mut;
 use keyboard::Keyboard;
 use keymap::KeyMap;
 
@@ -191,7 +191,7 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     loop {
         // Run all tasks, if one of them fails, wait 1 second and then restart
         if let Some(ref mut s) = storage {
-            run_usb_keyboard_forever(
+            run_usb_keyboard(
                 &mut usb_device,
                 &mut keyboard,
                 s,
@@ -262,22 +262,24 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
+    use core::sync::atomic::Ordering;
+
+    use crate::{
+        ble::{
+            advertise::{create_advertisement_data, SCAN_DATA},
+            bonder::{BondInfo, Bonder},
+            nrf_ble_config, BONDED_DEVICE_NUM,
+        },
+        storage::{get_bond_info_key, StorageData},
+        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
+    };
     use defmt::*;
     use heapless::FnvIndexMap;
     use nrf_softdevice::{ble::peripheral, Flash, Softdevice};
     use sequential_storage::{cache::NoCache, map::fetch_item};
     use static_cell::StaticCell;
-    // FIXME: add auto recognition of ble/usb
-    use crate::{
-        ble::{
-            advertise::{create_advertisement_data, SCAN_DATA},
-            bonder::{BondInfo, Bonder},
-            nrf_ble_config, BONDED_DEVICE_NUM, SOFTWARE_VBUS,
-        },
-        storage::{get_bond_info_key, StorageData},
-    };
-    use embassy_nrf::usb::vbus_detect::{SoftwareVbusDetect, VbusDetect};
 
+    // Set ble config and start nrf-softdevice background task first
     let keyboard_name = keyboard_config
         .usb_config
         .product_name
@@ -288,19 +290,15 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
+    // Flash and keymap configuration
     let flash = Flash::take(sd);
     let mut storage = Storage::new(flash, &keymap).await;
     let keymap = RefCell::new(
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut storage)).await,
     );
 
-    let mut usb_device = usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config));
-    let mut keyboard: Keyboard<'_, In, Out, ROW, COL, NUM_LAYER> =
-        Keyboard::new(input_pins, output_pins, &keymap);
-
-    // Get all saved bond info
+    // Get all saved bond info, config BLE bonder
     let mut buf: [u8; 128] = [0; 128];
-
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(StorageData::BondInfo(info))) =
@@ -316,33 +314,21 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             bond_info.insert(key as u8, info).ok();
         }
     }
-
     info!("Loaded saved bond info: {}", bond_info.len());
-
-    // BLE bonder
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
-    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
-    let mut light_service = LightService::from_config(keyboard_config.light_config);
+    // Keyboard services
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(input_pins, output_pins, &keymap),
+        usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
 
+    // Main loop
     loop {
-        // Check and run via USB first
-        warn!("RUN until suspend");
-        let mut vbus: &SoftwareVbusDetect = SOFTWARE_VBUS.get().unwrap();
-        // if let Some(ref mut usb_device) = usb_device  {
-        //         run_usb_keyboard_until_suspend(
-        //             usb_device,
-        //             &mut keyboard,
-        //             &mut storage,
-        //             &mut light_service,
-        //             &mut vial_service,
-        //         )
-        //         .await;
-        // }
-
-        info!("BLE Advertising");
-        // Create connection
+        // Init BLE advertising data
         let config = peripheral::Config::default();
         let adv_data = create_advertisement_data(keyboard_name);
         let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
@@ -350,35 +336,54 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             scan_data: &SCAN_DATA,
         };
         let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-        let power_fut = vbus.wait_power_ready();
-        // Wait for BLE or USB connection
+
+        // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
+        // Remember that USB ALWAYS has higher priority than BLE.
+        //
+        // If no USB device, just start BLE advertising
         if let Some(ref mut usb_device) = usb_device {
-            let usb_fut = run_usb_keyboard_until_suspend(
-                usb_device,
-                &mut keyboard,
-                &mut storage,
-                &mut light_service,
-                &mut vial_service,
-            );
-            match select(adv_fut, select(power_fut, usb_fut)).await {
+            // Check and run via USB first
+            if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
+                let usb_fut = run_usb_keyboard(
+                    usb_device,
+                    &mut keyboard,
+                    &mut storage,
+                    &mut light_service,
+                    &mut vial_service,
+                );
+                select(usb_fut, wait_for_usb_suspend()).await;
+            }
+
+            // Usb device have to be started to check if usb is configured
+            let usb_fut = usb_device.device.run();
+            let usb_configured = wait_for_usb_configured();
+            info!("USB suspended, BLE Advertising");
+
+            // Wait for BLE or USB connection
+            match select(adv_fut, select(usb_fut, usb_configured)).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
-                        run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage).await
+                        info!("Connected to BLE");
+                        let usb_configured = wait_for_usb_configured();
+                        let usb_fut = usb_device.device.run();
+                        match select(
+                            run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage),
+                            select(usb_fut, usb_configured),
+                        )
+                        .await
+                        {
+                            Either::First(_) => (),
+                            Either::Second(_) => {
+                                info!("Detected USB configured, quit BLE");
+                                continue;
+                            }
+                        }
                     }
                     Err(e) => error!("Advertise error: {}", e),
                 },
                 Either::Second(_) => {
-                    // Received USB resume, continue
-                    run_usb_keyboard_until_suspend(
-                        usb_device,
-                        &mut keyboard,
-                        &mut storage,
-                        &mut light_service,
-                        &mut vial_service,
-                    ).await;
-                    info!("WAIT resume!");
-                    usb_device.device.wait_resume().await;
-                    Timer::after_secs(1).await;
+                    // Wait 10ms for usb resuming
+                    Timer::after_millis(10).await;
                     continue;
                 }
             }
@@ -390,17 +395,37 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         }
 
         // Retry after 3 second
-        Timer::after_secs(3).await;
+        Timer::after_millis(100).await;
     }
 }
 
-async fn run_usb_keyboard_with_futures(
-    usb_fut: impl Future<Output = ()>,
-    keyboard_fut: impl Future<Output = ()>,
-    led_reader_fut: impl Future<Output = ()>,
-    via_fut: impl Future<Output = ()>,
-    storage_fut: impl Future<Output = ()>,
+// Run usb keyboard task for once
+async fn run_usb_keyboard<
+    'a,
+    'b,
+    D: Driver<'a>,
+    F: AsyncNorFlash,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    usb_device: &mut KeyboardUsbDevice<'a, D>,
+    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F>,
+    light_service: &mut LightService<Out>,
+    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
 ) {
+    let usb_fut = usb_device.device.run();
+    let keyboard_fut = keyboard_task(
+        keyboard,
+        &mut usb_device.keyboard_hid_writer,
+        &mut usb_device.other_hid_writer,
+    );
+    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
+    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
+    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
     pin_mut!(usb_fut);
     pin_mut!(keyboard_fut);
     pin_mut!(led_reader_fut);
@@ -424,74 +449,8 @@ async fn run_usb_keyboard_with_futures(
     }
 }
 
-async fn run_usb_keyboard_forever<
-    'a,
-    'b,
-    D: Driver<'a>,
-    F: AsyncNorFlash,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
-    storage: &mut Storage<F>,
-    light_service: &mut LightService<Out>,
-    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-) {
-    let usb_fut = run_usb_forever(&mut usb_device.device);
-    let keyboard_fut = keyboard_task(
-        keyboard,
-        &mut usb_device.keyboard_hid_writer,
-        &mut usb_device.other_hid_writer,
-    );
-    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
-    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-    run_usb_keyboard_with_futures(usb_fut, keyboard_fut, led_reader_fut, via_fut, storage_fut)
-        .await;
-}
-
-async fn run_usb_forever<'a, D: Driver<'a>>(device: &mut UsbDevice<'a, D>) {
-    loop {
-        device.run_until_suspend().await;
-        device.wait_resume().await;
-    }
-}
-
-async fn run_usb_keyboard_until_suspend<
-    'a,
-    'b,
-    D: Driver<'a>,
-    F: AsyncNorFlash,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
-    storage: &mut Storage<F>,
-    light_service: &mut LightService<Out>,
-    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-) {
-    let usb_fut = usb_device.device.run_until_suspend();
-    let keyboard_fut = keyboard_task(
-        keyboard,
-        &mut usb_device.keyboard_hid_writer,
-        &mut usb_device.other_hid_writer,
-    );
-    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
-    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-    run_usb_keyboard_with_futures(usb_fut, keyboard_fut, led_reader_fut, via_fut, storage_fut)
-        .await;
-}
-
 #[cfg(feature = "ble")]
+// Run ble keyboard task for once
 async fn run_ble_keyboard<
     'a,
     F: AsyncNorFlash,

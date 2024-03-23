@@ -2,6 +2,7 @@ pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
+use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
@@ -19,6 +20,29 @@ use crate::{
 
 pub(crate) static USB_SUSPENDED: AtomicBool = AtomicBool::new(false);
 pub(crate) static USB_CONFIGURED: AtomicBool = AtomicBool::new(false);
+pub(crate) static USB_DEVICE_ENABLED: AtomicBool = AtomicBool::new(false);
+
+pub(crate) async fn wait_for_usb_suspend() {
+    loop {
+        let suspended = USB_SUSPENDED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended {
+            break;
+        }
+        // Check usb suspended state every 10ms
+        Timer::after_millis(10).await
+    }
+}
+
+pub(crate) async fn wait_for_usb_configured() {
+    loop {
+        let suspended = USB_CONFIGURED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended {
+            break;
+        }
+        // Check usb configured state every 10ms
+        Timer::after_millis(10).await
+    }
+}
 
 // In this case, report id should be used.
 // The keyboard usb device should have 3 hid instances:
@@ -159,8 +183,10 @@ impl Handler for UsbDeviceHandler {
         USB_CONFIGURED.store(false, Ordering::Relaxed);
         USB_SUSPENDED.store(false, Ordering::Release);
         if enabled {
+            USB_DEVICE_ENABLED.store(true, Ordering::Release);
             info!("Device enabled");
         } else {
+            USB_DEVICE_ENABLED.store(false, Ordering::Release);
             info!("Device disabled");
         }
     }

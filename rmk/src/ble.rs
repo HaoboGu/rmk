@@ -10,7 +10,6 @@ pub(crate) mod spec;
 use self::server::BleServer;
 use crate::{hid::HidWriterWrapper, keyboard::Keyboard};
 use core::{convert::Infallible, mem};
-use defmt::info;
 use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -74,18 +73,9 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 
     sd.run_with_callback(|event: SocEvent| {
         match event {
-            SocEvent::PowerUsbRemoved => {
-                info!("Power usb removed");
-                software_vbus.detected(false)
-            }
-            SocEvent::PowerUsbDetected => {
-                info!("Power usb detected");
-                software_vbus.detected(true)
-            }
-            SocEvent::PowerUsbPowerReady => {
-                info!("Power usb ready");
-                software_vbus.ready()
-            }
+            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
+            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbPowerReady => software_vbus.ready(),
             _ => {}
         };
     })
