@@ -26,7 +26,7 @@ A feature-rich Rust keyboard firmware.
 
 - [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 
-- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples using Embassy, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
 
 </details>
 
@@ -68,10 +68,35 @@ step-to-step instruction for rp2040 and stm32h7
 
 3. Flash
 
+   If your rp2040 board is connected with a debugging probe, just use the following command to flash RMK firmware to the board:
+
    ```shell
    cd boards/rp2040
    cargo run
    ```
+
+   If you don't have a debugging probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
+
+   1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
+   2. Update `boards/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
+      ```diff
+      - runner = "probe-rs run --chip RP2040"
+      + runner = "elf2uf2-rs -d"
+      ```
+   3. Connect your rp2040 board holding the BOOTSEL key, ensure that rp's USB drive appears
+   4. Flash
+      ```shell
+      cd boards/rp2040
+      cargo run
+      ```
+      Then, you will see logs like if everything goes right:
+      ```
+      Finished release [optimized + debuginfo] target(s) in 0.21s
+      Running `elf2uf2-rs -d 'target\thumbv6m-none-eabi\release\rmk-rp2040'`
+      Found pico uf2 disk G:\
+      Transfering program to pico
+      173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
+      ```
 
 #### stm32h7
 
@@ -86,7 +111,7 @@ step-to-step instruction for rp2040 and stm32h7
 
 3. Flash
 
-   You can use both `probe-rs` and `openocd` to flash the firmware: 
+   Make sure you have a debugging probe connected to your board. You can use both `probe-rs` and `openocd` to flash the firmware: 
 
    ```shell
    # Use openocd
