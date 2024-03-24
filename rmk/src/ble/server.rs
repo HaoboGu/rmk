@@ -10,8 +10,10 @@ use crate::{
 use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
-        gatt_server::{self, RegisterError, Service, WriteOp}, Connection
-    }, Softdevice
+        gatt_server::{self, RegisterError, Service, WriteOp},
+        Connection,
+    },
+    Softdevice,
 };
 use usbd_hid::descriptor::AsInputReport;
 

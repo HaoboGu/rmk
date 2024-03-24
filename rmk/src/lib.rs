@@ -6,15 +6,126 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
 
+// Main items
+pub const HIDINPUT: u8 = 0x80;
+pub const HIDOUTPUT: u8 = 0x90;
+pub const FEATURE: u8 = 0xb0;
+pub const COLLECTION: u8 = 0xa0;
+pub const END_COLLECTION: u8 = 0xc0;
+
+// Global items
+pub const USAGE_PAGE: u8 = 0x04;
+pub const LOGICAL_MINIMUM: u8 = 0x14;
+pub const LOGICAL_MAXIMUM: u8 = 0x24;
+pub const PHYSICAL_MINIMUM: u8 = 0x34;
+pub const PHYSICAL_MAXIMUM: u8 = 0x44;
+pub const UNIT_EXPONENT: u8 = 0x54;
+pub const UNIT: u8 = 0x64;
+pub const REPORT_SIZE: u8 = 0x74; //bits
+pub const REPORT_ID: u8 = 0x84;
+pub const REPORT_COUNT: u8 = 0x94; //bytes
+pub const PUSH: u8 = 0xa4;
+pub const POP: u8 = 0xb4;
+
+// Local items
+pub const USAGE: u8 = 0x08;
+pub const USAGE_MINIMUM: u8 = 0x18;
+pub const USAGE_MAXIMUM: u8 = 0x28;
+pub const DESIGNATOR_INDEX: u8 = 0x38;
+pub const DESIGNATOR_MINIMUM: u8 = 0x48;
+pub const DESIGNATOR_MAXIMUM: u8 = 0x58;
+pub const STRING_INDEX: u8 = 0x78;
+pub const STRING_MINIMUM: u8 = 0x88;
+pub const STRING_MAXIMUM: u8 = 0x98;
+pub const DELIMITER: u8 = 0xa8;
+
+const KEYBOARD_ID: u8 = 0x01;
+const MEDIA_KEYS_ID: u8 = 0x02;
+
+macro_rules! count {
+	() => { 0u8 };
+	($x:tt $($xs:tt)*) => {1u8 + count!($($xs)*)};
+}
+
+macro_rules! hid {
+	($(( $($xs:tt),*)),+ $(,)?) => { &[ $( (count!($($xs)*)-1) | $($xs),* ),* ] };
+}
+const HID_REPORT_DESCRIPTOR: &[u8] = hid!(
+    (USAGE_PAGE, 0x01), // USAGE_PAGE (Generic Desktop Ctrls)
+    (USAGE, 0x06),      // USAGE (Keyboard)
+    (COLLECTION, 0x01), // COLLECTION (Application)
+    // ------------------------------------------------- Keyboard
+    (REPORT_ID, KEYBOARD_ID), //   REPORT_ID (1)
+    (USAGE_PAGE, 0x07),       //   USAGE_PAGE (Kbrd/Keypad)
+    (USAGE_MINIMUM, 0xE0),    //   USAGE_MINIMUM (0xE0)
+    (USAGE_MAXIMUM, 0xE7),    //   USAGE_MAXIMUM (0xE7)
+    (LOGICAL_MINIMUM, 0x00),  //   LOGICAL_MINIMUM (0)
+    (LOGICAL_MAXIMUM, 0x01),  //   Logical Maximum (1)
+    (REPORT_SIZE, 0x01),      //   REPORT_SIZE (1)
+    (REPORT_COUNT, 0x08),     //   REPORT_COUNT (8)
+    (HIDINPUT, 0x02), //   INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    (REPORT_COUNT, 0x01), //   REPORT_COUNT (1) ; 1 byte (Reserved)
+    (REPORT_SIZE, 0x08), //   REPORT_SIZE (8)
+    (HIDINPUT, 0x01), //   INPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    (REPORT_COUNT, 0x05), //   REPORT_COUNT (5) ; 5 bits (Num lock, Caps lock, Scroll lock, Compose, Kana)
+    (REPORT_SIZE, 0x01),  //   REPORT_SIZE (1)
+    (USAGE_PAGE, 0x08),   //   USAGE_PAGE (LEDs)
+    (USAGE_MINIMUM, 0x01), //   USAGE_MINIMUM (0x01) ; Num Lock
+    (USAGE_MAXIMUM, 0x05), //   USAGE_MAXIMUM (0x05) ; Kana
+    (HIDOUTPUT, 0x02), //   OUTPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+    (REPORT_COUNT, 0x01), //   REPORT_COUNT (1) ; 3 bits (Padding)
+    (REPORT_SIZE, 0x03), //   REPORT_SIZE (3)
+    (HIDOUTPUT, 0x01), //   OUTPUT (Const,Array,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+    (REPORT_COUNT, 0x06), //   REPORT_COUNT (6) ; 6 bytes (Keys)
+    (REPORT_SIZE, 0x08), //   REPORT_SIZE(8)
+    (LOGICAL_MINIMUM, 0x00), //   LOGICAL_MINIMUM(0)
+    (LOGICAL_MAXIMUM, 0x65), //   LOGICAL_MAXIMUM(0x65) ; 101 keys
+    (USAGE_PAGE, 0x07), //   USAGE_PAGE (Kbrd/Keypad)
+    (USAGE_MINIMUM, 0x00), //   USAGE_MINIMUM (0)
+    (USAGE_MAXIMUM, 0x65), //   USAGE_MAXIMUM (0x65)
+    (HIDINPUT, 0x00),  //   INPUT (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    (END_COLLECTION),  // END_COLLECTION
+    // ------------------------------------------------- Media Keys
+    (USAGE_PAGE, 0x0C),         // USAGE_PAGE (Consumer)
+    (USAGE, 0x01),              // USAGE (Consumer Control)
+    (COLLECTION, 0x01),         // COLLECTION (Application)
+    (REPORT_ID, MEDIA_KEYS_ID), //   REPORT_ID (2)
+    (USAGE_PAGE, 0x0C),         //   USAGE_PAGE (Consumer)
+    (LOGICAL_MINIMUM, 0x00),    //   LOGICAL_MINIMUM (0)
+    (LOGICAL_MAXIMUM, 0x01),    //   LOGICAL_MAXIMUM (1)
+    (REPORT_SIZE, 0x01),        //   REPORT_SIZE (1)
+    (REPORT_COUNT, 0x10),       //   REPORT_COUNT (16)
+    (USAGE, 0xB5),              //   USAGE (Scan Next Track)     ; bit 0: 1
+    (USAGE, 0xB6),              //   USAGE (Scan Previous Track) ; bit 1: 2
+    (USAGE, 0xB7),              //   USAGE (Stop)                ; bit 2: 4
+    (USAGE, 0xCD),              //   USAGE (Play/Pause)          ; bit 3: 8
+    (USAGE, 0xE2),              //   USAGE (Mute)                ; bit 4: 16
+    (USAGE, 0xE9),              //   USAGE (Volume Increment)    ; bit 5: 32
+    (USAGE, 0xEA),              //   USAGE (Volume Decrement)    ; bit 6: 64
+    (USAGE, 0x23, 0x02),        //   Usage (WWW Home)            ; bit 7: 128
+    (USAGE, 0x94, 0x01),        //   Usage (My Computer) ; bit 0: 1
+    (USAGE, 0x92, 0x01),        //   Usage (Calculator)  ; bit 1: 2
+    (USAGE, 0x2A, 0x02),        //   Usage (WWW fav)     ; bit 2: 4
+    (USAGE, 0x21, 0x02),        //   Usage (WWW search)  ; bit 3: 8
+    (USAGE, 0x26, 0x02),        //   Usage (WWW stop)    ; bit 4: 16
+    (USAGE, 0x24, 0x02),        //   Usage (WWW back)    ; bit 5: 32
+    (USAGE, 0x83, 0x01),        //   Usage (Media sel)   ; bit 6: 64
+    (USAGE, 0x8A, 0x01),        //   Usage (Mail)        ; bit 7: 128
+    (HIDINPUT, 0x02), // INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+    (END_COLLECTION), // END_COLLECTION
+);
+
 use crate::{
     keyboard::keyboard_task,
     light::{led_task, LightService},
     via::vial_task,
 };
 use action::KeyAction;
+
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, convert::Infallible};
 use defmt::*;
+use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -31,7 +142,7 @@ use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 pub mod ble;
 pub mod config;
 mod debounce;
@@ -221,13 +332,13 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     }
 }
 
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use embassy_executor::Spawner;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 pub use nrf_softdevice;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use nrf_softdevice::ble::{gatt_server, Connection};
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
 /// This function never returns.
@@ -399,6 +510,148 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         Timer::after_millis(100).await;
     }
 }
+// fn get_hid_info_fn(_offset: usize, data: &mut [u8]) -> usize {
+//     data[0..4].copy_from_slice(&[
+//         0x1u8, 0x1u8,  // HID version: 1.1
+//         0x00u8, // Country Code
+//         0x03u8, // Remote wake + Normally Connectable
+//     ]);
+//     4
+// }
+// fn get_hid_desc_fn(_offset: usize, data: &mut [u8]) -> usize {
+//     data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
+//     HID_REPORT_DESCRIPTOR.len()
+// }
+use bleps::{
+    ad_structure::{
+        create_advertising_data, AdStructure, BR_EDR_NOT_SUPPORTED, LE_GENERAL_DISCOVERABLE,
+    },
+    async_attribute_server::AttributeServer,
+    asynch::Ble,
+    att::Uuid,
+    attribute_server::NotificationData,
+    attribute_server::WorkResult,
+    gatt,
+};
+pub async fn initialize_esp_ble_keyboard_with_config_and_run<
+    T: embedded_io_async::Read + embedded_io_async::Write,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    input_pins: [In; ROW],
+    output_pins: [Out; COL],
+    keyboard_config: RmkConfig<'static, Out>,
+    ble: &mut Ble<T>,
+) -> ! {
+    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(keymap).await);
+
+    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    ble.init().await.unwrap();
+    ble.cmd_set_le_advertising_parameters().await.unwrap();
+    ble.cmd_set_le_advertising_data(
+        create_advertising_data(&[
+            AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+            AdStructure::ServiceUuids16(&[Uuid::Uuid16(0x1812)]),
+            AdStructure::CompleteLocalName("ESP RMK"),
+        ])
+        .unwrap(),
+    )
+    .await
+    .unwrap();
+    ble.cmd_set_le_advertise_enable(true).await.unwrap();
+    info!("Start advertising");
+
+        let mut hid_info_fn = |_offset: usize, data: &mut [u8]| {
+            data[0..4].copy_from_slice(&[
+                0x1u8, 0x1u8,  // HID version: 1.1
+                0x00u8, // Country Code
+                0x03u8, // Remote wake + Normally Connectable
+            ]);
+            4
+        };
+        let mut hid_desc_fn = |_offset: usize, data: &mut [u8]| {
+            data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
+            HID_REPORT_DESCRIPTOR.len()
+        };
+
+        let mut protocol_mode_fn = |_offset: usize, data: &mut [u8]| {
+            data[0] = 1;
+            1
+        };
+        let mut keyboard_desc_read_fn = |_offset: usize, data: &mut [u8]| {
+            data[0] = 1;
+            data[1] = 1;
+            2
+        };
+
+        let mut hid_report_fn = |_offset: usize, data: &mut [u8]| {
+            data[0..8].copy_from_slice(&[0, 0, 0x04, 0, 0, 0, 0, 0]);
+            8
+        };
+
+        let keyboard_desc_value = &[1, 1u8];
+        let mut kb_report = [0; 8];
+
+        gatt!([service {
+            uuid: "1812",
+            characteristics: [
+                characteristic {
+                    uuid: "2A4A",
+                    read: hid_info_fn,
+                },
+                characteristic {
+                    uuid: "2A4B",
+                    read: hid_desc_fn,
+                },
+                characteristic {
+                    uuid: "2A4E",
+                    read: protocol_mode_fn,
+                },
+                characteristic {
+                    uuid: "2A4D",
+                    notify: true,
+                    name: "my_characteristic",
+                    read: hid_report_fn,
+                    descriptors: [descriptor {
+                        uuid: "2908",
+                        value: keyboard_desc_value,
+                    },],
+                },
+            ],
+        },]);
+
+        let mut rng = bleps::no_rng::NoRng;
+        let mut srv = AttributeServer::new(ble, &mut gatt_attributes, &mut rng);
+
+        loop {
+            let mut notification = None;
+            let mut cccd = [0u8; 1];
+            if let Some(1) =
+                srv.get_characteristic_value(my_characteristic_notify_enable_handle, 0, &mut cccd)
+            {
+                // if notifications enabled
+                if cccd[0] == 1 {
+                    notification = Some(NotificationData::new(
+                        my_characteristic_handle,
+                        &b"Notification"[..],
+                    ));
+                }
+            }
+
+            match srv.do_work_with_notification(notification).await {
+                Ok(res) => if let WorkResult::GotDisconnected = res {},
+                Err(err) => {
+                    info!("error: {:?}", Debug2Format(&err));
+                }
+            }
+
+            Timer::after_millis(1000).await;
+        }
+}
 
 // Run usb keyboard task for once
 async fn run_usb_keyboard<
@@ -450,9 +703,9 @@ async fn run_usb_keyboard<
     }
 }
 
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use crate::ble::server::BleServer;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 // Run ble keyboard task for once
 async fn run_ble_keyboard<
     'a,

@@ -30,7 +30,6 @@ embassy-executor = { version = "0.5", features = ["defmt"] }
 usbd-hid = { version = "0.6.1", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
-log = "0.4"
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
@@ -41,7 +40,7 @@ sequential-storage = { version = "1.0", features = ["defmt-03"] }
 # Optional dependencies
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
-], default-features = false, optional = true}
+], default-features = false, optional = true }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
     "defmt",
     "ble-peripheral",
@@ -56,23 +55,37 @@ embassy-nrf = { version = "0.1.0", features = [
     "time",
 ], optional = true }
 
+bleps = { git = "https://github.com/bjoernQ/bleps", features = [
+    "macros",
+    "defmt",
+    "async",
+], optional = true }
+embedded-io-async = { version = "0.6.0", optional = true }
+
+# esp-wifi = { version = "0.4.0", features = [
+#     "async",
+#     "defmt",
+#     "ble",
+# ], default-features = false, optional = true }
+
 [features]
-# default = ["eeprom", "col2row", "nrf52840_ble"]
-default = ["eeprom", "col2row"]
+default = ["eeprom", "col2row", "esp32_ble"]
+# default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
-ble = ["dep:nrf-softdevice"]
+nrf_ble = ["dep:nrf-softdevice"]
 nrf52840_ble = [
-    "ble",
+    "nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52840",
     "nrf-softdevice/s140",
 ]
 nrf52832_ble = [
-    "ble",
+    "nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
+esp32_ble = ["dep:bleps", "dep:embedded-io-async"]

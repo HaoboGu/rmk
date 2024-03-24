@@ -1,28 +1,30 @@
 {
     "cortex-debug.variableUseNaturalFormat": false,
     "rust-analyzer.check.allTargets": false,
-    "rust-analyzer.check.overrideCommand": [
-        "cargo",
-        "check",
-        "--quiet",
-        "--message-format=json",
-        "--all-features"
-    ],
-    "rust-analyzer.cargo.buildScripts.overrideCommand": [
-        "cargo",
-        "check",
-        "--quiet",
-        "--message-format=json",
-        "--all-features"
-    ],
+    // "rust-analyzer.check.overrideCommand": [
+    //     "cargo",
+    //     "check",
+    //     "--quiet",
+    //     "--message-format=json",
+    //     "--all-features"
+    // ],
+    // "rust-analyzer.cargo.buildScripts.overrideCommand": [
+    //     "cargo",
+    //     "check",
+    //     "--quiet",
+    //     "--message-format=json",
+    //     "--all-features"
+    // ],
     "rust-analyzer.linkedProjects": [
         "rmk/Cargo.toml",
-        "boards/stm32h7/Cargo.toml",
-        "boards/stm32f4/Cargo.toml",
-        "boards/stm32f1/Cargo.toml",
-        "boards/nrf52840/Cargo.toml",
-        "boards/nrf52840_ble/Cargo.toml",
-        "boards/nrf52832_ble/Cargo.toml",
-        "boards/rp2040/Cargo.toml"
+        "boards/esp32c3_ble/Cargo.toml",
+        // "boards/stm32h7/Cargo.toml",
+        // "boards/stm32f4/Cargo.toml",
+        // "boards/stm32f1/Cargo.toml",
+        // "boards/nrf52840/Cargo.toml",
+        // "boards/nrf52840_ble/Cargo.toml",
+        // "boards/nrf52832_ble/Cargo.toml",
+        // "boards/rp2040/Cargo.toml"
     ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
 }

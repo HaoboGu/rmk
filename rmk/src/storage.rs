@@ -12,9 +12,9 @@ use sequential_storage::{
     map::{fetch_item, store_item, StorageItem},
 };
 
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use crate::ble::bonder::BondInfo;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use core::mem;
 use core::ops::Range;
 
@@ -33,7 +33,7 @@ pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperation
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BondInfo(BondInfo),
     // Clear info of given slot number
     Clear(u8),
@@ -57,7 +57,7 @@ pub(crate) enum StorageKeys {
     KeymapConfig,
     LayoutConfig,
     KeymapKeys,
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BleBondInfo,
 }
 
@@ -67,7 +67,7 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     LayoutConfig(LayoutConfig),
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey<ROW, COL, NUM_LAYER>),
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BondInfo(BondInfo),
 }
 
@@ -139,7 +139,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
                 buffer[5] = k.row as u8;
                 Ok(6)
             }
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             StorageData::BondInfo(b) => {
                 if buffer.len() < 121 {
                     return Err(StorageError::BufferTooSmall);
@@ -210,7 +210,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
                     action,
                 }))
             }
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             0x6 => {
                 // BleBondInfo
                 // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
@@ -233,7 +233,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageItem
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as usize,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as usize,
             StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as usize,
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
                 let kk = *k;
@@ -369,7 +369,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     .await
                 }
 
-                #[cfg(feature = "ble")]
+                #[cfg(feature = "nrf_ble")]
                 FlashOperationMessage::Clear(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
@@ -385,7 +385,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-                #[cfg(feature = "ble")]
+                #[cfg(feature = "nrf_ble")]
                 FlashOperationMessage::BondInfo(b) => {
                     info!("Saving bond info: {}", info);
                     let data = StorageData::BondInfo(b);
@@ -439,18 +439,26 @@ impl<F: AsyncNorFlash> Storage<F> {
                         }
                         Err(e) => {
                             match e {
-                                sequential_storage::Error::Storage { value: _ } => error!("Flash error"),
+                                sequential_storage::Error::Storage { value: _ } => {
+                                    error!("Flash error")
+                                }
                                 sequential_storage::Error::FullStorage => error!("Storage is full"),
-                                sequential_storage::Error::Corrupted {} => error!("Storage is corrupted"),
+                                sequential_storage::Error::Corrupted {} => {
+                                    error!("Storage is corrupted")
+                                }
                                 sequential_storage::Error::BufferTooBig => error!("Buffer too big"),
-                                sequential_storage::Error::BufferTooSmall(_) => error!("Buffer too small"),
-                                sequential_storage::Error::Item(item_e) => error!("Storage error: {}", item_e),
+                                sequential_storage::Error::BufferTooSmall(_) => {
+                                    error!("Buffer too small")
+                                }
+                                sequential_storage::Error::Item(item_e) => {
+                                    error!("Storage error: {}", item_e)
+                                }
                                 _ => error!("Unknown storage error"),
                             };
                             error!(
                                 "Load keymap key from storage error: (layer,col,row)=({},{},{})",
                                 layer, col, row
-                            ); 
+                            );
                             return Err(());
                         }
                         _ => {
