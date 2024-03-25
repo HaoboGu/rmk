@@ -39,7 +39,7 @@ A feature-rich Rust keyboard firmware.
 ### Option 1: Initialize from template
 You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
 
-```
+```shell
 cargo install cargo-generate
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
@@ -90,7 +90,7 @@ step-to-step instruction for rp2040 and stm32h7
       cargo run
       ```
       Then, you will see logs like if everything goes right:
-      ```
+      ```shell
       Finished release [optimized + debuginfo] target(s) in 0.21s
       Running `elf2uf2-rs -d 'target\thumbv6m-none-eabi\release\rmk-rp2040'`
       Found pico uf2 disk G:\
@@ -139,7 +139,7 @@ This crate requires stable Rust 1.75 and up.
 
 RMK is licensed under either of
 
-- Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license (LICENSE-MIT or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 (LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license (LICENSE-MIT or <http://opensource.org/licenses/MIT>)
 
 at your option.
