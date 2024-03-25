@@ -1,5 +1,6 @@
 use crate::{
     action::{Action, KeyAction},
+    hid::{ConnectionType, HidWriterWrapper},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -8,21 +9,36 @@ use crate::{
 use core::{cell::RefCell, convert::Infallible};
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
-use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_storage::nor_flash::NorFlash;
 use usbd_hid::descriptor::KeyboardReport;
 
-#[cfg(feature = "ble")]
-use crate::ble::server::BleServer;
-#[cfg(feature = "ble")]
-use nrf_softdevice::ble::Connection;
+pub(crate) async fn keyboard_task<
+    'a,
+    W: HidWriterWrapper,
+    W2: HidWriterWrapper,
+    In: InputPin<Error = Infallible>,
+    Out: OutputPin<Error = Infallible>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard_hid_writer: &mut W,
+    other_hid_writer: &mut W2,
+) {
+    loop {
+        let _ = keyboard.scan_matrix().await;
+        keyboard.send_keyboard_report(keyboard_hid_writer).await;
+        keyboard.send_media_report(other_hid_writer).await;
+        keyboard.send_mouse_report(other_hid_writer).await;
+        keyboard.send_system_control_report(other_hid_writer).await;
+    }
+}
+
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
     Out: OutputPin,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -34,7 +50,7 @@ pub(crate) struct Keyboard<
     matrix: Matrix<In, Out, COL, ROW>,
 
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -70,18 +86,16 @@ impl<
         'a,
         In: InputPin<Error = Infallible>,
         Out: OutputPin<Error = Infallible>,
-        F: NorFlash,
-        const EEPROM_SIZE: usize,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>
+    > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
     #[cfg(feature = "col2row")]
     pub(crate) fn new(
         input_pins: [In; ROW],
         output_pins: [Out; COL],
-        keymap: &'a RefCell<KeyMap<F, EEPROM_SIZE, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {
             matrix: Matrix::new(input_pins, output_pins),
@@ -134,14 +148,10 @@ impl<
         }
     }
 
-    /// Send hid report. The report is sent only when key state changes.
-    pub(crate) async fn send_report<'d, D: Driver<'d>>(
-        &mut self,
-        hid_interface: &mut HidWriter<'d, D, 8>,
-    ) {
+    pub(crate) async fn send_keyboard_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
         if self.need_send_key_report {
             debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
-            match hid_interface.write_serialize(&self.report).await {
+            match writer.write_serialize(&self.report).await {
                 Ok(()) => {}
                 Err(e) => error!("Send keyboard report error: {}", e),
             };
@@ -153,58 +163,31 @@ impl<
         }
     }
 
-    /// Send ble hid report. The report is sent only when key state changes.
-    #[cfg(feature = "ble")]
-    pub(crate) async fn send_ble_report(
+    /// Send system control report if needed
+    pub(crate) async fn send_system_control_report<W: HidWriterWrapper>(
         &mut self,
-        ble_server: &BleServer,
-        conn: &Connection,
+        hid_interface: &mut W,
     ) {
-        use ssmarshal::serialize;
-
-        if self.need_send_key_report {
-            let mut buf: [u8; 8] = [0; 8];
-            match serialize(&mut buf, &self.report) {
-                Ok(size) => {
-                    debug!(
-                        "Sending ble keyboard report: {=[u8]:#X}, size: {}",
-                        self.report.keycodes,
-                        size
-                    );
-                    ble_server.hid.send_ble_keyboard_report(conn, &buf)
-                }
-                Err(_) => {
-                    error!("Serialize keyboard report error");
-                }
-            };
-
-            // Reset report key states
-            for bit in &mut self.report.keycodes {
-                *bit = 0;
-            }
-            self.need_send_key_report = false;
-        }
-    }
-
-    /// Send other report(media/system/mouse) if needed
-    pub(crate) async fn send_other_report<'d, D: Driver<'d>>(
-        &mut self,
-        hid_interface: &mut HidWriter<'d, D, 9>,
-    ) {
-        if self.need_send_consumer_control_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
-                .await;
-            self.other_report.media_usage_id = 0;
-            self.need_send_consumer_control_report = false;
-        }
-
         if self.need_send_system_control_report {
             self.serialize_and_send_composite_report(hid_interface, CompositeReportType::System)
                 .await;
             self.other_report.system_usage_id = 0;
             self.need_send_system_control_report = false;
         }
+    }
 
+    /// Send media report if needed
+    pub(crate) async fn send_media_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
+        if self.need_send_consumer_control_report {
+            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
+                .await;
+            self.other_report.media_usage_id = 0;
+            self.need_send_consumer_control_report = false;
+        }
+    }
+
+    /// Send mouse report if needed
+    pub(crate) async fn send_mouse_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
         if self.need_send_mouse_report {
             // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
             let cur_tick = Instant::now().as_millis();
@@ -227,9 +210,9 @@ impl<
         }
     }
 
-    async fn serialize_and_send_composite_report<'d, D: Driver<'d>>(
+    async fn serialize_and_send_composite_report<W: HidWriterWrapper>(
         &mut self,
-        hid_interface: &mut HidWriter<'d, D, 9>,
+        hid_interface: &mut W,
         report_type: CompositeReportType,
     ) {
         let mut buf: [u8; 9] = [0; 9];
@@ -238,10 +221,13 @@ impl<
         match self.other_report.serialize(&mut buf[1..], report_type) {
             Ok(s) => {
                 debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
-                match hid_interface.write(&buf[0..s + 1]).await {
-                    Ok(()) => {}
+                match match hid_interface.get_conn_type() {
+                    ConnectionType::Usb => hid_interface.write(&buf[0..s + 1]).await,
+                    ConnectionType::Ble => hid_interface.write(&buf[1..s + 1]).await,
+                } {
+                    Ok(_) => {}
                     Err(e) => error!("Send other report error: {}", e),
-                };
+                }
             }
             Err(_) => error!("Serialize other report error"),
         }
@@ -249,7 +235,7 @@ impl<
 
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
-    pub(crate) async fn keyboard_task(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn scan_matrix(&mut self) -> Result<(), Infallible> {
         // Matrix scan
         self.matrix.scan().await?;
 
@@ -336,14 +322,12 @@ impl<
         for kc in keycodes.iter().take(n) {
             self.process_action_keycode(*kc, key_state);
         }
-        for _i in 0..n {}
         self.process_key_action_normal(action, key_state);
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
     async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
         if key_state.changed && key_state.pressed {
-            key_state.pressed = true;
             self.process_key_action_normal(action, key_state);
 
             // Wait 10ms, then send release
@@ -405,14 +389,12 @@ impl<
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
     fn process_action_consumer_control(&mut self, key: KeyCode, key_state: KeyState) {
         if key.is_consumer() {
-            if key_state.pressed {
-                let media_key = key.as_consumer_control_usage_id();
-                self.other_report.media_usage_id = media_key as u16;
-                self.need_send_consumer_control_report = true;
+            self.other_report.media_usage_id = if key_state.pressed {
+                key.as_consumer_control_usage_id() as u16
             } else {
-                self.other_report.media_usage_id = 0;
-                self.need_send_consumer_control_report = true;
-            }
+                0
+            };
+            self.need_send_consumer_control_report = true;
         }
     }
 
@@ -507,21 +489,15 @@ impl<
 
     /// Register a key to be sent in hid report.
     fn register_keycode(&mut self, key: KeyCode) {
-        for bit in &mut self.report.keycodes {
-            if *bit == 0 {
-                *bit = key as u8;
-                break;
-            }
+        if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+            self.report.keycodes[index] = key as u8;
         }
     }
 
     /// Unregister a key from hid report.
     fn unregister_keycode(&mut self, key: KeyCode) {
-        for bit in &mut self.report.keycodes {
-            if *bit == (key as u8) {
-                *bit = 0;
-                break;
-            }
+        if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+            self.report.keycodes[index] = 0;
         }
     }
 

@@ -1,8 +1,20 @@
-use crate::config::LightConfig;
+use crate::{config::LightConfig, hid::HidReaderWrapper};
 use defmt::{debug, error, Format};
-use embassy_usb::{class::hid::HidReader, driver::Driver};
+use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
 use packed_struct::prelude::*;
+
+pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
+    keyboard_hid_reader: &mut R,
+    light_service: &mut LightService<Out>,
+) {
+    loop {
+        match light_service.check_led_indicator(keyboard_hid_reader).await {
+            Ok(_) => Timer::after_millis(50).await,
+            Err(_) => Timer::after_secs(2).await,
+        }
+    }
+}
 
 #[derive(PackedStruct, Clone, Copy, Debug, Default, Format, Eq, PartialEq)]
 #[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
@@ -73,7 +85,7 @@ impl<P: OutputPin> SingleLED<P> {
 }
 
 pub(crate) struct LightService<P: OutputPin> {
-    enabled: bool,
+    pub(crate) enabled: bool,
     led_indicator_data: [u8; 1],
     capslock: Option<SingleLED<P>>,
     scrolllock: Option<SingleLED<P>>,
@@ -156,9 +168,9 @@ impl<P: OutputPin> LightService<P> {
     /// Check led indicator and update led status.
     ///
     /// If there's an error, print a message and ignore error types
-    pub(crate) async fn check_led_indicator<'a, D: Driver<'a>>(
+    pub(crate) async fn check_led_indicator<R: HidReaderWrapper>(
         &mut self,
-        keyboard_hid_reader: &mut HidReader<'a, D, 1>,
+        keyboard_hid_reader: &mut R,
     ) -> Result<(), ()> {
         // If light service is not enabled, wait 2 seconds and recheck
         if !self.enabled {

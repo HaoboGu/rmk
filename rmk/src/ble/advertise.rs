@@ -1,4 +1,7 @@
-use nrf_softdevice::ble::advertisement_builder::{AdvertisementDataType, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList, ServiceUuid16};
+use nrf_softdevice::ble::advertisement_builder::{
+    AdvertisementDataType, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
+    ServiceList, ServiceUuid16,
+};
 
 pub(crate) fn create_advertisement_data(keyboard_name: &str) -> LegacyAdvertisementPayload {
     LegacyAdvertisementBuilder::new()
@@ -15,3 +18,14 @@ pub(crate) fn create_advertisement_data(keyboard_name: &str) -> LegacyAdvertisem
         .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
         .build()
 }
+
+pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
+    .services_16(
+        ServiceList::Complete,
+        &[
+            ServiceUuid16::DEVICE_INFORMATION,
+            ServiceUuid16::BATTERY,
+            ServiceUuid16::HUMAN_INTERFACE_DEVICE,
+        ],
+    )
+    .build();

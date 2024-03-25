@@ -1,4 +1,4 @@
-use embedded_storage::nor_flash::{
+use embedded_storage_async::nor_flash::{
     ErrorType, NorFlash, NorFlashError, NorFlashErrorKind, ReadNorFlash,
 };
 
@@ -6,7 +6,7 @@ use embedded_storage::nor_flash::{
 pub struct EmptyFlashErrorWrapper {}
 
 impl NorFlashError for EmptyFlashErrorWrapper {
-    fn kind(&self) -> embedded_storage::nor_flash::NorFlashErrorKind {
+    fn kind(&self) -> embedded_storage_async::nor_flash::NorFlashErrorKind {
         NorFlashErrorKind::Other
     }
 }
@@ -28,18 +28,18 @@ impl NorFlash for EmptyFlashWrapper {
     const WRITE_SIZE: usize = 0;
     const ERASE_SIZE: usize = 0;
 
-    fn erase(&mut self, _from: u32, _to: u32) -> Result<(), Self::Error> {
+    async fn erase(&mut self, _from: u32, _to: u32) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn write(&mut self, _offset: u32, _bytes: &[u8]) -> Result<(), Self::Error> {
+    async fn write(&mut self, _offset: u32, _bytes: &[u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
 impl ReadNorFlash for EmptyFlashWrapper {
     const READ_SIZE: usize = 1;
-    fn read(&mut self, _offset: u32, _bytes: &mut [u8]) -> Result<(), Self::Error> {
+    async fn read(&mut self, _offset: u32, _bytes: &mut [u8]) -> Result<(), Self::Error> {
         Ok(())
     }
 

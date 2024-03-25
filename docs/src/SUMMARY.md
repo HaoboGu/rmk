@@ -11,15 +11,15 @@
 - [Create RMK project](create_project.md)
 - [Compile and flash!](compile_and_flash.md)
 
+
 # Features
-- [Keymap configuration]()
+- [Keymap configuration](keymap_configuration.md)
+- [Vial support](vial.md)
+- [Storage](storage.md)
 - [Layers]()
-- [Vial support]()
 - [Tap hold]()
+- [Binary size optimization](binary_size.md)
 
 # Development
-- [For Developers]()
-
-# [Roadmap](roadmap.md)
-
 - [Roadmap](roadmap.md)
+- [For Developers]()

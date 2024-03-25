@@ -1,9 +1,4 @@
-use nrf_softdevice::ble::{
-    advertisement_builder::{
-        LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList, ServiceUuid16,
-    },
-    Uuid,
-};
+use nrf_softdevice::ble::Uuid;
 
 /// HID service uuid defined in BLE protocol
 pub const BLE_HID_SERVICE_UUID: Uuid = Uuid::new_16(0x1812);
@@ -58,14 +53,3 @@ impl BleCharacteristics {
         Uuid::new_16(self as u16)
     }
 }
-
-pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
-    .services_16(
-        ServiceList::Complete,
-        &[
-            ServiceUuid16::DEVICE_INFORMATION,
-            ServiceUuid16::BATTERY,
-            ServiceUuid16::HUMAN_INTERFACE_DEVICE,
-        ],
-    )
-    .build();
