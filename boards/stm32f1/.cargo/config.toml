@@ -33,4 +33,4 @@ target = "thumbv7m-none-eabi"        # Cortex-M3
 # target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
 
 [env]
-DEFMT_LOG = "debug"
+DEFMT_LOG = "error"

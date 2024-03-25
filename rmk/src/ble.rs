@@ -7,29 +7,60 @@ mod hid_service;
 pub(crate) mod server;
 pub(crate) mod spec;
 
-use self::{bonder::FlashOperationMessage, server::BleServer};
-use crate::{
-    ble::bonder::{BondInfo, FLASH_CHANNEL},
-    keyboard::Keyboard,
-};
-use core::{convert::Infallible, mem, ops::Range};
-use defmt::info;
+use self::server::BleServer;
+use crate::{hid::HidWriterWrapper, keyboard::Keyboard};
+use core::{convert::Infallible, mem};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_storage::nor_flash::NorFlash;
-use nrf_softdevice::{raw, Config, Flash};
-use sequential_storage::{
-    cache::NoCache,
-    map::{remove_item, store_item},
-};
+use nrf_softdevice::{ble::Connection, raw, Config};
 
-/// Flash range which used to save bonding info
-pub(crate) const CONFIG_FLASH_RANGE: Range<u32> = 0x80000..0x82000;
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
+// TODO: Be compatible with more nRF chip models
+#[cfg(feature = "nrf52840_ble")]
+use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
+#[cfg(feature = "nrf52840_ble")]
+use once_cell::sync::OnceCell;
+#[cfg(feature = "nrf52840_ble")]
+/// Software Vbus detect when using BLE + USB
+pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
+
+#[cfg(feature = "nrf52840_ble")]
+/// Background task of nrf_softdevice
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    use nrf_softdevice::SocEvent;
+
+    unsafe {
+        nrf_softdevice::raw::sd_power_usbpwrrdy_enable(1);
+        nrf_softdevice::raw::sd_power_usbdetected_enable(1);
+        nrf_softdevice::raw::sd_power_usbremoved_enable(1);
+        // nrf_softdevice::raw::sd_clock_hfclk_request();
+    };
+
+    let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, true));
+
+    sd.run_with_callback(|event: SocEvent| {
+        match event {
+            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
+            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbPowerReady => software_vbus.ready(),
+            _ => {}
+        };
+    })
+    .await
+}
+
+// nRF52832 doesn't have USB, so the softdevice_task is different
+#[cfg(feature = "nrf52832_ble")]
+#[embassy_executor::task]
+pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    sd.run().await
+}
+
 /// Create default nrf ble config
-pub fn nrf_ble_config(keyboard_name: &str) -> Config {
+pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
             source: raw::NRF_CLOCK_LF_SRC_RC as u8,
@@ -65,68 +96,46 @@ pub fn nrf_ble_config(keyboard_name: &str) -> Config {
     }
 }
 
-/// Background task of nrf_softdevice
-#[embassy_executor::task]
-pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
-    sd.run().await
-}
-
-#[embassy_executor::task]
-pub(crate) async fn flash_task(f: &'static mut Flash) -> ! {
-    let mut storage_data_buffer = [0_u8; 128];
-    loop {
-        let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
-        match info {
-            FlashOperationMessage::Clear(key) => {
-                info!("Clearing bond info slot_num: {}", key);
-                remove_item::<BondInfo, _>(
-                    f,
-                    CONFIG_FLASH_RANGE,
-                    NoCache::new(),
-                    &mut storage_data_buffer,
-                    key,
-                )
-                .await
-                .ok();
-            }
-            FlashOperationMessage::BondInfo(b) => {
-                info!("Saving item: {}", info);
-
-                store_item::<BondInfo, _>(
-                    f,
-                    CONFIG_FLASH_RANGE,
-                    NoCache::new(),
-                    &mut storage_data_buffer,
-                    &b,
-                )
-                .await
-                .ok();
-            }
-        };
-    }
-}
-
 /// BLE keyboard task, run the keyboard with the ble server
 pub(crate) async fn keyboard_ble_task<
     'a,
+    W: HidWriterWrapper,
+    W2: HidWriterWrapper,
+    W3: HidWriterWrapper,
+    W4: HidWriterWrapper,
     In: InputPin<Error = Infallible>,
     Out: OutputPin<Error = Infallible>,
-    F: NorFlash,
-    const EEPROM_SIZE: usize,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, F, EEPROM_SIZE, ROW, COL, NUM_LAYER>,
-    ble_server: &BleServer,
-    conn: &nrf_softdevice::ble::Connection,
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    ble_keyboard_writer: &mut W,
+    ble_media_writer: &mut W2,
+    ble_system_control_writer: &mut W3,
+    ble_mouse_writer: &mut W4,
 ) {
     // Wait 2 seconds, ensure that gatt server has been started
     Timer::after_secs(2).await;
-    // TODO: A real battery service
-    ble_server.set_battery_value(conn, &50);
     loop {
-        let _ = keyboard.keyboard_task().await;
-        keyboard.send_ble_report(ble_server, conn).await;
+        let _ = keyboard.scan_matrix().await;
+
+        keyboard.send_keyboard_report(ble_keyboard_writer).await;
+        keyboard.send_media_report(ble_media_writer).await;
+        keyboard
+            .send_system_control_report(ble_system_control_writer)
+            .await;
+        keyboard.send_mouse_report(ble_mouse_writer).await;
+    }
+}
+
+/// BLE keyboard task, run the keyboard with the ble server
+pub(crate) async fn ble_battery_task(ble_server: &BleServer, conn: &Connection) {
+    // Wait 2 seconds, ensure that gatt server has been started
+    Timer::after_secs(2).await;
+    ble_server.set_battery_value(conn, &80);
+    loop {
+        // TODO: A real battery service
+        Timer::after_secs(10).await
     }
 }

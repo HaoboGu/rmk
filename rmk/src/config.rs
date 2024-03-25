@@ -2,7 +2,7 @@ use embedded_hal::digital::{OutputPin, PinState};
 
 // TODO: more configs need to be added, easy configuration(from config file)
 /// Configurations for RMK keyboard.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
@@ -22,7 +22,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 }
 
 /// Config for lights
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LightConfig<O: OutputPin> {
     pub capslock: Option<O>,
     pub scrolllock: Option<O>,
@@ -45,7 +45,7 @@ impl<O: OutputPin> Default for LightConfig<O> {
 /// Config for [vial](https://get.vial.today/).
 ///
 /// You can generate automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs).
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VialConfig<'a> {
     pub vial_keyboard_id: &'a [u8],
     pub vial_keyboard_def: &'a [u8],
@@ -67,7 +67,7 @@ pub struct DebounceConfig {
 }
 
 /// Configurations for mouse functionalities
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct MouseConfig {
     /// Time interval in ms of reporting mouse cursor states
     pub mouse_key_interval: u32,
@@ -85,6 +85,7 @@ impl Default for MouseConfig {
 }
 
 /// Configurations for RGB light
+#[derive(Clone, Copy, Debug)]
 pub struct RGBLightConfig {
     pub enabled: bool,
     pub rgb_led_num: u32,
@@ -94,7 +95,7 @@ pub struct RGBLightConfig {
 }
 
 /// Configurations for usb
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct KeyboardUsbConfig<'a> {
     /// Vender id
     pub vid: u16,

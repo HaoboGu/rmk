@@ -23,3 +23,5 @@ cargo run --release
 ```
 
 The firmware will be flashed to your microcontroller and the firmware will run automatically, yay!
+
+For more configurations of RMK, you can checkout feature documentations on the left.

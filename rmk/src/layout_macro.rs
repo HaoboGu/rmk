@@ -6,7 +6,7 @@ macro_rules! layer {
     };
 }
 
-/// Create a normal keycode
+/// Create a normal key. For example, `k!(A)` represents `KeyAction::Single(Action::Key(KeyCode::A))`
 #[macro_export]
 macro_rules! k {
     ($k: ident) => {
@@ -14,7 +14,7 @@ macro_rules! k {
     };
 }
 
-/// Create a normal action
+/// Create a normal action: `KeyAction`
 #[macro_export]
 macro_rules! a {
     ($a: ident) => {
@@ -22,37 +22,7 @@ macro_rules! a {
     };
 }
 
-/// Create a mouse key action
-#[macro_export]
-macro_rules! mk {
-    ($k: ident) => {
-        $crate::action::KeyAction::Single($crate::action::Action::MouseKey(
-            $crate::keycode::KeyCode::$k,
-        ))
-    };
-}
-
-/// Create a control action
-#[macro_export]
-macro_rules! sc {
-    ($k: ident) => {
-        $crate::action::KeyAction::Single($crate::action::Action::SystemControl(
-            $crate::keycode::KeyCode::$k,
-        ))
-    };
-}
-
-/// Create a consumer control(media) action
-#[macro_export]
-macro_rules! cc {
-    ($k: ident) => {
-        $crate::action::KeyAction::Single($crate::action::Action::ConsumerControl(
-            $crate::keycode::KeyCode::$k,
-        ))
-    };
-}
-
-/// Create a layer activate action
+/// Create a layer activate action. For example, `mo!(1)` activates layer 1.
 #[macro_export]
 macro_rules! mo {
     ($x: literal) => {

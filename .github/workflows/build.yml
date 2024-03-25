@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install target
-      run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi
+      run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
     - name: Build rmk
       working-directory: ./rmk
       run: cargo build --release
@@ -38,4 +38,7 @@ jobs:
       run: cargo build --release
     - name: Build nrf52840_ble
       working-directory: ./boards/nrf52840_ble
+      run: cargo build --release
+    - name: Build nrf52832_ble
+      working-directory: ./boards/nrf52832_ble
       run: cargo build --release
