@@ -13,9 +13,9 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    cargo install cargo-binutils
    rustup component add llvm-tools
    ```
-2. Compile RMK using `cargo objcopy`, get .hex firmware:
+2. Compile RMK using `cargo objcopy`, get .bin firmware:
    ```shell
-   cargo objcopy -- -O ihex rmk-52840.hex
+   cargo objcopy --release -- -O binary rmk-52840.bin
    ```
 3. Download uf2util from UF2 repo https://github.com/microsoft/uf2
    ```shell
@@ -24,10 +24,15 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    ``` 
 4. Convert your .hex firmware to uf2 format
    ```shell
-   python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -f 0xADA52840 -o rmk-52840.uf2 
+   # If your nice!nano uses softdevice v6.x.x
+   python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x26000 -f 0xADA52840 -o rmk-52840.uf2 
+   # If your nice!nano uses softdevice v7.x.x
+   python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x27000 -f 0xADA52840 -o rmk-52840.uf2 
    ```
 5. Flash
-   Check nice!nano's document: https://nicekeyboards.com/docs/nice-nano/getting-started#flashing-firmware-and-bootloaders
+   Set your nice!nano to bootloader mode, a USB drive will show. Just drag the .uf2 firmware to USB drive. RMK will be automatically flashed. Check nice!nano's document: https://nicekeyboards.com/docs/nice-nano/getting-started#flashing-firmware-and-bootloaders. 
+
+Note that RMK will switch to USB mode if an USB cable is connected. Remember to remove USB cable after flashing!
 
 You can also check the instruction [here](https://nicekeyboards.com/docs/nice-nano/) for more info about nice!nano.
 
