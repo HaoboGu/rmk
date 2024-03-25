@@ -76,3 +76,7 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
