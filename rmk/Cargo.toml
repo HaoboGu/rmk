@@ -76,8 +76,3 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
-
-[package.metadata.docs.rs]
-features = ["nrf52840_ble"]
-rustdoc-args = ["--cfg", "docsrs"]
-targets = ["thumbv7em-none-eabihf"]

@@ -5,7 +5,6 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use crate::{
     keyboard::keyboard_task,
