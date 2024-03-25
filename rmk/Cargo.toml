@@ -78,6 +78,6 @@ nrf52832_ble = [
 ]
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["nrf52840_ble"]
 rustdoc-args = ["--cfg", "docsrs"]
 targets = ["thumbv7em-none-eabihf"]
