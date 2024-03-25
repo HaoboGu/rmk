@@ -957,7 +957,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.1.6"
+version = "0.1.9"
 dependencies = [
  "byteorder",
  "defmt",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52840"
-version = "0.1.5"
+version = "0.1.9"
 dependencies = [
  "const-gen",
  "cortex-m",
