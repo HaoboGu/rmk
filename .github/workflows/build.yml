@@ -38,7 +38,7 @@ jobs:
       run: cargo build --release
     - name: Build nrf52840_ble
       working-directory: ./boards/nrf52840_ble
-      run: cargo build --release
+      run: cargo +nightly build --release
     - name: Build nrf52832_ble
       working-directory: ./boards/nrf52832_ble
-      run: cargo build --release
+      run: cargo +nightly build --release
