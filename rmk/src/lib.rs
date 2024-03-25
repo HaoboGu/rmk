@@ -228,7 +228,6 @@ pub use nrf_softdevice;
 #[cfg(feature = "ble")]
 use nrf_softdevice::ble::{gatt_server, Connection};
 #[cfg(feature = "ble")]
-#[doc(cfg(feature = "ble"))]
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
 /// This function never returns.
