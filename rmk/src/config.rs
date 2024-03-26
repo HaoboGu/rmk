@@ -8,6 +8,7 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
     pub light_config: LightConfig<O>,
+    pub storage_config: StorageConfig,
 }
 
 impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
@@ -17,6 +18,26 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
             usb_config: KeyboardUsbConfig::default(),
             vial_config: VialConfig::default(),
             light_config: LightConfig::default(),
+            storage_config: StorageConfig::default(),
+        }
+    }
+}
+
+/// Config for storage
+#[derive(Clone, Copy, Debug)]
+pub struct StorageConfig {
+    /// Start address of local storage, MUST BE start of a sector.
+    /// If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
+    pub start_addr: usize,
+    // Number of sectors used for storage, >= 2.
+    pub num_sectors: u8,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            start_addr: 0,
+            num_sectors: 2,
         }
     }
 }
