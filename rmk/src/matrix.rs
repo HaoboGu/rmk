@@ -1,4 +1,4 @@
-use crate::debounce::Debouncer;
+use crate::debounce::{DebounceState, Debouncer};
 use core::convert::Infallible;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -88,18 +88,20 @@ impl<
             Timer::after_micros(1).await;
             for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
-                let changed = self.debouncer.detect_change_with_debounce(
+                let debounce_state = self.debouncer.detect_change_with_debounce(
                     in_idx,
                     out_idx,
                     in_pin.is_high()?,
                     &self.key_states[out_idx][in_idx],
                 );
 
-                if changed {
-                    self.key_states[out_idx][in_idx].toggle_pressed();
+                match debounce_state {
+                    DebounceState::Debounced => {
+                        self.key_states[out_idx][in_idx].toggle_pressed();
+                        self.key_states[out_idx][in_idx].changed = true;
+                    }
+                    _ => self.key_states[out_idx][in_idx].changed = false,
                 }
-
-                self.key_states[out_idx][in_idx].changed = changed;
             }
             out_pin.set_low()?;
         }
