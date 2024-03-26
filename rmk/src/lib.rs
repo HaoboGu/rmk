@@ -577,8 +577,15 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
             data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
             HID_REPORT_DESCRIPTOR.len()
         };
+        let mut write_hid_control_point = |offset: usize, data: &[u8]| {
+            println!("write hid control point: {} {:?}", offset, data);
+        };
 
-        let mut protocol_mode_fn = |_offset: usize, data: &mut [u8]| {
+
+        let mut write_protocol_mode = |offset: usize, data: &[u8]| {
+            println!("write_protocol_mode: Offset {}, data {:?}", offset, data);
+        };
+        let mut read_protocol_mode = |_offset: usize, data: &mut [u8]| {
             data[0] = 1;
             1
         };
@@ -593,10 +600,22 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
             8
         };
 
+        let mut read_device_info = |_offset: usize, data: &mut [u8]| {
+            data[..7].copy_from_slice(&[0x02, 0x4c, 0x4b, 0x46, 0x43, 0x00, 0x00]);
+            7
+        };
+
+        let mut read_battery_level = |_offset: usize, data: &mut [u8]| {
+            data[..1].copy_from_slice(&[80]);
+            1
+        };
+
         let keyboard_desc_value = &[1, 1u8];
         let mut kb_report = [0; 8];
 
-        gatt!([service {
+        gatt!([
+            // HID service
+            service {
             uuid: "1812",
             characteristics: [
                 characteristic {
@@ -608,20 +627,41 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
                     read: hid_desc_fn,
                 },
                 characteristic {
+                    uuid: "2A4C",
+                    write: write_hid_control_point,
+                },
+                characteristic {
                     uuid: "2A4E",
-                    read: protocol_mode_fn,
+                    read: read_protocol_mode,
+                    write: write_protocol_mode,
                 },
                 characteristic {
                     uuid: "2A4D",
                     notify: true,
-                    name: "my_characteristic",
+                    name: "hid_report",
                     read: hid_report_fn,
-                    descriptors: [descriptor {
-                        uuid: "2908",
-                        value: keyboard_desc_value,
-                    },],
                 },
             ],
+        },
+        // BLE device information
+        service {
+            uuid: "180A",
+            characteristics: [
+                // BLE Device Information characteristic
+                characteristic {
+                    uuid: "2a50",
+                    read: read_device_info,
+                },
+            ],
+        },
+        // BLE HID Battery Service
+        service {
+            uuid: "180F",
+            // BLE HID battery level characteristic
+            characteristics: [characteristic {
+                uuid: "2a19",
+                read: read_battery_level,
+            },],
         },]);
 
         let mut rng = bleps::no_rng::NoRng;
@@ -631,12 +671,12 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
             let mut notification = None;
             let mut cccd = [0u8; 1];
             if let Some(1) =
-                srv.get_characteristic_value(my_characteristic_notify_enable_handle, 0, &mut cccd)
+                srv.get_characteristic_value(hid_report_notify_enable_handle, 0, &mut cccd)
             {
                 // if notifications enabled
                 if cccd[0] == 1 {
                     notification = Some(NotificationData::new(
-                        my_characteristic_handle,
+                        hid_report_handle,
                         &b"Notification"[..],
                     ));
                 }
