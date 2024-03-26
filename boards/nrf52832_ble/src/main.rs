@@ -16,7 +16,7 @@ use embassy_nrf::{
     interrupt::Priority,
 };
 use panic_probe as _;
-use rmk::config::{KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::config::{KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -40,9 +40,16 @@ async fn main(spawner: Spawner) {
         Some("00000001"),
     );
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    // Current default storage config of nRF52832 is not correct, check this issue: https://github.com/embassy-rs/nrf-softdevice/issues/246.
+    // So we set the storage config manually
+    let storage_config = StorageConfig {
+        start_addr: 0x70000,
+        num_sectors: 2,
+    };
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
+        storage_config,
         ..Default::default()
     };
 

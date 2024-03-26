@@ -36,9 +36,13 @@ jobs:
     - name: Build nrf52840
       working-directory: ./boards/nrf52840
       run: cargo build --release
+    - name: Switch to nightly
+      run: rustup default nightly
+    - name: Add components to nightly
+      run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi --toolchain nightly
     - name: Build nrf52840_ble
       working-directory: ./boards/nrf52840_ble
-      run: cargo build --release
+      run: cargo +nightly build --release
     - name: Build nrf52832_ble
       working-directory: ./boards/nrf52832_ble
-      run: cargo build --release
+      run: cargo +nightly build --release

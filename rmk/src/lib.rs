@@ -270,7 +270,7 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     // Initialize storage and keymap
     let (mut storage, keymap) = match flash {
         Some(f) => {
-            let mut s = Storage::new(f, &keymap).await;
+            let mut s = Storage::new(f, &keymap, keyboard_config.storage_config).await;
             let keymap = RefCell::new(
                 KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut s)).await,
             );
@@ -397,7 +397,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
-    let mut storage = Storage::new(flash, &keymap).await;
+    let mut storage = Storage::new(flash, &keymap, keyboard_config.storage_config).await;
     let keymap = RefCell::new(
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut storage)).await,
     );
