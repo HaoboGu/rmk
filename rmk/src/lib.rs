@@ -5,7 +5,41 @@
 // Enable std in test
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::if_same_then_else)]
-
+const REPORT_MAP: [u8; 65] = [
+    0x05, 0x01, // USAGE_PAGE (Generic Desktop)
+    0x09, 0x06, // USAGE (Keyboard)
+    0xa1, 0x01, // COLLECTION (Application)
+    0x85, 0x01, //   REPORT_ID (1)
+    0x05, 0x07, //   USAGE_PAGE (Keyboard)
+    0x19, 0x01, //   USAGE_MINIMUM
+    0x29, 0x7f, //   USAGE_MAXIMUM
+    0x15, 0x00, //   LOGICAL_MINIMUM (0)
+    0x25, 0x01, //   LOGICAL_MAXIMUM (1)
+    0x75, 0x01, //   REPORT_SIZE (1)
+    0x95, 0x08, //   REPORT_COUNT (8)
+    0x81, 0x02, //   INPUT (Data,Var,Abs)
+    0x95, 0x01, //   REPORT_COUNT (1)
+    0x75, 0x08, //   REPORT_SIZE (8)
+    0x81, 0x01, //   INPUT (Cnst,Ary,Abs)
+    0x95, 0x05, //   REPORT_COUNT (5)
+    0x75, 0x01, //   REPORT_SIZE (1)
+    0x05, 0x08, //   USAGE_PAGE (LEDs)
+    0x19, 0x01, //   USAGE_MINIMUM (Num Lock)
+    0x29, 0x05, //   USAGE_MAXIMUM (Kana)
+    0x91, 0x02, //   OUTPUT (Data,Var,Abs)
+    0x95, 0x01, //   REPORT_COUNT (1)
+    0x75, 0x03, //   REPORT_SIZE (3)
+    0x91, 0x01, //   OUTPUT (Cnst,Ary,Abs)
+    0x95, 0x06, //   REPORT_COUNT (6)
+    0x75, 0x08, //   REPORT_SIZE (8)
+    0x15, 0x00, //   LOGICAL_MINIMUM (0)
+    0x25, 0x65, //   LOGICAL_MAXIMUM (101)
+    0x05, 0x07, //   USAGE_PAGE (Keyboard)
+    0x19, 0x00, //   USAGE_MINIMUM (Reserved (no event indicated))
+    0x29, 0x65, //   USAGE_MAXIMUM (Keyboard Application)
+    0x81, 0x00, //   INPUT (Data,Ary,Abs)
+    0xc0, // END_COLLECTION
+];
 // Main items
 pub const HIDINPUT: u8 = 0x80;
 pub const HIDOUTPUT: u8 = 0x90;
@@ -510,28 +544,84 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         Timer::after_millis(100).await;
     }
 }
-// fn get_hid_info_fn(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0..4].copy_from_slice(&[
-//         0x1u8, 0x1u8,  // HID version: 1.1
-//         0x00u8, // Country Code
-//         0x03u8, // Remote wake + Normally Connectable
-//     ]);
-//     4
-// }
-// fn get_hid_desc_fn(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
-//     HID_REPORT_DESCRIPTOR.len()
-// }
+
+// BLE HID readers writers for esp
+fn read_hid_info(_offset: usize, data: &mut [u8]) -> usize {
+    data[0..4].copy_from_slice(&[
+        0x1u8, 0x1u8,  // HID version: 1.1
+        0x00u8, // Country Code
+        0x03u8, // Remote wake + Normally Connectable
+    ]);
+    4
+}
+fn read_hid_report_map(_offset: usize, data: &mut [u8]) -> usize {
+    data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
+    HID_REPORT_DESCRIPTOR.len()
+}
+
+fn write_hid_control_point(offset: usize, data: &[u8]) {
+    println!("write hid control point: {} {:?}", offset, data);
+}
+
+fn write_protocol_mode(offset: usize, data: &[u8]) {
+    println!("write_protocol_mode: Offset {}, data {:?}", offset, data);
+}
+fn read_protocol_mode(_offset: usize, data: &mut [u8]) -> usize {
+    data[0] = 0;
+    data[1] = 0;
+    2
+}
+fn read_hid_report(_offset: usize, data: &mut [u8]) -> usize {
+    data[0..8].copy_from_slice(&[0, 0, 0x04, 0, 0, 0, 0, 0]);
+    8
+}
+
+fn read_device_info(_offset: usize, data: &mut [u8]) -> usize {
+    data[..7].copy_from_slice(&[0x02, 0x4c, 0x4b, 0x46, 0x43, 0x00, 0x00]);
+    7
+}
+
+fn read_battery_level(_offset: usize, data: &mut [u8]) -> usize {
+    data[..1].copy_from_slice(&[80]);
+    1
+}
+
+use esp_hal::Rng;
+struct RngWrapper {
+    rng: Rng,
+}
+
+impl rand_core::RngCore for RngWrapper {
+    fn next_u32(&mut self) -> u32 {
+        self.rng.random()
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        (self.rng.random() as u64) << 32 | self.rng.random() as u64
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        for b in dest {
+            *b = (self.rng.random() & 0xff) as u8;
+        }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        self.fill_bytes(dest);
+        Ok(())
+    }
+}
+
+impl rand_core::CryptoRng for RngWrapper {}
+
 use bleps::{
     ad_structure::{
         create_advertising_data, AdStructure, BR_EDR_NOT_SUPPORTED, LE_GENERAL_DISCOVERABLE,
     },
     async_attribute_server::AttributeServer,
     asynch::Ble,
-    att::Uuid,
-    attribute_server::NotificationData,
-    attribute_server::WorkResult,
-    gatt,
+    attribute_server::{NotificationData, WorkResult},
+    gatt, Addr,
 };
 pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     T: embedded_io_async::Read + embedded_io_async::Write,
@@ -546,151 +636,211 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     output_pins: [Out; COL],
     keyboard_config: RmkConfig<'static, Out>,
     ble: &mut Ble<T>,
+    rng: Rng,
 ) -> ! {
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(keymap).await);
+    let mut rng_wrap = RngWrapper { rng };
 
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
-    ble.init().await.unwrap();
-    ble.cmd_set_le_advertising_parameters().await.unwrap();
-    ble.cmd_set_le_advertising_data(
-        create_advertising_data(&[
-            AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::ServiceUuids16(&[Uuid::Uuid16(0x1812)]),
-            AdStructure::CompleteLocalName("ESP RMK"),
-        ])
-        .unwrap(),
-    )
-    .await
-    .unwrap();
-    ble.cmd_set_le_advertise_enable(true).await.unwrap();
-    info!("Start advertising");
 
-        let mut hid_info_fn = |_offset: usize, data: &mut [u8]| {
-            data[0..4].copy_from_slice(&[
-                0x1u8, 0x1u8,  // HID version: 1.1
-                0x00u8, // Country Code
-                0x03u8, // Remote wake + Normally Connectable
-            ]);
-            4
-        };
-        let mut hid_desc_fn = |_offset: usize, data: &mut [u8]| {
-            data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
-            HID_REPORT_DESCRIPTOR.len()
-        };
-        let mut write_hid_control_point = |offset: usize, data: &[u8]| {
-            println!("write hid control point: {} {:?}", offset, data);
-        };
+    loop {
+        ble.init().await.unwrap();
+        ble.cmd_set_le_advertising_parameters().await.unwrap();
+        ble.cmd_set_le_advertising_data(
+            create_advertising_data(&[
+                AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+                AdStructure::Unknown {
+                    ty: 0x03,
+                    data: &[0x12, 0x18],
+                }, // HID
+                AdStructure::CompleteLocalName("ESP RMK Keyboard"),
+                AdStructure::Unknown {
+                    ty: 0x19,
+                    data: &[0xC1, 0x03],
+                }, // Appearance
+            ])
+            .unwrap(),
+        )
+        .await
+        .unwrap();
 
+        ble.cmd_set_le_advertise_enable(true).await.unwrap();
+        info!("Start advertising");
+        let mut read_hid_report_map2 = |offset: usize, data: &mut [u8]| {
+            // println!("read hid report map {offset} {}", data.len());
 
-        let mut write_protocol_mode = |offset: usize, data: &[u8]| {
-            println!("write_protocol_mode: Offset {}, data {:?}", offset, data);
+            let val = REPORT_MAP;
+            let off = offset;
+            if off < val.len() {
+                let len = data.len().min(val.len() - off);
+                data[..len].copy_from_slice(&val[off..off + len]);
+                len
+            } else {
+                0
+            }
         };
-        let mut read_protocol_mode = |_offset: usize, data: &mut [u8]| {
-            data[0] = 1;
-            1
-        };
-        let mut keyboard_desc_read_fn = |_offset: usize, data: &mut [u8]| {
-            data[0] = 1;
-            data[1] = 1;
-            2
-        };
-
-        let mut hid_report_fn = |_offset: usize, data: &mut [u8]| {
-            data[0..8].copy_from_slice(&[0, 0, 0x04, 0, 0, 0, 0, 0]);
-            8
-        };
-
-        let mut read_device_info = |_offset: usize, data: &mut [u8]| {
-            data[..7].copy_from_slice(&[0x02, 0x4c, 0x4b, 0x46, 0x43, 0x00, 0x00]);
-            7
-        };
-
-        let mut read_battery_level = |_offset: usize, data: &mut [u8]| {
-            data[..1].copy_from_slice(&[80]);
-            1
-        };
-
-        let keyboard_desc_value = &[1, 1u8];
-        let mut kb_report = [0; 8];
+        let local_addr = Addr::from_le_bytes(false, ble.cmd_read_br_addr().await.unwrap());
+        let mut ltk = None;
 
         gatt!([
-            // HID service
+            // BLE HID Service
             service {
-            uuid: "1812",
-            characteristics: [
-                characteristic {
-                    uuid: "2A4A",
-                    read: hid_info_fn,
-                },
-                characteristic {
-                    uuid: "2A4B",
-                    read: hid_desc_fn,
-                },
-                characteristic {
-                    uuid: "2A4C",
-                    write: write_hid_control_point,
-                },
-                characteristic {
-                    uuid: "2A4E",
-                    read: read_protocol_mode,
-                    write: write_protocol_mode,
-                },
-                characteristic {
-                    uuid: "2A4D",
-                    notify: true,
-                    name: "hid_report",
-                    read: hid_report_fn,
-                },
-            ],
-        },
-        // BLE device information
-        service {
-            uuid: "180A",
-            characteristics: [
-                // BLE Device Information characteristic
-                characteristic {
-                    uuid: "2a50",
-                    read: read_device_info,
-                },
-            ],
-        },
-        // BLE HID Battery Service
-        service {
-            uuid: "180F",
-            // BLE HID battery level characteristic
-            characteristics: [characteristic {
-                uuid: "2a19",
-                read: read_battery_level,
-            },],
-        },]);
+                uuid: "00001812-0000-1000-8000-00805f9b34fb",
+                characteristics: [
+                    // BLE HID_information
+                    characteristic {
+                        uuid: "00002a4a-0000-1000-8000-00805f9b34fb",
+                        read: read_hid_info,
+                    },
+                    // BLE HID Report Map characteristic
+                    characteristic {
+                        uuid: "00002a4b-0000-1000-8000-00805f9b34fb",
+                        read: read_hid_report_map2,
+                    },
+                    // BLE HID control point characteristic
+                    characteristic {
+                        uuid: "00002a4c-0000-1000-8000-00805f9b34fb",
+                        write: write_hid_control_point,
+                    },
+                    // BLE HID Report characteristic
+                    characteristic {
+                        uuid: "00002a4d-0000-1000-8000-00805f9b34fb",
+                        name: "hid_report",
+                        notify: true,
+                        read: read_hid_report,
+                    },
+                    // BLE HID protocol mode characteristic
+                    characteristic {
+                        uuid: "00002a4e-0000-1000-8000-00805f9b34fb",
+                        write: write_protocol_mode,
+                        read: read_protocol_mode,
+                    },
+                ],
+            },
+            // BLE device information
+            service {
+                uuid: "0000180a-0000-1000-8000-00805f9b34fb",
+                characteristics: [
+                    // BLE Device Information characteristic
+                    characteristic {
+                        uuid: "00002a50-0000-1000-8000-00805f9b34fb",
+                        read: read_device_info,
+                    },
+                ],
+            },
+            // BLE HID Battery Service
+            service {
+                uuid: "0000180f-0000-1000-8000-00805f9b34fb",
+                // BLE HID battery level characteristic
+                characteristics: [characteristic {
+                    uuid: "00002a19-0000-1000-8000-00805f9b34fb",
+                    read: read_battery_level,
+                },],
+            },
+        ]);
+        // Create service
+        // gatt!([
+        //     // HID service
+        //     service {
+        //         uuid: "1812",
+        //         characteristics: [
+        //             characteristic {
+        //                 uuid: "2A4A",
+        //                 read: read_hid_info,
+        //             },
+        //             characteristic {
+        //                 uuid: "2A4B",
+        //                 read: read_hid_report_map,
+        //             },
+        //             characteristic {
+        //                 uuid: "2A4C",
+        //                 write: write_hid_control_point,
+        //             },
+        //             characteristic {
+        //                 uuid: "2A4E",
+        //                 read: read_protocol_mode,
+        //                 write: write_protocol_mode,
+        //             },
+        //             characteristic {
+        //                 uuid: "2A4D",
+        //                 notify: true,
+        //                 name: "hid_report",
+        //                 read: read_hid_report,
+        //             },
+        //         ],
+        //     },
+        //     // BLE device information
+        //     service {
+        //         uuid: "180A",
+        //         characteristics: [
+        //             // BLE Device Information characteristic
+        //             characteristic {
+        //                 uuid: "2a50",
+        //                 read: read_device_info,
+        //             },
+        //         ],
+        //     },
+        //     // BLE HID Battery Service
+        //     service {
+        //         uuid: "180F",
+        //         // BLE HID battery level characteristic
+        //         characteristics: [characteristic {
+        //             uuid: "2a19",
+        //             read: read_battery_level,
+        //         },],
+        //     },
+        // ]);
+        let mut srv = AttributeServer::new_with_ltk(
+            ble,
+            &mut gatt_attributes,
+            local_addr,
+            ltk,
+            &mut rng_wrap,
+        );
+        let mut notifier = || async {
+            Timer::after_secs(2).await;
+            println!("notify hid report");
 
-        let mut rng = bleps::no_rng::NoRng;
-        let mut srv = AttributeServer::new(ble, &mut gatt_attributes, &mut rng);
+            NotificationData::new(hid_report_handle, &[1, 0, 0, 4, 0, 0, 0, 0, 0])
+        };
+        srv.run(&mut notifier).await.unwrap();
+        // loop {
+        //     info!("into loop");
+        //     let mut notification = Some(NotificationData::new(
+        //         hid_report_handle,
+        //         &[1, 0, 0, 4, 0, 0, 0, 0, 0],
+        //     ));
+        //     let mut cccd = [0u8; 1];
+        //     if let Some(1) =
+        //         srv.get_characteristic_value(hid_report_notify_enable_handle, 0, &mut cccd)
+        //     {
+        //         // if notifications enabled
+        //         if cccd[0] == 1 {
+        //             notification = Some(NotificationData::new(
+        //                 hid_report_handle,
+        //                 &b"Notification"[..],
+        //             ));
+        //         }
+        //     }
 
-        loop {
-            let mut notification = None;
-            let mut cccd = [0u8; 1];
-            if let Some(1) =
-                srv.get_characteristic_value(hid_report_notify_enable_handle, 0, &mut cccd)
-            {
-                // if notifications enabled
-                if cccd[0] == 1 {
-                    notification = Some(NotificationData::new(
-                        hid_report_handle,
-                        &b"Notification"[..],
-                    ));
-                }
-            }
+        //     match srv.do_work_with_notification(notification).await {
+        //         Ok(res) => {
+        //             if let WorkResult::GotDisconnected = res {
+        //                 ltk = srv.get_ltk();
+        //                 info!("disconnected, got ltk {}", ltk);
+        //             } else {
+        //                 ltk = srv.get_ltk();
+        //                 info!("did work, got ltk {}", ltk);
+        //             }
+        //         }
+        //         Err(err) => {
+        //             info!("error: {:?}", Debug2Format(&err));
+        //         }
+        //     }
 
-            match srv.do_work_with_notification(notification).await {
-                Ok(res) => if let WorkResult::GotDisconnected = res {},
-                Err(err) => {
-                    info!("error: {:?}", Debug2Format(&err));
-                }
-            }
-
-            Timer::after_millis(1000).await;
-        }
+        //     Timer::after_millis(1000).await;
+        // }
+    }
 }
 
 // Run usb keyboard task for once
