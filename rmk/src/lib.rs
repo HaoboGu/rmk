@@ -296,12 +296,12 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(StorageData::BondInfo(info))) =
-            fetch_item::<StorageData<ROW, COL, NUM_LAYER>, _>(
+            fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                 &mut storage.flash,
                 storage.storage_range.clone(),
-                NoCache::new(),
+                &mut NoCache::new(),
                 &mut buf,
-                get_bond_info_key(key as u8),
+                get_bond_info_key(key as u8) as u32,
             )
             .await
         {

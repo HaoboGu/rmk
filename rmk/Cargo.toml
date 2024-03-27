@@ -36,7 +36,7 @@ num_enum = { version = "0.7", default-features = false }
 packed_struct = { version = "0.10", default-features = false }
 byteorder = { version = "1.4", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "1.0", features = ["defmt-03"] }
+sequential-storage = { version = "2.0", git = "https://github.com/tweedegolf/sequential-storage", branch = "binsize-opts", features = ["defmt-03"] }
 
 # Optional dependencies
 once_cell = { version = "1.19", features = [
