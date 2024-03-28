@@ -1,13 +1,12 @@
 {
     "cortex-debug.variableUseNaturalFormat": false,
     "rust-analyzer.check.allTargets": false,
-    // "rust-analyzer.check.overrideCommand": [
-    //     "cargo",
-    //     "check",
-    //     "--quiet",
-    //     "--message-format=json",
-    //     "--all-features"
-    // ],
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "check",
+        "--quiet",
+        "--message-format=json",
+    ],
     // "rust-analyzer.cargo.buildScripts.overrideCommand": [
     //     "cargo",
     //     "check",

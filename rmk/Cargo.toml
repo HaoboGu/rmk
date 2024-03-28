@@ -55,18 +55,9 @@ embassy-nrf = { version = "0.1.0", features = [
     "time",
 ], optional = true }
 
-bleps = { git = "https://github.com/bjoernQ/bleps", features = [
-    "macros",
-    "defmt",
-    "async",
+esp32-nimble = { version = "0.6.0", default-features = false, features = [
+    "no_std",
 ], optional = true }
-embedded-io-async = { version = "0.6.0", optional = true }
-rand_core = { version = "0.6.4", optional = true }
-esp-hal = { version = "0.16.0", features = [
-    "embassy",
-    "embassy-time-timg0",
-    "embassy-executor-thread",
-] }
 
 [features]
 default = ["eeprom", "col2row", "esp32_ble"]
@@ -88,4 +79,4 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
-esp32_ble = ["dep:bleps", "dep:embedded-io-async", "dep:rand_core"]
+esp32_ble = ["dep:esp32-nimble"]

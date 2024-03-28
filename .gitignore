@@ -13,3 +13,5 @@ rmk/Cargo.lock
 
 # mdbook site
 docs/book
+
+.embuild

@@ -21,6 +21,7 @@ fn main() {
     // Generate vial config at the root of project
     generate_vial_config();
 
+    embuild::espidf::sysenv::output();
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     // let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
@@ -39,8 +40,8 @@ fn main() {
     // Specify linker arguments.
 
     // Set the linker script to the one provided by espressif.
-    println!("cargo:rustc-link-arg=-Tlinkall.x");
-    println!("cargo:rustc-link-arg=-Trom_functions.x");
+    // println!("cargo:rustc-link-arg=-Tlinkall.x");
+    // println!("cargo:rustc-link-arg=-Trom_functions.x");
 
     // Set the extra linker script from defmt
     println!("cargo:rustc-link-arg=-Tdefmt.x");

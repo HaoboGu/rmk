@@ -41,6 +41,24 @@ pub const SOC_NAME: &str = "ESP32-C3";
 async fn main(spawner: Spawner) {
     info!("Hello ESP BLE!");
 
+    let device = BLEDevice::take();
+    device
+      .security()
+      .set_auth(AuthReq::all())
+      .set_io_cap(SecurityIOCap::NoInputNoOutput);
+    let server = device.get_server();
+    let mut hid = BLEHIDDevice::new(server);
+    let input_keyboard = hid.input_report(KEYBOARD_ID);
+    let output_keyboard = hid.output_report(KEYBOARD_ID);
+    let input_media_keys = hid.input_report(MEDIA_KEYS_ID);
+    hid.manufacturer("Espressif");
+    hid.pnp(0x02, 0x05ac, 0x820a, 0x0210);
+    hid.hid_info(0x00, 0x01);
+    hid.report_map(HID_REPORT_DISCRIPTOR);
+
+    hid.set_battery_level(100);
+
+
     // Device config
     let peripherals = Peripherals::take();
     let system = peripherals.SYSTEM.split();
