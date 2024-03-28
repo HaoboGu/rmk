@@ -301,7 +301,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 storage.storage_range.clone(),
                 &mut NoCache::new(),
                 &mut buf,
-                get_bond_info_key(key as u8) as u32,
+                get_bond_info_key(key as u8),
             )
             .await
         {

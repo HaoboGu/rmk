@@ -10,6 +10,7 @@ use packed_struct::PackedStructSlice;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, MapValueError, Value},
+    Error as SSError,
 };
 
 #[cfg(feature = "ble")]
@@ -50,7 +51,7 @@ pub(crate) enum FlashOperationMessage {
     },
 }
 
-#[repr(usize)]
+#[repr(u32)]
 pub(crate) enum StorageKeys {
     StorageConfig,
     LedLightConfig,
@@ -72,35 +73,21 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     BondInfo(BondInfo),
 }
 
-pub(crate) fn get_bond_info_key(slot_num: u8) -> usize {
-    0x2000 + slot_num as usize
+pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
+    0x2000 + slot_num as u32
 }
 
 pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     row: usize,
     col: usize,
     layer: usize,
-) -> usize {
-    0x1000 + layer * COL * ROW + row * COL + col
-}
-
-#[derive(Format, Debug)]
-pub(crate) enum StorageError {
-    BufferTooSmall,
-    ItemWrongSize,
-    PackedStructError,
-    SaveItemError,
-    KeyError,
-    NotSupported,
+) -> u32 {
+    (0x1000 + layer * COL * ROW + row * COL + col) as u32
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
     for StorageData<ROW, COL, NUM_LAYER>
 {
-    // type Key = usize;
-
-    // type Error = StorageError;
-
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, MapValueError> {
         if buffer.len() < 6 {
             return Err(MapValueError::BufferTooSmall);
@@ -128,7 +115,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                     Ok(_) => Ok(3),
                     Err(_) => {
                         error!("Packing EeKeymapConfig error");
-                        // Err(StorageError::PackedStructError)
                         Err(MapValueError::InvalidData)
                     }
                 }
@@ -189,7 +175,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                     Ok(StorageData::KeymapConfig(config))
                 } else {
                     error!("Unpacking EeKeymapConfig error");
-                    // Err(StorageError::PackedStructError)
                     Err(MapValueError::InvalidFormat)
                 }
             }
@@ -230,21 +215,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
 
             _ => {
                 info!("Key error: {}", buffer[0]);
-                // Err(StorageError::KeyError)
                 Err(MapValueError::Custom(1))
             }
         }
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    StorageData<ROW, COL, NUM_LAYER>
-{
-    fn key(&self) -> usize {
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageData<ROW, COL, NUM_LAYER> {
+    fn key(&self) -> u32 {
         match self {
-            StorageData::StorageConfig(_) => StorageKeys::StorageConfig as usize,
-            StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as usize,
-            StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as usize,
+            StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
+            StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
+            StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as u32,
             #[cfg(feature = "ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
@@ -281,25 +263,25 @@ pub struct Storage<F: AsyncNorFlash> {
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
 macro_rules! write_storage {
-    ($f: expr, $buf: expr, $c:ident, $o:ident, $range:expr) => {
-        if let Ok(Some(StorageData::$c(mut saved))) =
+    ($f: expr, $buf: expr, $cache:expr, $key:ident, $field:ident, $range:expr) => {
+        if let Ok(Some(StorageData::$key(mut saved))) =
             fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                 $f,
                 $range,
-                &mut NoCache::new(),
+                $cache,
                 $buf,
-                StorageKeys::$c as u32,
+                StorageKeys::$key as u32,
             )
             .await
         {
-            saved.$o = $o;
+            saved.$field = $field;
             store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                 $f,
                 $range,
-                &mut NoCache::new(),
+                $cache,
                 $buf,
-                StorageKeys::$c as u32,
-                &StorageData::$c(saved),
+                StorageKeys::$key as u32,
+                &StorageData::$key(saved),
             )
             .await
         } else {
@@ -341,8 +323,24 @@ impl<F: AsyncNorFlash> Storage<F> {
         // Check whether keymap and configs have been storaged in flash
         if !storage.check_enable::<ROW, COL, NUM_LAYER>().await {
             // Initialize storage from keymap and config
-            if let Err(e) = storage.initialize_storage_with_config(keymap).await {
-                error!("Initialize storage error: {}", e)
+            if storage
+                .initialize_storage_with_config(keymap)
+                .await
+                .is_err()
+            {
+                // When there's an error, `enable: false` should be saved back to storage, preventing partial initialization of storage
+                store_item(
+                    &mut storage.flash,
+                    storage.storage_range.clone(),
+                    &mut NoCache::new(),
+                    &mut [0; 128],
+                    StorageKeys::StorageConfig as u32,
+                    &StorageData::StorageConfig::<ROW, COL, NUM_LAYER>(LocalStorageConfig {
+                        enable: false,
+                    }),
+                )
+                .await
+                .ok();
             }
         }
 
@@ -356,6 +354,7 @@ impl<F: AsyncNorFlash> Storage<F> {
 
     pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(&mut self) {
         let mut storage_data_buffer = [0_u8; 128];
+        let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             if let Err(e) = match info {
@@ -364,6 +363,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     write_storage!(
                         &mut self.flash,
                         &mut storage_data_buffer,
+                        &mut storage_cache,
                         LayoutConfig,
                         layout_option,
                         self.storage_range.clone()
@@ -374,6 +374,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     write_storage!(
                         &mut self.flash,
                         &mut storage_data_buffer,
+                        &mut storage_cache,
                         LayoutConfig,
                         default_layer,
                         self.storage_range.clone()
@@ -391,13 +392,12 @@ impl<F: AsyncNorFlash> Storage<F> {
                         layer: layer as usize,
                         action,
                     });
-                    let key = data.key();
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
-                        &mut NoCache::new(),
+                        &mut storage_cache,
                         &mut storage_data_buffer,
-                        key as u32,
+                        data.key(),
                         &data,
                     )
                     .await
@@ -413,9 +413,9 @@ impl<F: AsyncNorFlash> Storage<F> {
                     store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
-                        &mut NoCache::new(),
+                        &mut storage_cache,
                         &mut storage_data_buffer,
-                        data.key() as u32,
+                        data.key(),
                         &data,
                     )
                     .await
@@ -427,9 +427,9 @@ impl<F: AsyncNorFlash> Storage<F> {
                     store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
-                        &mut NoCache::new(),
+                        &mut storage_cache,
                         &mut storage_data_buffer,
-                        data.key() as u32,
+                        data.key(),
                         &data,
                     )
                     .await
@@ -437,15 +437,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 #[cfg(not(feature = "ble"))]
                 _ => Ok(()),
             } {
-                match e {
-                    sequential_storage::Error::Storage { value: _ } => error!("Flash error"),
-                    sequential_storage::Error::FullStorage => error!("Storage is full"),
-                    sequential_storage::Error::Corrupted {} => error!("Storage is corrupted"),
-                    sequential_storage::Error::BufferTooBig => error!("Buffer too big"),
-                    sequential_storage::Error::BufferTooSmall(_) => error!("Buffer too small"),
-                    // sequential_storage::Error::Item(item_e) => error!("Storage error: {}", item_e),
-                    _ => error!("Unknown storage error"),
-                }
+                print_sequential_storage_err::<F>(e);
             }
         }
     }
@@ -464,7 +456,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut NoCache::new(),
                         &mut buf,
-                        key as u32,
+                        key,
                     )
                     .await
                     {
@@ -474,23 +466,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                             return Err(());
                         }
                         Err(e) => {
-                            match e {
-                                sequential_storage::Error::Storage { value: _ } => {
-                                    error!("Flash error")
-                                }
-                                sequential_storage::Error::FullStorage => error!("Storage is full"),
-                                sequential_storage::Error::Corrupted {} => {
-                                    error!("Storage is corrupted")
-                                }
-                                sequential_storage::Error::BufferTooBig => error!("Buffer too big"),
-                                sequential_storage::Error::BufferTooSmall(_) => {
-                                    error!("Buffer too small")
-                                }
-                                // sequential_storage::Error::Item(item_e) => {
-                                //     error!("Storage error: {}", item_e)
-                                // }
-                                _ => error!("Unknown storage error"),
-                            };
+                            print_sequential_storage_err::<F>(e);
                             error!(
                                 "Load keymap key from storage error: (layer,col,row)=({},{},{})",
                                 layer, col, row
@@ -519,7 +495,8 @@ impl<F: AsyncNorFlash> Storage<F> {
     >(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-    ) -> Result<(), StorageError> {
+    ) -> Result<(), ()> {
+        let mut cache = NoCache::new();
         let mut buf = [0u8; 128];
         // Save storage config
         let storage_config =
@@ -527,13 +504,13 @@ impl<F: AsyncNorFlash> Storage<F> {
         store_item(
             &mut self.flash,
             self.storage_range.clone(),
-            &mut NoCache::new(),
+            &mut cache,
             &mut buf,
-            storage_config.key() as u32,
+            storage_config.key(),
             &storage_config,
         )
         .await
-        .map_err(|_e| StorageError::SaveItemError)?;
+        .map_err(|e| print_sequential_storage_err::<F>(e))?;
 
         // Save layout config
         let layout_config = StorageData::<ROW, COL, NUM_LAYER>::LayoutConfig(LayoutConfig {
@@ -543,13 +520,13 @@ impl<F: AsyncNorFlash> Storage<F> {
         store_item(
             &mut self.flash,
             self.storage_range.clone(),
-            &mut NoCache::new(),
+            &mut cache,
             &mut buf,
-            layout_config.key() as u32,
+            layout_config.key(),
             &layout_config,
         )
         .await
-        .map_err(|_e| StorageError::SaveItemError)?;
+        .map_err(|e| print_sequential_storage_err::<F>(e))?;
 
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
@@ -564,13 +541,13 @@ impl<F: AsyncNorFlash> Storage<F> {
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
-                        &mut NoCache::new(),
+                        &mut cache,
                         &mut buf,
-                        item.key() as u32,
+                        item.key(),
                         &item,
                     )
                     .await
-                    .map_err(|_e| StorageError::SaveItemError)?;
+                    .map_err(|e| print_sequential_storage_err::<F>(e))?;
                 }
             }
         }
@@ -596,5 +573,17 @@ impl<F: AsyncNorFlash> Storage<F> {
         } else {
             false
         }
+    }
+}
+
+fn print_sequential_storage_err<F: AsyncNorFlash>(e: SSError<F::Error>) {
+    match e {
+        SSError::Storage { value: _ } => error!("Flash error"),
+        SSError::FullStorage => error!("Storage is full"),
+        SSError::Corrupted {} => error!("Storage is corrupted"),
+        SSError::BufferTooBig => error!("Buffer too big"),
+        SSError::BufferTooSmall(_) => error!("Buffer too small"),
+        SSError::MapValueError(e) => error!("Map value error: {}", e),
+        _ => error!("Unknown storage error"),
     }
 }
