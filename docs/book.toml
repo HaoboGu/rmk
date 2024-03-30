@@ -18,6 +18,7 @@ preferred-dark-theme = "ayu"
 curly-quotes = false
 mathjax-support = false
 copy-fonts = true
+fold = true
 no-section-label = true
 git-repository-url = "https://github.com/HaoboGu/rmk"
 git-repository-icon = "fa-github"
