@@ -102,7 +102,6 @@ impl HidService {
             BleCharacteristics::HidReport.uuid(),
             Attribute::new([0u8; 1]).security(SecurityMode::JustWorks),
             Metadata::new(Properties::new().read().write().write_without_response())
-                .security(SecurityMode::JustWorks),
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),

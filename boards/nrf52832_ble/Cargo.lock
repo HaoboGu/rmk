@@ -1750,7 +1750,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "byteorder",
  "defmt",
@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52832-ble"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "const-gen",
  "cortex-m",
