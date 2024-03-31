@@ -1,6 +1,6 @@
 [package]
 name = "rmk-nrf52832-ble"
-version = "0.1.9"
+version = "0.1.11"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.1.9", path = "../../rmk", features = [
+rmk = { version = "0.1.11", path = "../../rmk", features = [
     "nrf52832_ble",
     "eeprom",
     "col2row",
