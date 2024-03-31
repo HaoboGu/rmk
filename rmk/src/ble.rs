@@ -6,6 +6,8 @@ mod device_information_service;
 mod hid_service;
 pub(crate) mod server;
 pub(crate) mod spec;
+#[cfg(feature = "esp32_ble")]
+pub mod esp;
 
 use self::server::BleServer;
 use crate::{hid::HidWriterWrapper, keyboard::Keyboard};

@@ -22,6 +22,8 @@ fn main() {
     generate_vial_config();
 
     embuild::espidf::sysenv::output();
+    // embuild::build::CfgArgs::output_propagated("ESP_IDF").unwrap();
+    // embuild::build::LinkArgs::output_propagated("ESP_IDF").unwrap();
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     // let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());

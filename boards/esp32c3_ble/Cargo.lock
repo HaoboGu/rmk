@@ -438,8 +438,7 @@ dependencies = [
  "defmt",
  "document-features",
  "embassy-executor-macros",
- "embassy-time-driver",
- "embassy-time-queue-driver",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -599,7 +598,6 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
 dependencies = [
- "defmt",
  "embedded-hal 1.0.0",
 ]
 
@@ -729,16 +727,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "esp-backtrace"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda6c53c50ed96cce44e8565bd7659f8884d55bac3262184c3a77f748553e3ff"
-dependencies = [
- "defmt",
- "esp-println",
-]
-
-[[package]]
 name = "esp-idf-hal"
 version = "0.43.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -770,6 +758,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2180642ca122a7fec1ec417a9b1a77aa66aaa067fdf1daae683dd8caba84f26b"
 dependencies = [
  "embassy-futures",
+ "embassy-time-driver",
  "embedded-hal-async",
  "embedded-svc",
  "embuild",
@@ -1412,8 +1401,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "riscv"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f5c1b8bf41ea746266cdee443d1d1e9125c86ce1447e1a2615abd34330d33a9"
+dependencies = [
+ "critical-section",
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "riscv-rt"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0d35e32cf1383183e8885d8a9aa4402a087fd094dc34c2cb6df6687d0229dfe"
+dependencies = [
+ "riscv",
+ "riscv-rt-macros",
+]
+
+[[package]]
+name = "riscv-rt-macros"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8d100d466dbb76681ef6a9386f3da9abc570d57394e86da0ba5af8c4408486d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "rmk"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "byteorder",
  "defmt",
@@ -1444,12 +1464,14 @@ dependencies = [
  "const-gen",
  "defmt",
  "embassy-executor",
- "embedded-hal-async",
  "embuild",
- "esp-backtrace",
+ "esp-idf-hal",
+ "esp-idf-svc",
+ "esp-idf-sys",
  "esp-println",
  "esp32-nimble",
  "json",
+ "riscv-rt",
  "rmk",
  "xz2",
 ]

@@ -8,124 +8,103 @@ mod macros;
 mod keymap;
 mod vial;
 
-use bleps::asynch::Ble;
-use defmt::*;
-use embassy_executor::Spawner;
-use esp_backtrace as _;
-pub use esp_hal as hal;
-use esp_hal::gpio::{AnyPin, Output, PushPull};
-use esp_println as _;
-use esp_wifi::{ble::controller::asynch::BleConnector, initialize, EspWifiInitFor};
-use hal::{
-    clock::ClockControl,
-    embassy,
-    gpio::{Input, PullDown},
-    peripherals::*,
-    prelude::*,
-    timer::TimerGroup,
-    Rng, IO,
-};
-use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    initialize_esp_ble_keyboard_with_config_and_run,
-};
-
 use crate::{
     keymap::{COL, NUM_LAYER, ROW},
     vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID},
 };
+use defmt::*;
+use embassy_executor::Spawner;
+use esp_idf_hal::{gpio::*, peripherals::Peripherals};
+use esp_idf_sys as _;
+use rmk::{
+    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    // initialize_esp_ble_keyboard_with_config_and_run,
+};
 
-pub type _BootButton = crate::hal::gpio::Gpio9<crate::hal::gpio::Input<crate::hal::gpio::PullDown>>;
+// pub type _BootButton = crate::hal::gpio::Gpio9<crate::hal::gpio::Input<crate::hal::gpio::PullDown>>;
 pub const SOC_NAME: &str = "ESP32-C3";
-#[main]
+#[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello ESP BLE!");
+    let peripherals = Peripherals::take().unwrap();
+    // let a = peripherals.pins.gpio4.downgrade_output();
+    let mut led = PinDriver::input(peripherals.pins.gpio4.downgrade()).unwrap();
+    let mut led2 = PinDriver::input(peripherals.pins.gpio5.downgrade()).unwrap();
+    let aa = [led, led2];
 
-    let device = BLEDevice::take();
-    device
-      .security()
-      .set_auth(AuthReq::all())
-      .set_io_cap(SecurityIOCap::NoInputNoOutput);
-    let server = device.get_server();
-    let mut hid = BLEHIDDevice::new(server);
-    let input_keyboard = hid.input_report(KEYBOARD_ID);
-    let output_keyboard = hid.output_report(KEYBOARD_ID);
-    let input_media_keys = hid.input_report(MEDIA_KEYS_ID);
-    hid.manufacturer("Espressif");
-    hid.pnp(0x02, 0x05ac, 0x820a, 0x0210);
-    hid.hid_info(0x00, 0x01);
-    hid.report_map(HID_REPORT_DISCRIPTOR);
-
-    hid.set_battery_level(100);
-
-
-    // Device config
-    let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::max(system.clock_control).freeze();
-
-    let timer = hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
-    let rng = Rng::new(peripherals.RNG);
-    let init = initialize(
-        EspWifiInitFor::Ble,
-        timer,
-        rng.clone(),
-        system.radio_clock_control,
-        &clocks,
-    )
-    .unwrap();
 
     // Pin config
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-    // let button = io.pins.gpio9.into_pull_down_input();
-    let (input_pins, output_pins) = config_matrix_pins_esp!(io: io, input: [gpio6, gpio7, gpio8, gpio9], output: [gpio10, gpio11, gpio12]);
+    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio8, gpio9], output: [gpio10, gpio11, gpio12]);
 
-    // Async requires the GPIO interrupt to wake futures
-    hal::interrupt::enable(
-        hal::peripherals::Interrupt::GPIO,
-        hal::interrupt::Priority::Priority1,
-    )
-    .unwrap();
+    // initialize_esp_ble_keyboard_with_config_and_run<
+    // > ()
 
-    // Keyboard config
-    let keyboard_usb_config = KeyboardUsbConfig::new(
-        0x4c4b,
-        0x4643,
-        Some("Haobo"),
-        Some("RMK Keyboard"),
-        Some("00000001"),
-    );
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let keyboard_config = RmkConfig {
-        usb_config: keyboard_usb_config,
-        vial_config,
-        ..Default::default()
-    };
+    // Device config
+    // let system = peripherals.SYSTEM.split();
+    // let clocks = ClockControl::max(system.clock_control).freeze();
 
-    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
-    embassy::init(&clocks, timer_group0);
+    // let timer = hal::systimer::SystemTimer::new(peripherals.SYSTIMER).alarm0;
+    // let rng = Rng::new(peripherals.RNG);
+    // let init = initialize(
+    //     EspWifiInitFor::Ble,
+    //     timer,
+    //     rng.clone(),
+    //     system.radio_clock_control,
+    //     &clocks,
+    // )
+    // .unwrap();
 
-    let mut bluetooth = peripherals.BT;
+    // // Pin config
+    // let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+    // // let button = io.pins.gpio9.into_pull_down_input();
+    // let (input_pins, output_pins) = config_matrix_pins_esp!(io: io, input: [gpio6, gpio7, gpio8, gpio9], output: [gpio10, gpio11, gpio12]);
 
-    loop {
-        let connector = BleConnector::new(&init, &mut bluetooth);
-        let mut ble = Ble::new(connector, esp_wifi::current_millis);
-        debug!("Connector created");
-        initialize_esp_ble_keyboard_with_config_and_run::<
-            BleConnector<'_>,
-            AnyPin<Input<PullDown>, _>,
-            AnyPin<Output<PushPull>>,
-            ROW,
-            COL,
-            NUM_LAYER,
-        >(
-            crate::keymap::KEYMAP,
-            input_pins,
-            output_pins,
-            keyboard_config,
-            &mut ble,
-            rng,
-        )
-        .await;
-    }
+    // // Async requires the GPIO interrupt to wake futures
+    // hal::interrupt::enable(
+    //     hal::peripherals::Interrupt::GPIO,
+    //     hal::interrupt::Priority::Priority1,
+    // )
+    // .unwrap();
+
+    // // Keyboard config
+    // let keyboard_usb_config = KeyboardUsbConfig::new(
+    //     0x4c4b,
+    //     0x4643,
+    //     Some("Haobo"),
+    //     Some("RMK Keyboard"),
+    //     Some("00000001"),
+    // );
+    // let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    // let keyboard_config = RmkConfig {
+    //     usb_config: keyboard_usb_config,
+    //     vial_config,
+    //     ..Default::default()
+    // };
+
+    // let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
+    // embassy::init(&clocks, timer_group0);
+
+    // let mut bluetooth = peripherals.BT;
+
+    // loop {
+    //     let connector = BleConnector::new(&init, &mut bluetooth);
+    //     let mut ble = Ble::new(connector, esp_wifi::current_millis);
+    //     debug!("Connector created");
+    //     initialize_esp_ble_keyboard_with_config_and_run::<
+    //         BleConnector<'_>,
+    //         AnyPin<Input<PullDown>, _>,
+    //         AnyPin<Output<PushPull>>,
+    //         ROW,
+    //         COL,
+    //         NUM_LAYER,
+    //     >(
+    //         crate::keymap::KEYMAP,
+    //         input_pins,
+    //         output_pins,
+    //         keyboard_config,
+    //         &mut ble,
+    //         rng,
+    //     )
+    //     .await;
+    // }
 }

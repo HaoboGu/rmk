@@ -6,6 +6,7 @@
         "check",
         "--quiet",
         "--message-format=json",
+        "--target"
     ],
     // "rust-analyzer.cargo.buildScripts.overrideCommand": [
     //     "cargo",
@@ -15,7 +16,7 @@
     //     "--all-features"
     // ],
     "rust-analyzer.linkedProjects": [
-        "rmk/Cargo.toml",
+        // "rmk/Cargo.toml",
         "boards/esp32c3_ble/Cargo.toml",
         // "boards/stm32h7/Cargo.toml",
         // "boards/stm32f4/Cargo.toml",
