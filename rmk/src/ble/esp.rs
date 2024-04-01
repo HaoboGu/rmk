@@ -1,7 +1,10 @@
+use embedded_hal::digital::{InputPin, OutputPin};
 use esp32_nimble::{
     enums::*, hid::*, utilities::mutex::Mutex, BLEAdvertisementData, BLECharacteristic, BLEDevice,
     BLEHIDDevice, BLEServer,
 };
+
+use crate::{action::KeyAction, config::RmkConfig};
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
@@ -16,8 +19,8 @@ use esp32_nimble::{
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_esp_ble_keyboard_with_config_and_run<
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -40,7 +43,8 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     hid.manufacturer("Espressif");
     hid.pnp(0x02, 0x05ac, 0x820a, 0x0210);
     hid.hid_info(0x00, 0x01);
-    hid.report_map(HID_REPORT_DISCRIPTOR);
+    // TODO: fixme
+    hid.report_map(&[1,2,3,4]);
 
     hid.set_battery_level(100);
     loop {}

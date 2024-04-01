@@ -6,7 +6,8 @@
         "check",
         "--quiet",
         "--message-format=json",
-        "--target"
+        "--target",
+        "riscv32imc-esp-espidf",
     ],
     // "rust-analyzer.cargo.buildScripts.overrideCommand": [
     //     "cargo",
