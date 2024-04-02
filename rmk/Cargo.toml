@@ -55,6 +55,9 @@ embassy-nrf = { version = "0.1.0", features = [
     "time",
 ], optional = true }
 
+esp-idf-hal = { verison = "0.43", default-features = false, features = [
+    "embassy-sync",
+], optional = true }
 esp32-nimble = { version = "0.6.0", default-features = false, features = [
     "no_std",
 ], optional = true }
@@ -79,4 +82,5 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
-esp32_ble = ["ble", "dep:esp32-nimble"]
+esp32_ble = ["ble", "dep:esp32-nimble", "dep:esp-idf-hal"]
+esp32c3_ble = ["esp32_ble"]

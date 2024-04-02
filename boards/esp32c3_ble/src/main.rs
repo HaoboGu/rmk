@@ -16,9 +16,10 @@ use defmt::*;
 use embassy_executor::Spawner;
 use esp_idf_hal::{gpio::*, peripherals::Peripherals};
 use esp_idf_sys as _;
+use esp_storage::FlashStorage;
 use rmk::{
-    ble::esp::initialize_esp_ble_keyboard_with_config_and_run, config::{KeyboardUsbConfig, RmkConfig, VialConfig}
-    // initialize_esp_ble_keyboard_with_config_and_run,
+    ble::esp::initialize_esp_ble_keyboard_with_config_and_run,
+    config::{KeyboardUsbConfig, RmkConfig, VialConfig}, // initialize_esp_ble_keyboard_with_config_and_run,
 };
 
 pub const SOC_NAME: &str = "ESP32-C3";
@@ -30,13 +31,18 @@ async fn main(spawner: Spawner) {
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio8, gpio9], output: [gpio10, gpio11, gpio12]);
 
+    // Flash config
+
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     let keyboard_config = RmkConfig {
         vial_config,
         ..Default::default()
     };
 
+    let storage = FlashStorage::new();
+
     initialize_esp_ble_keyboard_with_config_and_run::<
+        FlashStorage,
         PinDriver<'_, AnyIOPin, Input>,
         PinDriver<'_, AnyIOPin, Output>,
         ROW,
@@ -46,6 +52,7 @@ async fn main(spawner: Spawner) {
         crate::keymap::KEYMAP,
         input_pins,
         output_pins,
+        Some(storage),
         keyboard_config,
     )
     .await;

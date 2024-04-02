@@ -401,47 +401,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     }
 }
 
-// // BLE HID readers writers for esp
-// fn read_hid_info(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0..4].copy_from_slice(&[
-//         0x1u8, 0x1u8,  // HID version: 1.1
-//         0x00u8, // Country Code
-//         0x03u8, // Remote wake + Normally Connectable
-//     ]);
-//     4
-// }
-// fn read_hid_report_map(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0..HID_REPORT_DESCRIPTOR.len()].copy_from_slice(HID_REPORT_DESCRIPTOR);
-//     HID_REPORT_DESCRIPTOR.len()
-// }
-
-// fn write_hid_control_point(offset: usize, data: &[u8]) {
-//     println!("write hid control point: {} {:?}", offset, data);
-// }
-
-// fn write_protocol_mode(offset: usize, data: &[u8]) {
-//     println!("write_protocol_mode: Offset {}, data {:?}", offset, data);
-// }
-// fn read_protocol_mode(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0] = 0;
-//     data[1] = 0;
-//     2
-// }
-// fn read_hid_report(_offset: usize, data: &mut [u8]) -> usize {
-//     data[0..8].copy_from_slice(&[0, 0, 0x04, 0, 0, 0, 0, 0]);
-//     8
-// }
-
-// fn read_device_info(_offset: usize, data: &mut [u8]) -> usize {
-//     data[..7].copy_from_slice(&[0x02, 0x4c, 0x4b, 0x46, 0x43, 0x00, 0x00]);
-//     7
-// }
-
-// fn read_battery_level(_offset: usize, data: &mut [u8]) -> usize {
-//     data[..1].copy_from_slice(&[80]);
-//     1
-// }
-
 // Run usb keyboard task for once
 async fn run_usb_keyboard<
     'a,

@@ -91,7 +91,7 @@ impl<'a, const N: usize> BleHidReader<'a, N> {
     }
 }
 
-// BleServer
+// BleServer saves all services, which have connection handles in it
 pub(crate) struct BleServer {
     _dis: DeviceInformationService,
     pub(crate) bas: BatteryService,
