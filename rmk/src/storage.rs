@@ -13,7 +13,7 @@ use sequential_storage::{
 };
 
 #[cfg(feature = "nrf_ble")]
-use crate::ble::bonder::BondInfo;
+use crate::ble::nrf::bonder::BondInfo;
 #[cfg(feature = "nrf_ble")]
 use core::mem;
 use core::ops::Range;
@@ -422,7 +422,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-                #[cfg(not(feature = "ble"))]
+                #[cfg(not(feature = "nrf_ble"))]
                 _ => Ok(()),
             } {
                 match e {

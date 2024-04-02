@@ -60,11 +60,11 @@ esp32-nimble = { version = "0.6.0", default-features = false, features = [
 ], optional = true }
 
 [features]
-default = ["eeprom", "col2row", "esp32_ble"]
-# default = ["eeprom", "col2row"]
+default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
-nrf_ble = ["dep:nrf-softdevice"]
+ble = []
+nrf_ble = ["ble", "dep:nrf-softdevice"]
 nrf52840_ble = [
     "nrf_ble",
     "dep:embassy-nrf",
