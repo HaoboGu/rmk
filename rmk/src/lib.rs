@@ -32,7 +32,7 @@ use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "ble")]
 pub mod ble;
 pub mod config;
 mod debounce;

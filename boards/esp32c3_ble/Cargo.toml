@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 rmk = { version = "0.1.11", path = "../../rmk", features = [
     "col2row",
     "eeprom",
+    "esp32_ble"
 ] }
 esp32-nimble = { version = "0.6.0", default-features = false, features = [
     "no_std",

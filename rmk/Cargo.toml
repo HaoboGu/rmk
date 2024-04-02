@@ -79,4 +79,4 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
-esp32_ble = ["dep:esp32-nimble"]
+esp32_ble = ["ble", "dep:esp32-nimble"]
