@@ -1,11 +1,12 @@
 extern crate alloc;
 use alloc::sync::Arc;
+use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
     utilities::mutex::Mutex,
     BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer,
 };
-use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor as _};
+use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
 use crate::{
     ble::{
@@ -13,6 +14,7 @@ use crate::{
         device_info::VidSource,
     },
     config::KeyboardUsbConfig,
+    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidWriterWrapper},
 };
 
 pub(crate) struct BleServer {
@@ -78,12 +80,40 @@ impl BleServer {
         }
     }
 
+    pub(crate) async fn wait_for_connection(&self) {
+        loop {
+            // Check connection status every 100 ms
+            Timer::after_millis(100).await;
+            if !self.connected() {
+                continue;
+            }
+            break;
+        }
+    }
+
     pub(crate) fn connected(&self) -> bool {
         self.server.connected_count() > 0
     }
+}
 
-    pub(crate) fn send_ble_keyboard_report(&mut self, report: KeyboardReport) {
-        self.input_keyboard.lock().set_from(&report).notify();
-        esp_idf_hal::delay::Ets::delay_ms(7);
+impl ConnectionTypeWrapper for BleServer {
+    fn get_conn_type(&self) -> crate::hid::ConnectionType {
+        ConnectionType::Ble
     }
 }
+
+impl HidWriterWrapper for BleServer {
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+        self.input_keyboard.lock().set_from(r).notify();
+        esp_idf_hal::delay::Ets::delay_ms(7);
+        Ok(())
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
+        self.input_keyboard.lock().set_value(report).notify();
+        esp_idf_hal::delay::Ets::delay_ms(7);
+        Ok(())
+    }
+}
+
+

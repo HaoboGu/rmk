@@ -2,9 +2,11 @@ pub(crate) mod server;
 
 use self::server::BleServer;
 use crate::{
-    action::KeyAction, config::RmkConfig, keyboard::Keyboard, keymap::KeyMap, storage::Storage,
+    action::KeyAction, config::RmkConfig, hid::HidWriterWrapper, keyboard::Keyboard,
+    keymap::KeyMap, storage::Storage,
 };
 use core::cell::RefCell;
+use defmt::{info, warn};
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -57,20 +59,34 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
         }
     };
 
-    let keyboard = Keyboard::new(input_pins, output_pins, &keymap);
-    let ble_server = BleServer::new(keyboard_config.usb_config);
+    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
 
-    let adv_fut = async {
-        loop {
-            Timer::after_millis(10).await;
-            if !ble_server.connected() {
-                continue;
-            }
-            break;
-        }
-    };
+    loop {
+        info!("Advertising..");
+        let mut ble_server = BleServer::new(keyboard_config.usb_config);
+        ble_server.wait_for_connection().await;
+        info!("BLE connected!");
+        let keyboard_fut = keyboard_ble_task(&mut keyboard, &mut ble_server);
+        keyboard_fut.await;
+        // match select()
 
-    adv_fut.await;
+        warn!("BLE disconnected!")
+    }
+}
 
-    loop {}
+pub(crate) async fn keyboard_ble_task<
+    'a,
+    In: InputPin,
+    Out: OutputPin,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    ble_server: &mut BleServer,
+) {
+    loop {
+        let _ = keyboard.scan_matrix().await;
+        keyboard.send_keyboard_report(ble_server).await;
+    }
 }
