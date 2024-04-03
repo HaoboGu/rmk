@@ -801,16 +801,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "esp-storage"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fa3fc3afc3a56b91522a35b9f773d40d2332d0a66ff1e8a823152cda4ff1923"
-dependencies = [
- "critical-section",
- "embedded-storage",
-]
-
-[[package]]
 name = "esp32-nimble"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1456,7 +1446,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-storage",
  "embedded-storage-async",
- "esp-idf-hal",
+ "esp-idf-svc",
  "esp32-nimble",
  "futures",
  "heapless 0.8.0",
@@ -1475,16 +1465,15 @@ dependencies = [
  "const-gen",
  "defmt",
  "embassy-executor",
+ "embassy-time",
  "embuild",
- "esp-idf-hal",
  "esp-idf-svc",
- "esp-idf-sys",
  "esp-println",
- "esp-storage",
  "esp32-nimble",
  "json",
  "riscv-rt",
  "rmk",
+ "static_cell",
  "xz2",
 ]
 

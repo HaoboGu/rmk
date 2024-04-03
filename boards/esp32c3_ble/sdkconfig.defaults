@@ -9,10 +9,11 @@ CONFIG_FREERTOS_HZ=1000
 #CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n
 #CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=n
 
-# Rust often needs a bit of an extra main task stack size compared to C (the default is 3K)
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=7000
-
 CONFIG_LOG_DEFAULT_LEVEL=5
+
+# Disable watchdog
+CONFIG_INT_WDT=n
+CONFIG_ESP_TASK_WDT=n
 
 # esp-nimble config
 CONFIG_BT_ENABLED=y

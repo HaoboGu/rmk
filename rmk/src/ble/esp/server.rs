@@ -30,14 +30,16 @@ pub(crate) struct BleServer {
 
 impl BleServer {
     pub(crate) fn new(usb_config: KeyboardUsbConfig) -> Self {
+        let keyboard_name = usb_config.product_name.unwrap_or("RMK Keyboard");
         let device = BLEDevice::take();
+        BLEDevice::set_device_name(keyboard_name).ok();
         device
             .security()
             .set_auth(AuthReq::all())
             .set_io_cap(SecurityIOCap::NoInputNoOutput);
         let server = device.get_server();
         let mut hid = BLEHIDDevice::new(server);
-        hid.manufacturer(usb_config.manufacturer.unwrap_or("RMK Keyboard"));
+        hid.manufacturer(usb_config.manufacturer.unwrap_or("Haobo"));
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
         let output_keyboard = hid.output_report(BleCompositeReportType::Keyboard as u8);
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
@@ -52,16 +54,17 @@ impl BleServer {
             usb_config.pid,
             0x0000,
         );
+        hid.set_battery_level(80);
         hid.hid_info(0x00, 0x03);
         hid.report_map(BleKeyboardReport::desc());
-        hid.set_battery_level(100);
+
         let ble_advertising = device.get_advertising();
         ble_advertising
             .lock()
             .scan_response(false)
             .set_data(
                 BLEAdvertisementData::new()
-                    .name("ESP32 Keyboard")
+                    .name(keyboard_name)
                     .appearance(0x03C1)
                     .add_service_uuid(hid.hid_service().lock().uuid()),
             )
@@ -90,7 +93,7 @@ impl BleServer {
             break;
         }
     }
-
+ 
     pub(crate) fn connected(&self) -> bool {
         self.server.connected_count() > 0
     }
@@ -105,15 +108,13 @@ impl ConnectionTypeWrapper for BleServer {
 impl HidWriterWrapper for BleServer {
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
         self.input_keyboard.lock().set_from(r).notify();
-        esp_idf_hal::delay::Ets::delay_ms(7);
+        esp_idf_svc::hal::delay::Ets::delay_ms(7);
         Ok(())
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
         self.input_keyboard.lock().set_value(report).notify();
-        esp_idf_hal::delay::Ets::delay_ms(7);
+        esp_idf_svc::hal::delay::Ets::delay_ms(7);
         Ok(())
     }
 }
-
-

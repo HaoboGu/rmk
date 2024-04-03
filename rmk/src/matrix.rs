@@ -1,5 +1,4 @@
 use crate::debounce::Debouncer;
-use core::convert::Infallible;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 

@@ -15,35 +15,31 @@ rmk = { version = "0.1.11", path = "../../rmk", features = [
     "eeprom",
     "esp32c3_ble",
 ] }
-esp-storage = { version = "0.3", features = ["nor-flash", "esp32c3"] }
 esp32-nimble = { version = "0.6.0", default-features = false, features = [
     "no_std",
 ] }
-esp-idf-sys = { version = "0.34", default-features = false, features = [
-    "panic_handler",
-    "alloc_handler",
-] }
-esp-println = { version = "0.9", features = [
-    "esp32c3",
-    "defmt-espflash",
-    "uart",
-] }
 defmt = "0.3"
+embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8"] }
 embassy-executor = { version = "0.5.0", features = [
     "arch-riscv32",
     "nightly",
     "executor-thread",
     "defmt",
 ] }
+esp-println = { version = "0.9", features = [
+    "esp32c3",
+    "defmt-espflash"
+]}
 esp-idf-svc = { version = "0.48", default-features = false, features = [
+    "alloc_handler",
     "embassy-sync",
+    "binstart",
     "critical-section",
     "embassy-time-driver",
+    "panic_handler",
 ] }
-esp-idf-hal = { verison = "*", default-features = false, features = [
-    "embassy-sync",
-] }
-riscv-rt = "0.12.2"
+static_cell = "2.0"
+riscv-rt = "0.12"
 
 [build-dependencies]
 xz2 = "0.1.7"
