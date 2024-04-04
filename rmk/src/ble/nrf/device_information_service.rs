@@ -9,7 +9,7 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
-
+use crate::ble::device_info::{DeviceInformation, PnPID};
 use super::spec::{BleCharacteristics, BleSpecification};
 
 pub struct DeviceInformationService {}

@@ -1,9 +1,9 @@
 use super::{
-    battery_service::BatteryService,
-    device_information_service::{DeviceInformation, DeviceInformationService, PnPID, VidSource},
+    battery_service::BatteryService, device_information_service::DeviceInformationService,
     hid_service::HidService,
 };
 use crate::{
+    ble::device_info::{DeviceInformation, PnPID, VidSource},
     config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
