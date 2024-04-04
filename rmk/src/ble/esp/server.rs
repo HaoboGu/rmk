@@ -36,7 +36,8 @@ impl BleServer {
         device
             .security()
             .set_auth(AuthReq::all())
-            .set_io_cap(SecurityIOCap::NoInputNoOutput);
+            .set_io_cap(SecurityIOCap::NoInputNoOutput)
+            .resolve_rpa();
         let server = device.get_server();
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer.unwrap_or("Haobo"));
