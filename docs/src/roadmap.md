@@ -17,10 +17,11 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] LED
   - [ ] full async key detection and report sending
   - [ ] 🔴 RGB
-  - [ ] keyboard macro
+  - [ ] keyboard macros
   - [ ] 🟢 encoder
   - [ ] 🔵 display support
   - [ ] tap/hold
+  - [ ] 🔵 split keyboard support
 
 #### Wireless
   - [x] BLE support - nRF
