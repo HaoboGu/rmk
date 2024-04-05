@@ -5,6 +5,8 @@
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 [![Discord](https://img.shields.io/discord/1166665039793639424?label=discord)](https://discord.gg/HHGA7pQxkG)
 
+[中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
+
 A feature-rich Rust keyboard firmware. 
 
 ## Features
