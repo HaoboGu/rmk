@@ -221,13 +221,13 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     }
 }
 
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use embassy_executor::Spawner;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 pub use nrf_softdevice;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 use nrf_softdevice::ble::{gatt_server, Connection};
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
 /// This function never returns.
@@ -258,7 +258,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "nrf52832_ble"))]
     use crate::usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED};
     use crate::{
-        ble::{
+        ble::nrf::{
             advertise::{create_advertisement_data, SCAN_DATA},
             bonder::{BondInfo, Bonder},
             nrf_ble_config, softdevice_task, BONDED_DEVICE_NUM,
@@ -450,9 +450,9 @@ async fn run_usb_keyboard<
     }
 }
 
-#[cfg(feature = "ble")]
-use crate::ble::server::BleServer;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
+use crate::ble::nrf::server::BleServer;
+#[cfg(feature = "nrf_ble")]
 // Run ble keyboard task for once
 async fn run_ble_keyboard<
     'a,
@@ -468,7 +468,7 @@ async fn run_ble_keyboard<
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
 ) {
-    use crate::ble::{ble_battery_task, keyboard_ble_task, server::BleHidWriter};
+    use crate::ble::nrf::{ble_battery_task, keyboard_ble_task, server::BleHidWriter};
 
     info!("Starting GATT server 200 ms later");
     Timer::after_millis(200).await;

@@ -13,9 +13,9 @@ use sequential_storage::{
     Error as SSError,
 };
 
-#[cfg(feature = "ble")]
-use crate::ble::bonder::BondInfo;
-#[cfg(feature = "ble")]
+#[cfg(feature = "nrf_ble")]
+use crate::ble::nrf::bonder::BondInfo;
+#[cfg(feature = "nrf_ble")]
 use core::mem;
 use core::ops::Range;
 
@@ -35,7 +35,7 @@ pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperation
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BondInfo(BondInfo),
     // Clear info of given slot number
     Clear(u8),
@@ -59,7 +59,7 @@ pub(crate) enum StorageKeys {
     KeymapConfig,
     LayoutConfig,
     KeymapKeys,
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BleBondInfo,
 }
 
@@ -69,7 +69,7 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     LayoutConfig(LayoutConfig),
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey<ROW, COL, NUM_LAYER>),
-    #[cfg(feature = "ble")]
+    #[cfg(feature = "nrf_ble")]
     BondInfo(BondInfo),
 }
 
@@ -127,7 +127,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                 buffer[5] = k.row as u8;
                 Ok(6)
             }
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             StorageData::BondInfo(b) => {
                 if buffer.len() < 121 {
                     return Err(MapValueError::BufferTooSmall);
@@ -202,7 +202,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                     action,
                 }))
             }
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             0x6 => {
                 // BleBondInfo
                 // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
@@ -227,7 +227,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageData<ROW
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
             StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as u32,
-            #[cfg(feature = "ble")]
+            #[cfg(feature = "nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
                 let kk = *k;
@@ -403,7 +403,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     .await
                 }
 
-                #[cfg(feature = "ble")]
+                #[cfg(feature = "nrf_ble")]
                 FlashOperationMessage::Clear(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
@@ -420,7 +420,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-                #[cfg(feature = "ble")]
+                #[cfg(feature = "nrf_ble")]
                 FlashOperationMessage::BondInfo(b) => {
                     info!("Saving bond info: {}", info);
                     let data = StorageData::BondInfo(b);
@@ -434,7 +434,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-                #[cfg(not(feature = "ble"))]
+                #[cfg(not(feature = "nrf_ble"))]
                 _ => Ok(()),
             } {
                 print_sequential_storage_err::<F>(e);

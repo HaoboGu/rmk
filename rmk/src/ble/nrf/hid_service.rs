@@ -1,3 +1,5 @@
+use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
+use crate::ble::descriptor::{BleCompositeReportType, BleKeyboardReport};
 use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
@@ -12,11 +14,6 @@ use nrf_softdevice::{
     Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor as _;
-
-use super::{
-    descriptor::{BleCompositeReportType, BleKeyboardReport},
-    spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID},
-};
 
 #[allow(dead_code)]
 pub struct HidService {
@@ -101,7 +98,7 @@ impl HidService {
         let mut output_keyboard = service_builder.add_characteristic(
             BleCharacteristics::HidReport.uuid(),
             Attribute::new([0u8; 1]).security(SecurityMode::JustWorks),
-            Metadata::new(Properties::new().read().write().write_without_response())
+            Metadata::new(Properties::new().read().write().write_without_response()),
         )?;
         let output_keyboard_desc = output_keyboard.add_descriptor(
             BleDescriptor::ReportReference.uuid(),

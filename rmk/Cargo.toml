@@ -41,7 +41,7 @@ sequential-storage = { version = "2.0", git = "https://github.com/tweedegolf/seq
 # Optional dependencies
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
-], default-features = false, optional = true}
+], default-features = false, optional = true }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
     "defmt",
     "ble-peripheral",
@@ -57,20 +57,20 @@ embassy-nrf = { version = "0.1.0", features = [
 ], optional = true }
 
 [features]
-# default = ["eeprom", "col2row", "nrf52840_ble"]
 default = ["eeprom", "col2row"]
 col2row = []
 eeprom = []
-ble = ["dep:nrf-softdevice"]
+ble = []
+nrf_ble = ["ble", "dep:nrf-softdevice"]
 nrf52840_ble = [
-    "ble",
+    "nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52840",
     "nrf-softdevice/s140",
 ]
 nrf52832_ble = [
-    "ble",
+    "nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52832",
