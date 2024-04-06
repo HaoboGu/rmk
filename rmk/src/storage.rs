@@ -147,6 +147,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
     where
         Self: Sized,
     {
+        if buffer.len() < 1 {
+            return Err(MapValueError::InvalidFormat)
+        }
         match buffer[0] {
             0x0 => {
                 // StorageConfig
