@@ -954,7 +954,7 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 [[package]]
 name = "sequential-storage"
 version = "2.0.0"
-source = "git+https://github.com/tweedegolf/sequential-storage?branch=binsize-opts#c364cb535104c012715b43fa3f624b8e13303d29"
+source = "git+https://github.com/tweedegolf/sequential-storage?rev=4dedc23#4dedc236b118173892c8a4160225ec3fe1823718"
 dependencies = [
  "defmt",
  "embedded-storage-async",
