@@ -18,7 +18,7 @@ A feature-rich Rust keyboard firmware.
 
 ## News
 
-- [2024.04.07] BLE support for esp32c3 is available now on master branch, you can try the example at `boards/esp32c3_ble`. Any feedbacks are welcomed! Some more tests should be done before releasing it in next version. 
+- [2024.04.07] BLE support for esp32c3 is available now on main branch, you can try the example at `boards/esp32c3_ble`. It will be released to <crates.io> soon, after some additional testing.
 
 - [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [`boards/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) and [`boards/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) for details.
 
