@@ -35,13 +35,9 @@ impl HidWriterWrapper for BleHidWriter {
             Ok(n) => self.write(&buf[0..n]).await,
             Err(_) => Err(HidError::ReportSerializeError),
         } 
-        // self.lock().set_from(r).notify();
-        // esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        // Ok(())
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
-        info!("Writing report: {=[u8]:#X}", report);
         self.lock().set_value(report).notify();
         esp_idf_svc::hal::delay::Ets::delay_ms(7);
         Ok(())
