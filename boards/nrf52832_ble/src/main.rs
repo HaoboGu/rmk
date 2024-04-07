@@ -16,7 +16,10 @@ use embassy_nrf::{
     interrupt::Priority,
 };
 use panic_probe as _;
-use rmk::config::{KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::{
+    config::{KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    initialize_nrf_ble_keyboard_with_config_and_run,
+};
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -53,7 +56,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
+    initialize_nrf_ble_keyboard_with_config_and_run::<
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
         ROW,

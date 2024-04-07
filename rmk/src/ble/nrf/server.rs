@@ -1,17 +1,19 @@
 use super::{
-    battery_service::BatteryService,
-    device_information_service::{DeviceInformation, DeviceInformationService, PnPID, VidSource},
+    battery_service::BatteryService, device_information_service::DeviceInformationService,
     hid_service::HidService,
 };
 use crate::{
+    ble::device_info::{DeviceInformation, PnPID, VidSource},
     config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
 use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
-        gatt_server::{self, RegisterError, Service, WriteOp}, Connection
-    }, Softdevice
+        gatt_server::{self, RegisterError, Service, WriteOp},
+        Connection,
+    },
+    Softdevice,
 };
 use usbd_hid::descriptor::AsInputReport;
 
@@ -89,7 +91,7 @@ impl<'a, const N: usize> BleHidReader<'a, N> {
     }
 }
 
-// BleServer
+// BleServer saves all services, which have connection handles in it
 pub(crate) struct BleServer {
     _dis: DeviceInformationService,
     pub(crate) bas: BatteryService,

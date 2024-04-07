@@ -152,7 +152,10 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [GESC](https://docs.qmk.fm/#/feature_grave_esc)
             // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
-            warn!("Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}", via_keycode);
+            warn!(
+                "Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
+                via_keycode
+            );
             KeyAction::No
         }
         0x7E00..=0x7E0F => {

@@ -11,20 +11,22 @@ A feature-rich Rust keyboard firmware.
 
 ## Features
 
-- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nrf/rp2040
+- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nrf/rp2040/esp32
 - **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
-- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 microcontrollers, tested on nrf52840
+- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
 
 ## News
 
-- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) and [boards/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) for details.
+- [2024.04.07] BLE support for esp32c3 is available now on main branch, you can try the example at `boards/esp32c3_ble`. It will be released to <crates.io> soon, after some additional testing.
 
-- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
+- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [`boards/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) and [`boards/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) for details.
 
 <details>
 
 <summary>Click to checkout more news</summary>
+
+- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
 
 - [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 

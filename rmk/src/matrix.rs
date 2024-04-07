@@ -1,5 +1,4 @@
 use crate::debounce::Debouncer;
-use core::convert::Infallible;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 
@@ -63,12 +62,8 @@ pub struct Matrix<
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<
-        In: InputPin<Error = Infallible>,
-        Out: OutputPin<Error = Infallible>,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > Matrix<In, Out, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<In: InputPin, Out: OutputPin, const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
+    Matrix<In, Out, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {
@@ -81,17 +76,17 @@ impl<
     }
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
-    pub(crate) async fn scan(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn scan(&mut self) {
         for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
             // Pull up output pin, wait 1us ensuring the change comes into effect
-            out_pin.set_high()?;
+            out_pin.set_high().ok();
             Timer::after_micros(1).await;
             for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                 // Check input pins and debounce
                 let changed = self.debouncer.detect_change_with_debounce(
                     in_idx,
                     out_idx,
-                    in_pin.is_high()?,
+                    in_pin.is_high().ok().unwrap_or_default(),
                     &self.key_states[out_idx][in_idx],
                 );
 
@@ -101,9 +96,8 @@ impl<
 
                 self.key_states[out_idx][in_idx].changed = changed;
             }
-            out_pin.set_low()?;
+            out_pin.set_low().ok();
         }
-        Ok(())
     }
 
     /// When a key is pressed, some callbacks some be called, such as `start_timer`

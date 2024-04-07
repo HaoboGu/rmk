@@ -12,10 +12,13 @@ macro_rules! config_matrix_pins_stm32 {
 }
 
 macro_rules! output_pin_stm32 {
-    (peripherals: $p:ident, output: $out_pin:ident, initial_level: $initial_level: ident) => {
-        {
-            let output_pin = Output::new($p.$out_pin, embassy_stm32::gpio::Level::$initial_level, embassy_stm32::gpio::Speed::VeryHigh).degrade();
-            Some(output_pin)
-        }
-    };
+    (peripherals: $p:ident, output: $out_pin:ident, initial_level: $initial_level: ident) => {{
+        let output_pin = Output::new(
+            $p.$out_pin,
+            embassy_stm32::gpio::Level::$initial_level,
+            embassy_stm32::gpio::Speed::VeryHigh,
+        )
+        .degrade();
+        Some(output_pin)
+    }};
 }

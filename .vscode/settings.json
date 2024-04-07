@@ -6,17 +6,14 @@
         "check",
         "--quiet",
         "--message-format=json",
-        "--all-features"
-    ],
-    "rust-analyzer.cargo.buildScripts.overrideCommand": [
-        "cargo",
-        "check",
-        "--quiet",
-        "--message-format=json",
-        "--all-features"
+        // Set the target if needed
+        // "--target",
+        // "riscv32imc-esp-espidf",
     ],
     "rust-analyzer.linkedProjects": [
         "rmk/Cargo.toml",
+        // Enable ONE of the following for accurate analyzation of RA
+        "boards/esp32c3_ble/Cargo.toml",
         "boards/stm32h7/Cargo.toml",
         "boards/stm32f4/Cargo.toml",
         "boards/stm32f1/Cargo.toml",
@@ -25,4 +22,5 @@
         "boards/nrf52832_ble/Cargo.toml",
         "boards/rp2040/Cargo.toml"
     ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
 }

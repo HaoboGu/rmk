@@ -86,9 +86,6 @@ impl ModifierCombination {
         for item in keycodes.iter().take(n) {
             hid_modifier_bits |= item.as_modifier_bit();
         }
-        // for i in 0..n {
-            // hid_modifier_bits |= keycodes[i].as_modifier_bit();
-        // }
 
         hid_modifier_bits
     }

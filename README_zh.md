@@ -9,21 +9,23 @@
 
 ## 特性
 
-- **支持范围广**：基于 [embassy](https://github.com/embassy-rs/embassy)，RMK 支持非常多的MCU系列，例如 stm32/nrf/rp2040等。
+- **支持范围广**：基于 [embassy](https://github.com/embassy-rs/embassy)，RMK 支持非常多的MCU系列，例如 stm32/nrf/rp2040/esp32等。
 - **实时键位编辑**：使用 vial 进行实时键位编辑，可以在编译时定制键盘布局。
 - **高级键盘功能**：RMK 默认提供许多高级键盘功能，如层切换、媒体控制、系统控制、鼠标控制等。
-- **无线支持**：（实验性功能）RMK 支持 BLE 无线功能，包括自动重新连接和多设备功能，已经在 nrf52840 上进行了测试。
+- **无线支持**：（实验性功能）RMK 支持 BLE 无线功能，包括自动重新连接和多设备功能，已经在 nrf52840 和 esp32c3 上进行了测试。
 
 
 ## 新闻
 
-[2024.03.07] RMK 添加了对 nrf52840/nrf52832 的 BLE 支持，包括自动重新连接和多设备功能！具体用法可以参考 [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) 和 [boards/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) 下的示例
+- [2024.04.07] 现在esp32c3的蓝牙支持已经在主分支上可用，示例可以参考 `boards/esp32c3_ble`
 
-[2024.02.18] 版本 `0.1.4` 发布了！这个版本加入了一个自动生成 vial 配置的构建脚本，一点点 API 更新以及全新的[用户文档](https://haobogu.github.io/rmk)。
+- [2024.03.07] RMK 添加了对 nrf52840/nrf52832 的 BLE 支持，包括自动重新连接和多设备功能！具体用法可以参考 [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) 和 [boards/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) 下的示例
 
 <details>
 
 <summary>点击查看更多</summary>
+
+[2024.02.18] 版本 `0.1.4` 发布了！这个版本加入了一个自动生成 vial 配置的构建脚本，一点点 API 更新以及全新的[用户文档](https://haobogu.github.io/rmk)。
 
 - 下面懒得翻译了，就酱
  

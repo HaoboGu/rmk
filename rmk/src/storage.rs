@@ -148,7 +148,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
         Self: Sized,
     {
         if buffer.len() < 1 {
-            return Err(MapValueError::InvalidFormat)
+            return Err(MapValueError::InvalidFormat);
         }
         match buffer[0] {
             0x0 => {

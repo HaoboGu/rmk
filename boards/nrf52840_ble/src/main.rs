@@ -21,6 +21,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    initialize_nrf_ble_keyboard_with_config_and_run,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -61,7 +62,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
+    initialize_nrf_ble_keyboard_with_config_and_run::<
         Driver<'_, USBD, &SoftwareVbusDetect>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,

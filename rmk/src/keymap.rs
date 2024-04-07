@@ -29,6 +29,14 @@ pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
 }
 
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
+    pub async fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+        KeyMap {
+            layers: action_map,
+            layer_state: [false; NUM_LAYER],
+            default_layer: 0,
+            layer_cache: [[0; COL]; ROW],
+        }
+    }
     pub async fn new_from_storage<F: NorFlash>(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,

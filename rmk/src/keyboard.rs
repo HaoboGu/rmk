@@ -84,8 +84,8 @@ pub(crate) struct Keyboard<
 
 impl<
         'a,
-        In: InputPin<Error = Infallible>,
-        Out: OutputPin<Error = Infallible>,
+        In: InputPin,
+        Out: OutputPin,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
@@ -235,9 +235,9 @@ impl<
 
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
-    pub(crate) async fn scan_matrix(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn scan_matrix(&mut self) {
         // Matrix scan
-        self.matrix.scan().await?;
+        self.matrix.scan().await;
 
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
@@ -250,8 +250,6 @@ impl<
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Process key changes at (row, col)
