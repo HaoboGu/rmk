@@ -45,7 +45,7 @@ async fn main(_spawner: Spawner) {
             info!("Got namespace {:?} from default partition", test_namespace);
             nvs
         }
-        Err(e) => defmt::panic!("Could't get namespace"),
+        Err(_e) => defmt::panic!("Could't get namespace"),
     };
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);

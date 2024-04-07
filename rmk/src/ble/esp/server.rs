@@ -1,5 +1,6 @@
 extern crate alloc;
 use alloc::sync::Arc;
+use defmt::{info, warn};
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
@@ -14,18 +15,58 @@ use crate::{
         device_info::VidSource,
     },
     config::KeyboardUsbConfig,
-    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidWriterWrapper},
+    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
 
+type BleHidWriter = Arc<Mutex<BLECharacteristic>>;
+type BleHidReader = Arc<Mutex<BLECharacteristic>>;
+
+impl ConnectionTypeWrapper for BleHidWriter {
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::Ble
+    }
+}
+
+impl HidWriterWrapper for BleHidWriter {
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+        use ssmarshal::serialize;
+        let mut buf: [u8; 32] = [0; 32];
+        match serialize(&mut buf, &r) {
+            Ok(n) => self.write(&buf[0..n]).await,
+            Err(_) => Err(HidError::ReportSerializeError),
+        } 
+        // self.lock().set_from(r).notify();
+        // esp_idf_svc::hal::delay::Ets::delay_ms(7);
+        // Ok(())
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        info!("Writing report: {=[u8]:#X}", report);
+        self.lock().set_value(report).notify();
+        esp_idf_svc::hal::delay::Ets::delay_ms(7);
+        Ok(())
+    }
+}
+
+// FIXME: ESP BLE HID Reader
+impl HidReaderWrapper for BleHidReader {
+    async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
+        self.lock().on_read(|a, _| {
+            info!("on_read!, {} {=[u8]:#X}", a.len(), a.value());
+        });
+        Ok(1)
+    }
+}
+
 pub(crate) struct BleServer {
-    server: &'static mut BLEServer,
-    input_keyboard: Arc<Mutex<BLECharacteristic>>,
-    output_keyboard: Arc<Mutex<BLECharacteristic>>,
-    input_media_keys: Arc<Mutex<BLECharacteristic>>,
-    input_system_keys: Arc<Mutex<BLECharacteristic>>,
-    input_mouse_keys: Arc<Mutex<BLECharacteristic>>,
-    input_vial: Arc<Mutex<BLECharacteristic>>,
-    output_vial: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) server: &'static mut BLEServer,
+    pub(crate) input_keyboard: BleHidWriter,
+    pub(crate) output_keyboard: BleHidReader,
+    pub(crate) input_media_keys: BleHidWriter,
+    pub(crate) input_system_keys: BleHidWriter,
+    pub(crate) input_mouse_keys: BleHidWriter,
+    pub(crate) input_vial: BleHidWriter,
+    pub(crate) output_vial: BleHidReader,
 }
 
 impl BleServer {
@@ -39,6 +80,12 @@ impl BleServer {
             .set_io_cap(SecurityIOCap::NoInputNoOutput)
             .resolve_rpa();
         let server = device.get_server();
+        // Set disconnected callback
+        server.on_disconnect(|_, r| {
+            if let Err(e) = r {
+                warn!("BLE disconnected, error code: {}", e.code());
+            }
+        });
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer.unwrap_or("Haobo"));
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
@@ -84,19 +131,24 @@ impl BleServer {
         }
     }
 
-    pub(crate) async fn wait_for_connection(&self) {
+    pub(crate) async fn wait_for_connection(&mut self) {
         loop {
             // Check connection status every 100 ms
             Timer::after_millis(100).await;
-            if !self.connected() {
-                continue;
+            if self.server.connected_count() > 0 {
+                break;
             }
-            break;
         }
     }
- 
-    pub(crate) fn connected(&self) -> bool {
-        self.server.connected_count() > 0
+
+    pub(crate) async fn wait_for_disconnection(server: &'static mut BLEServer) {
+        loop {
+            // Check connection status every 500 ms
+            Timer::after_millis(500).await;
+            if server.connected_count() == 0 {
+                break;
+            }
+        }
     }
 }
 

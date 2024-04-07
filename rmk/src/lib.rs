@@ -469,7 +469,10 @@ async fn run_ble_keyboard<
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
 ) {
-    use crate::ble::nrf::{ble_battery_task, keyboard_ble_task, server::BleHidWriter};
+    use crate::ble::{
+        keyboard_ble_task,
+        nrf::{ble_battery_task, server::BleHidWriter},
+    };
 
     info!("Starting GATT server 200 ms later");
     Timer::after_millis(200).await;
