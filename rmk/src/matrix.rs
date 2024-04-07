@@ -62,12 +62,8 @@ pub struct Matrix<
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<
-        In: InputPin,
-        Out: OutputPin,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > Matrix<In, Out, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<In: InputPin, Out: OutputPin, const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
+    Matrix<In, Out, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {

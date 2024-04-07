@@ -6,18 +6,13 @@
         "check",
         "--quiet",
         "--message-format=json",
-        "--target",
-        "riscv32imc-esp-espidf",
+        // Set the target if needed
+        // "--target",
+        // "riscv32imc-esp-espidf",
     ],
-    // "rust-analyzer.cargo.buildScripts.overrideCommand": [
-    //     "cargo",
-    //     "check",
-    //     "--quiet",
-    //     "--message-format=json",
-    //     "--all-features"
-    // ],
     "rust-analyzer.linkedProjects": [
-        // "rmk/Cargo.toml",
+        "rmk/Cargo.toml",
+        // Enable one of the following
         "boards/esp32c3_ble/Cargo.toml",
         // "boards/stm32h7/Cargo.toml",
         // "boards/stm32f4/Cargo.toml",

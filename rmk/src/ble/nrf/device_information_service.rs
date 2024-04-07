@@ -1,3 +1,5 @@
+use super::spec::{BleCharacteristics, BleSpecification};
+use crate::ble::device_info::{DeviceInformation, PnPID};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -9,8 +11,6 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
-use crate::ble::device_info::{DeviceInformation, PnPID};
-use super::spec::{BleCharacteristics, BleSpecification};
 
 pub struct DeviceInformationService {}
 

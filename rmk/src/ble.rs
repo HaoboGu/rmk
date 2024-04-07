@@ -4,7 +4,7 @@ pub(crate) mod device_info;
 #[cfg(feature = "esp_ble")]
 pub mod esp;
 #[cfg(feature = "nrf_ble")]
-pub(crate) mod nrf;
+pub mod nrf;
 
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -32,7 +32,7 @@ pub(crate) async fn keyboard_ble_task<
     ble_system_control_writer: &mut W3,
     ble_mouse_writer: &mut W4,
 ) {
-    // Wait 2 seconds, ensure that gatt server has been started
+    // Wait 1 seconds, ensure that gatt server has been started
     Timer::after_secs(1).await;
     loop {
         let _ = keyboard.scan_matrix().await;

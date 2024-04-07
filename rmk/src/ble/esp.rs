@@ -33,7 +33,6 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     input_pins: [In; ROW],
     output_pins: [Out; COL],
-    // flash: Option<F>,
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // TODO: Use esp nvs as the storage

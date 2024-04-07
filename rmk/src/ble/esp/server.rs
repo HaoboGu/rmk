@@ -34,7 +34,7 @@ impl HidWriterWrapper for BleHidWriter {
         match serialize(&mut buf, &r) {
             Ok(n) => self.write(&buf[0..n]).await,
             Err(_) => Err(HidError::ReportSerializeError),
-        } 
+        }
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
@@ -54,6 +54,7 @@ impl HidReaderWrapper for BleHidReader {
     }
 }
 
+// BLE HID keyboard server
 pub(crate) struct BleServer {
     pub(crate) server: &'static mut BLEServer,
     pub(crate) input_keyboard: BleHidWriter,

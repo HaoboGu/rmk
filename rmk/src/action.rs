@@ -143,7 +143,7 @@ pub enum Action {
     /// Uses 0xE60 ~ 0xE7F. Serialized as 1110|011|layer_num(5bits)
     LayerToggle(u8),
     /// Set default layer
-    /// 
+    ///
     /// Uses 0xE80 ~ 0xE9F. Serialized as 1110|100|layer_num(5bits)
     DefaultLayer(u8),
 }
