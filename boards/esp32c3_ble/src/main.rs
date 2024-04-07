@@ -34,12 +34,14 @@ async fn main(_spawner: Spawner) {
     let peripherals = Peripherals::take().unwrap();
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio8, gpio9], output: [gpio10, gpio11, gpio12]);
+    // WARNING: Some gpio pins shouldn't be used, the initial state is error.
+    // reference: table 2-3 in https://www.espressif.com.cn/sites/default/files/documentation/esp32-c3_datasheet_en.pdf
+    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio20, gpio21], output: [gpio3, gpio4, gpio5]);
 
     // Flash config
     let nvs_default_partition: EspNvsPartition<NvsDefault> =
         EspDefaultNvsPartition::take().unwrap();
-    let test_namespace = "test_ns";
+    let test_namespace = "rmk";
     let mut _nvs = match EspNvs::new(nvs_default_partition, test_namespace, true) {
         Ok(nvs) => {
             info!("Got namespace {:?} from default partition", test_namespace);
@@ -55,8 +57,8 @@ async fn main(_spawner: Spawner) {
     };
 
     initialize_esp_ble_keyboard_with_config_and_run::<
-        PinDriver<'_, AnyIOPin, Input>,
-        PinDriver<'_, AnyIOPin, Output>,
+        PinDriver<'_, AnyInputPin, Input>,
+        PinDriver<'_, AnyOutputPin, Output>,
         ROW,
         COL,
         NUM_LAYER,
