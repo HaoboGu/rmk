@@ -19,13 +19,6 @@ pub(crate) struct BondInfo {
     pub(crate) removed: bool,
 }
 
-// Error when saving bond info into storage
-#[derive(Clone, Copy, Debug, Format)]
-pub enum StorageError {
-    BufferTooSmall,
-    ItemWrongSize,
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Format)]
 pub(crate) struct Peer {

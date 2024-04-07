@@ -142,6 +142,10 @@ pub enum Action {
     ///
     /// Uses 0xE60 ~ 0xE7F. Serialized as 1110|011|layer_num(5bits)
     LayerToggle(u8),
+    /// Set default layer
+    /// 
+    /// Uses 0xE80 ~ 0xE9F. Serialized as 1110|100|layer_num(5bits)
+    DefaultLayer(u8),
 }
 
 impl Action {
@@ -153,6 +157,7 @@ impl Action {
             Action::LayerOn(layer) => 0xE20 | (layer as u16),
             Action::LayerOff(layer) => 0xE40 | (layer as u16),
             Action::LayerToggle(layer) => 0xE60 | (layer as u16),
+            Action::DefaultLayer(layer) => 0xE80 | (layer as u16),
         }
     }
 
@@ -175,6 +180,10 @@ impl Action {
             0xE60..=0xE7F => {
                 let layer = (action_code & 0xFF) as u8;
                 Action::LayerToggle(layer)
+            }
+            0xE80..=0xE9F => {
+                let layer = (action_code & 0xFF) as u8;
+                Action::DefaultLayer(layer)
             }
             _ => {
                 warn!("Not a valid 12-bit action code: {:#X}", action_code);
