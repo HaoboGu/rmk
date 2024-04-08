@@ -70,8 +70,14 @@ pub async fn initialize_keyboard_and_run<
     const NUM_LAYER: usize,
 >(
     driver: D,
+    #[cfg(feature = "col2row")]
     input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))]
+    input_pins: [In; COL],
+    #[cfg(feature = "col2row")]
     output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))]
+    output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     vial_keyboard_id: &'static [u8],
@@ -113,8 +119,14 @@ pub async fn initialize_keyboard_with_config_and_run<
     const NUM_LAYER: usize,
 >(
     driver: D,
+    #[cfg(feature = "col2row")]
     input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))]
+    input_pins: [In; COL],
+    #[cfg(feature = "col2row")]
     output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))]
+    output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
@@ -153,8 +165,14 @@ pub async fn initialize_keyboard_with_config_and_run_async_flash<
     const NUM_LAYER: usize,
 >(
     driver: D,
+    #[cfg(feature = "col2row")]
     input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))]
+    input_pins: [In; COL],
+    #[cfg(feature = "col2row")]
     output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))]
+    output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,

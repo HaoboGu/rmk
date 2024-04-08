@@ -5,7 +5,6 @@ RMK has built-in wireless(BLE) support for nRF52840 and nRF52832. Supporting of 
 ```toml
 rmk = { version = "0.1.11", features = [
     "nrf52840_ble",
-    "eeprom",
     "col2row",
 ] }
 ```

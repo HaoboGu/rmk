@@ -12,7 +12,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { version = "0.1.11", path = "../../rmk", features = [
     "nrf52840_ble",
-    "eeprom",
     "col2row",
 ] }
 cortex-m = "0.7.7"

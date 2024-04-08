@@ -31,8 +31,14 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     const NUM_LAYER: usize,
 >(
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    #[cfg(feature = "col2row")]
     input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))]
+    input_pins: [In; COL],
+    #[cfg(feature = "col2row")]
     output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))]
+    output_pins: [Out; ROW],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // TODO: Use esp nvs as the storage

@@ -91,10 +91,16 @@ impl<
         const NUM_LAYER: usize,
     > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
-    #[cfg(feature = "col2row")]
+    // #[cfg(feature = "col2row")]
     pub(crate) fn new(
+        #[cfg(feature = "col2row")]
         input_pins: [In; ROW],
+        #[cfg(not(feature = "col2row"))]
+        input_pins: [In; COL],
+        #[cfg(feature = "col2row")]
         output_pins: [Out; COL],
+        #[cfg(not(feature = "col2row"))]
+        output_pins: [Out; ROW],
         keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {
@@ -118,33 +124,6 @@ impl<
             last_mouse_tick: 0,
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
-        }
-    }
-
-    #[cfg(not(feature = "col2row"))]
-    pub(crate) fn new(
-        input_pins: [In; COL],
-        output_pins: [Out; ROW],
-        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    ) -> Self {
-        Keyboard {
-            matrix: Matrix::new(input_pins, output_pins),
-            keymap,
-            report: KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0; 6],
-            },
-            other_report: CompositeReport::default(),
-            via_report: ViaReport {
-                input_data: [0; 32],
-                output_data: [0; 32],
-            },
-            need_send_key_report: false,
-            need_send_consumer_control_report: false,
-            need_send_system_control_report: false,
-            need_send_mouse_report: false,
         }
     }
 

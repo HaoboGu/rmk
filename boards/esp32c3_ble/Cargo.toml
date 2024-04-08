@@ -12,7 +12,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { version = "0.1.11", path = "../../rmk", features = [
     "col2row",
-    "eeprom",
     "esp32c3_ble",
 ] }
 esp32-nimble = { version = "0.6.0", default-features = false, features = [
@@ -26,10 +25,7 @@ embassy-executor = { version = "0.5.0", features = [
     "executor-thread",
     "defmt",
 ] }
-esp-println = { version = "0.9", features = [
-    "esp32c3",
-    "defmt-espflash"
-]}
+esp-println = { version = "0.9", features = ["esp32c3", "defmt-espflash"] }
 esp-idf-svc = { version = "0.48", default-features = false, features = [
     "alloc_handler",
     "embassy-sync",

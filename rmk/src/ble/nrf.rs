@@ -162,8 +162,14 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     const NUM_LAYER: usize,
 >(
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    #[cfg(feature = "col2row")]
     input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))]
+    input_pins: [In; COL],
+    #[cfg(feature = "col2row")]
     output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))]
+    output_pins: [Out; ROW],
     #[cfg(not(feature = "nrf52832_ble"))] usb_driver: Option<D>,
     keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,

@@ -65,7 +65,7 @@ esp32-nimble = { version = "0.6.0", default-features = false, features = [
 esp-idf-svc = { version = "0.48", default-features = false, optional = true }
 
 [features]
-default = ["eeprom", "col2row"]
+default = ["col2row"]
 col2row = []
 eeprom = []
 ble = []
