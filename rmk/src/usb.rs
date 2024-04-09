@@ -25,7 +25,8 @@ pub(crate) static USB_DEVICE_ENABLED: AtomicBool = AtomicBool::new(false);
 pub(crate) async fn wait_for_usb_suspend() {
     loop {
         let suspended = USB_SUSPENDED.load(core::sync::atomic::Ordering::Acquire);
-        if suspended {
+        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended || (!enabled) {
             break;
         }
         // Check usb suspended state every 10ms
