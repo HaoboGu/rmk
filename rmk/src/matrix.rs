@@ -1,9 +1,10 @@
 use crate::debounce::Debouncer;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+use defmt::Format;
 
 /// KeyState represents the state of a key.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Format)]
 pub(crate) struct KeyState {
     pub(crate) pressed: bool,
     pub(crate) changed: bool,

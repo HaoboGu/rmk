@@ -1,7 +1,6 @@
 use defmt::Format;
 use num_enum::FromPrimitive;
 use packed_struct::prelude::*;
-use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
@@ -99,6 +98,87 @@ impl ModifierCombination {
     pub(crate) fn from_bits(bits: u8) -> Self {
         ModifierCombination::unpack_from_slice(&[bits]).unwrap_or_default()
     }
+}
+
+/// Keys in consumer page
+/// Ref: https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75
+#[non_exhaustive]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[repr(u16)]
+pub enum ConsumerKey {
+    #[num_enum(default)]
+    Zero = 0x00,
+    // 15.5 Display Controls
+    SnapShot = 0x65,
+    /// https://www.usb.org/sites/default/files/hutrr41_0.pdf
+    BrightnessUp = 0x6F,
+    BrightnessDown = 0x70,
+    // 15.7 Transport Controls
+    Play = 0xB0,
+    Pause = 0xB1,
+    Record = 0xB2,
+    FastForward = 0xB3,
+    Rewind = 0xB4,
+    NextTrack = 0xB5,
+    PrevTrack = 0xB6,
+    StopPlay = 0xB7,
+    Eject = 0xB8,
+    RandomPlay = 0xB9,
+    Repeat = 0xBC,
+    StopEject = 0xCC,
+    PlayPause = 0xCD,
+    // 15.9.1 Audio Controls - Volume
+    Mute = 0xE2,
+    VolumeIncrement = 0xE9,
+    VolumeDecrement = 0xEA,
+    Reserved = 0xEB,
+    // 15.15 Application Launch Buttons
+    Email = 0x18A,
+    Calculator = 0x192,
+    LocalBrowser = 0x194,
+    Lock = 0x19E,
+    ControlPanel = 0x19F,
+    Assistant = 0x1CB,
+    // 15.16 Generic GUI Application Controls
+    New = 0x201,
+    Open = 0x202,
+    Close = 0x203,
+    Exit = 0x204,
+    Maximize = 0x205,
+    Minimize = 0x206,
+    Save = 0x207,
+    Print = 0x208,
+    Properties = 0x209,
+    Undo = 0x21A,
+    Copy = 0x21B,
+    Cut = 0x21C,
+    Paste = 0x21D,
+    SelectAll = 0x21E,
+    Find = 0x21F,
+    Search = 0x221,
+    Home = 0x223,
+    Back = 0x224,
+    Forward = 0x225,
+    Stop = 0x226,
+    Refresh = 0x227,
+    Bookmarks = 0x22A,
+    NextKeyboardLayoutSelect = 0x29D,
+    DesktopShowAllWindows = 0x29F,
+    AcSoftKeyLeft = 0x2A0,
+}
+
+/// Keys in `Generic Desktop Page`, generally used for system control
+/// Ref: https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26
+#[non_exhaustive]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[repr(u16)]
+pub enum SystemControlKey {
+    #[num_enum(default)]
+    Zero = 0x00,
+    PowerDown = 0x81,
+    Sleep = 0x82,
+    WakeUp = 0x83,
+    Restart = 0x8F,
 }
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
@@ -922,26 +1002,36 @@ impl KeyCode {
     }
 
     /// Convert a keycode to usb hid media key
-    pub(crate) fn as_consumer_control_usage_id(self) -> MediaKey {
+    pub(crate) fn as_consumer_control_usage_id(self) -> ConsumerKey {
         match self {
-            KeyCode::AudioMute => MediaKey::Mute,
-            KeyCode::AudioVolUp => MediaKey::VolumeIncrement,
-            KeyCode::AudioVolDown => MediaKey::VolumeDecrement,
-            KeyCode::MediaNextTrack => MediaKey::NextTrack,
-            KeyCode::MediaPrevTrack => MediaKey::PrevTrack,
-            KeyCode::MediaStop => MediaKey::Stop,
-            KeyCode::MediaPlayPause => MediaKey::PlayPause,
-            KeyCode::MediaSelect => MediaKey::Record,
-            // KeyCode::MediaEject => None,
-            // KeyCode::MediaFastForward => None,
-            // KeyCode::MediaRewind => None,
-            // KeyCode::BrightnessUp => MediaKey::BrightnessUp,
-            // KeyCode::BrightnessDown => MediaKey::BrightnessDown,
-            // KeyCode::ControlPanel => None,
-            // KeyCode::Assistant => None,
-            // KeyCode::MissionControl => None,
-            // KeyCode::Launchpad => None,
-            _ => MediaKey::Zero,
+            KeyCode::AudioMute => ConsumerKey::Mute,
+            KeyCode::AudioVolUp => ConsumerKey::VolumeIncrement,
+            KeyCode::AudioVolDown => ConsumerKey::VolumeDecrement,
+            KeyCode::MediaNextTrack => ConsumerKey::NextTrack,
+            KeyCode::MediaPrevTrack => ConsumerKey::PrevTrack,
+            KeyCode::MediaStop => ConsumerKey::StopPlay,
+            KeyCode::MediaPlayPause => ConsumerKey::PlayPause,
+            KeyCode::MediaSelect => ConsumerKey::Record,
+            KeyCode::MediaEject => ConsumerKey::Eject,
+            KeyCode::Mail => ConsumerKey::Email,
+            KeyCode::Calculator => ConsumerKey::Calculator,
+            KeyCode::MyComputer => ConsumerKey::LocalBrowser,
+            KeyCode::WwwSearch => ConsumerKey::Search,
+            KeyCode::WwwHome => ConsumerKey::Home,
+            KeyCode::WwwBack => ConsumerKey::Back,
+            KeyCode::WwwForward => ConsumerKey::Forward,
+            KeyCode::WwwStop => ConsumerKey::Stop,
+            KeyCode::WwwRefresh => ConsumerKey::Refresh,
+            KeyCode::WwwFavorites => ConsumerKey::Bookmarks,
+            KeyCode::MediaFastForward => ConsumerKey::FastForward,
+            KeyCode::MediaRewind => ConsumerKey::Rewind,
+            KeyCode::BrightnessUp => ConsumerKey::BrightnessUp,
+            KeyCode::BrightnessDown => ConsumerKey::BrightnessDown,
+            KeyCode::ControlPanel => ConsumerKey::ControlPanel,
+            KeyCode::Assistant => ConsumerKey::Assistant,
+            KeyCode::MissionControl => ConsumerKey::DesktopShowAllWindows,
+            KeyCode::Launchpad => ConsumerKey::AcSoftKeyLeft,
+            _ => ConsumerKey::Zero,
         }
     }
 
