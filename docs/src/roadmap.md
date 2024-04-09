@@ -26,11 +26,11 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 #### Wireless
   - [x] BLE support - nRF
   - [x] auto switch between BLE/USB
+  - [x] battery service from ADC
   - [ ] stablizing BLE feature gate/API
   - [ ] sleep mode to save battery
   - [ ] 🔴 BLE support - esp32
   - [ ] BLE support - ch58x/ch59x
-  - [ ] 🟢 battery service from ADC
   - [ ] 🔵 universal BLE wrapper
 
 #### User experience
