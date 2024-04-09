@@ -6,7 +6,7 @@ use crate::{
     matrix::{KeyState, Matrix},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
-use core::{cell::RefCell, convert::Infallible};
+use core::cell::RefCell;
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -16,8 +16,8 @@ pub(crate) async fn keyboard_task<
     'a,
     W: HidWriterWrapper,
     W2: HidWriterWrapper,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -91,16 +91,11 @@ impl<
         const NUM_LAYER: usize,
     > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
-    // #[cfg(feature = "col2row")]
     pub(crate) fn new(
-        #[cfg(feature = "col2row")]
-        input_pins: [In; ROW],
-        #[cfg(not(feature = "col2row"))]
-        input_pins: [In; COL],
-        #[cfg(feature = "col2row")]
-        output_pins: [Out; COL],
-        #[cfg(not(feature = "col2row"))]
-        output_pins: [Out; ROW],
+        #[cfg(feature = "col2row")] input_pins: [In; ROW],
+        #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+        #[cfg(feature = "col2row")] output_pins: [Out; COL],
+        #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
         keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {

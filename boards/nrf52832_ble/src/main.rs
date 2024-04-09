@@ -68,6 +68,7 @@ async fn main(spawner: Spawner) {
         output_pins,
         keyboard_config,
         spawner,
+        None,
     )
     .await;
 }

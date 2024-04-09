@@ -17,7 +17,7 @@ use crate::{
 };
 use action::KeyAction;
 use config::{RmkConfig, VialConfig};
-use core::{cell::RefCell, convert::Infallible};
+use core::cell::RefCell;
 use defmt::*;
 use embassy_futures::select::{select, select4, Either, Either4};
 use embassy_time::Timer;
@@ -62,22 +62,18 @@ mod via;
 /// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate them automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs)
 pub async fn initialize_keyboard_and_run<
     D: Driver<'static>,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     F: NorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     driver: D,
-    #[cfg(feature = "col2row")]
-    input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))]
-    input_pins: [In; COL],
-    #[cfg(feature = "col2row")]
-    output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))]
-    output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     vial_keyboard_id: &'static [u8],
@@ -112,21 +108,17 @@ pub async fn initialize_keyboard_and_run<
 pub async fn initialize_keyboard_with_config_and_run<
     F: NorFlash,
     D: Driver<'static>,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     driver: D,
-    #[cfg(feature = "col2row")]
-    input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))]
-    input_pins: [In; COL],
-    #[cfg(feature = "col2row")]
-    output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))]
-    output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
@@ -158,21 +150,17 @@ pub async fn initialize_keyboard_with_config_and_run<
 pub async fn initialize_keyboard_with_config_and_run_async_flash<
     F: AsyncNorFlash,
     D: Driver<'static>,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     driver: D,
-    #[cfg(feature = "col2row")]
-    input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))]
-    input_pins: [In; COL],
-    #[cfg(feature = "col2row")]
-    output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))]
-    output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     flash: Option<F>,
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
@@ -248,8 +236,8 @@ pub(crate) async fn run_usb_keyboard<
     'b,
     D: Driver<'a>,
     F: AsyncNorFlash,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,

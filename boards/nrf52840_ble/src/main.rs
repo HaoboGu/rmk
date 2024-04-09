@@ -14,7 +14,8 @@ use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
     interrupt::{self, InterruptExt, Priority},
-    peripherals::{self, USBD},
+    peripherals::{self, SAADC, USBD},
+    saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
 use panic_probe as _;
@@ -28,7 +29,18 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<peripherals::USBD>;
+    SAADC => saadc::InterruptHandler;
 });
+
+/// Initializes the SAADC peripheral in single-ended mode on the given pin.
+fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
+    // Then we initialize the ADC. We are only using one channel in this example.
+    let config = saadc::Config::default();
+    let channel_cfg = saadc::ChannelConfig::single_ended(adc_pin.degrade_saadc());
+    interrupt::SAADC.set_priority(interrupt::Priority::P3);
+    let saadc = saadc::Saadc::new(adc, Irqs, config, [channel_cfg]);
+    saadc
+}
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -62,6 +74,12 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
+    // Then we initialize the ADC. We are only using one channel in this example.
+    let adc_pin = p.P0_05.degrade_saadc();
+    let saadc = init_adc(adc_pin, p.SAADC);
+    // Indicated: wait for ADC calibration.
+    saadc.calibrate().await;
+
     initialize_nrf_ble_keyboard_with_config_and_run::<
         Driver<'_, USBD, &SoftwareVbusDetect>,
         Input<'_, AnyPin>,
@@ -76,6 +94,7 @@ async fn main(spawner: Spawner) {
         Some(driver),
         keyboard_config,
         spawner,
+        Some(saadc),
     )
     .await;
 }

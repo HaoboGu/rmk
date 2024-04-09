@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52832-ble"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "const-gen",
  "cortex-m",
