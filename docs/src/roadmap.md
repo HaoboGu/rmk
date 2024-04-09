@@ -27,18 +27,19 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] BLE support - nRF
   - [x] auto switch between BLE/USB
   - [x] battery service from ADC
+  - [x] 🔴 BLE support - esp32c3
+  - [ ] 🔴 BLE support - all esp32 chips
+  - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP at least
   - [ ] stablizing BLE feature gate/API
   - [ ] sleep mode to save battery
-  - [ ] 🔴 BLE support - esp32
   - [ ] BLE support - ch58x/ch59x
-  - [ ] 🔵 universal BLE wrapper
 
 #### User experience
   - [x] vial support
   - [ ] 🔴🔵 GUI configurator which supports windos/macos/linux/web
   - [ ] default bootloader
   - [ ] USB DFU/OTA
-  - [ ] 🔴 easy keyboard configuration with good default
+  - [ ] 🔴 easy keyboard configuration with good default, support different MCUs
   - [ ] making vial and default keymap consistent automatically
   - [ ] good documentation
 
