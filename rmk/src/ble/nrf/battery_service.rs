@@ -1,7 +1,8 @@
 use defmt::{error, info};
-use embassy_nrf::saadc::Saadc;
 use embassy_time::Timer;
 use nrf_softdevice::ble::Connection;
+
+use crate::config::BleBatteryConfig;
 
 use super::server::BleServer;
 
@@ -21,12 +22,18 @@ const BATTERY_LEVEL_LOOPUP_TABLE: [u8; 111] = [
     100, 100,
 ];
 
-impl BatteryService {
-    pub(crate) async fn run(&mut self, saadc: &mut Option<Saadc<'static, 1>>, conn: &Connection) {
+impl<'a> BatteryService {
+    pub(crate) async fn run(&mut self, battery_config: &mut BleBatteryConfig<'a>, conn: &Connection) {
         // Wait 1 seconds, ensure that gatt server has been started
         Timer::after_secs(1).await;
+        // Low means charging
+        if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
+            if is_charging_pin.is_low() {
+                info!("Charging!");
+            }
+        }
         loop {
-            if let Some(saadc) = saadc {
+            if let Some(ref mut saadc) = battery_config.saadc {
                 let mut buf = [0i16; 1];
                 saadc.sample(&mut buf).await;
                 // We only sampled one ADC channel.
@@ -37,7 +44,15 @@ impl BatteryService {
                         Ok(_) => info!("Battery value set: {}", val),
                         Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
                     },
-                } 
+                }
+            }
+
+            // Low means charging
+            // TODO: customize charging level
+            if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
+                if is_charging_pin.is_low() {
+                    info!("Charging!");
+                }
             }
             // Sample every 120s
             Timer::after_secs(120).await

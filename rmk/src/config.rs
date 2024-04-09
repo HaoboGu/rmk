@@ -1,14 +1,27 @@
+#[cfg(feature = "esp_ble")]
+mod esp_config;
+#[cfg(feature = "nrf_ble")]
+mod nrf_config;
+
+#[cfg(feature = "esp_ble")]
+pub use esp_config::BleBatteryConfig;
+#[cfg(feature = "nrf_ble")]
+pub use nrf_config::BleBatteryConfig;
+
 use embedded_hal::digital::{OutputPin, PinState};
 
 // TODO: more configs need to be added, easy configuration(from config file)
 /// Configurations for RMK keyboard.
-#[derive(Clone, Copy, Debug)]
 pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
     pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
+    #[cfg(feature = "nrf_ble")]
+    pub ble_battery_config: BleBatteryConfig<'a>,
+    #[cfg(feature = "esp_ble")]
+    pub ble_battery_config: BleBatteryConfig,
 }
 
 impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
@@ -19,6 +32,8 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
             vial_config: VialConfig::default(),
             light_config: LightConfig::default(),
             storage_config: StorageConfig::default(),
+            #[cfg(any(feature = "nrf_ble", feature = "esp_ble"))]
+            ble_battery_config: BleBatteryConfig::default(),
         }
     }
 }

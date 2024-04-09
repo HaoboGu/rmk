@@ -17,6 +17,7 @@ use crate::{
             server::BleHidWriter,
         },
     },
+    config::BleBatteryConfig,
     keyboard::Keyboard,
     storage::{get_bond_info_key, Storage, StorageData},
     KeyAction, KeyMap, RmkConfig,
@@ -35,7 +36,6 @@ use embassy_executor::Spawner;
 #[cfg(not(feature = "nrf52832_ble"))]
 use embassy_futures::select::{select, Either};
 use embassy_futures::select::{select4, Either4};
-use embassy_nrf::saadc::Saadc;
 #[cfg(not(feature = "nrf52832_ble"))]
 use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
 use embassy_time::Timer;
@@ -158,9 +158,8 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     #[cfg(not(feature = "nrf52832_ble"))] usb_driver: Option<D>,
-    keyboard_config: RmkConfig<'static, Out>,
+    mut keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
-    mut saadc: Option<Saadc<'static, 1>>,
 ) -> ! {
     // Set ble config and start nrf-softdevice background task first
     let keyboard_name = keyboard_config
@@ -236,6 +235,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut light_service,
                     &mut vial_service,
                 );
+                info!("Running USB keyboard!");
                 select(usb_fut, wait_for_usb_suspend()).await;
             }
 
@@ -257,7 +257,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &ble_server,
                                 &mut keyboard,
                                 &mut storage,
-                                &mut saadc,
+                                &mut keyboard_config.ble_battery_config,
                             ),
                             select(usb_fut, usb_configured),
                         )
@@ -281,8 +281,14 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         } else {
             match adv_fut.await {
                 Ok(conn) => {
-                    run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage, &mut saadc)
-                        .await
+                    run_ble_keyboard(
+                        &conn,
+                        &ble_server,
+                        &mut keyboard,
+                        &mut storage,
+                        &mut keyboard_config.ble_battery_config,
+                    )
+                    .await
                 }
                 Err(e) => error!("Advertise error: {}", e),
             }
@@ -303,6 +309,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 // Run ble keyboard task for once
 async fn run_ble_keyboard<
     'a,
+    'b,
     F: AsyncNorFlash,
     In: InputPin,
     Out: OutputPin,
@@ -314,7 +321,7 @@ async fn run_ble_keyboard<
     ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
-    saadc: &mut Option<Saadc<'static, 1>>,
+    battery_config: &mut BleBatteryConfig<'b>,
 ) {
     info!("Starting GATT server 200 ms later");
     Timer::after_millis(200).await;
@@ -324,7 +331,7 @@ async fn run_ble_keyboard<
         BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
     let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
-    let battery_fut = bas.run(saadc, &conn);
+    let battery_fut = bas.run(battery_config, &conn);
 
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});

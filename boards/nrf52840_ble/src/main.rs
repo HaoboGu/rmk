@@ -21,7 +21,7 @@ use embassy_nrf::{
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     initialize_nrf_ble_keyboard_with_config_and_run,
 };
 
@@ -59,6 +59,13 @@ async fn main(spawner: Spawner) {
     let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
     let driver = Driver::new(p.USBD, Irqs, software_vbus);
 
+    // Initialize the ADC. We are only using one channel for detecting battery level
+    let adc_pin = p.P0_05.degrade_saadc();
+    let is_charging_pin = Input::new(AnyPin::from(p.P0_25), embassy_nrf::gpio::Pull::None);
+    let saadc = init_adc(adc_pin, p.SAADC);
+    // Wait for ADC calibration.
+    saadc.calibrate().await;
+
     // Keyboard config
     let keyboard_usb_config = KeyboardUsbConfig::new(
         0x4c4b,
@@ -68,17 +75,13 @@ async fn main(spawner: Spawner) {
         Some("00000001"),
     );
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), Some(saadc));
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
+        ble_battery_config,
         ..Default::default()
     };
-
-    // Then we initialize the ADC. We are only using one channel in this example.
-    let adc_pin = p.P0_05.degrade_saadc();
-    let saadc = init_adc(adc_pin, p.SAADC);
-    // Indicated: wait for ADC calibration.
-    saadc.calibrate().await;
 
     initialize_nrf_ble_keyboard_with_config_and_run::<
         Driver<'_, USBD, &SoftwareVbusDetect>,
@@ -94,7 +97,6 @@ async fn main(spawner: Spawner) {
         Some(driver),
         keyboard_config,
         spawner,
-        Some(saadc),
     )
     .await;
 }
