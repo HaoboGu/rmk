@@ -101,7 +101,7 @@ impl ModifierCombination {
 }
 
 /// Keys in consumer page
-/// Ref: https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
@@ -110,7 +110,7 @@ pub enum ConsumerKey {
     Zero = 0x00,
     // 15.5 Display Controls
     SnapShot = 0x65,
-    /// https://www.usb.org/sites/default/files/hutrr41_0.pdf
+    /// <https://www.usb.org/sites/default/files/hutrr41_0.pdf>
     BrightnessUp = 0x6F,
     BrightnessDown = 0x70,
     // 15.7 Transport Controls
@@ -168,7 +168,7 @@ pub enum ConsumerKey {
 }
 
 /// Keys in `Generic Desktop Page`, generally used for system control
-/// Ref: https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
 #[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]

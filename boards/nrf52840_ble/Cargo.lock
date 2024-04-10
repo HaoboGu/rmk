@@ -1099,6 +1099,7 @@ version = "0.1.12"
 dependencies = [
  "byteorder",
  "defmt",
+ "document-features",
  "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",

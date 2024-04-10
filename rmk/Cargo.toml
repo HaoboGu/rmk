@@ -64,12 +64,18 @@ esp32-nimble = { version = "0.6.0", default-features = false, features = [
 ], optional = true }
 esp-idf-svc = { version = "0.48", default-features = false, optional = true }
 
+# Document feature
+document-features = "0.2"
+
 [features]
 default = ["col2row"]
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
-eeprom = []
-ble = []
-nrf_ble = ["ble", "dep:nrf-softdevice"]
+
+#! ##### BLE feature flags
+#! 
+#! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder of RMK repo for their usages.
+## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
     "nrf_ble",
     "dep:embassy-nrf",
@@ -77,6 +83,7 @@ nrf52840_ble = [
     "nrf-softdevice/nrf52840",
     "nrf-softdevice/s140",
 ]
+## Enable feature if you want to use nRF52832 with BLE.
 nrf52832_ble = [
     "nrf_ble",
     "dep:embassy-nrf",
@@ -84,5 +91,10 @@ nrf52832_ble = [
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
-esp_ble = ["ble", "dep:esp32-nimble", "dep:esp-idf-svc"]
+## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["esp_ble"]
+esp_ble = ["ble", "dep:esp32-nimble", "dep:esp-idf-svc"]
+ble = []
+nrf_ble = ["ble", "dep:nrf-softdevice"]
+# DEPRECIATED
+eeprom = []
