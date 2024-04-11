@@ -1,8 +1,8 @@
 use crate::{config::LightConfig, hid::HidReaderWrapper};
+use bitfield_struct::bitfield;
 use defmt::{debug, error, Format};
 use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
-use packed_struct::prelude::*;
 
 pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
@@ -16,21 +16,23 @@ pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     }
 }
 
-#[derive(PackedStruct, Clone, Copy, Debug, Default, Format, Eq, PartialEq)]
-#[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
+#[bitfield(u8)]
+#[derive(Format, Eq, PartialEq)]
 pub struct LedIndicator {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     numslock: bool,
-    #[packed_field(bits = "1")]
+    #[bits(1)]
     capslock: bool,
-    #[packed_field(bits = "2")]
+    #[bits(1)]
     scrolllock: bool,
-    #[packed_field(bits = "3")]
+    #[bits(1)]
     compose: bool,
-    #[packed_field(bits = "4")]
+    #[bits(1)]
     kana: bool,
-    #[packed_field(bits = "5")]
+    #[bits(1)]
     shift: bool,
+    #[bits(2)]
+    _reserved: u8,
 }
 
 /// A single LED
@@ -158,9 +160,9 @@ impl<P: OutputPin> LightService<P> {
     impl_led_on_off!(numslock, set_numslock);
 
     pub(crate) fn set_leds(&mut self, led_indicator: LedIndicator) -> Result<(), P::Error> {
-        self.set_capslock(led_indicator.capslock)?;
-        self.set_numslock(led_indicator.numslock)?;
-        self.set_scrolllock(led_indicator.scrolllock)?;
+        self.set_capslock(led_indicator.capslock())?;
+        self.set_numslock(led_indicator.numslock())?;
+        self.set_scrolllock(led_indicator.scrolllock())?;
 
         Ok(())
     }
@@ -178,17 +180,9 @@ impl<P: OutputPin> LightService<P> {
         }
         match keyboard_hid_reader.read(&mut self.led_indicator_data).await {
             Ok(_) => {
-                match LedIndicator::unpack_from_slice(&self.led_indicator_data) {
-                    Ok(indicator) => {
-                        debug!("Read keyboard state: {:?}", indicator);
-                        // Ignore the error, which is `Infallible` in most cases
-                        self.set_leds(indicator).map_err(|_| ())
-                    }
-                    Err(_) => {
-                        error!("packing error: {:b}", self.led_indicator_data[0]);
-                        Err(())
-                    }
-                }
+                let indicator = LedIndicator::from_bits(self.led_indicator_data[0]);
+                debug!("Read keyboard state: {:?}", indicator);
+                self.set_leds(indicator).map_err(|_| ())
             }
             Err(e) => {
                 error!("Read keyboard state error: {}", e);

@@ -6,7 +6,6 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use packed_struct::PackedStructSlice;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, MapValueError, Value},
@@ -111,13 +110,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
             }
             StorageData::KeymapConfig(c) => {
                 buffer[0] = StorageKeys::KeymapConfig as u8;
-                match c.pack_to_slice(&mut buffer[1..3]) {
-                    Ok(_) => Ok(3),
-                    Err(_) => {
-                        error!("Packing EeKeymapConfig error");
-                        Err(MapValueError::InvalidData)
-                    }
-                }
+                let bits = c.into_bits();
+                BigEndian::write_u16(&mut buffer[1..3], bits);
+                Ok(3)
             }
             StorageData::KeymapKey(k) => {
                 buffer[0] = StorageKeys::KeymapKeys as u8;
@@ -174,12 +169,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
             }
             0x3 => {
                 // KeymapConfig
-                if let Ok(config) = EeKeymapConfig::unpack_from_slice(&buffer[1..]) {
-                    Ok(StorageData::KeymapConfig(config))
-                } else {
-                    error!("Unpacking EeKeymapConfig error");
-                    Err(MapValueError::InvalidFormat)
-                }
+                Ok(StorageData::KeymapConfig(EeKeymapConfig::from_bits(
+                    BigEndian::read_u16(&buffer[1..3]),
+                )))
             }
             0x4 => {
                 // LayoutConfig
