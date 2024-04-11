@@ -10,9 +10,9 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(no_std, not(target_os = "espidf"))]
 
-#[cfg(feature = "esp_ble")]
+#[cfg(feature = "_esp_ble")]
 pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "_nrf_ble")]
 pub use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 use crate::{
     keyboard::keyboard_task,
@@ -38,7 +38,7 @@ use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
-#[cfg(feature = "ble")]
+#[cfg(feature = "_ble")]
 pub mod ble;
 pub mod config;
 mod debounce;

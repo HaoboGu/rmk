@@ -59,8 +59,6 @@ embassy-nrf = { version = "0.1.0", features = [
 ], optional = true }
 
 # Espressif dependencies
-# esp32-nimble = { version = "0.6.0", default-features = false, features = [
-    # "no_std",
 esp32-nimble = { version = "0.6.0", optional = true }
 esp-idf-svc = { version = "0.48", default-features = false, optional = true }
 
@@ -77,7 +75,7 @@ col2row = []
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
-    "nrf_ble",
+    "_nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52840",
@@ -85,17 +83,16 @@ nrf52840_ble = [
 ]
 ## Enable feature if you want to use nRF52832 with BLE.
 nrf52832_ble = [
-    "nrf_ble",
+    "_nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
 ## Enable feature if you want to use ESP32C3 with BLE.
-esp32c3_ble = ["esp_ble"]
-esp32s3_ble = ["esp_ble"]
-esp_ble = ["ble", "ssmarshal/std", "dep:esp32-nimble", "dep:esp-idf-svc"]
-ble = []
-nrf_ble = ["ble", "dep:nrf-softdevice"]
-# DEPRECIATED
-eeprom = []
+esp32c3_ble = ["_esp_ble"]
+## Enable feature if you want to use ESP32S3 with BLE.
+esp32s3_ble = ["_esp_ble"]
+_esp_ble = ["_ble", "ssmarshal/std", "dep:esp32-nimble", "dep:esp-idf-svc"]
+_nrf_ble = ["_ble", "dep:nrf-softdevice"]
+_ble = []

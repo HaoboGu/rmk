@@ -34,8 +34,6 @@ bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
-// const EEPROM_SIZE: usize = 128;
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK start!");

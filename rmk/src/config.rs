@@ -1,11 +1,11 @@
-#[cfg(feature = "esp_ble")]
+#[cfg(feature = "_esp_ble")]
 mod esp_config;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
-#[cfg(feature = "esp_ble")]
+#[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
 use embedded_hal::digital::{OutputPin, PinState};
@@ -18,9 +18,9 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub vial_config: VialConfig<'a>,
     pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
-    #[cfg(feature = "nrf_ble")]
+    #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
-    #[cfg(feature = "esp_ble")]
+    #[cfg(feature = "_esp_ble")]
     pub ble_battery_config: BleBatteryConfig,
 }
 
@@ -32,7 +32,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
             vial_config: VialConfig::default(),
             light_config: LightConfig::default(),
             storage_config: StorageConfig::default(),
-            #[cfg(any(feature = "nrf_ble", feature = "esp_ble"))]
+            #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
             ble_battery_config: BleBatteryConfig::default(),
         }
     }

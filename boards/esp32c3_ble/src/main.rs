@@ -1,5 +1,3 @@
-// #![no_std]
-// #![no_main]
 #![feature(type_alias_impl_trait)]
 
 #[macro_use]
@@ -12,7 +10,6 @@ use crate::{
     vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID},
 };
 use defmt::*;
-// use embassy_executor::Spawner;
 use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals};
 use esp_idf_svc::hal::task::block_on;
 use esp_println as _;
@@ -55,5 +52,4 @@ fn main() {
         output_pins,
         keyboard_config,
     ));
-    // .await;
 }
