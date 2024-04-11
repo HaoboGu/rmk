@@ -183,16 +183,6 @@ impl<P: OutputPin> LightService<P> {
                 let indicator = LedIndicator::from_bits(self.led_indicator_data[0]);
                 debug!("Read keyboard state: {:?}", indicator);
                 self.set_leds(indicator).map_err(|_| ())
-                // match LedIndicator::unpack_from_slice(&self.led_indicator_data) {
-                //     Ok(indicator) => {
-                //         // Ignore the error, which is `Infallible` in most cases
-
-                //     }
-                //     Err(_) => {
-                //         error!("packing error: {:b}", self.led_indicator_data[0]);
-                //         Err(())
-                //     }
-                // }
             }
             Err(e) => {
                 error!("Read keyboard state error: {}", e);
