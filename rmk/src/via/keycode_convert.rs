@@ -24,7 +24,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         KeyAction::OneShot(a) => match a {
             Action::Modifier(m) => {
                 // One-shot modifier
-                let modifier_bits = m.to_bits();
+                let modifier_bits = m.into_bits();
                 0x52A0 | modifier_bits as u16
             }
             Action::LayerOn(l) => {
@@ -42,7 +42,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 Action::Key(k) => k as u16,
                 _ => 0,
             };
-            ((m.to_bits() as u16) << 8) | keycode
+            ((m.into_bits() as u16) << 8) | keycode
         }
         KeyAction::LayerTapHold(a, l) => {
             if l > 16 {
@@ -60,7 +60,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 Action::Key(k) => k as u16,
                 _ => 0,
             };
-            0x2000 | ((m.to_bits() as u16) << 8) | keycode
+            0x2000 | ((m.into_bits() as u16) << 8) | keycode
         }
         KeyAction::TapHold(_tap, _hold) => todo!(),
     }
@@ -207,7 +207,7 @@ mod test {
         // OSM RCtrl
         let via_keycode = 0x52B1;
         assert_eq!(
-            KeyAction::OneShot(Action::Modifier(ModifierCombination::new(
+            KeyAction::OneShot(Action::Modifier(ModifierCombination::new_from(
                 true, false, false, false, true
             ))),
             from_via_keycode(via_keycode)
@@ -218,7 +218,7 @@ mod test {
         assert_eq!(
             KeyAction::WithModifier(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, false, false, false, true)
+                ModifierCombination::new_from(false, false, false, false, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -228,7 +228,7 @@ mod test {
         assert_eq!(
             KeyAction::WithModifier(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(true, false, false, false, true)
+                ModifierCombination::new_from(true, false, false, false, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -238,7 +238,7 @@ mod test {
         assert_eq!(
             KeyAction::WithModifier(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, false, true, true, true)
+                ModifierCombination::new_from(false, false, true, true, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -248,7 +248,7 @@ mod test {
         assert_eq!(
             KeyAction::WithModifier(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, true, true, true, true)
+                ModifierCombination::new_from(false, true, true, true, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -272,7 +272,7 @@ mod test {
         assert_eq!(
             KeyAction::ModifierTapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, false, true, true, false)
+                ModifierCombination::new_from(false, false, true, true, false)
             ),
             from_via_keycode(via_keycode)
         );
@@ -282,7 +282,7 @@ mod test {
         assert_eq!(
             KeyAction::ModifierTapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(true, true, true, false, true)
+                ModifierCombination::new_from(true, true, true, false, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -292,7 +292,7 @@ mod test {
         assert_eq!(
             KeyAction::ModifierTapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, true, true, true, true)
+                ModifierCombination::new_from(false, true, true, true, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -302,7 +302,7 @@ mod test {
         assert_eq!(
             KeyAction::ModifierTapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new(false, false, true, true, true)
+                ModifierCombination::new_from(false, false, true, true, true)
             ),
             from_via_keycode(via_keycode)
         );
@@ -327,7 +327,7 @@ mod test {
         assert_eq!(0x5283, to_via_keycode(a));
 
         // OSM RCtrl
-        let a = KeyAction::OneShot(Action::Modifier(ModifierCombination::new(
+        let a = KeyAction::OneShot(Action::Modifier(ModifierCombination::new_from(
             true, false, false, false, true,
         )));
         assert_eq!(0x52B1, to_via_keycode(a));
@@ -335,28 +335,28 @@ mod test {
         // LCtrl(A) -> WithModifier(A)
         let a = KeyAction::WithModifier(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, false, false, false, true),
+            ModifierCombination::new_from(false, false, false, false, true),
         );
         assert_eq!(0x104, to_via_keycode(a));
 
         // RCtrl(A) -> WithModifier(A)
         let a = KeyAction::WithModifier(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(true, false, false, false, true),
+            ModifierCombination::new_from(true, false, false, false, true),
         );
         assert_eq!(0x1104, to_via_keycode(a));
 
         // Meh(A) -> WithModifier(A)
         let a = KeyAction::WithModifier(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, false, true, true, true),
+            ModifierCombination::new_from(false, false, true, true, true),
         );
         assert_eq!(0x704, to_via_keycode(a));
 
         // Hypr(A) -> WithModifier(A)
         let a = KeyAction::WithModifier(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, true, true, true, true),
+            ModifierCombination::new_from(false, true, true, true, true),
         );
         assert_eq!(0xF04, to_via_keycode(a));
 
@@ -371,28 +371,28 @@ mod test {
         // LSA_T(A) ->
         let a = KeyAction::ModifierTapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, false, true, true, false),
+            ModifierCombination::new_from(false, false, true, true, false),
         );
         assert_eq!(0x2604, to_via_keycode(a));
 
         // RCAG_T(A) ->
         let a = KeyAction::ModifierTapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(true, true, true, false, true),
+            ModifierCombination::new_from(true, true, true, false, true),
         );
         assert_eq!(0x3D04, to_via_keycode(a));
 
         // ALL_T(A) ->
         let a = KeyAction::ModifierTapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, true, true, true, true),
+            ModifierCombination::new_from(false, true, true, true, true),
         );
         assert_eq!(0x2F04, to_via_keycode(a));
 
         // Meh_T(A) ->
         let a = KeyAction::ModifierTapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new(false, false, true, true, true),
+            ModifierCombination::new_from(false, false, true, true, true),
         );
         assert_eq!(0x2704, to_via_keycode(a));
     }

@@ -1,37 +1,52 @@
+use bitfield_struct::bitfield;
 use defmt::Format;
 use num_enum::FromPrimitive;
-use packed_struct::prelude::*;
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
 ///
-/// | bit0 | bit1 | bit2 | bit3 | bit4 |
+/// | bit4 | bit3 | bit2 | bit1 | bit0 |
 /// | --- | --- | --- | --- | --- |  
 /// | L/R | GUI | ALT |SHIFT| CTRL|
-#[derive(PackedStruct, Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
-#[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
+#[bitfield(u8, order = Lsb)]
+#[derive(Eq, PartialEq)]
 pub struct ModifierCombination {
-    #[packed_field(bits = "0")]
-    ctrl: bool,
-    #[packed_field(bits = "1")]
-    shift: bool,
-    #[packed_field(bits = "2")]
-    alt: bool,
-    #[packed_field(bits = "3")]
-    gui: bool,
-    #[packed_field(bits = "4")]
-    right: bool,
+    #[bits(1)]
+    pub(crate) ctrl: bool,
+    #[bits(1)]
+    pub(crate) shift: bool,
+    #[bits(1)]
+    pub(crate) alt: bool,
+    #[bits(1)]
+    pub(crate) gui: bool,
+    #[bits(1)]
+    pub(crate) right: bool,
+    #[bits(3)]
+    _reserved: u8,
+}
+
+impl Format for ModifierCombination {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "ModifierCombination {{ ctrl: {=bool}, shift: {=bool}, alt: {=bool}, gui: {=bool}, right: {=bool} }}",
+            self.ctrl(),
+            self.shift(),
+            self.alt(),
+            self.gui(),
+            self.right()
+        )
+    }
 }
 
 impl ModifierCombination {
-    pub(crate) fn new(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
-        ModifierCombination {
-            ctrl,
-            shift,
-            alt,
-            gui,
-            right,
-        }
+    pub(crate) fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
+        ModifierCombination::new()
+            .with_right(right)
+            .with_gui(gui)
+            .with_alt(alt)
+            .with_shift(shift)
+            .with_ctrl(ctrl)
     }
 
     /// Convert modifier combination to a list of modifier keycodes.
@@ -39,37 +54,37 @@ impl ModifierCombination {
     pub(crate) fn to_modifier_keycodes(self) -> ([KeyCode; 8], usize) {
         let mut keycodes = [KeyCode::No; 8];
         let mut i = 0;
-        if self.right {
-            if self.ctrl {
+        if self.right() {
+            if self.ctrl() {
                 keycodes[i] = KeyCode::LCtrl;
                 i += 1;
             }
-            if self.shift {
+            if self.shift() {
                 keycodes[i] = KeyCode::LShift;
                 i += 1;
             }
-            if self.alt {
+            if self.alt() {
                 keycodes[i] = KeyCode::LAlt;
                 i += 1;
             }
-            if self.gui {
+            if self.gui() {
                 keycodes[i] = KeyCode::LGui;
                 i += 1;
             }
         } else {
-            if self.ctrl {
+            if self.ctrl() {
                 keycodes[i] = KeyCode::RCtrl;
                 i += 1;
             }
-            if self.shift {
+            if self.shift() {
                 keycodes[i] = KeyCode::RShift;
                 i += 1;
             }
-            if self.alt {
+            if self.alt() {
                 keycodes[i] = KeyCode::RAlt;
                 i += 1;
             }
-            if self.gui {
+            if self.gui() {
                 keycodes[i] = KeyCode::RGui;
                 i += 1;
             }
@@ -87,16 +102,6 @@ impl ModifierCombination {
         }
 
         hid_modifier_bits
-    }
-
-    /// Convert modifier combination to bits
-    pub(crate) fn to_bits(self) -> u8 {
-        ModifierCombination::pack(&self).unwrap_or_default()[0]
-    }
-
-    /// Convert from bits
-    pub(crate) fn from_bits(bits: u8) -> Self {
-        ModifierCombination::unpack_from_slice(&[bits]).unwrap_or_default()
     }
 }
 

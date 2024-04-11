@@ -1,4 +1,4 @@
-use packed_struct::prelude::*;
+use bitfield_struct::bitfield;
 
 /// Keyboard configurations which should be saved in eeprom.
 #[derive(Default)]
@@ -12,75 +12,78 @@ pub struct Eeconfig {
     layout_option: u32,
 }
 
-#[derive(PackedStruct, Debug, Clone, Copy, Default)]
-#[packed_struct(bit_numbering = "msb0", bytes = "2")]
+#[bitfield(u16, order = Msb)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct EeKeymapConfig {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     swap_control_capslock: bool,
-    #[packed_field(bits = "1")]
+    #[bits(1)]
     capslock_to_control: bool,
-    #[packed_field(bits = "2")]
+    #[bits(1)]
     swap_lalt_lgui: bool,
-    #[packed_field(bits = "3")]
+    #[bits(1)]
     swap_ralt_rgui: bool,
-    #[packed_field(bits = "4")]
+    #[bits(1)]
     no_gui: bool,
-    #[packed_field(bits = "5")]
+    #[bits(1)]
     swap_grave_esc: bool,
-    #[packed_field(bits = "6")]
+    #[bits(1)]
     swap_backslash_backspace: bool,
-    #[packed_field(bits = "7")]
+    #[bits(1)]
     nkro: bool,
-    #[packed_field(bits = "8")]
+    #[bits(1)]
     swap_lctl_lgui: bool,
-    #[packed_field(bits = "9")]
+    #[bits(1)]
     swap_rctl_rgui: bool,
-    #[packed_field(bits = "10")]
+    #[bits(1)]
     oneshot_enable: bool,
-    #[packed_field(bits = "11")]
+    #[bits(1)]
     swap_escape_capslock: bool,
-    #[packed_field(bits = "12")]
+    #[bits(1)]
     autocorrect_enable: bool,
-    _reserved: ReservedOne<packed_bits::Bits<3>>,
+    #[bits(3)]
+    _reserved: u8,
 }
 
-#[derive(PackedStruct, Debug, Default)]
-#[packed_struct(bit_numbering = "msb0")]
+#[bitfield(u8, order = Msb)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct EeBacklightConfig {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     enable: bool,
-    #[packed_field(bits = "1")]
+    #[bits(1)]
     breathing: bool,
-    #[packed_field(bits = "2")]
+    #[bits(1)]
     reserved: bool,
-    #[packed_field(bits = "3..=7")]
+    #[bits(5)]
     level: u8,
 }
 
-#[derive(PackedStruct, Debug, Default)]
-#[packed_struct(bit_numbering = "msb0")]
+#[bitfield(u8, order = Msb)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct EeAudioConfig {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     enable: bool,
-    #[packed_field(bits = "1")]
+    #[bits(1)]
     clicky_enable: bool,
-    #[packed_field(bits = "2..=7")]
+    #[bits(6)]
     level: u8,
 }
 
-#[derive(PackedStruct, Debug, Default)]
-#[packed_struct(bit_numbering = "msb0")]
+#[bitfield(u64, order = Msb)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct EeRgbLightConfig {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     enable: bool,
-    #[packed_field(bits = "1..=7")]
+    #[bits(8)]
     mode: u8,
-    #[packed_field(bits = "8..=15")]
+    #[bits(8)]
     hue: u8,
-    #[packed_field(bits = "16..=23")]
+    #[bits(8)]
     sat: u8,
-    #[packed_field(bits = "24..=31")]
+    #[bits(8)]
     val: u8,
-    #[packed_field(bits = "32..=39")]
+    #[bits(8)]
     speed: u8,
+    #[bits(23)]
+    _reserved: u32,
 }
