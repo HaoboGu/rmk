@@ -14,28 +14,20 @@ rmk = { version = "0.1.12", path = "../../rmk", features = [
     "col2row",
     "esp32c3_ble",
 ] }
-esp32-nimble = { version = "0.6.0", default-features = false, features = [
-    "no_std",
-] }
+esp32-nimble = { version = "0.6.0" }
 defmt = "0.3"
 embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8"] }
-embassy-executor = { version = "0.5.0", features = [
-    "arch-riscv32",
-    "nightly",
-    "executor-thread",
-    "defmt",
-] }
 esp-println = { version = "0.9", features = ["esp32c3", "defmt-espflash"] }
 esp-idf-svc = { version = "0.48", default-features = false, features = [
-    "alloc_handler",
-    "embassy-sync",
+    "std",
+    "alloc",
     "binstart",
+    "embassy-sync",
     "critical-section",
     "embassy-time-driver",
-    "panic_handler",
+    "native"
 ] }
 static_cell = "2.0"
-riscv-rt = "0.12"
 
 [build-dependencies]
 xz2 = "0.1.7"

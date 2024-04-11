@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+// #![no_std]
+// #![no_main]
 #![feature(type_alias_impl_trait)]
 
 #[macro_use]
@@ -12,16 +12,16 @@ use crate::{
     vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID},
 };
 use defmt::*;
-use embassy_executor::Spawner;
+// use embassy_executor::Spawner;
 use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals};
+use esp_idf_svc::hal::task::block_on;
 use esp_println as _;
 use rmk::{
     config::{RmkConfig, VialConfig},
     initialize_esp_ble_keyboard_with_config_and_run,
 };
 
-#[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+fn main() {
     esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
@@ -43,7 +43,7 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    initialize_esp_ble_keyboard_with_config_and_run::<
+    block_on(initialize_esp_ble_keyboard_with_config_and_run::<
         PinDriver<'_, AnyInputPin, Input>,
         PinDriver<'_, AnyOutputPin, Output>,
         ROW,
@@ -54,6 +54,6 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         keyboard_config,
-    )
-    .await;
+    ));
+    // .await;
 }

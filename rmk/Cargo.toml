@@ -59,9 +59,9 @@ embassy-nrf = { version = "0.1.0", features = [
 ], optional = true }
 
 # Espressif dependencies
-esp32-nimble = { version = "0.6.0", default-features = false, features = [
-    "no_std",
-], optional = true }
+# esp32-nimble = { version = "0.6.0", default-features = false, features = [
+    # "no_std",
+esp32-nimble = { version = "0.6.0", optional = true }
 esp-idf-svc = { version = "0.48", default-features = false, optional = true }
 
 # Document feature
@@ -94,7 +94,7 @@ nrf52832_ble = [
 ## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["esp_ble"]
 esp32s3_ble = ["esp_ble"]
-esp_ble = ["ble", "dep:esp32-nimble", "dep:esp-idf-svc"]
+esp_ble = ["ble", "ssmarshal/std", "dep:esp32-nimble", "dep:esp-idf-svc"]
 ble = []
 nrf_ble = ["ble", "dep:nrf-softdevice"]
 # DEPRECIATED
