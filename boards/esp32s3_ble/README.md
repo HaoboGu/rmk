@@ -1,11 +1,11 @@
-# esp32c3 BLE example
+# esp32s3 BLE example
 
 To run this example, you should have Rust **nightly** and `esp-idf` toolchain installed. The full instruction of installing `esp-idf` toolchain can be found [here](https://docs.esp-rs.org/book/installation/index.html) and [here](https://docs.esp-rs.org/std-training/02_2_software.html)
 
 To run the example, make sure that you have esp-idf environment, `ldproxy` and `espflash` installed correctly. Then, run 
 
 ```
-cd boards/esp32c3_ble
+cd boards/esp32s3_ble
 cargo run --release
 ```
 
@@ -17,14 +17,14 @@ cargo run --release
     ...
     ...
     Finished `release` profile [optimized + debuginfo] target(s) in 51.39s
-     Running `espflash flash --monitor --log-format defmt target/riscv32imc-esp-espidf/release/rmk-esp32c3`
+     Running `espflash flash --monitor --log-format defmt target/xtensa-esp32s3-espidf/release/rmk-esp32s3`
 [2024-04-07T12:49:21Z INFO ] Detected 2 serial ports
 [2024-04-07T12:49:21Z INFO ] Ports which match a known common dev board are highlighted
 [2024-04-07T12:49:21Z INFO ] Please select a port
 [2024-04-07T12:50:24Z INFO ] Serial port: '/dev/cu/xx'
 [2024-04-07T12:50:24Z INFO ] Connecting...
 [2024-04-07T12:50:24Z INFO ] Using flash stub
-Chip type:         esp32c3 (revision v0.4)
+Chip type:         esp32s3 (revision v0.4)
 Crystal frequency: 40 MHz
 Flash size:        4MB
 Features:          WiFi, BLE
@@ -42,5 +42,5 @@ If you want to get some insight of segments of your binary, [`espsegs`](https://
 cargo install --git https://github.com/bjoernQ/espsegs
 
 # Check all segments
-espsegs target/riscv32imc-esp-espidf/release/rmk-esp32c3 --chip esp32c3
+espsegs target/xtensa-esp32s3-espidf/release/rmk-esp32s3 --chip esp32s3
 ```

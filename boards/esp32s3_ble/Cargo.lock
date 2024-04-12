@@ -1424,7 +1424,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-esp32c3"
+name = "rmk-esp32s3"
 version = "0.1.5"
 dependencies = [
  "const-gen",

@@ -1,16 +1,18 @@
 #![doc = include_str!("../README.md")]
 //! ## Feature flags
 #![doc = document_features::document_features!()] 
-#![allow(dead_code)]
-// Make rust analyzer happy with num-enum crate
-#![allow(non_snake_case, non_upper_case_globals)]
-// Enable std in test
-#![cfg_attr(not(test), no_std)]
-#![allow(clippy::if_same_then_else)]
 
-#[cfg(feature = "esp_ble")]
+// Make compiler and rust analyzer happy
+#![allow(dead_code)]
+#![allow(non_snake_case, non_upper_case_globals)]
+
+// Enable std for espidf and test
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(no_std, not(target_os = "espidf"))]
+
+#[cfg(feature = "_esp_ble")]
 pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "_nrf_ble")]
 pub use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 use crate::{
     keyboard::keyboard_task,
@@ -36,7 +38,7 @@ use usb::KeyboardUsbDevice;
 use via::process::VialService;
 
 pub mod action;
-#[cfg(feature = "ble")]
+#[cfg(feature = "_ble")]
 pub mod ble;
 pub mod config;
 mod debounce;

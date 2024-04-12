@@ -1,9 +1,9 @@
 pub(crate) mod descriptor;
 pub(crate) mod device_info;
 
-#[cfg(feature = "esp_ble")]
+#[cfg(feature = "_esp_ble")]
 pub mod esp;
-#[cfg(feature = "nrf_ble")]
+#[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
 use embassy_time::Timer;

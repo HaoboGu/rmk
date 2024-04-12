@@ -1,5 +1,5 @@
 [package]
-name = "rmk-esp32c3"
+name = "rmk-esp32s3"
 version = "0.1.5"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
@@ -12,12 +12,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { version = "0.1.12", path = "../../rmk", features = [
     "col2row",
-    "esp32c3_ble",
+    "esp32s3_ble",
 ] }
 esp32-nimble = { version = "0.6.0" }
 defmt = "0.3"
 embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8"] }
-esp-println = { version = "0.9", features = ["esp32c3", "defmt-espflash"] }
+esp-println = { version = "0.9", features = ["esp32s3", "defmt-espflash"] }
 esp-idf-svc = { version = "0.48", default-features = false, features = [
     "std",
     "alloc",
@@ -36,7 +36,7 @@ const-gen = "1.6"
 embuild = "0.31.3"
 
 [[bin]]
-name = "rmk-esp32c3"
+name = "rmk-esp32s3"
 test = false
 bench = false
 

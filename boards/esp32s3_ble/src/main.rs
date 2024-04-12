@@ -10,8 +10,7 @@ use crate::{
     vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID},
 };
 use defmt::*;
-use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals};
-use esp_idf_svc::hal::task::block_on;
+use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals, task::block_on};
 use esp_println as _;
 use rmk::{
     config::{RmkConfig, VialConfig},
@@ -29,8 +28,8 @@ fn main() {
 
     // Pin config
     // WARNING: Some gpio pins shouldn't be used, the initial state is error.
-    // reference: table 2-3 in https://www.espressif.com.cn/sites/default/files/documentation/esp32-c3_datasheet_en.pdf
-    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio20, gpio21], output: [gpio3, gpio4, gpio5]);
+    // reference: table 2-3 in https://www.espressif.com.cn/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
+    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio4, gpio5, gpio6, gpio7], output: [gpio1, gpio2, gpio8]);
 
     // Keyboard config
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
