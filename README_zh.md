@@ -17,7 +17,7 @@
 
 ## 新闻
 
-- [2024.04.07] 现在esp32c3的蓝牙支持已经在主分支上可用，示例可以参考 `boards/esp32c3_ble`
+- [2024.04.07] 现在esp32c3和esp32s3的蓝牙支持已经在主分支上可用，示例可以参考  [`boards/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/esp32c3_ble/src/main.rs) 和 [`boards/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/esp32s3_ble/src/main.rs)
 
 - [2024.03.07] RMK 添加了对 nrf52840/nrf52832 的 BLE 支持，包括自动重新连接和多设备功能！具体用法可以参考 [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) 和 [boards/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) 下的示例
 
