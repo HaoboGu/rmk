@@ -10,8 +10,7 @@ use crate::{
     vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID},
 };
 use defmt::*;
-use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals};
-use esp_idf_svc::hal::task::block_on;
+use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals, task::block_on};
 use esp_println as _;
 use rmk::{
     config::{RmkConfig, VialConfig},

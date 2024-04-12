@@ -27,7 +27,6 @@ esp-idf-svc = { version = "0.48", default-features = false, features = [
     "embassy-time-driver",
     "native"
 ] }
-static_cell = "2.0"
 
 [build-dependencies]
 xz2 = "0.1.7"
