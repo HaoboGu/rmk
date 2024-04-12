@@ -2,65 +2,60 @@ name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-  
+
     steps:
-    - uses: actions/checkout@v3
-    - name: Install target
-      run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
-    - name: Build rmk
-      working-directory: ./rmk
-      run: cargo build --release
-    - name: Install ldproxy
-      run: cargo install ldproxy
-    - name: Switch to nightly
-      run: rustup default nightly
-    - name: Add targets to nightly
-      run: rustup target add thumbv7em-none-eabihf thumbv7em-none-eabi riscv32imc-unknown-none-elf --toolchain nightly
-    - name: Add components to nightly
-      run: rustup component add rust-src --toolchain nightly
-    - name: Build esp32c3_ble
-      working-directory: ./boards/esp32c3_ble
-      run: cargo +nightly build --release
-    - name: Install espup
-      run: cargo install espup
-    - name: Install esp toolchain 
-      run: espup install
-    - name: Build esp32s3_ble
-      working-directory: ./boards/esp32s3_ble
-      run: cargo +esp build --release
-    - name: Build nrf52840_ble
-      working-directory: ./boards/nrf52840_ble
-      run: cargo +nightly build --release
-    - name: Build nrf52832_ble
-      working-directory: ./boards/nrf52832_ble
-      run: cargo +nightly build --release
-    - name: Switch to stable
-      run: rustup default stable
-    - name: Build rp2040
-      working-directory: ./boards/rp2040
-      run: cargo build --release
-    - name: Build stm32h7
-      working-directory: ./boards/stm32h7
-      run: cargo build --release
-    - name: Build stm32f1
-      working-directory: ./boards/stm32f1
-      run: cargo build --release
-    - name: Build stm32f4
-      working-directory: ./boards/stm32f4
-      run: cargo build --release
-    - name: Build nrf52840
-      working-directory: ./boards/nrf52840
-      run: cargo build --release
-
-
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
+      - name: Build rmk
+        working-directory: ./rmk
+        run: cargo build --release
+      - name: Build rp2040
+        working-directory: ./boards/rp2040
+        run: cargo build --release
+      - name: Build stm32h7
+        working-directory: ./boards/stm32h7
+        run: cargo build --release
+      - name: Build stm32f1
+        working-directory: ./boards/stm32f1
+        run: cargo build --release
+      - name: Build stm32f4
+        working-directory: ./boards/stm32f4
+        run: cargo build --release
+      - name: Build nrf52840
+        working-directory: ./boards/nrf52840
+        run: cargo build --release
+      - name: Install ldproxy
+        run: cargo install ldproxy
+      - name: Switch to nightly
+        run: rustup default nightly
+      - name: Add targets to nightly
+        run: rustup target add thumbv7em-none-eabihf thumbv7em-none-eabi riscv32imc-unknown-none-elf --toolchain nightly
+      - name: Add components to nightly
+        run: rustup component add rust-src --toolchain nightly
+      - name: Build nrf52840_ble
+        working-directory: ./boards/nrf52840_ble
+        run: cargo +nightly build --release
+      - name: Build nrf52832_ble
+        working-directory: ./boards/nrf52832_ble
+        run: cargo +nightly build --release
+      - name: Build esp32c3_ble
+        working-directory: ./boards/esp32c3_ble
+        run: cargo +nightly build --release
+      - name: Install espup
+        run: cargo install espup
+      - name: Install esp toolchain
+        run: espup install
+      - name: Build esp32s3_ble
+        working-directory: ./boards/esp32s3_ble
+        run: cargo +esp build --release
