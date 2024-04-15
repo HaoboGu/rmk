@@ -1,6 +1,6 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use defmt::{info, warn};
+use defmt::{error, info, warn};
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
@@ -104,7 +104,7 @@ impl BleServer {
         hid.report_map(BleKeyboardReport::desc());
 
         let ble_advertising = device.get_advertising();
-        ble_advertising
+        match ble_advertising
             .lock()
             .scan_response(false)
             .set_data(
@@ -113,8 +113,11 @@ impl BleServer {
                     .appearance(0x03C1)
                     .add_service_uuid(hid.hid_service().lock().uuid()),
             )
-            .unwrap();
-        ble_advertising.lock().start().unwrap();
+            .and_then(|_| ble_advertising.lock().start())
+        {
+            Ok(_) => (),
+            Err(e) => error!("BLE advertising error, error code: {}", e.code()),
+        }
 
         Self {
             server,
