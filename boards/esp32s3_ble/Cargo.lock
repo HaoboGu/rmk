@@ -1436,7 +1436,6 @@ dependencies = [
  "esp32-nimble",
  "json",
  "rmk",
- "static_cell",
  "xz2",
 ]
 
