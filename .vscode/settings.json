@@ -12,6 +12,8 @@
     ],
     "rust-analyzer.linkedProjects": [
         "rmk/Cargo.toml",
+        "rmk-config/Cargo.toml",
+        "rmk-macro/Cargo.toml",
         // Enable ONE of the following for accurate analyzation of RA
         // "boards/esp32c3_ble/Cargo.toml",
         // "boards/stm32h7/Cargo.toml",
