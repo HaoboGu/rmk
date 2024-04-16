@@ -1,4 +1,14 @@
+pub mod rmk_keyboard_config;
+
 use serde_derive::Deserialize;
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct KeyboardConfig {
+    /// Vender id
+    pub vendor_id: u16,
+    /// Product id
+    pub product_id: u16,
+}
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -102,17 +112,4 @@ pub struct PinConfig {
     pub pin: String,
     #[serde(default = "default_bool")]
     pub low_active: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn read() {
-        let s = fs::read_to_string("keyboard.toml").unwrap();
-        let c: KeyboardTomlConfig = toml::from_str(&s).unwrap();
-        println!("Hello, {:?}", c);
-    }
 }
