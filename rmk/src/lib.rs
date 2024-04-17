@@ -1,11 +1,9 @@
 #![doc = include_str!("../README.md")]
 //! ## Feature flags
-#![doc = document_features::document_features!()] 
-
+#![doc = document_features::document_features!()]
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
 #![allow(non_snake_case, non_upper_case_globals)]
-
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(no_std, not(target_os = "espidf"))]
@@ -20,7 +18,6 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
-use config::{RmkConfig, VialConfig};
 use core::cell::RefCell;
 use defmt::*;
 use embassy_futures::select::{select, select4, Either, Either4};
@@ -33,14 +30,15 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
 use keyboard::Keyboard;
 use keymap::KeyMap;
+use rmk_config::{RmkConfig, VialConfig};
 use storage::Storage;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
+pub use rmk_config as config;
 
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
-pub mod config;
 mod debounce;
 mod flash;
 mod hid;

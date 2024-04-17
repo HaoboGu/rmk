@@ -4,7 +4,6 @@ use super::{
 };
 use crate::{
     ble::device_info::{DeviceInformation, PnPID, VidSource},
-    config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
 use defmt::{error, info};
@@ -15,6 +14,7 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
+use rmk_config::KeyboardUsbConfig;
 use usbd_hid::descriptor::AsInputReport;
 
 /// Wrapper struct for writing via BLE

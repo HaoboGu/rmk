@@ -1082,10 +1082,19 @@ dependencies = [
  "nrf-softdevice",
  "num_enum",
  "once_cell",
+ "rmk-config",
  "sequential-storage",
  "ssmarshal",
  "static_cell",
  "usbd-hid",
+]
+
+[[package]]
+name = "rmk-config"
+version = "0.1.0"
+dependencies = [
+ "embassy-nrf",
+ "embedded-hal 1.0.0",
 ]
 
 [[package]]

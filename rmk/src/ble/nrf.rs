@@ -17,7 +17,6 @@ use crate::{
             server::BleHidWriter,
         },
     },
-    config::BleBatteryConfig,
     keyboard::Keyboard,
     storage::{get_bond_info_key, Storage, StorageData},
     KeyAction, KeyMap, RmkConfig,
@@ -51,6 +50,7 @@ use nrf_softdevice::{
 };
 #[cfg(not(feature = "nrf52832_ble"))]
 use once_cell::sync::OnceCell;
+use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 
@@ -297,7 +297,14 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         #[cfg(feature = "nrf52832_ble")]
         match adv_fut.await {
             Ok(conn) => {
-                run_ble_keyboard(&conn, &ble_server, &mut keyboard, &mut storage, &mut keyboard_config.ble_battery_config,).await
+                run_ble_keyboard(
+                    &conn,
+                    &ble_server,
+                    &mut keyboard,
+                    &mut storage,
+                    &mut keyboard_config.ble_battery_config,
+                )
+                .await
             }
             Err(e) => error!("Advertise error: {}", e),
         }

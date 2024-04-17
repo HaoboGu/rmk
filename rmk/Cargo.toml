@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
+rmk-config = { version = "0.1", path = "../rmk-config" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
@@ -93,6 +94,12 @@ nrf52832_ble = [
 esp32c3_ble = ["_esp_ble"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
-_esp_ble = ["_ble", "ssmarshal/std", "dep:esp32-nimble", "dep:esp-idf-svc"]
-_nrf_ble = ["_ble", "dep:nrf-softdevice"]
+_esp_ble = [
+    "_ble",
+    "rmk-config/_esp_ble",
+    "ssmarshal/std",
+    "dep:esp32-nimble",
+    "dep:esp-idf-svc",
+]
+_nrf_ble = ["_ble", "rmk-config/_nrf_ble", "dep:nrf-softdevice"]
 _ble = []
