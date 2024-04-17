@@ -48,13 +48,13 @@ async fn main(_spawner: Spawner) {
     // let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
     let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
 
-    let keyboard_usb_config = KeyboardUsbConfig::new(
-        0x4c4b,
-        0x4643,
-        Some("Haobo"),
-        Some("RMK Keyboard"),
-        Some("00000001"),
-    );
+    let keyboard_usb_config = KeyboardUsbConfig {
+        vid: 0x4c4b,
+        pid: 0x4643,
+        manufacturer: "Haobo",
+        product_name: "RMK Keyboard",
+        serial_number: "00000000",
+    };
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 

@@ -162,10 +162,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     spawner: Spawner,
 ) -> ! {
     // Set ble config and start nrf-softdevice background task first
-    let keyboard_name = keyboard_config
-        .usb_config
-        .product_name
-        .unwrap_or("RMK Keyboard");
+    let keyboard_name = keyboard_config.usb_config.product_name;
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);

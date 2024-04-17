@@ -138,29 +138,11 @@ pub struct KeyboardUsbConfig<'a> {
     /// Product id
     pub pid: u16,
     /// Manufacturer
-    pub manufacturer: Option<&'a str>,
+    pub manufacturer: &'a str,
     /// Product name
-    pub product_name: Option<&'a str>,
+    pub product_name: &'a str,
     /// Serial number
-    pub serial_number: Option<&'a str>,
-}
-
-impl<'a> KeyboardUsbConfig<'a> {
-    pub fn new(
-        vid: u16,
-        pid: u16,
-        manufacturer: Option<&'a str>,
-        product_name: Option<&'a str>,
-        serial_number: Option<&'a str>,
-    ) -> Self {
-        Self {
-            vid,
-            pid,
-            manufacturer,
-            product_name,
-            serial_number,
-        }
-    }
+    pub serial_number: &'a str,
 }
 
 impl<'a> Default for KeyboardUsbConfig<'a> {
@@ -168,9 +150,9 @@ impl<'a> Default for KeyboardUsbConfig<'a> {
         Self {
             vid: 0x4c4b,
             pid: 0x4643,
-            manufacturer: Some("Haobo"),
-            product_name: Some("RMK Keyboard"),
-            serial_number: Some("00000001"),
+            manufacturer: "Haobo",
+            product_name: "RMK Keyboard",
+            serial_number: "00000001",
         }
     }
 }

@@ -68,7 +68,7 @@ pub(crate) struct BleServer {
 
 impl BleServer {
     pub(crate) fn new(usb_config: KeyboardUsbConfig) -> Self {
-        let keyboard_name = usb_config.product_name.unwrap_or("RMK Keyboard");
+        let keyboard_name = usb_config.product_name;
         let device = BLEDevice::take();
         BLEDevice::set_device_name(keyboard_name).ok();
         device
@@ -84,7 +84,7 @@ impl BleServer {
             }
         });
         let mut hid = BLEHIDDevice::new(server);
-        hid.manufacturer(usb_config.manufacturer.unwrap_or("Haobo"));
+        hid.manufacturer(usb_config.manufacturer);
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
         let output_keyboard = hid.output_report(BleCompositeReportType::Keyboard as u8);
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);

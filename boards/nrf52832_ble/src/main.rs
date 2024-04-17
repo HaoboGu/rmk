@@ -35,13 +35,13 @@ async fn main(spawner: Spawner) {
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_03, P0_04, P0_28, P0_29], output: [P0_07, P0_11, P0_27]);
 
-    let keyboard_usb_config = KeyboardUsbConfig::new(
-        0x4c4b,
-        0x4643,
-        Some("Haobo"),
-        Some("RMK Keyboard"),
-        Some("00000001"),
-    );
+    let keyboard_usb_config = KeyboardUsbConfig {
+        vid: 0x4c4b,
+        pid: 0x4643,
+        manufacturer: "Haobo",
+        product_name: "RMK Keyboard",
+        serial_number: "00000000",
+    };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     // Current default storage config of nRF52832 is not correct, check this issue: https://github.com/embassy-rs/nrf-softdevice/issues/246.
     // So we set the storage config manually
