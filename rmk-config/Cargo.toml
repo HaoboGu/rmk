@@ -12,6 +12,8 @@ resolver = "2"
 
 [dependencies]
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
+serde = { version = "1.0", optional = true }
+serde_derive = { version = "1.0", optional = true }
 
 embassy-nrf = { version = "0.1.0", features = [
     "defmt",
@@ -21,5 +23,6 @@ embassy-nrf = { version = "0.1.0", features = [
 
 [features]
 default = []
+toml = ["serde", "serde_derive"]
 _esp_ble = []
 _nrf_ble = ["embassy-nrf"]
