@@ -1,8 +1,9 @@
-use crate::{config::LightConfig, hid::HidReaderWrapper};
+use crate::hid::HidReaderWrapper;
 use bitfield_struct::bitfield;
 use defmt::{debug, error, Format};
 use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
+use rmk_config::LightConfig;
 
 pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,

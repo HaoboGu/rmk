@@ -6,6 +6,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use rmk_config::StorageConfig;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, MapValueError, Value},
@@ -20,7 +21,6 @@ use core::ops::Range;
 
 use crate::{
     action::KeyAction,
-    config::StorageConfig,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 

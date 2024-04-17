@@ -1,3 +1,8 @@
+//! This crate contains all configs about RMK.
+//! 
+#![cfg_attr(no_std, not(target_os = "espidf"))]
+#![no_std]
+
 #[cfg(feature = "_esp_ble")]
 mod esp_config;
 #[cfg(feature = "_nrf_ble")]
