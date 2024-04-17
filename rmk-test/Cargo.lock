@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "embedded-hal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -31,6 +37,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
 
 [[package]]
+name = "prettyplease"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ac2cf0f2e4f42b49f5ffd07dae8d746508ef7526c13940e5f524012ae6c6550"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -52,6 +68,7 @@ dependencies = [
 name = "rmk-config"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal",
  "serde",
  "serde_derive",
 ]
@@ -60,6 +77,7 @@ dependencies = [
 name = "rmk-macro"
 version = "0.1.0"
 dependencies = [
+ "prettyplease",
  "proc-macro2",
  "quote",
  "rmk-config",
@@ -73,6 +91,7 @@ dependencies = [
 name = "rmk-test"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal",
  "rmk-config",
  "rmk-macro",
 ]

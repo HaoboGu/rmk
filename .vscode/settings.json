@@ -17,7 +17,7 @@
         "rmk-macro/Cargo.toml",
         // Enable ONE of the following for accurate analyzation of RA
         // "boards/esp32c3_ble/Cargo.toml",
-        // "boards/stm32h7/Cargo.toml",
+        "boards/stm32h7/Cargo.toml",
         // "boards/stm32f4/Cargo.toml",
         // "boards/stm32f1/Cargo.toml",
         // "boards/nrf52840/Cargo.toml",

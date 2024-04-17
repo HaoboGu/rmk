@@ -4,6 +4,32 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "rmk-test",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "test",
+                "--package",
+                "rmk-test",
+                "--bin",
+                "rmk-test",
+                "--",
+                "tests::test_main",
+                "--exact",
+                "--nocapture"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/rmk-test"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true,
+            }, 
+        },
+        {
             "label": "build stm32h7 --debug",
             "type": "process",
             "command": "cargo",

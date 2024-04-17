@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rmk-macro = { path = "../rmk-macro" }
 rmk-config = { path = "../rmk-config" }
+embedded-hal = "1.0"
