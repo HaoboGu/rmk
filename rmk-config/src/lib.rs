@@ -14,7 +14,7 @@
 //! [keyboard_config] is what RMK's code receives. You can safely ignore it unless you want to dive into the RMK source code.
 #![cfg_attr(not(feature = "toml"), no_std)]
 
-mod keyboard_config;
+pub mod keyboard_config;
 pub use keyboard_config::*;
 
 #[cfg(feature = "toml")]

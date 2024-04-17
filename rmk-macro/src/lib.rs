@@ -1,15 +1,18 @@
 mod gpio_str;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::quote;
 use rmk_config::{
     self,
-    toml_config::{KeyboardInfo, KeyboardTomlConfig, LightConfig},
+    toml_config::{KeyboardInfo, KeyboardTomlConfig, LightConfig, MatrixConfig},
 };
 use std::fs;
 use syn::parse_macro_input;
 
-use crate::gpio_str::convert_gpio_str_to_pin;
+use crate::gpio_str::{
+    convert_gpio_str_to_output_pin, convert_input_pins_to_initializers,
+    convert_output_pins_to_initializers,
+};
 
 enum ChipSeries {
     Stm32,
@@ -40,7 +43,7 @@ fn expand_keyboard_info(keyboard_info: KeyboardInfo) -> proc_macro2::TokenStream
         .product_name
         .unwrap_or("RMK Keyboard".to_string());
     let manufacturer = keyboard_info.manufacturer.unwrap_or("RMK".to_string());
-    let serial_number = keyboard_info.serial_number.unwrap_or("0".to_string());
+    let serial_number = keyboard_info.serial_number.unwrap_or("0000000".to_string());
     quote! {
         static keyboard_usb_config: ::rmk_config::keyboard_config::KeyboardUsbConfig = ::rmk_config::keyboard_config::KeyboardUsbConfig {
             vid: #vid,
@@ -61,17 +64,26 @@ fn expand_vial_config() -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_light_config(chip: ChipSeries, light_config: LightConfig) -> proc_macro2::TokenStream {
+fn expand_light_config(chip: &ChipSeries, light_config: LightConfig) -> proc_macro2::TokenStream {
     let numslock = match light_config.numslock {
-        Some(c) => convert_gpio_str_to_pin(&chip, c.pin),
+        Some(c) => {
+            let p = convert_gpio_str_to_output_pin(chip, c.pin);
+            quote! {Some(#p)}
+        }
         None => quote! {None},
     };
     let capslock = match light_config.capslock {
-        Some(c) => convert_gpio_str_to_pin(&chip, c.pin),
+        Some(c) => {
+            let p = convert_gpio_str_to_output_pin(chip, c.pin);
+            quote! {Some(#p)}
+        }
         None => quote! {None},
     };
     let scrolllock = match light_config.scrolllock {
-        Some(c) => convert_gpio_str_to_pin(&chip, c.pin),
+        Some(c) => {
+            let p = convert_gpio_str_to_output_pin(chip, c.pin);
+            quote! {Some(#p)}
+        }
         None => quote! {None},
     };
 
@@ -87,8 +99,40 @@ fn expand_light_config(chip: ChipSeries, light_config: LightConfig) -> proc_macr
     }
 }
 
+fn expand_matrix_config(
+    chip: &ChipSeries,
+    matrix_config: MatrixConfig,
+) -> proc_macro2::TokenStream {
+    let num_col = matrix_config.cols as usize;
+    let num_row = matrix_config.rows as usize;
+    let num_layer = matrix_config.layers as usize;
+    let mut final_tokenstream = proc_macro2::TokenStream::new();
+    final_tokenstream.extend(convert_input_pins_to_initializers(
+        &chip,
+        matrix_config.input_pins,
+    ));
+    final_tokenstream.extend(convert_output_pins_to_initializers(
+        &chip,
+        matrix_config.output_pins,
+    ));
+
+    quote! {
+        pub(crate) const COL: usize = #num_col;
+        pub(crate) const ROW: usize = #num_row;
+        pub(crate) const NUM_LAYER: usize = #num_layer;
+
+        macro_rules! config_matrix {
+            (p: $p:ident) => {{
+                #final_tokenstream
+                (output_pins, input_pins)
+            }};
+        }
+    }
+}
+
 #[proc_macro_attribute]
 pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Read keyboard config file at project root
     let s = match fs::read_to_string("keyboard.toml") {
         Ok(s) => s,
         Err(e) => {
@@ -98,6 +142,7 @@ pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .into();
         }
     };
+    // Parse keyboard config file content to `KeyboardTomlConfig`
     let c: KeyboardTomlConfig = match toml::from_str(&s) {
         Ok(c) => c,
         Err(e) => {
@@ -108,16 +153,18 @@ pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // Generate code from toml config
     let chip = get_chip_model(c.keyboard.chip.clone());
     let keyboard_info_static_var = expand_keyboard_info(c.keyboard);
     let vial_static_var = expand_vial_config();
-    let light_config_var = expand_light_config(chip, c.light);
-    eprintln!("{}", light_config_var.to_string());
+    let light_config_macro = expand_light_config(&chip, c.light);
+    let matrix_config_macro = expand_matrix_config(&chip, c.matrix);
     let f = parse_macro_input!(item as syn::ItemFn);
     quote! {
         #keyboard_info_static_var
         #vial_static_var
-        #light_config_var
+        #light_config_macro
+        #matrix_config_macro
 
         #f
     }

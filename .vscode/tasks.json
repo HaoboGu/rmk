@@ -8,21 +8,22 @@
             "type": "process",
             "command": "cargo",
             "args": [
-                "test",
-                "--package",
-                "rmk-test",
-                "--bin",
-                "rmk-test",
-                "--",
-                "tests::test_main",
-                "--exact",
-                "--nocapture"
+                "expand"
+            //     "test",
+            //     "--package",
+            //     "rmk-test",
+            //     "--bin",
+            //     "rmk-test",
+            //     "--",
+            //     "tests::test_main",
+            //     "--exact",
+            //     "--nocapture"
             ],
-            "problemMatcher": [
-                "$rustc"
-            ],
+            // "problemMatcher": [
+            //     "$rustc"
+            // ],
             "options": {
-                "cwd": "${workspaceFolder}/rmk-test"
+                "cwd": "${workspaceFolder}/boards/stm32h7"
             },
             "group": {
                 "kind": "test",

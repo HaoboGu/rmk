@@ -40,7 +40,7 @@ impl Default for KeyboardInfo {
         Self {
             vendor_id: 0x4c4b,
             product_id: 0x4643,
-            manufacturer: Some("Haobo".to_string()),
+            manufacturer: Some("RMK".to_string()),
             product_name: Some("RMK Keyboard".to_string()),
             serial_number: Some("00000001".to_string()),
             chip: "rp2040".to_string(),

@@ -10,8 +10,7 @@ pub use nrf_config::BleBatteryConfig;
 
 use embedded_hal::digital::{OutputPin, PinState};
 
-// TODO: more configs need to be added, easy configuration(from config file)
-/// Configurations for RMK keyboard.
+/// Internal configurations for RMK keyboard.
 pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
@@ -150,7 +149,7 @@ impl<'a> Default for KeyboardUsbConfig<'a> {
         Self {
             vid: 0x4c4b,
             pid: 0x4643,
-            manufacturer: "Haobo",
+            manufacturer: "RMK",
             product_name: "RMK Keyboard",
             serial_number: "00000001",
         }
