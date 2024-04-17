@@ -1,181 +1,21 @@
-//! This crate contains all configs about RMK.
-//! 
-#![cfg_attr(no_std, not(target_os = "espidf"))]
-#![no_std]
+//! This crate contains all configurations that you can customize RMK.
+//!
+//! There are two TYPES of configuration: [toml_config] and [keyboard_config].
+//!
+//! - [toml_config]: the configuration describles how the RMK toml configuration file looks like. It can be loaded directly from a toml file.
+//!
+//! > Why we have two configurations?
+//!
+//! > We want to provide a user-friendly representation of configurations, that's why [toml_config] exists.
+//! For example, to define the keyboard matrix, users can just use a list of string in toml like: `["PA1", "PA2"]`.
+//! This list could be automatically converted to an actual GPIO matrix associated to microncontroller in [keyboard_config].
+//!
+//! - [keyboard_config]: the configuration which is internally used in RMK.
+//! [keyboard_config] is what RMK's code receives. You can safely ignore it unless you want to dive into the RMK source code.
+#![cfg_attr(not(feature = "toml"), no_std)]
 
-#[cfg(feature = "_esp_ble")]
-mod esp_config;
-#[cfg(feature = "_nrf_ble")]
-mod nrf_config;
+mod keyboard_config;
+pub use keyboard_config::*;
 
-#[cfg(feature = "_esp_ble")]
-pub use esp_config::BleBatteryConfig;
-#[cfg(feature = "_nrf_ble")]
-pub use nrf_config::BleBatteryConfig;
-
-use embedded_hal::digital::{OutputPin, PinState};
-
-// TODO: more configs need to be added, easy configuration(from config file)
-/// Configurations for RMK keyboard.
-pub struct RmkConfig<'a, O: OutputPin> {
-    pub mouse_config: MouseConfig,
-    pub usb_config: KeyboardUsbConfig<'a>,
-    pub vial_config: VialConfig<'a>,
-    pub light_config: LightConfig<O>,
-    pub storage_config: StorageConfig,
-    #[cfg(feature = "_nrf_ble")]
-    pub ble_battery_config: BleBatteryConfig<'a>,
-    #[cfg(feature = "_esp_ble")]
-    pub ble_battery_config: BleBatteryConfig,
-}
-
-impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
-    fn default() -> Self {
-        Self {
-            mouse_config: MouseConfig::default(),
-            usb_config: KeyboardUsbConfig::default(),
-            vial_config: VialConfig::default(),
-            light_config: LightConfig::default(),
-            storage_config: StorageConfig::default(),
-            #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
-            ble_battery_config: BleBatteryConfig::default(),
-        }
-    }
-}
-
-/// Config for storage
-#[derive(Clone, Copy, Debug)]
-pub struct StorageConfig {
-    /// Start address of local storage, MUST BE start of a sector.
-    /// If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
-    pub start_addr: usize,
-    // Number of sectors used for storage, >= 2.
-    pub num_sectors: u8,
-}
-
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            start_addr: 0,
-            num_sectors: 2,
-        }
-    }
-}
-
-/// Config for lights
-#[derive(Clone, Copy, Debug)]
-pub struct LightConfig<O: OutputPin> {
-    pub capslock: Option<O>,
-    pub scrolllock: Option<O>,
-    pub numslock: Option<O>,
-    /// At this state, the light is on
-    pub on_state: PinState,
-}
-
-impl<O: OutputPin> Default for LightConfig<O> {
-    fn default() -> Self {
-        Self {
-            capslock: None,
-            scrolllock: None,
-            numslock: None,
-            on_state: PinState::Low,
-        }
-    }
-}
-
-/// Config for [vial](https://get.vial.today/).
-///
-/// You can generate automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs).
-#[derive(Clone, Copy, Debug, Default)]
-pub struct VialConfig<'a> {
-    pub vial_keyboard_id: &'a [u8],
-    pub vial_keyboard_def: &'a [u8],
-}
-
-impl<'a> VialConfig<'a> {
-    pub fn new(vial_keyboard_id: &'a [u8], vial_keyboard_def: &'a [u8]) -> Self {
-        Self {
-            vial_keyboard_id,
-            vial_keyboard_def,
-        }
-    }
-}
-
-/// Configuration for debouncing
-pub struct DebounceConfig {
-    /// Debounce time in ms
-    pub debounce_time: u32,
-}
-
-/// Configurations for mouse functionalities
-#[derive(Clone, Copy, Debug)]
-pub struct MouseConfig {
-    /// Time interval in ms of reporting mouse cursor states
-    pub mouse_key_interval: u32,
-    /// Time interval in ms of reporting mouse wheel states
-    pub mouse_wheel_interval: u32,
-}
-
-impl Default for MouseConfig {
-    fn default() -> Self {
-        Self {
-            mouse_key_interval: 20,
-            mouse_wheel_interval: 80,
-        }
-    }
-}
-
-/// Configurations for RGB light
-#[derive(Clone, Copy, Debug)]
-pub struct RGBLightConfig {
-    pub enabled: bool,
-    pub rgb_led_num: u32,
-    pub rgb_hue_step: u32,
-    pub rgb_val_step: u32,
-    pub rgb_sat_step: u32,
-}
-
-/// Configurations for usb
-#[derive(Clone, Copy, Debug)]
-pub struct KeyboardUsbConfig<'a> {
-    /// Vender id
-    pub vid: u16,
-    /// Product id
-    pub pid: u16,
-    /// Manufacturer
-    pub manufacturer: Option<&'a str>,
-    /// Product name
-    pub product_name: Option<&'a str>,
-    /// Serial number
-    pub serial_number: Option<&'a str>,
-}
-
-impl<'a> KeyboardUsbConfig<'a> {
-    pub fn new(
-        vid: u16,
-        pid: u16,
-        manufacturer: Option<&'a str>,
-        product_name: Option<&'a str>,
-        serial_number: Option<&'a str>,
-    ) -> Self {
-        Self {
-            vid,
-            pid,
-            manufacturer,
-            product_name,
-            serial_number,
-        }
-    }
-}
-
-impl<'a> Default for KeyboardUsbConfig<'a> {
-    fn default() -> Self {
-        Self {
-            vid: 0x4c4b,
-            pid: 0x4643,
-            manufacturer: Some("Haobo"),
-            product_name: Some("RMK Keyboard"),
-            serial_number: Some("00000001"),
-        }
-    }
-}
+#[cfg(feature = "toml")]
+pub mod toml_config;
