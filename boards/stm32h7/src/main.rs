@@ -2,10 +2,6 @@
 #![no_std]
 
 //! NOTE: This example compiles on latest main branch, which may be different from released version
-
-#[macro_use]
-mod macros;
-mod keymap;
 mod vial;
 
 use defmt::*;
@@ -22,12 +18,7 @@ use embassy_stm32::{
 };
 use panic_probe as _;
 use rmk::{a, k, layer, mo};
-use rmk::{
-    action::KeyAction,
-    config::{LightConfig, RmkConfig},
-    embedded_hal::digital::PinState,
-    initialize_keyboard_with_config_and_run,
-};
+use rmk::{action::KeyAction, config::RmkConfig, initialize_keyboard_with_config_and_run};
 use rmk_macro::rmk_main;
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -36,6 +27,7 @@ bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;
 });
 
+// TODO: Move keymap definition to proc macro
 #[rustfmt::skip]
 pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
     layer!([
@@ -91,8 +83,6 @@ async fn main(_spawner: Spawner) {
     // Initialize peripherals
     let p = embassy_stm32::init(config);
 
-    let (input_pins, output_pins) = config_matrix!(p: p);
-
     // Usb config
     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
     let mut usb_config = embassy_stm32::usb_otg::Config::default();
@@ -106,28 +96,13 @@ async fn main(_spawner: Spawner) {
         usb_config,
     );
 
-    // Pin config
-    // let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
-
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);
 
-    // let keyboard_usb_config = KeyboardUsbConfig {
-    //     vid: 0x4c4b,
-    //     pid: 0x4643,
-    //     manufacturer: "Haobo",
-    //     product_name: "RMK Keyboard",
-    //     serial_number: "00000000",
-    // };
+    // Read configs from config file
+    let (input_pins, output_pins) = config_matrix!(p: p);
+    let light_config = config_light!(p: p);
 
-    // let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-
-    let light_config = LightConfig {
-        capslock: output_pin_stm32!(peripherals: p, output: PE3, initial_level: Low),
-        scrolllock: None,
-        numslock: output_pin_stm32!(peripherals: p, output: PA2, initial_level: Low),
-        on_state: PinState::High,
-    };
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,

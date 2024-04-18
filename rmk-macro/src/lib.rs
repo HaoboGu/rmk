@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use rmk_config::{
     self,
-    toml_config::{KeyboardInfo, KeyboardTomlConfig, LightConfig, MatrixConfig},
+    toml_config::{KeyboardInfo, KeyboardTomlConfig, LightConfig, MatrixConfig, PinConfig},
 };
 use std::fs;
 use syn::parse_macro_input;
@@ -64,36 +64,40 @@ fn expand_vial_config() -> proc_macro2::TokenStream {
     }
 }
 
+fn extract_light_config(
+    chip: &ChipSeries,
+    pin_config: Option<PinConfig>,
+) -> proc_macro2::TokenStream {
+    match pin_config {
+        Some(c) => {
+            let p = convert_gpio_str_to_output_pin(chip, c.pin);
+            let low_active = c.low_active;
+            quote! {
+                Some(::rmk_config::keyboard_config::LightPinConfig {
+                    pin: #p,
+                    low_active: #low_active,
+                })
+            }
+        }
+        None => quote! {None},
+    }
+}
+
 fn expand_light_config(chip: &ChipSeries, light_config: LightConfig) -> proc_macro2::TokenStream {
-    let numslock = match light_config.numslock {
-        Some(c) => {
-            let p = convert_gpio_str_to_output_pin(chip, c.pin);
-            quote! {Some(#p)}
-        }
-        None => quote! {None},
-    };
-    let capslock = match light_config.capslock {
-        Some(c) => {
-            let p = convert_gpio_str_to_output_pin(chip, c.pin);
-            quote! {Some(#p)}
-        }
-        None => quote! {None},
-    };
-    let scrolllock = match light_config.scrolllock {
-        Some(c) => {
-            let p = convert_gpio_str_to_output_pin(chip, c.pin);
-            quote! {Some(#p)}
-        }
-        None => quote! {None},
-    };
+    let numslock = extract_light_config(chip, light_config.numslock);
+    let capslock = extract_light_config(chip, light_config.capslock);
+    let scrolllock = extract_light_config(chip, light_config.scrolllock);
 
     quote! {
+        // It's config light
         macro_rules! config_light {
             (p: $p:ident) => {{
-                let numslock_pin = #numslock;
-                let capslock_pin = #capslock;
-                let scrolllock_pin = #scrolllock;
-                (numslock_pin, capslock_pin, scrolllock_pin)
+                let light_config = ::rmk_config::keyboard_config::LightConfig {
+                    capslock: #capslock,
+                    numslock: #numslock,
+                    scrolllock: #scrolllock,
+                };
+                (light_config)
             }};
         }
     }
@@ -121,6 +125,7 @@ fn expand_matrix_config(
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
 
+        /// It's doc
         macro_rules! config_matrix {
             (p: $p:ident) => {{
                 #final_tokenstream

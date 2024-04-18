@@ -8,7 +8,7 @@ pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal::digital::OutputPin;
 
 /// Internal configurations for RMK keyboard.
 pub struct RmkConfig<'a, O: OutputPin> {
@@ -59,12 +59,23 @@ impl Default for StorageConfig {
 /// Config for lights
 #[derive(Clone, Copy, Debug)]
 pub struct LightConfig<O: OutputPin> {
-    pub capslock: Option<O>,
-    pub scrolllock: Option<O>,
-    pub numslock: Option<O>,
-    /// At this state, the light is on
-    pub on_state: PinState,
+    pub capslock: Option<LightPinConfig<O>>,
+    pub scrolllock: Option<LightPinConfig<O>>,
+    pub numslock: Option<LightPinConfig<O>>,
 }
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct LightPinConfig<O: OutputPin> {
+    pub pin: O,
+    pub low_active: bool,
+}
+
+// impl<O: OutputPin> LightPinConfig<O> {
+//     pub fn on_state(&self) -> PinState {
+//
+//     }
+
+// }
 
 impl<O: OutputPin> Default for LightConfig<O> {
     fn default() -> Self {
@@ -72,7 +83,6 @@ impl<O: OutputPin> Default for LightConfig<O> {
             capslock: None,
             scrolllock: None,
             numslock: None,
-            on_state: PinState::Low,
         }
     }
 }
