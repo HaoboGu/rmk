@@ -1,139 +1,24 @@
 mod gpio_config;
+mod keyboard;
+mod keyboard_config;
 
+use crate::{
+    keyboard::parse_keyboard_mod,
+    keyboard_config::{
+        expand_keyboard_info, expand_light_config, expand_matrix_config, expand_vial_config,
+        get_chip_model, ChipSeries,
+    },
+};
 use proc_macro::TokenStream;
 use quote::quote;
-use rmk_config::{
-    self,
-    toml_config::{KeyboardInfo, KeyboardTomlConfig, LightConfig, MatrixConfig, PinConfig},
-};
+use rmk_config::{self, toml_config::KeyboardTomlConfig};
 use std::fs;
 use syn::parse_macro_input;
 
-use crate::gpio_config::{
-    convert_gpio_str_to_output_pin, convert_input_pins_to_initializers,
-    convert_output_pins_to_initializers,
-};
-
-#[derive(Debug, PartialEq, Eq)]
-enum ChipSeries {
-    Stm32,
-    Nrf52,
-    Rp2040,
-    Esp32,
-    Unsupported,
-}
-
-fn get_chip_model(chip: String) -> ChipSeries {
-    if chip.to_lowercase().starts_with("stm32") {
-        return ChipSeries::Stm32;
-    } else if chip.to_lowercase().starts_with("nrf52") {
-        return ChipSeries::Nrf52;
-    } else if chip.to_lowercase().starts_with("rp2040") {
-        return ChipSeries::Rp2040;
-    } else if chip.to_lowercase().starts_with("esp32") {
-        return ChipSeries::Esp32;
-    } else {
-        return ChipSeries::Unsupported;
-    }
-}
-
-fn expand_keyboard_info(keyboard_info: KeyboardInfo) -> proc_macro2::TokenStream {
-    let pid = keyboard_info.product_id;
-    let vid = keyboard_info.vendor_id;
-    let product_name = keyboard_info
-        .product_name
-        .unwrap_or("RMK Keyboard".to_string());
-    let manufacturer = keyboard_info.manufacturer.unwrap_or("RMK".to_string());
-    let serial_number = keyboard_info.serial_number.unwrap_or("0000000".to_string());
-    quote! {
-        static keyboard_usb_config: ::rmk_config::keyboard_config::KeyboardUsbConfig = ::rmk_config::keyboard_config::KeyboardUsbConfig {
-            vid: #vid,
-            pid: #pid,
-            manufacturer: #manufacturer,
-            product_name: #product_name,
-            serial_number: #serial_number,
-        };
-    }
-}
-
-fn expand_vial_config() -> proc_macro2::TokenStream {
-    quote! {
-        static vial_config: ::rmk_config::keyboard_config::VialConfig = ::rmk_config::keyboard_config::VialConfig {
-            vial_keyboard_id: &VIAL_KEYBOARD_ID,
-            vial_keyboard_def: &VIAL_KEYBOARD_DEF,
-        };
-    }
-}
-
-fn build_light_config(
-    chip: &ChipSeries,
-    pin_config: Option<PinConfig>,
-) -> proc_macro2::TokenStream {
-    match pin_config {
-        Some(c) => {
-            let p = convert_gpio_str_to_output_pin(chip, c.pin);
-            let low_active = c.low_active;
-            quote! {
-                Some(::rmk_config::keyboard_config::LightPinConfig {
-                    pin: #p,
-                    low_active: #low_active,
-                })
-            }
-        }
-        None => quote! {None},
-    }
-}
-
-fn expand_light_config(chip: &ChipSeries, light_config: LightConfig) -> proc_macro2::TokenStream {
-    let numslock = build_light_config(chip, light_config.numslock);
-    let capslock = build_light_config(chip, light_config.capslock);
-    let scrolllock = build_light_config(chip, light_config.scrolllock);
-
-    // Generate a macro that does light config
-    quote! {
-        macro_rules! config_light {
-            (p: $p:ident) => {{
-                let light_config = ::rmk_config::keyboard_config::LightConfig {
-                    capslock: #capslock,
-                    numslock: #numslock,
-                    scrolllock: #scrolllock,
-                };
-                (light_config)
-            }};
-        }
-    }
-}
-
-fn expand_matrix_config(
-    chip: &ChipSeries,
-    matrix_config: MatrixConfig,
-) -> proc_macro2::TokenStream {
-    let num_col = matrix_config.cols as usize;
-    let num_row = matrix_config.rows as usize;
-    let num_layer = matrix_config.layers as usize;
-    let mut final_tokenstream = proc_macro2::TokenStream::new();
-    final_tokenstream.extend(convert_input_pins_to_initializers(
-        &chip,
-        matrix_config.input_pins,
-    ));
-    final_tokenstream.extend(convert_output_pins_to_initializers(
-        &chip,
-        matrix_config.output_pins,
-    ));
-
-    // Generate a macro that does pin matrix config
-    quote! {
-        pub(crate) const COL: usize = #num_col;
-        pub(crate) const ROW: usize = #num_row;
-        pub(crate) const NUM_LAYER: usize = #num_layer;
-
-        macro_rules! config_matrix {
-            (p: $p:ident) => {{
-                #final_tokenstream
-                (output_pins, input_pins)
-            }};
-        }
-    }
+#[proc_macro_attribute]
+pub fn rmk_keyboard(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item_mod = parse_macro_input!(item as syn::ItemMod);
+    parse_keyboard_mod(attr, item_mod).into()
 }
 
 #[proc_macro_attribute]
@@ -164,7 +49,8 @@ pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
     if chip == ChipSeries::Unsupported {
         return quote! {
             compile_error!("Unsupported chip series, please check `chip` field in `keyboard.toml`");
-        }.into();
+        }
+        .into();
     }
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(c.keyboard);

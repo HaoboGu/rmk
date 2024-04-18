@@ -19,7 +19,7 @@ use embassy_stm32::{
 use panic_probe as _;
 use rmk::{a, k, layer, mo};
 use rmk::{action::KeyAction, config::RmkConfig, initialize_keyboard_with_config_and_run};
-use rmk_macro::rmk_main;
+use rmk_macro::rmk_keyboard;
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -44,7 +44,9 @@ pub static KEYMAP: [[[KeyAction; COL]; ROW]; NUM_LAYER] = [
     ]),
 ];
 
-#[rmk_main]
+#[rmk_keyboard]
+mod my_keyboard {}
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
