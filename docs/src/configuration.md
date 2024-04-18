@@ -25,6 +25,18 @@ There are two choices right now:
     - Need to distribute `build.rs`, users cannot use the lib without this file, which is not a common way generally
     - LOTS OF work
 
+- Rust's procedural macro: add a macro like `#[rmk_main]` and add everything needed in compile-time
+  - pros:
+    - Extendable, flexible, and powerful, proc macro can do everything
+    - No need to distribute `build.rs`
+    - Possible to make user's usage even much simpler
+  - cons:
+    - `rmk-macro` becomes a mandatory dependency
+    - LOTS LOTS OF MACRO work
+    - Developing proc macro might become a barrier for people who want to contribute to RMK
+
+Okay, I'll try the third approch first: writing proc macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experient as the most important thing, that's why proc macro wins.
+
 ## Configuration file
 
 A `toml` file named `rmk.toml` is used as a configuration file. The following is the spec of `toml`:
@@ -93,16 +105,55 @@ Besides the above choosing, there's some other problems that have to be addresse
 
 1. The first one is, how to deserialize those configs to RMK Config? 
    1. Using serde would be a way, but it requires some other annotations on RMK Config structs(may cause extra flash usage? TODO: test it)
-   2. Another way is to define every field in config and convert then to RMK Config struct by hand. Seems to be a lot of works, but it's one-time investment.
+   2. ✅ Another way is to define every field in config and convert then to RMK Config struct by hand. Seems to be a lot of works, but it's one-time investment.
 
 2. The second problem is, how to convert different representations of GPIOs of different chips? For example, STMs have something like `PA1`, `PB2`, `PC3`, etc. nRFs have `P0_01`, ESPs have `gpio1`, rp2040 has `PIN_1`. Do we need a common representation of those different pin names? Or we just save strings in toml and process them differently.
 
+    - ✅ proc_macro can do this
+
 3. There are some other pheriphals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so there're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many pheriphals?
+    - To be addressed
 
 4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
+    - To be addressed
 
-## `build.rs` method
+## Procedural macro
 
-First, I would give `build.rs` method a try. 
+### Usage 
 
-`toml` crate will be used to parse config file. BUT, there's an issue:
+The ideal usage of the procedural macro way for customizing keyboard is like:
+
+```rust
+#[rmk]
+mod MyKeyboard {
+
+}
+```
+
+And, that's it!
+
+`#[rmk]` macro should load configs from a local toml file and create everything that's needed for creating a RMK keyboard instance.
+
+`#[rmk]` macro should also provide flexibilies of customizing the keyboard's behavior. For example, the clock config:
+
+```rust
+use embassy_stm32::Config;
+
+#[rmk]
+mod MyKeyboard {
+  #[config]
+  fn config() -> Config {
+    let mut config = Config::default();
+    {
+        use embassy_stm32::rcc::*;
+        config.rcc.hsi = Some(HSIPrescaler::DIV1);
+        // ... other rcc configs below
+    }
+    config
+  }
+}
+```
+
+RMK should use the config from the user defined function for `let p = embassy_stm32::init(config);` if it exists and use default config otherwise.
+
+In this way, RMK provides a flexible and extendable way for experienced Rust developer, while keeps simple for new users.
