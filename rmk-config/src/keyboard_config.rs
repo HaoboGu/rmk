@@ -70,13 +70,6 @@ pub struct LightPinConfig<O: OutputPin> {
     pub low_active: bool,
 }
 
-// impl<O: OutputPin> LightPinConfig<O> {
-//     pub fn on_state(&self) -> PinState {
-//
-//     }
-
-// }
-
 impl<O: OutputPin> Default for LightConfig<O> {
     fn default() -> Self {
         Self {

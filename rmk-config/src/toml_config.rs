@@ -15,7 +15,7 @@ pub struct KeyboardTomlConfig {
     pub matrix: MatrixConfig,
     pub light: LightConfig,
     pub storage: StorageConfig,
-    pub ble: BleConfig,
+    pub ble: Option<BleConfig>,
 }
 
 /// Configurations for usb

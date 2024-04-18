@@ -1,4 +1,4 @@
-mod gpio_str;
+mod gpio_config;
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -9,11 +9,12 @@ use rmk_config::{
 use std::fs;
 use syn::parse_macro_input;
 
-use crate::gpio_str::{
+use crate::gpio_config::{
     convert_gpio_str_to_output_pin, convert_input_pins_to_initializers,
     convert_output_pins_to_initializers,
 };
 
+#[derive(Debug, PartialEq, Eq)]
 enum ChipSeries {
     Stm32,
     Nrf52,
@@ -64,7 +65,7 @@ fn expand_vial_config() -> proc_macro2::TokenStream {
     }
 }
 
-fn extract_light_config(
+fn build_light_config(
     chip: &ChipSeries,
     pin_config: Option<PinConfig>,
 ) -> proc_macro2::TokenStream {
@@ -84,12 +85,12 @@ fn extract_light_config(
 }
 
 fn expand_light_config(chip: &ChipSeries, light_config: LightConfig) -> proc_macro2::TokenStream {
-    let numslock = extract_light_config(chip, light_config.numslock);
-    let capslock = extract_light_config(chip, light_config.capslock);
-    let scrolllock = extract_light_config(chip, light_config.scrolllock);
+    let numslock = build_light_config(chip, light_config.numslock);
+    let capslock = build_light_config(chip, light_config.capslock);
+    let scrolllock = build_light_config(chip, light_config.scrolllock);
 
+    // Generate a macro that does light config
     quote! {
-        // It's config light
         macro_rules! config_light {
             (p: $p:ident) => {{
                 let light_config = ::rmk_config::keyboard_config::LightConfig {
@@ -120,12 +121,12 @@ fn expand_matrix_config(
         matrix_config.output_pins,
     ));
 
+    // Generate a macro that does pin matrix config
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
 
-        /// It's doc
         macro_rules! config_matrix {
             (p: $p:ident) => {{
                 #final_tokenstream
@@ -160,11 +161,22 @@ pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Generate code from toml config
     let chip = get_chip_model(c.keyboard.chip.clone());
+    if chip == ChipSeries::Unsupported {
+        return quote! {
+            compile_error!("Unsupported chip series, please check `chip` field in `keyboard.toml`");
+        }.into();
+    }
+    // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(c.keyboard);
     let vial_static_var = expand_vial_config();
+    // Create macros that initialize light config and matrix config
     let light_config_macro = expand_light_config(&chip, c.light);
     let matrix_config_macro = expand_matrix_config(&chip, c.matrix);
+
+    // Original function body
     let f = parse_macro_input!(item as syn::ItemFn);
+
+    // Prepend all generated contents before function
     quote! {
         #keyboard_info_static_var
         #vial_static_var
