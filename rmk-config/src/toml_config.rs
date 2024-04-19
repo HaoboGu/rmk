@@ -1,13 +1,5 @@
 use serde_derive::Deserialize;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct KeyboardConfig {
-    /// Vender id
-    pub vendor_id: u16,
-    /// Product id
-    pub product_id: u16,
-}
-
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct KeyboardTomlConfig {

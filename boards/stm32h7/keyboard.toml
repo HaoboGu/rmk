@@ -14,11 +14,58 @@ layers = 2
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
 # Default is col2row, uncomment if your pcb is row2col
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 
 [layout]
 # TODO: keyboard's default layout and keymap, be compatible with vial json and KLE
 # TODO: Could `VIAL_KEYBOARD_DEF/ID` be generated using this? If so, we don't need a vial.json anymore
+default_keymap = [
+    [
+        [
+            "A",
+            "B",
+            "C",
+        ],
+        [
+            "MO(1)",
+            "AudioVolUp",
+            "LShift",
+        ],
+        [
+            "__",
+            "Kp1",
+            "AudioVolDown",
+        ],
+        [
+            "MO(1)",
+            "__",
+            "LCtrl",
+        ],
+    ],
+    [
+        [
+            "Kp7",
+            "Kp8",
+            "Kp9",
+        ],
+        [
+            "Kp4",
+            "Kp5",
+            "Kp6",
+        ],
+        [
+            "Kp1",
+            "Kp2",
+            "Kp3",
+        ],
+        [
+            "MO(1)",
+            "__",
+            "__",
+        ],
+    ],
+]
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active

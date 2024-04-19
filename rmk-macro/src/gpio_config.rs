@@ -48,22 +48,22 @@ pub(crate) fn convert_gpio_str_to_output_pin(
     match chip {
         ChipSeries::Stm32 => {
             quote! {
-                ::embassy_stm32::gpio::Output::new($p.#gpio_ident, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::VeryHigh).degrade()
+                ::embassy_stm32::gpio::Output::new(p.#gpio_ident, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::VeryHigh).degrade()
             }
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Output::new(AnyPin::from($p.#gpio_ident), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard)
+                ::embassy_nrf::gpio::Output::new(AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard)
             }
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from($p.#gpio_ident), ::embassy_rp::gpio::Level::Low)
+                ::embassy_rp::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Level::Low)
             }
         }
         ChipSeries::Esp32 => {
             quote! {
-                ::esp_idf_svc::hal::gpio::PinDriver::output($p.pins.#gpio_ident.downgrade_output()).unwrap()
+                ::esp_idf_svc::hal::gpio::PinDriver::output(p.pins.#gpio_ident.downgrade_output()).unwrap()
             }
         }
         ChipSeries::Unsupported => todo!(),
@@ -78,22 +78,22 @@ pub(crate) fn convert_gpio_str_to_input_pin(
     match chip {
         ChipSeries::Stm32 => {
             quote! {
-                ::embassy_stm32::gpio::Input::new($p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
+                ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
             }
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from($p.#gpio_ident), ::embassy_nrf::gpio::Pull::Down)
+                ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Pull::Down)
             }
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Input::new(::embassy_rp::gpio::AnyPin::from($p.#gpio_ident), ::embassy_rp::gpio::Pull::Down)
+                ::embassy_rp::gpio::Input::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Pull::Down)
             }
         }
         ChipSeries::Esp32 => {
             quote! {
-                ::esp_idf_svc::hal::gpio::PinDriver::input($p.pins.#gpio_ident.downgrade_input()).unwrap()
+                ::esp_idf_svc::hal::gpio::PinDriver::input(p.pins.#gpio_ident.downgrade_input()).unwrap()
             }
         }
         ChipSeries::Unsupported => todo!(),

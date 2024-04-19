@@ -53,7 +53,12 @@ pub fn rmk_main(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
     // Create keyboard info and vial struct
-    let keyboard_info_static_var = expand_keyboard_info(c.keyboard);
+    let keyboard_info_static_var = expand_keyboard_info(
+        c.keyboard.clone(),
+        c.matrix.rows as usize,
+        c.matrix.cols as usize,
+        c.matrix.layers as usize,
+    );
     let vial_static_var = expand_vial_config();
     // Create macros that initialize light config and matrix config
     let light_config_macro = expand_light_config(&chip, c.light);

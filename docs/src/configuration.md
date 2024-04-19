@@ -27,15 +27,15 @@ There are two choices right now:
 
 - Rust's procedural macro: add a macro like `#[rmk_main]` and add everything needed in compile-time
   - pros:
-    - Extendable, flexible, and powerful, proc macro can do everything
+    - Extendable, flexible, and powerful, proc-macro can do everything
     - No need to distribute `build.rs`
     - Possible to make user's usage even much simpler
   - cons:
     - `rmk-macro` becomes a mandatory dependency
     - LOTS LOTS OF MACRO work
-    - Developing proc macro might become a barrier for people who want to contribute to RMK
+    - Developing proc-macro might become a barrier for people who want to contribute to RMK
 
-Okay, I'll try the third approch first: writing proc macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experient as the most important thing, that's why proc macro wins.
+Okay, I'll try the third approch first: writing proc-macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experient as the most important thing, that's why proc-macro wins.
 
 ## Configuration file
 
@@ -117,7 +117,85 @@ Besides the above choosing, there's some other problems that have to be addresse
 4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
     - To be addressed
 
-## Procedural macro
+## Procedural macro approach
+
+### Generated code
+
+With proc-macro, the whole main function can be generated. But the main function varies between different chips. We have to separate the boilerplate code to several parts, making sure that the proc-macro won't become a mess. 
+
+#### Before main function
+
+There are some code out of main function, usually they should be placed before the main. Here is a list that RMK's proc-macro should add:
+
+1. imports: yeah it's needed of course! And, it's actually quite complex, need to be carefully generated ensuring that no extra imports are added.
+
+2. static configs: keyboard config, vial config, number of rows, etc
+
+3. `bind_interrupts`: Embassy need this, it's complex too. The interrupt name and bind periphral names are actually something quite random, according to the chip
+
+#### Embassy main
+
+In the main function, generally there are several parts:
+
+1. Chip initialization, with config:
+   ```rust
+      let mut config = Config::default();
+      {
+          use embassy_stm32::rcc::*;
+          config.rcc.hse = Some(Hse {
+              freq: Hertz(25_000_000),
+              mode: HseMode::Oscillator,
+          });
+          config.rcc.pll_src = PllSource::HSE;
+          config.rcc.pll = Some(Pll {
+              prediv: PllPreDiv::DIV25,
+              mul: PllMul::MUL192,
+              divp: Some(PllPDiv::DIV2), // 25mhz / 25 * 192 / 2 = 96Mhz.
+              divq: Some(PllQDiv::DIV4), // 25mhz / 25 * 192 / 4 = 48Mhz.
+              divr: None,
+          });
+          config.rcc.ahb_pre = AHBPrescaler::DIV1;
+          config.rcc.apb1_pre = APBPrescaler::DIV2;
+          config.rcc.apb2_pre = APBPrescaler::DIV1;
+          config.rcc.sys = Sysclk::PLL1_P;
+      }
+
+      // Initialize peripherals
+      let p = embassy_stm32::init(config);
+   ```
+
+2. (Optional)USB periphral initialization: just as what I wrote above, it's quite random!
+
+    ```rust
+      // It's STM32H7's USB initialization code
+      static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
+      let mut usb_config = embassy_stm32::usb_otg::Config::default();
+      usb_config.vbus_detection = false;
+      let driver = Driver::new_fs(
+          p.USB_OTG_HS,
+          Irqs,
+          p.PA12,
+          p.PA11,
+          &mut EP_OUT_BUFFER.init([0; 1024])[..],
+          usb_config,
+      );
+
+      // It's nRF52840's USB initialization code in USB mode
+      let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
+
+      // It's nRF52840's USB initialization code in USB + BLE mode
+      let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
+      let driver = Driver::new(p.USBD, Irqs, software_vbus);
+
+      // It's rp2040's USB initialization code
+      let driver = Driver::new(p.USB, Irqs);
+    ```
+
+3. Storage initialization
+
+4. Other keyboard config: Initialize `RmkConfig`, which contains usb config, vial config, ble_battery_config, etc.
+
+5. Run the keyboard: RMK provides several functions to run the keyboard right now. The different entry function requires different inputs. The number of entry functions should be controller to a reasonable amount(I think not more than 3 variants is good). 
 
 ### Usage 
 
@@ -125,7 +203,7 @@ The ideal usage of the procedural macro way for customizing keyboard is like:
 
 ```rust
 #[rmk]
-mod MyKeyboard {
+mod my_keyboard {
 
 }
 ```

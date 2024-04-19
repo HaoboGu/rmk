@@ -29,7 +29,12 @@ pub(crate) fn get_chip_model(chip: String) -> ChipSeries {
     }
 }
 
-pub(crate) fn expand_keyboard_info(keyboard_info: KeyboardInfo) -> proc_macro2::TokenStream {
+pub(crate) fn expand_keyboard_info(
+    keyboard_info: KeyboardInfo,
+    num_row: usize,
+    num_col: usize,
+    num_layer: usize,
+) -> proc_macro2::TokenStream {
     let pid = keyboard_info.product_id;
     let vid = keyboard_info.vendor_id;
     let product_name = keyboard_info
@@ -38,6 +43,9 @@ pub(crate) fn expand_keyboard_info(keyboard_info: KeyboardInfo) -> proc_macro2::
     let manufacturer = keyboard_info.manufacturer.unwrap_or("RMK".to_string());
     let serial_number = keyboard_info.serial_number.unwrap_or("0000000".to_string());
     quote! {
+        pub(crate) const COL: usize = #num_col;
+        pub(crate) const ROW: usize = #num_row;
+        pub(crate) const NUM_LAYER: usize = #num_layer;
         static keyboard_usb_config: ::rmk_config::keyboard_config::KeyboardUsbConfig = ::rmk_config::keyboard_config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,
@@ -86,15 +94,10 @@ pub(crate) fn expand_light_config(
 
     // Generate a macro that does light config
     quote! {
-        macro_rules! config_light {
-            (p: $p:ident) => {{
-                let light_config = ::rmk_config::keyboard_config::LightConfig {
-                    capslock: #capslock,
-                    numslock: #numslock,
-                    scrolllock: #scrolllock,
-                };
-                (light_config)
-            }};
+        ::rmk_config::keyboard_config::LightConfig {
+            capslock: #capslock,
+            numslock: #numslock,
+            scrolllock: #scrolllock,
         }
     }
 }
@@ -103,30 +106,23 @@ pub(crate) fn expand_matrix_config(
     chip: &ChipSeries,
     matrix_config: MatrixConfig,
 ) -> proc_macro2::TokenStream {
-    let num_col = matrix_config.cols as usize;
-    let num_row = matrix_config.rows as usize;
-    let num_layer = matrix_config.layers as usize;
-    let mut final_tokenstream = proc_macro2::TokenStream::new();
-    final_tokenstream.extend(convert_input_pins_to_initializers(
+    let mut pin_initialization = proc_macro2::TokenStream::new();
+    // Initialize input pins
+    pin_initialization.extend(convert_input_pins_to_initializers(
         &chip,
         matrix_config.input_pins,
     ));
-    final_tokenstream.extend(convert_output_pins_to_initializers(
+    // Initialize output pins
+    pin_initialization.extend(convert_output_pins_to_initializers(
         &chip,
         matrix_config.output_pins,
     ));
 
     // Generate a macro that does pin matrix config
     quote! {
-        pub(crate) const COL: usize = #num_col;
-        pub(crate) const ROW: usize = #num_row;
-        pub(crate) const NUM_LAYER: usize = #num_layer;
-
-        macro_rules! config_matrix {
-            (p: $p:ident) => {{
-                #final_tokenstream
-                (output_pins, input_pins)
-            }};
+        {
+            #pin_initialization
+            (output_pins, input_pins)
         }
     }
 }
