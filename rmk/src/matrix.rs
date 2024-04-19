@@ -6,8 +6,11 @@ use defmt::Format;
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
 pub(crate) struct KeyState {
+    // True if the key is pressed
     pub(crate) pressed: bool,
+    // True if the key's state is just changed
     pub(crate) changed: bool,
+    // If the key is held, `hold_start` records the time of it was pressed.
     hold_start: Option<Instant>,
 }
 
@@ -26,10 +29,12 @@ impl KeyState {
         }
     }
 
+    // Record the start time of pressing
     fn start_timer(&mut self) {
         self.hold_start = Some(Instant::now());
     }
 
+    // Calcuate held time
     fn elapsed(&self) -> Option<Duration> {
         match self.hold_start {
             Some(t) => Instant::now().checked_duration_since(t),
@@ -37,6 +42,7 @@ impl KeyState {
         }
     }
 
+    // Clear held timer
     fn clear_timer(&mut self) {
         self.hold_start = None;
     }
@@ -112,6 +118,7 @@ impl<In: InputPin, Out: OutputPin, const INPUT_PIN_NUM: usize, const OUTPUT_PIN_
         self.key_states[row][col].start_timer();
     }
 
+    /// Read key state at position (row, col)
     pub(crate) fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
         // COL2ROW
         #[cfg(feature = "col2row")]

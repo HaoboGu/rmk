@@ -2,15 +2,6 @@ use crate::{action::KeyAction, matrix::KeyState, storage::Storage};
 use defmt::{error, warn};
 use embedded_storage_async::nor_flash::NorFlash;
 
-pub(crate) struct KeyMapConfig {
-    /// Number of rows.
-    pub(crate) row: usize,
-    /// Number of columns.
-    pub(crate) col: usize,
-    /// Number of layer
-    pub(crate) layer: usize,
-}
-
 /// Keymap represents the stack of layers.
 ///
 /// The conception of Keymap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
