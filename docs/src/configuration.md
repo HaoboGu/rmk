@@ -99,6 +99,18 @@ charge_state.low_active = true
 
 ```
 
+### What's left to user side
+
+1. User customized chip config
+
+2. interrupt binding *
+
+3. USB driver initialization *
+
+4. Other customizatio
+
+*: To be removed if possible
+
 ## Problems
 
 Besides the above choosing, there's some other problems that have to be addressed.
@@ -138,7 +150,7 @@ There are some code out of main function, usually they should be placed before t
 In the main function, generally there are several parts:
 
 1. Chip initialization, with config:
-   ```rust
+    ```rust
       let mut config = Config::default();
       {
           use embassy_stm32::rcc::*;
@@ -162,7 +174,7 @@ In the main function, generally there are several parts:
 
       // Initialize peripherals
       let p = embassy_stm32::init(config);
-   ```
+    ```
 
 2. (Optional)USB periphral initialization: just as what I wrote above, it's quite random!
 
