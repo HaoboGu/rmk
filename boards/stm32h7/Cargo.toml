@@ -19,6 +19,7 @@ embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
 embassy-stm32 = { version = "0.1", features = [
     "stm32h7b0vb",
     "defmt",
+    "memory-x",
     "time-driver-any",
 ] }
 embassy-executor = { version = "0.5", features = [
