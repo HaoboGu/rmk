@@ -58,7 +58,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Level::Low)
+                ::embassy_rp::gpio::Output::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Level::Low)
             }
         }
         ChipSeries::Esp32 => {

@@ -46,7 +46,7 @@ pub(crate) fn expand_flash_init(
             }
             ChipSeries::Rp2040 => quote! {
                 const FLASH_SIZE: usize = 2 * 1024 * 1024;
-                let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, >::new(p.FLASH, p.DMA_CH0);
+                let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
             },
             ChipSeries::Esp32 => quote! {},
             ChipSeries::Unsupported => quote! {},
