@@ -1,31 +1,53 @@
 use quote::quote;
-use rmk_config::toml_config::KeyboardInfo;
+use rmk_config::toml_config::{BleConfig, KeyboardInfo};
 
-use crate::{ChipModel, ChipSeries};
+use crate::{keyboard::CommunicationType, ChipModel, ChipSeries};
+
+pub(crate) fn get_communication_type(
+    keyboard_config: &KeyboardInfo,
+    ble_config: &Option<BleConfig>,
+) -> CommunicationType {
+    if keyboard_config.usb_enable
+        && ble_config
+            .clone()
+            .is_some_and(|ble_config| ble_config.enabled)
+    {
+        CommunicationType::Both
+    } else if keyboard_config.usb_enable {
+        CommunicationType::Usb
+    } else if ble_config
+        .clone()
+        .is_some_and(|ble_config| ble_config.enabled)
+    {
+        CommunicationType::Ble
+    } else {
+        CommunicationType::None
+    }
+}
 
 pub(crate) fn get_chip_model(chip: String) -> ChipModel {
     if chip.to_lowercase().starts_with("stm32") {
-        ChipModel{
+        ChipModel {
             series: ChipSeries::Stm32,
             chip,
         }
     } else if chip.to_lowercase().starts_with("nrf52") {
-        ChipModel{
+        ChipModel {
             series: ChipSeries::Nrf52,
             chip,
         }
     } else if chip.to_lowercase().starts_with("rp2040") {
-        ChipModel{
+        ChipModel {
             series: ChipSeries::Rp2040,
             chip,
         }
     } else if chip.to_lowercase().starts_with("esp32") {
-        ChipModel{
+        ChipModel {
             series: ChipSeries::Esp32,
             chip,
         }
     } else {
-        ChipModel{
+        ChipModel {
             series: ChipSeries::Unsupported,
             chip,
         }

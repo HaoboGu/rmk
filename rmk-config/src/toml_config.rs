@@ -25,6 +25,9 @@ pub struct KeyboardInfo {
     pub serial_number: Option<String>,
     /// chip model
     pub chip: String,
+    /// enable usb
+    #[serde(default = "default_true")]
+    pub usb_enable: bool,
 }
 
 impl Default for KeyboardInfo {
@@ -36,6 +39,7 @@ impl Default for KeyboardInfo {
             product_name: Some("RMK Keyboard".to_string()),
             serial_number: Some("00000001".to_string()),
             chip: "rp2040".to_string(),
+            usb_enable: true,
         }
     }
 }
@@ -60,7 +64,7 @@ pub struct StorageConfig {
     #[serde(default = "default_num_sectors")]
     pub num_sectors: u8,
     ///
-    #[serde(default = "default_bool")]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
@@ -95,6 +99,10 @@ fn default_num_sectors() -> u8 {
 
 fn default_bool() -> bool {
     false
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

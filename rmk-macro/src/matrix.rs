@@ -26,7 +26,7 @@ pub(crate) fn expand_matrix_config(
 
     // Generate a macro that does pin matrix config
     quote! {
-        {
+        let (input_pins, output_pins) = {
             #pin_initialization
             (output_pins, input_pins)
         }

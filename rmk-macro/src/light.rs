@@ -35,10 +35,10 @@ pub(crate) fn expand_light_config(
 
     // Generate a macro that does light config
     quote! {
-        ::rmk_config::keyboard_config::LightConfig {
+        let light_config = ::rmk_config::keyboard_config::LightConfig {
             capslock: #capslock,
             numslock: #numslock,
             scrolllock: #scrolllock,
-        }
+        };
     }
 }

@@ -6,8 +6,19 @@ use std::fs;
 use syn::ItemMod;
 
 use crate::{
-    bind_interrupt::expand_bind_interrupt, chip_init::expand_chip_init, comm::expand_usb_init, import::expand_imports, keyboard_config::{expand_keyboard_info, expand_vial_config, get_chip_model}, light::expand_light_config, matrix::expand_matrix_config, ChipModel, ChipSeries
+    bind_interrupt::expand_bind_interrupt, chip_init::expand_chip_init, comm::expand_usb_init, entry::expand_rmk_entry, flash::expand_flash_init, import::expand_imports, keyboard_config::{
+        expand_keyboard_info, expand_vial_config, get_chip_model, get_communication_type,
+    }, light::expand_light_config, matrix::expand_matrix_config, ChipModel, ChipSeries
 };
+
+/// List of functions that can be overwritten
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommunicationType {
+    Usb,
+    Ble,
+    Both,
+    None,
+}
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
@@ -48,6 +59,14 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    let comm_type = get_communication_type(&toml_config.keyboard, &toml_config.ble);
+    if comm_type == CommunicationType::None {
+        return quote! {
+            compile_error!("You must enable at least one of usb or ble");
+        }
+        .into();
+    }
+
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
         toml_config.keyboard.clone(),
@@ -58,13 +77,15 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     let vial_static_var = expand_vial_config();
 
     // TODO: 2. Generate main function
-    let imports = get_imports(&chip);
-    let main_function = expand_main(&chip, toml_config, item_mod);
+    let main_function = expand_main(&chip, comm_type, toml_config, item_mod);
 
     // TODO: 3. Insert customization code
 
     quote! {
-        #imports
+        use defmt::*;
+        use defmt_rtt as _;
+        use panic_probe as _;
+
         #keyboard_info_static_var
         #vial_static_var
 
@@ -72,19 +93,23 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     }
 }
 
-
 fn expand_main(
     chip: &ChipModel,
+    comm_type: CommunicationType,
     toml_config: KeyboardTomlConfig,
     item_mod: ItemMod,
 ) -> TokenStream2 {
     // Expand components of main function
-    let light_config = expand_light_config(&chip, toml_config.light);
-    let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
-    let usb_init = expand_usb_init(&chip, &item_mod);
-    let chip_init = expand_chip_init(&chip, &item_mod);
     let imports = expand_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(&item_mod);
+    let chip_init = expand_chip_init(&chip, &item_mod);
+    let usb_init = expand_usb_init(&chip, &item_mod);
+    let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
+    let light_config = expand_light_config(&chip, toml_config.light);
+    let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
+    let run_rmk = expand_rmk_entry(&chip, comm_type);
+    // TODO: Add ble battery config
+
     quote! {
         #imports
 
@@ -92,74 +117,39 @@ fn expand_main(
 
         #[::embassy_executor::main]
         async fn main(_spawner: ::embassy_executor::Spawner) {
-            info!("RMK start!");
-            // Initialize peripherals
+            ::defmt::info!("RMK start!");
+            // Initialize peripherals as `p`
             #chip_init
 
-            // Usb config
-            // FIXME: usb initialization (with interrupt binding)
-            // It needs 3 inputs from users chip,which cannot be automatically extracted:
+            // Usb config needs at most 3 inputs from users chip, which cannot be automatically extracted:
             // 1. USB Interrupte name
             // 2. USB periphral name
             // 3. USB GPIO
-            // So, I'll leave it to users, make a stub function here
+            // Users have to implement the usb initialization function if the built-in func cannot 
+            // Initialize usb driver as `driver`
             #usb_init
 
             // FIXME: if storage is enabled
-            // Use internal flash to emulate eeprom
-            let f = Flash::new_blocking(p.FLASH);
+            // Initialize flash driver as `flash` and storage config as `storage_config`
+            #flash_init
 
-            let light_config = #light_config;
-            let (input_pins, output_pins) = #matrix_config;
+            // Initialize light config as `light_config`
+            #light_config;
 
-            let keyboard_config = RmkConfig {
+            // Initialize matrix config as `(input_pins, output_pins)`
+            #matrix_config;
+
+            // Set all keyboard config
+            let keyboard_config = ::rmk::config::RmkConfig {
                 usb_config: keyboard_usb_config,
                 vial_config,
                 light_config,
+                storage_config,
                 ..Default::default()
             };
 
             // Start serving
-            initialize_keyboard_with_config_and_run::<
-                Flash<'_, Blocking>,
-                Driver<'_, USB_OTG_HS>,
-                Input<'_, AnyPin>,
-                Output<'_, AnyPin>,
-                ROW,
-                COL,
-                NUM_LAYER,
-            >(
-                driver,
-                input_pins,
-                output_pins,
-                Some(f),
-                KEYMAP,
-                keyboard_config,
-            )
-            .await;
+            #run_rmk
         }
-    }
-}
-
-fn get_imports(chip: &ChipModel) -> TokenStream2 {
-    let chip_specific_imports = match chip.series {
-        ChipSeries::Stm32 => {
-            quote! {
-                // TODO: different imports by chip_name
-
-            }
-        }
-        ChipSeries::Nrf52 => todo!(),
-        ChipSeries::Rp2040 => todo!(),
-        ChipSeries::Esp32 => todo!(),
-        ChipSeries::Unsupported => todo!(),
-    };
-
-    quote! {
-        use defmt::*;
-        use defmt_rtt as _;
-        use panic_probe as _;
-        use embassy_executor::Spawner;
-        #chip_specific_imports
     }
 }

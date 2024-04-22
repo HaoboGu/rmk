@@ -1,13 +1,14 @@
 mod bind_interrupt;
 mod chip_init;
 mod comm;
+mod entry;
+mod flash;
 mod gpio_config;
 mod import;
 mod keyboard;
 mod keyboard_config;
 mod light;
 mod matrix;
-mod storage;
 
 use crate::keyboard::parse_keyboard_mod;
 use proc_macro::TokenStream;
