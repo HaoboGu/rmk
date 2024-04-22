@@ -15,13 +15,13 @@ pub(crate) fn expand_flash_init(
     if !storage_config.enabled {
         // This config actually does nothing if storage is disabled
         return quote! {
-            let storage_config = ::rmk_config::StorageConfig::default();
+            let storage_config = ::rmk::config::StorageConfig::default();
         };
     }
     let num_sectors = storage_config.num_sectors;
     let start_addr = storage_config.start_addr;
     let mut flash_init = quote! {
-        let storage_config = ::rmk_config::StorageConfig {
+        let storage_config = ::rmk::config::StorageConfig {
             num_sectors: #num_sectors,
             start_addr: #start_addr
         };

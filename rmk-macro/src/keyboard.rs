@@ -25,6 +25,7 @@ pub enum CommunicationType {
 pub enum Overwritten {
     Usb,
     ChipConfig,
+    Entry,
 }
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
@@ -107,7 +108,7 @@ fn expand_main(
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
-    let run_rmk = expand_rmk_entry(&chip, comm_type);
+    let run_rmk = expand_rmk_entry(&chip, comm_type, &item_mod);
     // TODO: Add ble battery config
 
     quote! {

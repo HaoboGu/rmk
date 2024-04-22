@@ -1,9 +1,48 @@
+use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::{ItemFn, ItemMod};
 
-use crate::{keyboard::CommunicationType, ChipModel, ChipSeries};
+use crate::{
+    keyboard::{CommunicationType, Overwritten},
+    ChipModel, ChipSeries,
+};
 
 pub(crate) fn expand_rmk_entry(
+    chip: &ChipModel,
+    communication_type: CommunicationType,
+    item_mod: &ItemMod,
+) -> TokenStream2 {
+    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
+    if let Some((_, items)) = &item_mod.content {
+        items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Fn(item_fn) = &item {
+                    if item_fn.attrs.len() == 1 {
+                        if let Ok(Overwritten::Entry) =
+                            Overwritten::from_meta(&item_fn.attrs[0].meta)
+                        {
+                            return Some(override_rmk_entry(item_fn));
+                        }
+                    }
+                }
+                None
+            })
+            .unwrap_or(rmk_entry_default(chip, communication_type))
+    } else {
+        rmk_entry_default(chip, communication_type)
+    }
+}
+
+fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
+    let content = &item_fn.block.stmts;
+    quote! {
+        #(#content)*
+    }
+}
+
+pub(crate) fn rmk_entry_default(
     chip: &ChipModel,
     communication_type: CommunicationType,
 ) -> TokenStream2 {
@@ -47,7 +86,7 @@ pub(crate) fn expand_rmk_entry(
                         KEYMAP,
                         keyboard_config,
                     )
-                    .await; 
+                    .await;
                 },
                 CommunicationType::Both => quote! {
                     ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<

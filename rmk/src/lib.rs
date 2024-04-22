@@ -35,6 +35,7 @@ use storage::Storage;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 pub use rmk_config as config;
+pub use rmk_macro as macros;
 
 pub mod action;
 #[cfg(feature = "_ble")]

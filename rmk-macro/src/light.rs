@@ -14,7 +14,7 @@ pub(crate) fn build_light_config(
             let p = convert_gpio_str_to_output_pin(chip, c.pin);
             let low_active = c.low_active;
             quote! {
-                Some(::rmk_config::keyboard_config::LightPinConfig {
+                Some(::rmk::config::keyboard_config::LightPinConfig {
                     pin: #p,
                     low_active: #low_active,
                 })
@@ -35,7 +35,7 @@ pub(crate) fn expand_light_config(
 
     // Generate a macro that does light config
     quote! {
-        let light_config = ::rmk_config::keyboard_config::LightConfig {
+        let light_config = ::rmk::config::keyboard_config::LightConfig {
             capslock: #capslock,
             numslock: #numslock,
             scrolllock: #scrolllock,
