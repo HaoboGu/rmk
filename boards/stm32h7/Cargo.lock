@@ -893,6 +893,7 @@ dependencies = [
 name = "rmk-macro"
 version = "0.1.0"
 dependencies = [
+ "darling",
  "prettyplease",
  "proc-macro2",
  "quote",

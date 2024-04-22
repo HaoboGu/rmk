@@ -9,7 +9,6 @@ use crate::keymap::KEYMAP;
 use embassy_stm32::bind_interrupts;
 use rmk::{config::RmkConfig, initialize_keyboard_with_config_and_run};
 use rmk_macro::rmk_keyboard;
-use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -22,7 +21,7 @@ bind_interrupts!(struct Irqs {
 mod my_keyboard {
     use embassy_stm32::peripherals::USB_OTG_HS;
 
-    #[config]
+    #[Override(chip_config)]
     fn config() -> Config {
         let mut config = Config::default();
         {
@@ -57,8 +56,8 @@ mod my_keyboard {
         config
     }
 
-    #[usb]
-    fn usb(usb: embassy_stm32::peripherals::USB_OTG_HS) -> Driver<'_, USB_OTG_HS> {
+    #[Override(usb)]
+    fn usb() -> Driver<'_, USB_OTG_HS> {
         static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
         let mut usb_config = embassy_stm32::usb_otg::Config::default();
         usb_config.vbus_detection = false;
@@ -70,6 +69,7 @@ mod my_keyboard {
             &mut EP_OUT_BUFFER.init([0; 1024])[..],
             usb_config,
         );
+        driver
     }
 }
 
