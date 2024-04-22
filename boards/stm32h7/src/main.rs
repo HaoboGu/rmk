@@ -6,8 +6,7 @@ mod keymap;
 mod vial;
 
 use crate::keymap::KEYMAP;
-// use rmk::{config::RmkConfig, initialize_keyboard_with_config_and_run};
-use rmk_macro::rmk_keyboard;
+use rmk::macros::rmk_keyboard;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 // TODO: Move keymap definition to proc-macro

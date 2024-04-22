@@ -1,8 +1,6 @@
 #![no_main]
 #![no_std]
 
-#[macro_use]
-mod macros;
 mod keymap;
 mod vial;
 

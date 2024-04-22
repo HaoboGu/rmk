@@ -23,6 +23,7 @@
         // "boards/nrf52840_ble/Cargo.toml",
         // "boards/nrf52832_ble/Cargo.toml",
         // "boards/rp2040/Cargo.toml"
+        // "boards/rp2040_macro/Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
 }
