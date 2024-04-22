@@ -1,8 +1,8 @@
-use crate::ChipSeries;
+use crate::{ChipModel, ChipSeries};
 use quote::{format_ident, quote};
 
 pub(crate) fn convert_output_pins_to_initializers(
-    chip: &ChipSeries,
+    chip: &ChipModel,
     pins: Vec<String>,
 ) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
@@ -22,7 +22,7 @@ pub(crate) fn convert_output_pins_to_initializers(
 }
 
 pub(crate) fn convert_input_pins_to_initializers(
-    chip: &ChipSeries,
+    chip: &ChipModel,
     pins: Vec<String>,
 ) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
@@ -41,11 +41,11 @@ pub(crate) fn convert_input_pins_to_initializers(
 }
 
 pub(crate) fn convert_gpio_str_to_output_pin(
-    chip: &ChipSeries,
+    chip: &ChipModel,
     gpio_name: String,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
-    match chip {
+    match chip.series {
         ChipSeries::Stm32 => {
             quote! {
                 ::embassy_stm32::gpio::Output::new(p.#gpio_ident, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::VeryHigh).degrade()
@@ -71,11 +71,11 @@ pub(crate) fn convert_gpio_str_to_output_pin(
 }
 
 pub(crate) fn convert_gpio_str_to_input_pin(
-    chip: &ChipSeries,
+    chip: &ChipModel,
     gpio_name: String,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
-    match chip {
+    match chip.series {
         ChipSeries::Stm32 => {
             quote! {
                 ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()

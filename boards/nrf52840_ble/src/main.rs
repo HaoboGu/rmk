@@ -48,9 +48,13 @@ async fn main(spawner: Spawner) {
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.gpiote_interrupt_priority = Priority::P3;
     nrf_config.time_interrupt_priority = Priority::P3;
-    let p = embassy_nrf::init(nrf_config);
     interrupt::USBD.set_priority(interrupt::Priority::P2);
     interrupt::POWER_CLOCK.set_priority(interrupt::Priority::P2);
+    let p = embassy_nrf::init(nrf_config);
+    let clock: embassy_nrf::pac::CLOCK = unsafe { core::mem::transmute(()) };
+    info!("Enabling ext hfosc...");
+    clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
+    while clock.events_hfclkstarted.read().bits() != 1 {}
 
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_00, P1_01, P1_02, P1_03], output: [P1_05, P1_06, P1_07]);

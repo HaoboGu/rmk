@@ -1,13 +1,13 @@
-use crate::keyboard_config::{
-    expand_keyboard_info, expand_light_config, expand_matrix_config, expand_vial_config,
-    get_chip_model, ChipSeries,
-};
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::quote;
 use rmk_config::toml_config::KeyboardTomlConfig;
 use std::fs;
-use syn::{ItemFn, ItemMod};
+use syn::ItemMod;
+
+use crate::{
+    bind_interrupt::expand_bind_interrupt, chip_init::expand_chip_init, comm::expand_usb_init, import::expand_imports, keyboard_config::{expand_keyboard_info, expand_vial_config, get_chip_model}, light::expand_light_config, matrix::expand_matrix_config, ChipModel, ChipSeries
+};
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
@@ -16,6 +16,7 @@ pub enum Overwritten {
     ChipConfig,
 }
 
+/// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
     // Read keyboard config file at project root
     let s = match fs::read_to_string("keyboard.toml") {
@@ -40,7 +41,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
 
     // Generate code from toml config
     let chip = get_chip_model(toml_config.keyboard.chip.clone());
-    if chip == ChipSeries::Unsupported {
+    if chip.series == ChipSeries::Unsupported {
         return quote! {
             compile_error!("Unsupported chip series, please check `chip` field in `keyboard.toml`");
         }
@@ -64,7 +65,6 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
 
     quote! {
         #imports
-
         #keyboard_info_static_var
         #vial_static_var
 
@@ -72,43 +72,23 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     }
 }
 
-// fn get_interrupt_binding(chip: &ChipSeries, chip_name: String) -> TokenStream2 {
-//     // FIXME: The interrupt bindings varies for chips, it's impossible now to automatically set it
-//     // Leave it to users for now, until there's better solution
-//     match chip {
-//         ChipSeries::Stm32 => {}
-//         ChipSeries::Nrf52 => todo!(),
-//         ChipSeries::Rp2040 => todo!(),
-//         ChipSeries::Esp32 => todo!(),
-//         ChipSeries::Unsupported => todo!(),
-//     }
-//     quote! {
-//         use embassy_stm32::bind_interrupts;
-//         bind_interrupts!(struct Irqs {
-//             OTG_HS => InterruptHandler<USB_OTG_HS>;
-//         });
-//     }
-// }
 
 fn expand_main(
-    chip: &ChipSeries,
+    chip: &ChipModel,
     toml_config: KeyboardTomlConfig,
     item_mod: ItemMod,
 ) -> TokenStream2 {
+    // Expand components of main function
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
-    let UsbInit {
-        imports: usb_import,
-        initialization: usb_initialization,
-    } = parse_usb_init(&chip, &item_mod);
-    let ChipInit {
-        imports: chip_init_imports,
-        initialization: chip_init,
-    } = parse_config_init(&chip, &item_mod);
-
+    let usb_init = expand_usb_init(&chip, &item_mod);
+    let chip_init = expand_chip_init(&chip, &item_mod);
+    let imports = expand_imports(&item_mod);
+    let bind_interrupt = expand_bind_interrupt(&item_mod);
     quote! {
-        #usb_import
-        #chip_init_imports
+        #imports
+
+        #bind_interrupt
 
         #[::embassy_executor::main]
         async fn main(_spawner: ::embassy_executor::Spawner) {
@@ -123,13 +103,12 @@ fn expand_main(
             // 2. USB periphral name
             // 3. USB GPIO
             // So, I'll leave it to users, make a stub function here
-            #usb_initialization
+            #usb_init
 
             // FIXME: if storage is enabled
             // Use internal flash to emulate eeprom
             let f = Flash::new_blocking(p.FLASH);
 
-            // FIXME: FIX macro
             let light_config = #light_config;
             let (input_pins, output_pins) = #matrix_config;
 
@@ -162,18 +141,12 @@ fn expand_main(
     }
 }
 
-fn get_imports(chip: &ChipSeries) -> TokenStream2 {
-    let chip_specific_imports = match chip {
+fn get_imports(chip: &ChipModel) -> TokenStream2 {
+    let chip_specific_imports = match chip.series {
         ChipSeries::Stm32 => {
             quote! {
                 // TODO: different imports by chip_name
-                use embassy_stm32::{
-                    flash::{Blocking, Flash},
-                    gpio::{AnyPin, Input, Output},
-                    peripherals::USB_OTG_HS,
-                    time::Hertz,
-                    usb_otg::InterruptHandler,
-                };
+
             }
         }
         ChipSeries::Nrf52 => todo!(),
@@ -189,140 +162,4 @@ fn get_imports(chip: &ChipSeries) -> TokenStream2 {
         use embassy_executor::Spawner;
         #chip_specific_imports
     }
-}
-
-#[derive(Debug, Default)]
-pub struct ChipInit {
-    imports: TokenStream2,
-    initialization: TokenStream2,
-}
-
-impl ChipInit {
-    fn new_default(chip: &ChipSeries) -> Self {
-        match chip {
-            ChipSeries::Stm32 => ChipInit {
-                imports: quote! {
-                    use embassy_stm32::Config;
-                },
-                initialization: quote! {
-                    let config = Config::default();
-                },
-            },
-            ChipSeries::Nrf52 => todo!(),
-            ChipSeries::Rp2040 => todo!(),
-            ChipSeries::Esp32 => todo!(),
-            ChipSeries::Unsupported => todo!(),
-        }
-    }
-}
-
-fn parse_config_init(chip: &ChipSeries, item_mod: &ItemMod) -> ChipInit {
-    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
-    if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) =
-                            Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
-                            return Some(override_chip_init(item_fn));
-                        }
-                    }
-                }
-                None
-            })
-            .unwrap_or(ChipInit::new_default(chip))
-    } else {
-        ChipInit::new_default(chip)
-    }
-}
-
-fn override_chip_init(item_fn: &ItemFn) -> ChipInit {
-    let initialization = item_fn.block.to_token_stream();
-    let imports = quote! {
-        use embassy_stm32::Config;
-    };
-    return ChipInit {
-        imports,
-        initialization: quote! {
-            let config = #initialization;
-            let p = embassy_stm32::init(config);
-        },
-    };
-}
-
-#[derive(Debug)]
-pub struct UsbInit {
-    imports: TokenStream2,
-    initialization: TokenStream2,
-}
-
-impl UsbInit {
-    /// Default implementation of usb initialization
-    fn new_default(chip: &ChipSeries) -> Self {
-        match chip {
-            ChipSeries::Stm32 => UsbInit {
-                imports: quote! {
-                    use static_cell::StaticCell;
-                    use embassy_stm32::usb_otg::Driver;
-                },
-                initialization: quote! {
-                    static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-                    let mut usb_config = embassy_stm32::usb_otg::Config::default();
-                    usb_config.vbus_detection = false;
-                    let driver = Driver::new_fs(
-                        p.USB_OTG_HS,
-                        Irqs,
-                        p.PA12,
-                        p.PA11,
-                        &mut EP_OUT_BUFFER.init([0; 1024])[..],
-                        usb_config,
-                    );
-                },
-            },
-            ChipSeries::Nrf52 => todo!(),
-            ChipSeries::Rp2040 => todo!(),
-            ChipSeries::Esp32 => todo!(),
-            ChipSeries::Unsupported => todo!(),
-        }
-    }
-}
-
-fn parse_usb_init(chip: &ChipSeries, item_mod: &ItemMod) -> UsbInit {
-    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
-    if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Usb) = Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
-                            return Some(override_usb_init(item_fn));
-                        }
-                    }
-                }
-                None
-            })
-            .unwrap_or(UsbInit::new_default(chip))
-    } else {
-        UsbInit::new_default(chip)
-    }
-}
-
-fn override_usb_init(item_fn: &ItemFn) -> UsbInit {
-    // TODO: Check function definition
-    let initialization = item_fn.block.to_token_stream();
-    let imports = quote! {
-        use static_cell::StaticCell;
-        use embassy_stm32::usb_otg::Driver;
-    };
-    return UsbInit {
-        imports,
-        initialization: quote! {
-            let driver = #initialization;
-        },
-    };
 }

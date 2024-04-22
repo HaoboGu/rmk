@@ -14,6 +14,7 @@ use embassy_executor::Spawner;
 use embassy_nrf::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
+    interrupt::{self, InterruptExt, Priority},
     nvmc::Nvmc,
     pac,
     peripherals::{self, USBD},
@@ -32,8 +33,13 @@ bind_interrupts!(struct Irqs {
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
-    let p = embassy_nrf::init(Default::default());
-    let clock: pac::CLOCK = unsafe { mem::transmute(()) };
+    let mut config = ::embassy_nrf::config::Config::default();
+    config.gpiote_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
+    config.time_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
+    ::embassy_nrf::interrupt::USBD.set_priority(::embassy_nrf::interrupt::Priority::P2);
+    ::embassy_nrf::interrupt::POWER_CLOCK.set_priority(::embassy_nrf::interrupt::Priority::P2);
+    let p = ::embassy_nrf::init(config);
+    let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
     info!("Enabling ext hfosc...");
     clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
     while clock.events_hfclkstarted.read().bits() != 1 {}

@@ -6,20 +6,30 @@ mod keymap;
 mod vial;
 
 use crate::keymap::KEYMAP;
-use embassy_stm32::bind_interrupts;
 use rmk::{config::RmkConfig, initialize_keyboard_with_config_and_run};
 use rmk_macro::rmk_keyboard;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
-bind_interrupts!(struct Irqs {
-    OTG_HS => InterruptHandler<USB_OTG_HS>;
-});
 
 // TODO: Move keymap definition to proc-macro
 
 #[rmk_keyboard]
 mod my_keyboard {
-    use embassy_stm32::peripherals::USB_OTG_HS;
+    use embassy_stm32::{
+        flash::{Blocking, Flash},
+        gpio::{AnyPin, Input, Output},
+        peripherals::USB_OTG_HS,
+        time::Hertz,
+        usb_otg::{Driver, InterruptHandler},
+        Config,
+    };
+    use static_cell::StaticCell;
+
+    #[bind_interrupt]
+    fn bind_interrupt() {
+        bind_interrupts!(struct Irqs {
+            OTG_HS => InterruptHandler<USB_OTG_HS>;
+        });
+    }
 
     #[Override(chip_config)]
     fn config() -> Config {
