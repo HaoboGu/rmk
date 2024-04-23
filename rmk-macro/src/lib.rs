@@ -9,6 +9,7 @@ mod keyboard;
 mod keyboard_config;
 mod light;
 mod matrix;
+mod usb_interrupt_map;
 
 use crate::keyboard::parse_keyboard_mod;
 use proc_macro::TokenStream;
@@ -27,6 +28,30 @@ pub(crate) enum ChipSeries {
 pub(crate) struct ChipModel {
     pub(crate) series: ChipSeries,
     pub(crate) chip: String,
+}
+
+impl ChipModel {
+    pub(crate) fn has_usb(&self) -> bool {
+        match self.series {
+            ChipSeries::Stm32 => todo!(),
+            ChipSeries::Nrf52 => {
+                if self.chip == "nrf52833" || self.chip == "52840" || self.chip == "52820" {
+                    true
+                } else {
+                    false
+                }
+            }
+            ChipSeries::Rp2040 => true,
+            ChipSeries::Esp32 => {
+                if self.chip == "esp32s3" || self.chip == "esp32s2" {
+                    true
+                } else {
+                    false
+                }
+            }
+            ChipSeries::Unsupported => todo!(),
+        }
+    }
 }
 
 #[proc_macro_attribute]

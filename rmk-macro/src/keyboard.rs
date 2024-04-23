@@ -6,9 +6,19 @@ use std::fs;
 use syn::ItemMod;
 
 use crate::{
-    bind_interrupt::expand_bind_interrupt, chip_init::expand_chip_init, comm::expand_usb_init, entry::expand_rmk_entry, flash::expand_flash_init, import::expand_imports, keyboard_config::{
+    bind_interrupt::expand_bind_interrupt,
+    chip_init::expand_chip_init,
+    comm::expand_usb_init,
+    entry::expand_rmk_entry,
+    flash::expand_flash_init,
+    import::expand_imports,
+    keyboard_config::{
         expand_keyboard_info, expand_vial_config, get_chip_model, get_communication_type,
-    }, light::expand_light_config, matrix::expand_matrix_config, ChipModel, ChipSeries
+    },
+    light::expand_light_config,
+    matrix::expand_matrix_config,
+    usb_interrupt_map::{get_usb_info, UsbInfo},
+    ChipModel, ChipSeries,
 };
 
 /// List of functions that can be overwritten
@@ -68,6 +78,19 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    let usb_info = if comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both {
+        if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
+            usb_info
+        } else {
+            return quote! {
+                compile_error!("Unsupported chip model, please check `chip` field in `keyboard.toml` is a valid. For stm32, it should be a feature gate of `embassy-stm32`");
+            }
+            .into();
+        }
+    } else {
+        UsbInfo::default()
+    };
+
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
         toml_config.keyboard.clone(),
@@ -78,7 +101,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     let vial_static_var = expand_vial_config();
 
     // TODO: 2. Generate main function
-    let main_function = expand_main(&chip, comm_type, toml_config, item_mod);
+    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
 
     // TODO: 3. Insert customization code
 
@@ -97,12 +120,13 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
 fn expand_main(
     chip: &ChipModel,
     comm_type: CommunicationType,
+    usb_info: UsbInfo,
     toml_config: KeyboardTomlConfig,
     item_mod: ItemMod,
 ) -> TokenStream2 {
     // Expand components of main function
     let imports = expand_imports(&item_mod);
-    let bind_interrupt = expand_bind_interrupt(&item_mod);
+    let bind_interrupt = expand_bind_interrupt(&chip, &usb_info, &item_mod);
     let chip_init = expand_chip_init(&chip, &item_mod);
     let usb_init = expand_usb_init(&chip, &item_mod);
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
@@ -126,7 +150,7 @@ fn expand_main(
             // 1. USB Interrupte name
             // 2. USB periphral name
             // 3. USB GPIO
-            // Users have to implement the usb initialization function if the built-in func cannot 
+            // Users have to implement the usb initialization function if the built-in func cannot
             // Initialize usb driver as `driver`
             #usb_init
 

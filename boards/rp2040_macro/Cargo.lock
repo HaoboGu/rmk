@@ -1307,6 +1307,7 @@ name = "rmk-macro"
 version = "0.1.0"
 dependencies = [
  "darling",
+ "once_cell",
  "prettyplease",
  "proc-macro2",
  "quote",

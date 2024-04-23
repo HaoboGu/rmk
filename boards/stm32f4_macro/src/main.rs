@@ -11,22 +11,14 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 #[rmk_keyboard]
 mod keyboard {
     use embassy_stm32::{
-        bind_interrupts,
         flash::{Blocking, Flash},
         gpio::{AnyPin, Input, Output},
         peripherals::USB_OTG_FS,
         time::Hertz,
-        usb_otg::{Driver, InterruptHandler},
+        usb_otg::Driver,
         Config,
     };
     use static_cell::StaticCell;
-
-    #[bind_interrupt]
-    fn bind_interrupt() {
-        bind_interrupts!(struct Irqs {
-            OTG_FS => InterruptHandler<USB_OTG_FS>;
-        });
-    }
 
     #[Override(chip_config)]
     fn config() -> Config {
