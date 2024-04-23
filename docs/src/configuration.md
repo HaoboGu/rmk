@@ -247,3 +247,12 @@ mod MyKeyboard {
 RMK should use the config from the user defined function for `let p = embassy_stm32::init(config);` if it exists and use default config otherwise.
 
 In this way, RMK provides a flexible and extendable way for experienced Rust developer, while keeps simple for new users.
+
+## TODO:
+
+- [ ] gen keymap
+- [ ] read vial.json and gen
+- [ ] update examples, into two folders
+- [ ] update doc and user guide
+- [ ] update readme
+
