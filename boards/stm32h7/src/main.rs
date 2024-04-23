@@ -9,17 +9,29 @@ use crate::keymap::KEYMAP;
 use rmk::macros::rmk_keyboard;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-// TODO: Move keymap definition to proc-macro
-
+/// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
     use embassy_stm32::{
+        flash::{Blocking, Flash},
+        gpio::{AnyPin, Input, Output},
+        peripherals::USB_OTG_HS,
         time::Hertz,
         usb_otg::Driver,
         Config,
     };
+    use rmk::initialize_keyboard_with_config_and_run;
     use static_cell::StaticCell;
 
+    // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
+    #[Override(bind_interrupt)]
+    fn bind_interrupt() {
+        bind_interrupts!(struct Irqs {
+            OTG_HS => InterruptHandler<USB_OTG_HS>;
+        });
+    }
+
+    // If you're using custom chip config, use `#[Override(chip_config)]` to override embassy's default config
     #[Override(chip_config)]
     fn config() -> Config {
         let mut config = Config::default();
@@ -55,6 +67,7 @@ mod my_keyboard {
         config
     }
 
+    // If you're using custom usb config, use `#[Override(usb)]` to override default usb config
     #[Override(usb)]
     fn usb() -> Driver<'_, USB_OTG_HS> {
         static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
@@ -70,60 +83,27 @@ mod my_keyboard {
         );
         driver
     }
+
+    // Use `#[Override(entry)]` to override default rmk keyboard runner
+    #[Override(entry)]
+    fn run() {
+        // Start serving
+        initialize_keyboard_with_config_and_run::<
+            Flash<'_, Blocking>,
+            Driver<'_, USB_OTG_HS>,
+            Input<'_, AnyPin>,
+            Output<'_, AnyPin>,
+            ROW,
+            COL,
+            NUM_LAYER,
+        >(
+            driver,
+            input_pins,
+            output_pins,
+            Some(f),
+            KEYMAP,
+            keyboard_config,
+        )
+        .await;
+    }
 }
-
-// #[embassy_executor::main]
-// async fn main(_spawner: Spawner) {
-//     info!("RMK start!");
-//     // RCC config
-//
-
-//     // Initialize peripherals
-//     let p = embassy_stm32::init(config);
-
-//     // Usb config
-//     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-//     let mut usb_config = embassy_stm32::usb_otg::Config::default();
-//     usb_config.vbus_detection = false;
-//     let driver = Driver::new_fs(
-//         p.USB_OTG_HS,
-//         Irqs,
-//         p.PA12,
-//         p.PA11,
-//         &mut EP_OUT_BUFFER.init([0; 1024])[..],
-//         usb_config,
-//     );
-
-//     // Use internal flash to emulate eeprom
-//     let f = Flash::new_blocking(p.FLASH);
-
-//     // Read configs from config file
-//     let (input_pins, output_pins) = config_matrix!(p: p);
-//     let light_config = config_light!(p: p);
-
-//     let keyboard_config = RmkConfig {
-//         usb_config: keyboard_usb_config,
-//         vial_config,
-//         light_config,
-//         ..Default::default()
-//     };
-
-//     // Start serving
-//     initialize_keyboard_with_config_and_run::<
-//         Flash<'_, Blocking>,
-//         Driver<'_, USB_OTG_HS>,
-//         Input<'_, AnyPin>,
-//         Output<'_, AnyPin>,
-//         ROW,
-//         COL,
-//         NUM_LAYER,
-//     >(
-//         driver,
-//         input_pins,
-//         output_pins,
-//         Some(f),
-//         KEYMAP,
-//         keyboard_config,
-//     )
-//     .await;
-// }

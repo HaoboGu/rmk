@@ -23,6 +23,9 @@ jobs:
       - name: Build rp2040
         working-directory: ./boards/rp2040
         run: cargo build --release
+      - name: Build rp2040 macro
+        working-directory: ./boards/rp2040_macro
+        run: cargo build --release
       - name: Build stm32h7
         working-directory: ./boards/stm32h7
         run: cargo build --release
@@ -31,6 +34,9 @@ jobs:
         run: cargo build --release
       - name: Build stm32f4
         working-directory: ./boards/stm32f4
+        run: cargo build --release
+      - name: Build stm32f4 macro
+        working-directory: ./boards/stm32f4_macro
         run: cargo build --release
       - name: Build nrf52840
         working-directory: ./boards/nrf52840
