@@ -75,7 +75,7 @@ static USB_INFO: Lazy<HashMap<String, UsbInfo>> = Lazy::new(|| {
     m
 });
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct UsbInfo {
     pub(crate) dm: String,
     pub(crate) dp: String,
