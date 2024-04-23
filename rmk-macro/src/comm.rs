@@ -45,11 +45,11 @@ pub(crate) fn usb_config_default(
     usb_info: &UsbInfo,
     comm_type: CommunicationType,
 ) -> TokenStream2 {
-    let dp = format_ident!("{}", usb_info.dp);
-    let dm = format_ident!("{}", usb_info.dm);
     let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
     match chip.series {
         ChipSeries::Stm32 => {
+            let dp = format_ident!("{}", usb_info.dp);
+            let dm = format_ident!("{}", usb_info.dm);
             if usb_info.peripheral_name.contains("OTG") {
                 quote! {
                     static EP_OUT_BUFFER: ::static_cell::StaticCell<[u8; 1024]> = ::static_cell::StaticCell::new();
