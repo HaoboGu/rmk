@@ -5,6 +5,8 @@
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
+use crate::{ChipModel, ChipSeries};
+
 static USB_INFO: Lazy<HashMap<String, UsbInfo>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert("nrf52840".to_string(), UsbInfo::new("", "", "USBD", "USBD"));
@@ -1036,6 +1038,20 @@ impl UsbInfo {
             dp: dp.to_string(),
             peripheral_name: p.to_string(),
             interrupt_name: i.to_string(),
+        }
+    }
+
+    pub(crate) fn new_default(chip: &ChipModel) -> Self {
+        match chip.series {
+            ChipSeries::Stm32 => UsbInfo::new("PA11", "PA12", "USB_OTG_FS", "USB_FS"),
+            ChipSeries::Nrf52 => UsbInfo::new("", "", "USBD", "USBD"),
+            ChipSeries::Rp2040 => UsbInfo::new("", "", "USB", "USBCTRL_IRQ"),
+            _ => UsbInfo::new(
+                "default_dm",
+                "default_dp",
+                "default_usb_peripheral",
+                "default_usb_interrupt",
+            ),
         }
     }
 }

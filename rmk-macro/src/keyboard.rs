@@ -78,6 +78,15 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    if !chip.has_usb()
+        && (comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both)
+    {
+        return quote! {
+            compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again. Or you can set `usb_enable = false` in `[keyboard]` section of `keyboard.toml`");
+        }
+        .into();
+    }
+
     let usb_info = if comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both {
         if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
             usb_info
@@ -91,14 +100,6 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         UsbInfo::default()
     };
 
-    if !chip.has_usb()
-        && (comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both)
-    {
-        return quote! {
-            compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again!");
-        }
-        .into();
-    }
 
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
