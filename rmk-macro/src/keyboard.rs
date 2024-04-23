@@ -97,9 +97,8 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
             .into();
         }
     } else {
-        UsbInfo::default()
+        UsbInfo::new_default(&chip)
     };
-
 
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(

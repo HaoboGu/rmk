@@ -39,6 +39,9 @@ pub(crate) fn expand_bind_interrupt(
 }
 
 pub(crate) fn bind_interrupt_default(chip: &ChipModel, usb_info: &UsbInfo) -> TokenStream2 {
+    if !chip.has_usb() {
+        return quote! {};
+    }
     let (usb_mod_path, chip_mod_path) = match chip.series {
         crate::ChipSeries::Stm32 => {
             let usb_mod_name = if usb_info.peripheral_name.contains("OTG") {

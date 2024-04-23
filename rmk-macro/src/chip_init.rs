@@ -13,12 +13,19 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
+            let usb_related_config = if chip.has_usb() {
+                quote! {
+                    ::embassy_nrf::interrupt::USBD.set_priority(::embassy_nrf::interrupt::Priority::P2);
+                }
+            } else {
+                quote! {}
+            };
             quote! {
                     use embassy_nrf::interrupt::InterruptExt;
                     let mut config = ::embassy_nrf::config::Config::default();
                     config.gpiote_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
                     config.time_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
-                    ::embassy_nrf::interrupt::USBD.set_priority(::embassy_nrf::interrupt::Priority::P2);
+                    #usb_related_config
                     ::embassy_nrf::interrupt::POWER_CLOCK.set_priority(::embassy_nrf::interrupt::Priority::P2);
                     let p = ::embassy_nrf::init(config);
                     let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
