@@ -14,12 +14,13 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
         },
         ChipSeries::Nrf52 => {
             quote! {
-                    let config = ::embassy_nrf::config::Config::default();
+                    use embassy_nrf::interrupt::InterruptExt;
+                    let mut config = ::embassy_nrf::config::Config::default();
                     config.gpiote_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
                     config.time_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
                     ::embassy_nrf::interrupt::USBD.set_priority(::embassy_nrf::interrupt::Priority::P2);
                     ::embassy_nrf::interrupt::POWER_CLOCK.set_priority(::embassy_nrf::interrupt::Priority::P2);
-                    let p = ::embassy_nrf::init(nrf_config);
+                    let p = ::embassy_nrf::init(config);
                     let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
                     info!("Enabling ext hfosc...");
                     clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });

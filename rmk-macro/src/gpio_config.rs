@@ -53,7 +53,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Output::new(AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard)
+                ::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard)
             }
         }
         ChipSeries::Rp2040 => {

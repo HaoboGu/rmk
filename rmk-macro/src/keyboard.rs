@@ -148,7 +148,7 @@ fn expand_main(
         #bind_interrupt
 
         #[::embassy_executor::main]
-        async fn main(_spawner: ::embassy_executor::Spawner) {
+        async fn main(spawner: ::embassy_executor::Spawner) {
             ::defmt::info!("RMK start!");
             // Initialize peripherals as `p`
             #chip_init

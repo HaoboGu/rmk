@@ -36,7 +36,7 @@ impl ChipModel {
         match self.series {
             ChipSeries::Stm32 => get_usb_info(&self.chip).is_some(),
             ChipSeries::Nrf52 => {
-                if self.chip == "nrf52833" || self.chip == "52840" || self.chip == "52820" {
+                if self.chip == "nrf52833" || self.chip == "nrf52840" || self.chip == "nrf52820" {
                     true
                 } else {
                     false
