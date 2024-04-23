@@ -61,6 +61,7 @@ content = "\n".join(lines)
 generated_file = """//! This file is auto-generated from https://github.com/embassy-rs/stm32-data-generated
 //! DO NOT MODIFY
 
+#![allow(dead_code)]
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
