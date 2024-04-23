@@ -1,0 +1,35 @@
+name: Build ESP examples
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install ldproxy
+        run: cargo install ldproxy
+      - name: Switch to nightly
+        run: rustup default nightly
+      - name: Add targets to nightly
+        run: rustup target add thumbv7em-none-eabihf thumbv7em-none-eabi riscv32imc-unknown-none-elf --toolchain nightly
+      - name: Add components to nightly
+        run: rustup component add rust-src --toolchain nightly
+      - name: Build esp32c3_ble
+        working-directory: ./boards/esp32c3_ble
+        run: cargo +nightly build --release
+      - name: Install espup
+        run: cargo install espup
+      - name: Install esp toolchain
+        run: espup install
+      - name: Build esp32s3_ble
+        working-directory: ./boards/esp32s3_ble
+        run: cargo +esp build --release

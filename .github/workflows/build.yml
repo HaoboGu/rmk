@@ -41,6 +41,21 @@ jobs:
       - name: Build nrf52840
         working-directory: ./boards/nrf52840
         run: cargo build --release
+      - name: Build nrf52840_ble
+        working-directory: ./boards/nrf52840_ble
+        run: cargo build --release
+      - name: Build nrf52832_ble
+        working-directory: ./boards/nrf52832_ble
+        run: cargo build --release
+      - name: Build nrf52840 macro
+        working-directory: ./boards/nrf52840_usb_macro
+        run: cargo build --release
+      - name: Build nrf52840_ble macro
+        working-directory: ./boards/nrf52840_ble_macro
+        run: cargo build --release
+      - name: Build nrf52832_ble macro
+        working-directory: ./boards/nrf52832_ble_macro
+        run: cargo build --release
       - name: Install ldproxy
         run: cargo install ldproxy
       - name: Switch to nightly
@@ -49,12 +64,6 @@ jobs:
         run: rustup target add thumbv7em-none-eabihf thumbv7em-none-eabi riscv32imc-unknown-none-elf --toolchain nightly
       - name: Add components to nightly
         run: rustup component add rust-src --toolchain nightly
-      - name: Build nrf52840_ble
-        working-directory: ./boards/nrf52840_ble
-        run: cargo +nightly build --release
-      - name: Build nrf52832_ble
-        working-directory: ./boards/nrf52832_ble
-        run: cargo +nightly build --release
       - name: Build esp32c3_ble
         working-directory: ./boards/esp32c3_ble
         run: cargo +nightly build --release
