@@ -10,7 +10,7 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
-                let p = ::embassy_stm32::init(config);
+                let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
             quote! {

@@ -91,6 +91,15 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         UsbInfo::default()
     };
 
+    if !chip.has_usb()
+        && (comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both)
+    {
+        return quote! {
+            compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again!");
+        }
+        .into();
+    }
+
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
         toml_config.keyboard.clone(),
@@ -100,10 +109,8 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     );
     let vial_static_var = expand_vial_config();
 
-    // TODO: 2. Generate main function
+    // Expanded main function
     let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
-
-    // TODO: 3. Insert customization code
 
     quote! {
         use defmt::*;
@@ -128,11 +135,11 @@ fn expand_main(
     let imports = expand_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(&chip, &usb_info, &item_mod);
     let chip_init = expand_chip_init(&chip, &item_mod);
-    let usb_init = expand_usb_init(&chip, &item_mod);
+    let usb_init = expand_usb_init(&chip, &usb_info, comm_type, &item_mod);
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
-    let run_rmk = expand_rmk_entry(&chip, comm_type, &item_mod);
+    let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod);
     // TODO: Add ble battery config
 
     quote! {

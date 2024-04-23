@@ -14,6 +14,7 @@ mod usb_interrupt_map;
 use crate::keyboard::parse_keyboard_mod;
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
+use usb_interrupt_map::get_usb_info;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ChipSeries {
@@ -33,7 +34,7 @@ pub(crate) struct ChipModel {
 impl ChipModel {
     pub(crate) fn has_usb(&self) -> bool {
         match self.series {
-            ChipSeries::Stm32 => todo!(),
+            ChipSeries::Stm32 => get_usb_info(&self.chip).is_some(),
             ChipSeries::Nrf52 => {
                 if self.chip == "nrf52833" || self.chip == "52840" || self.chip == "52820" {
                     true
@@ -49,7 +50,7 @@ impl ChipModel {
                     false
                 }
             }
-            ChipSeries::Unsupported => todo!(),
+            ChipSeries::Unsupported => false,
         }
     }
 }

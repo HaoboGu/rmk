@@ -1,15 +1,17 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{ItemFn, ItemMod};
 
 use crate::{
     keyboard::{CommunicationType, Overwritten},
+    usb_interrupt_map::UsbInfo,
     ChipModel, ChipSeries,
 };
 
 pub(crate) fn expand_rmk_entry(
     chip: &ChipModel,
+    usb_info: &UsbInfo,
     communication_type: CommunicationType,
     item_mod: &ItemMod,
 ) -> TokenStream2 {
@@ -29,9 +31,9 @@ pub(crate) fn expand_rmk_entry(
                 }
                 None
             })
-            .unwrap_or(rmk_entry_default(chip, communication_type))
+            .unwrap_or(rmk_entry_default(chip, usb_info, communication_type))
     } else {
-        rmk_entry_default(chip, communication_type)
+        rmk_entry_default(chip, usb_info, communication_type)
     }
 }
 
@@ -44,14 +46,20 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 
 pub(crate) fn rmk_entry_default(
     chip: &ChipModel,
+    usb_info: &UsbInfo,
     communication_type: CommunicationType,
 ) -> TokenStream2 {
+    let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+    let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
+        format_ident!("{}", "usb_otg")
+    } else {
+        format_ident!("{}", "usb")
+    };
     match chip.series {
         ChipSeries::Stm32 => quote! {
-            // TODO: Be compatible with all stm32s, which may not have `usb_otg` or `USB_OTG_HS`
             ::rmk::initialize_keyboard_with_config_and_run::<
                 ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
-                ::embassy_stm32::usb_otg::Driver<'_, ::embassy_stm32::peripherals::USB_OTG_HS>,
+                ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
                 ::embassy_stm32::gpio::Input<'_, ::embassy_stm32::gpio::AnyPin>,
                 ::embassy_stm32::gpio::Output<'_, ::embassy_stm32::gpio::AnyPin>,
                 ROW,
@@ -69,10 +77,11 @@ pub(crate) fn rmk_entry_default(
         },
         ChipSeries::Nrf52 => {
             match communication_type {
-                CommunicationType::Usb => quote! {
+                CommunicationType::Usb => {
+                    quote! {
                     ::rmk::initialize_keyboard_with_config_and_run::<
                         ::embassy_nrf::nvmc::Nvmc,
-                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect>,
                         ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
                         ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
                         ROW,
@@ -87,10 +96,10 @@ pub(crate) fn rmk_entry_default(
                         keyboard_config,
                     )
                     .await;
-                },
+                }},
                 CommunicationType::Both => quote! {
                     ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
-                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
                         ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
                         ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
                         ROW,
