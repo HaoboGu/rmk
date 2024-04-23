@@ -37,7 +37,7 @@ pub(crate) fn expand_flash_init(
                 if communication_type == CommunicationType::Usb {
                     // Usb only
                     quote! {
-                        let f = Nvmc::new(p.NVMC);
+                        let f = ::embassy_nrf::nvmc::Nvmc::new(p.NVMC);
                     }
                 } else {
                     // If BLE enables, RMK manages storage internally

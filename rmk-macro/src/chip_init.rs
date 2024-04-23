@@ -73,6 +73,7 @@ pub(crate) fn expand_chip_init(chip: &ChipModel, item_mod: &ItemMod) -> TokenStr
 }
 
 fn override_chip_init(item_fn: &ItemFn) -> TokenStream2 {
+    // TODO: override chip init for all chips
     let initialization = item_fn.block.to_token_stream();
     quote! {
         let config = #initialization;

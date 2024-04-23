@@ -78,7 +78,7 @@ pub(crate) fn usb_config_default(
         ChipSeries::Nrf52 => {
             match comm_type {
                 CommunicationType::Usb => quote! {
-                    let driver = :embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
+                    let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
                 },
                 CommunicationType::Both => quote! {
                     let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));

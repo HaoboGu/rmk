@@ -42,53 +42,44 @@ pub(crate) fn bind_interrupt_default(chip: &ChipModel, usb_info: &UsbInfo) -> To
     if !chip.has_usb() {
         return quote! {};
     }
-    let (usb_mod_path, chip_mod_path) = match chip.series {
+    let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
+    let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+    match chip.series {
         crate::ChipSeries::Stm32 => {
             let usb_mod_name = if usb_info.peripheral_name.contains("OTG") {
                 format_ident!("{}", "usb_otg")
             } else {
                 format_ident!("{}", "usb")
             };
-            let usb_mod_path = quote! {
-                ::embassy_stm32::#usb_mod_name
-            };
-            let peripheral_mod_path = quote! {
-                ::embassy_stm32
-            };
-            (usb_mod_path, peripheral_mod_path)
+            quote! {
+                use ::embassy_stm32::bind_interrupts;
+                bind_interrupts!(struct Irqs {
+                    #interrupt_name => ::embassy_stm32::#usb_mod_name::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
+                });
+            }
         }
         crate::ChipSeries::Nrf52 => {
             if chip.has_usb() {
-                let usb_mod_path = quote! {
-                    ::embassy_nrf::usb
-                };
-                let peripheral_mod_path = quote! {
-                    ::embassy_nrf
-                };
-                (usb_mod_path, peripheral_mod_path)
+                quote! {
+                    use ::embassy_nrf::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
+                        POWER_CLOCK => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
+                    });
+                }
             } else {
-                (quote! {}, quote! {})
+                quote! {}
             }
         }
-        crate::ChipSeries::Rp2040 => (
+        crate::ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::usb
-            },
-            quote! {
-                ::embassy_rp
-            },
-        ),
-        crate::ChipSeries::Esp32 => (quote! {}, quote! {}),
-        crate::ChipSeries::Unsupported => (quote! {}, quote! {}),
-    };
-
-    let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
-    let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-    quote! {
-        use #chip_mod_path::bind_interrupts;
-
-        bind_interrupts!(struct Irqs {
-            #interrupt_name => #usb_mod_path::InterruptHandler<#chip_mod_path::peripherals::#peripheral_name>;
-        });
+                use ::embassy_rp::bind_interrupts;
+                bind_interrupts!(struct Irqs {
+                    #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                });
+            }
+        }
+        crate::ChipSeries::Esp32 => quote! {},
+        crate::ChipSeries::Unsupported => quote! {},
     }
 }
