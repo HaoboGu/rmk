@@ -29,6 +29,8 @@ bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
 
+const FLASH_SIZE: usize = 2 * 1024 * 1024;
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
