@@ -53,7 +53,7 @@ Then follow the steps in generated `README.md`. Check RMK's [User Guide](https:/
 ### Option 2: Try built-in examples
 
 Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boards). The following is a simple
-step-to-step instruction for rp2040 and stm32h7
+step-to-step instruction for rp2040. For other microcontrollers, the steps should be identical with a debug probe.
 
 #### rp2040
 
@@ -70,16 +70,18 @@ step-to-step instruction for rp2040 and stm32h7
    cargo build
    ```
 
-3. Flash
+3. Flash using debug probe
 
-   If your rp2040 board is connected with a debugging probe, just use the following command to flash RMK firmware to the board:
+   If you have a debug probe connected to your rp2040 board, flashing is quite simple: run the following command to automatically compile and flash RMK firmware to the board:
 
    ```shell
    cd boards/rp2040
    cargo run
    ```
 
-   If you don't have a debugging probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
+4. (Optional) Flash using USB
+
+   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
 
    1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
    2. Update `boards/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
@@ -101,35 +103,6 @@ step-to-step instruction for rp2040 and stm32h7
       Transfering program to pico
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
-
-#### stm32h7
-
-1. Install [openocd](https://github.com/openocd-org/openocd)
-
-2. Build the firmware
-
-   ```shell
-   cd boards/stm32h7
-   cargo build
-   ```
-
-3. Flash
-
-   Make sure you have a debugging probe connected to your board. You can use both `probe-rs` and `openocd` to flash the firmware: 
-
-   ```shell
-   # Use openocd
-   openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
-   
-   # Use probe-rs
-   cd boards/stm32h7
-   cargo run
-   ```
-
-4. (Optional) Debug firmware using CMSIS-DAP
-
-   Open the project using VSCode, choose `Cortex-Debug - stm32h7` debug profile, then press `F5`, the firmware will be automatically compiled and flashed. A debug session is started after flashing.
-   Check [`.vscode/tasks.json`](https://github.com/HaoboGu/rmk/blob/main/.vscode/tasks.json) and [`.vscode/launch.json`](https://github.com/HaoboGu/rmk/blob/main/.vscode/launch.json) for details.
 
 ## [Roadmap](https://haobogu.github.io/rmk/roadmap.html)
 
