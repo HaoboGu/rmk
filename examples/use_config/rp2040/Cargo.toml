@@ -1,5 +1,5 @@
 [package]
-name = "rmk-nrf52832-ble"
+name = "rmk-rp2040"
 version = "0.1.12"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
@@ -10,31 +10,29 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.1.12", path = "../../rmk", features = [
-    "nrf52832_ble",
-    "col2row",
-] }
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
-embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.1.0", features = [
+rmk = { version = "0.1.12", path = "../../../rmk" }
+embassy-time = { version = "0.3", features = ["defmt"] }
+embassy-rp = { version = "0.1", features = [
     "defmt",
-    "nrf52832",
-    "time-driver-rtc1",
-    "gpiote",
-    "unstable-pac",
-    "time",
+    "time-driver",
+    "critical-section-impl",
 ] }
 embassy-executor = { version = "0.5", features = [
     "defmt",
-    "task-arena-size-8192",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",
 ] }
+cortex-m-rt = "0.7.3"
+portable-atomic = { version = "1.5", features = ["critical-section"] }
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+# [features]
+# avoid having to use --allow-multiple-definition linker flag
+# on macOS with Apple Silicon at least
+# default = ["rp-pico/disable-intrinsics"]
 
 [build-dependencies]
 xz2 = "0.1.7"
@@ -42,7 +40,7 @@ json = "0.12"
 const-gen = "1.6"
 
 [[bin]]
-name = "rmk-nrf52832-ble"
+name = "rmk-rp2040"
 test = false
 bench = false
 

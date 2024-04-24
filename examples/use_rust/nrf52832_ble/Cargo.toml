@@ -1,5 +1,5 @@
 [package]
-name = "rmk-nrf52840"
+name = "rmk-nrf52832-ble"
 version = "0.1.12"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
@@ -10,8 +10,8 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.1.11", path = "../../rmk", features = [
-    "nrf52840_ble",
+rmk = { version = "0.1.12", path = "../../../rmk", features = [
+    "nrf52832_ble",
     "col2row",
 ] }
 cortex-m = "0.7.7"
@@ -19,7 +19,7 @@ cortex-m-rt = "0.7.3"
 embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
 embassy-nrf = { version = "0.1.0", features = [
     "defmt",
-    "nrf52840",
+    "nrf52832",
     "time-driver-rtc1",
     "gpiote",
     "unstable-pac",
@@ -42,7 +42,7 @@ json = "0.12"
 const-gen = "1.6"
 
 [[bin]]
-name = "rmk-nrf52840"
+name = "rmk-nrf52832-ble"
 test = false
 bench = false
 
