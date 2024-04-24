@@ -26,10 +26,16 @@ jobs:
       - name: Build esp32c3_ble
         working-directory: ./examples/use_rust/esp32c3_ble
         run: cargo +nightly build --release
+      - name: Build esp32c3_ble with config
+        working-directory: ./examples/use_config/esp32c3_ble
+        run: cargo +nightly build --release
       - name: Install espup
         run: cargo install espup
       - name: Install esp toolchain
         run: espup install
       - name: Build esp32s3_ble
         working-directory: ./examples/use_rust/esp32s3_ble
+        run: cargo +esp build --release
+      - name: Build esp32s3_ble with config
+        working-directory: ./examples/use_config/esp32s3_ble
         run: cargo +esp build --release
