@@ -79,6 +79,8 @@ RMK 内置了一些常见MCU的示例，这些示例可以在 [`boards`](https:/
    cargo run
    ```
 
+4. 通过USB烧录
+
    如果你没有调试器，那么可以使用 `elf2uf2-rs` 通过 USB 烧录固件，但是这种方式需要一些额外的步骤：
 
    1. 安装 `elf2uf2-rs`: `cargo install elf2uf2-rs`
@@ -101,30 +103,6 @@ RMK 内置了一些常见MCU的示例，这些示例可以在 [`boards`](https:/
       Transfering program to pico
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
-
-#### stm32h7
-
-1. 安装 [openocd](https://github.com/openocd-org/openocd) 或者 probe-rs
-
-2. 构建固件
-
-   ```shell
-   cd boards/stm32h7
-   cargo build
-   ```
-
-3. 烧录
-
-   确保你已经连接了调试器。你可以使用 probe-rs 或者 openocd 来烧录固件：
-
-   ```shell
-   # 使用 openocd 烧录
-   openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
-   
-   # 使用 probe-rs 烧录
-   cd boards/stm32h7
-   cargo run
-   ```
 
 ## [Roadmap](https://haobogu.github.io/rmk/roadmap.html)
 
