@@ -30,6 +30,7 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x27000 -f 0xADA52840 -o rmk-52840.uf2 
    ```
 5. Flash
+
    Set your nice!nano to bootloader mode, a USB drive will show. Just drag the .uf2 firmware to USB drive. RMK will be automatically flashed. Check nice!nano's document: https://nicekeyboards.com/docs/nice-nano/getting-started#flashing-firmware-and-bootloaders. 
 
 Note that RMK will switch to USB mode if an USB cable is connected. Remember to remove USB cable after flashing!
