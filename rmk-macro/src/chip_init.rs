@@ -43,7 +43,7 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
         ChipSeries::Esp32 => quote! {
             ::esp_idf_svc::sys::link_patches();
             ::esp_idf_svc::log::EspLogger::initialize_default();
-            let p = ::esp_idf_svc::peripherals::Peripherals::take().unwrap();
+            let p = ::esp_idf_svc::hal::peripherals::Peripherals::take().unwrap();
         },
         ChipSeries::Unsupported => quote! {},
     }

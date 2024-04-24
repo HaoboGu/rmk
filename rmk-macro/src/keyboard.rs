@@ -112,10 +112,18 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     // Expanded main function
     let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
 
+    let no_std_imports = if chip.series == ChipSeries::Esp32 {
+        quote!()
+    } else {
+        quote! {
+            use defmt_rtt as _;
+            use panic_probe as _;
+        }
+    };
+
     quote! {
         use defmt::*;
-        use defmt_rtt as _;
-        use panic_probe as _;
+        #no_std_imports
 
         #keyboard_info_static_var
         #vial_static_var
@@ -142,13 +150,24 @@ fn expand_main(
     let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod);
     // TODO: Add ble battery config
 
+    let main_function_sig = if chip.series == ChipSeries::Esp32 {
+        quote! {
+            use ::esp_idf_svc::hal::gpio::*;
+            use esp_println as _;
+            fn main()
+        }
+    } else {
+        quote! {
+            #[::embassy_executor::main]
+            async fn main(spawner: ::embassy_executor::Spawner)
+        }
+    };
     quote! {
         #imports
 
         #bind_interrupt
 
-        #[::embassy_executor::main]
-        async fn main(spawner: ::embassy_executor::Spawner) {
+        #main_function_sig {
             ::defmt::info!("RMK start!");
             // Initialize peripherals as `p`
             #chip_init
