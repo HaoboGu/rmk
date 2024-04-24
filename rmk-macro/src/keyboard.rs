@@ -109,17 +109,35 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     );
     let vial_static_var = expand_vial_config();
 
-    // Expanded main function
-    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
+    let defmt_import = if toml_config.dependency.defmt_log {
+        quote! {
+            use defmt_rtt as _;
+        }
+    } else {
+        quote! {
+            #[::defmt::global_logger]
+            struct Logger;
+
+            unsafe impl ::defmt::Logger for Logger {
+                fn acquire() {}
+                unsafe fn flush() {}
+                unsafe fn release() {}
+                unsafe fn write(_bytes: &[u8]) {}
+            }
+        }
+    };
 
     let no_std_imports = if chip.series == ChipSeries::Esp32 {
         quote!()
     } else {
         quote! {
-            use defmt_rtt as _;
             use panic_probe as _;
+            #defmt_import
         }
     };
+
+    // Expanded main function
+    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
 
     quote! {
         use defmt::*;

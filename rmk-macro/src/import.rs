@@ -6,7 +6,7 @@ use quote::quote;
 use syn::ItemMod;
 
 pub(crate) fn expand_imports(item_mod: &ItemMod) -> TokenStream2 {
-    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
+    // Parse added imports in mod
     if let Some((_, items)) = &item_mod.content {
         let imports = items.iter().map(|item| {
             if let syn::Item::Use(item_use) = &item {

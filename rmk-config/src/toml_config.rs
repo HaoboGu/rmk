@@ -8,6 +8,7 @@ pub struct KeyboardTomlConfig {
     pub light: LightConfig,
     pub storage: StorageConfig,
     pub ble: Option<BleConfig>,
+    pub dependency: DependencyConfig,
 }
 
 /// Configurations for usb
@@ -110,4 +111,13 @@ pub struct PinConfig {
     pub pin: String,
     #[serde(default = "default_bool")]
     pub low_active: bool,
+}
+
+
+/// Configurations for usb
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct DependencyConfig {
+    /// Enable defmt log or not
+    #[serde(default = "default_true")]
+    pub defmt_log: bool,
 }
