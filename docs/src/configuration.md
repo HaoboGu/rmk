@@ -252,7 +252,8 @@ In this way, RMK provides a flexible and extendable way for experienced Rust dev
 
 - [ ] gen keymap
 - [ ] read vial.json and gen
-- [ ] update examples, into two folders
+- [x] update examples, into two folders
 - [ ] update doc and user guide
 - [ ] update readme
 - [ ] update template
+- [ ] clean config file in examples
