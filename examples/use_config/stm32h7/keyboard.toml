@@ -1,0 +1,93 @@
+[keyboard]
+name = "RMK Keyboard"
+product_name = "My RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "stm32h7b0vb"
+
+[matrix]
+rows = 4
+cols = 3
+layers = 2
+# Input and output pins are mandatory
+input_pins = ["PD4", "PD5", "PD6", "PD3"]
+output_pins = ["PD7", "PD8", "PD9"]
+# Default is col2row, uncomment if your pcb is row2col
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# row2col = true
+
+[layout]
+# TODO: keyboard's default layout and keymap, be compatible with vial json and KLE
+# TODO: Could `VIAL_KEYBOARD_DEF/ID` be generated using this? If so, we don't need a vial.json anymore
+default_keymap = [
+    [
+        [
+            "A",
+            "B",
+            "C",
+        ],
+        [
+            "MO(1)",
+            "AudioVolUp",
+            "LShift",
+        ],
+        [
+            "__",
+            "Kp1",
+            "AudioVolDown",
+        ],
+        [
+            "MO(1)",
+            "__",
+            "LCtrl",
+        ],
+    ],
+    [
+        [
+            "Kp7",
+            "Kp8",
+            "Kp9",
+        ],
+        [
+            "Kp4",
+            "Kp5",
+            "Kp6",
+        ],
+        [
+            "Kp1",
+            "Kp2",
+            "Kp3",
+        ],
+        [
+            "MO(1)",
+            "__",
+            "__",
+        ],
+    ],
+]
+
+[light]
+# All light pins are high-active by default, uncomment if you want it to be low-active
+capslock.pin = "PA4"
+# capslock.low_active = true
+scrolllock.pin = "PA3"
+# scrolllock.low_active = true
+# Just ignore if no light pin is used for it
+# numslock.pin = "PA5"
+# numslock.low_active = true
+
+# TODO: RGB configs
+# rgb.driver = "ws2812"
+
+[storage]
+# Enable storage by default?
+enabled = true
+# num_sectors = 2
+# start_addr = 0x10000
+
+[ble]
+enabled = true
+battery_pin = "PA0"
+charge_state.pin = "PA0"
+charge_state.low_active = true
