@@ -23,7 +23,7 @@
             //     "$rustc"
             // ],
             "options": {
-                "cwd": "${workspaceFolder}/boards/stm32h7"
+                "cwd": "${workspaceFolder}/examples/use_rust/stm32h7"
             },
             "group": {
                 "kind": "test",
@@ -40,7 +40,7 @@
                 "32"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/boards/stm32h7"
+                "cwd": "${workspaceFolder}/examples/use_rust/stm32h7"
             },
             "problemMatcher": [
                 "$rustc"
@@ -59,7 +59,7 @@
                 "32"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/boards/rp2040"
+                "cwd": "${workspaceFolder}/examples/use_rust/rp2040"
             },
             "problemMatcher": [
                 "$rustc"
@@ -79,7 +79,7 @@
                 "32"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/boards/stm32h7"
+                "cwd": "${workspaceFolder}/examples/use_rust/stm32h7"
             },
             "problemMatcher": [
                 "$rustc"
@@ -99,7 +99,7 @@
                 "32"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/boards/rp2040"
+                "cwd": "${workspaceFolder}/examples/use_rust/rp2040"
             },
             "problemMatcher": [
                 "$rustc"
@@ -112,7 +112,7 @@
             "label": "flash stm32h7",
             "group": "build",
             "type": "shell",
-            "command": "openocd -f \"${workspaceFolder}/boards/stm32h7/openocd.cfg\" -c \"program boards/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit\"",
+            "command": "openocd -f \"${workspaceFolder}/examples/use_rust/stm32h7/openocd.cfg\" -c \"program examples/use_rust/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit\"",
             "dependsOn": [
                 "build stm32h7 --debug"
             ],
@@ -122,7 +122,7 @@
             "label": "flash rp2040",
             "group": "build",
             "type": "shell",
-            "command": "openocd -f \"${workspaceFolder}/boards/rp2040/openocd.cfg\" -c \"program boards/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040 preverify verify reset exit\"",
+            "command": "openocd -f \"${workspaceFolder}/examples/use_rust/rp2040/openocd.cfg\" -c \"program examples/use_rust/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040 preverify verify reset exit\"",
             "dependsOn": [
                 "build rp2040 --debug"
             ],
@@ -131,9 +131,9 @@
         {
             "label": "objcopy",
             "type": "shell",
-            "command": "cargo objcopy --release -- -O binary \"${workspaceFolder}/boards/${input:targetChip}/target/release/rmk-${input:targetChip}.bin\" && cargo size -j 32 --release",
+            "command": "cargo objcopy --release -- -O binary \"${workspaceFolder}/examples/use_rust/${input:targetChip}/target/release/rmk-${input:targetChip}.bin\" && cargo size -j 32 --release",
             "options": {
-                "cwd": "${workspaceFolder}/boards/${input:targetChip}"
+                "cwd": "${workspaceFolder}/examples/use_rust/${input:targetChip}"
             },
             "problemMatcher": [
                 "$rustc"
@@ -147,7 +147,7 @@
         {
             "id": "targetChip",
             "type": "pickString",
-            "description": "Choose a chip in `boards` folder to build or flash",
+            "description": "Choose a chip in `examples` folder to build or flash",
             "options": [
                 "rp2040",
                 "stm32h7"

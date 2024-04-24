@@ -15,16 +15,16 @@
         "rmk-config/Cargo.toml",
         "rmk-macro/Cargo.toml",
         // Enable ONE of the following for accurate analyzation of RA
-        // "boards/esp32c3_ble/Cargo.toml",
-        // "boards/stm32h7/Cargo.toml",
-        // "boards/stm32f4/Cargo.toml",
-        // "boards/stm32f4_macro/Cargo.toml",
-        // "boards/stm32f1/Cargo.toml",
-        // "boards/nrf52840/Cargo.toml",
-        // "boards/nrf52840_ble/Cargo.toml",
-        // "boards/nrf52832_ble/Cargo.toml",
-        // "boards/rp2040/Cargo.toml"
-        // "boards/rp2040_macro/Cargo.toml"
+        // "examples/use_rust/esp32c3_ble/Cargo.toml",
+        // "examples/use_rust/stm32h7/Cargo.toml",
+        // "examples/use_rust/stm32f4/Cargo.toml",
+        // "examples/use_config/stm32f4/Cargo.toml",
+        // "examples/use_rust/stm32f1/Cargo.toml",
+        // "examples/use_rust/nrf52840/Cargo.toml",
+        // "examples/use_rust/nrf52840_ble/Cargo.toml",
+        // "examples/use_rust/nrf52832_ble/Cargo.toml",
+        // "examples/use_rust/rp2040/Cargo.toml"
+        "examples/use_config/rp2040/Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
 }

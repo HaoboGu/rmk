@@ -18,19 +18,19 @@ A feature-rich Rust keyboard firmware.
 
 ## News
 
-- [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`boards/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/esp32c3_ble/src/main.rs) and [`boards/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
+- [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
 
-- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [`boards/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) and [`boards/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) for details.
+- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [`examples/use_rust/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) and [`examples/use_rust/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) for details.
 
 <details>
 
 <summary>Click to checkout more news</summary>
 
-- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
+- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
 
 - [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 
-- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder!
 
 </details>
 
@@ -52,7 +52,7 @@ Then follow the steps in generated `README.md`. Check RMK's [User Guide](https:/
 
 ### Option 2: Try built-in examples
 
-Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boards). The following is a simple
+Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples). The following is a simple
 step-to-step instruction for rp2040. For other microcontrollers, the steps should be identical with a debug probe.
 
 #### rp2040
@@ -66,7 +66,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
 2. Build the firmware
 
    ```shell
-   cd boards/rp2040
+   cd examples/use_rust/rp2040
    cargo build
    ```
 
@@ -75,7 +75,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
    If you have a debug probe connected to your rp2040 board, flashing is quite simple: run the following command to automatically compile and flash RMK firmware to the board:
 
    ```shell
-   cd boards/rp2040
+   cd examples/use_rust/rp2040
    cargo run
    ```
 
@@ -84,7 +84,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
    If you don't have a debug probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
 
    1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
-   2. Update `boards/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
+   2. Update `examples/use_rust/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
       ```diff
       - runner = "probe-rs run --chip RP2040"
       + runner = "elf2uf2-rs -d"
@@ -92,7 +92,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
    3. Connect your rp2040 board holding the BOOTSEL key, ensure that rp's USB drive appears
    4. Flash
       ```shell
-      cd boards/rp2040
+      cd examples/use_rust/rp2040
       cargo run
       ```
       Then, you will see logs like if everything goes right:

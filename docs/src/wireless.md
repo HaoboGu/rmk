@@ -9,19 +9,19 @@ rmk = { version = "0.1.12", features = [
 ] }
 ```
 
-RMK also provides ble examples, check [nrf52840_ble](https://github.com/HaoboGu/rmk/tree/main/boards/nrf52840_ble) and [nrf52832_ble](https://github.com/HaoboGu/rmk/tree/main/boards/nrf52832_ble).
+RMK also provides ble examples, check [nrf52840_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble) and [nrf52832_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52832_ble).
 
 Due to multiple targets are not supported by `docs.rs` right now, so API documentations are not there. Check examples for the usage. I'll add a separate doc site later.
 
 ## Flashing to your board
 
-RMK can be flashed via a debug probe or USB. Follow the instruction in the [`boards/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/README.md)
+RMK can be flashed via a debug probe or USB. Follow the instruction in the [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md)
 
 ## Nice!nano support
 
 RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely used board for building wireless keyboard.
 
-nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`boards/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format and flash to nice!nano.
+nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format and flash to nice!nano.
 
 There is another way to flash RMK firmware to nice!nano. It requires a modified version of `elf2uf2-rs`. The following are the steps:
 

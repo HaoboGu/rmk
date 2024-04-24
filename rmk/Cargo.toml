@@ -75,7 +75,7 @@ col2row = []
 
 #! ##### BLE feature flags
 #! 
-#! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder of RMK repo for their usages.
+#! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
     "_nrf_ble",

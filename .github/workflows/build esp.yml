@@ -24,12 +24,12 @@ jobs:
       - name: Add components to nightly
         run: rustup component add rust-src --toolchain nightly
       - name: Build esp32c3_ble
-        working-directory: ./boards/esp32c3_ble
+        working-directory: ./examples/use_rust/esp32c3_ble
         run: cargo +nightly build --release
       - name: Install espup
         run: cargo install espup
       - name: Install esp toolchain
         run: espup install
       - name: Build esp32s3_ble
-        working-directory: ./boards/esp32s3_ble
+        working-directory: ./examples/use_rust/esp32s3_ble
         run: cargo +esp build --release

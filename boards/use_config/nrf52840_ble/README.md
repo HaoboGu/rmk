@@ -4,7 +4,7 @@ RMK supports [nice!nano](https://nicekeyboards.com/) as well as any custom nrf52
 
 ## Nice!nano support
 
-nice!nano has a bootloader built-in, which supports UF2 firmware format. That means you don't need any debug probe to flash your firmware. 
+nice!nano has a bootloader built-in, which supports UF2 firmware format. That means you don't need any debugging probe to flash your firmware. 
 
 If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
 
@@ -37,14 +37,14 @@ Note that RMK will switch to USB mode if an USB cable is connected. Remember to 
 
 You can also check the instruction [here](https://nicekeyboards.com/docs/nice-nano/) for more info about nice!nano.
 
-## With debug probe
-With a debug probe, you can have the full control of you hardware. To use RMK you should have [nrf s140 softdevice 7.3.0](https://www.nordicsemi.com/Products/Development-software/s140/download) flashed to nrf52840 first. 
+## With debugging probe
+With a debugging probe, you can have the full control of you hardware. To use RMK you should have [nrf s140 softdevice 7.3.0](https://www.nordicsemi.com/Products/Development-software/s140/download) flashed to nrf52840 first. 
 
 The following are the detailed steps for flashing both nrf's softdevice and RMK firmware:
 
 1. Enter example folder:
    ```shell
-   cd boards/nrf52840_ble
+   cd examples/use_rust/nrf52840_ble
    ```
 2. Erase the flash:
    ```shell

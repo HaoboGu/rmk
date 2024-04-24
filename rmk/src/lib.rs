@@ -62,7 +62,7 @@ mod via;
 /// * `output_pins` - output gpio pins
 /// * `flash` - optional flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
-/// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate them automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs)
+/// * `vial_keyboard_id`/`vial_keyboard_def` - generated keyboard id and definition for vial, you can generate them automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs)
 pub async fn initialize_keyboard_and_run<
     D: Driver<'static>,
     In: InputPin,

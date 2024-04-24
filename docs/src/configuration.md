@@ -255,4 +255,4 @@ In this way, RMK provides a flexible and extendable way for experienced Rust dev
 - [ ] update examples, into two folders
 - [ ] update doc and user guide
 - [ ] update readme
-
+- [ ] update template

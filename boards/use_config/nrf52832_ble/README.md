@@ -6,7 +6,7 @@ The following are the detailed steps:
 
 1. Enter example folder:
    ```shell
-   cd boards/nrf52832_ble
+   cd examples/use_rust/nrf52832_ble
    ```
 2. Erase the flash:
    ```shell
