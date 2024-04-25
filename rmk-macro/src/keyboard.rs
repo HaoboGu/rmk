@@ -1,3 +1,4 @@
+use cargo_toml::Manifest;
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -7,6 +8,7 @@ use syn::ItemMod;
 
 use crate::{
     bind_interrupt::expand_bind_interrupt,
+    ble::expand_ble_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
     entry::expand_rmk_entry,
@@ -40,6 +42,18 @@ pub enum Overwritten {
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
+    // TODO: Read Cargo.toml, get feature gate
+    let enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
+        Ok(manifest) => manifest
+            .dependencies
+            .iter()
+            .find(|(name, _dep)| *name == "rmk")
+            .map(|(_name, dep)| dep.req_features().to_vec()),
+        Err(_e) => None,
+    };
+
+    eprintln!("{:?}", enabled_rmk_features);
+
     // Read keyboard config file at project root
     let s = match fs::read_to_string("keyboard.toml") {
         Ok(s) => s,
@@ -70,6 +84,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    // Get communication type: USB/BLE or BOTH
     let comm_type = get_communication_type(&toml_config.keyboard, &toml_config.ble);
     if comm_type == CommunicationType::None {
         return quote! {
@@ -78,6 +93,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    // Check if the chip has usb
     if !chip.has_usb()
         && (comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both)
     {
@@ -87,6 +103,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         .into();
     }
 
+    // Get usb info from generated usb_interrupt_map.rs
     let usb_info = if comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both {
         if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
             usb_info
@@ -109,6 +126,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     );
     let vial_static_var = expand_vial_config();
 
+    // If defmt_log is disabled, add an empty defmt logger impl
     let defmt_import = if toml_config.dependency.defmt_log {
         quote! {
             use defmt_rtt as _;
@@ -127,6 +145,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         }
     };
 
+    // For ESP32s, no panic handler and defmt logger are used
     let no_std_imports = if chip.series == ChipSeries::Esp32 {
         quote!()
     } else {
@@ -159,14 +178,14 @@ fn expand_main(
 ) -> TokenStream2 {
     // Expand components of main function
     let imports = expand_imports(&item_mod);
-    let bind_interrupt = expand_bind_interrupt(&chip, &usb_info, &item_mod);
+    let bind_interrupt = expand_bind_interrupt(&chip, &usb_info, &toml_config, &item_mod);
     let chip_init = expand_chip_init(&chip, &item_mod);
     let usb_init = expand_usb_init(&chip, &usb_info, comm_type, &item_mod);
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
     let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod);
-    // TODO: Add ble battery config
+    let ble_config = expand_ble_config(&chip, toml_config.ble);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -208,12 +227,15 @@ fn expand_main(
             // Initialize matrix config as `(input_pins, output_pins)`
             #matrix_config;
 
+            #ble_config
+
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
                 usb_config: keyboard_usb_config,
                 vial_config,
                 light_config,
                 storage_config,
+                ble_battery_config,
                 ..Default::default()
             };
 

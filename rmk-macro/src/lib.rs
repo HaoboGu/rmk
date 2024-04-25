@@ -1,5 +1,6 @@
 mod bind_interrupt;
 mod chip_init;
+mod ble;
 mod comm;
 mod entry;
 mod flash;

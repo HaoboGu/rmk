@@ -3,6 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::toml_config::{BleConfig, KeyboardTomlConfig};
 use syn::ItemMod;
 
 use crate::{usb_interrupt_map::UsbInfo, ChipModel};
@@ -11,6 +12,7 @@ use crate::{usb_interrupt_map::UsbInfo, ChipModel};
 pub(crate) fn expand_bind_interrupt(
     chip: &ChipModel,
     usb_info: &UsbInfo,
+    toml_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
@@ -32,13 +34,17 @@ pub(crate) fn expand_bind_interrupt(
                 }
                 None
             })
-            .unwrap_or(bind_interrupt_default(chip, usb_info))
+            .unwrap_or(bind_interrupt_default(chip, usb_info, toml_config))
     } else {
-        bind_interrupt_default(chip, usb_info)
+        bind_interrupt_default(chip, usb_info, toml_config)
     }
 }
 
-pub(crate) fn bind_interrupt_default(chip: &ChipModel, usb_info: &UsbInfo) -> TokenStream2 {
+pub(crate) fn bind_interrupt_default(
+    chip: &ChipModel,
+    usb_info: &UsbInfo,
+    toml_config: &KeyboardTomlConfig,
+) -> TokenStream2 {
     if !chip.has_usb() {
         return quote! {};
     }
@@ -59,11 +65,24 @@ pub(crate) fn bind_interrupt_default(chip: &ChipModel, usb_info: &UsbInfo) -> To
             }
         }
         crate::ChipSeries::Nrf52 => {
+            let saadc_interrupt = if let Some(BleConfig {
+                enabled: true,
+                battery_adc_pin: Some(_adc_pin),
+                charge_state: _,
+            }) = &toml_config.ble
+            {
+                Some(quote! {
+                    SAADC => ::embassy_nrf::saadc::InterruptHandler;
+                })
+            } else {
+                None
+            };
             if chip.has_usb() {
                 quote! {
                     use ::embassy_nrf::bind_interrupts;
                     bind_interrupts!(struct Irqs {
                         #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
+                        #saadc_interrupt
                         POWER_CLOCK => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
                     });
                 }

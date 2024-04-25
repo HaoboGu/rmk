@@ -85,7 +85,7 @@ impl Default for StorageConfig {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct BleConfig {
     pub enabled: bool,
-    pub battery_pin: Option<String>,
+    pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
 }
 
@@ -131,5 +131,5 @@ fn default_dep() -> DependencyConfig {
 /// Configurations for usb
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct LayoutConfig {
-    pub default_keymap: Vec<Vec<Vec<String>>>,
+    pub default_keymap: Option<Vec<Vec<Vec<String>>>>,
 }
