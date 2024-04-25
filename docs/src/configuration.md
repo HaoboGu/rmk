@@ -99,6 +99,62 @@ charge_state.low_active = true
 
 ```
 
+#### Keymap config
+
+NOTE: THIS FEATURE IS NOT AVAILABLE NOW, USE `keymap.rs` BEFORE IT MERGES MASTER
+
+You can set your keyboard's default keymap in `keyboard.toml`. The config key is `default_keymap` under `[layout]` section:
+
+```toml
+[layout]
+default_keymap = [
+  # Your default keymap here
+]
+```
+
+The keymap inside is a 2-D array, which represents layer -> row -> key structure of your keymap:
+
+```toml
+[layout]
+default_keymap = [
+  # Layer 1
+  [
+    ["key1", "key2"], # Row 1
+    ["key1", "key2"], # Row 2
+    ...
+  ],
+  # Layer 2
+  [
+    [], # Row 1
+    [], # Row 2
+    ...
+  ],
+  ...
+]
+```
+
+The number of layers/rows/cols should be identical with what's already in `[matrix]` section.
+
+In each row, some keys are set. Due to the limitation of `toml` file, all keys are strings. RMK would parse the strings and fill them to actual keymap initializer, like what's in [`keymap.rs`](#TODO: FILL THE URL)
+
+The key string should follow several rules:
+
+1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
+
+    For example, if you set a keycode `"Backspace"`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile!
+
+2. For no-key, use `"__"`
+
+3. RMK supports many advanced layer operations:
+    1. Use `"MO(n)"` to create a layer activate action
+    2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be like `LShift | RGui`
+    3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold)
+    4. Use `"OSL(n)"` to create a one-shot layer action
+    5. Use `"TT(n)"` to create a layer activate or tap toggle action
+    6. Use `"TG(n)"` to create a layer toggle action
+
+  The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers)
+
 ### What's left to user side
 
 1. User customized chip config
@@ -257,3 +313,4 @@ In this way, RMK provides a flexible and extendable way for experienced Rust dev
 - [ ] update readme
 - [ ] update template
 - [ ] clean config file in examples
+- [ ] saadc config

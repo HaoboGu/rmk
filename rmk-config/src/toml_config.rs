@@ -10,6 +10,8 @@ pub struct KeyboardTomlConfig {
     pub ble: Option<BleConfig>,
     #[serde(default = "default_dep")]
     pub dependency: DependencyConfig,
+    // TODO: Load layout from toml
+    pub layout: Option<LayoutConfig>,
 }
 
 /// Configurations for usb
@@ -124,4 +126,10 @@ pub struct DependencyConfig {
 
 fn default_dep() -> DependencyConfig {
     DependencyConfig { defmt_log: true }
+}
+
+/// Configurations for usb
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct LayoutConfig {
+    pub default_keymap: Vec<Vec<Vec<String>>>,
 }
