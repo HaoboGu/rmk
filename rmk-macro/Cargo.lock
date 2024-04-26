@@ -9,6 +9,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "cargo_toml"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35a60491a82bdc0440640298990087ac1625e23c2feacd584eb33775903d5bb3"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -195,6 +205,7 @@ dependencies = [
 name = "rmk-macro"
 version = "0.1.0"
 dependencies = [
+ "cargo_toml",
  "darling",
  "once_cell",
  "prettyplease",

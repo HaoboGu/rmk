@@ -32,6 +32,22 @@ pub enum CommunicationType {
     None,
 }
 
+impl CommunicationType {
+    pub(crate) fn usb_enabled(&self) -> bool {
+        match self {
+            CommunicationType::Both | CommunicationType::Usb => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn ble_enabled(&self) -> bool {
+        match self {
+            CommunicationType::Both | CommunicationType::Ble => true,
+            _ => false,
+        }
+    }
+}
+
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
 pub enum Overwritten {
@@ -42,8 +58,8 @@ pub enum Overwritten {
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
-    // TODO: Read Cargo.toml, get feature gate
-    let enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
+    // TODO: Read Cargo.toml, check whether the feature gate in Cargo.toml is consistent with keyboard.toml
+    let _enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
         Ok(manifest) => manifest
             .dependencies
             .iter()
@@ -51,8 +67,6 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
             .map(|(_name, dep)| dep.req_features().to_vec()),
         Err(_e) => None,
     };
-
-    eprintln!("{:?}", enabled_rmk_features);
 
     // Read keyboard config file at project root
     let s = match fs::read_to_string("keyboard.toml") {
@@ -94,9 +108,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     }
 
     // Check if the chip has usb
-    if !chip.has_usb()
-        && (comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both)
-    {
+    if !chip.has_usb() && comm_type.usb_enabled() {
         return quote! {
             compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again. Or you can set `usb_enable = false` in `[keyboard]` section of `keyboard.toml`");
         }
@@ -104,7 +116,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     }
 
     // Get usb info from generated usb_interrupt_map.rs
-    let usb_info = if comm_type == CommunicationType::Usb || comm_type == CommunicationType::Both {
+    let usb_info = if comm_type.usb_enabled() {
         if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
             usb_info
         } else {
@@ -185,7 +197,7 @@ fn expand_main(
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
     let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod);
-    let ble_config = expand_ble_config(&chip, toml_config.ble);
+    let (ble_config, set_ble_config) = expand_ble_config(&chip, comm_type, toml_config.ble);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -209,11 +221,6 @@ fn expand_main(
             // Initialize peripherals as `p`
             #chip_init
 
-            // Usb config needs at most 3 inputs from users chip, which cannot be automatically extracted:
-            // 1. USB Interrupte name
-            // 2. USB periphral name
-            // 3. USB GPIO
-            // Users have to implement the usb initialization function if the built-in func cannot
             // Initialize usb driver as `driver`
             #usb_init
 
@@ -235,7 +242,7 @@ fn expand_main(
                 vial_config,
                 light_config,
                 storage_config,
-                ble_battery_config,
+                #set_ble_config
                 ..Default::default()
             };
 

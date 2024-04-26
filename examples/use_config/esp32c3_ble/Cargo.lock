@@ -190,6 +190,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_toml"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8cb1d556b8b8f36e5ca74938008be3ac102f5dcb5b68a0477e4249ae2291cd3"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1464,6 +1474,7 @@ dependencies = [
 name = "rmk-macro"
 version = "0.1.0"
 dependencies = [
+ "cargo_toml",
  "darling",
  "once_cell",
  "prettyplease",

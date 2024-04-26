@@ -21,6 +21,8 @@ fn main() {
     // Generate vial config at the root of project
     generate_vial_config();
 
+    println!("cargo:rerun-if-changed=keyboard.toml");
+
     // Specify linker arguments.
 
     // `--nmagic` is required if memory section addresses are not aligned to 0x10000,

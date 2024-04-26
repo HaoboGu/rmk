@@ -19,6 +19,7 @@ output_pins = ["P1_05", "P1_06", "P1_07"]
 [layout]
 # TODO: keyboard's default layout and keymap, be compatible with vial json and KLE
 # TODO: Could `VIAL_KEYBOARD_DEF/ID` be generated using this? If so, we don't need a vial.json anymore
+default_keymap = [[[]]]
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
@@ -41,3 +42,6 @@ enabled = true
 
 [ble]
 enabled = true
+# battery_adc_pin = "P0_05"
+# charge_state.pin = "P0_25"
+# charge_state.low_active = true

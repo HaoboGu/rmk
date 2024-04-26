@@ -12,6 +12,8 @@ fn main() {
     // ESP IDE system env
     embuild::espidf::sysenv::output();
 
+    println!("cargo:rerun-if-changed=keyboard.toml");
+
     // Set the extra linker script from defmt
     println!("cargo:rustc-link-arg=-Tdefmt.x");
 }

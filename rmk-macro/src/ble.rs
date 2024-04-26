@@ -2,21 +2,29 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::toml_config::BleConfig;
 
-use crate::{ChipModel, ChipSeries};
+use crate::{keyboard::CommunicationType, ChipModel, ChipSeries};
 
-// Default implementations of chip initialization
+// Default implementations of ble configuration.
+// Because ble configuration in `rmk_config` is enabled by a feature gate, so this function returns two TokenStreams.
+// One for initialization ble config, another one for filling this field into `RmkConfig`.
 pub(crate) fn expand_ble_config(
-    chip: &ChipModel,
+    chip:&ChipModel,
+    comm_type: CommunicationType,
     ble_config: Option<BleConfig>,
-) -> TokenStream2 {
+) -> (TokenStream2, TokenStream2) {
+    if !comm_type.ble_enabled() { 
+        return (quote! {}, quote! {});
+    }
     // Support nrf52 only (for now)
     if chip.series != ChipSeries::Nrf52 {
         if chip.series == ChipSeries::Esp32 {
-            return quote! {
+            return (quote! {
                 let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-            };
+            }, quote! {
+                ble_battery_config,
+            });
         } else {
-            return quote!{};
+            return (quote!{}, quote!{});
         }
     }
     match ble_config {
@@ -65,15 +73,21 @@ pub(crate) fn expand_ble_config(
                     }
                 );
 
-                ble_config_tokens
+                (ble_config_tokens, quote! {
+                    ble_battery_config,
+                })
             } else {
-                quote! {
+                (quote! {
                     let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-                }
+                }, quote! {
+                    ble_battery_config,
+                })
             }
         }
-        None => quote! {
+        None => (quote! {
             let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-        }
+        }, quote! {
+            ble_battery_config,
+        })
     }
 }

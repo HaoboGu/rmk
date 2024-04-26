@@ -313,4 +313,6 @@ In this way, RMK provides a flexible and extendable way for experienced Rust dev
 - [ ] update readme
 - [ ] update template
 - [ ] clean config file in examples
-- [ ] saadc config
+- [x] saadc config
+- [ ] add rerun if keyboard.toml changes to all build.rs
+- [ ] read Cargo.toml, get enabled feature
