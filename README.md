@@ -15,8 +15,11 @@ A feature-rich Rust keyboard firmware.
 - **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
 - **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
+- **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 
 ## News
+
+- [2024.05.01] Version `0.2.0` is released! This version brings bunch of exciting features, like BLE support for ESP32C3/ESP32S3, a totally new configuration system which allows you to config your keyboard with a single `keyboard.toml`(no Rust code required!), and so on. You can check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
 
 - [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
 
