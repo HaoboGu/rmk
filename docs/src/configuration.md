@@ -1,53 +1,32 @@
-# Configuration(Draft)
+# Configuration
 
-The goal of RMK's configuration system is to provide users an easy and accessible way to set up keyboards (with or without Rust).
+RMK provides an easy and accessible way to set up the keyboard with a toml config file, even without Rust code!
 
-Apparently, a config file could be better for more people who don't know Rust, but we also want to keep some flexibility for customizing keyboard with Rust code.
+## Usage 
 
-There are two choices right now:
+A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml`:
+  - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
-- [`cfg-toml`](https://github.com/jamesmunns/toml-cfg)
-  - pros: 
-    - a widely used lib
-    - could overwrite default configs defined in RMK
-    - easy to use 
-  - cons:
-    - need to add extra annotations to all config structs
-    - some fields are not support
-    - hard to expand to other types, accepts only numbers/strings in toml
+[Here] is an example `keyboard.toml` for stm32 microcontroller, put your `keyboard.toml` at the root of your firmware project.
 
-- `build.rs`: Load the config in `build.rs`, then generate Rust code, which could be passed to RMK as config struct
-  - pros:
-    - Extendable, flexible, can do everything
-    - No extra dependency
-    - Need to access RMK config at build time
-  - cons:
-    - Need to distribute `build.rs`, users cannot use the lib without this file, which is not a common way generally
-    - LOTS OF work
+RMK provides a proc-macro to load the `keyboard.toml`: `#[rmk_keyboard]`, add it to your `main.rs` like:
 
-- Rust's procedural macro: add a macro like `#[rmk_main]` and add everything needed in compile-time
-  - pros:
-    - Extendable, flexible, and powerful, proc-macro can do everything
-    - No need to distribute `build.rs`
-    - Possible to make user's usage even much simpler
-  - cons:
-    - `rmk-macro` becomes a mandatory dependency
-    - LOTS LOTS OF MACRO work
-    - Developing proc-macro might become a barrier for people who want to contribute to RMK
+```rust
+#[rmk_keyboard]
+mod my_keyboard {}
+```
 
-Okay, I'll try the third approach first: writing proc-macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experience as the most important thing, that's why proc-macro wins(for now).
+And, that's it! `#[rmk_keyboard]` macro would load your `keyboard.toml` config and create everything that's needed for creating a RMK keyboard instance.
 
-## Configuration file
+If you don't want any other customizations beyond the `keyboard.toml`, `#[rmk_keyboard]` macro will just work. For the full examples, please check the [`example/use_config`](https://github.com/HaoboGu/rmk/tree/main/examples/use_config) folder.
 
-A `toml` file named `rmk.toml` is used as a configuration file. The following is the spec of `toml`:
-  - [English](https://toml.io/en/v1.0.0)
-  - [中文](https://toml.io/cn/v1.0.0)
+## What's in the config file?
 
-### What's in the config file?
+The config file contains almost EVERYTHING that users could customize to build a keyboard. There are several sections in the config file:
 
-The config file should contain EVERYTHING that users could customize.
+### `[keyboard]`
 
-The following is an example of RMK config file:
+`[keyboard]` section contains basic information of the keyboard, such as keyboard's name, chip, etc:
 
 ```toml
 [keyboard]
@@ -56,7 +35,23 @@ vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "RMK"
 chip = "stm32h7b0vb"
+# If your chip doesn't have a functional USB peripheral, for example, nRF52832/esp32c3(esp32c3 has only USB serial, not full functional USB), set `usb_enable` to false
+usb_enable = true
+```
 
+### `[matrix]`
+
+`[matrix]` section defines the key matrix information of the keyboard, like number of rows, cols and keymap layers, input/output pins.
+
+IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html to get the valid GPIO peripheral name:
+
+![gpio_peripheral_name](images/gpio_peripheral_name.png)
+
+The GPIO peripheral name varies for different chips. For example, RP2040 has `PIN_0`, nRF52840 has `P0_00` and stm32 has `PA0`. So it's recommended to check the embassy's doc for your chip to get the valid GPIO name first.
+
+Here is an example toml of `[matrix]` section for stm32:
+
+```toml
 [matrix]
 rows = 4
 cols = 3
@@ -64,13 +59,21 @@ layers = 2
 # Input and output pins are mandatory
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
-# Default is col2row, uncomment if your pcb is row2col
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
+```
 
-[layout]
-# TODO: keyboard's default layout and keymap, be compatible with vial json and KLE
-# TODO: Could `VIAL_KEYBOARD_DEF/ID` be generated using this? If so, we don't need a vial.json anymore
+### `[layout]`
 
+`[layout]` section contains the default keymap for the keyboard. It's currently not implemented, PRs welcome!
+
+### `[light]`
+
+`[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
+
+`pin` field is just like IO pins in `[matrix]`, `low_active` defines whether the light low-active or high-active(`true` means low-active).
+
+```toml
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
 capslock.pin = "PA4"
@@ -80,28 +83,45 @@ scrolllock.pin = "PA3"
 # Just ignore if no light pin is used for it
 # numslock.pin = "PA5"
 # numslock.low_active = true
-
-# TODO: RGB configs
-# rgb.driver = "ws2812"
-
-[storage]
-# Enable storage by default?
-enabled = true
-# num_sectors = 2
-# start_addr = 0x10000
-
-[ble]
-enabled = true
-battery_pin = "PA0"
-charge_state.pin = "PA0"
-charge_state.low_active = true
-
-
 ```
 
-#### Keymap config
+### `[storage]`
 
-NOTE: THIS FEATURE IS NOT AVAILABLE NOW, USE `keymap.rs` BEFORE IT MERGES MASTER
+`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically uses the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
+
+```toml
+[storage]
+# Storage feature is enabled by default
+# enabled = false
+# Start address of local storage, MUST BE start of a sector.
+# If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
+# start_addr = 0x00000000
+# How many sectors are used for storage, the default value is 2
+# num_sectors = 2
+```
+
+### `[ble]`
+
+To enable BLE, add `enabled = true` under the `[ble]` section. 
+
+There are several more configs for reading battery level and charging state, now they are available for nRF52840 only.
+
+```toml
+[ble]
+# Whether to enable BLE feature
+enabled = true
+# nRF52840's saadc pin for reading battery level
+battery_pin = "PA0"
+# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+charge_state.pin = "PA0"
+charge_state.low_active = true
+```
+
+### Keymap config(draft)
+
+**NOTE: THIS FEATURE IS NOT AVAILABLE NOW, USE [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs) BEFORE IT'S COMPLETED AND GOT MERGED TO MASTER.**
+
+Suggestions are welcomed!
 
 You can set your keyboard's default keymap in `keyboard.toml`. The config key is `default_keymap` under `[layout]` section:
 
@@ -135,7 +155,7 @@ default_keymap = [
 
 The number of layers/rows/cols should be identical with what's already in `[matrix]` section.
 
-In each row, some keys are set. Due to the limitation of `toml` file, all keys are strings. RMK would parse the strings and fill them to actual keymap initializer, like what's in [`keymap.rs`](#TODO: FILL THE URL)
+In each row, some keys are set. Due to the limitation of `toml` file, all keys are strings. RMK would parse the strings and fill them to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
 The key string should follow several rules:
 
@@ -155,138 +175,16 @@ The key string should follow several rules:
 
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers)
 
-### What's left to user side
 
-1. User customized chip config
+## More customization
 
-2. interrupt binding *
-
-3. USB driver initialization *
-
-4. Other customizations
-
-*: To be removed if possible
-
-## Problems
-
-Besides the above choosing, there's some other problems that have to be addressed.
-
-1. The first one is, how to deserialize those configs to RMK Config? 
-   1. Using serde would be a way, but it requires some other annotations on RMK Config structs(may cause extra flash usage? TODO: test it)
-   2. ✅ Another way is to define every field in config and convert then to RMK Config struct by hand. Seems to be a lot of works, but it's one-time investment.
-
-2. The second problem is, how to convert different representations of GPIOs of different chips? For example, STMs have something like `PA1`, `PB2`, `PC3`, etc. nRFs have `P0_01`, ESPs have `gpio1`, rp2040 has `PIN_1`. Do we need a common representation of those different pin names? Or we just save strings in toml and process them differently.
-
-    - ✅ proc_macro can do this
-
-3. There are some other peripherals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so there're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many peripherals?
-    - To be addressed
-
-4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
-    - To be addressed
-
-## Procedural macro approach
-
-### Generated code
-
-With proc-macro, the whole main function can be generated. But the main function varies between different chips. We have to separate the boilerplate code to several parts, making sure that the proc-macro won't become a mess. 
-
-#### Before main function
-
-There are some code out of main function, usually they should be placed before the main. Here is a list that RMK's proc-macro should add:
-
-1. imports: yeah it's needed of course! And, it's actually quite complex, need to be carefully generated ensuring that no extra imports are added.
-
-2. static configs: keyboard config, vial config, number of rows, etc
-
-3. `bind_interrupts`: Embassy need this, it's complex too. The interrupt name and bind periphral names are actually something quite random, according to the chip
-
-#### Embassy main
-
-In the main function, generally there are several parts:
-
-1. Chip initialization, with config:
-    ```rust
-      let mut config = Config::default();
-      {
-          use embassy_stm32::rcc::*;
-          config.rcc.hse = Some(Hse {
-              freq: Hertz(25_000_000),
-              mode: HseMode::Oscillator,
-          });
-          config.rcc.pll_src = PllSource::HSE;
-          config.rcc.pll = Some(Pll {
-              prediv: PllPreDiv::DIV25,
-              mul: PllMul::MUL192,
-              divp: Some(PllPDiv::DIV2), // 25mhz / 25 * 192 / 2 = 96Mhz.
-              divq: Some(PllQDiv::DIV4), // 25mhz / 25 * 192 / 4 = 48Mhz.
-              divr: None,
-          });
-          config.rcc.ahb_pre = AHBPrescaler::DIV1;
-          config.rcc.apb1_pre = APBPrescaler::DIV2;
-          config.rcc.apb2_pre = APBPrescaler::DIV1;
-          config.rcc.sys = Sysclk::PLL1_P;
-      }
-
-      // Initialize peripherals
-      let p = embassy_stm32::init(config);
-    ```
-
-2. (Optional)USB peripheral initialization: just as what I wrote above, it's quite random!
-
-    ```rust
-      // It's STM32H7's USB initialization code
-      static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-      let mut usb_config = embassy_stm32::usb_otg::Config::default();
-      usb_config.vbus_detection = false;
-      let driver = Driver::new_fs(
-          p.USB_OTG_HS,
-          Irqs,
-          p.PA12,
-          p.PA11,
-          &mut EP_OUT_BUFFER.init([0; 1024])[..],
-          usb_config,
-      );
-
-      // It's nRF52840's USB initialization code in USB mode
-      let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
-
-      // It's nRF52840's USB initialization code in USB + BLE mode
-      let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
-      let driver = Driver::new(p.USBD, Irqs, software_vbus);
-
-      // It's rp2040's USB initialization code
-      let driver = Driver::new(p.USB, Irqs);
-    ```
-
-3. Storage initialization
-
-4. Other keyboard config: Initialize `RmkConfig`, which contains usb config, vial config, ble_battery_config, etc.
-
-5. Run the keyboard: RMK provides several functions to run the keyboard right now. The different entry function requires different inputs. The number of entry functions should be controller to a reasonable amount(I think not more than 3 variants is good). 
-
-### Usage 
-
-The ideal usage of the procedural macro way for customizing keyboard is like:
+`#[rmk_keyboard]` macro also provides some flexibilities of customizing the keyboard's behavior. For example, the clock config:
 
 ```rust
-#[rmk]
-mod my_keyboard {
-
-}
-```
-
-And, that's it!
-
-`#[rmk]` macro should load configs from a local toml file and create everything that's needed for creating a RMK keyboard instance.
-
-`#[rmk]` macro should also provide flexibilities of customizing the keyboard's behavior. For example, the clock config:
-
-```rust
-use embassy_stm32::Config;
-
 #[rmk]
 mod MyKeyboard {
+  use embassy_stm32::Config;
+
   #[config]
   fn config() -> Config {
     let mut config = Config::default();
@@ -300,19 +198,18 @@ mod MyKeyboard {
 }
 ```
 
-RMK should use the config from the user defined function for `let p = embassy_stm32::init(config);` if it exists and use default config otherwise.
+RMK should use the config from the user defined function to initialize the singleton of chip peripheral, for stm32, you can assume that it's initialized using `let p = embassy_stm32::init(config);`.
 
-In this way, RMK provides a flexible and extendable way for experienced Rust developer, while keeps simple for new users.
-
-## TODO:
+## TODOs:
 
 - [ ] gen keymap
 - [ ] read vial.json and gen
 - [x] update examples, into two folders
-- [ ] update doc and user guide
+- [x] update doc
+- [ ] user guide
 - [ ] update readme
 - [ ] update template
-- [ ] clean config file in examples
+- [x] clean config file in examples
 - [x] saadc config
 - [x] add rerun if keyboard.toml changes to all build.rs
 - [x] read Cargo.toml, get enabled feature, check chip name
