@@ -5,7 +5,9 @@ use serde_derive::Deserialize;
 pub struct KeyboardTomlConfig {
     pub keyboard: KeyboardInfo,
     pub matrix: MatrixConfig,
+    #[serde(default = "default_light_config")]
     pub light: LightConfig,
+    #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
     pub ble: Option<BleConfig>,
     #[serde(default = "default_dep")]
@@ -126,6 +128,14 @@ pub struct DependencyConfig {
 
 fn default_dep() -> DependencyConfig {
     DependencyConfig { defmt_log: true }
+}
+
+fn default_light_config() -> LightConfig {
+    LightConfig::default()
+}
+
+fn default_storage_config() -> StorageConfig {
+    StorageConfig::default()
 }
 
 /// Configurations for usb
