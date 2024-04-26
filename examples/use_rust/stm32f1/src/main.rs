@@ -45,20 +45,10 @@ async fn main(_spawner: Spawner) {
     // Initialize peripherals
     let mut p = embassy_stm32::init(config);
 
-    {
-        // BluePill board has a pull-up resistor on the D+ line.
-        // Pull the D+ pin down to send a RESET condition to the USB bus.
-        // This forced reset is needed only for development, without it host
-        // will not reset your device when you upload new firmware.
-        let _dp = Output::new(&mut p.PA12, Level::Low, Speed::Low);
-        Timer::after_millis(10).await;
-    }
-
     // Usb driver
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Pin config
-    // TODO: fix pins
     let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
 
     // Use internal flash to emulate eeprom

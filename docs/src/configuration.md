@@ -206,9 +206,9 @@ RMK should use the config from the user defined function to initialize the singl
 - [ ] read vial.json and gen
 - [x] update examples, into two folders
 - [x] update doc
-- [ ] user guide
-- [ ] update readme
-- [ ] update template
+- [x] user guide
+- [x] update readme
+- [x] update template
 - [x] clean config file in examples
 - [x] saadc config
 - [x] add rerun if keyboard.toml changes to all build.rs

@@ -106,7 +106,7 @@ pub(crate) fn rmk_entry_default(
                         COL,
                         NUM_LAYER,
                     >(
-                        crate::keymap::KEYMAP,
+                        KEYMAP,
                         input_pins,
                         output_pins,
                         Some(driver),
@@ -116,7 +116,6 @@ pub(crate) fn rmk_entry_default(
                     .await;
                 },
                 CommunicationType::Ble => quote! {
-                    // FIXME: This would result in an error when using nRF52840 + BLE ONLY
                     ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
                         ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
                         ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
@@ -124,7 +123,7 @@ pub(crate) fn rmk_entry_default(
                         COL,
                         NUM_LAYER,
                     >(
-                        crate::keymap::KEYMAP,
+                        KEYMAP,
                         input_pins,
                         output_pins,
                         keyboard_config,
@@ -149,7 +148,7 @@ pub(crate) fn rmk_entry_default(
                 input_pins,
                 output_pins,
                 Some(flash),
-                crate::keymap::KEYMAP,
+                KEYMAP,
                 keyboard_config,
             )
             .await;
@@ -162,7 +161,7 @@ pub(crate) fn rmk_entry_default(
                 COL,
                 NUM_LAYER,
             >(
-                crate::keymap::KEYMAP,
+                KEYMAP,
                 input_pins,
                 output_pins,
                 keyboard_config,
