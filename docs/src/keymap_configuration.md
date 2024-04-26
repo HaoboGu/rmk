@@ -2,7 +2,7 @@
 
 RMK supports configuring the default keymap at the compile time. Keymap in RMK is a 3-D matrix of [`KeyAction`](https://docs.rs/rmk/latest/rmk/action/enum.KeyAction.html), which represent the keyboard's action after you trigger a physical key. The 3 dimensions are the number of columns, rows and layers.
 
-The default keymap should be defined at a Rust source file, [rmk-template](https://github.com/HaoboGu/rmk-template) provides an initial [`keymap.rs`](https://github.com/HaoboGu/rmk-template/blob/master/src/keymap.rs) which could be a good example of definiting keymaps in RMK:
+The default keymap should be defined at a Rust source file, [rmk-template](https://github.com/HaoboGu/rmk-template) provides an initial [`keymap.rs`](https://github.com/HaoboGu/rmk-template/blob/master/src/keymap.rs) which could be a good example of defining keymaps in RMK:
 
 ```rust
 /// https://github.com/HaoboGu/rmk-template/blob/master/src/keymap.rs

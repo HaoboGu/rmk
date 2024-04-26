@@ -35,7 +35,7 @@ There are two choices right now:
     - LOTS LOTS OF MACRO work
     - Developing proc-macro might become a barrier for people who want to contribute to RMK
 
-Okay, I'll try the third approch first: writing proc-macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experient as the most important thing, that's why proc-macro wins.
+Okay, I'll try the third approach first: writing proc-macros for RMK's configuration system. It brings simplicity for end-users but adds complexity to developers. I think that RMK should consider users experience as the most important thing, that's why proc-macro wins(for now).
 
 ## Configuration file
 
@@ -163,7 +163,7 @@ The key string should follow several rules:
 
 3. USB driver initialization *
 
-4. Other customizatio
+4. Other customizations
 
 *: To be removed if possible
 
@@ -179,7 +179,7 @@ Besides the above choosing, there's some other problems that have to be addresse
 
     - ✅ proc_macro can do this
 
-3. There are some other pheriphals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so there're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many pheriphals?
+3. There are some other peripherals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so there're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many peripherals?
     - To be addressed
 
 4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
@@ -232,7 +232,7 @@ In the main function, generally there are several parts:
       let p = embassy_stm32::init(config);
     ```
 
-2. (Optional)USB periphral initialization: just as what I wrote above, it's quite random!
+2. (Optional)USB peripheral initialization: just as what I wrote above, it's quite random!
 
     ```rust
       // It's STM32H7's USB initialization code
@@ -280,7 +280,7 @@ And, that's it!
 
 `#[rmk]` macro should load configs from a local toml file and create everything that's needed for creating a RMK keyboard instance.
 
-`#[rmk]` macro should also provide flexibilies of customizing the keyboard's behavior. For example, the clock config:
+`#[rmk]` macro should also provide flexibilities of customizing the keyboard's behavior. For example, the clock config:
 
 ```rust
 use embassy_stm32::Config;

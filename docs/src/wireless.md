@@ -30,7 +30,7 @@ There is another way to flash RMK firmware to nice!nano. It requires a modified 
    cargo install --git https://github.com/simmsb/elf2uf2-rs
    ```
 2. Enter nice!nano's bootloader mode, a USB drive should appear in your machine
-3. Check the softdevice veresion of your nice!nano. If it's v6.x.x, edit `memory.x`:
+3. Check the softdevice version of your nice!nano. If it's v6.x.x, edit `memory.x`:
    ```diff
    - FLASH : ORIGIN = 0x00027000, LENGTH = 868K
    + FLASH : ORIGIN = 0x00026000, LENGTH = 872K
