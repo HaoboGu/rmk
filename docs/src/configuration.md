@@ -2,6 +2,12 @@
 
 RMK provides an easy and accessible way to set up the keyboard with a toml config file, even without Rust code!
 
+<div class="warning">
+This feature is available on latest git version of RMK. Add 
+<code>rmk = { version = "0.1.12", git = "https://github.com/HaoboGu/rmk" } </code>
+in your <code>Cargo.toml</code> to use it
+</div>
+
 ## Usage 
 
 A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml`:
@@ -204,12 +210,3 @@ RMK should use the config from the user defined function to initialize the singl
 
 - [ ] gen keymap
 - [ ] read vial.json and gen
-- [x] update examples, into two folders
-- [x] update doc
-- [x] user guide
-- [x] update readme
-- [x] update template
-- [x] clean config file in examples
-- [x] saadc config
-- [x] add rerun if keyboard.toml changes to all build.rs
-- [x] read Cargo.toml, get enabled feature, check chip name

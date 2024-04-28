@@ -19,7 +19,7 @@ A feature-rich Rust keyboard firmware.
 
 ## News
 
-- [2024.05.01] Version `0.2.0` is released! This version brings bunch of exciting features, like BLE support for ESP32C3/ESP32S3, a totally new configuration system which allows you to config your keyboard with a single `keyboard.toml`(no Rust code required!), and so on. You can check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
+- [2024.05.01] RMK's new configuration system is available at main branch! This new feature brings a totally new way to build your keyboard firmware: using a config file `keyboard.toml`. The document can be found [here](https://haobogu.github.io/rmk/configuration.html), you can also check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
 
 - [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
 
