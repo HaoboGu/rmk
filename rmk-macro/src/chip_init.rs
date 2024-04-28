@@ -77,6 +77,6 @@ fn override_chip_init(item_fn: &ItemFn) -> TokenStream2 {
     let initialization = item_fn.block.to_token_stream();
     quote! {
         let config = #initialization;
-        let p = embassy_stm32::init(config);
+        let mut p = embassy_stm32::init(config);
     }
 }
