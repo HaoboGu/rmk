@@ -21,16 +21,17 @@ use embassy_time::Timer;
 use panic_halt as _;
 use rmk::initialize_keyboard_and_run;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use defmt_rtt as _;
 
-#[defmt::global_logger]
-struct Logger;
+// #[defmt::global_logger]
+// struct Logger;
 
-unsafe impl defmt::Logger for Logger {
-    fn acquire() {}
-    unsafe fn flush() {}
-    unsafe fn release() {}
-    unsafe fn write(_bytes: &[u8]) {}
-}
+// unsafe impl defmt::Logger for Logger {
+//     fn acquire() {}
+//     unsafe fn flush() {}
+//     unsafe fn release() {}
+//     unsafe fn write(_bytes: &[u8]) {}
+// }
 
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => InterruptHandler<USB>;
