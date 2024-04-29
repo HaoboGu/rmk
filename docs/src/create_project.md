@@ -4,7 +4,7 @@ In this section, you'll create your own RMK firmware project using [RMK project 
 
 ## 1. Create from template
 
-RMK provides a [project template](https://github.com/HaoboGu/rmk-template), making it much easier to create your own firmware using your favorate microcontroller. `cargo-generate` is required to use the template, you can install it using the following command:
+RMK provides a [project template](https://github.com/HaoboGu/rmk-template), making it much easier to create your own firmware using your favorite microcontroller. `cargo-generate` is required to use the template, you can install it using the following command:
 
 ```bash
 cargo install cargo-generate
@@ -47,7 +47,7 @@ The followings are the detailed steps:
 
 ### 2.2 Update USB interrupt binding in `main.rs`
 
-Next, you have to check generated `src/main.rs`, make sure that the binded USB interrupt is right. Different microcontrollers have different types of USB peripheral, so does binded interrupt. You can check out [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind the USB interrupt correctly.
+Next, you have to check generated `src/main.rs`, make sure that the binded USB interrupt is right. Different microcontrollers have different types of USB peripheral, so does bind interrupt. You can check out [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind the USB interrupt correctly.
 
 For example, if you're using stm32f4, there is a [usb serial example](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs) there. And code for binding USB interrupt is at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/usb_serial.rs#L15-L17):
 
@@ -81,6 +81,6 @@ let (input_pins, output_pins) = config_matrix_pins_rp!(
 );
 ```
 
-`input` and `output` are lists of used pins, change them accorrdingly.
+`input` and `output` are lists of used pins, change them accordingly.
 
 So far so good, you've done all necessary modifications of your firmware project. The next step is compiling and flashing your firmware!

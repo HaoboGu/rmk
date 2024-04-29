@@ -1,0 +1,62 @@
+[package]
+name = "rmk-nrf52840"
+version = "0.1.12"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { version = "0.1.12", path = "../../../rmk", features = [
+    "nrf52840_ble",
+    "col2row",
+] }
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.3"
+embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
+embassy-nrf = { version = "0.1.0", features = [
+    "defmt",
+    "nrf52840",
+    "time-driver-rtc1",
+    "gpiote",
+    "unstable-pac",
+    "time",
+] }
+embassy-executor = { version = "0.5", features = [
+    "defmt",
+    "task-arena-size-8192",
+    "arch-cortex-m",
+    "executor-thread",
+    "integrated-timers",
+] }
+defmt = "0.3"
+defmt-rtt = "0.4"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+
+[[bin]]
+name = "rmk-nrf52840"
+test = false
+bench = false
+
+[profile.dev]
+codegen-units = 1      # better optimizations
+debug = true
+opt-level = 1
+overflow-checks = true
+lto = false
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1       # better optimizations
+debug = true            # no overhead for bare-metal
+opt-level = "z"         # optimize for binary size
+overflow-checks = false
+lto = "fat"

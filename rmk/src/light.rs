@@ -3,7 +3,7 @@ use bitfield_struct::bitfield;
 use defmt::{debug, error, Format};
 use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
-use rmk_config::LightConfig;
+use rmk_config::{LightConfig, LightPinConfig};
 
 pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
@@ -57,11 +57,16 @@ struct SingleLED<P: OutputPin> {
 }
 
 impl<P: OutputPin> SingleLED<P> {
-    fn new(pin: P, on_state: PinState) -> Self {
+    fn new(p: LightPinConfig<P>) -> Self {
+        let on_state = if p.low_active {
+            PinState::Low
+        } else {
+            PinState::High
+        };
         Self {
             state: false,
             on_state,
-            pin,
+            pin: p.pin,
             brightness: 255,
             period: 0,
         }
@@ -113,10 +118,9 @@ macro_rules! impl_led_on_off {
 
 impl<P: OutputPin> LightService<P> {
     pub(crate) fn new(
-        capslock_pin: Option<P>,
-        scrolllock_pin: Option<P>,
-        numslock_pin: Option<P>,
-        on_state: PinState,
+        capslock_pin: Option<LightPinConfig<P>>,
+        scrolllock_pin: Option<LightPinConfig<P>>,
+        numslock_pin: Option<LightPinConfig<P>>,
     ) -> Self {
         let mut enabled = true;
         if capslock_pin.is_none() && scrolllock_pin.is_none() && numslock_pin.is_none() {
@@ -125,9 +129,9 @@ impl<P: OutputPin> LightService<P> {
         Self {
             enabled,
             led_indicator_data: [0; 1],
-            capslock: capslock_pin.map(|p| SingleLED::new(p, on_state)),
-            scrolllock: scrolllock_pin.map(|p| SingleLED::new(p, on_state)),
-            numslock: numslock_pin.map(|p| SingleLED::new(p, on_state)),
+            capslock: capslock_pin.map(|p| SingleLED::new(p)),
+            scrolllock: scrolllock_pin.map(|p| SingleLED::new(p)),
+            numslock: numslock_pin.map(|p| SingleLED::new(p)),
         }
     }
 
@@ -144,13 +148,13 @@ impl<P: OutputPin> LightService<P> {
             led_indicator_data: [0; 1],
             capslock: light_config
                 .capslock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
             scrolllock: light_config
                 .scrolllock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
             numslock: light_config
                 .numslock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
         }
     }
 }

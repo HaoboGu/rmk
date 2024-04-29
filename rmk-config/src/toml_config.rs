@@ -1,21 +1,19 @@
 use serde_derive::Deserialize;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct KeyboardConfig {
-    /// Vender id
-    pub vendor_id: u16,
-    /// Product id
-    pub product_id: u16,
-}
-
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct KeyboardTomlConfig {
     pub keyboard: KeyboardInfo,
     pub matrix: MatrixConfig,
+    #[serde(default = "default_light_config")]
     pub light: LightConfig,
+    #[serde(default = "default_storage_config")]
     pub storage: StorageConfig,
-    pub ble: BleConfig,
+    pub ble: Option<BleConfig>,
+    #[serde(default = "default_dep")]
+    pub dependency: DependencyConfig,
+    // TODO: Load layout from toml
+    pub layout: Option<LayoutConfig>,
 }
 
 /// Configurations for usb
@@ -33,6 +31,9 @@ pub struct KeyboardInfo {
     pub serial_number: Option<String>,
     /// chip model
     pub chip: String,
+    /// enable usb
+    #[serde(default = "default_true")]
+    pub usb_enable: bool,
 }
 
 impl Default for KeyboardInfo {
@@ -40,10 +41,11 @@ impl Default for KeyboardInfo {
         Self {
             vendor_id: 0x4c4b,
             product_id: 0x4643,
-            manufacturer: Some("Haobo".to_string()),
+            manufacturer: Some("RMK".to_string()),
             product_name: Some("RMK Keyboard".to_string()),
             serial_number: Some("00000001".to_string()),
             chip: "rp2040".to_string(),
+            usb_enable: true,
         }
     }
 }
@@ -68,7 +70,7 @@ pub struct StorageConfig {
     #[serde(default = "default_num_sectors")]
     pub num_sectors: u8,
     ///
-    #[serde(default = "default_bool")]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
@@ -85,7 +87,7 @@ impl Default for StorageConfig {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct BleConfig {
     pub enabled: bool,
-    pub battery_pin: Option<String>,
+    pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
 }
 
@@ -105,9 +107,39 @@ fn default_bool() -> bool {
     false
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct PinConfig {
     pub pin: String,
     #[serde(default = "default_bool")]
     pub low_active: bool,
+}
+
+/// Configurations for usb
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct DependencyConfig {
+    /// Enable defmt log or not
+    #[serde(default = "default_true")]
+    pub defmt_log: bool,
+}
+
+fn default_dep() -> DependencyConfig {
+    DependencyConfig { defmt_log: true }
+}
+
+fn default_light_config() -> LightConfig {
+    LightConfig::default()
+}
+
+fn default_storage_config() -> StorageConfig {
+    StorageConfig::default()
+}
+
+/// Configurations for usb
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct LayoutConfig {
+    pub default_keymap: Option<Vec<Vec<Vec<String>>>>,
 }

@@ -8,16 +8,16 @@
             "name": "Cortex-Debug - stm32h7",
             "preLaunchTask": "flash stm32h7",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/boards/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
+            "executable": "${workspaceFolder}/examples/use_rust/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
             "request": "launch",
             "type": "cortex-debug",
             "servertype": "openocd",
             "showDevDebugOutput": "parsed",
             "runToEntryPoint": "main",
             "configFiles": [
-                "${workspaceFolder}/boards/stm32h7/openocd.cfg"
+                "${workspaceFolder}/examples/use_rust/stm32h7/openocd.cfg"
             ],
-            "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
+            "svdFile": "${workspaceFolder}/examples/use_rust/stm32h7/STM32H7B0x.svd",
             "postRestartCommands": [
                 "monitor rtt start",
             ],
@@ -42,11 +42,11 @@
             "request": "launch",
             "gdbPath": "gdb-multiarch",
             // "preLaunchTask": "flash rp2040",
-            "cwd": "${workspaceFolder}/boards/rp2040",
+            "cwd": "${workspaceFolder}/examples/use_rust/rp2040",
             "device": "RP2040",
             "servertype": "openocd",
             "showDevDebugOutput": "parsed",
-            "executable": "${workspaceFolder}/boards/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+            "executable": "${workspaceFolder}/examples/use_rust/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
             "runToEntryPoint": "main",
             "configFiles": [
                 "openocd.cfg"
@@ -57,7 +57,7 @@
             // "preLaunchTask": "build stm32h7 --debug",
             "type": "probe-rs-debug",
             "request": "launch",
-            "cwd": "${workspaceFolder}/boards/stm32f4",
+            "cwd": "${workspaceFolder}/examples/use_rust/stm32f4",
             "chip": "STM32F411CEUx",
             "speed": 24000,
             "runtimeExecutable": "probe-rs",
@@ -72,9 +72,9 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/boards/stm32f4/target/thumbv7em-none-eabihf/debug/rmk-stm32f4",
+                    "programBinary": "${workspaceFolder}/examples/use_rust/stm32f4/target/thumbv7em-none-eabihf/debug/rmk-stm32f4",
                     "chip": "STM32F411CEUx",
-                    "svdFile": "${workspaceFolder}/boards/stm32f4/STM32F411.svd",
+                    "svdFile": "${workspaceFolder}/examples/use_rust/stm32f4/STM32F411.svd",
                     "rttEnabled": true,
                     "rttChannelFormats": [
                         {
@@ -108,7 +108,7 @@
             "preLaunchTask": "build stm32h7 --debug",
             "type": "probe-rs-debug",
             "request": "launch",
-            "cwd": "${workspaceFolder}/boards/stm32h7",
+            "cwd": "${workspaceFolder}/examples/use_rust/stm32h7",
             "chip": "STM32H7B0VBTx",
             "speed": 24000,
             "runtimeExecutable": "probe-rs",
@@ -123,9 +123,9 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/boards/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
+                    "programBinary": "${workspaceFolder}/examples/use_rust/stm32h7/target/thumbv7em-none-eabihf/debug/rmk-stm32h7",
                     "chip": "STM32H7B0VBTx",
-                    "svdFile": "${workspaceFolder}/boards/stm32h7/STM32H7B0x.svd",
+                    "svdFile": "${workspaceFolder}/examples/use_rust/stm32h7/STM32H7B0x.svd",
                     "rttEnabled": true,
                     "rttChannelFormats": [
                         {
@@ -159,7 +159,7 @@
             "preLaunchTask": "Build Debug",
             "type": "probe-rs-debug",
             "request": "launch",
-            "cwd": "${workspaceFolder}/boards/rp2040",
+            "cwd": "${workspaceFolder}/examples/use_rust/rp2040",
             "chip": "rp2040",
             // RP2040 doesn't support connectUnderReset
             "connectUnderReset": false,
@@ -176,9 +176,9 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "${workspaceFolder}/boards/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
+                    "programBinary": "${workspaceFolder}/examples/use_rust/rp2040/target/thumbv6m-none-eabi/debug/rmk-rp2040",
                     "chip": "RP2040",
-                    "svdFile": "${workspaceFolder}/boards/rp2040/rp2040.svd",
+                    "svdFile": "${workspaceFolder}/examples/use_rust/rp2040/rp2040.svd",
                     "rttEnabled": true,
                     "options": {
                         "env": {

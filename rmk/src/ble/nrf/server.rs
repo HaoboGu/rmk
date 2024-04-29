@@ -112,9 +112,9 @@ impl BleServer {
                 product_version: 0x0000,
             },
             DeviceInformation {
-                manufacturer_name: usb_config.manufacturer,
-                model_number: usb_config.product_name,
-                serial_number: usb_config.serial_number,
+                manufacturer_name: Some(usb_config.manufacturer),
+                model_number: Some(usb_config.product_name),
+                serial_number: Some(usb_config.serial_number),
                 ..Default::default()
             },
         )?;

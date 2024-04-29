@@ -90,7 +90,7 @@ cargo +nightly build --release
 cargo +nightly size --release
 ```
 
-This config will reduce about 4-6kb of bianry size further more.
+This config will reduce about 4-6kb of binary size further more.
 
 After applying all above approaches, total binary size of stm32h7 example can be reduced from about 93KB to 54KB, which means the binary size decreases about 42%!
 

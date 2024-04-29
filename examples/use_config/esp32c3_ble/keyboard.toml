@@ -1,0 +1,37 @@
+[keyboard]
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "esp32c3"
+usb_enable = false
+
+[matrix]
+rows = 4
+cols = 3
+layers = 2
+# Input and output pins are mandatory
+input_pins = ["gpio6", "gpio7", "gpio20", "gpio21"]
+output_pins = ["gpio3", "gpio4", "gpio5"]
+
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# row2col = true
+
+[layout]
+
+[light]
+# All light pins are high-active by default, uncomment if you want it to be low-active
+# capslock.pin = "PB2"
+# capslock.low_active = true
+# scrolllock.pin = "PA3"
+# scrolllock.low_active = true
+# Just ignore if no light pin is used for it
+# numslock.pin = "PA5"
+# numslock.low_active = true
+
+[storage]
+# Storage feature is enabled by default
+# enabled = false
+
+[ble]
+enabled = true

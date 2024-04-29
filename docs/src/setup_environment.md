@@ -20,7 +20,7 @@ The next step is to add Rust's compilation target of your chosen microcontroller
 
 Different microcontrollers with different architectures may have different compilation targets, if you're using ARM Cortex-M microcontrollers, [here](https://docs.rust-embedded.org/book/intro/install.html#rust-toolchain) is a simple target list.
 
-For example, rp2040 is a Cortex-M0+ microcontroller, it's compilation target is `thumbv6m-none-eabi`. Use `rustup target add` command to intall it:
+For example, rp2040 is a Cortex-M0+ microcontroller, it's compilation target is `thumbv6m-none-eabi`. Use `rustup target add` command to install it:
 
 
 ```bash

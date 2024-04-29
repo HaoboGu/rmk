@@ -8,10 +8,9 @@ pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal::digital::OutputPin;
 
-// TODO: more configs need to be added, easy configuration(from config file)
-/// Configurations for RMK keyboard.
+/// Internal configurations for RMK keyboard.
 pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
@@ -60,11 +59,15 @@ impl Default for StorageConfig {
 /// Config for lights
 #[derive(Clone, Copy, Debug)]
 pub struct LightConfig<O: OutputPin> {
-    pub capslock: Option<O>,
-    pub scrolllock: Option<O>,
-    pub numslock: Option<O>,
-    /// At this state, the light is on
-    pub on_state: PinState,
+    pub capslock: Option<LightPinConfig<O>>,
+    pub scrolllock: Option<LightPinConfig<O>>,
+    pub numslock: Option<LightPinConfig<O>>,
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct LightPinConfig<O: OutputPin> {
+    pub pin: O,
+    pub low_active: bool,
 }
 
 impl<O: OutputPin> Default for LightConfig<O> {
@@ -73,14 +76,13 @@ impl<O: OutputPin> Default for LightConfig<O> {
             capslock: None,
             scrolllock: None,
             numslock: None,
-            on_state: PinState::Low,
         }
     }
 }
 
 /// Config for [vial](https://get.vial.today/).
 ///
-/// You can generate automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs).
+/// You can generate automatically using [`build.rs`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VialConfig<'a> {
     pub vial_keyboard_id: &'a [u8],
@@ -138,29 +140,11 @@ pub struct KeyboardUsbConfig<'a> {
     /// Product id
     pub pid: u16,
     /// Manufacturer
-    pub manufacturer: Option<&'a str>,
+    pub manufacturer: &'a str,
     /// Product name
-    pub product_name: Option<&'a str>,
+    pub product_name: &'a str,
     /// Serial number
-    pub serial_number: Option<&'a str>,
-}
-
-impl<'a> KeyboardUsbConfig<'a> {
-    pub fn new(
-        vid: u16,
-        pid: u16,
-        manufacturer: Option<&'a str>,
-        product_name: Option<&'a str>,
-        serial_number: Option<&'a str>,
-    ) -> Self {
-        Self {
-            vid,
-            pid,
-            manufacturer,
-            product_name,
-            serial_number,
-        }
-    }
+    pub serial_number: &'a str,
 }
 
 impl<'a> Default for KeyboardUsbConfig<'a> {
@@ -168,9 +152,9 @@ impl<'a> Default for KeyboardUsbConfig<'a> {
         Self {
             vid: 0x4c4b,
             pid: 0x4643,
-            manufacturer: Some("Haobo"),
-            product_name: Some("RMK Keyboard"),
-            serial_number: Some("00000001"),
+            manufacturer: "RMK",
+            product_name: "RMK Keyboard",
+            serial_number: "00000001",
         }
     }
 }

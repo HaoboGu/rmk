@@ -62,9 +62,9 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
     pub(crate) fn new(driver: D, keyboard_config: KeyboardUsbConfig<'static>) -> Self {
         // Create embassy-usb Config
         let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
-        usb_config.manufacturer = keyboard_config.manufacturer;
-        usb_config.product = keyboard_config.product_name;
-        usb_config.serial_number = keyboard_config.serial_number;
+        usb_config.manufacturer = Some(keyboard_config.manufacturer);
+        usb_config.product = Some(keyboard_config.product_name);
+        usb_config.serial_number = Some(keyboard_config.serial_number);
         usb_config.max_power = 450;
 
         // Required for windows compatibility.
