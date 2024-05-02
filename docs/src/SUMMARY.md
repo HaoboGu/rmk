@@ -13,7 +13,8 @@
 
 
 # Features
-- [Keymap configuration](keymap_configuration.md)
+- [Keyboard Configuration](configuration.md)
+- [Keymap](keymap_configuration.md)
 - [Vial support](vial.md)
 - [Wireless](wireless.md)
 - [Storage](storage.md)
