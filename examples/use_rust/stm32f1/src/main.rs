@@ -12,12 +12,11 @@ use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
     flash::{Blocking, Flash},
-    gpio::{AnyPin, Input, Level, Output, Speed},
+    gpio::{AnyPin, Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
     Config,
 };
-use embassy_time::Timer;
 use panic_halt as _;
 use rmk::initialize_keyboard_and_run;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -43,7 +42,7 @@ async fn main(_spawner: Spawner) {
     let config = Config::default();
 
     // Initialize peripherals
-    let mut p = embassy_stm32::init(config);
+    let p = embassy_stm32::init(config);
 
     // Usb driver
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
