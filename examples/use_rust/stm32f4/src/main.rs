@@ -15,7 +15,6 @@ use embassy_stm32::{
     flash::{Blocking, Flash},
     gpio::{AnyPin, Input, Output},
     peripherals::USB_OTG_FS,
-    time::Hertz,
     usb_otg::{Driver, InterruptHandler},
     Config,
 };
@@ -32,7 +31,7 @@ bind_interrupts!(struct Irqs {
 async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // RCC config
-    let mut config = Config::default();
+    let config = Config::default();
 
     // Initialize peripherals
     let p = embassy_stm32::init(config);

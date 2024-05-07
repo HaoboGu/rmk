@@ -9,7 +9,7 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use rmk_config::StorageConfig;
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, store_item, MapValueError, Value},
+    map::{fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
 
@@ -87,9 +87,9 @@ pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
     for StorageData<ROW, COL, NUM_LAYER>
 {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, MapValueError> {
+    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
         if buffer.len() < 6 {
-            return Err(MapValueError::BufferTooSmall);
+            return Err(SerializationError::BufferTooSmall);
         }
         match self {
             StorageData::StorageConfig(c) => {
@@ -125,7 +125,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => {
                 if buffer.len() < 121 {
-                    return Err(MapValueError::BufferTooSmall);
+                    return Err(SerializationError::BufferTooSmall);
                 }
 
                 // Must be 120
@@ -138,12 +138,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
         }
     }
 
-    fn deserialize_from(buffer: &[u8]) -> Result<Self, MapValueError>
+    fn deserialize_from(buffer: &[u8]) -> Result<Self, SerializationError>
     where
         Self: Sized,
     {
         if buffer.len() < 1 {
-            return Err(MapValueError::InvalidFormat);
+            return Err(SerializationError::InvalidFormat);
         }
         match buffer[0] {
             0x0 => {
@@ -161,11 +161,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
             }
             0x1 => {
                 // LedLightConfig
-                Err(MapValueError::Custom(0))
+                Err(SerializationError::Custom(0))
             }
             0x2 => {
                 // RgbLightConfig
-                Err(MapValueError::Custom(0))
+                Err(SerializationError::Custom(0))
             }
             0x3 => {
                 // KeymapConfig
@@ -210,7 +210,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
 
             _ => {
                 info!("Key error: {}", buffer[0]);
-                Err(MapValueError::Custom(1))
+                Err(SerializationError::Custom(1))
             }
         }
     }
@@ -578,7 +578,7 @@ fn print_sequential_storage_err<F: AsyncNorFlash>(e: SSError<F::Error>) {
         SSError::Corrupted {} => error!("Storage is corrupted"),
         SSError::BufferTooBig => error!("Buffer too big"),
         SSError::BufferTooSmall(_) => error!("Buffer too small"),
-        SSError::MapValueError(e) => error!("Map value error: {}", e),
+        SSError::SerializationError(e) => error!("Map value error: {}", e),
         _ => error!("Unknown storage error"),
     }
 }

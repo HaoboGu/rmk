@@ -7,16 +7,14 @@ mod keymap;
 mod vial;
 
 use crate::keymap::{COL, NUM_LAYER, ROW};
-use core::mem;
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
-    interrupt::{self, InterruptExt, Priority},
+    interrupt::InterruptExt,
     nvmc::Nvmc,
-    pac,
     peripherals::{self, USBD},
     usb::{self, vbus_detect::HardwareVbusDetect, Driver},
 };
