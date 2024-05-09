@@ -11,9 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-# FIXME: Release to crates.io
-rmk-config = { version = "0.1", path = "../rmk-config" }
-rmk-macro = { version = "0.1", path = "../rmk-macro" }
+rmk-config = { version = "0.1" }
+rmk-macro = { version = "0.1" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"

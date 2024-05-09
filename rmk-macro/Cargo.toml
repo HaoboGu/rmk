@@ -2,8 +2,12 @@
 name = "rmk-macro"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Proc-macro crate of RMK"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+license = "MIT OR Apache-2.0"
+resolver = "2"
 
 [dependencies]
 toml = "0.8"
