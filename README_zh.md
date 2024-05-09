@@ -110,7 +110,7 @@ RMK 现在的roadmap在[这里](https://haobogu.github.io/rmk/roadmap.html).
 
 ## 最小支持的 Rust 版本（MSRV）
 
-RMK 需要 Rust 1.75 稳定版本及以上。
+RMK 需要 Rust 1.77 稳定版本及以上。
 
 ## 许可证
 

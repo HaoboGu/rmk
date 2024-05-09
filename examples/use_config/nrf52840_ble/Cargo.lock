@@ -1224,8 +1224,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "2.0.0"
-source = "git+https://github.com/tweedegolf/sequential-storage?rev=4dedc23#4dedc236b118173892c8a4160225ec3fe1823718"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d25123e754473ed08bcc4e0ef61f0a733662872885e533ffdf03771119712fc"
 dependencies = [
  "defmt",
  "embedded-storage-async",
