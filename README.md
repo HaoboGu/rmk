@@ -27,9 +27,9 @@ A feature-rich Rust keyboard firmware.
 
 <details>
 
-<summary>Click to checkout more news</summary>
+<summary>Click to check out more news</summary>
 
-- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
+- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand-new [user documentation page](https://haobogu.github.io/rmk).
 
 - [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 

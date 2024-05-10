@@ -93,7 +93,7 @@ scrolllock.pin = "PA3"
 
 ### `[storage]`
 
-`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically uses the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
+`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
 
 ```toml
 [storage]
