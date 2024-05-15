@@ -1,6 +1,6 @@
 # esp32c3 BLE example
 
-To run this example, you should have Rust **nightly** and `esp-idf` toolchain installed. The full instruction of installing `esp-idf` toolchain can be found [here](https://docs.esp-rs.org/book/installation/index.html) and [here](https://docs.esp-rs.org/std-training/02_2_software.html)
+To run this example, you should have Rust 1.77 in **esp** channel and `esp-idf` toolchain installed. The full instruction of installing `esp-idf` toolchain can be found [here](https://docs.esp-rs.org/book/installation/index.html) and [here](https://docs.esp-rs.org/std-training/02_2_software.html)
 
 To run the example, make sure that you have esp-idf environment, `ldproxy` and `espflash` installed correctly. Then, run 
 
