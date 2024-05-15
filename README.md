@@ -23,11 +23,11 @@ A feature-rich Rust keyboard firmware.
 
 - [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
 
-- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has been added to RMK! Checkout [`examples/use_rust/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) and [`examples/use_rust/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) for details.
-
 <details>
 
 <summary>Click to check out more news</summary>
+
+- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has been added to RMK! Checkout [`examples/use_rust/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) and [`examples/use_rust/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) for details.
 
 - [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand-new [user documentation page](https://haobogu.github.io/rmk).
 

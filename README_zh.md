@@ -13,9 +13,11 @@
 - **实时键位编辑**：使用 vial 进行实时键位编辑，可以在编译时定制键盘布局。
 - **高级键盘功能**：RMK 默认提供许多高级键盘功能，如层切换、媒体控制、系统控制、鼠标控制等。
 - **无线支持**：（实验性功能）RMK 支持 BLE 无线功能，包括自动重新连接和多设备功能，已经在 nrf52840 和 esp32c3 上进行了测试。
-
+- **易于配置**：RMK提供了一个非常简单的配置你的键盘的方法，你只需要一个`keyboard.toml`文件，就可以构建起你的键盘固件！当然，对于 Rust 开发者来说，你仍然可以使用代码方式来使用 RMK
 
 ## 新闻
+
+- [2024.05.01] RMK的全新配置化固件生成已经在主分支可用了！使用这个特性，你可以编写一个`keyboard.toml`配置文件，然后让RMK来帮助你生成Rust代码然后编译固件。[这里](https://haobogu.github.io/rmk/configuration.html)是相关文档，你也可以在 [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) 目录下查看示例。示例包含使用配置文件和使用Rust代码两种方式。
 
 - [2024.04.07] 现在esp32c3和esp32s3的蓝牙支持已经在主分支上可用，示例可以参考  [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) 和 [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs)
 
