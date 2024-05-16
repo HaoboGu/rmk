@@ -1,4 +1,4 @@
-# Create RMK project
+# Create RMK firmware project
 
 In this section, you'll create your own RMK firmware project
 using [RMK project template](https://github.com/HaoboGu/rmk-template)
@@ -51,4 +51,3 @@ But for the most of the cases, there are minor modifications you have to do. The
 
     If the configuration doesn't satisfy all your needs(it would mostly do!), you can write your own Rust code to do more customization! RMK also provides some [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) to help you quickly get throught it.
 
- All TODOs are listed in the `README.md` file in the generated project.

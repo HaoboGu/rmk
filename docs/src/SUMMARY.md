@@ -8,7 +8,7 @@
 
 - [1. Overview](guide_overview.md)
 - [2. Setup RMK environment](setup_environment.md)
-- [3. Create RMK project](create_project.md)
+- [3. Create RMK firmware project](create_firmware.md)
     - [Use `keyboard.toml`](config_rmk_project_toml.md)
     - [Use Rust](config_rmk_project_rust.md)
 - [4. Compile and flash!](compile_and_flash.md)
