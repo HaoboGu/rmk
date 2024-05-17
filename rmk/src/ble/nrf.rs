@@ -219,8 +219,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
-        //
-        // If no USB device, just start BLE advertising
         #[cfg(not(feature = "nrf52832_ble"))]
         if let Some(ref mut usb_device) = usb_device {
             // Check and run via USB first
@@ -276,6 +274,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 }
             }
         } else {
+            // If no USB device, just start BLE advertising
             match adv_fut.await {
                 Ok(conn) => {
                     run_ble_keyboard(
