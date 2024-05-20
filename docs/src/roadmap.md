@@ -1,24 +1,47 @@
 # Roadmap
 
-There are a bunch of things to do with RMK in the near future. The following is a simple TODO list:
+There are a bunch of things to do with RMK in the near future. I plan to ship 1.0.0 after all the following items are accomplished.
 
-- [x] layer support
-- [x] system/media keys
-- [x] mouse keys
-- [x] vial support
-- [x] eeprom
-- [x] project template
-- [x] LED
-- [x] (experimental) wireless - BLE
-- [x] auto switch between BLE/USB
-- [ ] real battery service from ADC  
-- [ ] esp32 support
-- [ ] keyboard macro
-- [ ] better documentation
-- [ ] RGB
-- [ ] encoder
-- [ ] default bootloader/DFU
-- [ ] a good gui configurator
-- [ ] ~~easy keyboard configuration with good default~~(haven't found a good way to achieve this, if you got any idea, ping me pls)
+## Roadmap to 1.0.0
 
-If you want to contribute, please feel free to open an issue or PR, or just ping me! Any forms of contribution are welcome!
+| Mark | Description |
+| ---- | ----------- |
+|  🔴  | important   |
+|  🟢  | easy        |
+|  🔵  | massive work|
+
+
+#### keyboard feature
+  - [x] layer support
+  - [x] system/media/mouse keys
+  - [x] LED
+  - [ ] full async key detection and report sending
+  - [ ] 🔴 RGB
+  - [ ] keyboard macros
+  - [ ] 🟢 encoder
+  - [ ] 🔵 display support
+  - [ ] tap/hold
+  - [ ] 🔵 split keyboard support
+
+#### Wireless
+  - [x] BLE support - nRF
+  - [x] auto switch between BLE/USB
+  - [x] battery service from ADC
+  - [x] 🔴 BLE support - esp32c3
+  - [ ] 🔴 BLE support - all esp32 chips
+  - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP at least
+  - [ ] stablizing BLE feature gate/API
+  - [ ] sleep mode to save battery
+  - [ ] BLE support - ch58x/ch59x
+
+#### User experience
+  - [x] vial support
+  - [ ] 🔴🔵 GUI configurator which supports windows/macos/linux/web
+  - [ ] default bootloader
+  - [ ] USB DFU/OTA
+  - [ ] 🔴 easy keyboard configuration with good default, support different MCUs
+  - [ ] making vial and default keymap consistent automatically
+  - [ ] good documentation
+
+If you want to contribute, please feel free to open an issue or PR, or just ping me! Any forms of contribution are welcome :D
+

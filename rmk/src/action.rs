@@ -1,7 +1,6 @@
 use crate::keycode::{KeyCode, ModifierCombination};
 use defmt::{error, warn, Format};
 use num_enum::FromPrimitive;
-use packed_struct::PackedStructSlice;
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
@@ -61,17 +60,10 @@ impl KeyAction {
             KeyAction::Tap(a) => 0x0001 | a.to_action_code(),
             KeyAction::OneShot(a) => 0x0010 | a.to_action_code(),
             KeyAction::WithModifier(a, m) => {
-                let mut modifier_bits = [0];
-                // Ignore packing error
-                ModifierCombination::pack_to_slice(&m, &mut modifier_bits).unwrap_or_default();
-                0x4000 | ((modifier_bits[0] as u16) << 8) | a.to_basic_action_code()
+                0x4000 | ((m.into_bits() as u16) << 8) | a.to_basic_action_code()
             }
-            KeyAction::ModifierTapHold(action, modifier) => {
-                let mut modifier_bits = [0];
-                // Ignore packing error
-                ModifierCombination::pack_to_slice(&modifier, &mut modifier_bits)
-                    .unwrap_or_default();
-                0x6000 | ((modifier_bits[0] as u16) << 8) | action.to_basic_action_code()
+            KeyAction::ModifierTapHold(a, m) => {
+                0x6000 | ((m.into_bits() as u16) << 8) | a.to_basic_action_code()
             }
             KeyAction::LayerTapHold(action, layer) => {
                 if layer < 16 {
@@ -142,6 +134,10 @@ pub enum Action {
     ///
     /// Uses 0xE60 ~ 0xE7F. Serialized as 1110|011|layer_num(5bits)
     LayerToggle(u8),
+    /// Set default layer
+    ///
+    /// Uses 0xE80 ~ 0xE9F. Serialized as 1110|100|layer_num(5bits)
+    DefaultLayer(u8),
 }
 
 impl Action {
@@ -149,10 +145,11 @@ impl Action {
     pub(crate) fn to_action_code(self) -> u16 {
         match self {
             Action::Key(k) => k as u16,
-            Action::Modifier(m) => 0xE00 | (m.to_bits() as u16),
+            Action::Modifier(m) => 0xE00 | (m.into_bits() as u16),
             Action::LayerOn(layer) => 0xE20 | (layer as u16),
             Action::LayerOff(layer) => 0xE40 | (layer as u16),
             Action::LayerToggle(layer) => 0xE60 | (layer as u16),
+            Action::DefaultLayer(layer) => 0xE80 | (layer as u16),
         }
     }
 
@@ -175,6 +172,10 @@ impl Action {
             0xE60..=0xE7F => {
                 let layer = (action_code & 0xFF) as u8;
                 Action::LayerToggle(layer)
+            }
+            0xE80..=0xE9F => {
+                let layer = (action_code & 0xFF) as u8;
+                Action::DefaultLayer(layer)
             }
             _ => {
                 warn!("Not a valid 12-bit action code: {:#X}", action_code);

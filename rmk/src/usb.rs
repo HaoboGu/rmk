@@ -9,11 +9,11 @@ use embassy_usb::{
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
+use rmk_config::KeyboardUsbConfig;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 use crate::{
-    config::KeyboardUsbConfig,
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
 };
@@ -25,7 +25,8 @@ pub(crate) static USB_DEVICE_ENABLED: AtomicBool = AtomicBool::new(false);
 pub(crate) async fn wait_for_usb_suspend() {
     loop {
         let suspended = USB_SUSPENDED.load(core::sync::atomic::Ordering::Acquire);
-        if suspended {
+        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
+        if suspended || (!enabled) {
             break;
         }
         // Check usb suspended state every 10ms
@@ -61,9 +62,9 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
     pub(crate) fn new(driver: D, keyboard_config: KeyboardUsbConfig<'static>) -> Self {
         // Create embassy-usb Config
         let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
-        usb_config.manufacturer = keyboard_config.manufacturer;
-        usb_config.product = keyboard_config.product_name;
-        usb_config.serial_number = keyboard_config.serial_number;
+        usb_config.manufacturer = Some(keyboard_config.manufacturer);
+        usb_config.product = Some(keyboard_config.product_name);
+        usb_config.serial_number = Some(keyboard_config.serial_number);
         usb_config.max_power = 450;
 
         // Required for windows compatibility.

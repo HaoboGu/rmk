@@ -1,8 +1,9 @@
-use crate::{config::LightConfig, hid::HidReaderWrapper};
+use crate::hid::HidReaderWrapper;
+use bitfield_struct::bitfield;
 use defmt::{debug, error, Format};
 use embassy_time::Timer;
 use embedded_hal::digital::{OutputPin, PinState};
-use packed_struct::prelude::*;
+use rmk_config::{LightConfig, LightPinConfig};
 
 pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
@@ -16,21 +17,23 @@ pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
     }
 }
 
-#[derive(PackedStruct, Clone, Copy, Debug, Default, Format, Eq, PartialEq)]
-#[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
+#[bitfield(u8)]
+#[derive(Format, Eq, PartialEq)]
 pub struct LedIndicator {
-    #[packed_field(bits = "0")]
+    #[bits(1)]
     numslock: bool,
-    #[packed_field(bits = "1")]
+    #[bits(1)]
     capslock: bool,
-    #[packed_field(bits = "2")]
+    #[bits(1)]
     scrolllock: bool,
-    #[packed_field(bits = "3")]
+    #[bits(1)]
     compose: bool,
-    #[packed_field(bits = "4")]
+    #[bits(1)]
     kana: bool,
-    #[packed_field(bits = "5")]
+    #[bits(1)]
     shift: bool,
+    #[bits(2)]
+    _reserved: u8,
 }
 
 /// A single LED
@@ -54,11 +57,16 @@ struct SingleLED<P: OutputPin> {
 }
 
 impl<P: OutputPin> SingleLED<P> {
-    fn new(pin: P, on_state: PinState) -> Self {
+    fn new(p: LightPinConfig<P>) -> Self {
+        let on_state = if p.low_active {
+            PinState::Low
+        } else {
+            PinState::High
+        };
         Self {
             state: false,
             on_state,
-            pin,
+            pin: p.pin,
             brightness: 255,
             period: 0,
         }
@@ -110,10 +118,9 @@ macro_rules! impl_led_on_off {
 
 impl<P: OutputPin> LightService<P> {
     pub(crate) fn new(
-        capslock_pin: Option<P>,
-        scrolllock_pin: Option<P>,
-        numslock_pin: Option<P>,
-        on_state: PinState,
+        capslock_pin: Option<LightPinConfig<P>>,
+        scrolllock_pin: Option<LightPinConfig<P>>,
+        numslock_pin: Option<LightPinConfig<P>>,
     ) -> Self {
         let mut enabled = true;
         if capslock_pin.is_none() && scrolllock_pin.is_none() && numslock_pin.is_none() {
@@ -122,9 +129,9 @@ impl<P: OutputPin> LightService<P> {
         Self {
             enabled,
             led_indicator_data: [0; 1],
-            capslock: capslock_pin.map(|p| SingleLED::new(p, on_state)),
-            scrolllock: scrolllock_pin.map(|p| SingleLED::new(p, on_state)),
-            numslock: numslock_pin.map(|p| SingleLED::new(p, on_state)),
+            capslock: capslock_pin.map(|p| SingleLED::new(p)),
+            scrolllock: scrolllock_pin.map(|p| SingleLED::new(p)),
+            numslock: numslock_pin.map(|p| SingleLED::new(p)),
         }
     }
 
@@ -141,13 +148,13 @@ impl<P: OutputPin> LightService<P> {
             led_indicator_data: [0; 1],
             capslock: light_config
                 .capslock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
             scrolllock: light_config
                 .scrolllock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
             numslock: light_config
                 .numslock
-                .map(|p| SingleLED::new(p, light_config.on_state)),
+                .map(|p| SingleLED::new(p)),
         }
     }
 }
@@ -158,9 +165,9 @@ impl<P: OutputPin> LightService<P> {
     impl_led_on_off!(numslock, set_numslock);
 
     pub(crate) fn set_leds(&mut self, led_indicator: LedIndicator) -> Result<(), P::Error> {
-        self.set_capslock(led_indicator.capslock)?;
-        self.set_numslock(led_indicator.numslock)?;
-        self.set_scrolllock(led_indicator.scrolllock)?;
+        self.set_capslock(led_indicator.capslock())?;
+        self.set_numslock(led_indicator.numslock())?;
+        self.set_scrolllock(led_indicator.scrolllock())?;
 
         Ok(())
     }
@@ -178,17 +185,9 @@ impl<P: OutputPin> LightService<P> {
         }
         match keyboard_hid_reader.read(&mut self.led_indicator_data).await {
             Ok(_) => {
-                match LedIndicator::unpack_from_slice(&self.led_indicator_data) {
-                    Ok(indicator) => {
-                        debug!("Read keyboard state: {:?}", indicator);
-                        // Ignore the error, which is `Infallible` in most cases
-                        self.set_leds(indicator).map_err(|_| ())
-                    }
-                    Err(_) => {
-                        error!("packing error: {:b}", self.led_indicator_data[0]);
-                        Err(())
-                    }
-                }
+                let indicator = LedIndicator::from_bits(self.led_indicator_data[0]);
+                debug!("Read keyboard state: {:?}", indicator);
+                self.set_leds(indicator).map_err(|_| ())
             }
             Err(e) => {
                 error!("Read keyboard state error: {}", e);

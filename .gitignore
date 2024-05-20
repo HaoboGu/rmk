@@ -13,3 +13,6 @@ rmk/Cargo.lock
 
 # mdbook site
 docs/book
+
+# esp idf build files
+.embuild

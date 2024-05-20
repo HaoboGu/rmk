@@ -1,6 +1,5 @@
 use super::{protocol::*, vial::process_vial};
 use crate::{
-    config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keymap::KeyMap,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
@@ -12,6 +11,7 @@ use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use num_enum::{FromPrimitive, TryFromPrimitive};
+use rmk_config::VialConfig;
 
 pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     // VialService holds a reference of keymap, for updating
@@ -87,7 +87,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                     Ok(v) => match v {
                         ViaKeyboardInfo::Uptime => {
-                            let value = Instant::now().as_ticks() as u32;
+                            let value = Instant::now().as_millis() as u32;
                             BigEndian::write_u32(&mut report.input_data[2..6], value);
                         }
                         ViaKeyboardInfo::LayoutOptions => {

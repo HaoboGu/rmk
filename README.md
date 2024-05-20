@@ -5,28 +5,35 @@
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 [![Discord](https://img.shields.io/discord/1166665039793639424?label=discord)](https://discord.gg/HHGA7pQxkG)
 
+[中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
+
 A feature-rich Rust keyboard firmware. 
 
 ## Features
 
-- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nrf/rp2040
-- **Real-time keymap editing**: Keyboard layout can be customized at the compile-time with real-time keymap editing using [vial](https://get.vial.today)
+- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nrf/rp2040/esp32
+- **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
-- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 microcontrollers, tested on nrf52840
+- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
+- **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 
 ## News
 
-- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has beed added to RMK! Checkout [boards/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52840_ble/src/main.rs) and [boards/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/boards/nrf52832_ble/src/main.rs) for details.
+- [2024.05.01] RMK's new configuration system is available at main branch! This new feature brings a totally new way to build your keyboard firmware: using a config file `keyboard.toml`. The document can be found [here](https://haobogu.github.io/rmk/configuration.html), you can also check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
 
-- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/boards/stm32h7/build.rs) for generating vial config, minor API update and a brand new [user documentation page](https://haobogu.github.io/rmk).
+- [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
 
 <details>
 
-<summary>Click to checkout more news</summary>
+<summary>Click to check out more news</summary>
+
+- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has been added to RMK! Checkout [`examples/use_rust/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) and [`examples/use_rust/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) for details.
+
+- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand-new [user documentation page](https://haobogu.github.io/rmk).
 
 - [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
 
-- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`boards`](https://github.com/HaoboGu/rmk/tree/main/boards) folder!
+- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder!
 
 </details>
 
@@ -48,8 +55,8 @@ Then follow the steps in generated `README.md`. Check RMK's [User Guide](https:/
 
 ### Option 2: Try built-in examples
 
-Example can be found at [`boards`](https://github.com/HaoboGu/rmk/blob/main/boards). The following is a simple
-step-to-step instruction for rp2040 and stm32h7
+Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples). The following is a simple
+step-to-step instruction for rp2040. For other microcontrollers, the steps should be identical with a debug probe.
 
 #### rp2040
 
@@ -62,23 +69,25 @@ step-to-step instruction for rp2040 and stm32h7
 2. Build the firmware
 
    ```shell
-   cd boards/rp2040
+   cd examples/use_rust/rp2040
    cargo build
    ```
 
-3. Flash
+3. Flash using debug probe
 
-   If your rp2040 board is connected with a debugging probe, just use the following command to flash RMK firmware to the board:
+   If you have a debug probe connected to your rp2040 board, flashing is quite simple: run the following command to automatically compile and flash RMK firmware to the board:
 
    ```shell
-   cd boards/rp2040
+   cd examples/use_rust/rp2040
    cargo run
    ```
 
-   If you don't have a debugging probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
+4. (Optional) Flash using USB
+
+   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
 
    1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
-   2. Update `boards/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
+   2. Update `examples/use_rust/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool
       ```diff
       - runner = "probe-rs run --chip RP2040"
       + runner = "elf2uf2-rs -d"
@@ -86,7 +95,7 @@ step-to-step instruction for rp2040 and stm32h7
    3. Connect your rp2040 board holding the BOOTSEL key, ensure that rp's USB drive appears
    4. Flash
       ```shell
-      cd boards/rp2040
+      cd examples/use_rust/rp2040
       cargo run
       ```
       Then, you will see logs like if everything goes right:
@@ -98,42 +107,13 @@ step-to-step instruction for rp2040 and stm32h7
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
 
-#### stm32h7
-
-1. Install [openocd](https://github.com/openocd-org/openocd)
-
-2. Build the firmware
-
-   ```shell
-   cd boards/stm32h7
-   cargo build
-   ```
-
-3. Flash
-
-   Make sure you have a debugging probe connected to your board. You can use both `probe-rs` and `openocd` to flash the firmware: 
-
-   ```shell
-   # Use openocd
-   openocd -f openocd.cfg -c "program target/thumbv7em-none-eabihf/debug/rmk-stm32h7 preverify verify reset exit"
-   
-   # Use probe-rs
-   cd boards/stm32h7
-   cargo run
-   ```
-
-4. (Optional) Debug firmware using CMSIS-DAP
-
-   Open the project using VSCode, choose `Cortex-Debug - stm32h7` debug profile, then press `F5`, the firmware will be automatically compiled and flashed. A debug session is started after flashing.
-   Check [`.vscode/tasks.json`](https://github.com/HaoboGu/rmk/blob/main/.vscode/tasks.json) and [`.vscode/launch.json`](https://github.com/HaoboGu/rmk/blob/main/.vscode/launch.json) for details.
-
 ## [Roadmap](https://haobogu.github.io/rmk/roadmap.html)
 
 Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap.html).
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate requires stable Rust 1.75 and up. 
+This crate requires stable Rust 1.77 and up. 
 
 ## License
 

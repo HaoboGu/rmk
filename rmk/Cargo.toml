@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.1.9"
+version = "0.1.14"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,6 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
+rmk-config = { version = "0.1" }
+rmk-macro = { version = "0.1" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
@@ -30,18 +32,18 @@ embassy-executor = { version = "0.5", features = ["defmt"] }
 usbd-hid = { version = "0.6.1", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
-log = "0.4"
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
-packed_struct = { version = "0.10", default-features = false }
+bitfield-struct = "0.6"
 byteorder = { version = "1.4", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "1.0", features = ["defmt-03"] }
+sequential-storage = { version = "2.0", features = ["defmt-03"] }
 
 # Optional dependencies
+# nRF dependencies
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
-], default-features = false, optional = true}
+], default-features = false, optional = true }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
     "defmt",
     "ble-peripheral",
@@ -56,23 +58,47 @@ embassy-nrf = { version = "0.1.0", features = [
     "time",
 ], optional = true }
 
+# Espressif dependencies
+esp32-nimble = { version = "0.6.0", optional = true }
+esp-idf-svc = { version = "0.48", default-features = false, optional = true }
+
+# Document feature
+document-features = "0.2"
+
 [features]
-# default = ["eeprom", "col2row", "nrf52840_ble"]
-default = ["eeprom", "col2row"]
+default = ["col2row"]
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
-eeprom = []
-ble = ["dep:nrf-softdevice"]
+
+#! ##### BLE feature flags
+#! 
+#! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
+## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
-    "ble",
+    "_nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52840",
     "nrf-softdevice/s140",
 ]
+## Enable feature if you want to use nRF52832 with BLE.
 nrf52832_ble = [
-    "ble",
+    "_nrf_ble",
     "dep:embassy-nrf",
     "dep:once_cell",
     "nrf-softdevice/nrf52832",
     "nrf-softdevice/s132",
 ]
+## Enable feature if you want to use ESP32C3 with BLE.
+esp32c3_ble = ["_esp_ble"]
+## Enable feature if you want to use ESP32S3 with BLE.
+esp32s3_ble = ["_esp_ble"]
+_esp_ble = [
+    "_ble",
+    "rmk-config/_esp_ble",
+    "ssmarshal/std",
+    "dep:esp32-nimble",
+    "dep:esp-idf-svc",
+]
+_nrf_ble = ["_ble", "rmk-config/_nrf_ble", "dep:nrf-softdevice"]
+_ble = []

@@ -6,7 +6,7 @@ use crate::{
     matrix::{KeyState, Matrix},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
-use core::{cell::RefCell, convert::Infallible};
+use core::cell::RefCell;
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -16,8 +16,8 @@ pub(crate) async fn keyboard_task<
     'a,
     W: HidWriterWrapper,
     W2: HidWriterWrapper,
-    In: InputPin<Error = Infallible>,
-    Out: OutputPin<Error = Infallible>,
+    In: InputPin,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -84,17 +84,18 @@ pub(crate) struct Keyboard<
 
 impl<
         'a,
-        In: InputPin<Error = Infallible>,
-        Out: OutputPin<Error = Infallible>,
+        In: InputPin,
+        Out: OutputPin,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
     > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
 {
-    #[cfg(feature = "col2row")]
     pub(crate) fn new(
-        input_pins: [In; ROW],
-        output_pins: [Out; COL],
+        #[cfg(feature = "col2row")] input_pins: [In; ROW],
+        #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+        #[cfg(feature = "col2row")] output_pins: [Out; COL],
+        #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
         keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Keyboard {
@@ -118,33 +119,6 @@ impl<
             last_mouse_tick: 0,
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
-        }
-    }
-
-    #[cfg(not(feature = "col2row"))]
-    pub(crate) fn new(
-        input_pins: [In; COL],
-        output_pins: [Out; ROW],
-        keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    ) -> Self {
-        Keyboard {
-            matrix: Matrix::new(input_pins, output_pins),
-            keymap,
-            report: KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0; 6],
-            },
-            other_report: CompositeReport::default(),
-            via_report: ViaReport {
-                input_data: [0; 32],
-                output_data: [0; 32],
-            },
-            need_send_key_report: false,
-            need_send_consumer_control_report: false,
-            need_send_system_control_report: false,
-            need_send_mouse_report: false,
         }
     }
 
@@ -235,9 +209,9 @@ impl<
 
     /// Main keyboard task, it scans matrix, processes active keys
     /// If there is any change of key states, set self.changed=true
-    pub(crate) async fn scan_matrix(&mut self) -> Result<(), Infallible> {
+    pub(crate) async fn scan_matrix(&mut self) {
         // Matrix scan
-        self.matrix.scan().await?;
+        self.matrix.scan().await;
 
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
@@ -250,8 +224,6 @@ impl<
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Process key changes at (row, col)

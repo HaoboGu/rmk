@@ -1,38 +1,52 @@
+use bitfield_struct::bitfield;
 use defmt::Format;
 use num_enum::FromPrimitive;
-use packed_struct::prelude::*;
-use usbd_hid::descriptor::{MediaKey, SystemControlKey};
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
 ///
-/// | bit0 | bit1 | bit2 | bit3 | bit4 |
+/// | bit4 | bit3 | bit2 | bit1 | bit0 |
 /// | --- | --- | --- | --- | --- |  
 /// | L/R | GUI | ALT |SHIFT| CTRL|
-#[derive(PackedStruct, Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
-#[packed_struct(bit_numbering = "lsb0", size_bytes = "1")]
+#[bitfield(u8, order = Lsb)]
+#[derive(Eq, PartialEq)]
 pub struct ModifierCombination {
-    #[packed_field(bits = "0")]
-    ctrl: bool,
-    #[packed_field(bits = "1")]
-    shift: bool,
-    #[packed_field(bits = "2")]
-    alt: bool,
-    #[packed_field(bits = "3")]
-    gui: bool,
-    #[packed_field(bits = "4")]
-    right: bool,
+    #[bits(1)]
+    pub(crate) ctrl: bool,
+    #[bits(1)]
+    pub(crate) shift: bool,
+    #[bits(1)]
+    pub(crate) alt: bool,
+    #[bits(1)]
+    pub(crate) gui: bool,
+    #[bits(1)]
+    pub(crate) right: bool,
+    #[bits(3)]
+    _reserved: u8,
+}
+
+impl Format for ModifierCombination {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "ModifierCombination {{ ctrl: {=bool}, shift: {=bool}, alt: {=bool}, gui: {=bool}, right: {=bool} }}",
+            self.ctrl(),
+            self.shift(),
+            self.alt(),
+            self.gui(),
+            self.right()
+        )
+    }
 }
 
 impl ModifierCombination {
-    pub(crate) fn new(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
-        ModifierCombination {
-            ctrl,
-            shift,
-            alt,
-            gui,
-            right,
-        }
+    pub(crate) fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
+        ModifierCombination::new()
+            .with_right(right)
+            .with_gui(gui)
+            .with_alt(alt)
+            .with_shift(shift)
+            .with_ctrl(ctrl)
     }
 
     /// Convert modifier combination to a list of modifier keycodes.
@@ -40,37 +54,37 @@ impl ModifierCombination {
     pub(crate) fn to_modifier_keycodes(self) -> ([KeyCode; 8], usize) {
         let mut keycodes = [KeyCode::No; 8];
         let mut i = 0;
-        if self.right {
-            if self.ctrl {
+        if self.right() {
+            if self.ctrl() {
                 keycodes[i] = KeyCode::LCtrl;
                 i += 1;
             }
-            if self.shift {
+            if self.shift() {
                 keycodes[i] = KeyCode::LShift;
                 i += 1;
             }
-            if self.alt {
+            if self.alt() {
                 keycodes[i] = KeyCode::LAlt;
                 i += 1;
             }
-            if self.gui {
+            if self.gui() {
                 keycodes[i] = KeyCode::LGui;
                 i += 1;
             }
         } else {
-            if self.ctrl {
+            if self.ctrl() {
                 keycodes[i] = KeyCode::RCtrl;
                 i += 1;
             }
-            if self.shift {
+            if self.shift() {
                 keycodes[i] = KeyCode::RShift;
                 i += 1;
             }
-            if self.alt {
+            if self.alt() {
                 keycodes[i] = KeyCode::RAlt;
                 i += 1;
             }
-            if self.gui {
+            if self.gui() {
                 keycodes[i] = KeyCode::RGui;
                 i += 1;
             }
@@ -86,22 +100,90 @@ impl ModifierCombination {
         for item in keycodes.iter().take(n) {
             hid_modifier_bits |= item.as_modifier_bit();
         }
-        // for i in 0..n {
-            // hid_modifier_bits |= keycodes[i].as_modifier_bit();
-        // }
 
         hid_modifier_bits
     }
+}
 
-    /// Convert modifier combination to bits
-    pub(crate) fn to_bits(self) -> u8 {
-        ModifierCombination::pack(&self).unwrap_or_default()[0]
-    }
+/// Keys in consumer page
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
+#[non_exhaustive]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[repr(u16)]
+pub enum ConsumerKey {
+    #[num_enum(default)]
+    Zero = 0x00,
+    // 15.5 Display Controls
+    SnapShot = 0x65,
+    /// <https://www.usb.org/sites/default/files/hutrr41_0.pdf>
+    BrightnessUp = 0x6F,
+    BrightnessDown = 0x70,
+    // 15.7 Transport Controls
+    Play = 0xB0,
+    Pause = 0xB1,
+    Record = 0xB2,
+    FastForward = 0xB3,
+    Rewind = 0xB4,
+    NextTrack = 0xB5,
+    PrevTrack = 0xB6,
+    StopPlay = 0xB7,
+    Eject = 0xB8,
+    RandomPlay = 0xB9,
+    Repeat = 0xBC,
+    StopEject = 0xCC,
+    PlayPause = 0xCD,
+    // 15.9.1 Audio Controls - Volume
+    Mute = 0xE2,
+    VolumeIncrement = 0xE9,
+    VolumeDecrement = 0xEA,
+    Reserved = 0xEB,
+    // 15.15 Application Launch Buttons
+    Email = 0x18A,
+    Calculator = 0x192,
+    LocalBrowser = 0x194,
+    Lock = 0x19E,
+    ControlPanel = 0x19F,
+    Assistant = 0x1CB,
+    // 15.16 Generic GUI Application Controls
+    New = 0x201,
+    Open = 0x202,
+    Close = 0x203,
+    Exit = 0x204,
+    Maximize = 0x205,
+    Minimize = 0x206,
+    Save = 0x207,
+    Print = 0x208,
+    Properties = 0x209,
+    Undo = 0x21A,
+    Copy = 0x21B,
+    Cut = 0x21C,
+    Paste = 0x21D,
+    SelectAll = 0x21E,
+    Find = 0x21F,
+    Search = 0x221,
+    Home = 0x223,
+    Back = 0x224,
+    Forward = 0x225,
+    Stop = 0x226,
+    Refresh = 0x227,
+    Bookmarks = 0x22A,
+    NextKeyboardLayoutSelect = 0x29D,
+    DesktopShowAllWindows = 0x29F,
+    AcSoftKeyLeft = 0x2A0,
+}
 
-    /// Convert from bits
-    pub(crate) fn from_bits(bits: u8) -> Self {
-        ModifierCombination::unpack_from_slice(&[bits]).unwrap_or_default()
-    }
+/// Keys in `Generic Desktop Page`, generally used for system control
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
+#[non_exhaustive]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[repr(u16)]
+pub enum SystemControlKey {
+    #[num_enum(default)]
+    Zero = 0x00,
+    PowerDown = 0x81,
+    Sleep = 0x82,
+    WakeUp = 0x83,
+    Restart = 0x8F,
 }
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
@@ -925,26 +1007,36 @@ impl KeyCode {
     }
 
     /// Convert a keycode to usb hid media key
-    pub(crate) fn as_consumer_control_usage_id(self) -> MediaKey {
+    pub(crate) fn as_consumer_control_usage_id(self) -> ConsumerKey {
         match self {
-            KeyCode::AudioMute => MediaKey::Mute,
-            KeyCode::AudioVolUp => MediaKey::VolumeIncrement,
-            KeyCode::AudioVolDown => MediaKey::VolumeDecrement,
-            KeyCode::MediaNextTrack => MediaKey::NextTrack,
-            KeyCode::MediaPrevTrack => MediaKey::PrevTrack,
-            KeyCode::MediaStop => MediaKey::Stop,
-            KeyCode::MediaPlayPause => MediaKey::PlayPause,
-            KeyCode::MediaSelect => MediaKey::Record,
-            // KeyCode::MediaEject => None,
-            // KeyCode::MediaFastForward => None,
-            // KeyCode::MediaRewind => None,
-            // KeyCode::BrightnessUp => MediaKey::BrightnessUp,
-            // KeyCode::BrightnessDown => MediaKey::BrightnessDown,
-            // KeyCode::ControlPanel => None,
-            // KeyCode::Assistant => None,
-            // KeyCode::MissionControl => None,
-            // KeyCode::Launchpad => None,
-            _ => MediaKey::Zero,
+            KeyCode::AudioMute => ConsumerKey::Mute,
+            KeyCode::AudioVolUp => ConsumerKey::VolumeIncrement,
+            KeyCode::AudioVolDown => ConsumerKey::VolumeDecrement,
+            KeyCode::MediaNextTrack => ConsumerKey::NextTrack,
+            KeyCode::MediaPrevTrack => ConsumerKey::PrevTrack,
+            KeyCode::MediaStop => ConsumerKey::StopPlay,
+            KeyCode::MediaPlayPause => ConsumerKey::PlayPause,
+            KeyCode::MediaSelect => ConsumerKey::Record,
+            KeyCode::MediaEject => ConsumerKey::Eject,
+            KeyCode::Mail => ConsumerKey::Email,
+            KeyCode::Calculator => ConsumerKey::Calculator,
+            KeyCode::MyComputer => ConsumerKey::LocalBrowser,
+            KeyCode::WwwSearch => ConsumerKey::Search,
+            KeyCode::WwwHome => ConsumerKey::Home,
+            KeyCode::WwwBack => ConsumerKey::Back,
+            KeyCode::WwwForward => ConsumerKey::Forward,
+            KeyCode::WwwStop => ConsumerKey::Stop,
+            KeyCode::WwwRefresh => ConsumerKey::Refresh,
+            KeyCode::WwwFavorites => ConsumerKey::Bookmarks,
+            KeyCode::MediaFastForward => ConsumerKey::FastForward,
+            KeyCode::MediaRewind => ConsumerKey::Rewind,
+            KeyCode::BrightnessUp => ConsumerKey::BrightnessUp,
+            KeyCode::BrightnessDown => ConsumerKey::BrightnessDown,
+            KeyCode::ControlPanel => ConsumerKey::ControlPanel,
+            KeyCode::Assistant => ConsumerKey::Assistant,
+            KeyCode::MissionControl => ConsumerKey::DesktopShowAllWindows,
+            KeyCode::Launchpad => ConsumerKey::AcSoftKeyLeft,
+            _ => ConsumerKey::Zero,
         }
     }
 
