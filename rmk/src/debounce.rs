@@ -28,6 +28,15 @@ impl DebounceCounter {
     }
 }
 
+/// Debounce state
+pub(crate) enum DebounceState {
+    Debounced,
+    InProgress,
+    HeldHigh,
+    HeldLow,
+    Ignored,
+}
+
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/19613128b901723f7b78c136792d72e6ca7cf4fc/app/module/lib/zmk_debounce/debounce.c)
 pub(crate) struct Debouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_tick: u32,
@@ -52,7 +61,10 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
         out_idx: usize,
         pin_state: bool,
         key_state: &KeyState,
-    ) -> bool {
+    ) -> DebounceState {
+        // Use 10khz tick, so the debounce threshold should * 10
+        const TICK_FREQUENCY: u16 = 10;
+
         // Record debounce state per ms
         let cur_tick = Instant::now().as_millis() as u32;
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
@@ -61,19 +73,26 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
             let counter: &mut DebounceCounter = &mut self.counters[out_idx][in_idx];
 
             if key_state.pressed == pin_state {
+                // If current key state matches input pin, decrease debounce counter
                 counter.decrease(elapsed_ms);
-            } else {
-                // Use 10khz tick, so the debounce threshold should * 10
-                if counter.0 < DEBOUNCE_THRESHOLD * 10 {
-                    counter.increase(elapsed_ms);
+                if pin_state {
+                    DebounceState::HeldHigh
                 } else {
-                    self.last_tick = cur_tick;
-                    counter.0 = 0;
-                    return true;
+                    DebounceState::HeldLow
                 }
+            } else if counter.0 < DEBOUNCE_THRESHOLD * TICK_FREQUENCY {
+                // If debounce threshold is not exceeded, increase debounce counter
+                counter.increase(elapsed_ms);
+                DebounceState::InProgress
+            } else {
+                // Debounce threshold is exceeded, reset counter
+                self.last_tick = cur_tick;
+                counter.0 = 0;
+                DebounceState::Debounced
             }
+        } else {
+            DebounceState::Ignored
         }
-        false
     }
 }
 
