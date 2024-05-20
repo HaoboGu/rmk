@@ -54,7 +54,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
         key_state: &KeyState,
     ) -> bool {
         // Record debounce state per ms
-        let cur_tick = Instant::now().as_ticks() as u32;
+        let cur_tick = Instant::now().as_millis() as u32;
         let elapsed_ms = (cur_tick - self.last_tick) as u16;
 
         if elapsed_ms > 0 {

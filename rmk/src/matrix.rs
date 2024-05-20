@@ -34,7 +34,7 @@ impl KeyState {
         self.hold_start = Some(Instant::now());
     }
 
-    // Calcuate held time
+    // Calculate held time
     fn elapsed(&self) -> Option<Duration> {
         match self.hold_start {
             Some(t) => Instant::now().checked_duration_since(t),
