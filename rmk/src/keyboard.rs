@@ -6,6 +6,10 @@ use crate::{
     matrix::{KeyState, Matrix},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
 use core::cell::RefCell;
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
@@ -44,10 +48,14 @@ pub(crate) struct Keyboard<
     const NUM_LAYER: usize,
 > {
     /// Keyboard matrix, use COL2ROW by default
-    #[cfg(feature = "col2row")]
-    pub(crate) matrix: Matrix<In, Out, ROW, COL>,
-    #[cfg(not(feature = "col2row"))]
-    matrix: Matrix<In, Out, COL, ROW>,
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    pub(crate) matrix: Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    pub(crate) matrix: Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    pub(crate) matrix: Matrix<In, Out, RapidDebouncer<COL, ROW>, COL, ROW>,
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    pub(crate) matrix: Matrix<In, Out, DefaultDebouncer<COL, ROW>, COL, ROW>,
 
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,

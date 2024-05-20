@@ -1,7 +1,7 @@
-use crate::debounce::{DebounceState, Debouncer};
+use crate::debounce::{DebounceState, DebouncerTrait};
+use defmt::Format;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
-use defmt::Format;
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
@@ -56,6 +56,7 @@ impl KeyState {
 pub struct Matrix<
     In: InputPin,
     Out: OutputPin,
+    D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
 > {
@@ -64,20 +65,26 @@ pub struct Matrix<
     /// Output pins of the pcb matrix
     output_pins: [Out; OUTPUT_PIN_NUM],
     /// Debouncer
-    debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
+    // debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
+    debouncer: D,
     /// Key state matrix
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<In: InputPin, Out: OutputPin, const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
-    Matrix<In, Out, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<
+        In: InputPin,
+        Out: OutputPin,
+        D: DebouncerTrait,
+        const INPUT_PIN_NUM: usize,
+        const OUTPUT_PIN_NUM: usize,
+    > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {
         Matrix {
             input_pins,
             output_pins,
-            debouncer: Debouncer::new(),
+            debouncer: D::new(),
             key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
         }
     }

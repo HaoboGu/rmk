@@ -66,9 +66,12 @@ esp-idf-svc = { version = "0.48", default-features = false, optional = true }
 document-features = "0.2"
 
 [features]
-default = ["col2row"]
+default = ["col2row", "rapid_debouncer"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
+
+## Use rapid debouncer
+rapid_debouncer = []
 
 #! ##### BLE feature flags
 #! 
