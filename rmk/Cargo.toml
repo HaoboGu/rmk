@@ -29,7 +29,7 @@ embassy-sync = { version = "0.5", features = ["defmt"] }
 embassy-futures = { version = "0.1", features = ["defmt"] }
 embassy-executor = { version = "0.5", features = ["defmt"] }
 
-usbd-hid = { version = "0.6.1", features = ["defmt"] }
+usbd-hid = { version = "0.7.0", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
 static_cell = "2"
