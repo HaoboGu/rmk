@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-stm32f4"
-version = "0.1.12"
+version = "0.1.14"
 dependencies = [
  "const-gen",
  "cortex-m",

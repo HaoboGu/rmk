@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52840"
-version = "0.1.12"
+version = "0.1.14"
 dependencies = [
  "const-gen",
  "cortex-m",
