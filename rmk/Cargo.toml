@@ -18,7 +18,7 @@ embedded-storage = "0.3"
 embedded-storage-async = "0.4"
 embassy-embedded-hal = { version = "0.1" }
 embassy-time = { version = "0.3", features = ["defmt"] }
-embassy-usb = { version = "0.1", features = [
+embassy-usb = { version = "0.2", features = [
     "defmt",
     "usbd-hid",
     "max-interface-count-8",
