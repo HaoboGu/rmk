@@ -6,7 +6,6 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
-#![cfg_attr(no_std, not(target_os = "espidf"))]
 
 #[cfg(feature = "_esp_ble")]
 pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
