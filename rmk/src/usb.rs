@@ -75,7 +75,6 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.composite_with_iads = true;
 
         // Create embassy-usb DeviceBuilder using the driver and config.
-        static DEVICE_DESC: StaticCell<[u8; 256]> = StaticCell::new();
         static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
         static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
         static MSOS_DESC: StaticCell<[u8; 128]> = StaticCell::new();
@@ -85,7 +84,6 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let mut builder = Builder::new(
             driver,
             usb_config,
-            &mut DEVICE_DESC.init([0; 256])[..],
             &mut CONFIG_DESC.init([0; 256])[..],
             &mut BOS_DESC.init([0; 256])[..],
             &mut MSOS_DESC.init([0; 128])[..],
@@ -99,9 +97,10 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         static request_handler: UsbRequestHandler = UsbRequestHandler {};
 
         // Initialize two hid interfaces: keyboard & via
+        static keyboard_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let keyboard_hid_config = Config {
             report_descriptor: KeyboardReport::desc(),
-            request_handler: Some(&request_handler),
+            request_handler: Some(keyboard_request_handler.init(UsbRequestHandler {})),
             poll_ms: 1,
             max_packet_size: 64,
         };
@@ -112,9 +111,10 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             keyboard_hid_config,
         );
 
+        static other_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let other_hid_config = Config {
             report_descriptor: CompositeReport::desc(),
-            request_handler: Some(&request_handler),
+            request_handler: Some(other_request_handler.init(UsbRequestHandler {})),
             poll_ms: 1,
             max_packet_size: 64,
         };
@@ -125,9 +125,10 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             other_hid_config,
         );
 
+        static via_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let via_config = Config {
             report_descriptor: ViaReport::desc(),
-            request_handler: Some(&request_handler),
+            request_handler: Some(via_request_handler.init(UsbRequestHandler {})),
             poll_ms: 60,
             max_packet_size: 64,
         };
@@ -151,21 +152,21 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
 struct UsbRequestHandler {}
 
 impl RequestHandler for UsbRequestHandler {
-    fn get_report(&self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
+    fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
         info!("Get report for {}", id);
         None
     }
 
-    fn set_report(&self, id: ReportId, data: &[u8]) -> OutResponse {
+    fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
         info!("Set report for {}: {}", id, data);
         OutResponse::Accepted
     }
 
-    fn set_idle_ms(&self, id: Option<ReportId>, dur: u32) {
+    fn set_idle_ms(&mut self, id: Option<ReportId>, dur: u32) {
         info!("Set idle rate for {} to {}", id, dur);
     }
 
-    fn get_idle_ms(&self, id: Option<ReportId>) -> Option<u32> {
+    fn get_idle_ms(&mut self, id: Option<ReportId>) -> Option<u32> {
         info!("Get idle rate for {}", id);
         None
     }
