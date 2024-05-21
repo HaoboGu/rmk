@@ -538,7 +538,8 @@ source = "git+https://github.com/embassy-rs/embassy?rev=4617f6c#4617f6c75422bc8b
 [[package]]
 name = "embassy-usb"
 version = "0.2.0"
-source = "git+https://github.com/embassy-rs/embassy?rev=4617f6c#4617f6c75422bc8bc88071f610d71d67a8400176"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66444f442f4efc155138a996e250821a6d83a0c40e28ce3de8f0d9033617838b"
 dependencies = [
  "defmt",
  "embassy-futures 0.1.1 (git+https://github.com/embassy-rs/embassy?rev=4617f6c)",
@@ -1370,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1751,7 +1752,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98816b1accafbb09085168b90f27e93d790b4bfa19d883466b5e53315b5f06a6"
 dependencies = [
  "defmt",
- "heapless",
+ "heapless 0.8.0",
  "portable-atomic",
 ]
 

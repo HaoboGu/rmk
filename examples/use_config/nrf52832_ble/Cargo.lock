@@ -480,9 +480,9 @@ checksum = "f1177859559ebf42cd24ae7ba8fe6ee707489b01d0bf471f8827b7b12dcb0bc0"
 
 [[package]]
 name = "embassy-usb"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1587e58ed8f7e0215246e6bb8d7ef4837db682e209e5ef7410a81c500dc949e5"
+checksum = "66444f442f4efc155138a996e250821a6d83a0c40e28ce3de8f0d9033617838b"
 dependencies = [
  "defmt",
  "embassy-futures",
@@ -1103,7 +1103,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52832-ble"
-version = "0.1.12"
+version = "0.1.14"
 dependencies = [
  "const-gen",
  "cortex-m",
@@ -1395,18 +1395,20 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "usb-device"
-version = "0.2.9"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
+checksum = "98816b1accafbb09085168b90f27e93d790b4bfa19d883466b5e53315b5f06a6"
 dependencies = [
  "defmt",
+ "heapless 0.8.0",
+ "portable-atomic",
 ]
 
 [[package]]
 name = "usbd-hid"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975bd411f4a939986751ea09992a24fa47c4d25c6ed108d04b4c2999a4fd0132"
+checksum = "41a2d4546ca3e6a5c6a85584e5caf29feabf3ec35d6cd6b772eb35bd3cff7256"
 dependencies = [
  "defmt",
  "serde",
