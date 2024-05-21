@@ -65,7 +65,6 @@ pub struct Matrix<
     /// Output pins of the pcb matrix
     output_pins: [Out; OUTPUT_PIN_NUM],
     /// Debouncer
-    // debouncer: Debouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>,
     debouncer: D,
     /// Key state matrix
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
