@@ -56,11 +56,11 @@ Besides the above choosing, there's some other problems that have to be addresse
 
     - ✅ proc_macro can do this
 
-3. There are some other peripherals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so there're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many peripherals?
+3. There are some other peripherals are commonly used in keyboards, such as spi, i2c, pwm and adc. There are some HAL traits for spi/i2c, so they're good. But for adc, there is no common trait AFAIK. For example, in `embassy-nrf`, it's called `SAADC` and it does not impl any external trait! How to be compatible with so many peripherals?
     - To be addressed
-    - Temporary solution: add initialzations code per chip
+    - Temporary solution: add initializations code per chip
 
-4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
+4. What if the config in toml is conflict with feature gate in `Cargo.toml`? Move some of the configs to `Cargo.toml`, or put them all in config file and update feature gate by config?
     - ✅ bin project's `Cargo.toml` can be loaded and parsed at compile-time
 
 

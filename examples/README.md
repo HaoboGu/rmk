@@ -8,6 +8,6 @@ RMK provides two ways to create your firmware:
 
 The toml configuration + macro way is super easy to use, everything is configured in `keyboard.toml`, no Rust code required.
 
-The second way suits for people who want flexibility and extendability and are comfortable with writing Rust code. 
+The second way suits for people who want flexibility and extendability and are comfortable writing Rust code. 
 
 RMK provides examples for both way, check out the [use_config](https://github.com/HaoboGu/rmk/tree/main/examples/use_config) and [use_rust](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) folder in examples.

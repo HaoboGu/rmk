@@ -36,7 +36,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 
 #### User experience
   - [x] vial support
-  - [ ] 🔴🔵 GUI configurator which supports windos/macos/linux/web
+  - [ ] 🔴🔵 GUI configurator which supports windows/macos/linux/web
   - [ ] default bootloader
   - [ ] USB DFU/OTA
   - [ ] 🔴 easy keyboard configuration with good default, support different MCUs

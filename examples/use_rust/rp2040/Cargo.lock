@@ -1277,7 +1277,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1306,6 +1306,8 @@ dependencies = [
 [[package]]
 name = "rmk-config"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7080dc0b7e07c9053ddfa25c8ce5a3ef103fbc6e66af5e9162b541a1fc2dde8"
 dependencies = [
  "embedded-hal 1.0.0",
  "serde",
@@ -1315,6 +1317,8 @@ dependencies = [
 [[package]]
 name = "rmk-macro"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f731a9a7847d770149ea570e706276962bd63c482c3a067a51ca3f356e57854b"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -1432,8 +1436,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "2.0.0"
-source = "git+https://github.com/tweedegolf/sequential-storage?rev=4dedc23#4dedc236b118173892c8a4160225ec3fe1823718"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d25123e754473ed08bcc4e0ef61f0a733662872885e533ffdf03771119712fc"
 dependencies = [
  "defmt",
  "embedded-storage-async",
