@@ -57,7 +57,7 @@ pub(crate) fn rmk_entry_default(
     };
     match chip.series {
         ChipSeries::Stm32 => quote! {
-            ::rmk::initialize_keyboard_with_config_and_run::<
+            ::rmk::initialize_keyboard_and_run::<
                 ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
                 ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
                 ::embassy_stm32::gpio::Input<'_, ::embassy_stm32::gpio::AnyPin>,
@@ -79,7 +79,7 @@ pub(crate) fn rmk_entry_default(
             match communication_type {
                 CommunicationType::Usb => {
                     quote! {
-                    ::rmk::initialize_keyboard_with_config_and_run::<
+                    ::rmk::initialize_keyboard_and_run::<
                         ::embassy_nrf::nvmc::Nvmc,
                         ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect>,
                         ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
@@ -135,7 +135,7 @@ pub(crate) fn rmk_entry_default(
             }
         }
         ChipSeries::Rp2040 => quote! {
-            ::rmk::initialize_keyboard_with_config_and_run_async_flash::<
+            ::rmk::initialize_keyboard_and_run_async_flash::<
                 ::embassy_rp::flash::Flash<::embassy_rp::peripherals::FLASH, ::embassy_rp::flash::Async, FLASH_SIZE>,
                 ::embassy_rp::usb::Driver<'_, ::embassy_rp::peripherals::USB>,
                 ::embassy_rp::gpio::Input<'_, ::embassy_rp::gpio::AnyPin>,

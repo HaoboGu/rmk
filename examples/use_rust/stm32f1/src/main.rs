@@ -18,7 +18,7 @@ use embassy_stm32::{
     Config,
 };
 use panic_halt as _;
-use rmk::initialize_keyboard_and_run;
+use rmk::{initialize_keyboard_and_run, config::{RmkConfig, VialConfig}};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 #[defmt::global_logger]
@@ -53,12 +53,18 @@ async fn main(_spawner: Spawner) {
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);
 
+    // Keyboard config
+    let keyboard_config = RmkConfig {
+        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF),
+        ..Default::default()
+    };
+
     // Start serving
     initialize_keyboard_and_run::<
+        Flash<'_, Blocking>,
         Driver<'_, USB>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        Flash<'_, Blocking>,
         ROW,
         COL,
         NUM_LAYER,
@@ -68,8 +74,7 @@ async fn main(_spawner: Spawner) {
         output_pins,
         Some(f),
         crate::keymap::KEYMAP,
-        &VIAL_KEYBOARD_ID,
-        &VIAL_KEYBOARD_DEF,
+        keyboard_config,
     )
     .await;
 }

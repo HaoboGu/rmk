@@ -19,7 +19,7 @@ use embassy_nrf::{
     usb::{self, vbus_detect::HardwareVbusDetect, Driver},
 };
 use panic_probe as _;
-use rmk::initialize_keyboard_and_run;
+use rmk::{initialize_keyboard_and_run, config::{RmkConfig, VialConfig}};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -51,12 +51,18 @@ async fn main(_spawner: Spawner) {
     // Use internal flash to emulate eeprom
     let f = Nvmc::new(p.NVMC);
 
+    // Keyboard config
+    let keyboard_config = RmkConfig {
+        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF,),
+        ..Default::default()
+    };
+
     // Start serving
     initialize_keyboard_and_run::<
+        Nvmc,
         Driver<'_, USBD, HardwareVbusDetect>,
         Input<'_, AnyPin>,
         Output<'_, AnyPin>,
-        Nvmc,
         ROW,
         COL,
         NUM_LAYER,
@@ -66,8 +72,7 @@ async fn main(_spawner: Spawner) {
         output_pins,
         Some(f),
         crate::keymap::KEYMAP,
-        VIAL_KEYBOARD_ID,
-        VIAL_KEYBOARD_DEF,
+        keyboard_config,
     )
     .await;
 }
