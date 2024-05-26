@@ -44,10 +44,9 @@ sequential-storage = { version = "2.0", features = ["defmt-03"] }
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
 ], default-features = false, optional = true }
-nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "cdee83c", features = [
+nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "d5f023b", features = [
     "defmt",
     "ble-peripheral",
-    "ble-central",
     "critical-section-impl",
     "ble-gatt-server",
     "ble-sec",

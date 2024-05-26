@@ -96,7 +96,7 @@ impl SecurityHandler for Bonder {
 
     fn on_bonded(
         &self,
-        _conn: &Connection,
+        conn: &Connection,
         master_id: MasterId,
         key: EncryptionInfo,
         peer_id: IdentityKey,
@@ -125,8 +125,19 @@ impl SecurityHandler for Bonder {
             self.bond_info.borrow_mut().remove(&unlucky);
         } else {
             // Save bond info
+            let mut sys_attr_data: [u8; 62] = [0; 62];
+            let sys_attr_length = get_sys_attrs(conn, &mut sys_attr_data).unwrap();
+            info!(
+                "ON BOND: get sys attr: {}, size:{}",
+                sys_attr_data, sys_attr_length
+            );
+
             let new_bond_info = BondInfo {
-                sys_attr: SystemAttribute::default(),
+                sys_attr: SystemAttribute {
+                    length: sys_attr_length,
+                    data: sys_attr_data,
+                },
+                // sys_attr: SystemAttribute::default(),
                 peer: Peer {
                     master_id,
                     key,
@@ -183,6 +194,8 @@ impl SecurityHandler for Bonder {
                 }
             };
 
+            info!("Saving sys attr to flash: {}, {}", info.sys_attr.data, info.sys_attr.length);
+
             // Correctly get system attr, save to flash
             match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
                 Ok(_) => debug!("Sent bond info to flash channel"),
@@ -205,6 +218,7 @@ impl SecurityHandler for Bonder {
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
+        info!("call set_sys_attrs in load_sys_attrs: {}, {}", sys_attr, sys_attr.unwrap().len());
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }

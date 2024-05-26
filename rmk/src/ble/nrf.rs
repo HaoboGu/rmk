@@ -43,10 +43,9 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
-use nrf_softdevice::{ble::peripheral, Flash, Softdevice};
 use nrf_softdevice::{
-    ble::{gatt_server, Connection},
-    raw, Config,
+    ble::{gatt_server, Connection, peripheral, security::SecurityHandler as _},
+    raw, Config, Flash, Softdevice,
 };
 #[cfg(not(feature = "nrf52832_ble"))]
 use once_cell::sync::OnceCell;
@@ -244,6 +243,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
+                        // let mut buf = [0_u8; 64];
+                        // let l = get_sys_attrs(&conn, &mut buf).unwrap();
+                        // set_sys_attrs(&conn, Some(&buf[0..l])).unwrap();
+                        // bonder.save_sys_attrs(&conn);
+                        bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
                         match select(

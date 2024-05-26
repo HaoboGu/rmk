@@ -794,7 +794,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 [[package]]
 name = "nrf-softdevice"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=d5f023b#d5f023ba0f30d9d6779931f8a20a3c81c45b90f2"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -816,7 +816,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-macro"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=d5f023b#d5f023ba0f30d9d6779931f8a20a3c81c45b90f2"
 dependencies = [
  "Inflector",
  "darling 0.13.4",
@@ -829,7 +829,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-s140"
 version = "0.1.2"
-source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=cdee83c#cdee83c0753a0a3c912a67a5bc2e0b46d50aa5ca"
+source = "git+https://github.com/embassy-rs/nrf-softdevice?rev=d5f023b#d5f023ba0f30d9d6779931f8a20a3c81c45b90f2"
 
 [[package]]
 name = "nrf52805-pac"
@@ -1103,7 +1103,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "bitfield-struct",
  "byteorder",
