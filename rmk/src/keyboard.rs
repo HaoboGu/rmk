@@ -1,3 +1,7 @@
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -6,10 +10,6 @@ use crate::{
     matrix::{KeyState, Matrix},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
 use core::cell::RefCell;
 use defmt::{debug, error, warn};
 use embassy_time::{Instant, Timer};
@@ -229,6 +229,30 @@ impl<
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
                 if ks.changed {
                     self.process_key_change(row_idx, col_idx).await;
+                } else if ks.pressed {
+                    // When there's no key change, only tap/hold action needs to be processed
+                    // Continuously check the hold state
+                    let action = self
+                        .keymap
+                        .borrow_mut()
+                        .get_action_with_layer_cache(row_idx, col_idx, ks);
+                    match action {
+                        KeyAction::TapHold(tap_action, hold_action) => {
+                            self.process_key_action_tap_hold(tap_action, hold_action, ks)
+                                .await;
+                        }
+                        KeyAction::LayerTapHold(tap_action, layer_num) => {
+                            let layer_action = Action::LayerOn(layer_num);
+                            self.process_key_action_tap_hold(tap_action, layer_action, ks)
+                                .await;
+                        }
+                        KeyAction::ModifierTapHold(tap_action, modifier) => {
+                            let modifier_action = Action::Modifier(modifier);
+                            self.process_key_action_tap_hold(tap_action, modifier_action, ks)
+                                .await;
+                        }
+                        _ => (),
+                    }
                 }
             }
         }
@@ -236,11 +260,12 @@ impl<
 
     /// Process key changes at (row, col)
     async fn process_key_change(&mut self, row: usize, col: usize) {
+        let key_state = self.matrix.get_key_state(row, col);
+
         // Matrix should process key pressed event first, record the timestamp of key changes
-        self.matrix.key_pressed(row, col);
+        self.matrix.update_timer(row, col, key_state);
 
         // Process key
-        let key_state = self.matrix.get_key_state(row, col);
         let action = self
             .keymap
             .borrow_mut()
@@ -251,20 +276,20 @@ impl<
             KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_state),
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
             KeyAction::TapHold(tap_action, hold_action) => {
-                self.process_key_action_tap_hold(tap_action, hold_action)
-                    .await
+                self.process_key_action_tap_hold(tap_action, hold_action, key_state)
+                    .await;
             }
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action)
+                self.process_key_action_tap_hold(tap_action, layer_action, key_state)
                     .await;
             }
             KeyAction::ModifierTapHold(tap_action, modifier) => {
                 let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action)
+                self.process_key_action_tap_hold(tap_action, modifier_action, key_state)
                     .await;
             }
         }
@@ -318,8 +343,27 @@ impl<
         }
     }
 
-    async fn process_key_action_tap_hold(&mut self, _tap_action: Action, _hold_action: Action) {
-        warn!("tap or hold not implemented");
+    async fn process_key_action_tap_hold(
+        &mut self,
+        tap_action: Action,
+        hold_action: Action,
+        mut key_state: KeyState,
+    ) {
+        if !key_state.pressed {
+            // For tap_hold, only process when the key is released.
+            // When the key is pressed, calculate duration
+            if let Some(s) = key_state.hold_start {
+                let d = s.elapsed();
+                // TODO: make tap/hold threshold customizable
+                // Tap the key only when the key is RELEASED within the threshold
+                if d.as_millis() < 200 && key_state.changed && !key_state.pressed {
+                    key_state.pressed = true;
+                    self.process_key_action_tap(tap_action, key_state).await;
+                } else if d.as_millis() > 200 {
+                    self.process_key_action_normal(hold_action, key_state);
+                }
+            };
+        }
     }
 
     async fn process_key_action_oneshot(&mut self, _oneshot_action: Action) {

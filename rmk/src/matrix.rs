@@ -11,7 +11,7 @@ pub(crate) struct KeyState {
     // True if the key's state is just changed
     pub(crate) changed: bool,
     // If the key is held, `hold_start` records the time of it was pressed.
-    hold_start: Option<Instant>,
+    pub(crate) hold_start: Option<Instant>,
 }
 
 impl Default for KeyState {
@@ -116,14 +116,13 @@ impl<
     }
 
     /// When a key is pressed, some callbacks some be called, such as `start_timer`
-    pub(crate) fn key_pressed(&mut self, row: usize, col: usize) {
-        // COL2ROW
-        #[cfg(feature = "col2row")]
-        self.key_states[col][row].start_timer();
-
-        // ROW2COL
-        #[cfg(not(feature = "col2row"))]
-        self.key_states[row][col].start_timer();
+    pub(crate) fn update_timer(&mut self, row: usize, col: usize, key_state: KeyState) {
+        let mut ks = self.get_key_state(row, col);
+        if key_state.pressed {
+            ks.start_timer();
+        } else {
+            ks.clear_timer()
+        }
     }
 
     /// Read key state at position (row, col)
