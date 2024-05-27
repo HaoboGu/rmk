@@ -116,9 +116,13 @@ impl<
     }
 
     /// When a key is pressed, some callbacks some be called, such as `start_timer`
-    pub(crate) fn update_timer(&mut self, row: usize, col: usize, key_state: KeyState) {
-        let mut ks = self.get_key_state(row, col);
-        if key_state.pressed {
+    pub(crate) fn update_timer(&mut self, row: usize, col: usize) {
+        #[cfg(feature = "col2row")]
+        let ks = &mut self.key_states[col][row];
+        #[cfg(not(feature = "col2row"))]
+        let ks = &mut self.key_states[row][col];
+
+        if ks.pressed {
             ks.start_timer();
         } else {
             ks.clear_timer()

@@ -236,20 +236,39 @@ impl<
                         .keymap
                         .borrow_mut()
                         .get_action_with_layer_cache(row_idx, col_idx, ks);
+                    debug!("Pressed and no change, action: {}", action);
                     match action {
                         KeyAction::TapHold(tap_action, hold_action) => {
-                            self.process_key_action_tap_hold(tap_action, hold_action, ks)
-                                .await;
+                            self.process_key_action_tap_hold(
+                                tap_action,
+                                hold_action,
+                                row_idx,
+                                col_idx,
+                                ks,
+                            )
+                            .await;
                         }
                         KeyAction::LayerTapHold(tap_action, layer_num) => {
                             let layer_action = Action::LayerOn(layer_num);
-                            self.process_key_action_tap_hold(tap_action, layer_action, ks)
-                                .await;
+                            self.process_key_action_tap_hold(
+                                tap_action,
+                                layer_action,
+                                row_idx,
+                                col_idx,
+                                ks,
+                            )
+                            .await;
                         }
                         KeyAction::ModifierTapHold(tap_action, modifier) => {
                             let modifier_action = Action::Modifier(modifier);
-                            self.process_key_action_tap_hold(tap_action, modifier_action, ks)
-                                .await;
+                            self.process_key_action_tap_hold(
+                                tap_action,
+                                modifier_action,
+                                row_idx,
+                                col_idx,
+                                ks,
+                            )
+                            .await;
                         }
                         _ => (),
                     }
@@ -263,7 +282,10 @@ impl<
         let key_state = self.matrix.get_key_state(row, col);
 
         // Matrix should process key pressed event first, record the timestamp of key changes
-        self.matrix.update_timer(row, col, key_state);
+        if key_state.pressed {
+            // Start timer
+            self.matrix.update_timer(row, col);
+        }
 
         // Process key
         let action = self
@@ -276,7 +298,7 @@ impl<
             KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_state),
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
             KeyAction::TapHold(tap_action, hold_action) => {
-                self.process_key_action_tap_hold(tap_action, hold_action, key_state)
+                self.process_key_action_tap_hold(tap_action, hold_action, row, col, key_state)
                     .await;
             }
             KeyAction::OneShot(oneshot_action) => {
@@ -284,12 +306,12 @@ impl<
             }
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action, key_state)
+                self.process_key_action_tap_hold(tap_action, layer_action, row, col, key_state)
                     .await;
             }
             KeyAction::ModifierTapHold(tap_action, modifier) => {
                 let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action, key_state)
+                self.process_key_action_tap_hold(tap_action, modifier_action, row, col, key_state)
                     .await;
             }
         }
@@ -337,32 +359,64 @@ impl<
 
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
+            // FIXME: manually trigger send report
+            // self.send_keyboard_report(writer)
 
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state);
         }
     }
 
+    /// Process tap/hold action.
+    /// There are several cases:
+    ///
+    /// 1. `key_state.changed` is true, and `key_state.pressed` is false,
+    ///     which means the key is released. Then the duration time should be checked
+    ///
+    /// 2. `key_state.changed` is false, and `key_state.pressed` is true,
+    ///     which means that the key is held. The duration time should to be checked.
+    ///     
+    /// TODO: make tap/hold threshold customizable
     async fn process_key_action_tap_hold(
         &mut self,
         tap_action: Action,
         hold_action: Action,
+        row: usize,
+        col: usize,
         mut key_state: KeyState,
     ) {
-        if !key_state.pressed {
-            // For tap_hold, only process when the key is released.
-            // When the key is pressed, calculate duration
+        debug!("key_state: {}", key_state);
+        if !key_state.pressed && key_state.changed {
+            // Case 1, the key is released
             if let Some(s) = key_state.hold_start {
-                let d = s.elapsed();
-                // TODO: make tap/hold threshold customizable
-                // Tap the key only when the key is RELEASED within the threshold
-                if d.as_millis() < 200 && key_state.changed && !key_state.pressed {
+                let d = s.elapsed().as_millis();
+                debug!("released since pressed: {}", d);
+                if d < 200 {
                     key_state.pressed = true;
+                    // Released, tap
+                    debug!(
+                        "Released tap hold, got tap: {}, ks: {}",
+                        tap_action, key_state
+                    );
+
                     self.process_key_action_tap(tap_action, key_state).await;
-                } else if d.as_millis() > 200 {
+                }
+                // Reset timer after release
+                self.matrix.update_timer(row, col);
+            }
+        } else if key_state.pressed && !key_state.changed {
+            // Case 2, the key is held
+            if let Some(s) = key_state.hold_start {
+                let d = s.elapsed().as_millis();
+                debug!("held since pressed: {}", d);
+                if d > 200 {
+                    debug!(
+                        "Processing hold action, got: {}, ks: {}",
+                        hold_action, key_state
+                    );
                     self.process_key_action_normal(hold_action, key_state);
                 }
-            };
+            }
         }
     }
 
@@ -372,6 +426,7 @@ impl<
 
     // Process a single keycode, typically a basic key or a modifier key.
     fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
+        debug!("process action keycode: {}, {}", key, key_state);
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
@@ -400,9 +455,9 @@ impl<
     /// Process layer switch action.
     fn process_action_layer_switch(&mut self, layer_num: u8, key_state: KeyState) {
         // Change layer state only when the key's state is changed
-        if !key_state.changed {
-            return;
-        }
+        // if !key_state.changed {
+        //     return;
+        // }
         if key_state.pressed {
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
