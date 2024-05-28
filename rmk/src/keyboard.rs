@@ -288,7 +288,6 @@ impl<
                         .keymap
                         .borrow_mut()
                         .get_action_with_layer_cache(row_idx, col_idx, ks);
-                    debug!("Pressed and no change, action: {}", action);
                     let tap_hold = match action {
                         KeyAction::TapHold(tap_action, hold_action) => {
                             Some((tap_action, hold_action))
