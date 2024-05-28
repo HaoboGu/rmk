@@ -20,6 +20,10 @@ use action::KeyAction;
 use core::cell::RefCell;
 use defmt::*;
 use embassy_futures::select::{select, select4, Either, Either4};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex,
+    channel::{Channel, Receiver, Sender},
+};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
@@ -27,7 +31,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
-use keyboard::Keyboard;
+use keyboard::{communication_task, Keyboard, KeyboardReportMessage};
 use keymap::KeyMap;
 pub use rmk_config as config;
 use rmk_config::RmkConfig;
@@ -139,6 +143,11 @@ pub async fn initialize_keyboard_and_run_async_flash<
         }
     };
 
+    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
+        Channel::new();
+    let mut keyboard_report_sender = keyboard_channel.sender();
+    let mut keyboard_report_receiver = keyboard_channel.receiver();
+
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
         Keyboard::new(input_pins, output_pins, &keymap),
@@ -156,13 +165,16 @@ pub async fn initialize_keyboard_and_run_async_flash<
                 s,
                 &mut light_service,
                 &mut vial_service,
+                &mut keyboard_report_receiver,
+                &mut keyboard_report_sender,
             )
             .await;
         } else {
-            // Run 4 tasks: usb, keyboard, led, vial
+            // Run 5 tasks: usb, keyboard, led, vial, communication
             let usb_fut = usb_device.device.run();
-            let keyboard_fut = keyboard_task(
-                &mut keyboard,
+            let keyboard_fut = keyboard_task(&mut keyboard, &mut keyboard_report_sender);
+            let communication_fut = communication_task(
+                &mut keyboard_report_receiver,
                 &mut usb_device.keyboard_hid_writer,
                 &mut usb_device.other_hid_writer,
             );
@@ -172,7 +184,15 @@ pub async fn initialize_keyboard_and_run_async_flash<
             pin_mut!(keyboard_fut);
             pin_mut!(led_reader_fut);
             pin_mut!(via_fut);
-            match select4(usb_fut, keyboard_fut, led_reader_fut, via_fut).await {
+            pin_mut!(communication_fut);
+            match select4(
+                usb_fut,
+                select(keyboard_fut, communication_fut),
+                led_reader_fut,
+                via_fut,
+            )
+            .await
+            {
                 Either4::First(_) => {
                     error!("Usb task is died");
                 }
@@ -204,10 +224,13 @@ pub(crate) async fn run_usb_keyboard<
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
+    keyboard_report_receiver: &mut Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_sender: &mut Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(
-        keyboard,
+    let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
+    let communication_fut = communication_task(
+        keyboard_report_receiver,
         &mut usb_device.keyboard_hid_writer,
         &mut usb_device.other_hid_writer,
     );
@@ -219,11 +242,12 @@ pub(crate) async fn run_usb_keyboard<
     pin_mut!(led_reader_fut);
     pin_mut!(via_fut);
     pin_mut!(storage_fut);
+    pin_mut!(communication_fut);
     match select4(
         select(usb_fut, keyboard_fut),
         storage_fut,
         led_reader_fut,
-        via_fut,
+        select(via_fut, communication_fut),
     )
     .await
     {
