@@ -818,9 +818,9 @@ dependencies = [
 
 [[package]]
 name = "esp32-nimble"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8ccff3e5968ee2f8d0e15792c4e62706a3a20b8df0401fad4eb8f4b5a81842c"
+checksum = "0f76ac89cccd005099a14ea3161fcfdfe857452c60333542c71136ecc67a249c"
 dependencies = [
  "anyhow",
  "bitflags 2.5.0",
@@ -831,6 +831,7 @@ dependencies = [
  "esp-idf-hal",
  "esp-idf-svc",
  "esp-idf-sys",
+ "heapless 0.8.0",
  "log",
  "num_enum",
  "once_cell",
