@@ -218,7 +218,7 @@ impl SecurityHandler for Bonder {
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
-        info!("call set_sys_attrs in load_sys_attrs: {}, {}", sys_attr, sys_attr.unwrap().len());
+        // info!("call set_sys_attrs in load_sys_attrs: {}", sys_attr);
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }
