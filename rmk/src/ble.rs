@@ -6,27 +6,26 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
+use defmt::error;
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
-use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "nrf52840_ble")]
 pub use nrf::SOFTWARE_VBUS;
 
-use crate::{hid::HidWriterWrapper, Keyboard};
+use crate::{
+    hid::HidWriterWrapper, keyboard::{write_other_report_to_host, KeyboardReportMessage},
+    usb::descriptor::CompositeReportType,
+};
 
-/// BLE keyboard task, run the keyboard with the ble server
-pub(crate) async fn keyboard_ble_task<
+/// BLE communication task, send reports to host via BLE.
+pub(crate) async fn ble_task<
     'a,
     W: HidWriterWrapper,
     W2: HidWriterWrapper,
     W3: HidWriterWrapper,
     W4: HidWriterWrapper,
-    In: InputPin,
-    Out: OutputPin,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard_report_receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ble_keyboard_writer: &mut W,
     ble_media_writer: &mut W2,
     ble_system_control_writer: &mut W3,
@@ -35,12 +34,28 @@ pub(crate) async fn keyboard_ble_task<
     // Wait 1 seconds, ensure that gatt server has been started
     Timer::after_secs(1).await;
     loop {
-        let _ = keyboard.scan_matrix().await;
-        keyboard.send_keyboard_report(ble_keyboard_writer).await;
-        keyboard.send_media_report(ble_media_writer).await;
-        keyboard
-            .send_system_control_report(ble_system_control_writer)
-            .await;
-        keyboard.send_mouse_report(ble_mouse_writer).await;
+        match keyboard_report_receiver.receive().await {
+            KeyboardReportMessage::KeyboardReport(report) => {
+                match ble_keyboard_writer.write_serialize(&report).await {
+                    Ok(()) => {}
+                    Err(e) => error!("Send keyboard report error: {}", e),
+                };
+            }
+            KeyboardReportMessage::CompositeReport(report, report_type) => {
+                match report_type {
+                    CompositeReportType::Media => {
+                        write_other_report_to_host(report, report_type, ble_media_writer).await
+                    }
+                    CompositeReportType::Mouse => {
+                        write_other_report_to_host(report, report_type, ble_mouse_writer).await
+                    }
+                    CompositeReportType::System => {
+                        write_other_report_to_host(report, report_type, ble_system_control_writer)
+                            .await
+                    }
+                    CompositeReportType::None => (),
+                };
+            }
+        }
     }
 }
