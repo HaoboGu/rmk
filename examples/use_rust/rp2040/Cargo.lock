@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-rp2040"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "const-gen",
  "cortex-m-rt",

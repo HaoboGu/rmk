@@ -82,6 +82,7 @@ impl BleServer {
             if let Err(e) = r {
                 warn!("BLE disconnected, error code: {}", e.code());
             }
+            info!("Disconnected!");
         });
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer);
@@ -104,19 +105,17 @@ impl BleServer {
         hid.report_map(BleKeyboardReport::desc());
 
         let ble_advertising = device.get_advertising();
-        match ble_advertising
-            .lock()
-            .scan_response(false)
-            .set_data(
-                BLEAdvertisementData::new()
-                    .name(keyboard_name)
-                    .appearance(0x03C1)
-                    .add_service_uuid(hid.hid_service().lock().uuid()),
-            )
-            .and_then(|_| ble_advertising.lock().start())
-        {
-            Ok(_) => (),
-            Err(e) => error!("BLE advertising error, error code: {}", e.code()),
+        if let Err(e) = ble_advertising.lock().scan_response(false).set_data(
+            BLEAdvertisementData::new()
+                .name(keyboard_name)
+                .appearance(0x03C1)
+                .add_service_uuid(hid.hid_service().lock().uuid()),
+        ) {
+            error!("BLE advertising error, error code: {}", e.code());
+        }
+
+        if let Err(e) = ble_advertising.lock().start() {
+            error!("BLE advertising start error: {}", e.code());
         }
 
         Self {
