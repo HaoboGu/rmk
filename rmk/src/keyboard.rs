@@ -133,14 +133,27 @@ impl<
     pub(crate) async fn send_keyboard_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
         if self.need_send_key_report {
             debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
-            match writer.write_serialize(&self.report).await {
-                Ok(()) => {}
-                Err(e) => error!("Send keyboard report error: {}", e),
-            };
-            // Reset report key states
-            for bit in &mut self.report.keycodes {
-                *bit = 0;
+
+            const MAX_RETRIES: usize = 3;
+
+            let mut retries = 0;
+            loop {
+                match writer.write_serialize(&self.report).await {
+                    Ok(()) => {
+                        break;
+                    }
+                    Err(e) => {
+                        error!("Send keyboard report error: {}", e);
+                        retries += 1;
+                        if retries >= MAX_RETRIES {
+                            error!("Maximum retry count reached. Failed to send keyboard report.");
+                            break;
+                        }
+                        // We could wait before retrying
+                    }
+                };
             }
+
             self.need_send_key_report = false;
         }
     }
