@@ -9,11 +9,14 @@ pub(crate) mod spec;
 // TODO: Conditional imports should be compatible with more nRF chip models
 use self::server::BleServer;
 use crate::{
-    ble::{ble_task, nrf::{
-        advertise::{create_advertisement_data, SCAN_DATA},
-        bonder::{BondInfo, Bonder},
-        server::BleHidWriter,
-    }},
+    ble::{
+        ble_task,
+        nrf::{
+            advertise::{create_advertisement_data, SCAN_DATA},
+            bonder::{BondInfo, Bonder},
+            server::BleHidWriter,
+        },
+    },
     keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
     storage::{get_bond_info_key, Storage, StorageData},
     KeyAction, KeyMap, RmkConfig,
@@ -251,7 +254,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
-                        bonder.load_sys_attrs(&conn);
+                        bonder.save_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
                         match select(
@@ -287,6 +290,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             // If no USB device, just start BLE advertising
             match adv_fut.await {
                 Ok(conn) => {
+                    bonder.save_sys_attrs(&conn);
                     run_ble_keyboard(
                         &conn,
                         &ble_server,
@@ -305,6 +309,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         #[cfg(feature = "nrf52832_ble")]
         match adv_fut.await {
             Ok(conn) => {
+                bonder.save_sys_attrs(&conn);
                 run_ble_keyboard(
                     &conn,
                     &ble_server,
@@ -365,7 +370,14 @@ async fn run_ble_keyboard<
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
 
     // Exit if anyone of three futures exits
-    match select4(ble_fut, select(ble_task, keyboard_fut), battery_fut, storage_fut).await {
+    match select4(
+        ble_fut,
+        select(ble_task, keyboard_fut),
+        battery_fut,
+        storage_fut,
+    )
+    .await
+    {
         Either4::First(disconnected_error) => error!(
             "BLE gatt_server run exited with error: {:?}",
             disconnected_error

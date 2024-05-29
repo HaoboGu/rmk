@@ -185,22 +185,43 @@ impl SecurityHandler for Bonder {
             .find(|(_, info)| info.peer.peer_id.is_match(addr));
 
         if let Some((_, info)) = bonded {
-            // Get system attr and save to flash
-            info.sys_attr.length = match get_sys_attrs(conn, &mut info.sys_attr.data) {
-                Ok(length) => length,
+            let mut buf = [0_u8; 64];
+
+            match get_sys_attrs(conn, &mut buf) {
+                Ok(sys_attr_len) => {
+                    if sys_attr_len > 0 {
+                        // Get sys_attrs correctly, check whether it's same with saved bond info.
+                        // If not, update bond info
+                        if !(info.sys_attr.length == sys_attr_len
+                            && info.sys_attr.data[0..sys_attr_len] == buf[0..sys_attr_len])
+                        {
+                            info!(
+                                "Updating sys_attr:\nold: {},{}\nnew: {},{}",
+                                buf, sys_attr_len, info.sys_attr.data, info.sys_attr.length
+                            );
+                            //  Update bond info
+                            info.sys_attr.data[0..sys_attr_len]
+                                .copy_from_slice(&buf[0..sys_attr_len]);
+                            info.sys_attr.length = sys_attr_len;
+
+                            // Save new bond info to flash
+                            match FLASH_CHANNEL
+                                .try_send(FlashOperationMessage::BondInfo(info.clone()))
+                            {
+                                Ok(_) => debug!("Sent bond info to flash channel"),
+                                Err(_e) => error!("Send bond info to flash channel error"),
+                            };
+                        } else {
+                            info!("sys_attrs doesn't change, do nothing");
+                        }
+                    } else {
+                        error!("Got empty system attr");
+                    }
+                }
                 Err(e) => {
                     error!("Get system attr for {} erro: {}", info, e);
-                    0
                 }
-            };
-
-            info!("Saving sys attr to flash: {}, {}", info.sys_attr.data, info.sys_attr.length);
-
-            // Correctly get system attr, save to flash
-            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
-                Ok(_) => debug!("Sent bond info to flash channel"),
-                Err(_e) => error!("Send bond info to flash channel error"),
-            };
+            }
         } else {
             info!("Peer doesn't match: {}", conn.peer_address());
         }
