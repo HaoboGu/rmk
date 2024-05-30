@@ -10,6 +10,7 @@ use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
         gatt_server::{self, get_sys_attrs, set_sys_attrs, RegisterError, Service, WriteOp},
+        security::SecurityHandler,
         Connection,
     },
     Softdevice,
@@ -96,12 +97,14 @@ pub(crate) struct BleServer {
     _dis: DeviceInformationService,
     pub(crate) bas: BatteryService,
     pub(crate) hid: HidService,
+    bonder: &'static dyn SecurityHandler,
 }
 
 impl BleServer {
     pub fn new(
         sd: &mut Softdevice,
         usb_config: KeyboardUsbConfig<'static>,
+        bonder: &'static dyn SecurityHandler,
     ) -> Result<Self, RegisterError> {
         let dis = DeviceInformationService::new(
             sd,
@@ -127,6 +130,7 @@ impl BleServer {
             _dis: dis,
             bas,
             hid,
+            bonder,
         })
     }
 }
@@ -143,6 +147,8 @@ impl gatt_server::Server for BleServer {
         data: &[u8],
     ) -> Option<Self::Event> {
         self.hid.on_write(conn, handle, data);
+        // FIXME: save sys attr only when `on_write` call for cccd handle
+        self.bonder.save_sys_attrs(conn);
         if let Some(event) = self.bas.on_write(handle, data) {
             info!("handle: {}, data: {}", handle, data);
             let mut buf: [u8; 64] = [0; 64];

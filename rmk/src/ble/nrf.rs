@@ -169,8 +169,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
-    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config));
-    unwrap!(spawner.spawn(softdevice_task(sd)));
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
@@ -199,6 +197,10 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     info!("Loaded saved bond info: {}", bond_info.len());
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+
+    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
+    unwrap!(spawner.spawn(softdevice_task(sd)));
+
 
     // Keyboard services
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
@@ -254,7 +256,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
-                        bonder.save_sys_attrs(&conn);
+                        bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
                         match select(
@@ -290,7 +292,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             // If no USB device, just start BLE advertising
             match adv_fut.await {
                 Ok(conn) => {
-                    bonder.save_sys_attrs(&conn);
+                    bonder.load_sys_attrs(&conn);
                     run_ble_keyboard(
                         &conn,
                         &ble_server,
@@ -309,7 +311,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         #[cfg(feature = "nrf52832_ble")]
         match adv_fut.await {
             Ok(conn) => {
-                bonder.save_sys_attrs(&conn);
+                bonder.load_sys_attrs(&conn);
                 run_ble_keyboard(
                     &conn,
                     &ble_server,
