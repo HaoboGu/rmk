@@ -79,7 +79,7 @@ async fn main(spawner: Spawner) {
         serial_number: "00000000",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), None, Some(saadc));
+    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, true, Some(saadc));
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
