@@ -169,6 +169,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
+    {
+        let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
+        unwrap!(spawner.spawn(softdevice_task(sdv)))
+    };
+    Timer::after_millis(10).await;
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
@@ -194,7 +199,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             bond_info.insert(key as u8, info).ok();
         }
     }
-    info!("Loaded saved bond info: {}", bond_info.len());
+    info!("Loaded {} saved bond info", bond_info.len());
     static BONDER: StaticCell<Bonder> = StaticCell::new();
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
