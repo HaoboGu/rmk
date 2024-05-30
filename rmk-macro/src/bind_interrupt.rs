@@ -69,6 +69,7 @@ pub(crate) fn bind_interrupt_default(
                 enabled: true,
                 battery_adc_pin: Some(_adc_pin),
                 charge_state: _,
+                charge_led: _,
             }) = &toml_config.ble
             {
                 Some(quote! {

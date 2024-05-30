@@ -130,8 +130,6 @@ dependencies = [
 [[package]]
 name = "rmk-config"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7080dc0b7e07c9053ddfa25c8ce5a3ef103fbc6e66af5e9162b541a1fc2dde8"
 dependencies = [
  "embedded-hal",
  "serde",

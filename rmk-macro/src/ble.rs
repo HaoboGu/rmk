@@ -48,8 +48,7 @@ pub(crate) fn expand_ble_config(
                     });
                 } else {
                     ble_config_tokens.extend(quote! {
-                        // TODO: Use full path of Option
-                        let saadc_option: Option<::embassy_nrf::saadc::Saadc<'_, 1>> = None;
+                        let saadc_option: ::core::option::Option<::embassy_nrf::saadc::Saadc<'_, 1>> = None;
                     });
                 };
 
@@ -61,15 +60,27 @@ pub(crate) fn expand_ble_config(
                 } else {
                     ble_config_tokens.extend(
                         quote! {
-                            // TODO: Use full path of Option
-                            let is_charging_pin: Option<::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>> = None;
+                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>> = None;
+                        }
+                    )
+                }
+
+                if let Some(charging_led_config) = ble.charge_led {
+                    let charging_led_pin = format_ident!("{}", charging_led_config.pin);
+                    ble_config_tokens.extend(quote! {
+                        let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_led_pin), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard));
+                    });
+                } else {
+                    ble_config_tokens.extend(
+                        quote! {
+                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>>  = None;
                         }
                     )
                 }
 
                 ble_config_tokens.extend(
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, saadc_option);       
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charge_led_pin, saadc_option);       
                     }
                 );
 
