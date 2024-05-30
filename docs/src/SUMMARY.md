@@ -13,6 +13,7 @@
     - [Use Rust](config_rmk_project_rust.md)
 - [4. Compile and flash!](compile_and_flash.md)
 - [FAQs](faq.md)
+- [Real world examples](real_world_examples.md)
 
 # Features
 - [Keyboard Configuration](configuration.md)
