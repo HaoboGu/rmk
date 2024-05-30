@@ -353,8 +353,8 @@ async fn run_ble_keyboard<
     keyboard_report_receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     keyboard_report_sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
-    info!("Starting GATT server 200 ms later");
-    Timer::after_millis(200).await;
+    info!("Starting GATT server 20 ms later");
+    Timer::after_millis(20).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
     let mut ble_media_writer = BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
     let mut ble_system_control_writer =

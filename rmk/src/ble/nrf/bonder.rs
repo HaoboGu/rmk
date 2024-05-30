@@ -127,17 +127,12 @@ impl SecurityHandler for Bonder {
             // Save bond info
             let mut sys_attr_data: [u8; 62] = [0; 62];
             let sys_attr_length = get_sys_attrs(conn, &mut sys_attr_data).unwrap();
-            info!(
-                "ON BOND: get sys attr: {}, size:{}",
-                sys_attr_data, sys_attr_length
-            );
 
             let new_bond_info = BondInfo {
                 sys_attr: SystemAttribute {
                     length: sys_attr_length,
                     data: sys_attr_data,
                 },
-                // sys_attr: SystemAttribute::default(),
                 peer: Peer {
                     master_id,
                     key,
@@ -175,7 +170,6 @@ impl SecurityHandler for Bonder {
     fn save_sys_attrs(&self, conn: &Connection) {
         // On disconnect usually
         let addr = conn.peer_address();
-        info!("Saving system attributes for {}", addr);
 
         let mut bond_info = self.bond_info.borrow_mut();
 
@@ -195,11 +189,11 @@ impl SecurityHandler for Bonder {
                         if !(info.sys_attr.length == sys_attr_len
                             && info.sys_attr.data[0..sys_attr_len] == buf[0..sys_attr_len])
                         {
-                            info!(
-                                "Updating sys_attr:\nold: {},{}\nnew: {},{}",
+                            debug!(
+                                "Updating sys_attr:\nnew: {},{}\nold: {},{}",
                                 buf, sys_attr_len, info.sys_attr.data, info.sys_attr.length
                             );
-                            //  Update bond info
+                            // Update bond info
                             info.sys_attr.data[0..sys_attr_len]
                                 .copy_from_slice(&buf[0..sys_attr_len]);
                             info.sys_attr.length = sys_attr_len;
@@ -211,8 +205,6 @@ impl SecurityHandler for Bonder {
                                 Ok(_) => debug!("Sent bond info to flash channel"),
                                 Err(_e) => error!("Send bond info to flash channel error"),
                             };
-                        } else {
-                            info!("sys_attrs doesn't change, do nothing");
                         }
                     } else {
                         error!("Got empty system attr");

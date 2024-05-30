@@ -432,7 +432,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 #[cfg(not(feature = "_nrf_ble"))]
                 _ => Ok(()),
             } {
-                print_sequential_storage_err::<F>(e);
+                print_storage_error::<F>(e);
             }
         }
     }
@@ -461,7 +461,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                             return Err(());
                         }
                         Err(e) => {
-                            print_sequential_storage_err::<F>(e);
+                            print_storage_error::<F>(e);
                             error!(
                                 "Load keymap key from storage error: (layer,col,row)=({},{},{})",
                                 layer, col, row
@@ -505,7 +505,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             &storage_config,
         )
         .await
-        .map_err(|e| print_sequential_storage_err::<F>(e))?;
+        .map_err(|e| print_storage_error::<F>(e))?;
 
         // Save layout config
         let layout_config = StorageData::<ROW, COL, NUM_LAYER>::LayoutConfig(LayoutConfig {
@@ -521,7 +521,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             &layout_config,
         )
         .await
-        .map_err(|e| print_sequential_storage_err::<F>(e))?;
+        .map_err(|e| print_storage_error::<F>(e))?;
 
         for (layer, layer_data) in keymap.iter().enumerate() {
             for (row, row_data) in layer_data.iter().enumerate() {
@@ -542,7 +542,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &item,
                     )
                     .await
-                    .map_err(|e| print_sequential_storage_err::<F>(e))?;
+                    .map_err(|e| print_storage_error::<F>(e))?;
                 }
             }
         }
@@ -571,7 +571,7 @@ impl<F: AsyncNorFlash> Storage<F> {
     }
 }
 
-fn print_sequential_storage_err<F: AsyncNorFlash>(e: SSError<F::Error>) {
+fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
     match e {
         SSError::Storage { value: _ } => error!("Flash error"),
         SSError::FullStorage => error!("Storage is full"),

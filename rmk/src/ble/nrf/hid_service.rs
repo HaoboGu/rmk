@@ -1,13 +1,13 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::ble::descriptor::{BleCompositeReportType, BleKeyboardReport};
-use defmt::{error, info};
+use defmt::{error, info, Format};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
             self,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Properties},
-            get_sys_attrs, set_sys_attrs, RegisterError,
+            RegisterError,
         },
         Connection, SecurityMode,
     },
@@ -197,40 +197,6 @@ impl HidService {
         })
     }
 
-    pub fn on_write(&self, conn: &Connection, handle: u16, data: &[u8]) {
-        let mut buf: [u8; 64] = [0; 64];
-        let len = get_sys_attrs(conn, &mut buf).unwrap();
-        if handle == self.input_keyboard_cccd {
-            info!("HID input_keyboard_cccd: {:?}", data);
-            info!("sys attr @ input_keyboard_cccd: {}, {}", buf, len);
-            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
-        } else if handle == self.input_vial_keys_cccd {
-            info!("HID input via keys cccd: {:?}", data);
-            info!("sys attr @ input_vial_keys_cccd: {}, {}", buf, len);
-            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
-        } else if handle == self.input_media_keys_cccd {
-            info!("HID input media keys cccd: {:?}", data);
-            info!("sys attr @ input_media_keys_cccd: {}, {}", buf, len);
-            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
-        } else if handle == self.input_mouse_keys_cccd {
-            info!("HID input mouse keys cccd: {:?}", data);
-            info!("sys attr @ input_mouse_keys_cccd: {}, {}", buf, len);
-            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
-        } else if handle == self.input_system_keys_cccd {
-            info!("HID input system keys cccd: {:?}", data);
-            info!("sys attr @ input_system_keys_cccd: {}, {}", buf, len);
-            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
-        } else if handle == self.output_vial {
-            info!("HID output vial: {:?}", data);
-            info!("sys attr @ output_vial: {}, {}", buf, len);
-        } else if handle == self.output_keyboard {
-            // Fires if a keyboard output is changed - e.g. the caps lock LED
-            // TODO: Update capslock LED
-            info!("HID output keyboard: {:?}", data);
-            info!("sys attr @ output_keyboard: {}, {}", buf, len);
-        }
-    }
-
     pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
             .map_err(|e| error!("send keyboard report error: {}", e))
@@ -242,4 +208,44 @@ impl HidService {
             .map_err(|e| error!("send keyboard report error: {}", e))
             .ok();
     }
+}
+
+impl gatt_server::Service for HidService {
+    type Event = HidServiceEvent;
+
+    fn on_write(&self, handle: u16, data: &[u8]) -> Option<Self::Event> {
+        if handle == self.input_keyboard_cccd {
+            Some(HidServiceEvent::InputKeyboardCccdWrite)
+        } else if handle == self.input_vial_keys_cccd {
+            Some(HidServiceEvent::InputVialKeyCccdWrite)
+        } else if handle == self.input_media_keys_cccd {
+            Some(HidServiceEvent::InputMediaKeyCccdWrite)
+        } else if handle == self.input_mouse_keys_cccd {
+            Some(HidServiceEvent::InputMouseKeyCccdWrite)
+        } else if handle == self.input_system_keys_cccd {
+            Some(HidServiceEvent::InputSystemKeyCccdWrite)
+        } else if handle == self.output_vial {
+            info!("HID output vial: {:?}", data);
+            Some(HidServiceEvent::OutputVial)
+        } else if handle == self.output_keyboard {
+            // Fires if a keyboard output is changed - e.g. the caps lock LED
+            // TODO: Update capslock LED
+            info!("HID output keyboard: {:?}", data);
+            Some(HidServiceEvent::OutputKeyboard)
+        } else {
+            None
+        }
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Format)]
+pub enum HidServiceEvent {
+    InputKeyboardCccdWrite,
+    InputMediaKeyCccdWrite,
+    InputMouseKeyCccdWrite,
+    InputSystemKeyCccdWrite,
+    InputVialKeyCccdWrite,
+    OutputKeyboard,
+    OutputVial,
 }

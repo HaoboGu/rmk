@@ -1,6 +1,7 @@
 use super::{
-    battery_service::BatteryService, device_information_service::DeviceInformationService,
-    hid_service::HidService,
+    battery_service::{BatteryService, BatteryServiceEvent},
+    device_information_service::DeviceInformationService,
+    hid_service::{HidService, HidServiceEvent},
 };
 use crate::{
     ble::device_info::{DeviceInformation, PnPID, VidSource},
@@ -146,15 +147,28 @@ impl gatt_server::Server for BleServer {
         _offset: usize,
         data: &[u8],
     ) -> Option<Self::Event> {
-        self.hid.on_write(conn, handle, data);
-        // FIXME: save sys attr only when `on_write` call for cccd handle
-        self.bonder.save_sys_attrs(conn);
+        if let Some(event) = self.hid.on_write(handle, data) {
+            match event {
+                HidServiceEvent::InputKeyboardCccdWrite
+                | HidServiceEvent::InputMediaKeyCccdWrite
+                | HidServiceEvent::InputMouseKeyCccdWrite
+                | HidServiceEvent::InputSystemKeyCccdWrite
+                | HidServiceEvent::InputVialKeyCccdWrite => {
+                    info!("{}, handle: {}, data: {}", event, handle, data);
+                    self.bonder.save_sys_attrs(conn)
+                }
+                HidServiceEvent::OutputKeyboard => (),
+                HidServiceEvent::OutputVial => (),
+            }
+        }
         if let Some(event) = self.bas.on_write(handle, data) {
             match event {
-                crate::ble::nrf::battery_service::BatteryServiceEvent::BatteryLevelCccdWrite {
-                    notifications,
-                } => {
-                    info!("bat notifi: {}", notifications);
+                BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
+                    info!(
+                        "BatteryLevelCccdWrite, handle: {}, data: {}, notif: {}",
+                        handle, data, notifications
+                    );
+                    self.bonder.save_sys_attrs(conn)
                 }
             }
         }
