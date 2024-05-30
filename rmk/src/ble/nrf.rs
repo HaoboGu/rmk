@@ -170,10 +170,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     let sd = Softdevice::enable(&ble_config);
     {
+        // Use the immutable ref of `Softdevice` to run the softdevice_task
+        // The mumtable ref is used for configuring Flash and BleServer
         let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
         unwrap!(spawner.spawn(softdevice_task(sdv)))
     };
-    Timer::after_millis(10).await;
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
@@ -204,8 +205,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
-    unwrap!(spawner.spawn(softdevice_task(sd)));
-
 
     // Keyboard services
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
