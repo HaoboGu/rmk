@@ -13,6 +13,23 @@ pub struct BatteryService {
 }
 
 impl<'a> BatteryService {
+    fn check_charging_state(battery_config: &mut BleBatteryConfig<'a>) {
+        // TODO: Check user's low/high active setting
+        if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
+            if is_charging_pin.is_low() {
+                info!("Charging!");
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    charge_led.set_low()
+                }
+            } else {
+                info!("not Charging!");
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    charge_led.set_high()
+                }
+            }
+        }
+    }
+
     pub(crate) async fn run(
         &mut self,
         battery_config: &mut BleBatteryConfig<'a>,
@@ -20,12 +37,8 @@ impl<'a> BatteryService {
     ) {
         // Wait 1 seconds, ensure that gatt server has been started
         Timer::after_secs(1).await;
-        // Low means charging
-        if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
-            if is_charging_pin.is_low() {
-                info!("Charging!");
-            }
-        }
+        BatteryService::check_charging_state(battery_config);
+
         loop {
             if let Some(ref mut saadc) = battery_config.saadc {
                 let mut buf = [0i16; 1];
@@ -41,21 +54,22 @@ impl<'a> BatteryService {
                 }
             }
 
-            // Low means charging
-            // TODO: customize charging level
-            if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
-                if is_charging_pin.is_low() {
-                    info!("Charging!");
-                }
-            }
+            // Check charging state
+            BatteryService::check_charging_state(battery_config); 
+
             // Sample every 120s
-            Timer::after_secs(120).await
+            Timer::after_secs(1).await
         }
     }
 
     fn get_battery_percent(&self, val: i16) -> u8 {
         info!("Detected adv value: {=i16}", val);
         // Suppose that the adc value is between 2200 and 3000
+        // With default setting:
+        // voltage = val * 1000 / 1137 mv;
+        // val = v * 1137;
+        // v = val / 1137;
+
         if val > 3000 {
             100_u8
         } else if val < 2200 {

@@ -35,6 +35,8 @@ output_pins = ["P1_05", "P1_06", "P1_07"]
 
 [ble]
 enabled = true
-# battery_adc_pin = "P0_05"
-# charge_state.pin = "P0_25"
-# charge_state.low_active = true
+battery_adc_pin = "P0_05"
+charge_state.pin = "P0_25"
+charge_state.low_active = true
+charge_led.pin = "P0_30"
+charge_led.low_active = true
