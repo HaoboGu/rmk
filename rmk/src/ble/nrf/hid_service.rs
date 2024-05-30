@@ -229,7 +229,7 @@ impl gatt_server::Service for HidService {
             Some(HidServiceEvent::OutputVial)
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
-            // TODO: Update capslock LED
+            // TODO: Update capslock LED from data
             info!("HID output keyboard: {:?}", data);
             Some(HidServiceEvent::OutputKeyboard)
         } else {

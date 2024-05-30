@@ -89,6 +89,7 @@ pub struct BleConfig {
     pub enabled: bool,
     pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
+    pub charge_led: Option<PinConfig>,
 }
 
 /// Config for lights
