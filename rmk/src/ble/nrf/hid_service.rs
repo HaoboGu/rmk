@@ -7,7 +7,7 @@ use nrf_softdevice::{
             self,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Properties},
-            RegisterError,
+            get_sys_attrs, set_sys_attrs, RegisterError,
         },
         Connection, SecurityMode,
     },
@@ -16,6 +16,7 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 #[allow(dead_code)]
+#[derive(Debug, defmt::Format)]
 pub struct HidService {
     hid_info: u16,
     report_map: u16,
@@ -196,19 +197,37 @@ impl HidService {
         })
     }
 
-    pub fn on_write(&self, _conn: &Connection, handle: u16, data: &[u8]) {
+    pub fn on_write(&self, conn: &Connection, handle: u16, data: &[u8]) {
+        let mut buf: [u8; 64] = [0; 64];
+        let len = get_sys_attrs(conn, &mut buf).unwrap();
         if handle == self.input_keyboard_cccd {
-            info!("HID input keyboard cccd: {:?}", data);
-        } else if handle == self.input_keyboard {
-            info!("HID input keyboard: {:?}", data);
+            info!("HID input_keyboard_cccd: {:?}", data);
+            info!("sys attr @ input_keyboard_cccd: {}, {}", buf, len);
+            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+        } else if handle == self.input_vial_keys_cccd {
+            info!("HID input via keys cccd: {:?}", data);
+            info!("sys attr @ input_vial_keys_cccd: {}, {}", buf, len);
+            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+        } else if handle == self.input_media_keys_cccd {
+            info!("HID input media keys cccd: {:?}", data);
+            info!("sys attr @ input_media_keys_cccd: {}, {}", buf, len);
+            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+        } else if handle == self.input_mouse_keys_cccd {
+            info!("HID input mouse keys cccd: {:?}", data);
+            info!("sys attr @ input_mouse_keys_cccd: {}, {}", buf, len);
+            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+        } else if handle == self.input_system_keys_cccd {
+            info!("HID input system keys cccd: {:?}", data);
+            info!("sys attr @ input_system_keys_cccd: {}, {}", buf, len);
+            set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+        } else if handle == self.output_vial {
+            info!("HID output vial: {:?}", data);
+            info!("sys attr @ output_vial: {}, {}", buf, len);
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             // TODO: Update capslock LED
             info!("HID output keyboard: {:?}", data);
-        } else if handle == self.input_vial_keys_cccd {
-            info!("HID input via keys: {:?}", data);
-        } else if handle == self.input_media_keys_cccd {
-            info!("HID input media keys: {:?}", data);
+            info!("sys attr @ output_keyboard: {}, {}", buf, len);
         }
     }
 

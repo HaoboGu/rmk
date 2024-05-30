@@ -9,7 +9,7 @@ use crate::{
 use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
-        gatt_server::{self, RegisterError, Service, WriteOp},
+        gatt_server::{self, get_sys_attrs, set_sys_attrs, RegisterError, Service, WriteOp},
         Connection,
     },
     Softdevice,
@@ -143,7 +143,22 @@ impl gatt_server::Server for BleServer {
         data: &[u8],
     ) -> Option<Self::Event> {
         self.hid.on_write(conn, handle, data);
-        self.bas.on_write(handle, data);
+        if let Some(event) = self.bas.on_write(handle, data) {
+            info!("handle: {}, data: {}", handle, data);
+            let mut buf: [u8; 64] = [0; 64];
+            let len = get_sys_attrs(conn, &mut buf).unwrap();
+            if len > 0 {
+                set_sys_attrs(conn, Some(&buf[0..len])).unwrap();
+            }
+            match event {
+                crate::ble::nrf::battery_service::BatteryServiceEvent::BatteryLevelCccdWrite {
+                    notifications,
+                } => {
+                    info!("bat notifi: {}", notifications);
+                }
+            }
+        }
+
         None
     }
 }
