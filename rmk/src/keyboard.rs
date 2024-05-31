@@ -47,6 +47,7 @@ pub(crate) async fn keyboard_task<
         keyboard.send_media_report(sender).await;
         keyboard.send_mouse_report(sender).await;
         keyboard.send_system_control_report(sender).await;
+        Timer::after_micros(100).await;
     }
 }
 
