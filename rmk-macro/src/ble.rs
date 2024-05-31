@@ -40,6 +40,7 @@ pub(crate) fn expand_ble_config(
                         // Then we initialize the ADC. We are only using one channel in this example.
                         let config = ::embassy_nrf::saadc::Config::default();
                         let channel_cfg = ::embassy_nrf::saadc::ChannelConfig::single_ended(adc_pin);
+                        // channel_cfg.gain = ::embassy_nrf::saadc:: Gain::GAIN1_3;
                         ::embassy_nrf::interrupt::SAADC.set_priority(::embassy_nrf::interrupt::Priority::P3);
                         let saadc = ::embassy_nrf::saadc::Saadc::new(p.SAADC, Irqs, config, [channel_cfg]);
                         // Wait for ADC calibration.

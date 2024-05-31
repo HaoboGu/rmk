@@ -81,18 +81,20 @@ impl<'a> BatteryService {
 
     fn get_battery_percent(&self, val: i16) -> u8 {
         info!("Detected adv value: {=i16}", val);
-        // Suppose that the adc value is between 2200 and 3000
         // With default setting:
-        // voltage = val * 1000 / 1137 mv;
-        // val = v * 1137;
-        // v = val / 1137;
+        // voltage = val * 1000 / 1137 mv.
+        // input range of saadc = 3.6v ~= 4090 = 100%
+        // Suppose that we take 3.3v at the 0% voltage
+        // 3.3v ~= 3750.
+        //
+        // To simplify the calculation, we use 4050/3750 as the highes/lowest saadc value.
 
-        if val > 3000 {
+        if val > 4050 {
             100_u8
-        } else if val < 2200 {
+        } else if val < 3750 {
             0_u8
         } else {
-            ((val - 2200) / 8) as u8
+            ((val - 3750) / 3) as u8
         }
     }
 }
