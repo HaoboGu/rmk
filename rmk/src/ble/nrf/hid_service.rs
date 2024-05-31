@@ -1,6 +1,6 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::ble::descriptor::{BleCompositeReportType, BleKeyboardReport};
-use defmt::{error, info};
+use defmt::{error, info, Format};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -16,6 +16,7 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 #[allow(dead_code)]
+#[derive(Debug, defmt::Format)]
 pub struct HidService {
     hid_info: u16,
     report_map: u16,
@@ -196,22 +197,6 @@ impl HidService {
         })
     }
 
-    pub fn on_write(&self, _conn: &Connection, handle: u16, data: &[u8]) {
-        if handle == self.input_keyboard_cccd {
-            info!("HID input keyboard cccd: {:?}", data);
-        } else if handle == self.input_keyboard {
-            info!("HID input keyboard: {:?}", data);
-        } else if handle == self.output_keyboard {
-            // Fires if a keyboard output is changed - e.g. the caps lock LED
-            // TODO: Update capslock LED
-            info!("HID output keyboard: {:?}", data);
-        } else if handle == self.input_vial_keys_cccd {
-            info!("HID input via keys: {:?}", data);
-        } else if handle == self.input_media_keys_cccd {
-            info!("HID input media keys: {:?}", data);
-        }
-    }
-
     pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
             .map_err(|e| error!("send keyboard report error: {}", e))
@@ -223,4 +208,44 @@ impl HidService {
             .map_err(|e| error!("send keyboard report error: {}", e))
             .ok();
     }
+}
+
+impl gatt_server::Service for HidService {
+    type Event = HidServiceEvent;
+
+    fn on_write(&self, handle: u16, data: &[u8]) -> Option<Self::Event> {
+        if handle == self.input_keyboard_cccd {
+            Some(HidServiceEvent::InputKeyboardCccdWrite)
+        } else if handle == self.input_vial_keys_cccd {
+            Some(HidServiceEvent::InputVialKeyCccdWrite)
+        } else if handle == self.input_media_keys_cccd {
+            Some(HidServiceEvent::InputMediaKeyCccdWrite)
+        } else if handle == self.input_mouse_keys_cccd {
+            Some(HidServiceEvent::InputMouseKeyCccdWrite)
+        } else if handle == self.input_system_keys_cccd {
+            Some(HidServiceEvent::InputSystemKeyCccdWrite)
+        } else if handle == self.output_vial {
+            info!("HID output vial: {:?}", data);
+            Some(HidServiceEvent::OutputVial)
+        } else if handle == self.output_keyboard {
+            // Fires if a keyboard output is changed - e.g. the caps lock LED
+            // TODO: Update capslock LED from data
+            info!("HID output keyboard: {:?}", data);
+            Some(HidServiceEvent::OutputKeyboard)
+        } else {
+            None
+        }
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Format)]
+pub enum HidServiceEvent {
+    InputKeyboardCccdWrite,
+    InputMediaKeyCccdWrite,
+    InputMouseKeyCccdWrite,
+    InputSystemKeyCccdWrite,
+    InputVialKeyCccdWrite,
+    OutputKeyboard,
+    OutputVial,
 }

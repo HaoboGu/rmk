@@ -96,7 +96,7 @@ impl SecurityHandler for Bonder {
 
     fn on_bonded(
         &self,
-        _conn: &Connection,
+        conn: &Connection,
         master_id: MasterId,
         key: EncryptionInfo,
         peer_id: IdentityKey,
@@ -125,8 +125,14 @@ impl SecurityHandler for Bonder {
             self.bond_info.borrow_mut().remove(&unlucky);
         } else {
             // Save bond info
+            let mut sys_attr_data: [u8; 62] = [0; 62];
+            let sys_attr_length = get_sys_attrs(conn, &mut sys_attr_data).unwrap();
+
             let new_bond_info = BondInfo {
-                sys_attr: SystemAttribute::default(),
+                sys_attr: SystemAttribute {
+                    length: sys_attr_length,
+                    data: sys_attr_data,
+                },
                 peer: Peer {
                     master_id,
                     key,
@@ -164,7 +170,6 @@ impl SecurityHandler for Bonder {
     fn save_sys_attrs(&self, conn: &Connection) {
         // On disconnect usually
         let addr = conn.peer_address();
-        info!("Saving system attributes for {}", addr);
 
         let mut bond_info = self.bond_info.borrow_mut();
 
@@ -174,20 +179,41 @@ impl SecurityHandler for Bonder {
             .find(|(_, info)| info.peer.peer_id.is_match(addr));
 
         if let Some((_, info)) = bonded {
-            // Get system attr and save to flash
-            info.sys_attr.length = match get_sys_attrs(conn, &mut info.sys_attr.data) {
-                Ok(length) => length,
+            let mut buf = [0_u8; 64];
+
+            match get_sys_attrs(conn, &mut buf) {
+                Ok(sys_attr_len) => {
+                    if sys_attr_len > 0 {
+                        // Get sys_attrs correctly, check whether it's same with saved bond info.
+                        // If not, update bond info
+                        if !(info.sys_attr.length == sys_attr_len
+                            && info.sys_attr.data[0..sys_attr_len] == buf[0..sys_attr_len])
+                        {
+                            debug!(
+                                "Updating sys_attr:\nnew: {},{}\nold: {},{}",
+                                buf, sys_attr_len, info.sys_attr.data, info.sys_attr.length
+                            );
+                            // Update bond info
+                            info.sys_attr.data[0..sys_attr_len]
+                                .copy_from_slice(&buf[0..sys_attr_len]);
+                            info.sys_attr.length = sys_attr_len;
+
+                            // Save new bond info to flash
+                            match FLASH_CHANNEL
+                                .try_send(FlashOperationMessage::BondInfo(info.clone()))
+                            {
+                                Ok(_) => debug!("Sent bond info to flash channel"),
+                                Err(_e) => error!("Send bond info to flash channel error"),
+                            };
+                        }
+                    } else {
+                        error!("Got empty system attr");
+                    }
+                }
                 Err(e) => {
                     error!("Get system attr for {} erro: {}", info, e);
-                    0
                 }
-            };
-
-            // Correctly get system attr, save to flash
-            match FLASH_CHANNEL.try_send(FlashOperationMessage::BondInfo(info.clone())) {
-                Ok(_) => debug!("Sent bond info to flash channel"),
-                Err(_e) => error!("Send bond info to flash channel error"),
-            };
+            }
         } else {
             info!("Peer doesn't match: {}", conn.peer_address());
         }
@@ -205,6 +231,7 @@ impl SecurityHandler for Bonder {
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
+        // info!("call set_sys_attrs in load_sys_attrs: {}", sys_attr);
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }

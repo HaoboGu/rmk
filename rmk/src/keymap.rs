@@ -79,6 +79,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             return self.layers[layer as usize][row][col];
         }
 
+        if !key_state.changed && key_state.pressed {
+            // If current key_state doesn't change, and the key is pressed, use the cached layer.
+            // 
+            // This situation is specifically for tap/hold, when the key is held, the layer could be continuously checked.
+            // The layer cache should not be popped in this case.
+            // This function should return the cached layer to make layer tap/hold action performs correctly.
+            let layer = self.layer_cache[row][col];
+            return self.layers[layer as usize][row][col];
+        }
+
         // Iterate from higher layer to lower layer, the lowest checked layer is the default layer
         for (layer_idx, layer) in self.layers.iter().enumerate().rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {

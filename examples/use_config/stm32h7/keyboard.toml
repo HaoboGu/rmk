@@ -11,8 +11,8 @@ rows = 4
 cols = 3
 layers = 2
 # Input and output pins are mandatory
-input_pins = ["PD4", "PD5", "PD6", "PD3"]
-output_pins = ["PD7", "PD8", "PD9"]
+input_pins = ["PD9", "PD8", "PB13", "PB12"]
+output_pins = ["PE13", "PE14", "PE15"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 

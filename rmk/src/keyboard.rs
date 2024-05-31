@@ -1,3 +1,7 @@
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -6,20 +10,28 @@ use crate::{
     matrix::{KeyState, Matrix},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
 use core::cell::RefCell;
 use defmt::{debug, error, warn};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex,
+    channel::{Receiver, Sender},
+};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 use usbd_hid::descriptor::KeyboardReport;
 
+/// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
+pub(crate) enum KeyboardReportMessage {
+    /// Normal keyboard hid report
+    KeyboardReport(KeyboardReport),
+    /// Other types of keyboard reports: mouse + media(consumer) + system control
+    CompositeReport(CompositeReport, CompositeReportType),
+}
+
+/// This is the main keyboard task, this task do the matrix scanning and key processing
+/// The report is sent to communication task, and finally sent to the host
 pub(crate) async fn keyboard_task<
     'a,
-    W: HidWriterWrapper,
-    W2: HidWriterWrapper,
     In: InputPin,
     Out: OutputPin,
     const ROW: usize,
@@ -27,18 +39,60 @@ pub(crate) async fn keyboard_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
-    keyboard_hid_writer: &mut W,
-    other_hid_writer: &mut W2,
+    sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     loop {
-        let _ = keyboard.scan_matrix().await;
-        keyboard.send_keyboard_report(keyboard_hid_writer).await;
-        keyboard.send_media_report(other_hid_writer).await;
-        keyboard.send_mouse_report(other_hid_writer).await;
-        keyboard.send_system_control_report(other_hid_writer).await;
+        let _ = keyboard.scan_matrix(sender).await;
+        keyboard.send_keyboard_report(sender).await;
+        keyboard.send_media_report(sender).await;
+        keyboard.send_mouse_report(sender).await;
+        keyboard.send_system_control_report(sender).await;
     }
 }
 
+/// This task processes all keyboard reports and send them to the host
+pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
+    receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keybooard_hid_writer: &mut W,
+    other_hid_writer: &mut W2,
+) {
+    loop {
+        match receiver.receive().await {
+            KeyboardReportMessage::KeyboardReport(report) => {
+                match keybooard_hid_writer.write_serialize(&report).await {
+                    Ok(()) => {}
+                    Err(e) => error!("Send keyboard report error: {}", e),
+                };
+            }
+            KeyboardReportMessage::CompositeReport(report, report_type) => {
+                write_other_report_to_host(report, report_type, other_hid_writer).await;
+            }
+        }
+    }
+}
+
+pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
+    report: CompositeReport,
+    report_type: CompositeReportType,
+    other_hid_writer: &mut W,
+) {
+    let mut buf: [u8; 9] = [0; 9];
+    // Prepend report id
+    buf[0] = report_type as u8;
+    match report.serialize(&mut buf[1..], report_type) {
+        Ok(s) => {
+            debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
+            match match other_hid_writer.get_conn_type() {
+                ConnectionType::Usb => other_hid_writer.write(&buf[0..s + 1]).await,
+                ConnectionType::Ble => other_hid_writer.write(&buf[1..s + 1]).await,
+            } {
+                Ok(_) => {}
+                Err(e) => error!("Send other report error: {}", e),
+            }
+        }
+        Err(_) => error!("Serialize other report error"),
+    }
+}
 pub(crate) struct Keyboard<
     'a,
     In: InputPin,
@@ -130,28 +184,30 @@ impl<
         }
     }
 
-    pub(crate) async fn send_keyboard_report<W: HidWriterWrapper>(&mut self, writer: &mut W) {
+    pub(crate) async fn send_keyboard_report(
+        &mut self,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         if self.need_send_key_report {
             debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
-            match writer.write_serialize(&self.report).await {
-                Ok(()) => {}
-                Err(e) => error!("Send keyboard report error: {}", e),
-            };
-            // Reset report key states
-            for bit in &mut self.report.keycodes {
-                *bit = 0;
-            }
+            sender
+                .send(KeyboardReportMessage::KeyboardReport(self.report))
+                .await;
             self.need_send_key_report = false;
         }
     }
 
     /// Send system control report if needed
-    pub(crate) async fn send_system_control_report<W: HidWriterWrapper>(
+    pub(crate) async fn send_system_control_report(
         &mut self,
-        hid_interface: &mut W,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_system_control_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::System)
+            sender
+                .send(KeyboardReportMessage::CompositeReport(
+                    self.other_report,
+                    CompositeReportType::System,
+                ))
                 .await;
             self.other_report.system_usage_id = 0;
             self.need_send_system_control_report = false;
@@ -159,9 +215,16 @@ impl<
     }
 
     /// Send media report if needed
-    pub(crate) async fn send_media_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
+    pub(crate) async fn send_media_report(
+        &mut self,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         if self.need_send_consumer_control_report {
-            self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Media)
+            sender
+                .send(KeyboardReportMessage::CompositeReport(
+                    self.other_report,
+                    CompositeReportType::Media,
+                ))
                 .await;
             self.other_report.media_usage_id = 0;
             self.need_send_consumer_control_report = false;
@@ -169,14 +232,21 @@ impl<
     }
 
     /// Send mouse report if needed
-    pub(crate) async fn send_mouse_report<W: HidWriterWrapper>(&mut self, hid_interface: &mut W) {
+    pub(crate) async fn send_mouse_report(
+        &mut self,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         if self.need_send_mouse_report {
             // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
             let cur_tick = Instant::now().as_millis();
             // The default internal of sending mouse report is 20 ms, same as qmk accelerated mode
             // TODO: make it configurable
             if cur_tick - self.last_mouse_tick > 20 {
-                self.serialize_and_send_composite_report(hid_interface, CompositeReportType::Mouse)
+                sender
+                    .send(KeyboardReportMessage::CompositeReport(
+                        self.other_report,
+                        CompositeReportType::Mouse,
+                    ))
                     .await;
                 self.last_mouse_tick = cur_tick;
             }
@@ -192,32 +262,14 @@ impl<
         }
     }
 
-    async fn serialize_and_send_composite_report<W: HidWriterWrapper>(
+    /// Main keyboard task, it scans matrix, processes active keys.
+    /// If there is any change of key states, set self.changed=true.
+    ///
+    /// `sender` is required because when there's tap action, the report should be sent immediately and then continue scanning
+    pub(crate) async fn scan_matrix(
         &mut self,
-        hid_interface: &mut W,
-        report_type: CompositeReportType,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        let mut buf: [u8; 9] = [0; 9];
-        // Prepend report id
-        buf[0] = report_type as u8;
-        match self.other_report.serialize(&mut buf[1..], report_type) {
-            Ok(s) => {
-                debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
-                match match hid_interface.get_conn_type() {
-                    ConnectionType::Usb => hid_interface.write(&buf[0..s + 1]).await,
-                    ConnectionType::Ble => hid_interface.write(&buf[1..s + 1]).await,
-                } {
-                    Ok(_) => {}
-                    Err(e) => error!("Send other report error: {}", e),
-                }
-            }
-            Err(_) => error!("Serialize other report error"),
-        }
-    }
-
-    /// Main keyboard task, it scans matrix, processes active keys
-    /// If there is any change of key states, set self.changed=true
-    pub(crate) async fn scan_matrix(&mut self) {
         // Matrix scan
         self.matrix.scan().await;
 
@@ -228,19 +280,58 @@ impl<
             for col_idx in 0..COL {
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
                 if ks.changed {
-                    self.process_key_change(row_idx, col_idx).await;
+                    self.process_key_change(row_idx, col_idx, sender).await;
+                } else if ks.pressed {
+                    // When there's no key change, only tap/hold action needs to be processed
+                    // Continuously check the hold state
+                    let action = self
+                        .keymap
+                        .borrow_mut()
+                        .get_action_with_layer_cache(row_idx, col_idx, ks);
+                    let tap_hold = match action {
+                        KeyAction::TapHold(tap_action, hold_action) => {
+                            Some((tap_action, hold_action))
+                        }
+                        KeyAction::LayerTapHold(tap_action, layer_num) => {
+                            Some((tap_action, Action::LayerOn(layer_num)))
+                        }
+                        KeyAction::ModifierTapHold(tap_action, modifier) => {
+                            Some((tap_action, Action::Modifier(modifier)))
+                        }
+                        _ => None,
+                    };
+                    if let Some((tap_action, hold_action)) = tap_hold {
+                        self.process_key_action_tap_hold(
+                            tap_action,
+                            hold_action,
+                            row_idx,
+                            col_idx,
+                            ks,
+                            sender,
+                        )
+                        .await;
+                    };
                 }
             }
         }
     }
 
     /// Process key changes at (row, col)
-    async fn process_key_change(&mut self, row: usize, col: usize) {
+    async fn process_key_change(
+        &mut self,
+        row: usize,
+        col: usize,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
+        let key_state = self.matrix.get_key_state(row, col);
+
         // Matrix should process key pressed event first, record the timestamp of key changes
-        self.matrix.key_pressed(row, col);
+        if key_state.pressed {
+            // Start timer
+            self.matrix.update_timer(row, col);
+        }
 
         // Process key
-        let key_state = self.matrix.get_key_state(row, col);
         let action = self
             .keymap
             .borrow_mut()
@@ -249,23 +340,44 @@ impl<
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
             KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_state),
-            KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
+            KeyAction::Tap(a) => self.process_key_action_tap(a, key_state, sender).await,
             KeyAction::TapHold(tap_action, hold_action) => {
-                self.process_key_action_tap_hold(tap_action, hold_action)
-                    .await
+                self.process_key_action_tap_hold(
+                    tap_action,
+                    hold_action,
+                    row,
+                    col,
+                    key_state,
+                    sender,
+                )
+                .await;
             }
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action)
-                    .await;
+                self.process_key_action_tap_hold(
+                    tap_action,
+                    layer_action,
+                    row,
+                    col,
+                    key_state,
+                    sender,
+                )
+                .await;
             }
             KeyAction::ModifierTapHold(tap_action, modifier) => {
                 let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action)
-                    .await;
+                self.process_key_action_tap_hold(
+                    tap_action,
+                    modifier_action,
+                    row,
+                    col,
+                    key_state,
+                    sender,
+                )
+                .await;
             }
         }
     }
@@ -287,6 +399,12 @@ impl<
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
+            Action::Modifier(modifier) => {
+                let (keycodes, n) = modifier.to_modifier_keycodes();
+                for kc in keycodes.iter().take(n) {
+                    self.process_action_keycode(*kc, key_state);
+                }
+            }
             _ => (),
         }
     }
@@ -306,20 +424,74 @@ impl<
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
-    async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
+    async fn process_key_action_tap(
+        &mut self,
+        action: Action,
+        mut key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         if key_state.changed && key_state.pressed {
             self.process_key_action_normal(action, key_state);
 
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
+            // Manually trigger send report
+            self.send_keyboard_report(sender).await;
+            self.send_media_report(sender).await;
+            self.send_system_control_report(sender).await;
+            self.send_mouse_report(sender).await;
 
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state);
         }
     }
 
-    async fn process_key_action_tap_hold(&mut self, _tap_action: Action, _hold_action: Action) {
-        warn!("tap or hold not implemented");
+    /// Process tap/hold action.
+    /// There are several cases:
+    ///
+    /// 1. `key_state.changed` is true, and `key_state.pressed` is false,
+    ///     which means the key is released. Then the duration time should be checked
+    ///
+    /// 2. `key_state.changed` is false, and `key_state.pressed` is true,
+    ///     which means that the key is held. The duration time should to be checked.
+    ///     
+    /// TODO: make tap/hold threshold customizable
+    async fn process_key_action_tap_hold(
+        &mut self,
+        tap_action: Action,
+        hold_action: Action,
+        row: usize,
+        col: usize,
+        mut key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
+        if !key_state.pressed && key_state.changed {
+            // Case 1, the key is released
+            if let Some(s) = key_state.hold_start {
+                let d = s.elapsed().as_millis();
+                if d < 200 {
+                    // Released: tap
+                    key_state.pressed = true;
+                    debug!("Release tap hold, got TAP: {}, {}", tap_action, key_state);
+                    self.process_key_action_tap(tap_action, key_state, sender)
+                        .await;
+                } else {
+                    // Released: hold action
+                    debug!("Release tap hold, got HOLD: {}, {}", hold_action, key_state);
+                    self.process_key_action_normal(hold_action, key_state);
+                }
+                // Reset timer after release
+                self.matrix.update_timer(row, col);
+            }
+        } else if key_state.pressed && !key_state.changed {
+            // Case 2, the key is held
+            if let Some(s) = key_state.hold_start {
+                let d = s.elapsed().as_millis();
+                if d > 200 {
+                    self.process_key_action_normal(hold_action, key_state);
+                }
+            }
+        }
     }
 
     async fn process_key_action_oneshot(&mut self, _oneshot_action: Action) {
@@ -356,9 +528,6 @@ impl<
     /// Process layer switch action.
     fn process_action_layer_switch(&mut self, layer_num: u8, key_state: KeyState) {
         // Change layer state only when the key's state is changed
-        if !key_state.changed {
-            return;
-        }
         if key_state.pressed {
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {

@@ -21,7 +21,7 @@ use embassy_rp::{
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    initialize_keyboard_with_config_and_run_async_flash,
+    initialize_keyboard_and_run_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -65,9 +65,9 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    // initialize_keyboard_with_config_and_run::<
+    // initialize_keyboard_and_run::<
     // Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
-    initialize_keyboard_with_config_and_run_async_flash::<
+    initialize_keyboard_and_run_async_flash::<
         Flash<peripherals::FLASH, Async, FLASH_SIZE>,
         Driver<'_, USB>,
         Input<'_, AnyPin>,

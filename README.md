@@ -17,6 +17,8 @@ A feature-rich Rust keyboard firmware.
 - **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 
+## [User Documentation](https://haobogu.github.io/rmk/guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) 
+
 ## News
 
 - [2024.05.01] RMK's new configuration system is available at main branch! This new feature brings a totally new way to build your keyboard firmware: using a config file `keyboard.toml`. The document can be found [here](https://haobogu.github.io/rmk/configuration.html), you can also check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
@@ -37,9 +39,11 @@ A feature-rich Rust keyboard firmware.
 
 </details>
 
-## [User Documentation](https://haobogu.github.io/rmk/guide_overview.html) 
+## [Real World Examples](https://haobogu.github.io/rmk/faqreal_world_examples.html)
 
-## [API Reference](https://docs.rs/rmk/latest/rmk/)
+### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
+
+<img src="docs/src/images/1.jpg" width="60%">
 
 ## Usage
 

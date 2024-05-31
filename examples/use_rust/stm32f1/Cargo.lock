@@ -395,6 +395,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-sync"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e0c49ff02ebe324faf3a8653ba91582e2d0a7fdef5bc88f449d5aa1bfcc05c"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "defmt",
+ "embedded-io-async",
+ "futures-util",
+ "heapless 0.8.0",
+]
+
+[[package]]
 name = "embassy-time"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -864,7 +878,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -873,7 +887,7 @@ dependencies = [
  "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
- "embassy-sync 0.5.0",
+ "embassy-sync 0.6.0",
  "embassy-time",
  "embassy-usb",
  "embedded-hal 1.0.0",
@@ -903,9 +917,9 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f731a9a7847d770149ea570e706276962bd63c482c3a067a51ca3f356e57854b"
+checksum = "b87619cc93492c23c2e729818a42b181eef1d170e3ca2191cb26a54879dab55b"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -922,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-stm32f1"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "const-gen",
  "cortex-m",

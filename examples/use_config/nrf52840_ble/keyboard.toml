@@ -10,8 +10,8 @@ rows = 4
 cols = 3
 layers = 2
 # Input and output pins are mandatory
-input_pins = ["P1_00", "P1_01", "P1_02", "P1_03"]
-output_pins = ["P1_05", "P1_06", "P1_07"]
+input_pins = ["P1_00", "P1_01", "P1_02", "P1_07"]
+output_pins = ["P1_05", "P1_06", "P1_03"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 
@@ -19,7 +19,7 @@ output_pins = ["P1_05", "P1_06", "P1_07"]
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
-# capslock.pin = "PB2"
+# capslock.pin = "P0_31"
 # capslock.low_active = true
 # scrolllock.pin = "PA3"
 # scrolllock.low_active = true
@@ -35,6 +35,8 @@ output_pins = ["P1_05", "P1_06", "P1_07"]
 
 [ble]
 enabled = true
-# battery_adc_pin = "P0_05"
-# charge_state.pin = "P0_25"
-# charge_state.low_active = true
+battery_adc_pin = "P0_05"
+charge_state.pin = "P0_25"
+charge_state.low_active = false
+charge_led.pin = "P0_29"
+charge_led.low_active = true

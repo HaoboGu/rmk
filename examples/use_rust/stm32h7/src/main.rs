@@ -24,7 +24,7 @@ use embassy_stm32::{
 use panic_probe as _;
 use rmk::{
     config::{RmkConfig, VialConfig},
-    initialize_keyboard_with_config_and_run,
+    initialize_keyboard_and_run,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -98,7 +98,7 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    initialize_keyboard_with_config_and_run::<
+    initialize_keyboard_and_run::<
         Flash<'_, Blocking>,
         Driver<'_, USB_OTG_HS>,
         Input<'_, AnyPin>,
