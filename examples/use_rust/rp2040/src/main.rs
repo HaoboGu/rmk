@@ -13,11 +13,12 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::{
     bind_interrupts,
-    flash::{Async, Blocking, Flash},
+    flash::{Async, Flash},
     gpio::{AnyPin, Input, Output},
     peripherals::{self, USB},
     usb::{Driver, InterruptHandler},
 };
+// use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
