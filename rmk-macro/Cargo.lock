@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "embedded-hal",
  "serde",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cargo_toml",
  "darling",

@@ -92,7 +92,6 @@ impl<'a> BatteryService {
         // val = v_bat * 0.7092 * 1137.8 = v_bat * 806.93
         // 
         // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
-        // To simplify the calculation, we use 4050/3750 as the highes/lowest saadc value.
         // TODO: Make battery calculation user customizable
         if val > 3300 {
             100_u8
