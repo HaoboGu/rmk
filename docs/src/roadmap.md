@@ -15,7 +15,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] layer support
   - [x] system/media/mouse keys
   - [x] LED
-  - [ ] tap/hold
+  - [x] tap/hold
   - [ ] 🔴 RGB
   - [ ] keyboard macros
   - [ ] 🟢 encoder
@@ -29,7 +29,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] battery service from ADC
   - [x] 🔴 BLE support - esp32c3 and esp32s3
   - [ ] 🔴 BLE support - all esp32 chips
-  - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP at least
+  - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP
   - [ ] stablizing BLE feature gate/API
   - [ ] sleep mode to save battery
   - [ ] BLE support - ch58x/ch59x
