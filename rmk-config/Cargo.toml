@@ -1,6 +1,6 @@
 [package]
 name = "rmk-config"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Config crate of RMK"
@@ -13,7 +13,6 @@ resolver = "2"
 embedded-hal = { version = "1.0.0" }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
-
 embassy-nrf = { version = "0.1.0", features = [
     "unstable-pac",
     "time",

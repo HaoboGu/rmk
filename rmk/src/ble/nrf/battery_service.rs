@@ -46,7 +46,7 @@ impl<'a> BatteryService {
         // Wait 1 seconds, ensure that gatt server has been started
         Timer::after_secs(1).await;
         BatteryService::check_charging_state(battery_config);
-        
+
         loop {
             if let Some(ref mut saadc) = battery_config.saadc {
                 let mut buf = [0i16; 1];
@@ -81,20 +81,24 @@ impl<'a> BatteryService {
 
     fn get_battery_percent(&self, val: i16) -> u8 {
         info!("Detected adv value: {=i16}", val);
-        // With default setting:
-        // voltage = val * 1000 / 1137 mv.
-        // input range of saadc = 3.6v ~= 4090 = 100%
-        // Suppose that we take 3.3v at the 0% voltage
-        // 3.3v ~= 3750.
+        // According to nRF52840's datasheet, for single_ended saadc:
+        // `val = v_adc * (gain / reference) * 2^(resolution)`
         //
-        // To simplify the calculation, we use 4050/3750 as the highes/lowest saadc value.
-
-        if val > 4050 {
+        // When using default setting, gain = 1/6, reference = 0.6v, resolution = 12bits, so:
+        // val = v_adc * 1137.8
+        //
+        // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, hence,
+        // v_adc = v_bat * 0.7092 =>
+        // val = v_bat * 0.7092 * 1137.8 = v_bat * 806.93
+        // 
+        // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
+        // TODO: Make battery calculation user customizable
+        if val > 3300 {
             100_u8
-        } else if val < 3750 {
+        } else if val < 2600 {
             0_u8
         } else {
-            ((val - 3750) / 3) as u8
+            ((val - 2600) / 7) as u8
         }
     }
 }

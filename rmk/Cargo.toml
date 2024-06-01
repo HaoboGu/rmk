@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.1.15"
+version = "0.1.16"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,8 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-config = { version = "0.1", path = "../rmk-config" }
-rmk-macro = { version = "0.1.1", path = "../rmk-macro" }
+rmk-config = { version = "0.1.2", path = "../rmk-config" }
+rmk-macro = { version = "0.1.2", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
