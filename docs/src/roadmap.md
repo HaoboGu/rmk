@@ -16,6 +16,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] system/media/mouse keys
   - [x] LED
   - [x] tap/hold
+  - [ ] Direct pin
   - [ ] 🔴 RGB
   - [ ] keyboard macros
   - [ ] 🟢 encoder
