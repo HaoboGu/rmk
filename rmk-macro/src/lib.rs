@@ -1,6 +1,6 @@
 mod bind_interrupt;
-mod chip_init;
 mod ble;
+mod chip_init;
 mod comm;
 mod entry;
 mod flash;
@@ -8,6 +8,7 @@ mod gpio_config;
 mod import;
 mod keyboard;
 mod keyboard_config;
+mod layout;
 mod light;
 mod matrix;
 mod usb_interrupt_map;

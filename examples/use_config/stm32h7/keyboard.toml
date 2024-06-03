@@ -18,10 +18,12 @@ output_pins = ["PE13", "PE14", "PE15"]
 
 [layout]
 keymap = [
-    ["A", "B", "C"],
-    ["1", "2", "3"],
-    ["LCtrl", "MO(1)", "LShift"],
-    ["_", "_", ","],
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["_", "_", "Dot"]
+    ],
 ]
 
 [light]

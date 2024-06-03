@@ -17,6 +17,7 @@ use crate::{
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, get_chip_model, get_communication_type,
     },
+    layout::expand_layout_init,
     light::expand_light_config,
     matrix::expand_matrix_config,
     usb_interrupt_map::{get_usb_info, UsbInfo},
@@ -78,6 +79,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
                 .into();
         }
     };
+
     // Parse keyboard config file content to `KeyboardTomlConfig`
     let toml_config: KeyboardTomlConfig = match toml::from_str(&s) {
         Ok(c) => c,
@@ -129,6 +131,8 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         UsbInfo::new_default(&chip)
     };
 
+    let layout = expand_layout_init(toml_config.layout.clone());
+
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
         toml_config.keyboard.clone(),
@@ -176,6 +180,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
 
         #keyboard_info_static_var
         #vial_static_var
+        #layout
 
         #main_function
     }
