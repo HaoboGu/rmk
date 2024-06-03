@@ -1117,7 +1117,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "embassy-nrf",
  "embedded-hal 1.0.0",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cargo_toml",
  "darling 0.20.8",
@@ -1175,7 +1175,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-nrf52832-ble"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "const-gen",
  "cortex-m",

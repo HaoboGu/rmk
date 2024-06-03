@@ -39,4 +39,4 @@ battery_adc_pin = "P0_05"
 charge_state.pin = "P0_25"
 charge_state.low_active = false
 charge_led.pin = "P0_29"
-charge_led.low_active = true
+charge_led.low_active = false

@@ -885,7 +885,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -913,9 +913,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7080dc0b7e07c9053ddfa25c8ce5a3ef103fbc6e66af5e9162b541a1fc2dde8"
+version = "0.1.2"
 dependencies = [
  "embedded-hal 1.0.0",
  "serde",
@@ -924,9 +922,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b87619cc93492c23c2e729818a42b181eef1d170e3ca2191cb26a54879dab55b"
+version = "0.1.2"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -943,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-stm32h7"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "const-gen",
  "cortex-m",
