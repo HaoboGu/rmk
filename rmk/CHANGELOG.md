@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2024-06-04
+
+### Fixed
+
+- Fixed doc display error on docs.rs 
+
 ## [0.1.16] - 2024-06-01
 
 ### Added
