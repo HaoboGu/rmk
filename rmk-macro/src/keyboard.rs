@@ -131,7 +131,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         UsbInfo::new_default(&chip)
     };
 
-    let layout = expand_layout_init(toml_config.layout.clone());
+    let layout = expand_layout_init(toml_config.layout.clone(), toml_config.matrix.clone());
 
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
