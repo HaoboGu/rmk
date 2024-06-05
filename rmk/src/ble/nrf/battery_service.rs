@@ -75,7 +75,7 @@ impl<'a> BatteryService {
             BatteryService::check_charging_state(battery_config);
 
             // Sample every 120s
-            Timer::after_secs(1).await
+            Timer::after_secs(120).await
         }
     }
 

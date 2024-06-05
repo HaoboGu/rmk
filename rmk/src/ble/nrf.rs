@@ -105,6 +105,11 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             rc_ctiv: 16,
             rc_temp_ctiv: 2,
             accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
+            // External osc
+            // source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
+            // rc_ctiv: 0,
+            // rc_temp_ctiv: 0,
+            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_100_PPM as u8,
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
             conn_count: 6,
@@ -215,6 +220,9 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         LightService::from_config(keyboard_config.light_config),
     );
 
+    // BLE only, test power usage
+    usb_device = None;
+
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
     let mut keyboard_report_sender = keyboard_channel.sender();
@@ -294,6 +302,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             }
         } else {
             // If no USB device, just start BLE advertising
+            info!("No USB, Start BLE advertising!");
             match adv_fut.await {
                 Ok(conn) => {
                     bonder.load_sys_attrs(&conn);
