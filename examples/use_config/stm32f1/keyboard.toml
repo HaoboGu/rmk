@@ -15,8 +15,6 @@ output_pins = ["PD7", "PD8", "PD9"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 
-[layout]
-
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
 # capslock.pin = "PB2"
