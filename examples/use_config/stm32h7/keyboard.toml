@@ -17,6 +17,20 @@ output_pins = ["PE13", "PE14", "PE15"]
 # row2col = true
 
 [layout]
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active

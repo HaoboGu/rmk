@@ -123,17 +123,13 @@ charge_state.pin = "PA0"
 charge_state.low_active = true
 ```
 
-### Keymap config(draft)
+### Keymap config
 
-**NOTE: THIS FEATURE IS NOT AVAILABLE NOW, USE [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs) BEFORE IT'S COMPLETED AND GOT MERGED TO MASTER.**
-
-Suggestions are welcomed!
-
-You can set your keyboard's default keymap in `keyboard.toml`. The config key is `default_keymap` under `[layout]` section:
+You can set your keyboard's default keymap in `keyboard.toml`. The config key is `keymap` under `[layout]` section:
 
 ```toml
 [layout]
-default_keymap = [
+keymap = [
   # Your default keymap here
 ]
 ```
@@ -142,7 +138,7 @@ The keymap inside is a 2-D array, which represents layer -> row -> key structure
 
 ```toml
 [layout]
-default_keymap = [
+keymap = [
   # Layer 1
   [
     ["key1", "key2"], # Row 1
@@ -151,15 +147,15 @@ default_keymap = [
   ],
   # Layer 2
   [
-    [], # Row 1
-    [], # Row 2
+    [..], # Row 1
+    [..], # Row 2
     ...
   ],
   ...
 ]
 ```
 
-The number of layers/rows/cols should be identical with what's already in `[matrix]` section.
+The number of layers/rows/cols should be identical with what's already in `[matrix]` section. [Here](https://github.com/HaoboGu/rmk/blob/main/examples/use_config/stm32h7/keyboard.toml) is an example of keymap definition.
 
 In each row, some keys are set. Due to the limitation of `toml` file, all keys are strings. RMK would parse the strings and fill them to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
@@ -172,12 +168,12 @@ The key string should follow several rules:
 2. For no-key, use `"__"`
 
 3. RMK supports many advanced layer operations:
-    1. Use `"MO(n)"` to create a layer activate action
+    1. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
     2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be like `LShift | RGui`
-    3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold)
-    4. Use `"OSL(n)"` to create a one-shot layer action
-    5. Use `"TT(n)"` to create a layer activate or tap toggle action
-    6. Use `"TG(n)"` to create a layer toggle action
+    3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
+    4. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
+    5. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
+    6. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
 
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers)
 
@@ -208,5 +204,5 @@ RMK should use the config from the user defined function to initialize the singl
 
 ## TODOs:
 
-- [ ] gen keymap
+- [x] gen keymap from `keyboard.toml`
 - [ ] read vial.json and gen
