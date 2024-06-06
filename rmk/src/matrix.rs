@@ -102,7 +102,7 @@ impl<
         if let Some(start_time) = self.scan_start {
             // If not key over 2 secs, wait for interupt in next loop
             info!("Check start: {}", start_time.as_secs());
-            if start_time.elapsed().as_secs() < 2 {
+            if start_time.elapsed().as_secs() < 1 {
                 return;
             } else {
                 self.scan_start = None;

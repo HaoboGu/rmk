@@ -21,7 +21,7 @@ use embassy_nrf::{
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
-    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     initialize_nrf_ble_keyboard_with_config_and_run,
 };
 
@@ -57,15 +57,20 @@ async fn main(spawner: Spawner) {
     while clock.events_hfclkstarted.read().bits() != 1 {}
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_00, P1_01, P1_02, P1_03], output: [P1_05, P1_06, P1_07]);
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10, P0_03, P0_28, P1_13], output:  [P0_30, P0_31, P0_29, P0_02, P0_05, P1_09, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_04, P1_06]);
 
     // Usb config
     let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
     let driver = Driver::new(p.USBD, Irqs, software_vbus);
 
     // Initialize the ADC. We are only using one channel for detecting battery level
-    let adc_pin = p.P0_05.degrade_saadc();
-    let is_charging_pin = Input::new(AnyPin::from(p.P0_25), embassy_nrf::gpio::Pull::None);
+    let adc_pin = p.P0_04.degrade_saadc();
+    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    let charging_led = Output::new(
+        AnyPin::from(p.P0_08),
+        embassy_nrf::gpio::Level::Low,
+        embassy_nrf::gpio::OutputDrive::Standard,
+    );
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
@@ -79,11 +84,22 @@ async fn main(spawner: Spawner) {
         serial_number: "00000000",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, true, Some(saadc));
+    let ble_battery_config = BleBatteryConfig::new(
+        Some(is_charging_pin),
+        true,
+        Some(charging_led),
+        false,
+        Some(saadc),
+    );
+    let storage_config = StorageConfig {
+        start_addr: 0,
+        num_sectors: 6,
+    };
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
         ble_battery_config,
+        storage_config,
         ..Default::default()
     };
 

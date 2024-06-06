@@ -224,7 +224,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     );
 
     // BLE only, test power usage
-    usb_device = None;
+    // usb_device = None;
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
