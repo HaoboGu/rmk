@@ -45,6 +45,8 @@ use embassy_time::Timer;
 #[cfg(not(feature = "nrf52832_ble"))]
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::{
@@ -149,7 +151,8 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "nrf52832_ble"))] D: Driver<'static>,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -339,7 +342,8 @@ async fn run_ble_keyboard<
     'a,
     'b,
     F: AsyncNorFlash,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,

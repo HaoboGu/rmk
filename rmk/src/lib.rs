@@ -28,6 +28,8 @@ use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
@@ -69,7 +71,8 @@ mod via;
 pub async fn initialize_keyboard_and_run<
     F: NorFlash,
     D: Driver<'static>,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -111,7 +114,8 @@ pub async fn initialize_keyboard_and_run<
 pub async fn initialize_keyboard_and_run_async_flash<
     F: AsyncNorFlash,
     D: Driver<'static>,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -213,7 +217,8 @@ pub(crate) async fn run_usb_keyboard<
     'b,
     D: Driver<'a>,
     F: AsyncNorFlash,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,

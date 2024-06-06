@@ -10,6 +10,8 @@ use defmt::{info, warn};
 use embassy_futures::select::select3;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 use futures::pin_mut;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
@@ -26,7 +28,8 @@ use futures::pin_mut;
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     // F: NorFlash,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
