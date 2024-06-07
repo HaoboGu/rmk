@@ -24,12 +24,18 @@ pub(crate) fn convert_output_pins_to_initializers(
 pub(crate) fn convert_input_pins_to_initializers(
     chip: &ChipModel,
     pins: Vec<String>,
+    async_matrix: bool,
 ) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
     let mut idents = vec![];
     let pin_initializers = pins
         .into_iter()
-        .map(|p| (p.clone(), convert_gpio_str_to_input_pin(chip, p)))
+        .map(|p| {
+            (
+                p.clone(),
+                convert_gpio_str_to_input_pin(chip, p, async_matrix),
+            )
+        })
         .map(|(p, ts)| {
             let ident_name = format_ident!("{}", p.to_lowercase());
             idents.push(ident_name.clone());
@@ -73,12 +79,29 @@ pub(crate) fn convert_gpio_str_to_output_pin(
 pub(crate) fn convert_gpio_str_to_input_pin(
     chip: &ChipModel,
     gpio_name: String,
+    async_matrix: bool,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
     match chip.series {
         ChipSeries::Stm32 => {
-            quote! {
-                ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
+            if async_matrix {
+                // If async_matrix is enabled, use ExtiInput for input pins
+                match get_pin_num_stm32(&gpio_name) {
+                    Some(pin_num) => {
+                        let pin_num_ident = format_ident!("EXTI{}", pin_num);
+                        quote! {
+                            ::embassy_stm32::exti::ExtiInput::new(::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade(), p.#pin_num_ident.degrade())
+                        }
+                    }
+                    None => {
+                        let message = format!("Invalid pin definition: {}", gpio_name);
+                        quote! { compile_error!(#message); }
+                    }
+                }
+            } else {
+                quote! {
+                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
+                }
             }
         }
         ChipSeries::Nrf52 => {
@@ -97,5 +120,15 @@ pub(crate) fn convert_gpio_str_to_input_pin(
             }
         }
         ChipSeries::Unsupported => todo!(),
+    }
+}
+
+/// Get pin number from pin str.
+/// For example, if the pin str is "PD13", this function will return "13".
+fn get_pin_num_stm32(gpio_name: &String) -> Option<String> {
+    if gpio_name.len() < 3 {
+        None
+    } else {
+        Some(gpio_name[2..].to_string())
     }
 }

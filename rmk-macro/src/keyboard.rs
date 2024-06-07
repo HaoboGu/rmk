@@ -69,6 +69,16 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         Err(_e) => None,
     };
 
+    // Check whether the async matrix feature is enabled
+    let mut async_matrix = false;
+    if let Some(rmk_features) = _enabled_rmk_features {
+        for f in rmk_features {
+            if f == "async_matrix" {
+                async_matrix = true
+            }
+        }
+    };
+
     // Read keyboard config file at project root
     let s = match fs::read_to_string("keyboard.toml") {
         Ok(s) => s,
@@ -131,8 +141,8 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         UsbInfo::new_default(&chip)
     };
 
+    // Create layout info
     let layout = expand_layout_init(toml_config.layout.clone(), toml_config.matrix.clone());
-
     // Create keyboard info and vial struct
     let keyboard_info_static_var = expand_keyboard_info(
         toml_config.keyboard.clone(),
@@ -140,6 +150,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         toml_config.matrix.cols as usize,
         toml_config.matrix.layers as usize,
     );
+    // Create vial config
     let vial_static_var = expand_vial_config();
 
     // If defmt_log is disabled, add an empty defmt logger impl
@@ -172,7 +183,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     };
 
     // Expanded main function
-    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod);
+    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod, async_matrix);
 
     quote! {
         use defmt::*;
@@ -192,6 +203,7 @@ fn expand_main(
     usb_info: UsbInfo,
     toml_config: KeyboardTomlConfig,
     item_mod: ItemMod,
+    async_matrix: bool,
 ) -> TokenStream2 {
     // Expand components of main function
     let imports = expand_imports(&item_mod);
@@ -200,8 +212,8 @@ fn expand_main(
     let usb_init = expand_usb_init(&chip, &usb_info, comm_type, &item_mod);
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
     let light_config = expand_light_config(&chip, toml_config.light);
-    let matrix_config = expand_matrix_config(&chip, toml_config.matrix);
-    let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod);
+    let matrix_config = expand_matrix_config(&chip, toml_config.matrix, async_matrix);
+    let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod, async_matrix);
     let (ble_config, set_ble_config) = expand_ble_config(&chip, comm_type, toml_config.ble);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
