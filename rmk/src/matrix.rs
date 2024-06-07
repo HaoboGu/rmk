@@ -1,11 +1,12 @@
 use crate::debounce::{DebounceState, DebouncerTrait};
-use defmt::{info, Format};
-use embassy_futures::select::select_slice;
+use defmt::Format;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
-use heapless::Vec;
+use {
+    defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
+    heapless::Vec,
+};
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]

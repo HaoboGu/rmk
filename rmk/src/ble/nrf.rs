@@ -21,29 +21,15 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     KeyAction, KeyMap, RmkConfig,
 };
-#[cfg(not(feature = "nrf52832_ble"))]
-use crate::{
-    run_usb_keyboard,
-    usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-    KeyboardUsbDevice, LightService, VialService,
-};
-#[cfg(not(feature = "nrf52832_ble"))]
-use core::sync::atomic::Ordering;
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_futures::select::Either;
 use embassy_futures::select::{select, select4, Either4};
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
 };
 use embassy_time::Timer;
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -53,11 +39,22 @@ use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
 };
-#[cfg(not(feature = "nrf52832_ble"))]
-use once_cell::sync::OnceCell;
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
+#[cfg(not(feature = "nrf52832_ble"))]
+use {
+    crate::{
+        run_usb_keyboard,
+        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        KeyboardUsbDevice, LightService, VialService,
+    },
+    core::sync::atomic::Ordering,
+    embassy_futures::select::Either,
+    embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
+    embassy_usb::driver::Driver,
+    once_cell::sync::OnceCell,
+};
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
