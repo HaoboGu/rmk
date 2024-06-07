@@ -951,7 +951,6 @@ dependencies = [
  "embassy-executor",
  "embassy-stm32",
  "embassy-time",
- "embedded-hal-async",
  "json",
  "panic-probe",
  "rmk",
