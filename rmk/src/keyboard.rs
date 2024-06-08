@@ -18,6 +18,8 @@ use embassy_sync::{
 };
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 use usbd_hid::descriptor::KeyboardReport;
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
@@ -32,7 +34,8 @@ pub(crate) enum KeyboardReportMessage {
 /// The report is sent to communication task, and finally sent to the host
 pub(crate) async fn keyboard_task<
     'a,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -96,7 +99,8 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
 }
 pub(crate) struct Keyboard<
     'a,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -147,7 +151,8 @@ pub(crate) struct Keyboard<
 
 impl<
         'a,
-        In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
         Out: OutputPin,
         const ROW: usize,
         const COL: usize,
@@ -271,6 +276,9 @@ impl<
         &mut self,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
+        #[cfg(feature = "async_matrix")]
+        self.matrix.wait_for_key().await;       
+
         // Matrix scan
         self.matrix.scan().await;
 

@@ -542,6 +542,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
 dependencies = [
+ "defmt",
  "embedded-hal 1.0.0",
 ]
 
@@ -996,9 +997,9 @@ dependencies = [
 
 [[package]]
 name = "panic-probe"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa6fa5645ef5a760cd340eaa92af9c1ce131c8c09e7f8926d8a24b59d26652b9"
+checksum = "4047d9235d1423d66cc97da7d07eddb54d4f154d6c13805c6d0793956f4f25b0"
 dependencies = [
  "cortex-m",
  "defmt",
@@ -1117,7 +1118,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.1.17"
+version = "0.1.20"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1131,6 +1132,7 @@ dependencies = [
  "embassy-time",
  "embassy-usb",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "embedded-storage",
  "embedded-storage-async",
  "futures",
@@ -1148,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "embassy-nrf",
  "embedded-hal 1.0.0",
@@ -1158,7 +1160,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "cargo_toml",
  "darling 0.20.3",

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Recognize `async_matrix` feature defined in `Cargo.toml` and automatically generate corresponding code.
+
 ## [0.1.4] - 2024-06-06
 
 ### Added
