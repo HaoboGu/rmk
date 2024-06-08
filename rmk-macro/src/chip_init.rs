@@ -23,6 +23,8 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
             quote! {
                     use embassy_nrf::interrupt::InterruptExt;
                     let mut config = ::embassy_nrf::config::Config::default();
+                    // config.hfclk_source = ::embassy_nrf::config::HfclkSource::ExternalXtal;
+                    // config.lfclk_source = ::embassy_nrf::config::LfclkSource::ExternalXtal;
                     config.gpiote_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
                     config.time_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
                     #usb_related_config

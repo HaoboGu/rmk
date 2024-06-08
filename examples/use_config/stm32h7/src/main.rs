@@ -5,7 +5,6 @@
 mod keymap;
 mod vial;
 
-use crate::keymap::KEYMAP;
 use rmk::macros::rmk_keyboard;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -13,8 +12,9 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 #[rmk_keyboard]
 mod my_keyboard {
     use embassy_stm32::{
+        exti::ExtiInput,
         flash::{Blocking, Flash},
-        gpio::{AnyPin, Input, Output},
+        gpio::{AnyPin, Output},
         peripherals::USB_OTG_HS,
         time::Hertz,
         usb_otg::Driver,
@@ -91,7 +91,7 @@ mod my_keyboard {
         initialize_keyboard_and_run::<
             Flash<'_, Blocking>,
             Driver<'_, USB_OTG_HS>,
-            Input<'_, AnyPin>,
+            ExtiInput<AnyPin>,
             Output<'_, AnyPin>,
             ROW,
             COL,

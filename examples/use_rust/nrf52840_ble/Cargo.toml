@@ -10,9 +10,10 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.1.16", path = "../../../rmk", features = [
+rmk = { version = "0.1.21", path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
+    "async_matrix"
 ] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
@@ -23,11 +24,12 @@ embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", 
     "time-driver-rtc1",
     "gpiote",
     "unstable-pac",
+    "nfc-pins-as-gpio",
     "time",
 ] }
 embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
     "defmt",
-    "task-arena-size-8192",
+    "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",

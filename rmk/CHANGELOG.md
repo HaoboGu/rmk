@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2024-06-08
+
+### Added
+
+- Add `async_matrix` feature, which enables async detection of key press and reduces power consumption
+
+## [0.1.20] - 2024-06-06
+
+### Added
+
+- Support read default keymap from `keyboard.toml`, see https://haobogu.github.io/rmk/configuration.html#keymap-config
+
+## [0.1.17] - 2024-06-04
+
+### Fixed
+
+- Fixed doc display error on docs.rs 
+
 ## [0.1.16] - 2024-06-01
 
 ### Added

@@ -40,7 +40,7 @@ impl Format for ModifierCombination {
 }
 
 impl ModifierCombination {
-    pub(crate) fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
+    pub const fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
         ModifierCombination::new()
             .with_right(right)
             .with_gui(gui)

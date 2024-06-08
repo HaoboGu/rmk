@@ -21,41 +21,40 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     KeyAction, KeyMap, RmkConfig,
 };
-#[cfg(not(feature = "nrf52832_ble"))]
-use crate::{
-    run_usb_keyboard,
-    usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-    KeyboardUsbDevice, LightService, VialService,
-};
-#[cfg(not(feature = "nrf52832_ble"))]
-use core::sync::atomic::Ordering;
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_futures::select::Either;
 use embassy_futures::select::{select, select4, Either4};
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
 };
 use embassy_time::Timer;
-#[cfg(not(feature = "nrf52832_ble"))]
-use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
 };
-#[cfg(not(feature = "nrf52832_ble"))]
-use once_cell::sync::OnceCell;
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
+#[cfg(not(feature = "nrf52832_ble"))]
+use {
+    crate::{
+        run_usb_keyboard,
+        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        KeyboardUsbDevice, LightService, VialService,
+    },
+    core::sync::atomic::Ordering,
+    embassy_futures::select::Either,
+    embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
+    embassy_usb::driver::Driver,
+    once_cell::sync::OnceCell,
+};
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
@@ -105,6 +104,11 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             rc_ctiv: 16,
             rc_temp_ctiv: 2,
             accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
+            // External osc
+            // source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
+            // rc_ctiv: 0,
+            // rc_temp_ctiv: 0,
+            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_100_PPM as u8,
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
             conn_count: 6,
@@ -149,7 +153,8 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "nrf52832_ble"))] D: Driver<'static>,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -214,6 +219,9 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
     );
+
+    // BLE only, test power usage
+    // usb_device = None;
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
@@ -294,6 +302,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             }
         } else {
             // If no USB device, just start BLE advertising
+            info!("No USB, Start BLE advertising!");
             match adv_fut.await {
                 Ok(conn) => {
                     bonder.load_sys_attrs(&conn);
@@ -339,7 +348,8 @@ async fn run_ble_keyboard<
     'a,
     'b,
     F: AsyncNorFlash,
-    In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,

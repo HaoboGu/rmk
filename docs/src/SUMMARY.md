@@ -21,10 +21,9 @@
 - [Vial support](vial.md)
 - [Wireless](wireless.md)
 - [Storage](storage.md)
-- [Layers]()
-- [Tap hold]()
+- [Low-power](low_power.md)
 - [Binary size optimization](binary_size.md)
 
 # Development
 - [Roadmap](roadmap.md)
-- [For Developers]()
+- [Contributing](contributing.md)

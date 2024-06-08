@@ -13,11 +13,9 @@ use sequential_storage::{
     Error as SSError,
 };
 
-#[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::bonder::BondInfo;
-#[cfg(feature = "_nrf_ble")]
-use core::mem;
 use core::ops::Range;
+#[cfg(feature = "_nrf_ble")]
+use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
 use crate::{
     action::KeyAction,
