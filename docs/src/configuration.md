@@ -4,7 +4,7 @@ RMK provides an easy and accessible way to set up the keyboard with a toml confi
 
 <div class="warning">
 This feature is available on latest git version of RMK. Add 
-<code>rmk = { version = "0.1.16", git = "https://github.com/HaoboGu/rmk" } </code>
+<code>rmk = { version = "0.1.21", git = "https://github.com/HaoboGu/rmk" } </code>
 in your <code>Cargo.toml</code> to use it
 </div>
 
