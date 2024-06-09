@@ -29,10 +29,10 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] auto switch between BLE/USB
   - [x] battery service from ADC
   - [x] 🔴 BLE support - esp32c3 and esp32s3
+  - [x] sleep mode to save battery
   - [ ] 🔴 BLE support - all esp32 chips
   - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP
   - [ ] stablizing BLE feature gate/API
-  - [ ] sleep mode to save battery
   - [ ] BLE support - ch58x/ch59x
 
 #### User experience
