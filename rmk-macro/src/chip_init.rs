@@ -30,10 +30,11 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
                     #usb_related_config
                     ::embassy_nrf::interrupt::POWER_CLOCK.set_priority(::embassy_nrf::interrupt::Priority::P2);
                     let p = ::embassy_nrf::init(config);
-                    let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
-                    info!("Enabling ext hfosc...");
-                    clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
-                    while clock.events_hfclkstarted.read().bits() != 1 {}
+                    // Disable external HF clock by default, reduce power consumption
+                    // let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
+                    // info!("Enabling ext hfosc...");
+                    // clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
+                    // while clock.events_hfclkstarted.read().bits() != 1 {}
             }
         }
         ChipSeries::Rp2040 => {

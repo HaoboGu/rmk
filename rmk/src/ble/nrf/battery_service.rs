@@ -69,6 +69,9 @@ impl<'a> BatteryService {
                     Timer::after_millis(200).await;
                     continue;
                 }
+            } else {
+                // No SAADC, skip battery check
+                Timer::after_secs(u64::MAX).await;
             }
 
             // Check charging state
