@@ -69,7 +69,7 @@ impl<'a> BatteryService {
                 }
             } else {
                 // No SAADC, skip battery check
-                Timer::after_secs(u64::MAX).await;
+                Timer::after_secs(u32::MAX as u64).await;
             }
 
             // Check charging state
