@@ -6,7 +6,6 @@ mod hid_service;
 pub(crate) mod server;
 pub(crate) mod spec;
 
-// TODO: Conditional imports should be compatible with more nRF chip models
 use self::server::BleServer;
 use crate::{
     ble::{
