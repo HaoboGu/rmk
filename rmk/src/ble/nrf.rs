@@ -42,7 +42,7 @@ use nrf_softdevice::{
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
-#[cfg(not(feature = "nrf52832_ble"))]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 use {
     crate::{
         run_usb_keyboard,
@@ -59,11 +59,11 @@ use {
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
-#[cfg(feature = "nrf52840_ble")]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 
-#[cfg(feature = "nrf52840_ble")]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
@@ -99,10 +99,20 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
     .await
 }
 
-// nRF52832 doesn't have USB, so the softdevice_task is different
-#[cfg(feature = "nrf52832_ble")]
+// Some nRF BLE chips doesn't have USB, so the softdevice_task is different
+#[cfg(any(
+    feature = "nrf52832_ble",
+    feature = "nrf52811_ble",
+    feature = "nrf52810_ble"
+))]
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    // Enable dcdc-mode, reduce power consumption
+    unsafe {
+        nrf_softdevice::raw::sd_power_dcdc_mode_set(
+            nrf_softdevice::raw::NRF_POWER_DCDC_MODES_NRF_POWER_DCDC_ENABLE as u8,
+        );
+    };
     sd.run().await
 }
 
@@ -162,7 +172,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
-    #[cfg(not(feature = "nrf52832_ble"))] D: Driver<'static>,
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] D: Driver<'static>,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -175,7 +185,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    #[cfg(not(feature = "nrf52832_ble"))] usb_driver: Option<D>,
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] usb_driver: Option<D>,
     mut keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
@@ -223,7 +233,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Keyboard services
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
-    #[cfg(not(feature = "nrf52832_ble"))]
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
     let (mut usb_device, mut vial_service, mut light_service) = (
         usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
         VialService::new(&keymap, keyboard_config.vial_config),
@@ -253,7 +263,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
-        #[cfg(not(feature = "nrf52832_ble"))]
+        #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
         if let Some(ref mut usb_device) = usb_device {
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
@@ -283,6 +293,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
+                        // TODO: enable light service(and vial service) in ble mode
                         match select(
                             run_ble_keyboard(
                                 &conn,
@@ -333,7 +344,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             }
         }
 
-        #[cfg(feature = "nrf52832_ble")]
+        #[cfg(any(
+            feature = "nrf52832_ble",
+            feature = "nrf52811_ble",
+            feature = "nrf52810_ble"
+        ))]
         match adv_fut.await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
