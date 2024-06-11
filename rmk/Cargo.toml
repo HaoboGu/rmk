@@ -82,21 +82,16 @@ rapid_debouncer = []
 #! 
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
-nrf52840_ble = [
-    "_nrf_ble",
-    "dep:embassy-nrf",
-    "dep:once_cell",
-    "nrf-softdevice/nrf52840",
-    "nrf-softdevice/s140",
-]
+nrf52840_ble = ["_nrf_ble", "nrf-softdevice/nrf52840", "nrf-softdevice/s140"]
+## Enable feature if you want to use nRF52833 with BLE.
+nrf52833_ble = ["_nrf_ble", "nrf-softdevice/nrf52833", "nrf-softdevice/s140"]
 ## Enable feature if you want to use nRF52832 with BLE.
-nrf52832_ble = [
-    "_nrf_ble",
-    "dep:embassy-nrf",
-    "dep:once_cell",
-    "nrf-softdevice/nrf52832",
-    "nrf-softdevice/s132",
-]
+nrf52832_ble = ["_nrf_ble", "nrf-softdevice/nrf52832", "nrf-softdevice/s132"]
+## Enable feature if you want to use nRF52811 with BLE.
+nrf52811_ble = ["_nrf_ble", "nrf-softdevice/nrf52811", "nrf-softdevice/s140"]
+## Enable feature if you want to use nRF52810 with BLE.
+nrf52810_ble = ["_nrf_ble", "nrf-softdevice/nrf52810", "nrf-softdevice/s132"]
+
 ## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["_esp_ble"]
 ## Enable feature if you want to use ESP32S3 with BLE.
@@ -108,5 +103,11 @@ _esp_ble = [
     "dep:esp32-nimble",
     "dep:esp-idf-svc",
 ]
-_nrf_ble = ["_ble", "rmk-config/_nrf_ble", "dep:nrf-softdevice"]
+_nrf_ble = [
+    "_ble",
+    "rmk-config/_nrf_ble",
+    "dep:nrf-softdevice",
+    "dep:embassy-nrf",
+    "dep:once_cell",
+]
 _ble = []

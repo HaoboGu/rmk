@@ -110,7 +110,6 @@ impl CompositeReport {
         data: &mut [u8],
         report_type: CompositeReportType,
     ) -> Result<usize, ssmarshal::Error> {
-        // TODO: Optimize it
         // Use usbd-hid's report to do serialization, but not so efficient.
         match report_type {
             CompositeReportType::None => Ok(0),
