@@ -11,7 +11,7 @@ pub(crate) fn build_light_config(
 ) -> proc_macro2::TokenStream {
     match pin_config {
         Some(c) => {
-            let p = convert_gpio_str_to_output_pin(chip, c.pin);
+            let p = convert_gpio_str_to_output_pin(chip, c.pin, c.low_active);
             let low_active = c.low_active;
             quote! {
                 Some(::rmk::config::keyboard_config::LightPinConfig {
