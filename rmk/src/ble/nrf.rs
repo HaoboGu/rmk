@@ -69,6 +69,16 @@ pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
 
+    // Enable dcdc-mode, reduce power consumption
+    unsafe {
+        nrf_softdevice::raw::sd_power_dcdc_mode_set(
+            nrf_softdevice::raw::NRF_POWER_DCDC_MODES_NRF_POWER_DCDC_ENABLE as u8,
+        );
+        nrf_softdevice::raw::sd_power_dcdc0_mode_set(
+            nrf_softdevice::raw::NRF_POWER_DCDC_MODES_NRF_POWER_DCDC_ENABLE as u8,
+        );
+    };
+
     // Enable USB event in softdevice
     unsafe {
         nrf_softdevice::raw::sd_power_usbpwrrdy_enable(1);
@@ -108,7 +118,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             // source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
             // rc_ctiv: 0,
             // rc_temp_ctiv: 0,
-            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_100_PPM as u8,
+            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_20_PPM as u8,
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
             conn_count: 6,
@@ -231,7 +241,9 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     // Main loop
     loop {
         // Init BLE advertising data
-        let config = peripheral::Config::default();
+        let mut config = peripheral::Config::default();
+        // Interval: 500ms
+        config.interval = 800;
         let adv_data = create_advertisement_data(keyboard_name);
         let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
             adv_data: &adv_data,

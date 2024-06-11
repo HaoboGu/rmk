@@ -35,7 +35,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         // If the storage is initialized, read keymap from storage
         if let Some(storage) = storage {
             if storage.read_keymap(&mut action_map).await.is_err() {
-                error!("Keymap reading aborted!");
+                error!("Keymap reading aborted by an error, clearing the storage...");
+                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await.ok();
+                // TODO: The storage is erased, reset the device
             }
         }
 
