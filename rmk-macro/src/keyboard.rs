@@ -59,8 +59,7 @@ pub enum Overwritten {
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
-    // TODO: Read Cargo.toml, check whether the feature gate in Cargo.toml is consistent with keyboard.toml
-    let _enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
+    let enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
         Ok(manifest) => manifest
             .dependencies
             .iter()
@@ -71,7 +70,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
 
     // Check whether the async matrix feature is enabled
     let mut async_matrix = false;
-    if let Some(rmk_features) = _enabled_rmk_features {
+    if let Some(rmk_features) = enabled_rmk_features {
         for f in rmk_features {
             if f == "async_matrix" {
                 async_matrix = true
@@ -241,7 +240,6 @@ fn expand_main(
             // Initialize usb driver as `driver`
             #usb_init
 
-            // FIXME: if storage is enabled
             // Initialize flash driver as `flash` and storage config as `storage_config`
             #flash_init
 
