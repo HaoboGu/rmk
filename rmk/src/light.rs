@@ -1,20 +1,54 @@
 use crate::hid::HidReaderWrapper;
 use bitfield_struct::bitfield;
-use defmt::{debug, error, Format};
-use embassy_time::Timer;
-use embedded_hal::digital::{OutputPin, PinState};
+use defmt::{debug, error, warn, Format};
+use embassy_futures::select::select;
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embedded_hal::digital::{Error, OutputPin, PinState};
 use rmk_config::{LightConfig, LightPinConfig};
 
-pub(crate) async fn led_task<R: HidReaderWrapper, Out: OutputPin>(
+pub(crate) static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 8> = Channel::new();
+
+/// LED control task
+pub(crate) async fn led_service_task<P: OutputPin>(light_service: &mut LightService<P>) {
+    loop {
+        let led_indicator = LED_CHANNEL.receive().await;
+        if light_service.enabled {
+            if let Err(e) = light_service.set_leds(led_indicator) {
+                error!("Set led error {:?}", e.kind());
+            }
+        } else {
+            warn!("Led service is not enabled");
+        }
+    }
+}
+
+/// Check led indicator and send the led status to LED channel
+///
+/// If there's an error, print a message and ignore error types
+pub(crate) async fn hid_read_led<R: HidReaderWrapper>(keyboard_hid_reader: &mut R) -> ! {
+    loop {
+        let mut led_indicator_data = [0; 1];
+        match keyboard_hid_reader.read(&mut led_indicator_data).await {
+            Ok(_) => {
+                // Read led indicator data and send to LED channel
+                let indicator = LedIndicator::from_bits(led_indicator_data[0]);
+                debug!("Read keyboard state: {:?}", indicator);
+                LED_CHANNEL.send(indicator).await;
+            }
+            Err(e) => error!("Read keyboard state error: {}", e),
+        }
+    }
+}
+
+pub(crate) async fn led_hid_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
     light_service: &mut LightService<Out>,
 ) {
-    loop {
-        match light_service.check_led_indicator(keyboard_hid_reader).await {
-            Ok(_) => Timer::after_millis(50).await,
-            Err(_) => Timer::after_secs(2).await,
-        }
-    }
+    select(
+        hid_read_led(keyboard_hid_reader),
+        led_service_task(light_service),
+    )
+    .await;
 }
 
 #[bitfield(u8)]
@@ -146,15 +180,9 @@ impl<P: OutputPin> LightService<P> {
         Self {
             enabled,
             led_indicator_data: [0; 1],
-            capslock: light_config
-                .capslock
-                .map(|p| SingleLED::new(p)),
-            scrolllock: light_config
-                .scrolllock
-                .map(|p| SingleLED::new(p)),
-            numslock: light_config
-                .numslock
-                .map(|p| SingleLED::new(p)),
+            capslock: light_config.capslock.map(|p| SingleLED::new(p)),
+            scrolllock: light_config.scrolllock.map(|p| SingleLED::new(p)),
+            numslock: light_config.numslock.map(|p| SingleLED::new(p)),
         }
     }
 }
@@ -170,29 +198,5 @@ impl<P: OutputPin> LightService<P> {
         self.set_scrolllock(led_indicator.scrolllock())?;
 
         Ok(())
-    }
-
-    /// Check led indicator and update led status.
-    ///
-    /// If there's an error, print a message and ignore error types
-    pub(crate) async fn check_led_indicator<R: HidReaderWrapper>(
-        &mut self,
-        keyboard_hid_reader: &mut R,
-    ) -> Result<(), ()> {
-        // If light service is not enabled, wait 2 seconds and recheck
-        if !self.enabled {
-            return Err(());
-        }
-        match keyboard_hid_reader.read(&mut self.led_indicator_data).await {
-            Ok(_) => {
-                let indicator = LedIndicator::from_bits(self.led_indicator_data[0]);
-                debug!("Read keyboard state: {:?}", indicator);
-                self.set_leds(indicator).map_err(|_| ())
-            }
-            Err(e) => {
-                error!("Read keyboard state error: {}", e);
-                Err(())
-            }
-        }
     }
 }

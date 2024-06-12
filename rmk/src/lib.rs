@@ -13,7 +13,7 @@ pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 pub use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 use crate::{
     keyboard::keyboard_task,
-    light::{led_task, LightService},
+    light::{led_hid_task, LightService},
     via::vial_task,
 };
 use action::KeyAction;
@@ -182,17 +182,17 @@ pub async fn initialize_keyboard_and_run_async_flash<
                 &mut usb_device.keyboard_hid_writer,
                 &mut usb_device.other_hid_writer,
             );
-            let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
+            let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
             let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
             pin_mut!(usb_fut);
             pin_mut!(keyboard_fut);
-            pin_mut!(led_reader_fut);
+            pin_mut!(led_fut);
             pin_mut!(via_fut);
             pin_mut!(communication_fut);
             match select4(
                 usb_fut,
                 select(keyboard_fut, communication_fut),
-                led_reader_fut,
+                led_fut,
                 via_fut,
             )
             .await
@@ -239,19 +239,19 @@ pub(crate) async fn run_usb_keyboard<
         &mut usb_device.keyboard_hid_writer,
         &mut usb_device.other_hid_writer,
     );
-    let led_reader_fut = led_task(&mut usb_device.keyboard_hid_reader, light_service);
+    let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
     let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
     pin_mut!(usb_fut);
     pin_mut!(keyboard_fut);
-    pin_mut!(led_reader_fut);
+    pin_mut!(led_fut);
     pin_mut!(via_fut);
     pin_mut!(storage_fut);
     pin_mut!(communication_fut);
     match select4(
         select(usb_fut, keyboard_fut),
         storage_fut,
-        led_reader_fut,
+        led_fut,
         select(via_fut, communication_fut),
     )
     .await
