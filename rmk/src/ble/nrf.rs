@@ -19,7 +19,7 @@ use crate::{
     keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
     light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
-    KeyAction, KeyMap, RmkConfig,
+    KeyAction, KeyMap, LightService, RmkConfig,
 };
 use core::{cell::RefCell, mem};
 use defmt::*;
@@ -47,7 +47,7 @@ use {
     crate::{
         run_usb_keyboard,
         usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-        KeyboardUsbDevice, LightService, VialService,
+        KeyboardUsbDevice, VialService,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
