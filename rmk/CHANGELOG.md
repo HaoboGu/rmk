@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Support led status update from ble 
 - Support more nRF chips: nRF52833, nRF52810, nRF52811
 
 ## [0.1.21] - 2024-06-08
