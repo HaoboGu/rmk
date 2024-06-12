@@ -102,7 +102,6 @@ impl<
     pub(crate) async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {
             // If not key over 2 secs, wait for interupt in next loop
-            info!("Check start: {}", start_time.as_secs());
             if start_time.elapsed().as_secs() < 1 {
                 return;
             } else {

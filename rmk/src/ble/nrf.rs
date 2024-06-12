@@ -17,8 +17,9 @@ use crate::{
         },
     },
     keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
+    light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
-    KeyAction, KeyMap, RmkConfig,
+    KeyAction, KeyMap, LightService, RmkConfig,
 };
 use core::{cell::RefCell, mem};
 use defmt::*;
@@ -46,7 +47,7 @@ use {
     crate::{
         run_usb_keyboard,
         usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-        KeyboardUsbDevice, LightService, VialService,
+        KeyboardUsbDevice, VialService,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
@@ -233,11 +234,12 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     // Keyboard services
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
     #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
-    let (mut usb_device, mut vial_service, mut light_service) = (
+    let (mut usb_device, mut vial_service) = (
         usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
         VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
     );
+
+    let mut light_service = LightService::from_config(keyboard_config.light_config);
 
     // BLE only, test power usage
     // usb_device = None;
@@ -299,6 +301,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &ble_server,
                                 &mut keyboard,
                                 &mut storage,
+                                &mut light_service,
                                 &mut keyboard_config.ble_battery_config,
                                 &mut keyboard_report_receiver,
                                 &mut keyboard_report_sender,
@@ -333,6 +336,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         &ble_server,
                         &mut keyboard,
                         &mut storage,
+                        &mut light_service,
                         &mut keyboard_config.ble_battery_config,
                         &mut keyboard_report_receiver,
                         &mut keyboard_report_sender,
@@ -356,6 +360,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &ble_server,
                     &mut keyboard,
                     &mut storage,
+                    &mut light_service,
                     &mut keyboard_config.ble_battery_config,
                     &mut keyboard_report_receiver,
                     &mut keyboard_report_sender,
@@ -385,6 +390,7 @@ async fn run_ble_keyboard<
     ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
+    light_service: &mut LightService<Out>,
     battery_config: &mut BleBatteryConfig<'b>,
     keyboard_report_receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     keyboard_report_sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -397,8 +403,10 @@ async fn run_ble_keyboard<
         BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
     let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
-    let battery_fut = bas.run(battery_config, &conn);
 
+    // Tasks
+    let battery_fut = bas.run(battery_config, &conn);
+    let led_fut = led_service_task(light_service);
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
@@ -415,7 +423,7 @@ async fn run_ble_keyboard<
     match select4(
         ble_fut,
         select(ble_task, keyboard_fut),
-        battery_fut,
+        select(battery_fut, led_fut),
         storage_fut,
     )
     .await
@@ -424,8 +432,8 @@ async fn run_ble_keyboard<
             "BLE gatt_server run exited with error: {:?}",
             disconnected_error
         ),
-        Either4::Second(_) => error!("Keyboard task exited"),
-        Either4::Third(_) => error!("Battery task exited"),
+        Either4::Second(_) => error!("Keyboard task or ble task exited"),
+        Either4::Third(_) => error!("Battery task or led task exited"),
         Either4::Fourth(_) => error!("Storage task exited"),
     }
 }

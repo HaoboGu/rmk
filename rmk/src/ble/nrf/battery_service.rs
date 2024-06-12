@@ -82,7 +82,7 @@ impl<'a> BatteryService {
 
     // TODO: Make battery calculation user customizable
     fn get_battery_percent(&self, val: i16) -> u8 {
-        info!("Detected adv value: {=i16}", val);
+        info!("Detected adc value: {=i16}", val);
         // According to nRF52840's datasheet, for single_ended saadc:
         // val = v_adc * (gain / reference) * 2^(resolution)
         //
@@ -91,7 +91,7 @@ impl<'a> BatteryService {
         //
         // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, then,
         // v_adc = v_bat * 0.7092 => val = v_bat * 806.93
-        // 
+        //
         // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
         // To make calculation simple, adc val range 2650 ~ 3350 is used.
         if val > 3350 {

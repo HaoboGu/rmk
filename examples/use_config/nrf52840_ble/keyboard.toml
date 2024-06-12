@@ -17,8 +17,8 @@ output_pins = ["P1_05", "P1_06", "P1_03"]
 
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
-# capslock.pin = "P0_31"
-# capslock.low_active = true
+capslock.pin = "P0_30"
+capslock.low_active = false
 # scrolllock.pin = "PA3"
 # scrolllock.low_active = true
 # Just ignore if no light pin is used for it

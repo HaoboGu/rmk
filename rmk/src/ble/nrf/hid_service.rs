@@ -1,6 +1,9 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
-use crate::ble::descriptor::{BleCompositeReportType, BleKeyboardReport};
-use defmt::{error, info, Format};
+use crate::{
+    ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
+    light::{LedIndicator, LED_CHANNEL},
+};
+use defmt::{error, info, warn, Format};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -229,8 +232,15 @@ impl gatt_server::Service for HidService {
             Some(HidServiceEvent::OutputVial)
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
-            // TODO: Update capslock LED from data
-            info!("HID output keyboard: {:?}", data);
+            let led_indicator = LedIndicator::from_bits(data[0]);
+            info!("HID output keyboard: {}", led_indicator);
+            // Retry 3 times in case the channel is full(which is really rare)
+            for _i in 0..3 {
+                match LED_CHANNEL.try_send(led_indicator) {
+                    Ok(_) => break,
+                    Err(e) => warn!("LED channel full, retrying: {:?}", e),
+                }
+            }
             Some(HidServiceEvent::OutputKeyboard)
         } else {
             None
