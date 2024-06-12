@@ -6,7 +6,6 @@ mod hid_service;
 pub(crate) mod server;
 pub(crate) mod spec;
 
-// TODO: Conditional imports should be compatible with more nRF chip models
 use self::server::BleServer;
 use crate::{
     ble::{
@@ -18,8 +17,9 @@ use crate::{
         },
     },
     keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
+    light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
-    KeyAction, KeyMap, RmkConfig,
+    KeyAction, KeyMap, LightService, RmkConfig,
 };
 use core::{cell::RefCell, mem};
 use defmt::*;
@@ -42,12 +42,12 @@ use nrf_softdevice::{
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
-#[cfg(not(feature = "nrf52832_ble"))]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 use {
     crate::{
         run_usb_keyboard,
         usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-        KeyboardUsbDevice, LightService, VialService,
+        KeyboardUsbDevice, VialService,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
@@ -59,11 +59,11 @@ use {
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 
-#[cfg(feature = "nrf52840_ble")]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 
-#[cfg(feature = "nrf52840_ble")]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
@@ -99,10 +99,20 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
     .await
 }
 
-// nRF52832 doesn't have USB, so the softdevice_task is different
-#[cfg(feature = "nrf52832_ble")]
+// Some nRF BLE chips doesn't have USB, so the softdevice_task is different
+#[cfg(any(
+    feature = "nrf52832_ble",
+    feature = "nrf52811_ble",
+    feature = "nrf52810_ble"
+))]
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
+    // Enable dcdc-mode, reduce power consumption
+    unsafe {
+        nrf_softdevice::raw::sd_power_dcdc_mode_set(
+            nrf_softdevice::raw::NRF_POWER_DCDC_MODES_NRF_POWER_DCDC_ENABLE as u8,
+        );
+    };
     sd.run().await
 }
 
@@ -162,7 +172,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
 pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
-    #[cfg(not(feature = "nrf52832_ble"))] D: Driver<'static>,
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] D: Driver<'static>,
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -175,7 +185,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    #[cfg(not(feature = "nrf52832_ble"))] usb_driver: Option<D>,
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] usb_driver: Option<D>,
     mut keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
@@ -223,12 +233,13 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Keyboard services
     let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
-    #[cfg(not(feature = "nrf52832_ble"))]
-    let (mut usb_device, mut vial_service, mut light_service) = (
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+    let (mut usb_device, mut vial_service) = (
         usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
         VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
     );
+
+    let mut light_service = LightService::from_config(keyboard_config.light_config);
 
     // BLE only, test power usage
     // usb_device = None;
@@ -253,7 +264,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
-        #[cfg(not(feature = "nrf52832_ble"))]
+        #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
         if let Some(ref mut usb_device) = usb_device {
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
@@ -283,12 +294,14 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
+                        // TODO: enable light service(and vial service) in ble mode
                         match select(
                             run_ble_keyboard(
                                 &conn,
                                 &ble_server,
                                 &mut keyboard,
                                 &mut storage,
+                                &mut light_service,
                                 &mut keyboard_config.ble_battery_config,
                                 &mut keyboard_report_receiver,
                                 &mut keyboard_report_sender,
@@ -323,6 +336,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         &ble_server,
                         &mut keyboard,
                         &mut storage,
+                        &mut light_service,
                         &mut keyboard_config.ble_battery_config,
                         &mut keyboard_report_receiver,
                         &mut keyboard_report_sender,
@@ -333,7 +347,11 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             }
         }
 
-        #[cfg(feature = "nrf52832_ble")]
+        #[cfg(any(
+            feature = "nrf52832_ble",
+            feature = "nrf52811_ble",
+            feature = "nrf52810_ble"
+        ))]
         match adv_fut.await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
@@ -342,6 +360,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &ble_server,
                     &mut keyboard,
                     &mut storage,
+                    &mut light_service,
                     &mut keyboard_config.ble_battery_config,
                     &mut keyboard_report_receiver,
                     &mut keyboard_report_sender,
@@ -371,6 +390,7 @@ async fn run_ble_keyboard<
     ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
+    light_service: &mut LightService<Out>,
     battery_config: &mut BleBatteryConfig<'b>,
     keyboard_report_receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     keyboard_report_sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -383,8 +403,10 @@ async fn run_ble_keyboard<
         BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
     let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
-    let battery_fut = bas.run(battery_config, &conn);
 
+    // Tasks
+    let battery_fut = bas.run(battery_config, &conn);
+    let led_fut = led_service_task(light_service);
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
@@ -401,7 +423,7 @@ async fn run_ble_keyboard<
     match select4(
         ble_fut,
         select(ble_task, keyboard_fut),
-        battery_fut,
+        select(battery_fut, led_fut),
         storage_fut,
     )
     .await
@@ -410,8 +432,8 @@ async fn run_ble_keyboard<
             "BLE gatt_server run exited with error: {:?}",
             disconnected_error
         ),
-        Either4::Second(_) => error!("Keyboard task exited"),
-        Either4::Third(_) => error!("Battery task exited"),
+        Either4::Second(_) => error!("Keyboard task or ble task exited"),
+        Either4::Third(_) => error!("Battery task or led task exited"),
         Either4::Fourth(_) => error!("Storage task exited"),
     }
 }

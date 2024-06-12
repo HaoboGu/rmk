@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 rmk = { version = "0.1.21", path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
+    "async_matrix",
 ] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"

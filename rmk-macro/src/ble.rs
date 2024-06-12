@@ -72,8 +72,13 @@ pub(crate) fn expand_ble_config(
                 if let Some(charging_led_config) = ble.charge_led {
                     let charging_led_pin = format_ident!("{}", charging_led_config.pin);
                     let charging_led_low_active = charging_led_config.low_active;
+                    let default_level = if charging_led_low_active {
+                        quote!{ ::embassy_nrf::gpio::Level::High }
+                    } else {
+                        quote!{ ::embassy_nrf::gpio::Level::Low }
+                    };
                     ble_config_tokens.extend(quote! {
-                        let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_led_pin), ::embassy_nrf::gpio::Level::Low, ::embassy_nrf::gpio::OutputDrive::Standard));
+                        let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_led_pin), #default_level, ::embassy_nrf::gpio::OutputDrive::Standard));
                         let charge_led_low_active = #charging_led_low_active;
                     });
                 } else {

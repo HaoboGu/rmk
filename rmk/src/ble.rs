@@ -9,11 +9,12 @@ pub mod nrf;
 use defmt::error;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
-#[cfg(feature = "nrf52840_ble")]
+#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 pub use nrf::SOFTWARE_VBUS;
 
 use crate::{
-    hid::HidWriterWrapper, keyboard::{write_other_report_to_host, KeyboardReportMessage},
+    hid::HidWriterWrapper,
+    keyboard::{write_other_report_to_host, KeyboardReportMessage},
     usb::descriptor::CompositeReportType,
 };
 
