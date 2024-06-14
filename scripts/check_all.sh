@@ -1,7 +1,7 @@
 cd examples/use_rust/esp32c3_ble && cargo build --release && cd ../../..
 cd examples/use_rust/esp32s3_ble && cargo build --release && cd ../../..
-# cd examples/use_config/esp32c3_ble && cargo build --release && cd ../../..
-# cd examples/use_config/esp32s3_ble && cargo build --release && cd ../../..
+cd examples/use_config/esp32c3_ble && cargo build --release && cd ../../..
+cd examples/use_config/esp32s3_ble && cargo build --release && cd ../../..
 
 cd examples/use_rust/nrf52832_ble && cargo build --release && cargo clean && cd ../../..
 cd examples/use_rust/nrf52840 && cargo build --release && cargo clean && cd ../../..

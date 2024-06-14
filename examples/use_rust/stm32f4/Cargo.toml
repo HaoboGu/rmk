@@ -13,15 +13,15 @@ license = "MIT OR Apache-2.0"
 rmk = { version = "0.1.21", path = "../../../rmk" }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.3"
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["tick-hz-32_768", "defmt"] }
-embassy-stm32 = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["tick-hz-32_768", "defmt"] }
+embassy-stm32 = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     # "stm32f407ve",
     "stm32f411ce",
     "defmt",
     "memory-x",
     "time-driver-any",
 ] }
-embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",

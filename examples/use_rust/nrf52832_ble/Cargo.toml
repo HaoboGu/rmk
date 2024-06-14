@@ -16,8 +16,8 @@ rmk = { version = "0.1.21", path = "../../../rmk", features = [
 ] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["tick-hz-32_768", "defmt"] }
+embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
@@ -25,7 +25,7 @@ embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", 
     "unstable-pac",
     "time",
 ] }
-embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     "defmt",
     "task-arena-size-8192",
     "arch-cortex-m",

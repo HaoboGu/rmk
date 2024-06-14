@@ -60,7 +60,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
     match chip.series {
         ChipSeries::Stm32 => {
             quote! {
-                ::embassy_stm32::gpio::Output::new(p.#gpio_ident, ::embassy_stm32::gpio::Level::#default_level_ident, ::embassy_stm32::gpio::Speed::VeryHigh).degrade()
+                ::embassy_stm32::gpio::Output::new(p.#gpio_ident, ::embassy_stm32::gpio::Level::#default_level_ident, ::embassy_stm32::gpio::Speed::VeryHigh)
             }
         }
         ChipSeries::Nrf52 => {
@@ -96,7 +96,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                     Some(pin_num) => {
                         let pin_num_ident = format_ident!("EXTI{}", pin_num);
                         quote! {
-                            ::embassy_stm32::exti::ExtiInput::new(::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade(), p.#pin_num_ident.degrade())
+                            ::embassy_stm32::exti::ExtiInput::new(p.#gpio_ident, p.#pin_num_ident, ::embassy_stm32::gpio::Pull::Down)
                         }
                     }
                     None => {
@@ -106,7 +106,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 }
             } else {
                 quote! {
-                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
+                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down)
                 }
             }
         }

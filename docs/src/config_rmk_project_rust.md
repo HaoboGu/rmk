@@ -23,7 +23,7 @@ at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4
 
 ```rust
 bind_interrupts!(struct Irqs {
-    OTG_FS => usb_otg::InterruptHandler<peripherals::USB_OTG_FS>;
+    OTG_FS => usb::InterruptHandler<peripherals::USB_OTG_FS>;
 });
 ```
 

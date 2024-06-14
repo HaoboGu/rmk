@@ -116,7 +116,7 @@ In the main function, generally there are several parts:
     ```rust
       // It's STM32H7's USB initialization code
       static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-      let mut usb_config = embassy_stm32::usb_otg::Config::default();
+      let mut usb_config = embassy_stm32::usb::Config::default();
       usb_config.vbus_detection = false;
       let driver = Driver::new_fs(
           p.USB_OTG_HS,

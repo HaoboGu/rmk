@@ -19,18 +19,18 @@ embedded-hal-async = { version = "1.0.0", features = [
 ], optional = true }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embassy-embedded-hal = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c" }
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["defmt"] }
-embassy-usb = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-embedded-hal = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999" }
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
+embassy-usb = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     "defmt",
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
 heapless = "0.8.0"
-embassy-sync = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["defmt"] }
-embassy-futures = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["defmt"] }
-embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = ["defmt"] }
+embassy-sync = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
+embassy-futures = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
+embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
 
 usbd-hid = { version = "0.7.0", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
@@ -54,7 +54,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
-embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "4617f6c", features = [
+embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
     "defmt",
     "unstable-pac",
     "time",

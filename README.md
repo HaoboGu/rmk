@@ -17,27 +17,7 @@ A feature-rich Rust keyboard firmware.
 - **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 
-## [User Documentation](https://haobogu.github.io/rmk/guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) 
-
-## News
-
-- [2024.05.01] RMK's new configuration system is available at main branch! This new feature brings a totally new way to build your keyboard firmware: using a config file `keyboard.toml`. The document can be found [here](https://haobogu.github.io/rmk/configuration.html), you can also check out the [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) folder for both config way and rust way to use RMK.
-
-- [2024.04.07] BLE support for esp32 is available now on main branch, you can try the example at [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) and [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs). It will be released to crates.io soon, after some additional testing.
-
-<details>
-
-<summary>Click to check out more news</summary>
-
-- [2024.03.07] BLE support with auto-reconnection/multiple devices feature for nrf52840/nrf52832 has been added to RMK! Checkout [`examples/use_rust/nrf52840_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) and [`examples/use_rust/nrf52832_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) for details.
-
-- [2024.02.18] Version `0.1.4` is just released! This release contains a new [build script](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/stm32h7/build.rs) for generating vial config, minor API update and a brand-new [user documentation page](https://haobogu.github.io/rmk).
-
-- [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
-
-- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder!
-
-</details>
+## [User Documentation](https://haobogu.github.io/rmk/guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## [Real World Examples](https://haobogu.github.io/rmk/faqreal_world_examples.html)
 
@@ -117,7 +97,7 @@ Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate requires stable Rust 1.77 and up. 
+This crate is tested on stable Rust 1.77 and up. Older Rust version may work but not guaranteed.
 
 ## License
 

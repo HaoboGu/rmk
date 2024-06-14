@@ -14,12 +14,12 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
-    exti::{Channel, ExtiInput},
+    exti::{ExtiInput},
     flash::{Blocking, Flash},
-    gpio::{AnyPin, Input, Output, Pull},
+    gpio::{Output, Pull},
     peripherals::USB_OTG_HS,
     time::Hertz,
-    usb_otg::{Driver, InterruptHandler},
+    usb::{Driver, InterruptHandler},
     Config,
 };
 use panic_probe as _;
@@ -74,7 +74,7 @@ async fn main(_spawner: Spawner) {
 
     // Usb config
     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    let mut usb_config = embassy_stm32::usb_otg::Config::default();
+    let mut usb_config = embassy_stm32::usb::Config::default();
     usb_config.vbus_detection = false;
     let driver = Driver::new_fs(
         p.USB_OTG_HS,
@@ -88,10 +88,11 @@ async fn main(_spawner: Spawner) {
     // Pin config
     // let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
     let output_pins = config_output_pins_stm32!(peripherals: p, output: [PE13, PE14, PE15]);
-    let pd9 = ExtiInput::new(Input::new(p.PD9, Pull::Down).degrade(), p.EXTI9.degrade());
-    let pd8 = ExtiInput::new(Input::new(p.PD8, Pull::Down).degrade(), p.EXTI8.degrade());
-    let pb13 = ExtiInput::new(Input::new(p.PB13, Pull::Down).degrade(), p.EXTI13.degrade());
-    let pb12 = ExtiInput::new(Input::new(p.PB12, Pull::Down).degrade(), p.EXTI12.degrade());
+    
+    let pd9 = ExtiInput::new(p.PD9,  p.EXTI9, Pull::Down);
+    let pd8 = ExtiInput::new(p.PD8,  p.EXTI8, Pull::Down);
+    let pb13 = ExtiInput::new(p.PB13, p.EXTI13, Pull::Down);
+    let pb12 = ExtiInput::new(p.PB12, p.EXTI12, Pull::Down);
     let input_pins = [pd9, pd8, pb13, pb12];
 
     // Use internal flash to emulate eeprom
@@ -108,8 +109,8 @@ async fn main(_spawner: Spawner) {
     initialize_keyboard_and_run::<
         Flash<'_, Blocking>,
         Driver<'_, USB_OTG_HS>,
-        ExtiInput<AnyPin>,
-        Output<'_, AnyPin>,
+        ExtiInput,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,

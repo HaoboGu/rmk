@@ -52,15 +52,10 @@ pub(crate) fn bind_interrupt_default(
             if !chip.has_usb() {
                 return quote! {};
             }
-            let usb_mod_name = if usb_info.peripheral_name.contains("OTG") {
-                format_ident!("{}", "usb_otg")
-            } else {
-                format_ident!("{}", "usb")
-            };
             quote! {
                 use ::embassy_stm32::bind_interrupts;
                 bind_interrupts!(struct Irqs {
-                    #interrupt_name => ::embassy_stm32::#usb_mod_name::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
+                    #interrupt_name => ::embassy_stm32::usb::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
                 });
             }
         }
