@@ -14,32 +14,9 @@
 - **高级键盘功能**：RMK 默认提供许多高级键盘功能，如层切换、媒体控制、系统控制、鼠标控制等。
 - **无线支持**：（实验性功能）RMK 支持 BLE 无线功能，包括自动重新连接和多设备功能，已经在 nrf52840 和 esp32c3 上进行了测试。
 - **易于配置**：RMK提供了一个非常简单的配置你的键盘的方法，你只需要一个`keyboard.toml`文件，就可以构建起你的键盘固件！当然，对于 Rust 开发者来说，你仍然可以使用代码方式来使用 RMK
+- **低延迟、低电量消耗**：根据我们的测试，RMK在有线模式下延迟约为2ms，蓝牙模式下延迟约为10ms。在开启`async_matrix` feature之后，RMK有着非常低的电量消耗，一块2000mah的电池可以续航好几个月
 
-## 新闻
-
-- [2024.05.01] RMK的全新配置化固件生成已经在主分支可用了！使用这个特性，你可以编写一个`keyboard.toml`配置文件，然后让RMK来帮助你生成Rust代码然后编译固件。[这里](https://haobogu.github.io/rmk/configuration.html)是相关文档，你也可以在 [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples/) 目录下查看示例。示例包含使用配置文件和使用Rust代码两种方式。
-
-- [2024.04.07] 现在esp32c3和esp32s3的蓝牙支持已经在主分支上可用，示例可以参考  [`examples/use_rust/esp32c3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32c3_ble/src/main.rs) 和 [`examples/use_rust/esp32s3_ble`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/esp32s3_ble/src/main.rs)
-
-- [2024.03.07] RMK 添加了对 nrf52840/nrf52832 的 BLE 支持，包括自动重新连接和多设备功能！具体用法可以参考 [examples/use_rust/nrf52840_ble](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) 和 [examples/use_rust/nrf52832_ble](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/src/main.rs) 下的示例
-
-<details>
-
-<summary>点击查看更多</summary>
-
-[2024.02.18] 版本 `0.1.4` 发布了！这个版本加入了一个自动生成 vial 配置的构建脚本，一点点 API 更新以及全新的[用户文档](https://haobogu.github.io/rmk)。
-
-- 下面懒得翻译了，就酱
- 
-- [2024.01.26] 🎉[rmk-template](https://github.com/HaoboGu/rmk-template) is released! Now you can create your own keyboard firmware with a single command: `cargo generate --git https://github.com/HaoboGu/rmk-template`
-
-- [2024.01.18] RMK just released version `0.1.0`! By migrating to [Embassy](https://github.com/embassy-rs/embassy), RMK now has better async support, more supported MCUs and much easier usages than before. For examples, check [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder!
-
-</details>
-
-## [用户文档（英文）](https://haobogu.github.io/rmk/guide_overview.html) 
-
-## [API 文档](https://docs.rs/rmk/latest/rmk/)
+## [用户文档](https://haobogu.github.io/rmk/guide_overview.html) | [API文档](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [更新日志](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## 使用 RMK
 
