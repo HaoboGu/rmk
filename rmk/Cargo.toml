@@ -37,7 +37,7 @@ ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
-bitfield-struct = "0.6"
+bitfield-struct = "0.7"
 byteorder = { version = "1.4", default-features = false }
 futures = { version = "0.3", default-features = false }
 sequential-storage = { version = "2.0", features = ["defmt-03"] }
