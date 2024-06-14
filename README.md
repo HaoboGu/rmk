@@ -22,7 +22,7 @@ A feature-rich Rust keyboard firmware.
 
 </details>
 
-## [Real World Examples](https://haobogu.github.io/rmk/faqreal_world_examples.html)
+## Real World Examples
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
