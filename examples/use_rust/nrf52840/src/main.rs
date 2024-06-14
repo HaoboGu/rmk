@@ -61,8 +61,8 @@ async fn main(_spawner: Spawner) {
     initialize_keyboard_and_run::<
         Nvmc,
         Driver<'_, USBD, HardwareVbusDetect>,
-        Input<'_, AnyPin>,
-        Output<'_, AnyPin>,
+        Input<'_>,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,

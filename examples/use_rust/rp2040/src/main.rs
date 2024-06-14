@@ -71,8 +71,8 @@ async fn main(_spawner: Spawner) {
     initialize_keyboard_and_run_async_flash::<
         Flash<peripherals::FLASH, Async, FLASH_SIZE>,
         Driver<'_, USB>,
-        Input<'_, AnyPin>,
-        Output<'_, AnyPin>,
+        Input<'_>,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,

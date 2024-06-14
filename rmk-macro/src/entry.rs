@@ -57,25 +57,20 @@ pub(crate) fn rmk_entry_default(
     async_matrix: bool,
 ) -> TokenStream2 {
     let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-    let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
-        format_ident!("{}", "usb_otg")
-    } else {
-        format_ident!("{}", "usb")
-    };
     match chip.series {
         ChipSeries::Stm32 => {
             // If async_matrix is enabled, use `ExtiInput` as input pin type in RMK entry
             let input_pin_generics = if async_matrix {
-                quote! {::embassy_stm32::exti::ExtiInput<::embassy_stm32::gpio::AnyPin>}
+                quote! {::embassy_stm32::exti::ExtiInput}
             } else {
-                quote! {::embassy_stm32::gpio::Input<'_, ::embassy_stm32::gpio::AnyPin>}
+                quote! {::embassy_stm32::gpio::Input<'_>}
             };
             quote! {
                 ::rmk::initialize_keyboard_and_run::<
                     ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
-                    ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
+                    ::embassy_stm32::usb::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
                     #input_pin_generics,
-                    ::embassy_stm32::gpio::Output<'_, ::embassy_stm32::gpio::AnyPin>,
+                    ::embassy_stm32::gpio::Output<'_>,
                     ROW,
                     COL,
                     NUM_LAYER,
@@ -96,8 +91,8 @@ pub(crate) fn rmk_entry_default(
                     ::rmk::initialize_keyboard_and_run::<
                         ::embassy_nrf::nvmc::Nvmc,
                         ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect>,
-                        ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
-                        ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
+                        ::embassy_nrf::gpio::Input<'_>,
+                        ::embassy_nrf::gpio::Output<'_>,
                         ROW,
                         COL,
                         NUM_LAYER,
@@ -115,8 +110,8 @@ pub(crate) fn rmk_entry_default(
             CommunicationType::Both => quote! {
                 ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
                     ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
-                    ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
-                    ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
+                    ::embassy_nrf::gpio::Input<'_>,
+                    ::embassy_nrf::gpio::Output<'_>,
                     ROW,
                     COL,
                     NUM_LAYER,
@@ -132,8 +127,8 @@ pub(crate) fn rmk_entry_default(
             },
             CommunicationType::Ble => quote! {
                 ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
-                    ::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>,
-                    ::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>,
+                    ::embassy_nrf::gpio::Input<'_>,
+                    ::embassy_nrf::gpio::Output<'_>,
                     ROW,
                     COL,
                     NUM_LAYER,
@@ -152,8 +147,8 @@ pub(crate) fn rmk_entry_default(
             ::rmk::initialize_keyboard_and_run_async_flash::<
                 ::embassy_rp::flash::Flash<::embassy_rp::peripherals::FLASH, ::embassy_rp::flash::Async, FLASH_SIZE>,
                 ::embassy_rp::usb::Driver<'_, ::embassy_rp::peripherals::USB>,
-                ::embassy_rp::gpio::Input<'_, ::embassy_rp::gpio::AnyPin>,
-                ::embassy_rp::gpio::Output<'_, ::embassy_rp::gpio::AnyPin>,
+                ::embassy_rp::gpio::Input<'_>,
+                ::embassy_rp::gpio::Output<'_>,
                 ROW,
                 COL,
                 NUM_LAYER,

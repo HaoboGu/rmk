@@ -64,7 +64,7 @@ pub(crate) fn expand_ble_config(
                     ble_config_tokens.extend(
                         quote! {
                             let charging_state_low_active = false;
-                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>> = None;
+                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_>> = None;
                         }
                     )
                 }
@@ -85,7 +85,7 @@ pub(crate) fn expand_ble_config(
                     ble_config_tokens.extend(
                         quote! {
                             let charge_led_low_active = false;
-                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>>  = None;
+                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_>>  = None;
                         }
                     )
                 }

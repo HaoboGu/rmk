@@ -13,9 +13,9 @@ use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
     flash::{Blocking, Flash},
-    gpio::{AnyPin, Input, Output},
+    gpio::{Input, Output},
     peripherals::USB_OTG_FS,
-    usb_otg::{Driver, InterruptHandler},
+    usb::{Driver, InterruptHandler},
     Config,
 };
 use panic_probe as _;
@@ -38,7 +38,7 @@ async fn main(_spawner: Spawner) {
 
     // Usb config
     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    let mut usb_config = embassy_stm32::usb_otg::Config::default();
+    let mut usb_config = embassy_stm32::usb::Config::default();
     usb_config.vbus_detection = false;
     let driver = Driver::new_fs(
         p.USB_OTG_FS,
@@ -65,8 +65,8 @@ async fn main(_spawner: Spawner) {
     initialize_keyboard_and_run::<
         Flash<'_, Blocking>,
         Driver<'_, USB_OTG_FS>,
-        Input<'_, AnyPin>,
-        Output<'_, AnyPin>,
+        Input<'_>,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,
