@@ -1430,7 +1430,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.1.21"
+version = "0.2.0"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1469,7 +1469,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-esp32c3"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "const-gen",
  "defmt",
