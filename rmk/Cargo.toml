@@ -78,7 +78,7 @@ async_matrix = ["dep:embedded-hal-async"]
 ## Use rapid debouncer
 rapid_debouncer = []
 
-#! ##### BLE feature flags
+#! ### BLE feature flags
 #! 
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
