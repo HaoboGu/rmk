@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.2.0", path = "../../../rmk" }
+rmk = { version = "0.2.1", path = "../../../rmk" }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.3"
 embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
