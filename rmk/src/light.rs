@@ -15,9 +15,11 @@ pub(crate) async fn led_service_task<P: OutputPin>(light_service: &mut LightServ
         if light_service.enabled {
             if let Err(e) = light_service.set_leds(led_indicator) {
                 error!("Set led error {:?}", e.kind());
+                // If there's an error, wait for a while
+                embassy_time::Timer::after_millis(500).await;
             }
         } else {
-            warn!("Led service is not enabled");
+            warn!("Led service is not enabled but led_service_task is started, this should not happen!");
         }
     }
 }
@@ -35,7 +37,10 @@ pub(crate) async fn hid_read_led<R: HidReaderWrapper>(keyboard_hid_reader: &mut 
                 debug!("Read keyboard state: {:?}", indicator);
                 LED_CHANNEL.send(indicator).await;
             }
-            Err(e) => error!("Read keyboard state error: {}", e),
+            Err(e) => {
+                error!("Read keyboard state error: {}", e);
+                embassy_time::Timer::after_secs(1).await;
+            }
         }
     }
 }
@@ -44,11 +49,17 @@ pub(crate) async fn led_hid_task<R: HidReaderWrapper, Out: OutputPin>(
     keyboard_hid_reader: &mut R,
     light_service: &mut LightService<Out>,
 ) {
-    select(
-        hid_read_led(keyboard_hid_reader),
-        led_service_task(light_service),
-    )
-    .await;
+    if !light_service.enabled {
+        loop {
+            embassy_time::Timer::after_secs(u32::MAX as u64).await;
+        }
+    } else {
+        select(
+            hid_read_led(keyboard_hid_reader),
+            led_service_task(light_service),
+        )
+        .await;
+    }
 }
 
 #[bitfield(u8)]

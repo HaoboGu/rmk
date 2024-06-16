@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2024-06-14
+
+### Fixed
+
+- Fix USB not responding when the light service is not enabled
+
 ## [0.2.0] - 2024-06-14
 
 ### Added
