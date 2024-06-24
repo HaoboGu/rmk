@@ -35,4 +35,4 @@ target = "thumbv7em-none-eabihf"     # Cortex-M4F and Cortex-M7F (with FPU)
 # target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
 
 [env]
-DEFMT_LOG = "error"
+DEFMT_LOG = "info"
