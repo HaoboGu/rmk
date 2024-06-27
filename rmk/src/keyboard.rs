@@ -47,9 +47,14 @@ pub(crate) async fn keyboard_task<
     loop {
         let _ = keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
+        // Yield once to improve the performance
+        embassy_futures::yield_now().await;
         keyboard.send_media_report(sender).await;
+        embassy_futures::yield_now().await;
         keyboard.send_mouse_report(sender).await;
+        embassy_futures::yield_now().await;
         keyboard.send_system_control_report(sender).await;
+        embassy_futures::yield_now().await;
         Timer::after_micros(100).await;
     }
 }
