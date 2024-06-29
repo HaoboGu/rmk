@@ -14,7 +14,7 @@ A feature-rich Rust keyboard firmware.
 - **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nRF/rp2040/esp32
 - **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
-- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
+- **Wireless**: BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 - **Low latency and low-power ready**: RMK has a typical 2 ms latency in wired mode and 10 ms latency in wireless mode. By enabling `async_matrix` feature, RMK has very low power consumption, with a 2000mah battery, RMK can provide several months battery life
 
@@ -100,7 +100,7 @@ Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate requires stable Rust 1.77 and up. 
+This crate requires stable Rust 1.77 and up. Versions before 1.77 should work, but not tested.
 
 ## License
 
