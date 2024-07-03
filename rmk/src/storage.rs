@@ -34,8 +34,10 @@ pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
+    // Clear the storage
+    Reset,
     // Clear info of given slot number
-    Clear(u8),
+    ClearSlot(u8),
     // Layout option
     LayoutOptions(u32),
     // Default layer number
@@ -362,6 +364,9 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone()
                     )
                 }
+                FlashOperationMessage::Reset => {
+                    sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
+                }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
                     write_storage!(
@@ -397,7 +402,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 }
 
                 #[cfg(feature = "_nrf_ble")]
-                FlashOperationMessage::Clear(key) => {
+                FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
                     let mut empty = BondInfo::default();

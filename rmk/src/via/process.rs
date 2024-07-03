@@ -181,7 +181,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 warn!("Custom get value -- not supported")
             }
             ViaCommand::EepromReset => {
-                warn!("Eeprom reset -- not supported")
+                warn!("Reseting storage..");
+                FLASH_CHANNEL.send(FlashOperationMessage::Reset).await
+                // TODO: Reboot after a eeprom reset?
             }
             ViaCommand::BootloaderJump => {
                 warn!("Bootloader jump -- not supported")

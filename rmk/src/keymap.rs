@@ -28,6 +28,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             layer_cache: [[0; COL]; ROW],
         }
     }
+
     pub async fn new_from_storage<F: NorFlash>(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,
@@ -36,7 +37,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         if let Some(storage) = storage {
             if storage.read_keymap(&mut action_map).await.is_err() {
                 error!("Keymap reading aborted by an error, clearing the storage...");
-                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await.ok();
+                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
+                    .await
+                    .ok();
                 // TODO: The storage is erased, reset the device
             }
         }
@@ -83,7 +86,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
 
         if !key_state.changed && key_state.pressed {
             // If current key_state doesn't change, and the key is pressed, use the cached layer.
-            // 
+            //
             // This situation is specifically for tap/hold, when the key is held, the layer could be continuously checked.
             // The layer cache should not be popped in this case.
             // This function should return the cached layer to make layer tap/hold action performs correctly.
