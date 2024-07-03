@@ -37,6 +37,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         if let Some(storage) = storage {
             if storage.read_keymap(&mut action_map).await.is_err() {
                 error!("Keymap reading aborted by an error, clearing the storage...");
+                // Dont sent flash message here, since the storage task is not running yet
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
                     .await
                     .ok();
