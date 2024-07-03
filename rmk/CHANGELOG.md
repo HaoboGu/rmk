@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Support vial keymap reset command
+
 ## [0.2.1] - 2024-06-14
 
 ### Fixed
