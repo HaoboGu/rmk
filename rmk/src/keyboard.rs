@@ -403,13 +403,13 @@ impl<
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if key_state.changed && key_state.pressed {
+                if key_state.is_pressing() {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
-                if key_state.changed && !key_state.pressed {
+                if key_state.is_releasing() {
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
@@ -444,7 +444,7 @@ impl<
         mut key_state: KeyState,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        if key_state.changed && key_state.pressed {
+        if key_state.is_pressing() {
             self.process_key_action_normal(action, key_state);
 
             // Wait 10ms, then send release
@@ -479,7 +479,7 @@ impl<
         mut key_state: KeyState,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        if !key_state.pressed && key_state.changed {
+        if key_state.is_releasing() {
             // Case 1, the key is released
             if let Some(s) = key_state.hold_start {
                 let d = s.elapsed().as_millis();

@@ -79,7 +79,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         col: usize,
         key_state: KeyState,
     ) -> KeyAction {
-        if !key_state.pressed && key_state.changed {
+        if key_state.is_releasing() {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(row, col);
             return self.layers[layer as usize][row][col];
