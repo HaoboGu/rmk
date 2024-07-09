@@ -1,6 +1,13 @@
-use crate::{action::KeyAction, matrix::KeyState, storage::Storage};
+use crate::{
+    action::KeyAction,
+    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
+    keycode::KeyCode,
+    matrix::KeyState,
+    storage::Storage,
+};
 use defmt::{error, warn};
 use embedded_storage_async::nor_flash::NorFlash;
+use num_enum::FromPrimitive;
 
 /// Keymap represents the stack of layers.
 ///
@@ -17,6 +24,8 @@ pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     default_layer: u8,
     /// Layer cache
     layer_cache: [[u8; COL]; ROW],
+    /// Macro cache
+    pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
 }
 
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
@@ -26,6 +35,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
+            macro_cache: [0; MACRO_SPACE_SIZE],
         }
     }
 
@@ -34,7 +44,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         storage: Option<&mut Storage<F>>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
+        let mut macro_cache = [0; MACRO_SPACE_SIZE];
         if let Some(storage) = storage {
+            // Read keymap to `action_map`
             if storage.read_keymap(&mut action_map).await.is_err() {
                 error!("Keymap reading aborted by an error, clearing the storage...");
                 // Dont sent flash message here, since the storage task is not running yet
@@ -43,6 +55,11 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                     .ok();
                 // TODO: The storage is erased, reset the device
             }
+
+            // Read macro cache
+            storage
+                .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
+                .await;
         }
 
         KeyMap {
@@ -50,11 +67,90 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
+            macro_cache,
         }
     }
 
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         (ROW, COL, NUM_LAYER)
+    }
+
+    /// Get the next macro operation starting from given index and offset
+    /// Return current macro operation and the next operations's offset
+    pub(crate) fn get_next_macro_operation(
+        &self,
+        macro_start_idx: usize,
+        offset: usize,
+    ) -> (MacroOperation, usize) {
+        let idx = macro_start_idx + offset;
+        if idx >= self.macro_cache.len() - 1 {
+            return (MacroOperation::End, idx);
+        }
+        match (self.macro_cache[idx], self.macro_cache[idx + 1]) {
+            (0, _) => (MacroOperation::End, idx),
+            (1, 1) => {
+                // SS_QMK_PREFIX + SS_TAP_CODE
+                if idx + 2 < self.macro_cache.len() {
+                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
+                    (MacroOperation::Tap(keycode), idx + 3)
+                } else {
+                    (MacroOperation::End, idx + 3)
+                }
+            }
+            (1, 2) => {
+                // SS_QMK_PREFIX + SS_DOWN_CODE
+                if idx + 2 < self.macro_cache.len() {
+                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
+                    (MacroOperation::Press(keycode), idx + 3)
+                } else {
+                    (MacroOperation::End, idx + 3)
+                }
+            }
+            (1, 3) => {
+                // SS_QMK_PREFIX + SS_UP_CODE
+                if idx + 2 < self.macro_cache.len() {
+                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
+                    (MacroOperation::Release(keycode), idx + 3)
+                } else {
+                    (MacroOperation::End, idx + 3)
+                }
+            }
+            (1, 4) => {
+                // SS_QMK_PREFIX + SS_DELAY_CODE
+                if idx + 3 < self.macro_cache.len() {
+                    let delay_ms = (self.macro_cache[idx + 2] as u16 - 1)
+                        + (self.macro_cache[idx + 3] as u16 - 1) * 255;
+                    (MacroOperation::Delay(delay_ms), idx + 4)
+                } else {
+                    (MacroOperation::End, idx + 4)
+                }
+            }
+            _ => {
+                // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
+                let (keycode, is_caps) = KeyCode::from_ascii(self.macro_cache[idx]);
+                (MacroOperation::Text(keycode, is_caps), idx + 1)
+            }
+        }
+    }
+
+    pub(crate) fn get_macro_start(&self, mut macro_idx: u8) -> Option<usize> {
+        let mut idx = 0;
+        // Find idx until the macro start of given index
+        loop {
+            if macro_idx == 0 || idx >= self.macro_cache.len() {
+                break;
+            }
+            if self.macro_cache[idx] == 0 {
+                macro_idx -= 1;
+            }
+            idx += 1;
+        }
+
+        if idx == self.macro_cache.len() {
+            None
+        } else {
+            Some(idx)
+        }
     }
 
     pub(crate) fn set_action_at(

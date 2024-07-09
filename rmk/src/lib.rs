@@ -49,6 +49,7 @@ mod debounce;
 mod flash;
 mod hid;
 pub mod keyboard;
+pub mod keyboard_macro;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;

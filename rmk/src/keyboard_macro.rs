@@ -3,12 +3,14 @@ use crate::keycode::KeyCode;
 // Default macro space size
 pub(crate) const MACRO_SPACE_SIZE: usize = 512;
 
+// Default number of keyboard macros
+pub(crate) const NUM_MACRO: usize = 8;
+
 pub enum MacroOperation {
-    /// This bit is the start of a macro, with macro length
-    Start(u8),
     Press(KeyCode),
     Release(KeyCode),
     Tap(KeyCode),
-    Text(KeyCode),
+    Text(KeyCode, bool),
+    Delay(u16),
     End,
 }
