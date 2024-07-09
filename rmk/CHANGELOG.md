@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add keyboard macro support
 - Support vial keymap reset command
+- Fix default `lt!` and `lm!` implementation
 
 ## [0.2.1] - 2024-06-14
 
