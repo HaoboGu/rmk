@@ -266,3 +266,12 @@ pub(crate) async fn run_usb_keyboard<
         Either4::Fourth(_) => error!("Via task is died"),
     }
 }
+
+pub(crate) fn reboot_keyboard() {
+    warn!("Rebooting keyboard!")
+    // TODO: Implement reboot
+    // For cortex-m:
+    // cortex_m::peripheral::SCB::sys_reset();
+    // For RISCV?
+    // For ESP32?
+} 

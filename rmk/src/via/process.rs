@@ -199,14 +199,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 warn!("Macro get buffer size -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBuffer => {
-                let _offset = BigEndian::read_u16(&report.output_data[1..3]);
-                let size = report.output_data[3];
+                let offset = BigEndian::read_u16(&report.output_data[1..3]) as usize;
+                let size = report.output_data[3] as usize;
                 if size <= 28 {
-                    debug!("Current returned data: {:02X}", report.input_data);
+                    report.input_data[4..4 + size]
+                        .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
+                    debug!(
+                        "Get macro buffer: offset: {}, data: {:02X}",
+                        offset, report.input_data
+                    );
                 } else {
                     report.input_data[0] = 0xFF;
                 }
-                warn!("Macro get buffer -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroSetBuffer => {
                 // Every write writes all buffer space of the macro(if it's not empty)

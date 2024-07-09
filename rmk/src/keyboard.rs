@@ -5,7 +5,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
-    keyboard_macro::MacroOperation,
+    keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -686,6 +686,10 @@ impl<
 
         // Get macro index
         if let Some(macro_idx) = key.as_macro_index() {
+            if macro_idx as usize >= NUM_MACRO {
+                error!("Macro idx invalid: {}", macro_idx);
+                return;
+            }
             // Read macro operations untill the end of the macro
             if let Some(macro_start_idx) = self.keymap.borrow().get_macro_start(macro_idx) {
                 let mut offset = 0;
@@ -730,7 +734,10 @@ impl<
                         MacroOperation::Delay(t) => {
                             embassy_time::Timer::after_millis(t as u64).await;
                         }
-                        MacroOperation::End => break,
+                        MacroOperation::End => {
+                            self.send_keyboard_report(sender).await;
+                            break;
+                        }
                     };
 
                     // Send the item in the macro sequence

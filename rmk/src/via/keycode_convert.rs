@@ -11,7 +11,13 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         KeyAction::No => 0x0000,
         KeyAction::Transparent => 0x0001,
         KeyAction::Single(a) => match a {
-            Action::Key(k) => k as u16,
+            Action::Key(k) => {
+                if k.is_macro() {
+                    k as u16 & 0xFF | 0x7700
+                } else {
+                    k as u16
+                }
+            }
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
@@ -45,6 +51,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             ((m.into_bits() as u16) << 8) | keycode
         }
         KeyAction::LayerTapHold(a, l) => {
+            // LayerTapHold is now included in TapHold Action, it can be safely removed in the future
             if l > 16 {
                 0
             } else {
@@ -62,7 +69,13 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             };
             0x2000 | ((m.into_bits() as u16) << 8) | keycode
         }
-        KeyAction::TapHold(_tap, _hold) => todo!(),
+        KeyAction::TapHold(tap, hold) => {
+            warn!(
+                "Tap hold action is not supported: tap: {}, hold: {}",
+                tap, hold
+            );
+            0
+        }
     }
 }
 
@@ -139,9 +152,8 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7700..=0x770F => {
-            // TODO: Macro 1-16
-            warn!("Macro {:#X} not supported", via_keycode);
-            KeyAction::No
+            let keycode = via_keycode & 0xFF | 0x500;
+            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
         0x7800..=0x783F => {
             // TODO: backlight and rgb configuration

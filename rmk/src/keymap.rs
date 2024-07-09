@@ -3,6 +3,7 @@ use crate::{
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
     matrix::KeyState,
+    reboot_keyboard,
     storage::Storage,
 };
 use defmt::{error, warn};
@@ -53,13 +54,25 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
                     .await
                     .ok();
-                // TODO: The storage is erased, reset the device
-            }
 
-            // Read macro cache
-            storage
-                .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
-                .await;
+                reboot_keyboard();
+            } else {
+                // Read macro cache
+                if let Err(_) = storage
+                    .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
+                    .await
+                {
+                    error!("Wrong macro cache, clearing the storage...");
+                    sequential_storage::erase_all(
+                        &mut storage.flash,
+                        storage.storage_range.clone(),
+                    )
+                    .await
+                    .ok();
+
+                    reboot_keyboard();
+                }
+            }
         }
 
         KeyMap {
@@ -84,35 +97,35 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     ) -> (MacroOperation, usize) {
         let idx = macro_start_idx + offset;
         if idx >= self.macro_cache.len() - 1 {
-            return (MacroOperation::End, idx);
+            return (MacroOperation::End, offset);
         }
         match (self.macro_cache[idx], self.macro_cache[idx + 1]) {
-            (0, _) => (MacroOperation::End, idx),
+            (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 // SS_QMK_PREFIX + SS_TAP_CODE
                 if idx + 2 < self.macro_cache.len() {
                     let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Tap(keycode), idx + 3)
+                    (MacroOperation::Tap(keycode), offset + 3)
                 } else {
-                    (MacroOperation::End, idx + 3)
+                    (MacroOperation::End, offset + 3)
                 }
             }
             (1, 2) => {
                 // SS_QMK_PREFIX + SS_DOWN_CODE
                 if idx + 2 < self.macro_cache.len() {
                     let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Press(keycode), idx + 3)
+                    (MacroOperation::Press(keycode), offset + 3)
                 } else {
-                    (MacroOperation::End, idx + 3)
+                    (MacroOperation::End, offset + 3)
                 }
             }
             (1, 3) => {
                 // SS_QMK_PREFIX + SS_UP_CODE
                 if idx + 2 < self.macro_cache.len() {
                     let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Release(keycode), idx + 3)
+                    (MacroOperation::Release(keycode), offset + 3)
                 } else {
-                    (MacroOperation::End, idx + 3)
+                    (MacroOperation::End, offset + 3)
                 }
             }
             (1, 4) => {
@@ -120,15 +133,15 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 if idx + 3 < self.macro_cache.len() {
                     let delay_ms = (self.macro_cache[idx + 2] as u16 - 1)
                         + (self.macro_cache[idx + 3] as u16 - 1) * 255;
-                    (MacroOperation::Delay(delay_ms), idx + 4)
+                    (MacroOperation::Delay(delay_ms), offset + 4)
                 } else {
-                    (MacroOperation::End, idx + 4)
+                    (MacroOperation::End, offset + 4)
                 }
             }
             _ => {
                 // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
                 let (keycode, is_caps) = KeyCode::from_ascii(self.macro_cache[idx]);
-                (MacroOperation::Text(keycode, is_caps), idx + 1)
+                (MacroOperation::Text(keycode, is_caps), offset + 1)
             }
         }
     }
