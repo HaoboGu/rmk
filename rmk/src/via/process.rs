@@ -1,6 +1,7 @@
 use super::{protocol::*, vial::process_vial};
 use crate::{
     hid::{HidError, HidReaderWriterWrapper},
+    keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
@@ -189,27 +190,58 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 warn!("Bootloader jump -- not supported")
             }
             ViaCommand::DynamicKeymapMacroGetCount => {
-                report.input_data[1] = 1;
+                report.input_data[1] = 8;
                 warn!("Macro get count -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBufferSize => {
-                // report.input_data[0] = 0xFF;
-                report.input_data[1] = 0x00;
-                report.input_data[2] = 0x10;
+                report.input_data[1] = (MACRO_SPACE_SIZE as u16 >> 8) as u8;
+                report.input_data[2] = (MACRO_SPACE_SIZE & 0xFF) as u8;
                 warn!("Macro get buffer size -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBuffer => {
-                let _offset = BigEndian::read_u16(&report.output_data[1..3]);
-                let size = report.output_data[3];
+                let offset = BigEndian::read_u16(&report.output_data[1..3]) as usize;
+                let size = report.output_data[3] as usize;
                 if size <= 28 {
-                    debug!("Current returned data: {:02X}", report.input_data);
+                    report.input_data[4..4 + size]
+                        .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
+                    debug!(
+                        "Get macro buffer: offset: {}, data: {:02X}",
+                        offset, report.input_data
+                    );
                 } else {
                     report.input_data[0] = 0xFF;
                 }
-                warn!("Macro get buffer -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroSetBuffer => {
-                warn!("Macro set buffer -- to be implemented")
+                // Every write writes all buffer space of the macro(if it's not empty)
+                // The sequence must have NUM_MACRO 0s, where each 0 indicates the end of a macro
+                let offset = BigEndian::read_u16(&report.output_data[1..3]);
+                // Current sequence size, <= 28
+                let size = report.output_data[3];
+                // End of current sequence in the macro cache
+                let end = offset + size as u16;
+
+                // The first sequence, reset the macro cache
+                if offset == 0 {
+                    self.keymap.borrow_mut().macro_cache = [0; MACRO_SPACE_SIZE];
+                }
+
+                // Update macro cache
+                info!("Setting macro buffer, offset: {}, size: {}", offset, size);
+                info!("Data: {=[u8]:x}", report.output_data[4..]);
+                self.keymap.borrow_mut().macro_cache[offset as usize..end as usize]
+                    .copy_from_slice(&report.output_data[4..4 + size as usize]);
+
+                // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
+                // Then flush macros to storage
+                let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
+                if size < 28 || num_zero >= NUM_MACRO {
+                    let buf = self.keymap.borrow_mut().macro_cache.clone();
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::WriteMacro(buf))
+                        .await;
+                    info!("Flush macros to storage")
+                }
             }
             ViaCommand::DynamicKeymapMacroReset => {
                 warn!("Macro reset -- to be implemented")
@@ -265,13 +297,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
                         );
-                        if let Err(e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
+                        if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
                             layer: layer as u8,
                             col: col as u8,
                             row: row as u8,
                             action,
                         }) {
-                            error!("Set keymap buffer error: {} ", e)
+                            error!("Send keymap setting command error")
                         }
                     });
             }
@@ -301,4 +333,8 @@ fn get_position_from_offset(
     let row = current_layer_offset / max_col;
     let col = current_layer_offset % max_col;
     (row, col, layer)
+}
+
+fn count_zeros(data: &[u8]) -> usize {
+    data.iter().filter(|&&x| x == 0).count()
 }

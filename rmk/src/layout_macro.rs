@@ -42,9 +42,9 @@ macro_rules! lm {
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::LayerTapHold(
             $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $crate::action::Action::LayerOn($x),
+            $x,
         )
     };
 }
@@ -69,9 +69,9 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::LayerTapHold(
             $crate::action::Action::LayerToggle($x),
-            $crate::action::Action::LayerOn($x),
+            $x,
         )
     };
 }

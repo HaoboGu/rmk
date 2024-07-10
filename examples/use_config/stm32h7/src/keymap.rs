@@ -1,6 +1,6 @@
 //! You can specify the default keymap here, or in `keyboard.toml`
 //! Check the documentation here: https://haobogu.github.io/rmk/configuration.html#keymap-config
-//! 
+//!
 // use crate::{COL, NUM_LAYER, ROW};
 // use rmk::action::KeyAction;
 // use rmk::{a, k, layer, mo};

@@ -49,6 +49,7 @@ mod debounce;
 mod flash;
 mod hid;
 pub mod keyboard;
+pub mod keyboard_macro;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;
@@ -265,3 +266,12 @@ pub(crate) async fn run_usb_keyboard<
         Either4::Fourth(_) => error!("Via task is died"),
     }
 }
+
+pub(crate) fn reboot_keyboard() {
+    warn!("Rebooting keyboard!")
+    // TODO: Implement reboot
+    // For cortex-m:
+    // cortex_m::peripheral::SCB::sys_reset();
+    // For RISCV?
+    // For ESP32?
+} 

@@ -1,7 +1,7 @@
 use crate::matrix::KeyState;
 
-pub mod fast_debouncer;
 pub mod default_bouncer;
+pub mod fast_debouncer;
 
 /// Default DEBOUNCE_THRESHOLD in ms.
 static DEBOUNCE_THRESHOLD: u16 = 10;
@@ -16,7 +16,6 @@ pub(crate) trait DebouncerTrait {
         key_state: &KeyState,
     ) -> DebounceState;
 }
-
 
 /// Debounce state
 pub(crate) enum DebounceState {
