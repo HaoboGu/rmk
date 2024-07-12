@@ -3,7 +3,7 @@
 RMK has built-in wireless(BLE) support for nRF52840 and nRF52832. Supporting of other nRF52 microcontrollers should be quite easy to add. To use the wireless feature, enable `nrf52832_ble` or `nrf52840_ble` feature gate in your `Cargo.toml`:
 
 ```toml
-rmk = { version = "0.2.1", features = [
+rmk = { version = "0.2.2", features = [
     "nrf52840_ble",
     "col2row",
 ] }
