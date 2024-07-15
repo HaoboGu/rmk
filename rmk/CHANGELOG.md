@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2024-07-12
+
+- Add keyboard macro support
+- Support vial keymap reset command
+- Fix default `lt!` and `lm!` implementation
+
+## [0.2.1] - 2024-06-14
+
+### Fixed
+
+- Fix USB not responding when the light service is not enabled
+
+## [0.2.0] - 2024-06-14
+
 ### Added
 
 - Support led status update from ble 

@@ -55,6 +55,14 @@ impl KeyState {
     fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
     }
+
+    pub(crate) fn is_releasing(&self) -> bool {
+        !self.pressed && self.changed
+    }
+
+    pub(crate) fn is_pressing(&self) -> bool {
+        self.pressed && self.changed
+    }
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.

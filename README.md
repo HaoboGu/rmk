@@ -11,19 +11,22 @@ A feature-rich Rust keyboard firmware.
 
 ## Features
 
-- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nrf/rp2040/esp32
+- **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nRF/rp2040/esp32
 - **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
-- **Wireless**: (Experimental) BLE wireless support with auto-reconnection/multiple devices feature for nrf52 and esp32 microcontrollers, tested on nrf52840 and esp32c3
+- **Wireless**: BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
+- **Low latency and low-power ready**: RMK has a typical 2 ms latency in wired mode and 10 ms latency in wireless mode. By enabling `async_matrix` feature, RMK has very low power consumption, with a 2000mah battery, RMK can provide several months battery life
 
 ## [User Documentation](https://haobogu.github.io/rmk/guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
-## [Real World Examples](https://haobogu.github.io/rmk/faqreal_world_examples.html)
+</details>
+
+## Real World Examples
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="docs/src/images/1.jpg" width="60%">
+<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/1.jpg?raw=true" width="60%">
 
 ## Usage
 
@@ -97,7 +100,7 @@ Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate is tested on stable Rust 1.77 and up. Older Rust version may work but not guaranteed.
+This crate requires stable Rust 1.77 and up. Versions before 1.77 should work, but not tested.
 
 ## License
 

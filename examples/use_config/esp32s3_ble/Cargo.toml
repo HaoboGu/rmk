@@ -1,6 +1,6 @@
 [package]
 name = "rmk-esp32s3"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.1.21", path = "../../../rmk", features = [
+rmk = { version = "0.2.2", path = "../../../rmk", features = [
     "col2row",
     "esp32s3_ble",
 ] }

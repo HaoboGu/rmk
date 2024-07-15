@@ -49,6 +49,7 @@ mod debounce;
 mod flash;
 mod hid;
 pub mod keyboard;
+pub mod keyboard_macro;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;
@@ -127,21 +128,21 @@ pub async fn initialize_keyboard_and_run_async_flash<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     flash: Option<F>,
-    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
     let (mut storage, keymap) = match flash {
         Some(f) => {
-            let mut s = Storage::new(f, &keymap, keyboard_config.storage_config).await;
+            let mut s = Storage::new(f, &default_keymap, keyboard_config.storage_config).await;
             let keymap = RefCell::new(
-                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(keymap, Some(&mut s)).await,
+                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut s)).await,
             );
             (Some(s), keymap)
         }
         None => {
             let keymap = RefCell::new(
-                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<F>(keymap, None).await,
+                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<F>(default_keymap, None).await,
             );
             (None, keymap)
         }
@@ -265,3 +266,12 @@ pub(crate) async fn run_usb_keyboard<
         Either4::Fourth(_) => error!("Via task is died"),
     }
 }
+
+pub(crate) fn reboot_keyboard() {
+    warn!("Rebooting keyboard!")
+    // TODO: Implement reboot
+    // For cortex-m:
+    // cortex_m::peripheral::SCB::sys_reset();
+    // For RISCV?
+    // For ESP32?
+} 

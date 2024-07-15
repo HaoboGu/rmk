@@ -118,7 +118,7 @@ impl SecurityHandler for Bonder {
             warn!("Reach maximum number of bonded devices, a device which is not lucky today will be removed:(");
             // The unlucky number is 4
             let unlucky: u8 = 4;
-            match FLASH_CHANNEL.try_send(FlashOperationMessage::Clear(unlucky)) {
+            match FLASH_CHANNEL.try_send(FlashOperationMessage::ClearSlot(unlucky)) {
                 Ok(_) => debug!("Sent clear to flash channel"),
                 Err(_e) => error!("Send clear to flash channel error"),
             }

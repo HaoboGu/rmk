@@ -16,12 +16,12 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] system/media/mouse keys
   - [x] LED
   - [x] tap/hold
+  - [x] keyboard macros
+  - [x] async key detection and report sending
   - [ ] Direct pin
   - [ ] 🔴 RGB
-  - [ ] keyboard macros
   - [ ] 🟢 encoder
   - [ ] 🔵 display support
-  - [ ] full async key detection and report sending
   - [ ] 🔵 split keyboard support
 
 #### Wireless

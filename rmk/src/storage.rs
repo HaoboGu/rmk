@@ -1,6 +1,7 @@
 mod eeconfig;
 
 use byteorder::{BigEndian, ByteOrder};
+use core::ops::Range;
 use defmt::{error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -12,11 +13,10 @@ use sequential_storage::{
     map::{fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
-
-use core::ops::Range;
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::{
     action::KeyAction,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -25,7 +25,7 @@ use crate::{
 use self::eeconfig::EeKeymapConfig;
 
 // Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperationMessage, 8> =
+pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperationMessage, 4> =
     Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
@@ -34,12 +34,16 @@ pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
+    // Clear the storage
+    Reset,
     // Clear info of given slot number
-    Clear(u8),
+    ClearSlot(u8),
     // Layout option
     LayoutOptions(u32),
     // Default layer number
     DefaultLayer(u8),
+    // Write macro
+    WriteMacro([u8; MACRO_SPACE_SIZE]),
     KeymapKey {
         layer: u8,
         col: u8,
@@ -56,8 +60,26 @@ pub(crate) enum StorageKeys {
     KeymapConfig,
     LayoutConfig,
     KeymapKeys,
+    MacroData,
     #[cfg(feature = "_nrf_ble")]
-    BleBondInfo,
+    BleBondInfo = 0xEF,
+}
+
+impl StorageKeys {
+    pub(crate) fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(StorageKeys::StorageConfig),
+            1 => Some(StorageKeys::LedLightConfig),
+            2 => Some(StorageKeys::RgbLightConfig),
+            3 => Some(StorageKeys::KeymapConfig),
+            4 => Some(StorageKeys::LayoutConfig),
+            5 => Some(StorageKeys::KeymapKeys),
+            6 => Some(StorageKeys::MacroData),
+            #[cfg(feature = "_nrf_ble")]
+            0xEF => Some(StorageKeys::BleBondInfo),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -66,6 +88,7 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     LayoutConfig(LayoutConfig),
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey<ROW, COL, NUM_LAYER>),
+    MacroData([u8; MACRO_SPACE_SIZE]),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
 }
@@ -133,6 +156,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                 buffer[1..121].copy_from_slice(&buf);
                 Ok(121)
             }
+            StorageData::MacroData(d) => {
+                if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::MacroData as u8;
+                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
+                Ok(MACRO_SPACE_SIZE + 1)
+            }
         }
     }
 
@@ -143,73 +174,67 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
         if buffer.len() < 1 {
             return Err(SerializationError::InvalidFormat);
         }
-        match buffer[0] {
-            0x0 => {
-                // StorageConfig
-                // 1 is the initial state of flash, so it means storage is NOT initialized
-                if buffer[1] == 1 {
-                    Ok(StorageData::StorageConfig(LocalStorageConfig {
-                        enable: false,
-                    }))
-                } else {
-                    Ok(StorageData::StorageConfig(LocalStorageConfig {
-                        enable: true,
+        if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
+            match key_type {
+                StorageKeys::StorageConfig => {
+                    // 1 is the initial state of flash, so it means storage is NOT initialized
+                    if buffer[1] == 1 {
+                        Ok(StorageData::StorageConfig(LocalStorageConfig {
+                            enable: false,
+                        }))
+                    } else {
+                        Ok(StorageData::StorageConfig(LocalStorageConfig {
+                            enable: true,
+                        }))
+                    }
+                }
+                StorageKeys::LedLightConfig => Err(SerializationError::Custom(0)),
+                StorageKeys::RgbLightConfig => Err(SerializationError::Custom(0)),
+                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(
+                    EeKeymapConfig::from_bits(BigEndian::read_u16(&buffer[1..3])),
+                )),
+                StorageKeys::LayoutConfig => {
+                    let default_layer = buffer[1];
+                    let layout_option = BigEndian::read_u32(&buffer[2..6]);
+                    Ok(StorageData::LayoutConfig(LayoutConfig {
+                        default_layer,
+                        layout_option,
                     }))
                 }
-            }
-            0x1 => {
-                // LedLightConfig
-                Err(SerializationError::Custom(0))
-            }
-            0x2 => {
-                // RgbLightConfig
-                Err(SerializationError::Custom(0))
-            }
-            0x3 => {
-                // KeymapConfig
-                Ok(StorageData::KeymapConfig(EeKeymapConfig::from_bits(
-                    BigEndian::read_u16(&buffer[1..3]),
-                )))
-            }
-            0x4 => {
-                // LayoutConfig
-                let default_layer = buffer[1];
-                let layout_option = BigEndian::read_u32(&buffer[2..6]);
-                Ok(StorageData::LayoutConfig(LayoutConfig {
-                    default_layer,
-                    layout_option,
-                }))
-            }
-            0x5 => {
-                // KeymapKey
-                let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                let layer = buffer[3] as usize;
-                let col = buffer[4] as usize;
-                let row = buffer[5] as usize;
+                StorageKeys::KeymapKeys => {
+                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
+                    let layer = buffer[3] as usize;
+                    let col = buffer[4] as usize;
+                    let row = buffer[5] as usize;
 
-                // row, col, layer are used to calculate key only, not used here
-                Ok(StorageData::KeymapKey(KeymapKey {
-                    row,
-                    col,
-                    layer,
-                    action,
-                }))
-            }
-            #[cfg(feature = "_nrf_ble")]
-            0x6 => {
-                // BleBondInfo
-                // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
-                let mut buf = [0_u8; 120];
-                buf.copy_from_slice(&buffer[1..121]);
-                let info: BondInfo = unsafe { mem::transmute_copy(&buf) };
+                    // row, col, layer are used to calculate key only, not used here
+                    Ok(StorageData::KeymapKey(KeymapKey {
+                        row,
+                        col,
+                        layer,
+                        action,
+                    }))
+                }
+                #[cfg(feature = "_nrf_ble")]
+                StorageKeys::BleBondInfo => {
+                    // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
+                    let mut buf = [0_u8; 120];
+                    buf.copy_from_slice(&buffer[1..121]);
+                    let info: BondInfo = unsafe { mem::transmute_copy(&buf) };
 
-                Ok(StorageData::BondInfo(info))
+                    Ok(StorageData::BondInfo(info))
+                }
+                StorageKeys::MacroData => {
+                    if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
+                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
+                    Ok(StorageData::MacroData(buf))
+                }
             }
-
-            _ => {
-                info!("Key error: {}", buffer[0]);
-                Err(SerializationError::Custom(1))
-            }
+        } else {
+            Err(SerializationError::Custom(1))
         }
     }
 }
@@ -226,6 +251,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageData<ROW
                 let kk = *k;
                 get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer)
             }
+            StorageData::MacroData(_) => StorageKeys::MacroData as u32,
         }
     }
 }
@@ -251,6 +277,7 @@ pub(crate) struct KeymapKey<const ROW: usize, const COL: usize, const NUM_LAYER:
 pub struct Storage<F: AsyncNorFlash> {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
+    buffer: [u8; get_buffer_size()],
 }
 
 /// Read out storage config, update and then save back.
@@ -308,9 +335,11 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.start_addr as u32
                 ..(config.start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
+
         let mut storage = Self {
             flash,
             storage_range,
+            buffer: [0; get_buffer_size()],
         };
 
         // Check whether keymap and configs have been storaged in flash
@@ -326,7 +355,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     &mut storage.flash,
                     storage.storage_range.clone(),
                     &mut NoCache::new(),
-                    &mut [0; 128],
+                    &mut storage.buffer,
                     StorageKeys::StorageConfig as u32,
                     &StorageData::StorageConfig::<ROW, COL, NUM_LAYER>(LocalStorageConfig {
                         enable: false,
@@ -346,7 +375,6 @@ impl<F: AsyncNorFlash> Storage<F> {
     }
 
     pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(&mut self) {
-        let mut storage_data_buffer = [0_u8; 128];
         let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
@@ -355,23 +383,38 @@ impl<F: AsyncNorFlash> Storage<F> {
                     // Read out layout options, update layer option and save back
                     write_storage!(
                         &mut self.flash,
-                        &mut storage_data_buffer,
+                        &mut self.buffer,
                         &mut storage_cache,
                         LayoutConfig,
                         layout_option,
                         self.storage_range.clone()
                     )
                 }
+                FlashOperationMessage::Reset => {
+                    sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
+                }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
                     write_storage!(
                         &mut self.flash,
-                        &mut storage_data_buffer,
+                        &mut self.buffer,
                         &mut storage_cache,
                         LayoutConfig,
                         default_layer,
                         self.storage_range.clone()
                     )
+                }
+                FlashOperationMessage::WriteMacro(macro_data) => {
+                    info!("Saving keyboard macro data");
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        StorageKeys::MacroData as u32,
+                        &StorageData::<ROW, COL, NUM_LAYER>::MacroData(macro_data),
+                    )
+                    .await
                 }
                 FlashOperationMessage::KeymapKey {
                     layer,
@@ -389,7 +432,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
-                        &mut storage_data_buffer,
+                        &mut self.buffer,
                         data.key(),
                         &data,
                     )
@@ -397,7 +440,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 }
 
                 #[cfg(feature = "_nrf_ble")]
-                FlashOperationMessage::Clear(key) => {
+                FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
                     let mut empty = BondInfo::default();
@@ -407,7 +450,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
-                        &mut storage_data_buffer,
+                        &mut self.buffer,
                         data.key(),
                         &data,
                     )
@@ -415,13 +458,13 @@ impl<F: AsyncNorFlash> Storage<F> {
                 }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::BondInfo(b) => {
-                    info!("Saving bond info: {}", info);
+                    info!("Saving bond info: {}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
-                        &mut storage_data_buffer,
+                        &mut self.buffer,
                         data.key(),
                         &data,
                     )
@@ -439,7 +482,6 @@ impl<F: AsyncNorFlash> Storage<F> {
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
-        let mut buf = [0u8; 128];
         for (layer, layer_data) in keymap.iter_mut().enumerate() {
             for (row, row_data) in layer_data.iter_mut().enumerate() {
                 for (col, value) in row_data.iter_mut().enumerate() {
@@ -448,7 +490,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut NoCache::new(),
-                        &mut buf,
+                        &mut self.buffer,
                         key,
                     )
                     .await
@@ -481,6 +523,33 @@ impl<F: AsyncNorFlash> Storage<F> {
         Ok(())
     }
 
+    pub(crate) async fn read_macro_cache<
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+    >(
+        &mut self,
+        macro_cache: &mut [u8],
+    ) -> Result<(), ()> {
+        // Read storage and send back from send_channel
+        let read_data = fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            StorageKeys::MacroData as u32,
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::MacroData(data)) = read_data {
+            // Send data back
+            macro_cache.copy_from_slice(&data);
+        }
+
+        Ok(())
+    }
+
     async fn initialize_storage_with_config<
         const ROW: usize,
         const COL: usize,
@@ -490,7 +559,6 @@ impl<F: AsyncNorFlash> Storage<F> {
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
-        let mut buf = [0u8; 128];
         // Save storage config
         let storage_config =
             StorageData::<ROW, COL, NUM_LAYER>::StorageConfig(LocalStorageConfig { enable: true });
@@ -498,7 +566,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             &mut self.flash,
             self.storage_range.clone(),
             &mut cache,
-            &mut buf,
+            &mut self.buffer,
             storage_config.key(),
             &storage_config,
         )
@@ -514,7 +582,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             &mut self.flash,
             self.storage_range.clone(),
             &mut cache,
-            &mut buf,
+            &mut self.buffer,
             layout_config.key(),
             &layout_config,
         )
@@ -535,7 +603,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut cache,
-                        &mut buf,
+                        &mut self.buffer,
                         item.key(),
                         &item,
                     )
@@ -551,13 +619,12 @@ impl<F: AsyncNorFlash> Storage<F> {
     async fn check_enable<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         &mut self,
     ) -> bool {
-        let mut buf = [0u8; 128];
         if let Ok(Some(StorageData::StorageConfig(config))) =
             fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
                 &mut NoCache::new(),
-                &mut buf,
+                &mut self.buffer,
                 StorageKeys::StorageConfig as u32,
             )
             .await
@@ -575,8 +642,27 @@ fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
         SSError::FullStorage => error!("Storage is full"),
         SSError::Corrupted {} => error!("Storage is corrupted"),
         SSError::BufferTooBig => error!("Buffer too big"),
-        SSError::BufferTooSmall(_) => error!("Buffer too small"),
+        SSError::BufferTooSmall(x) => error!("Buffer too small, needs {} bytes", x),
         SSError::SerializationError(e) => error!("Map value error: {}", e),
         _ => error!("Unknown storage error"),
+    }
+}
+
+const fn get_buffer_size() -> usize {
+    // The buffer size needed = size_of(StorageData) = MACRO_SPACE_SIZE + 8(generally)
+    // According to doc of `sequential-storage`, for some flashes it should be aligned in 32 bytes
+    // To make sure the buffer works, do this alignment always
+    let buffer_size = if MACRO_SPACE_SIZE < 248 {
+        256
+    } else {
+        MACRO_SPACE_SIZE + 8
+    };
+
+    let remainder = buffer_size % 32;
+
+    if remainder == 0 {
+        buffer_size
+    } else {
+        buffer_size + 32 - remainder
     }
 }

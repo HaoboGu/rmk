@@ -26,4 +26,4 @@
 
 # Development
 - [Roadmap](roadmap.md)
-- [Contributing](contributing.md)
+- [How to contribute](how_to_contribute.md)

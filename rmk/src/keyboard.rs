@@ -5,6 +5,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
+    keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     matrix::{KeyState, Matrix},
@@ -47,9 +48,14 @@ pub(crate) async fn keyboard_task<
     loop {
         let _ = keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
+        // Yield once to improve the performance
+        embassy_futures::yield_now().await;
         keyboard.send_media_report(sender).await;
+        embassy_futures::yield_now().await;
         keyboard.send_mouse_report(sender).await;
+        embassy_futures::yield_now().await;
         keyboard.send_system_control_report(sender).await;
+        embassy_futures::yield_now().await;
         Timer::after_micros(100).await;
     }
 }
@@ -277,7 +283,7 @@ impl<
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         #[cfg(feature = "async_matrix")]
-        self.matrix.wait_for_key().await;       
+        self.matrix.wait_for_key().await;
 
         // Matrix scan
         self.matrix.scan().await;
@@ -347,8 +353,11 @@ impl<
             .get_action_with_layer_cache(row, col, key_state);
         match action {
             KeyAction::No | KeyAction::Transparent => (),
-            KeyAction::Single(a) => self.process_key_action_normal(a, key_state),
-            KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_state),
+            KeyAction::Single(a) => self.process_key_action_normal(a, key_state, sender).await,
+            KeyAction::WithModifier(a, m) => {
+                self.process_key_action_with_modifier(a, m, key_state, sender)
+                    .await
+            }
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_state, sender).await,
             KeyAction::TapHold(tap_action, hold_action) => {
                 self.process_key_action_tap_hold(
@@ -391,45 +400,52 @@ impl<
         }
     }
 
-    fn process_key_action_normal(&mut self, action: Action, key_state: KeyState) {
+    async fn process_key_action_normal(
+        &mut self,
+        action: Action,
+        key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         match action {
-            Action::Key(key) => self.process_action_keycode(key, key_state),
+            Action::Key(key) => self.process_action_keycode(key, key_state, sender).await,
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if key_state.changed && key_state.pressed {
+                if key_state.is_pressing() {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
-                if key_state.changed && !key_state.pressed {
+                if key_state.is_releasing() {
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
             Action::Modifier(modifier) => {
                 let (keycodes, n) = modifier.to_modifier_keycodes();
                 for kc in keycodes.iter().take(n) {
-                    self.process_action_keycode(*kc, key_state);
+                    self.process_action_keycode(*kc, key_state, sender).await;
                 }
             }
             _ => (),
         }
     }
 
-    fn process_key_action_with_modifier(
+    async fn process_key_action_with_modifier(
         &mut self,
         action: Action,
         modifier: ModifierCombination,
         key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         // Process modifier first
         let (keycodes, n) = modifier.to_modifier_keycodes();
         for kc in keycodes.iter().take(n) {
-            self.process_action_keycode(*kc, key_state);
+            self.process_action_keycode(*kc, key_state, sender).await;
         }
-        self.process_key_action_normal(action, key_state);
+        self.process_key_action_normal(action, key_state, sender)
+            .await;
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
@@ -439,8 +455,9 @@ impl<
         mut key_state: KeyState,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        if key_state.changed && key_state.pressed {
-            self.process_key_action_normal(action, key_state);
+        if key_state.is_pressing() {
+            self.process_key_action_normal(action, key_state, sender)
+                .await;
 
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
@@ -451,7 +468,8 @@ impl<
             self.send_mouse_report(sender).await;
 
             key_state.pressed = false;
-            self.process_key_action_normal(action, key_state);
+            self.process_key_action_normal(action, key_state, sender)
+                .await;
         }
     }
 
@@ -474,7 +492,7 @@ impl<
         mut key_state: KeyState,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        if !key_state.pressed && key_state.changed {
+        if key_state.is_releasing() {
             // Case 1, the key is released
             if let Some(s) = key_state.hold_start {
                 let d = s.elapsed().as_millis();
@@ -487,7 +505,8 @@ impl<
                 } else {
                     // Released: hold action
                     debug!("Release tap hold, got HOLD: {}, {}", hold_action, key_state);
-                    self.process_key_action_normal(hold_action, key_state);
+                    self.process_key_action_normal(hold_action, key_state, sender)
+                        .await;
                 }
                 // Reset timer after release
                 self.matrix.update_timer(row, col);
@@ -497,7 +516,8 @@ impl<
             if let Some(s) = key_state.hold_start {
                 let d = s.elapsed().as_millis();
                 if d > 200 {
-                    self.process_key_action_normal(hold_action, key_state);
+                    self.process_key_action_normal(hold_action, key_state, sender)
+                        .await;
                 }
             }
         }
@@ -508,7 +528,12 @@ impl<
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
-    fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_keycode(
+        &mut self,
+        key: KeyCode,
+        key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
@@ -531,6 +556,9 @@ impl<
             } else {
                 self.unregister_keycode(key);
             }
+        } else if key.is_macro() {
+            // Process macro
+            self.process_action_macro(key, key_state, sender).await;
         }
     }
 
@@ -642,6 +670,87 @@ impl<
                 }
             }
             self.need_send_mouse_report = true;
+        }
+    }
+
+    async fn process_action_macro(
+        &mut self,
+        key: KeyCode,
+        key_state: KeyState,
+        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    ) {
+        // Execute the macro only when releasing the key
+        if !key_state.is_releasing() {
+            return;
+        }
+
+        // Get macro index
+        if let Some(macro_idx) = key.as_macro_index() {
+            if macro_idx as usize >= NUM_MACRO {
+                error!("Macro idx invalid: {}", macro_idx);
+                return;
+            }
+            // Read macro operations untill the end of the macro
+            if let Some(macro_start_idx) = self.keymap.borrow().get_macro_start(macro_idx) {
+                let mut offset = 0;
+                loop {
+                    // First, get the next macro operation
+                    let (operation, new_offset) = self
+                        .keymap
+                        .borrow()
+                        .get_next_macro_operation(macro_start_idx, offset);
+                    // Execute the operation
+                    match operation {
+                        MacroOperation::Press(k) => {
+                            self.need_send_key_report = true;
+                            self.register_keycode(k);
+                        }
+                        MacroOperation::Release(k) => {
+                            self.need_send_key_report = true;
+                            self.unregister_keycode(k);
+                        }
+                        MacroOperation::Tap(k) => {
+                            self.need_send_key_report = true;
+                            self.register_keycode(k);
+                            self.send_keyboard_report(sender).await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.need_send_key_report = true;
+                            self.unregister_keycode(k)
+                        }
+                        MacroOperation::Text(k, is_cap) => {
+                            self.need_send_key_report = true;
+                            self.register_keycode(k);
+                            if is_cap {
+                                self.register_modifier(KeyCode::LShift.as_modifier_bit());
+                            }
+                            self.send_keyboard_report(sender).await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.need_send_key_report = true;
+                            self.unregister_keycode(k);
+                            if is_cap {
+                                self.unregister_modifier(KeyCode::LShift.as_modifier_bit());
+                            }
+                        }
+                        MacroOperation::Delay(t) => {
+                            embassy_time::Timer::after_millis(t as u64).await;
+                        }
+                        MacroOperation::End => {
+                            self.send_keyboard_report(sender).await;
+                            break;
+                        }
+                    };
+
+                    // Send the item in the macro sequence
+                    self.send_keyboard_report(sender).await;
+
+                    offset = new_offset;
+                    if offset > self.keymap.borrow().macro_cache.len() {
+                        break;
+                    }
+                }
+            } else {
+                error!("Macro not found");
+            }
         }
     }
 
