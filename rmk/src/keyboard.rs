@@ -13,6 +13,7 @@ use crate::{
 };
 use core::cell::RefCell;
 use defmt::{debug, error, warn};
+use embassy_futures::yield_now;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Receiver, Sender},
@@ -201,7 +202,10 @@ impl<
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_key_report {
-            debug!("Sending keyboard report: {=[u8]:#X}", self.report.keycodes);
+            debug!(
+                "Sending keyboard report: {=[u8]:#X}, modifier: {:b}",
+                self.report.keycodes, self.report.modifier
+            );
             sender
                 .send(KeyboardReportMessage::KeyboardReport(self.report))
                 .await;
@@ -439,13 +443,28 @@ impl<
         key_state: KeyState,
         sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        // Process modifier first
-        let (keycodes, n) = modifier.to_modifier_keycodes();
-        for kc in keycodes.iter().take(n) {
-            self.process_action_keycode(*kc, key_state, sender).await;
+        if key_state.is_pressing() {
+            // Process modifier
+            let (keycodes, n) = modifier.to_modifier_keycodes();
+            for kc in keycodes.iter().take(n) {
+                self.process_action_keycode(*kc, key_state, sender).await;
+            }
+            // Send the modifier first, then send the key
+            self.send_keyboard_report(sender).await;
+            yield_now().await;
+            self.process_key_action_normal(action, key_state, sender)
+                .await;
+        } else {
+            // Releasing, release the key first, then release the modifier
+            self.process_key_action_normal(action, key_state, sender)
+                .await;
+            self.send_keyboard_report(sender).await;
+            yield_now().await;
+            let (keycodes, n) = modifier.to_modifier_keycodes();
+            for kc in keycodes.iter().take(n) {
+                self.process_action_keycode(*kc, key_state, sender).await;
+            }
         }
-        self.process_key_action_normal(action, key_state, sender)
-            .await;
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
