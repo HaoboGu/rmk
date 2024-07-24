@@ -49,14 +49,9 @@ pub(crate) async fn keyboard_task<
     loop {
         let _ = keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
-        // Yield once to improve the performance
-        embassy_futures::yield_now().await;
         keyboard.send_media_report(sender).await;
-        embassy_futures::yield_now().await;
         keyboard.send_mouse_report(sender).await;
-        embassy_futures::yield_now().await;
         keyboard.send_system_control_report(sender).await;
-        embassy_futures::yield_now().await;
         Timer::after_micros(100).await;
     }
 }
@@ -210,6 +205,8 @@ impl<
                 .send(KeyboardReportMessage::KeyboardReport(self.report))
                 .await;
             self.need_send_key_report = false;
+            // Yield once after sending the report to channel
+            yield_now().await;
         }
     }
 
@@ -227,6 +224,7 @@ impl<
                 .await;
             self.other_report.system_usage_id = 0;
             self.need_send_system_control_report = false;
+            yield_now().await;
         }
     }
 
@@ -244,6 +242,7 @@ impl<
                 .await;
             self.other_report.media_usage_id = 0;
             self.need_send_consumer_control_report = false;
+            yield_now().await;
         }
     }
 
@@ -275,6 +274,7 @@ impl<
                 // Release, stop report mouse report
                 self.need_send_mouse_report = false;
             }
+            yield_now().await;
         }
     }
 
@@ -451,7 +451,6 @@ impl<
             }
             // Send the modifier first, then send the key
             self.send_keyboard_report(sender).await;
-            yield_now().await;
             self.process_key_action_normal(action, key_state, sender)
                 .await;
         } else {
@@ -459,7 +458,6 @@ impl<
             self.process_key_action_normal(action, key_state, sender)
                 .await;
             self.send_keyboard_report(sender).await;
-            yield_now().await;
             let (keycodes, n) = modifier.to_modifier_keycodes();
             for kc in keycodes.iter().take(n) {
                 self.process_action_keycode(*kc, key_state, sender).await;
@@ -557,24 +555,15 @@ impl<
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
             self.process_action_system_control(key, key_state);
-        } else if key.is_modifier() {
+        } else if key.is_basic() {
             self.need_send_key_report = true;
-            let modifier_bit = key.as_modifier_bit();
             if key_state.pressed {
-                self.register_modifier(modifier_bit);
+                self.register_key(key);
             } else {
-                self.unregister_modifier(modifier_bit);
+                self.unregister_key(key);
             }
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_state);
-        } else if key.is_basic() {
-            self.need_send_key_report = true;
-            // 6KRO implementation
-            if key_state.pressed {
-                self.register_keycode(key);
-            } else {
-                self.unregister_keycode(key);
-            }
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_state, sender).await;
@@ -722,31 +711,35 @@ impl<
                     match operation {
                         MacroOperation::Press(k) => {
                             self.need_send_key_report = true;
-                            self.register_keycode(k);
+                            self.register_key(k);
                         }
                         MacroOperation::Release(k) => {
                             self.need_send_key_report = true;
-                            self.unregister_keycode(k);
+                            self.unregister_key(k);
                         }
                         MacroOperation::Tap(k) => {
                             self.need_send_key_report = true;
-                            self.register_keycode(k);
+                            self.register_key(k);
                             self.send_keyboard_report(sender).await;
                             embassy_time::Timer::after_millis(2).await;
                             self.need_send_key_report = true;
-                            self.unregister_keycode(k)
+                            self.unregister_key(k)
                         }
                         MacroOperation::Text(k, is_cap) => {
                             self.need_send_key_report = true;
-                            self.register_keycode(k);
                             if is_cap {
+                                // If it's a capital letter, send shift first
                                 self.register_modifier(KeyCode::LShift.as_modifier_bit());
+                                self.send_keyboard_report(sender).await;
+                                self.need_send_key_report = true;
                             }
+                            self.register_keycode(k);
                             self.send_keyboard_report(sender).await;
-                            embassy_time::Timer::after_millis(2).await;
                             self.need_send_key_report = true;
                             self.unregister_keycode(k);
                             if is_cap {
+                                self.send_keyboard_report(sender).await;
+                                self.need_send_key_report = true;
                                 self.unregister_modifier(KeyCode::LShift.as_modifier_bit());
                             }
                         }
@@ -770,6 +763,24 @@ impl<
             } else {
                 error!("Macro not found");
             }
+        }
+    }
+
+    /// Register a key, the key can be a basic keycode or a modifier.
+    fn register_key(&mut self, key: KeyCode) {
+        if key.is_modifier() {
+            self.register_modifier(key.as_modifier_bit());
+        } else if key.is_basic() {
+            self.register_keycode(key);
+        }
+    }
+
+    /// Unregister a key, the key can be a basic keycode or a modifier.
+    fn unregister_key(&mut self, key: KeyCode) {
+        if key.is_modifier() {
+            self.unregister_modifier(key.as_modifier_bit());
+        } else if key.is_basic() {
+            self.unregister_keycode(key);
         }
     }
 

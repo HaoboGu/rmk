@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fix with_modifier action doesn't trigger the key with modifier
+- Fix capital letter is not send in keyboard macro
+
+### Changed
+
+- Yield everytime after sending a keyboard report to channel
 
 ## [0.2.2] - 2024-07-12
 
