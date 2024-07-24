@@ -555,24 +555,15 @@ impl<
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
             self.process_action_system_control(key, key_state);
-        } else if key.is_modifier() {
+        } else if key.is_basic() {
             self.need_send_key_report = true;
-            let modifier_bit = key.as_modifier_bit();
             if key_state.pressed {
-                self.register_modifier(modifier_bit);
+                self.register_key(key);
             } else {
-                self.unregister_modifier(modifier_bit);
+                self.unregister_key(key);
             }
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_state);
-        } else if key.is_basic() {
-            self.need_send_key_report = true;
-            // 6KRO implementation
-            if key_state.pressed {
-                self.register_keycode(key);
-            } else {
-                self.unregister_keycode(key);
-            }
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_state, sender).await;
@@ -720,19 +711,19 @@ impl<
                     match operation {
                         MacroOperation::Press(k) => {
                             self.need_send_key_report = true;
-                            self.register_keycode(k);
+                            self.register_key(k);
                         }
                         MacroOperation::Release(k) => {
                             self.need_send_key_report = true;
-                            self.unregister_keycode(k);
+                            self.unregister_key(k);
                         }
                         MacroOperation::Tap(k) => {
                             self.need_send_key_report = true;
-                            self.register_keycode(k);
+                            self.register_key(k);
                             self.send_keyboard_report(sender).await;
                             embassy_time::Timer::after_millis(2).await;
                             self.need_send_key_report = true;
-                            self.unregister_keycode(k)
+                            self.unregister_key(k)
                         }
                         MacroOperation::Text(k, is_cap) => {
                             self.need_send_key_report = true;
@@ -772,6 +763,24 @@ impl<
             } else {
                 error!("Macro not found");
             }
+        }
+    }
+
+    /// Register a key, the key can be a basic keycode or a modifier.
+    fn register_key(&mut self, key: KeyCode) {
+        if key.is_modifier() {
+            self.register_modifier(key.as_modifier_bit());
+        } else if key.is_basic() {
+            self.register_keycode(key);
+        }
+    }
+
+    /// Unregister a key, the key can be a basic keycode or a modifier.
+    fn unregister_key(&mut self, key: KeyCode) {
+        if key.is_modifier() {
+            self.unregister_modifier(key.as_modifier_bit());
+        } else if key.is_basic() {
+            self.unregister_keycode(key);
         }
     }
 
