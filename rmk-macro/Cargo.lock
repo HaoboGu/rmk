@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "cargo_toml",
  "darling",
