@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "cargo_toml",
  "darling 0.20.3",
@@ -1273,9 +1273,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "2.0.2"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d25123e754473ed08bcc4e0ef61f0a733662872885e533ffdf03771119712fc"
+checksum = "780b24ac23002fc5a710d43c8ffa9866ac4c6367e8c2d059e51f2f045a5d08c2"
 dependencies = [
  "defmt",
  "embedded-storage-async",

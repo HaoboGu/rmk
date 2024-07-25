@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.2.2", path = "../../../rmk", features = [
+rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
     "async_matrix",
