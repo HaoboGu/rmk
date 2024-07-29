@@ -100,7 +100,7 @@ Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate uses latest stable. Other versions may work, but they're not tested.
+This crate uses latest stable. Other versions should work, but they're not tested.
 
 ## License
 
