@@ -26,7 +26,7 @@ A feature-rich Rust keyboard firmware.
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/1.jpg?raw=true" width="60%">
+<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
 
 ## Usage
 

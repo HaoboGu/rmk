@@ -2,12 +2,6 @@
 
 RMK provides an easy and accessible way to set up the keyboard with a toml config file, even without Rust code!
 
-<div class="warning">
-This feature is available on latest git version of RMK. Add 
-<code>rmk = { version = "0.2.2", git = "https://github.com/HaoboGu/rmk" } </code>
-in your <code>Cargo.toml</code> to use it
-</div>
-
 ## Usage 
 
 A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml`:
