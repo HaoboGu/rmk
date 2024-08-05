@@ -21,7 +21,7 @@ embassy-stm32 = { version = "0.1", features = [
     "memory-x",
     "time-driver-any",
 ] }
-embassy-executor = { version = "0.5", features = [
+embassy-executor = { version = "0.6", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",

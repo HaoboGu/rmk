@@ -10,8 +10,6 @@ This feature is currently not implemented, this document is a design writeup
 
 Defining a split keyboard should be as simple as a normal keyboard. The split-keyboard's type and matrix should be defined in the `keyboard.toml`.
 
-TODO: should we have left.toml & right.toml, or just use one keyboard.toml?
-
 ```toml
 # Split keyboard definition(draft)
 [matrix]

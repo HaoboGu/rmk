@@ -1,3 +1,3 @@
-fn main () {
+fn main() {
     println!("cargo:rerun-if-changed=keyboard.toml");
 }

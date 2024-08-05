@@ -8,23 +8,26 @@ use crate::{keyboard::CommunicationType, ChipModel, ChipSeries};
 // Because ble configuration in `rmk_config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
 pub(crate) fn expand_ble_config(
-    chip:&ChipModel,
+    chip: &ChipModel,
     comm_type: CommunicationType,
     ble_config: Option<BleConfig>,
 ) -> (TokenStream2, TokenStream2) {
-    if !comm_type.ble_enabled() { 
+    if !comm_type.ble_enabled() {
         return (quote! {}, quote! {});
     }
     // Support nrf52 only (for now)
     if chip.series != ChipSeries::Nrf52 {
         if chip.series == ChipSeries::Esp32 {
-            return (quote! {
-                let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-            }, quote! {
-                ble_battery_config,
-            });
+            return (
+                quote! {
+                    let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+                },
+                quote! {
+                    ble_battery_config,
+                },
+            );
         } else {
-            return (quote!{}, quote!{});
+            return (quote! {}, quote! {});
         }
     }
     match ble_config {
@@ -64,7 +67,7 @@ pub(crate) fn expand_ble_config(
                     ble_config_tokens.extend(
                         quote! {
                             let charging_state_low_active = false;
-                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_, ::embassy_nrf::gpio::AnyPin>> = None;
+                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_>> = None;
                         }
                     )
                 }
@@ -73,9 +76,9 @@ pub(crate) fn expand_ble_config(
                     let charging_led_pin = format_ident!("{}", charging_led_config.pin);
                     let charging_led_low_active = charging_led_config.low_active;
                     let default_level = if charging_led_low_active {
-                        quote!{ ::embassy_nrf::gpio::Level::High }
+                        quote! { ::embassy_nrf::gpio::Level::High }
                     } else {
-                        quote!{ ::embassy_nrf::gpio::Level::Low }
+                        quote! { ::embassy_nrf::gpio::Level::Low }
                     };
                     ble_config_tokens.extend(quote! {
                         let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_led_pin), #default_level, ::embassy_nrf::gpio::OutputDrive::Standard));
@@ -85,32 +88,41 @@ pub(crate) fn expand_ble_config(
                     ble_config_tokens.extend(
                         quote! {
                             let charge_led_low_active = false;
-                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_, ::embassy_nrf::gpio::AnyPin>>  = None;
+                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_>>  = None;
                         }
                     )
                 }
 
                 ble_config_tokens.extend(
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option);       
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option);
                     }
                 );
 
-                (ble_config_tokens, quote! {
-                    ble_battery_config,
-                })
+                (
+                    ble_config_tokens,
+                    quote! {
+                        ble_battery_config,
+                    },
+                )
             } else {
-                (quote! {
-                    let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-                }, quote! {
-                    ble_battery_config,
-                })
+                (
+                    quote! {
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+                    },
+                    quote! {
+                        ble_battery_config,
+                    },
+                )
             }
         }
-        None => (quote! {
-            let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-        }, quote! {
-            ble_battery_config,
-        })
+        None => (
+            quote! {
+                let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+            },
+            quote! {
+                ble_battery_config,
+            },
+        ),
     }
 }
