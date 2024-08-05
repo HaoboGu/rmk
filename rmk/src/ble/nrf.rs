@@ -7,6 +7,10 @@ pub(crate) mod server;
 pub(crate) mod spec;
 
 use self::server::BleServer;
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     ble::{
         ble_task,
@@ -35,6 +39,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
+use crate::matrix::{Matrix, MatrixTrait};
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
@@ -231,8 +236,18 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
+    // Keyboard matrix
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+
     // Keyboard services
-    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    let mut keyboard = Keyboard::new(matrix, &keymap);
     #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
     let (mut usb_device, mut vial_service) = (
         usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
@@ -379,16 +394,15 @@ async fn run_ble_keyboard<
     'a,
     'b,
     F: AsyncNorFlash,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
+    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     conn: &Connection,
     ble_server: &BleServer,
-    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     battery_config: &mut BleBatteryConfig<'b>,
