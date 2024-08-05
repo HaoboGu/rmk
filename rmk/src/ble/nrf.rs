@@ -11,6 +11,7 @@ use self::server::BleServer;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::matrix::{Matrix, MatrixTrait};
 use crate::{
     ble::{
         ble_task,
@@ -39,7 +40,6 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
-use crate::matrix::{Matrix, MatrixTrait};
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
