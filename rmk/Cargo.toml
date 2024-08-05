@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -12,35 +12,35 @@ resolver = "2"
 
 [dependencies]
 rmk-config = { version = "0.1.3", path = "../rmk-config" }
-rmk-macro = { version = "0.1.6", path = "../rmk-macro" }
+rmk-macro = { version = "0.1.7", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal-async = { version = "1.0.0", features = [
     "defmt-03",
 ], optional = true }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embassy-embedded-hal = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999" }
-embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
-embassy-usb = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
+embassy-embedded-hal = { version = "0.2" }
+embassy-time = { version = "0.3", features = ["defmt"] }
+embassy-usb = { version = "0.3", features = [
     "defmt",
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
 heapless = "0.8.0"
-embassy-sync = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
-embassy-futures = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
-embassy-executor = { version = "0.5", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = ["defmt"] }
+embassy-sync = { version = "0.6", features = ["defmt"] }
+embassy-futures = { version = "0.1", features = ["defmt"] }
+embassy-executor = { version = "0.6", features = ["defmt"] }
 
-usbd-hid = { version = "0.7.0", features = ["defmt"] }
+usbd-hid = { version = "0.8.2", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
 defmt = "0.3"
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
-bitfield-struct = "0.7"
-byteorder = { version = "1.4", default-features = false }
+bitfield-struct = "0.8"
+byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "2.0", features = ["defmt-03"] }
+sequential-storage = { version = "3.0.0", features = ["defmt-03"] }
 
 # Optional dependencies
 # nRF dependencies
@@ -54,15 +54,15 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
-embassy-nrf = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "7473999", features = [
+embassy-nrf = { version = "0.2.0", features = [
     "defmt",
     "unstable-pac",
     "time",
 ], optional = true }
 
 # Espressif dependencies
-esp32-nimble = { version = "0.6.0", optional = true }
-esp-idf-svc = { version = "0.48", default-features = false, optional = true }
+esp32-nimble = { version = "0.7.0", optional = true }
+esp-idf-svc = { version = "0.49", default-features = false, optional = true }
 
 # Document feature
 document-features = "0.2"

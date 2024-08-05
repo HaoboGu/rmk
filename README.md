@@ -26,7 +26,7 @@ A feature-rich Rust keyboard firmware.
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/1.jpg?raw=true" width="60%">
+<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
 
 ## Usage
 
@@ -100,7 +100,7 @@ Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate requires stable Rust 1.77 and up. Versions before 1.77 should work, but not tested.
+This crate uses latest stable. Other versions should work, but they're not tested.
 
 ## License
 

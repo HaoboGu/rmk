@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Update `embassy-nrf` and `embassy-rp` version
+
+## [0.1.7] - 2024-07-25 
+
+- Fix keymap doesn't update issue [#41](https://github.com/HaoboGu/rmk/issues/41)
+
 ## [0.1.6] - 2024-06-14
 
 ### Added

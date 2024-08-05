@@ -20,6 +20,11 @@ There're three crates in RMK project, `rmk`, `rmk-config` and `rmk-macro`.
 
 `rmk-config` crate is the dependency of both `rmk` and `rmk-macro`, it includes both toml configs used in `keyboard.toml` and normal config used in RMK core. `rmk-macro` is a proc-macro helper of RMK, it reads `keyboard.toml` config file and converts toml config to RMK config, generates the boilerplate code. The core of RMK stays in `rmk` crate.
 
+
+<p align="center">
+  <img src="images/rmk_dependency.svg" />
+</p>
+
 So, if you want to contribute new features of RMK, just look into `rmk` core crate. If you want to add new chip support, `rmk` and `rmk-macro` should be updated, so that users could use `keyboard.toml` to config keyboard with your new chip. And, if you want to add new configurations, look into `rmk-config`.
 
 ### RMK core

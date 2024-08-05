@@ -290,7 +290,7 @@ macro_rules! write_storage {
                 $range,
                 $cache,
                 $buf,
-                StorageKeys::$key as u32,
+                &(StorageKeys::$key as u32),
             )
             .await
         {
@@ -300,7 +300,7 @@ macro_rules! write_storage {
                 $range,
                 $cache,
                 $buf,
-                StorageKeys::$key as u32,
+                &(StorageKeys::$key as u32),
                 &StorageData::$key(saved),
             )
             .await
@@ -356,7 +356,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                     storage.storage_range.clone(),
                     &mut NoCache::new(),
                     &mut storage.buffer,
-                    StorageKeys::StorageConfig as u32,
+                    &(StorageKeys::StorageConfig as u32),
                     &StorageData::StorageConfig::<ROW, COL, NUM_LAYER>(LocalStorageConfig {
                         enable: false,
                     }),
@@ -411,7 +411,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        StorageKeys::MacroData as u32,
+                        &(StorageKeys::MacroData as u32),
                         &StorageData::<ROW, COL, NUM_LAYER>::MacroData(macro_data),
                     )
                     .await
@@ -433,7 +433,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        data.key(),
+                        &data.key(),
                         &data,
                     )
                     .await
@@ -451,7 +451,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        data.key(),
+                        &data.key(),
                         &data,
                     )
                     .await
@@ -465,7 +465,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        data.key(),
+                        &data.key(),
                         &data,
                     )
                     .await
@@ -491,7 +491,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut NoCache::new(),
                         &mut self.buffer,
-                        key,
+                        &key,
                     )
                     .await
                     {
@@ -537,7 +537,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             self.storage_range.clone(),
             &mut NoCache::new(),
             &mut self.buffer,
-            StorageKeys::MacroData as u32,
+            &(StorageKeys::MacroData as u32),
         )
         .await
         .map_err(|e| print_storage_error::<F>(e))?;
@@ -567,7 +567,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             self.storage_range.clone(),
             &mut cache,
             &mut self.buffer,
-            storage_config.key(),
+            &storage_config.key(),
             &storage_config,
         )
         .await
@@ -583,7 +583,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             self.storage_range.clone(),
             &mut cache,
             &mut self.buffer,
-            layout_config.key(),
+            &layout_config.key(),
             &layout_config,
         )
         .await
@@ -604,7 +604,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                         self.storage_range.clone(),
                         &mut cache,
                         &mut self.buffer,
-                        item.key(),
+                        &item.key(),
                         &item,
                     )
                     .await
@@ -625,7 +625,7 @@ impl<F: AsyncNorFlash> Storage<F> {
                 self.storage_range.clone(),
                 &mut NoCache::new(),
                 &mut self.buffer,
-                StorageKeys::StorageConfig as u32,
+                &(StorageKeys::StorageConfig as u32),
             )
             .await
         {

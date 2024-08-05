@@ -10,15 +10,12 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { version = "0.2.2", path = "../../../rmk", features = [
-    "col2row",
-    "esp32c3_ble",
-] }
-esp32-nimble = { version = "0.6.1" }
+rmk = { path = "../../../rmk", features = ["col2row", "esp32c3_ble"] }
+esp32-nimble = { version = "0.7.0" }
 defmt = "0.3"
-embassy-time = { version = "0.3", features = ["defmt", "generic-queue"] }
-esp-println = { version = "0.9", features = ["esp32c3", "defmt-espflash"] }
-esp-idf-svc = { version = "0.48", default-features = false, features = [
+embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8"] }
+esp-println = { version = "0.10", features = ["esp32c3", "defmt-espflash"] }
+esp-idf-svc = { version = "0.49", default-features = false, features = [
     "std",
     "alloc",
     "binstart",
@@ -41,7 +38,7 @@ embassy-time-driver = { version = "0.1", git = "https://github.com/embassy-rs/em
 xz2 = "0.1.7"
 json = "0.12"
 const-gen = "1.6"
-embuild = "0.31.3"
+embuild = "0.32"
 
 [[bin]]
 name = "rmk-esp32c3"
