@@ -57,8 +57,8 @@ async fn main(spawner: Spawner) {
     };
 
     initialize_nrf_ble_keyboard_with_config_and_run::<
-        Input<'_, AnyPin>,
-        Output<'_, AnyPin>,
+        Input<'_>,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,

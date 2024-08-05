@@ -182,7 +182,14 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
     };
 
     // Expanded main function
-    let main_function = expand_main(&chip, comm_type, usb_info, toml_config, item_mod, async_matrix);
+    let main_function = expand_main(
+        &chip,
+        comm_type,
+        usb_info,
+        toml_config,
+        item_mod,
+        async_matrix,
+    );
 
     quote! {
         use defmt::*;

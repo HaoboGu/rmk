@@ -75,19 +75,17 @@ pub(crate) fn usb_config_default(
                 }
             }
         }
-        ChipSeries::Nrf52 => {
-            match comm_type {
-                CommunicationType::Usb => quote! {
-                    let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
-                },
-                CommunicationType::Both => quote! {
-                    let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
-                    let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
-                },
-                CommunicationType::Ble => quote! {},
-                CommunicationType::None => quote! {},
-            }
-        }
+        ChipSeries::Nrf52 => match comm_type {
+            CommunicationType::Usb => quote! {
+                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
+            },
+            CommunicationType::Both => quote! {
+                let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
+                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
+            },
+            CommunicationType::Ble => quote! {},
+            CommunicationType::None => quote! {},
+        },
         ChipSeries::Rp2040 => quote! {
             let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
         },

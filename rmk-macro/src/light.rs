@@ -1,7 +1,7 @@
 //! Initialize light config boilerplate of RMK, including USB or BLE
-//! 
-use rmk_config::toml_config::{PinConfig, LightConfig};
+//!
 use quote::quote;
+use rmk_config::toml_config::{LightConfig, PinConfig};
 
 use crate::{gpio_config::convert_gpio_str_to_output_pin, ChipModel};
 
@@ -23,7 +23,6 @@ pub(crate) fn build_light_config(
         None => quote! {None},
     }
 }
-
 
 pub(crate) fn expand_light_config(
     chip: &ChipModel,
