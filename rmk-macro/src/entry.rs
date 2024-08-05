@@ -110,8 +110,8 @@ pub(crate) fn rmk_entry_default(
             CommunicationType::Both => quote! {
                 ::rmk::initialize_nrf_ble_keyboard_with_config_and_run::<
                     ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::#peripheral_name, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
-                    ::embassy_nrf::gpio::Input<'_,>,
-                    ::embassy_nrf::gpio::Output<'_,>,
+                    ::embassy_nrf::gpio::Input<'_>,
+                    ::embassy_nrf::gpio::Output<'_>,
                     ROW,
                     COL,
                     NUM_LAYER,

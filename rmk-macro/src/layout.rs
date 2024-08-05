@@ -36,7 +36,7 @@ fn expand_layer(layer: Vec<Vec<String>>) -> TokenStream2 {
     quote! { [#(#rows), *] }
 }
 
-/// Push keys in the row 
+/// Push keys in the row
 fn expand_row(row: Vec<String>) -> TokenStream2 {
     let mut keys = vec![];
     for key in row {

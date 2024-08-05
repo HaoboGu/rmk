@@ -137,11 +137,11 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 } else {
                     (MacroOperation::End, offset + 4)
                 }
-            },
+            }
             (1, 5) | (1, 6) | (1, 7) => {
                 warn!("VIAL_MACRO_EXT is not supported");
                 (MacroOperation::Delay(0), offset + 4)
-            },
+            }
             _ => {
                 // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
                 let (keycode, is_caps) = KeyCode::from_ascii(self.macro_cache[idx]);
