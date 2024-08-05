@@ -69,9 +69,6 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        $crate::action::KeyAction::LayerTapHold(
-            $crate::action::Action::LayerToggle($x),
-            $x,
-        )
+        $crate::action::KeyAction::LayerTapHold($crate::action::Action::LayerToggle($x), $x)
     };
 }

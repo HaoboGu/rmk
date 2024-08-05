@@ -274,4 +274,4 @@ pub(crate) fn reboot_keyboard() {
     // cortex_m::peripheral::SCB::sys_reset();
     // For RISCV?
     // For ESP32?
-} 
+}
