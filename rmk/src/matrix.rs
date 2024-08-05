@@ -8,6 +8,15 @@ use {
     heapless::Vec,
 };
 
+pub(crate) trait MatrixTrait {
+    async fn scan(&mut self);
+    // FIXME: Move this function out of the trait
+    fn update_timer(&mut self, row: usize, col: usize);
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
+    #[cfg(feature = "async_matrix")]
+    async fn wait_for_key(&mut self);
+}
+
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
 pub(crate) struct KeyState {
@@ -105,9 +114,18 @@ impl<
             scan_start: None,
         }
     }
-
+}
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        Out: OutputPin,
+        D: DebouncerTrait,
+        const INPUT_PIN_NUM: usize,
+        const OUTPUT_PIN_NUM: usize,
+    > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     #[cfg(feature = "async_matrix")]
-    pub(crate) async fn wait_for_key(&mut self) {
+    async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {
             // If not key over 2 secs, wait for interupt in next loop
             if start_time.elapsed().as_secs() < 1 {
@@ -138,7 +156,7 @@ impl<
     }
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
-    pub(crate) async fn scan(&mut self) {
+    async fn scan(&mut self) {
         for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
             // Pull up output pin, wait 1us ensuring the change comes into effect
             out_pin.set_high().ok();
@@ -173,7 +191,7 @@ impl<
     }
 
     /// When a key is pressed, some callbacks some be called, such as `start_timer`
-    pub(crate) fn update_timer(&mut self, row: usize, col: usize) {
+    fn update_timer(&mut self, row: usize, col: usize) {
         #[cfg(feature = "col2row")]
         let ks = &mut self.key_states[col][row];
         #[cfg(not(feature = "col2row"))]
@@ -187,7 +205,7 @@ impl<
     }
 
     /// Read key state at position (row, col)
-    pub(crate) fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
         // COL2ROW
         #[cfg(feature = "col2row")]
         return self.key_states[col][row];
