@@ -316,8 +316,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
 
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_state.pressed {
-            // Start timer
-            self.matrix.update_timer(row, col);
+            self.matrix.update_key_state(row, col, |ks| {
+                ks.start_timer();
+            });
         }
 
         // Process key
@@ -496,7 +497,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                         .await;
                 }
                 // Reset timer after release
-                self.matrix.update_timer(row, col);
+                self.matrix.update_key_state(row, col, |ks| {
+                    ks.clear_timer();
+                });
             }
         } else if key_state.pressed && !key_state.changed {
             // Case 2, the key is held
