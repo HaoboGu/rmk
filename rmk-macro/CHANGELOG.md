@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2024-08-06 
+
 - Update `embassy-nrf` and `embassy-rp` version
 
 ## [0.1.7] - 2024-07-25 

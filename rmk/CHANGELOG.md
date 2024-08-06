@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2024-08-06
+
+### Added
+
+- Add `MatrixTrait` and use it in keyboard instead of a plain `Matrix` struct
+
+### Changed
+
 - Update versions of dependecies
 
 ## [0.2.3] - 2024-07-25
