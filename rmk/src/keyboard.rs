@@ -1,14 +1,10 @@
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
-    matrix::{KeyState, Matrix},
+    matrix::{KeyState, MatrixTrait},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
 use core::cell::RefCell;
@@ -19,9 +15,6 @@ use embassy_sync::{
     channel::{Receiver, Sender},
 };
 use embassy_time::{Instant, Timer};
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
 use usbd_hid::descriptor::KeyboardReport;
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
@@ -36,14 +29,12 @@ pub(crate) enum KeyboardReportMessage {
 /// The report is sent to communication task, and finally sent to the host
 pub(crate) async fn keyboard_task<
     'a,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
+    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     loop {
@@ -101,22 +92,13 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
 }
 pub(crate) struct Keyboard<
     'a,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
+    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 > {
     /// Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    pub(crate) matrix: Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    pub(crate) matrix: Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    pub(crate) matrix: Matrix<In, Out, RapidDebouncer<COL, ROW>, COL, ROW>,
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    pub(crate) matrix: Matrix<In, Out, DefaultDebouncer<COL, ROW>, COL, ROW>,
+    pub(crate) matrix: M,
 
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
@@ -151,25 +133,12 @@ pub(crate) struct Keyboard<
     mouse_wheel_move_delta: i8,
 }
 
-impl<
-        'a,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        Out: OutputPin,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    > Keyboard<'a, In, Out, ROW, COL, NUM_LAYER>
+impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    Keyboard<'a, M, ROW, COL, NUM_LAYER>
 {
-    pub(crate) fn new(
-        #[cfg(feature = "col2row")] input_pins: [In; ROW],
-        #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-        #[cfg(feature = "col2row")] output_pins: [Out; COL],
-        #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
-    ) -> Self {
+    pub(crate) fn new(matrix: M, keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>) -> Self {
         Keyboard {
-            matrix: Matrix::new(input_pins, output_pins),
+            matrix,
             keymap,
             report: KeyboardReport {
                 modifier: 0,
@@ -295,6 +264,7 @@ impl<
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
         // process_key_change -> process_key_action_* -> process_action_*
+        // TODO: can matrix emit those key state events as an interator?
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
@@ -346,8 +316,9 @@ impl<
 
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_state.pressed {
-            // Start timer
-            self.matrix.update_timer(row, col);
+            self.matrix.update_key_state(row, col, |ks| {
+                ks.start_timer();
+            });
         }
 
         // Process key
@@ -526,7 +497,9 @@ impl<
                         .await;
                 }
                 // Reset timer after release
-                self.matrix.update_timer(row, col);
+                self.matrix.update_key_state(row, col, |ks| {
+                    ks.clear_timer();
+                });
             }
         } else if key_state.pressed && !key_state.changed {
             // Case 2, the key is held
