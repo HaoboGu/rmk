@@ -27,6 +27,12 @@ jobs:
       - name: Build esp32c3_ble with config
         working-directory: ./examples/use_config/esp32c3_ble
         run: cargo +esp build --release
+      - name: Build esp32c6_ble
+        working-directory: ./examples/use_rust/esp32c6_ble
+        run: cargo build --release
+      - name: Build esp32c6_ble with config
+        working-directory: ./examples/use_config/esp32c6_ble
+        run: cargo build --release
       - name: Build esp32s3_ble
         working-directory: ./examples/use_rust/esp32s3_ble
         run: cargo +esp build --release

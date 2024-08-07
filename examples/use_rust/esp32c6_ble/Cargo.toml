@@ -1,0 +1,52 @@
+[package]
+name = "rmk-esp32c6"
+version = "0.2.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = ["col2row", "esp32c6_ble"] }
+esp32-nimble = { version = "0.7" }
+defmt = "0.3"
+embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8"] }
+esp-println = { version = "0.10", features = ["esp32c6", "defmt-espflash"] }
+esp-idf-svc = { version = "0.49", default-features = false, features = [
+    "std",
+    "alloc",
+    "binstart",
+    "embassy-sync",
+    "critical-section",
+    "embassy-time-driver",
+    "native",
+] }
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+embuild = "0.32"
+
+[[bin]]
+name = "rmk-esp32c6"
+test = false
+bench = false
+
+[profile.dev]
+codegen-units = 1      # better optimizations
+debug = true
+opt-level = 3          # esp-wifi should be built with opt-level 2 or 3
+overflow-checks = true
+lto = false
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1       # better optimizations
+debug = true            # no overhead for bare-metal
+opt-level = 3           # esp-wifi should be built with opt-level 2 or 3
+overflow-checks = false
+lto = "fat"
