@@ -14,7 +14,7 @@
 - **易于配置**：RMK提供了一个非常简单的配置键盘的方法，你只需要一个`keyboard.toml`文件，就可以构建起你的键盘固件（不需要写任何Rust代码）！当然，对于 Rust 开发者来说，你仍然可以使用代码方式来使用 RMK 从而获得更大的灵活性。
 - **低延迟、低电量消耗**：根据测试，RMK在有线模式下延迟约为2ms，蓝牙模式下延迟约为10ms。在开启`async_matrix` feature之后，RMK有着非常低的电量消耗，一块2000mah的电池可以续航好几个月。
 
-## [用户文档](https://haobogu.github.io/rmk/guide_overview.html) | [API文档](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [更新日志](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [用户文档](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API文档](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [更新日志](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## 使用 RMK
 
@@ -26,7 +26,7 @@ cargo install cargo-generate
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
 
-生成固件工程之后，按照`README.md`中的步骤进行操作。有关详细信息，请查看 RMK 的 [用户指南](https://haobogu.github.io/rmk/guide_overview.html)。
+生成固件工程之后，按照`README.md`中的步骤进行操作。有关详细信息，请查看 RMK 的 [用户指南](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html)。
 
 ### 选项 2：尝试内置的例子
 

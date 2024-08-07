@@ -116,7 +116,7 @@ fn parse_key(key: String) -> TokenStream2 {
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
-                        compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/configuration.html");
+                        compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 let layer = keys[0].parse::<u8>().unwrap();
@@ -156,7 +156,7 @@ fn parse_key(key: String) -> TokenStream2 {
 
                 if (gui || alt || shift || ctrl) == false {
                     return quote! {
-                        compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/configuration.html");
+                        compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 quote! {
@@ -164,7 +164,7 @@ fn parse_key(key: String) -> TokenStream2 {
                 }
             } else {
                 return quote! {
-                    compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/configuration.html");
+                    compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 };
             }
         }
@@ -178,7 +178,7 @@ fn parse_key(key: String) -> TokenStream2 {
                 .collect();
             if keys.len() != 2 {
                 return quote! {
-                    compile_error!("keyboard.toml: LT(layer, key) invalid, please check the documentation: https://haobogu.github.io/rmk/configuration.html");
+                    compile_error!("keyboard.toml: LT(layer, key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 };
             }
             let layer = keys[0].parse::<u8>().unwrap();

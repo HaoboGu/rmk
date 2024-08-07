@@ -44,7 +44,7 @@ at the root of the firmware project, replacing the default one. RMK would do all
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined
 in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check
-out [keymap_configuration](https://haobogu.github.io/rmk/keymap_configuration.html) chapter for more details.
+out [keymap_configuration](https://haobogu.github.io/rmk/keymap.html) chapter for more details.
 
 ### Define your matrix
 

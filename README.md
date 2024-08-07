@@ -38,7 +38,7 @@ cargo install cargo-generate
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
 
-Then follow the steps in generated `README.md`. Check RMK's [User Guide](https://haobogu.github.io/rmk/guide_overview.html) for details.
+Then follow the steps in generated `README.md`. Check RMK's [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) for details.
 
 ### Option 2: Try built-in examples
 

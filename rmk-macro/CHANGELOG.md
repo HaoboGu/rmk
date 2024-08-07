@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix broken link in error message
+
 ## [0.1.8] - 2024-08-06 
 
 - Update `embassy-nrf` and `embassy-rp` version
@@ -32,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Parse keymap from `keyboard.toml`, see https://haobogu.github.io/rmk/configuration.html#keymap-config
+- Parse keymap from `keyboard.toml`, see https://haobogu.github.io/rmk/keyboard_configuration.html#keymap-config
 
 ## [0.1.2] - 2024-06-01
 
