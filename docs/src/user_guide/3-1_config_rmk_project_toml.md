@@ -17,7 +17,7 @@ There're steps you have to do to customize your own firmware:
 
 ### Edit `keyboard.toml`
 
-The generated `keyboard.toml` should have some fields configured from `cargo generate`. But there are still some fields that you want to fill, such as the pin matrix, led config, etc. The [Keyboard Configuration](configuration.md) section has full instructions of how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
+The generated `keyboard.toml` should have some fields configured from `cargo generate`. But there are still some fields that you want to fill, such as the pin matrix, led config, etc. The [Keyboard Configuration](keyboard_configuration.md) section has full instructions of how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
 
 ### Update `memory.x`
 
@@ -43,4 +43,4 @@ at the root of the firmware project, replacing the default one. RMK would do all
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined
 in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check
-out [keymap_configuration](https://haobogu.github.io/rmk/keymap.html) chapter for more details.
+out [keymap_configuration](../keymap.md) chapter for more details.
