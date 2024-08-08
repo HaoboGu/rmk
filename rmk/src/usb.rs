@@ -90,13 +90,11 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             &mut CONTROL_BUF.init([0; 128])[..],
         );
 
+        // Create classes on the builder.
         static device_handler: StaticCell<UsbDeviceHandler> = StaticCell::new();
         builder.handler(device_handler.init(UsbDeviceHandler::new()));
 
-        // Create classes on the builder.
-        static request_handler: UsbRequestHandler = UsbRequestHandler {};
-
-        // Initialize two hid interfaces: keyboard & via
+        // Initialize three hid interfaces: keyboard & other & via
         static keyboard_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let keyboard_hid_config = Config {
             report_descriptor: KeyboardReport::desc(),

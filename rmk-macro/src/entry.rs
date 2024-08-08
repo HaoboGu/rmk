@@ -57,25 +57,20 @@ pub(crate) fn rmk_entry_default(
     async_matrix: bool,
 ) -> TokenStream2 {
     let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-    let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
-        format_ident!("{}", "usb_otg")
-    } else {
-        format_ident!("{}", "usb")
-    };
     match chip.series {
         ChipSeries::Stm32 => {
             // If async_matrix is enabled, use `ExtiInput` as input pin type in RMK entry
             let input_pin_generics = if async_matrix {
-                quote! {::embassy_stm32::exti::ExtiInput<::embassy_stm32::gpio::AnyPin>}
+                quote! {::embassy_stm32::exti::ExtiInput}
             } else {
-                quote! {::embassy_stm32::gpio::Input<'_, ::embassy_stm32::gpio::AnyPin>}
+                quote! {::embassy_stm32::gpio::Input<'_>}
             };
             quote! {
                 ::rmk::initialize_keyboard_and_run::<
                     ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
-                    ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
+                    ::embassy_stm32::usb::Driver<'_, ::embassy_stm32::peripherals::#peripheral_name>,
                     #input_pin_generics,
-                    ::embassy_stm32::gpio::Output<'_, ::embassy_stm32::gpio::AnyPin>,
+                    ::embassy_stm32::gpio::Output<'_>,
                     ROW,
                     COL,
                     NUM_LAYER,

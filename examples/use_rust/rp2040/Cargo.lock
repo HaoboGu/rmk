@@ -410,8 +410,7 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 dependencies = [
  "defmt",
 ]
@@ -431,8 +430,7 @@ dependencies = [
 [[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 
 [[package]]
 name = "embassy-net-driver-channel"
@@ -485,8 +483,7 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e0c49ff02ebe324faf3a8653ba91582e2d0a7fdef5bc88f449d5aa1bfcc05c"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -518,8 +515,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e0c214077aaa9206958b16411c157961fb7990d4ea628120a78d1a5a28aed24"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 dependencies = [
  "document-features",
 ]
@@ -527,8 +523,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-queue-driver"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1177859559ebf42cd24ae7ba8fe6ee707489b01d0bf471f8827b7b12dcb0bc0"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 
 [[package]]
 name = "embassy-usb"
@@ -549,8 +544,7 @@ dependencies = [
 [[package]]
 name = "embassy-usb-driver"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fc247028eae04174b6635104a35b1ed336aabef4654f5e87a8f32327d231970"
+source = "git+https://github.com/embassy-rs/embassy?rev=7473999#74739997bd70d3c23b5c58d25aa5c9ba4db55f35"
 dependencies = [
  "defmt",
 ]

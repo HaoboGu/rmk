@@ -12,7 +12,7 @@ use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
     flash::{Blocking, Flash},
-    gpio::{AnyPin, Input, Output},
+    gpio::{Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
     Config,
@@ -20,6 +20,7 @@ use embassy_stm32::{
 use panic_halt as _;
 use rmk::{initialize_keyboard_and_run, config::{RmkConfig, VialConfig}};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+// use defmt_rtt as _;
 
 #[defmt::global_logger]
 struct Logger;
@@ -63,8 +64,8 @@ async fn main(_spawner: Spawner) {
     initialize_keyboard_and_run::<
         Flash<'_, Blocking>,
         Driver<'_, USB>,
-        Input<'_, AnyPin>,
-        Output<'_, AnyPin>,
+        Input<'_>,
+        Output<'_>,
         ROW,
         COL,
         NUM_LAYER,
