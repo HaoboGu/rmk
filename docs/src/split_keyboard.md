@@ -89,14 +89,31 @@ Cargo.toml
 
 ### Communication protocol
 
+A single message can be defined like:
+
 ```rust
 pub enum SplitMessage {
-    /// Activated key info (row, col, KeyState), from slave to master
-    Key(u8, u8, KeyState)
+    /// Activated key info (row, col, pressed), from slave to master.
+    /// Only key changes are sent in the split message, aka if pressed = true, the actual event is this key state changes from released -> pressed and vice versa.
+    Key(u8, u8, bool)
     /// 
-    LedState(),
+    LedState(u8),
 }
 ```
+
+The slave continously scans it's matrix, if there's a key change, or a key pressed. A `SplitMessage` is sent to the master.
+
+In master, there's a key state cache for each slave, and a separate thread running to continously receives the key states from slave and saves key states to cache.
+
+For master, the matrix scanning has the following steps: 
+
+1. Scan the master's own key matrix
+2. Read the all slaves' key state caches
+3. Merge them to a final key states, finish matrix scanning
+
+Only the changed event should be sent, then the state cache of slave is updated. If the slave state is different from main key state, `changed` is true.
+
+4. If the keyboard is running in `async_matrix` mode, each received key states triggers matrix scanning. 
 
 ### Implementation difference?
 
