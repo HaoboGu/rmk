@@ -1,6 +1,11 @@
 pub(crate) mod server;
 
 use self::server::BleServer;
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::matrix::Matrix;
 use crate::{
     action::KeyAction, ble::ble_task, config::RmkConfig, flash::EmptyFlashWrapper,
     keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
@@ -56,7 +61,17 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     let mut keyboard_report_sender = keyboard_channel.sender();
     let mut keyboard_report_receiver = keyboard_channel.receiver();
 
-    let mut keyboard = Keyboard::new(input_pins, output_pins, &keymap);
+    // Keyboard matrix
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+
+    let mut keyboard = Keyboard::new(matrix, &keymap);
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 

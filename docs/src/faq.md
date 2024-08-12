@@ -32,7 +32,7 @@ run `cargo clean` and then `cargo run --release`. Open an [issue](https://github
 
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 
-This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](https://haobogu.github.io/rmk/binary_size.html) doc to reduce your code size.
+This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](binary_size_optimization.md) doc to reduce your code size.
 
 ### I see ERROR: Storage is full error in the log
 
@@ -47,7 +47,7 @@ ERROR Keymap reading aborted!
 └─ rmk::keymap::{impl#0}::new_from_storage::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/keymap.rs:38  
 ```
 
-If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/0.1.0/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
+If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
 
 ### panicked at embassy-executor: task arena is full.
 

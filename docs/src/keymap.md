@@ -6,7 +6,7 @@ RMK provides both Rust code or config ways to set your default keymap.
 
 ## Define default keymap in `keyboard.toml`
 
-Please check [this section](https://haobogu.github.io/rmk/configuration.html#keymap-config) of keyboard configuration doc.
+Please check [this section](keyboard_configuration.md#keymap-config) of keyboard configuration doc.
 
 ## Define default keymap in Rust source file
 

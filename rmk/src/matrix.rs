@@ -1,12 +1,27 @@
 use crate::debounce::{DebounceState, DebouncerTrait};
 use defmt::Format;
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {
     defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
     heapless::Vec,
 };
+
+/// MatrixTrait is the trait for keyboard matrix.
+///
+/// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
+/// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
+pub(crate) trait MatrixTrait {
+    // Do matrix scanning, save the result in matrix's key_state field.
+    async fn scan(&mut self);
+    // Read key state at position (row, col)
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
+    // Update key state at position (row, col)
+    fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState));
+    #[cfg(feature = "async_matrix")]
+    async fn wait_for_key(&mut self);
+}
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
@@ -35,20 +50,12 @@ impl KeyState {
     }
 
     // Record the start time of pressing
-    fn start_timer(&mut self) {
+    pub(crate) fn start_timer(&mut self) {
         self.hold_start = Some(Instant::now());
     }
 
-    // Calculate held time
-    fn elapsed(&self) -> Option<Duration> {
-        match self.hold_start {
-            Some(t) => Instant::now().checked_duration_since(t),
-            None => None,
-        }
-    }
-
     // Clear held timer
-    fn clear_timer(&mut self) {
+    pub(crate) fn clear_timer(&mut self) {
         self.hold_start = None;
     }
 
@@ -105,9 +112,19 @@ impl<
             scan_start: None,
         }
     }
+}
 
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        Out: OutputPin,
+        D: DebouncerTrait,
+        const INPUT_PIN_NUM: usize,
+        const OUTPUT_PIN_NUM: usize,
+    > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     #[cfg(feature = "async_matrix")]
-    pub(crate) async fn wait_for_key(&mut self) {
+    async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {
             // If not key over 2 secs, wait for interupt in next loop
             if start_time.elapsed().as_secs() < 1 {
@@ -138,7 +155,7 @@ impl<
     }
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
-    pub(crate) async fn scan(&mut self) {
+    async fn scan(&mut self) {
         for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
             // Pull up output pin, wait 1us ensuring the change comes into effect
             out_pin.set_high().ok();
@@ -172,22 +189,8 @@ impl<
         }
     }
 
-    /// When a key is pressed, some callbacks some be called, such as `start_timer`
-    pub(crate) fn update_timer(&mut self, row: usize, col: usize) {
-        #[cfg(feature = "col2row")]
-        let ks = &mut self.key_states[col][row];
-        #[cfg(not(feature = "col2row"))]
-        let ks = &mut self.key_states[row][col];
-
-        if ks.pressed {
-            ks.start_timer();
-        } else {
-            ks.clear_timer()
-        }
-    }
-
     /// Read key state at position (row, col)
-    pub(crate) fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
         // COL2ROW
         #[cfg(feature = "col2row")]
         return self.key_states[col][row];
@@ -195,5 +198,15 @@ impl<
         // ROW2COL
         #[cfg(not(feature = "col2row"))]
         return self.key_states[row][col];
+    }
+
+    fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
+        // COL2ROW
+        #[cfg(feature = "col2row")]
+        f(&mut self.key_states[col][row]);
+
+        // ROW2COL
+        #[cfg(not(feature = "col2row"))]
+        f(&mut self.key_states[row][col]);
     }
 }

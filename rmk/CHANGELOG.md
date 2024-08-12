@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2024-08-06
+
+### Added
+
+- Add `MatrixTrait` and use it in keyboard instead of a plain `Matrix` struct
+
+### Changed
+
 - Update versions of dependecies
 
 ## [0.2.3] - 2024-07-25
@@ -52,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support read default keymap from `keyboard.toml`, see https://haobogu.github.io/rmk/configuration.html#keymap-config
+- Support read default keymap from `keyboard.toml`, see https://haobogu.github.io/rmk/keyboard_configuration.html#keymap-config
 
 ## [0.1.17] - 2024-06-04
 

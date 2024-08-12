@@ -11,6 +11,10 @@
 pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
 pub use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
     keyboard::keyboard_task,
     light::{led_hid_task, LightService},
@@ -35,6 +39,7 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
 use keyboard::{communication_task, Keyboard, KeyboardReportMessage};
 use keymap::KeyMap;
+use matrix::{Matrix, MatrixTrait};
 pub use rmk_config as config;
 use rmk_config::RmkConfig;
 pub use rmk_macro as macros;
@@ -154,8 +159,19 @@ pub async fn initialize_keyboard_and_run_async_flash<
     let mut keyboard_report_receiver = keyboard_channel.receiver();
 
     // Create keyboard services and devices
+
+    // Keyboard matrix, use COL2ROW by default
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(input_pins, output_pins, &keymap),
+        Keyboard::new(matrix, &keymap),
         KeyboardUsbDevice::new(driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
@@ -218,15 +234,14 @@ pub(crate) async fn run_usb_keyboard<
     'b,
     D: Driver<'a>,
     F: AsyncNorFlash,
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    M: MatrixTrait,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, In, Out, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'b, M, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
