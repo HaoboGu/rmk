@@ -1,7 +1,7 @@
 # Split keyboard
 
 <div class="warning">
-This feature is currently not implemented, this document is a design writeup
+This feature is currently not implemented, this document is a draft writeup
 </div>
 
 ## Design
@@ -105,15 +105,15 @@ The slave continously scans it's matrix, if there's a key change, or a key press
 
 In master, there's a key state cache for each slave, and a separate thread running to continously receives the key states from slave and saves key states to cache.
 
+Each slave cache in master runs in different threads, which is an infinite loop that receives all `SplitMessage` from actual slave boards. 
+
 For master, the matrix scanning has the following steps: 
 
 1. Scan the master's own key matrix
 2. Read the all slaves' key state caches
-3. Merge them to a final key states, finish matrix scanning
-
-Only the changed event should be sent, then the state cache of slave is updated. If the slave state is different from main key state, `changed` is true.
-
+3. Merge them to a final key states, finish matrix scanning. If the slave state is different from main key state, `changed` is true.
 4. If the keyboard is running in `async_matrix` mode, each received key states triggers matrix scanning. 
+
 
 ### Implementation difference?
 
@@ -151,7 +151,7 @@ There are several types of split keyboard that RMK should support:
 
 The following is a simple table for those four types of split keyboard
 
-| left/right connection | wired | wireless |
-| ----------- | ----------- | ------------ |
-| USB to host | fully wired | dongle like |
-| BLE to host | partial wireless| fully wireless|
+| left/right connection | wired            | wireless       |
+| --------------------- | ---------------- | -------------- |
+| USB to host           | fully wired      | dongle like    |
+| BLE to host           | partial wireless | fully wireless |
