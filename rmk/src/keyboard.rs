@@ -37,7 +37,17 @@ pub(crate) async fn keyboard_task<
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
+
+    let mut sec = embassy_time::Instant::now().as_secs();
+    let mut cnt: u64 = 0;
     loop {
+        if embassy_time::Instant::now().as_secs() != sec {
+            defmt::error!("cnt: {}", cnt);
+            sec = embassy_time::Instant::now().as_secs();
+            cnt = 0;
+        }
+        cnt += 1;
+
         let _ = keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
         keyboard.send_media_report(sender).await;

@@ -17,6 +17,7 @@ embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal-async = { version = "1.0.0", features = [
     "defmt-03",
 ], optional = true }
+embedded-io-async = { version = "0.6", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
 embassy-embedded-hal = { version = "0.2" }
@@ -41,6 +42,9 @@ bitfield-struct = "0.8"
 byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
 sequential-storage = { version = "3.0.0", features = ["defmt-03"] }
+
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1", features = ["experimental-derive"] }
 
 # Optional dependencies
 # nRF dependencies

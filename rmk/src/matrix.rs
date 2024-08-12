@@ -59,7 +59,7 @@ impl KeyState {
         self.hold_start = None;
     }
 
-    fn toggle_pressed(&mut self) {
+    pub(crate) fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
     }
 
