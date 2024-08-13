@@ -12,11 +12,8 @@ use crate::{
 };
 use core::cell::RefCell;
 use defmt::*;
-use embassy_futures::select::{select, select4, select_slice, Either4};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::Channel,
-};
+use embassy_futures::select::{select, select4, Either4};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -24,12 +21,12 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
-use master::{MasterMatrix, SlaveCache};
+use master::MasterMatrix;
 use rmk_config::RmkConfig;
 
+pub(crate) mod driver;
 pub(crate) mod master;
 pub(crate) mod slave;
-pub(crate) mod driver;
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
@@ -86,7 +83,10 @@ pub async fn initialize_split_master_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = MasterMatrix::<In, Out, RapidDebouncer<ROW, COL>, ROW, COL, 0, 0, ROW, COL>::new(input_pins, output_pins);
+    let matrix = MasterMatrix::<In, Out, RapidDebouncer<ROW, COL>, ROW, COL, 0, 0, ROW, COL>::new(
+        input_pins,
+        output_pins,
+    );
     // #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
     // let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     // #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
@@ -95,14 +95,14 @@ pub async fn initialize_split_master_and_run<
     // let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     // TODO: Get SLAVE_NUM and all corresponding configs from config file
-    const SLAVE_NUM: usize = 1;
-    let mut slave_futs: heapless::Vec<_, 8> = (0..SLAVE_NUM)
-        .into_iter()
-        .map(|i| {
-            let slave = SlaveCache::<1, 2>::new(i);
-            slave.run()
-        })
-        .collect();
+    // const SLAVE_NUM: usize = 1;
+    // let mut slave_futs: heapless::Vec<_, 8> = (0..SLAVE_NUM)
+    //     .into_iter()
+    //     .map(|i| {
+    //         let slave = SlaveCache::<1, 2>::new(i);
+    //         slave.run()
+    //     })
+    //     .collect();
 
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
         Keyboard::new(matrix, &keymap),
@@ -135,7 +135,7 @@ pub async fn initialize_split_master_and_run<
             );
             let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
             let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-            let slave_fut = select_slice(&mut slave_futs);
+            // let slave_fut = select_slice(&mut slave_futs);
             pin_mut!(usb_fut);
             pin_mut!(keyboard_fut);
             pin_mut!(led_fut);
@@ -144,7 +144,8 @@ pub async fn initialize_split_master_and_run<
             match select4(
                 usb_fut,
                 select(keyboard_fut, communication_fut),
-                select(led_fut, slave_fut),
+                // select(led_fut, slave_fut),
+                led_fut,
                 via_fut,
             )
             .await

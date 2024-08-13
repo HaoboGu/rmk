@@ -12,8 +12,8 @@ use crate::{
 };
 
 /// Channels for synchronization between master and slave threads
-const SYNC_CHANNEL_VALUE: Channel<CriticalSectionRawMutex, SyncMessage, 8> = Channel::new();
-pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, SyncMessage, 8>; 4] =
+const SYNC_CHANNEL_VALUE: Channel<CriticalSectionRawMutex, KeySyncMessage, 8> = Channel::new();
+pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyncMessage, 8>; 4] =
     [SYNC_CHANNEL_VALUE; 4];
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
@@ -25,8 +25,8 @@ pub enum SplitMessage {
     LedState(bool),
 }
 
-/// Message used for synchronization between master thread and slave thread
-pub(crate) enum SyncMessage {
+/// Message used for synchronization between master thread and slave receiver
+pub(crate) enum KeySyncMessage {
     /// Sent from master to slave thread, indicating master starts to read the key state matrix
     StartRead,
     /// Response of `StartRead`, sent from slave to master, indicating that the slave starts to send the key state matrix.
@@ -118,10 +118,10 @@ impl<
 
     pub(crate) async fn scan_slave(&mut self) {
         for slave_channel in MASTER_SYNC_CHANNELS.iter() {
-            slave_channel.send(SyncMessage::StartRead).await;
-            if let SyncMessage::StartSend(n) = slave_channel.receive().await {
+            slave_channel.send(KeySyncMessage::StartRead).await;
+            if let KeySyncMessage::StartSend(n) = slave_channel.receive().await {
                 for _ in 0..n {
-                    if let SyncMessage::Key(row, col, key_state) = slave_channel.receive().await {
+                    if let KeySyncMessage::Key(row, col, key_state) = slave_channel.receive().await {
                         if key_state != self.key_states[row as usize][col as usize].pressed {
                             self.key_states[row as usize][col as usize].pressed = key_state;
                             self.key_states[row as usize][col as usize].changed = true;
@@ -189,69 +189,3 @@ impl<
     }
 }
 
-pub(crate) struct SlaveCache<const ROW: usize, const COL: usize /* , R: Read*/> {
-    /// Key state matrix
-    pressed: [[bool; COL]; ROW],
-    /// Receiver
-    // receiver: R,
-    /// Slave id
-    id: usize,
-}
-
-impl<const ROW: usize, const COL: usize /* , R: Read*/> SlaveCache<ROW, COL> {
-    pub(crate) fn new(id: usize) -> Self {
-        Self {
-            pressed: [[false; COL]; ROW],
-            // receiver: todo!(),
-            id,
-        }
-    }
-    // pub(crate) fn new(receiver: R, id: usize) -> Self {
-    //     Self {
-    //         pressed: [[false; COL]; ROW],
-    //         receiver,
-    //         id,
-    //     }
-    // }
-
-    pub(crate) async fn run(self) -> ! {
-        let mut _buf = [0_u8; SplitMessage::POSTCARD_MAX_SIZE];
-        loop {
-            // let receive_from_slave = self.receiver.read(&mut buf);
-            // let slave_sync = MASTER_SYNC_CHANNELS[self.id].receive();
-            // match select(receive_from_slave, slave_sync).await {
-            //     Either::First(receive_re) => {
-            //         if let Ok(n_bytes) = receive_re {
-            //             if n_bytes == 0 {
-            //                 continue;
-            //             }
-            //             let message: SplitMessage = postcard::from_bytes(&buf).unwrap();
-            //             // Update the key state matrix
-            //             if let SplitMessage::Key(row, col, pressed) = message {
-            //                 // TODO: Check row, col
-            //                 self.pressed[row as usize][col as usize] = pressed;
-            //             }
-            //         }
-            //     }
-            //     Either::Second(sync_message) => {
-            //         if let SyncMessage::StartRead = sync_message {
-            //             // First, send the number of states to be sent
-            //             MASTER_SYNC_CHANNELS[self.id]
-            //                 .send(SyncMessage::StartSend((ROW * COL) as u16))
-            //                 .await;
-
-            //             // Send the key state matrix
-            //             // TODO: Check index with slave offset
-            //             for i in 0..ROW {
-            //                 for j in 0..COL {
-            //                     MASTER_SYNC_CHANNELS[self.id]
-            //                         .send(SyncMessage::Key(i as u8, j as u8, self.pressed[i][j]))
-            //                         .await;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-        }
-    }
-}
