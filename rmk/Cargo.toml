@@ -67,6 +67,10 @@ esp-idf-svc = { version = "0.49", default-features = false, optional = true }
 # Document feature
 document-features = "0.2"
 
+# Architecture specific dependencies
+[target.'cfg(all(target_arch = "arm", target_os = "none"))'.dependencies]
+cortex-m = { version = "0.7" }
+
 [features]
 default = ["col2row", "rapid_debouncer"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.

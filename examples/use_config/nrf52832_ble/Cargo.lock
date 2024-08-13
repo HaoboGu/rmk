@@ -1131,6 +1131,7 @@ version = "0.2.4"
 dependencies = [
  "bitfield-struct",
  "byteorder",
+ "cortex-m",
  "defmt",
  "document-features",
  "embassy-embedded-hal",
