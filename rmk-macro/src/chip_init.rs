@@ -63,7 +63,7 @@ pub(crate) fn expand_chip_init(chip: &ChipModel, item_mod: &ItemMod) -> TokenStr
                         if let Ok(Overwritten::ChipConfig) =
                             Overwritten::from_meta(&item_fn.attrs[0].meta)
                         {
-                            return Some(override_chip_init(item_fn));
+                            return Some(override_chip_init(chip, item_fn));
                         }
                     }
                 }
@@ -75,11 +75,26 @@ pub(crate) fn expand_chip_init(chip: &ChipModel, item_mod: &ItemMod) -> TokenStr
     }
 }
 
-fn override_chip_init(item_fn: &ItemFn) -> TokenStream2 {
-    // TODO: override chip init for all chips
+fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     let initialization = item_fn.block.to_token_stream();
-    quote! {
+    let mut initialization_tokens = quote! {
         let config = #initialization;
-        let mut p = embassy_stm32::init(config);
+    };
+    match chip.series {
+        ChipSeries::Stm32 => initialization_tokens.extend(quote! {
+            let mut p = ::embassy_stm32::init(config);
+        }),
+        ChipSeries::Nrf52 => initialization_tokens.extend(quote! {
+            let mut p = ::embassy_nrf::init(config);
+        }),
+        ChipSeries::Rp2040 => initialization_tokens.extend(quote! {
+            let mut p = ::embassy_rp::init(config);
+        }),
+        ChipSeries::Esp32 => initialization_tokens.extend(quote! {
+            let p = ::esp_idf_svc::hal::peripherals::Peripherals::take().unwrap();
+        }),
+        ChipSeries::Unsupported => initialization_tokens = quote! {},
     }
+
+    initialization_tokens
 }
