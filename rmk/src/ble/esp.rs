@@ -47,7 +47,8 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    // TODO: Use esp nvs as the storage
+    // TODO: Use esp nvs as the storage 
+    // Related issue: https://github.com/esp-rs/esp-idf-svc/issues/405
     let (mut _storage, keymap) = (
         None::<EmptyFlashWrapper>,
         RefCell::new(

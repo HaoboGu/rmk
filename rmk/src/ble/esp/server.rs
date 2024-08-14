@@ -44,7 +44,6 @@ impl HidWriterWrapper for BleHidWriter {
     }
 }
 
-// FIXME: ESP BLE HID Reader
 impl HidReaderWrapper for BleHidReader {
     async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
         self.lock().on_read(|a, _| {
