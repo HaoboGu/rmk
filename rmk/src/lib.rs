@@ -61,7 +61,7 @@ pub mod layout_macro;
 mod light;
 mod matrix;
 mod storage;
-mod split;
+pub mod split;
 mod usb;
 mod via;
 

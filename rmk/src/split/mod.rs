@@ -1,7 +1,12 @@
 use crate::action::KeyAction;
+#[cfg(not(feature = "rapid_debouncer"))]
+use crate::debounce::default_bouncer::DefaultDebouncer;
+#[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::debounce::DebouncerTrait;
 use crate::keyboard::{communication_task, Keyboard, KeyboardReportMessage};
 use crate::keymap::KeyMap;
+use crate::run_usb_keyboard;
 use crate::storage::Storage;
 use crate::usb::KeyboardUsbDevice;
 use crate::via::process::VialService;
@@ -12,6 +17,7 @@ use crate::{
 };
 use core::cell::RefCell;
 use defmt::*;
+use driver::serial::SerialSplitMasterReceiver;
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::Timer;
@@ -19,14 +25,18 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use embedded_io_async::Read;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
-use master::MasterMatrix;
+use master::{MasterMatrix, SplitMessage};
+use postcard::experimental::max_size::MaxSize;
 use rmk_config::RmkConfig;
 
 pub(crate) mod driver;
 pub(crate) mod master;
 pub(crate) mod slave;
+
+pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
@@ -44,17 +54,21 @@ pub async fn initialize_split_master_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
-    const ROW: usize,
-    const COL: usize,
+    const TOTAL_ROW: usize,
+    const TOTAL_COL: usize,
+    const MASTER_ROW: usize,
+    const MASTER_COL: usize,
+    const MASTER_ROW_OFFSET: usize,
+    const MASTER_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
     driver: D,
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
     flash: Option<F>,
-    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -62,13 +76,21 @@ pub async fn initialize_split_master_and_run<
         Some(f) => {
             let mut s = Storage::new(f, &default_keymap, keyboard_config.storage_config).await;
             let keymap = RefCell::new(
-                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut s)).await,
+                KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
+                    default_keymap,
+                    Some(&mut s),
+                )
+                .await,
             );
             (Some(s), keymap)
         }
         None => {
             let keymap = RefCell::new(
-                KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<F>(default_keymap, None).await,
+                KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage::<F>(
+                    default_keymap,
+                    None,
+                )
+                .await,
             );
             (None, keymap)
         }
@@ -83,26 +105,53 @@ pub async fn initialize_split_master_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = MasterMatrix::<In, Out, RapidDebouncer<ROW, COL>, ROW, COL, 0, 0, ROW, COL>::new(
-        input_pins,
-        output_pins,
-    );
-    // #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    // let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    // #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    // let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-    // #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    // let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-
-    // TODO: Get SLAVE_NUM and all corresponding configs from config file
-    // const SLAVE_NUM: usize = 1;
-    // let mut slave_futs: heapless::Vec<_, 8> = (0..SLAVE_NUM)
-    //     .into_iter()
-    //     .map(|i| {
-    //         let slave = SlaveCache::<1, 2>::new(i);
-    //         slave.run()
-    //     })
-    //     .collect();
+    let matrix = MasterMatrix::<
+        In,
+        Out,
+        RapidDebouncer<MASTER_ROW, MASTER_COL>,
+        TOTAL_ROW,
+        TOTAL_COL,
+        MASTER_ROW_OFFSET,
+        MASTER_COL_OFFSET,
+        MASTER_ROW,
+        MASTER_COL,
+    >::new(input_pins, output_pins, RapidDebouncer::new());
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let matrix = MasterMatrix::<
+        In,
+        Out,
+        DefaultDebouncer<MASTER_ROW, MASTER_COL>,
+        TOTAL_ROW,
+        TOTAL_COL,
+        MASTER_ROW_OFFSET,
+        MASTER_COL_OFFSET,
+        MASTER_ROW,
+        MASTER_COL,
+    >::new(input_pins, output_pins, DefaultDebouncer::new());
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let matrix = MasterMatrix::<
+        In,
+        Out,
+        RapidDebouncer<MASTER_COL, MASTER_ROW>,
+        TOTAL_ROW,
+        TOTAL_COL,
+        MASTER_ROW_OFFSET,
+        MASTER_COL_OFFSET,
+        MASTER_COL,
+        MASTER_ROW,
+    >::new(input_pins, output_pins, RapidDebouncer::new());
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let matrix = MasterMatrix::<
+        In,
+        Out,
+        DefaultDebouncer<MASTER_COL, MASTER_ROW>,
+        TOTAL_ROW,
+        TOTAL_COL,
+        MASTER_ROW_OFFSET,
+        MASTER_COL_OFFSET,
+        MASTER_COL,
+        MASTER_ROW,
+    >::new(input_pins, output_pins, DefaultDebouncer::new());
 
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
         Keyboard::new(matrix, &keymap),
@@ -113,17 +162,17 @@ pub async fn initialize_split_master_and_run<
 
     loop {
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        if let Some(ref mut _s) = storage {
-            // run_usb_keyboard(
-            //     &mut usb_device,
-            //     &mut keyboard,
-            //     s,
-            //     &mut light_service,
-            //     &mut vial_service,
-            //     &mut keyboard_report_receiver,
-            //     &mut keyboard_report_sender,
-            // )
-            // .await;
+        if let Some(ref mut s) = storage {
+            run_usb_keyboard(
+                &mut usb_device,
+                &mut keyboard,
+                s,
+                &mut light_service,
+                &mut vial_service,
+                &mut keyboard_report_receiver,
+                &mut keyboard_report_sender,
+            )
+            .await;
         } else {
             // Run 5 tasks: usb, keyboard, led, vial, communication
             let usb_fut = usb_device.device.run();
@@ -162,4 +211,26 @@ pub async fn initialize_split_master_and_run<
         warn!("Detected failure, restarting keyboard sevice after 1 second");
         Timer::after_secs(1).await;
     }
+}
+
+/// Receive split message from slave and process it
+///
+/// Generic parameters:
+/// - `const ROW`: row number of the slave's matrix
+/// - `const COL`: column number of the slave's matrix
+/// - `const ROW_OFFSET`: row offset of the slave's matrix in the whole matrix
+/// - `const COL_OFFSET`: column offset of the slave's matrix in the whole matrix
+/// - `R`: the type of the receiver
+pub async fn run_slave_receiver<
+    const ROW: usize,
+    const COL: usize,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    R: Read,
+>(
+    receiver: R,
+    id: usize,
+) {
+    let slave = SerialSplitMasterReceiver::<ROW, COL, ROW_OFFSET, COL_OFFSET, R>::new(receiver, id);
+    slave.run().await;
 }

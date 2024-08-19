@@ -42,8 +42,8 @@ pub struct MasterMatrix<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const ROW: usize,
-    const COL: usize,
+    const TOTAL_ROW: usize,
+    const TOTAL_COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
     const INPUT_PIN_NUM: usize,
@@ -56,7 +56,7 @@ pub struct MasterMatrix<
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    key_states: [[KeyState; COL]; ROW],
+    key_states: [[KeyState; TOTAL_COL]; TOTAL_ROW],
     /// Start scanning
     scan_start: Option<Instant>,
 }
@@ -80,12 +80,12 @@ impl<
         self.scan_slave().await;
     }
 
-    fn get_key_state(&mut self, _row: usize, _col: usize) -> KeyState {
-        todo!()
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+        self.key_states[row][col]
     }
 
-    fn update_key_state(&mut self, _row: usize, _col: usize, _f: impl FnOnce(&mut KeyState)) {
-        todo!()
+    fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
+        f(&mut self.key_states[row][col]);
     }
 
     #[cfg(feature = "async_matrix")]
@@ -112,16 +112,28 @@ impl<
     /// 1. the matrix definition of master board: (row, col), (total_row, total_col), (row_pins, col_pins)
     /// 2. keyboard definition
     /// 3. storage definition
-    pub(crate) fn new(_input_pins: [In; INPUT_PIN_NUM], _output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {
-        todo!()
+    pub(crate) fn new(
+        input_pins: [In; INPUT_PIN_NUM],
+        output_pins: [Out; OUTPUT_PIN_NUM],
+        debouncer: D,
+    ) -> Self {
+        MasterMatrix {
+            input_pins,
+            output_pins,
+            debouncer,
+            key_states: [[KeyState::default(); COL]; ROW],
+            scan_start: None,
+        }
     }
 
     pub(crate) async fn scan_slave(&mut self) {
         for slave_channel in MASTER_SYNC_CHANNELS.iter() {
+            // TODO: Continue when the slave is not connected
             slave_channel.send(KeySyncMessage::StartRead).await;
             if let KeySyncMessage::StartSend(n) = slave_channel.receive().await {
                 for _ in 0..n {
-                    if let KeySyncMessage::Key(row, col, key_state) = slave_channel.receive().await {
+                    if let KeySyncMessage::Key(row, col, key_state) = slave_channel.receive().await
+                    {
                         if key_state != self.key_states[row as usize][col as usize].pressed {
                             self.key_states[row as usize][col as usize].pressed = key_state;
                             self.key_states[row as usize][col as usize].changed = true;
@@ -188,4 +200,3 @@ impl<
         return self.key_states[out_idx + ROW_OFFSET][in_idx + COL_OFFSET];
     }
 }
-
