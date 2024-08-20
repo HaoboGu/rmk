@@ -26,8 +26,6 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
 use embedded_io_async::Read;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
