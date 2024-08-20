@@ -60,8 +60,8 @@ pub mod keymap;
 pub mod layout_macro;
 mod light;
 mod matrix;
-mod storage;
 pub mod split;
+mod storage;
 mod usb;
 mod via;
 

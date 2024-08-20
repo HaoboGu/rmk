@@ -24,7 +24,10 @@ use embassy_rp::{
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    split::{initialize_split_master_and_run, run_slave_receiver, SPLIT_MESSAGE_MAX_SIZE},
+    split::{
+        master::{initialize_split_master_and_run, run_slave_receiver},
+        SPLIT_MESSAGE_MAX_SIZE,
+    },
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -47,7 +50,8 @@ async fn main(_spawner: Spawner) {
 
     // Pin config
     // let (input_pins, output_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
-    let (input_pins, output_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7], output: [PIN_19, PIN_20]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7], output: [PIN_19, PIN_20]);
 
     // Use internal flash to emulate eeprom
     // Both blocking and async flash are support, use different API
