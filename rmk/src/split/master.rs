@@ -18,7 +18,7 @@ use crate::{
 };
 
 use core::cell::RefCell;
-use defmt::*;
+use defmt::{error, warn};
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::{Instant, Timer};
@@ -217,7 +217,6 @@ pub async fn initialize_split_master_and_run<
 /// - `const ROW_OFFSET`: row offset of the slave's matrix in the whole matrix
 /// - `const COL_OFFSET`: column offset of the slave's matrix in the whole matrix
 /// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
-// TODO: split-serial feature
 pub async fn run_serial_slave_monitor<
     const ROW: usize,
     const COL: usize,
