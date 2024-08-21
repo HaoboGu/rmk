@@ -1,5 +1,6 @@
 use super::SplitMessage;
 
+// TODO: feature gate
 pub(crate) mod nrf_ble;
 pub(crate) mod serial;
 

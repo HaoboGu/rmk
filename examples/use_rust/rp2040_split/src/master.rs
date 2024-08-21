@@ -25,7 +25,7 @@ use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
-        master::{initialize_split_master_and_run, run_slave_receiver},
+        master::{initialize_split_master_and_run, run_serial_slave_monitor},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };
@@ -112,7 +112,7 @@ async fn main(_spawner: Spawner) {
             crate::keymap::KEYMAP,
             keyboard_config,
         ),
-        run_slave_receiver::<2, 1, 2, 2, _>(uart_receiver, 0),
+        run_serial_slave_monitor::<2, 1, 2, 2, _>(uart_receiver, 0),
     )
     .await;
 }
