@@ -26,19 +26,13 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use embedded_io_async::Read;
+use embedded_io_async::{Read, Write};
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use futures::pin_mut;
-use postcard::experimental::max_size::MaxSize;
 use rmk_config::RmkConfig;
-use serde::{Deserialize, Serialize};
 
-use super::driver::serial::SerialSplitMasterReceiver;
-
-/// Channels for synchronization between master and slave threads
-const SYNC_CHANNEL_VALUE: Channel<CriticalSectionRawMutex, KeySyncMessage, 8> = Channel::new();
-pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyncMessage, 8>; 4] =
-    [SYNC_CHANNEL_VALUE; 4];
+use super::driver::serial::{SerialSplitDriver, SerialSplitMasterReceiver};
+use super::{KeySyncMessage, MASTER_SYNC_CHANNELS};
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///
@@ -228,34 +222,17 @@ pub async fn run_slave_receiver<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    R: Read,
+    S: Read + Write,
 >(
-    receiver: R,
+    receiver: S,
     id: usize,
 ) {
-    let slave = SerialSplitMasterReceiver::<ROW, COL, ROW_OFFSET, COL_OFFSET, R>::new(receiver, id);
+    let split_serial_driver = SerialSplitDriver::new(receiver);
+    let slave = SerialSplitMasterReceiver::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(
+        split_serial_driver,
+        id,
+    );
     slave.run().await;
-}
-
-/// Message used from master & slave communication
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
-#[repr(u8)]
-pub enum SplitMessage {
-    /// Activated key info (row, col, pressed), from slave to master
-    Key(u8, u8, bool),
-    /// Led state, on/off
-    LedState(bool),
-}
-
-/// Message used for synchronization between master thread and slave receiver(both in master board)
-pub(crate) enum KeySyncMessage {
-    /// Sent from master to slave thread, indicating master starts to read the key state matrix
-    StartRead,
-    /// Response of `StartRead`, sent from slave to master, indicating that the slave starts to send the key state matrix.
-    /// u8 is the number of sent key states
-    StartSend(u16),
-    /// Key state: (row, col, key_pressing_state)
-    Key(u8, u8, bool),
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.

@@ -1,8 +1,11 @@
+use defmt::error;
 use embassy_futures::select::{select, Either};
-use embedded_io_async::Read;
+use embedded_io_async::{Read, Write};
 use postcard::experimental::max_size::MaxSize;
 
-use crate::split::master::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
+use crate::split::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
+
+use super::{SplitReader, SplitWriter};
 
 /// SerialSplitMasterReceiver receives split message from corresponding slave via serial.
 /// The `ROW` and `COL` are the number of rows and columns of the corresponding slave's keyboard matrix.
@@ -12,7 +15,7 @@ pub(crate) struct SerialSplitMasterReceiver<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    R: Read,
+    R: SplitReader,
 > {
     /// Key state cache matrix
     pressed: [[bool; COL]; ROW],
@@ -27,7 +30,7 @@ impl<
         const COL: usize,
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
-        R: Read,
+        R: SplitReader,
     > SerialSplitMasterReceiver<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
@@ -42,17 +45,12 @@ impl<
     /// The receiver receives from the slave and waits for the sync message from the master matrix.
     /// If a sync message is received from master, it sends the key state matrix to the master matrix.
     pub(crate) async fn run(mut self) -> ! {
-        let mut buf = [0_u8; SplitMessage::POSTCARD_MAX_SIZE];
         loop {
-            let receive_fut = self.receiver.read(&mut buf);
+            let receive_fut = self.receiver.read();
             let sync_fut = MASTER_SYNC_CHANNELS[self.id].receive();
             match select(receive_fut, sync_fut).await {
                 Either::First(received_message) => {
-                    if let Ok(n_bytes) = received_message {
-                        if n_bytes == 0 {
-                            continue;
-                        }
-                        let message: SplitMessage = postcard::from_bytes(&buf).unwrap();
+                    if let Ok(message) = received_message {
                         // Update the key state matrix
                         if let SplitMessage::Key(row, col, pressed) = message {
                             self.pressed[row as usize][col as usize] = pressed;
@@ -83,5 +81,48 @@ impl<
                 }
             }
         }
+    }
+}
+
+pub(crate) struct SerialSplitDriver<S: Read + Write> {
+    serial: S,
+}
+
+impl<S: Read + Write> SerialSplitDriver<S> {
+    pub fn new(serial: S) -> Self {
+        Self { serial }
+    }
+}
+
+impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
+    async fn read(&mut self) -> Result<SplitMessage, super::SplitDriverError> {
+        let mut buf = [0_u8; SplitMessage::POSTCARD_MAX_SIZE + 4];
+        let n_bytes = self
+            .serial
+            .read(&mut buf)
+            .await
+            .map_err(|_e| super::SplitDriverError::SerialError)?;
+        if n_bytes == 0 {
+            return Err(super::SplitDriverError::EmptyMessage);
+        }
+        let message: SplitMessage = postcard::from_bytes(&buf).map_err(|e| {
+            error!("Postcard deserialize split message error: {}", e);
+            super::SplitDriverError::DeserializeError
+        })?;
+        Ok(message)
+    }
+}
+
+impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
+    async fn write(&mut self, message: &SplitMessage) -> Result<usize, super::SplitDriverError> {
+        let mut buf = [0_u8; SplitMessage::POSTCARD_MAX_SIZE + 4];
+        let bytes = postcard::to_slice(message, &mut buf).map_err(|e| {
+            error!("Postcard serialize split message error: {}", e);
+            super::SplitDriverError::SerializeError
+        })?;
+        self.serial
+            .write(bytes)
+            .await
+            .map_err(|_e| super::SplitDriverError::SerialError)
     }
 }

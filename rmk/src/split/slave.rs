@@ -9,7 +9,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::matrix::{Matrix, MatrixTrait};
 
-use super::master::SplitMessage;
+use super::SplitMessage;
 
 /// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
 ///

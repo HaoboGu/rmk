@@ -44,7 +44,7 @@ futures = { version = "0.3", default-features = false }
 sequential-storage = { version = "3.0.0", features = ["defmt-03"] }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
-postcard = { version = "1", features = ["experimental-derive"] }
+postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
 
 # Optional dependencies
 # nRF dependencies
