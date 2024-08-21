@@ -22,7 +22,7 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    git clone https://github.com/microsoft/uf2.git
    cd uf2/utils
    ``` 
-4. Convert your .hex firmware to uf2 format
+4. Convert your .bin firmware to uf2 format
    ```shell
    # If your nice!nano uses softdevice v6.x.x
    python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x26000 -f 0xADA52840 -o rmk-52840.uf2 
