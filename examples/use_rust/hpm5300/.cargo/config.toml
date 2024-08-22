@@ -6,7 +6,7 @@ target = "riscv32imafc-unknown-none-elf"
 runner = [
     "probe-rs", "run",
     "--chip", "HPM5361",
-    "--chip-description-path", "../HPMicro.yaml",
+    "--chip-description-path", "HPMicro.yaml",
     "--protocol","jtag",
     "--log-format", "{t} {L} {F}:{l} {s}",
 ]
