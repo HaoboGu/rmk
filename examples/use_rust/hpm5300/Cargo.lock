@@ -582,7 +582,7 @@ dependencies = [
 [[package]]
 name = "hpm-hal"
 version = "0.0.1"
-source = "git+https://github.com/hpmicro-rs/hpm-hal?branch=feat/usb#447941b8ecfdb43fde013490f755cb792280fd99"
+source = "git+https://github.com/hpmicro-rs/hpm-hal?rev=1e55abea9dd6936e9ba88fedbe154bbbad90d5b0#1e55abea9dd6936e9ba88fedbe154bbbad90d5b0"
 dependencies = [
  "critical-section",
  "defmt",
@@ -894,7 +894,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-hpm5301"
+name = "rmk-hpm5300"
 version = "0.2.0"
 dependencies = [
  "const-gen",
