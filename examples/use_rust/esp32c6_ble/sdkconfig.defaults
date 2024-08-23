@@ -1,5 +1,6 @@
 # Rust often needs a bit of an extra main task stack size compared to C (the default is 3K)
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=12000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=64000
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=7000 
 
 # Use this to set FreeRTOS kernel tick frequency to 1000 Hz (100 Hz by default).
 # This allows to use 1 ms granuality for thread sleeps (10 ms by default).
@@ -12,8 +13,8 @@ CONFIG_FREERTOS_HZ=1000
 CONFIG_LOG_DEFAULT_LEVEL=5
 
 # Disable watchdog
-CONFIG_INT_WDT=n
-CONFIG_ESP_TASK_WDT=n
+CONFIG_ESP_INT_WDT=n
+CONFIG_ESP_TASK_WDT_EN=n
 
 # esp-nimble config
 CONFIG_BT_ENABLED=y

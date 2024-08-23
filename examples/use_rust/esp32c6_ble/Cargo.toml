@@ -42,7 +42,7 @@ debug = true
 opt-level = 3          # esp-wifi should be built with opt-level 2 or 3
 overflow-checks = true
 lto = false
-panic = 'unwind'
+panic = 'abort'
 
 [profile.release]
 codegen-units = 1       # better optimizations
