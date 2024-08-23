@@ -129,8 +129,8 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let via_config = Config {
             report_descriptor: ViaReport::desc(),
             request_handler: Some(via_request_handler.init(UsbRequestHandler {})),
-            poll_ms: 60,
-            max_packet_size: 64,
+            poll_ms: 10,
+            max_packet_size: 32,
         };
         static VIA_STATE: StaticCell<State> = StaticCell::new();
         let via_hid: HidReaderWriter<'_, D, 32, 32> =
