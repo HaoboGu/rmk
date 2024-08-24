@@ -50,7 +50,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
 1. Install [probe-rs](https://github.com/probe-rs/probe-rs)
 
    ```shell
-   cargo install probe-rs --features cli
+   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
    ```
 
 2. Build the firmware
