@@ -15,7 +15,7 @@ pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyn
     [SYNC_CHANNEL_VALUE; 4];
 
 /// Message used from master & slave communication
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]
 #[repr(u8)]
 pub enum SplitMessage {
     /// Activated key info (row, col, pressed), from slave to master
@@ -25,6 +25,7 @@ pub enum SplitMessage {
 }
 
 /// Message used for synchronization between master thread and slave receiver(both in master board)
+#[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum KeySyncMessage {
     /// Sent from master to slave thread, indicating master starts to read the key state matrix
     StartRead,

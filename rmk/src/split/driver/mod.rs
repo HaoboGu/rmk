@@ -4,6 +4,7 @@ use super::SplitMessage;
 pub(crate) mod nrf_ble;
 pub(crate) mod serial;
 
+#[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
     SerialError,
     EmptyMessage,

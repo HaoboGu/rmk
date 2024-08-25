@@ -18,7 +18,7 @@ use crate::{
 };
 
 use core::cell::RefCell;
-use defmt::{error, warn};
+use defmt::{error, info, warn};
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::{Instant, Timer};
@@ -232,6 +232,7 @@ pub async fn run_serial_slave_monitor<
         split_serial_driver,
         id,
     );
+    info!("Running slave monitor {}", id);
     slave.run().await;
 }
 

@@ -31,7 +31,7 @@ async fn main(_spawner: Spawner) {
 
     // Pin config
     let (input_pins, output_pins) =
-        config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7], output: [PIN_19, PIN_20]);
+        config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
 
     static TX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
@@ -48,7 +48,7 @@ async fn main(_spawner: Spawner) {
     );
 
     // Start serving
-    initialize_split_slave_and_run::<Input<'_>, Output<'_>, _, 2, 2, 2, 2>(
+    initialize_split_slave_and_run::<Input<'_>, Output<'_>, _, 2, 2>(
         input_pins,
         output_pins,
         uart_writer,

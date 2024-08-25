@@ -2,6 +2,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use embedded_io_async::Write;
+use postcard::experimental::max_size::MaxSize;
 
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
@@ -28,8 +29,6 @@ pub async fn initialize_split_slave_and_run<
     W: Write,
     const ROW: usize,
     const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
 >(
     #[cfg(feature = "col2row")] input_pins: [In; ROW],
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
@@ -57,15 +56,11 @@ pub async fn initialize_split_slave_and_run<
         // Send key events to host
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
-                let mut buf = [0u8; 8];
+                let mut buf = [0u8; SplitMessage::POSTCARD_MAX_SIZE + 4];
                 let key_state = matrix.get_key_state(row_idx, col_idx);
                 if key_state.changed {
                     let bytes = postcard::to_slice(
-                        &SplitMessage::Key(
-                            (row_idx + ROW_OFFSET) as u8,
-                            (col_idx + COL_OFFSET) as u8,
-                            key_state.pressed,
-                        ),
+                        &SplitMessage::Key(row_idx as u8, col_idx as u8, key_state.pressed),
                         &mut buf,
                     )
                     .unwrap();

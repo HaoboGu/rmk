@@ -1,4 +1,4 @@
-use defmt::error;
+use defmt::{error, info};
 use embassy_futures::select::{select, Either};
 use embedded_io_async::{Read, Write};
 use postcard::experimental::max_size::MaxSize;
@@ -50,6 +50,7 @@ impl<
             let sync_fut = MASTER_SYNC_CHANNELS[self.id].receive();
             match select(receive_fut, sync_fut).await {
                 Either::First(received_message) => {
+                    info!("Receveid slave message: {}", received_message);
                     if let Ok(message) = received_message {
                         // Update the key state matrix
                         if let SplitMessage::Key(row, col, pressed) = message {
