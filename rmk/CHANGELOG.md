@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add basic split keyboard support via serial
 - Add reboot for cortex-m chips
 
 ## [0.2.4] - 2024-08-06
