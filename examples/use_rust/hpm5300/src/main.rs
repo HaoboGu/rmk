@@ -15,26 +15,32 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use hpm_hal::gpio::{Input, Output};
 use hpm_hal::usb::UsbDriver;
+use hpm_hal::flash::Flash;
 use hpm_hal::{bind_interrupts, peripherals};
 use riscv_rt as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    initialize_keyboard_and_run_async_flash,
+    initialize_keyboard_and_run,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-use crate::dummy_flash::DummyFlash;
 use crate::keymap::{COL, NUM_LAYER, ROW};
 
 bind_interrupts!(struct Irqs {
     USB0 => hpm_hal::usb::InterruptHandler<peripherals::USB0>;
 });
 
+const FLASH_SIZE: usize = 1 * 1024 * 1024;
+
 #[embassy_executor::main(entry = "hpm_hal::entry")]
 async fn main(_spawner: Spawner) {
-    let p = hpm_hal::init(Default::default());
+    let mut p = hpm_hal::init(Default::default());
 
     let usb_driver = hpm_hal::usb::UsbDriver::new(p.USB0, p.PA24, p.PA25);
+
+    let flash_config = hpm_hal::flash::Config::from_rom_data(&mut p.XPI0).unwrap();
+    let flash: Flash<_, FLASH_SIZE> = Flash::new(p.XPI0, flash_config).unwrap();
+
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_hpm!(peripherals: p, input: [PA10, PA11, PA12, PA13], output: [PA14, PA15, PA16]);
 
@@ -55,8 +61,8 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    initialize_keyboard_and_run_async_flash::<
-        DummyFlash,
+    initialize_keyboard_and_run::<
+        Flash<_, FLASH_SIZE>,
         UsbDriver<'_, peripherals::USB0>,
         Input<'_>,
         Output<'_>,
@@ -67,7 +73,7 @@ async fn main(_spawner: Spawner) {
         usb_driver,
         input_pins,
         output_pins,
-        None,
+        Some(flash),
         crate::keymap::KEYMAP,
         keyboard_config,
     )

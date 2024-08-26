@@ -12,8 +12,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk" }
 embedded-storage-async = "0.4"
-hpm-hal = { git = "https://github.com/hpmicro-rs/hpm-hal", rev = "1e55abea9dd6936e9ba88fedbe154bbbad90d5b0", features = [
-# hpm-hal = { path = "/Users/haobogu/Projects/rust/hpm-hal", features = [
+hpm-hal = { git = "https://github.com/hpmicro-rs/hpm-hal", rev = "a52f5ec", features = [
     "rt",
     "embassy",
     "hpm5361",
