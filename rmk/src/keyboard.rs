@@ -264,7 +264,6 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
         // process_key_change -> process_key_action_* -> process_action_*
-        // TODO: can matrix emit those key state events as an interator?
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
                 let ks = self.matrix.get_key_state(row_idx, col_idx);

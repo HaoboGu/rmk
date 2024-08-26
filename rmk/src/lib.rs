@@ -60,6 +60,7 @@ pub mod keymap;
 pub mod layout_macro;
 mod light;
 mod matrix;
+pub mod split;
 mod storage;
 mod usb;
 mod via;
@@ -283,10 +284,15 @@ pub(crate) async fn run_usb_keyboard<
 }
 
 pub(crate) fn reboot_keyboard() {
-    warn!("Rebooting keyboard!")
-    // TODO: Implement reboot
+    warn!("Rebooting keyboard!");
     // For cortex-m:
-    // cortex_m::peripheral::SCB::sys_reset();
-    // For RISCV?
-    // For ESP32?
+    #[cfg(all(
+        target_arch = "arm",
+        target_os = "none",
+        any(target_abi = "eabi", target_abi = "eabihf")
+    ))]
+    cortex_m::peripheral::SCB::sys_reset();
+    // TODO: Implement reboot for other platforms
+    // - RISCV
+    // - ESP32
 }

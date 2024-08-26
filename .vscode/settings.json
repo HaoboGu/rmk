@@ -25,6 +25,7 @@
         // "examples/use_rust/nrf52840_ble/Cargo.toml",
         // "examples/use_rust/nrf52832_ble/Cargo.toml",
         // "examples/use_rust/rp2040/Cargo.toml"
+        "examples/use_rust/rp2040_split/Cargo.toml"
         // "examples/use_config/rp2040/Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,

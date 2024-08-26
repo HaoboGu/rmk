@@ -309,7 +309,6 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
                         let usb_fut = usb_device.device.run();
-                        // TODO: enable light service(and vial service) in ble mode
                         match select(
                             run_ble_keyboard(
                                 &conn,

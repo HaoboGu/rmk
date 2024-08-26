@@ -20,9 +20,9 @@
 - [Keymap](keymap.md)
 - [Vial support](vial_support.md)
 - [Wireless](wireless.md)
-<!-- - [Split keyboard](split_keyboard.md) -->
 - [Low-power](low_power.md)
 - [Storage](storage.md)
+- [Split keyboard](split_keyboard.md)
 - [Binary size optimization](binary_size_optimization.md)
 
 # Development

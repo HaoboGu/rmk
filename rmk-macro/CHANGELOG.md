@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add support for overriding chip initialization for nrf/rp/esp32
 - Fix broken link in error message
 
 ## [0.1.8] - 2024-08-06 
