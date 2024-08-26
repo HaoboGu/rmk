@@ -10,6 +10,7 @@ pub const BLE_HID_SERVICE_UUID: Uuid = Uuid::new_16(0x1812);
 pub enum BleSpecification {
     DeviceInformation = 0x180a,
     BatteryService = 0x180f,
+    HidService = 0x1812,
 }
 
 /// Characteristics uuids used in keyboards

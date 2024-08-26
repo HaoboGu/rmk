@@ -5,6 +5,7 @@ pub(crate) mod device_info;
 pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
+pub mod trouble;
 
 use defmt::error;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};

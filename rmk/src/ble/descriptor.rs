@@ -17,6 +17,7 @@ pub(crate) enum BleCompositeReportType {
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
 /// keyboard LEDs.
+#[allow(dead_code)]
 #[gen_hid_descriptor(
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = KEYBOARD) = {
         (report_id = 0x01,) = {
@@ -84,7 +85,6 @@ pub(crate) enum BleCompositeReportType {
         };
     }
 )]
-#[allow(dead_code)]
 pub struct BleKeyboardReport {
     pub modifier: u8,
     pub reserved: u8,
