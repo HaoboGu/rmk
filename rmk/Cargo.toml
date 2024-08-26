@@ -20,18 +20,18 @@ embedded-hal-async = { version = "1.0.0", features = [
 embedded-io-async = { version = "0.6", features = ["defmt-03"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embassy-embedded-hal = { version = "0.2" }
-embassy-time = { version = "0.3", features = ["defmt"] }
-embassy-usb = { version = "0.3", features = [
+embassy-embedded-hal = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00" }
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
+embassy-usb = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
 heapless = "0.8.0"
-embassy-sync = { version = "0.6", features = ["defmt"] }
-embassy-futures = { version = "0.1", features = ["defmt"] }
-embassy-executor = { version = "0.6", features = ["defmt"] }
+embassy-sync = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
+embassy-futures = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
+embassy-executor = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
 
 usbd-hid = { version = "0.8.2", features = ["defmt"] }
 ssmarshal = { version = "1.0", default-features = false }
@@ -58,7 +58,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-server",
     "ble-sec",
 ], optional = true }
-embassy-nrf = { version = "0.2.0", features = [
+embassy-nrf = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
     "unstable-pac",
     "time",
