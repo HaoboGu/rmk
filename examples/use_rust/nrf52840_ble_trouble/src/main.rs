@@ -1,22 +1,18 @@
 #![no_std]
 #![no_main]
-#![feature(impl_trait_in_assoc_type)]
 
-use defmt::{error, info, unwrap};
+use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_futures::join::join3;
-use embassy_nrf::{bind_interrupts, pac};
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_time::{Duration, Timer};
+use embassy_nrf::peripherals::RNG;
+use embassy_nrf::{bind_interrupts, pac, rng};
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
-use sdc::rng_pool::RngPool;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 use rmk::ble::trouble::run_ble_task;
 
 bind_interrupts!(struct Irqs {
-    RNG => nrf_sdc::rng_pool::InterruptHandler;
+    RNG => rng::InterruptHandler<RNG>;
     SWI0_EGU0 => nrf_sdc::mpsl::LowPrioInterruptHandler;
     POWER_CLOCK => nrf_sdc::mpsl::ClockInterruptHandler;
     RADIO => nrf_sdc::mpsl::HighPrioInterruptHandler;
@@ -31,7 +27,7 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
-    rng: &'d RngPool,
+    rng: &'d mut rng::Rng<RNG>,
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
@@ -73,11 +69,11 @@ async fn main(spawner: Spawner) {
         p.PPI_CH25, p.PPI_CH26, p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
 
-    let mut pool = [0; 256];
-    let rng = sdc::rng_pool::RngPool::new(p.RNG, Irqs, &mut pool, 64);
+    let mut rng = rng::Rng::new(p.RNG, Irqs);
 
     let mut sdc_mem = sdc::Mem::<3312>::new();
-    let sdc = unwrap!(build_sdc(sdc_p, &rng, mpsl, &mut sdc_mem));
+    let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
+
 
     run_ble_task(sdc).await;
 }

@@ -63,7 +63,7 @@ embassy-nrf = { version = "0.2.0", features = [
     "unstable-pac",
     "time",
 ], optional = true }
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble/", features = ["gatt"] }
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble/", features = ["defmt", "gatt"] }
 
 # Espressif dependencies
 esp32-nimble = { version = "0.7.0", optional = true }
