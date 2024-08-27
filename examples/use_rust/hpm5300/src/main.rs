@@ -42,7 +42,7 @@ async fn main(_spawner: Spawner) {
     let flash: Flash<_, FLASH_SIZE> = Flash::new(p.XPI0, flash_config).unwrap();
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_hpm!(peripherals: p, input: [PA10, PA11, PA12, PA13], output: [PA14, PA15, PA16]);
+    let (input_pins, output_pins) = config_matrix_pins_hpm!(peripherals: p, input: [PA31, PA28, PA29, PA27], output: [PB10, PB11, PA09]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,
