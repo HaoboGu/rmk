@@ -19,6 +19,7 @@ use xz2::read::XzEncoder;
 
 fn main() {
     // Generate vial config at the root of project
+    println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();
 
     // Put `memory.x` in our output directory and ensure it's
@@ -56,7 +57,6 @@ fn main() {
 
 fn generate_vial_config() {
     // Generated vial config file
-    println!("cargo:rerun-if-changed=vial.json");
     let out_file = Path::new(&env::var_os("OUT_DIR").unwrap()).join("config_generated.rs");
 
     let p = Path::new("vial.json");
