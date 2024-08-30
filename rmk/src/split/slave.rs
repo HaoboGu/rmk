@@ -16,17 +16,14 @@ use super::SplitMessage;
 ///
 /// # Arguments
 ///
-/// * `driver` - embassy usb driver instance
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
-/// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
-/// * `keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-pub async fn initialize_split_slave_and_run<
+/// * `serial` - serial port to send key events to master board
+pub async fn initialize_serial_split_slave_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
-    W: Write,
+    S: Write + Read,
     const ROW: usize,
     const COL: usize,
 >(
@@ -34,7 +31,7 @@ pub async fn initialize_split_slave_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    mut writer: W,
+    serial: S,
 ) -> ! {
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -50,21 +47,34 @@ pub async fn initialize_split_slave_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
+    run_slave::<_, _, ROW, COL>(&mut matrix, SerialSplitDriver::new(serial)).await
+}
+
+pub(crate) async fn run_slave<
+    M: MatrixTrait,
+    S: SplitWriter + SplitReader,
+    const ROW: usize,
+    const COL: usize,
+>(
+    matrix: &mut M,
+    mut split_driver: S,
+) -> ! {
     loop {
         matrix.scan().await;
 
         // Send key events to host
         for row_idx in 0..ROW {
             for col_idx in 0..COL {
-                let mut buf = [0u8; SplitMessage::POSTCARD_MAX_SIZE + 4];
                 let key_state = matrix.get_key_state(row_idx, col_idx);
                 if key_state.changed {
-                    let bytes = postcard::to_slice(
-                        &SplitMessage::Key(row_idx as u8, col_idx as u8, key_state.pressed),
-                        &mut buf,
-                    )
-                    .unwrap();
-                    writer.write(bytes).await.unwrap();
+                    split_driver
+                        .write(&SplitMessage::Key(
+                            row_idx as u8,
+                            col_idx as u8,
+                            key_state.pressed,
+                        ))
+                        .await
+                        .unwrap();
                 }
             }
         }

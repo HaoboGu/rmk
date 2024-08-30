@@ -37,7 +37,7 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_writer = BufferedUart::new(
+    let uart_instance = BufferedUart::new(
         p.UART0,
         Irqs,
         p.PIN_0,
@@ -48,10 +48,10 @@ async fn main(_spawner: Spawner) {
     );
 
     // Start serving
-    initialize_split_slave_and_run::<Input<'_>, Output<'_>, _, 2, 2>(
+    initialize_serial_split_slave_and_run::<Input<'_>, Output<'_>, _, 2, 2>(
         input_pins,
         output_pins,
-        uart_writer,
+        uart_instance,
     )
     .await;
 }
