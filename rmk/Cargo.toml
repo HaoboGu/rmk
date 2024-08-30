@@ -102,6 +102,7 @@ nrf52810_ble = ["_nrf_ble", "nrf-softdevice/nrf52810", "nrf-softdevice/s132"]
 
 ## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["_esp_ble"]
+esp32c6_ble = ["_esp_ble"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
