@@ -389,7 +389,7 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
 }
 
 // Run ble keyboard task for once
-async fn run_ble_keyboard<
+pub(crate) async fn run_ble_keyboard<
     'a,
     'b,
     F: AsyncNorFlash,

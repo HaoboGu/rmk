@@ -8,7 +8,7 @@ use crate::{
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
 use core::cell::RefCell;
-use defmt::{debug, error, warn};
+use defmt::{debug, error, info, warn};
 use embassy_futures::yield_now;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -37,8 +37,9 @@ pub(crate) async fn keyboard_task<
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
+
     loop {
-        let _ = keyboard.scan_matrix(sender).await;
+        keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
         keyboard.send_media_report(sender).await;
         keyboard.send_mouse_report(sender).await;

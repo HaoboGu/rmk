@@ -56,6 +56,8 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-peripheral",
     "critical-section-impl",
     "ble-gatt-server",
+    "ble-gatt-client",
+    "ble-central",
     "ble-sec",
 ], optional = true }
 embassy-nrf = { version = "0.2.0", features = [

@@ -1,5 +1,23 @@
 # Split keyboard design
 
+## API design
+
+For user API, since the number of used split matrix is flexible, it's not easy to use only one API to run the split keyboard. Each slave's number of row/col, offset of row/col are different.
+
+So, for master, I prefer the master board + slave monitor mode of user API.
+
+For slave, one slave run API is good.
+
+There are also two sets of api for BLE split and serial.
+
+
+### Master
+
+
+
+
+### Slave
+
 ## Protocol
 
 ### Communication protocol

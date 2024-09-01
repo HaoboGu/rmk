@@ -1,3 +1,5 @@
+use crate::split::SYNC_SIGNALS;
+
 use super::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
 use defmt::info;
 use embassy_futures::select::{select, Either};
@@ -62,7 +64,7 @@ impl<
     pub(crate) async fn run(mut self) -> ! {
         loop {
             let receive_fut = self.receiver.read();
-            let sync_fut = MASTER_SYNC_CHANNELS[self.id].receive();
+            let sync_fut = SYNC_SIGNALS[self.id].wait();
             match select(receive_fut, sync_fut).await {
                 Either::First(received_message) => {
                     info!("Receveid slave message: {}", received_message);
@@ -73,27 +75,26 @@ impl<
                         }
                     }
                 }
-                Either::Second(sync_message) => {
-                    if let KeySyncMessage::StartRead = sync_message {
-                        // First, send the number of states to be sent
-                        MASTER_SYNC_CHANNELS[self.id]
-                            .send(KeySyncMessage::StartSend((ROW * COL) as u16))
-                            .await;
-
-                        // Send the key state matrix
-                        // TODO: Optimize: send only the changed key states
-                        for row in 0..ROW {
-                            for col in 0..COL {
-                                MASTER_SYNC_CHANNELS[self.id]
-                                    .send(KeySyncMessage::Key(
-                                        (row + ROW_OFFSET) as u8,
-                                        (col + COL_OFFSET) as u8,
-                                        self.pressed[row][col],
-                                    ))
-                                    .await;
-                            }
+                Either::Second(_sync_signal) => {
+                    // First, send the number of states to be sent
+                    MASTER_SYNC_CHANNELS[self.id]
+                        .send(KeySyncMessage::StartSend((ROW * COL) as u16))
+                        .await;
+                    // Send the key state matrix
+                    // TODO: Optimize: send only the changed key states
+                    for row in 0..ROW {
+                        for col in 0..COL {
+                            MASTER_SYNC_CHANNELS[self.id]
+                                .send(KeySyncMessage::Key(
+                                    (row + ROW_OFFSET) as u8,
+                                    (col + COL_OFFSET) as u8,
+                                    self.pressed[row][col],
+                                ))
+                                .await;
                         }
                     }
+                    // Reset key signal, enable next scan
+                    SYNC_SIGNALS[self.id].reset();
                 }
             }
         }
