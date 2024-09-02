@@ -43,7 +43,6 @@ use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::Either;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_futures::yield_now;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
@@ -56,6 +55,7 @@ use futures::pin_mut;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::ble::security::SecurityHandler;
+use nrf_softdevice::ble::{set_address, Address, AddressType};
 use nrf_softdevice::Flash;
 use nrf_softdevice::Softdevice;
 use rmk_config::RmkConfig;
@@ -76,6 +76,7 @@ use super::{KeySyncMessage, MASTER_SYNC_CHANNELS};
 /// * `output_pins` - output gpio pins
 /// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
+/// * `master_addr` - BLE random static address of master
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 pub async fn initialize_split_ble_master_and_run<
     D: Driver<'static>,
@@ -97,6 +98,7 @@ pub async fn initialize_split_ble_master_and_run<
     #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
+    master_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
     // Set ble config and start nrf-softdevice background task first
@@ -104,6 +106,8 @@ pub async fn initialize_split_ble_master_and_run<
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
+    set_address(sd, &Address::new(AddressType::RandomStatic, master_addr));
+
     {
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
@@ -512,7 +516,7 @@ pub async fn run_ble_slave_monitor<
     id: usize,
     addr: [u8; 6],
 ) {
-    embassy_time::Timer::after_secs(10).await;
+    // embassy_time::Timer::after_secs(10).await;
     let channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
 
     let sender = channel.sender();

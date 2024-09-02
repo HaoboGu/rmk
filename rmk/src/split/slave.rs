@@ -15,7 +15,7 @@ use {
     embassy_executor::Spawner,
     nrf_softdevice::ble::gatt_server::set_sys_attrs,
     nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement},
-    nrf_softdevice::ble::{Address, AddressType},
+    nrf_softdevice::ble::{set_address, Address, AddressType},
     nrf_softdevice::{raw, Config, Softdevice},
 };
 
@@ -43,6 +43,8 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    master_addr: [u8; 6],
+    slave_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
     use defmt::info;
@@ -89,9 +91,9 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
         }),
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,
-            periph_role_count: 3,
-            central_role_count: 0,
-            central_sec_count: 0,
+            periph_role_count: 4,
+            central_role_count: 4,
+            central_sec_count: 4,
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
@@ -107,6 +109,8 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
     };
 
     let sd = Softdevice::enable(&ble_config);
+    set_address(sd, &Address::new(AddressType::RandomStatic, slave_addr));
+
     {
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
@@ -114,13 +118,11 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
         defmt::unwrap!(spawner.spawn(softdevice_task(sdv)))
     };
 
-    let central_address: [u8; 6] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-
     let server = defmt::unwrap!(SplitBleServer::new(sd));
 
     loop {
         let advertisement = ConnectableAdvertisement::NonscannableDirected {
-            peer: Address::new(AddressType::RandomStatic, central_address),
+            peer: Address::new(AddressType::RandomStatic, master_addr),
         };
         let conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
             Ok(conn) => conn,
@@ -207,14 +209,13 @@ pub(crate) async fn run_slave<
             for col_idx in 0..COL {
                 let key_state = matrix.get_key_state(row_idx, col_idx);
                 if key_state.changed {
-                    split_driver
+                    let _ = split_driver
                         .write(&SplitMessage::Key(
                             row_idx as u8,
                             col_idx as u8,
                             key_state.pressed,
                         ))
-                        .await
-                        .unwrap();
+                        .await;
                 }
             }
         }

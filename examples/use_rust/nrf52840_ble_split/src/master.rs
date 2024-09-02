@@ -108,6 +108,9 @@ async fn main(spawner: Spawner) {
     let (input_pins, output_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10], output:  [P0_30, P0_31]);
 
+    let master_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
+
     join(
         initialize_split_ble_master_and_run::<
             Driver<'_, USBD, &SoftwareVbusDetect>,
@@ -126,9 +129,10 @@ async fn main(spawner: Spawner) {
             output_pins,
             crate::keymap::KEYMAP,
             keyboard_config,
+            master_addr,
             spawner,
         ),
-        run_ble_slave_monitor::<2, 1, 2, 2>(0, [0x99, 0xbc, 0x25, 0x5d, 0x1e, 0xf7]),
+        run_ble_slave_monitor::<2, 1, 2, 2>(0, slave_addr),
     )
     .await;
 }

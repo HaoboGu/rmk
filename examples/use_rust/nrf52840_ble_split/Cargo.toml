@@ -44,10 +44,16 @@ xz2 = "0.1.7"
 json = "0.12"
 const-gen = "1.6"
 
+# Split keyboard example
 [[bin]]
-name = "rmk-nrf52840"
-test = false
-bench = false
+name = "master"
+path = "src/master.rs"
+# required-features = []
+
+[[bin]]
+name = "slave"
+path = "src/slave.rs"
+# required-features = []
 
 [profile.dev]
 codegen-units = 1      # better optimizations
