@@ -1,6 +1,6 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use defmt::{error, info, warn};
+use defmt::{debug, error, info, warn};
 use embassy_futures::block_on;
 use embassy_time::Timer;
 use esp32_nimble::{
@@ -39,8 +39,9 @@ impl HidWriterWrapper for BleHidWriter {
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        debug!("BLE notify {} {=[u8]:#X}", report.len(), report);
         self.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
+        Timer::after_millis(7).await;
         Ok(())
     }
 }
@@ -161,19 +162,5 @@ impl BleServer {
 impl ConnectionTypeWrapper for BleServer {
     fn get_conn_type(&self) -> crate::hid::ConnectionType {
         ConnectionType::Ble
-    }
-}
-
-impl HidWriterWrapper for BleServer {
-    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
-        self.input_keyboard.lock().set_from(r).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
-    }
-
-    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
-        self.input_keyboard.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
     }
 }

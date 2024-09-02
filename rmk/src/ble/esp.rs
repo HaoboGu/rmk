@@ -5,19 +5,23 @@ use self::server::BleServer;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::hid::{BleReceiver, ReaderWriter};
 use crate::matrix::Matrix;
+use crate::via::process::VialService;
+use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, flash::EmptyFlashWrapper,
     keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
 };
 use core::cell::RefCell;
-use defmt::{info, warn};
-use embassy_futures::select::select3;
+use defmt::{debug, info, warn};
+use embassy_futures::select::select4;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
@@ -79,10 +83,17 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
+    static via_output: Channel<CriticalSectionRawMutex, [u8; 32], 2> = Channel::new();
+    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
+        ble_server.output_keyboard.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("output_keyboard {}, {}", data.len(), data[0]);
+        });
+
         info!("Waitting for connection..");
         ble_server.wait_for_connection().await;
 
@@ -105,11 +116,20 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             &mut mouse_writer,
         );
 
+        ble_server.output_vial.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("BLE received {} {=[u8]:#X}", data.len(), data);
+            block_on(via_output.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
+        });
+        let mut via_rw = ReaderWriter(BleReceiver(via_output.receiver()), ble_server.input_vial);
+        let via_fut = vial_task(&mut via_rw, &mut vial_service);
+
+        pin_mut!(via_fut);
         pin_mut!(keyboard_fut);
         pin_mut!(disconnect);
         pin_mut!(ble_fut);
 
-        select3(keyboard_fut, disconnect, ble_fut).await;
+        select4(keyboard_fut, disconnect, ble_fut, via_fut).await;
 
         warn!("BLE disconnected!")
     }

@@ -1,6 +1,8 @@
 //! A thin hid wrapper layer which supports writing/reading HID reports via USB and BLE
 
+use crate::as_bytes;
 use defmt::Format;
+use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
     driver::Driver,
@@ -40,6 +42,46 @@ pub(crate) trait HidWriterWrapper: ConnectionTypeWrapper {
 }
 
 pub(crate) trait HidReaderWriterWrapper: HidReaderWrapper + HidWriterWrapper {}
+impl<T: HidReaderWrapper + HidWriterWrapper> HidReaderWriterWrapper for T {}
+
+pub(crate) struct ReaderWriter<T1, T2>(pub T1, pub T2);
+impl<T1: HidReaderWrapper, T2: HidWriterWrapper> ConnectionTypeWrapper for ReaderWriter<T1, T2> {
+    fn get_conn_type(&self) -> ConnectionType {
+        self.1.get_conn_type()
+    }
+}
+
+impl<T1: HidReaderWrapper, T2: HidWriterWrapper> HidReaderWrapper for ReaderWriter<T1, T2> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+        self.0.read(buf).await
+    }
+}
+impl<T1: HidReaderWrapper, T2: HidWriterWrapper> HidWriterWrapper for ReaderWriter<T1, T2> {
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        self.1.write(report).await
+    }
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+        self.1.write_serialize(r).await
+    }
+}
+
+pub(crate) struct BleReceiver<'ch, M: RawMutex, T: Sized, const N: usize>(
+    pub Receiver<'ch, M, T, N>,
+);
+impl<'ch, M: RawMutex, T: Sized, const N: usize> ConnectionTypeWrapper
+    for BleReceiver<'ch, M, T, N>
+{
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::Ble
+    }
+}
+impl<'ch, M: RawMutex, T: Sized, const N: usize> HidReaderWrapper for BleReceiver<'ch, M, T, N> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+        let v = self.0.receive().await;
+        buf.copy_from_slice(as_bytes(&v));
+        Ok(as_bytes(&v).len())
+    }
+}
 
 /// Wrapper struct for writing via USB
 pub(crate) struct UsbHidWriter<'d, D: Driver<'d>, const N: usize> {
@@ -115,11 +157,6 @@ impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize>
     pub(crate) fn new(usb_reader_writer: HidReaderWriter<'d, D, READ_N, WRITE_N>) -> Self {
         Self { usb_reader_writer }
     }
-}
-
-impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidReaderWriterWrapper
-    for UsbHidReaderWriter<'d, D, READ_N, WRITE_N>
-{
 }
 
 impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> ConnectionTypeWrapper
