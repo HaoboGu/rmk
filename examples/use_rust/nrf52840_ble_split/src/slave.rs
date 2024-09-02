@@ -3,33 +3,21 @@
 
 #[macro_use]
 mod macros;
-mod keymap;
-mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
     interrupt::{self, InterruptExt, Priority},
-    peripherals::{self, SAADC, USBD},
+    peripherals::SAADC,
     saadc::{self, AnyInput, Input as _, Saadc},
-    usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
 use panic_probe as _;
-use rmk::{
-    ble::SOFTWARE_VBUS,
-    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    split::slave::initialize_nrf_ble_split_slave_and_run,
-};
-
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use rmk::split::slave::initialize_nrf_ble_split_slave_and_run;
 
 bind_interrupts!(struct Irqs {
-    USBD => usb::InterruptHandler<peripherals::USBD>;
     SAADC => saadc::InterruptHandler;
 });
 
@@ -49,7 +37,6 @@ async fn main(spawner: Spawner) {
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.gpiote_interrupt_priority = Priority::P3;
     nrf_config.time_interrupt_priority = Priority::P3;
-    interrupt::USBD.set_priority(interrupt::Priority::P2);
     interrupt::POWER_CLOCK.set_priority(interrupt::Priority::P2);
     let p = embassy_nrf::init(nrf_config);
     // Disable external HF clock by default, reduce power consumption
@@ -58,17 +45,11 @@ async fn main(spawner: Spawner) {
     // clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
     // while clock.events_hfclkstarted.read().bits() != 1 {}
 
-    // Pin config
-    // let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10, P0_03, P0_28, P1_13], output:  [P0_30, P0_31, P0_29, P0_02, P0_05, P1_09, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_04, P1_06]);
-
-    // Usb config
-    let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
-    let driver = Driver::new(p.USBD, Irqs, software_vbus);
-
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_04.degrade_saadc();
-    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    let charging_led = Output::new(
+    // TODO: Slave's charging state and battery level
+    let _is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    let _charging_led = Output::new(
         AnyPin::from(p.P0_08),
         embassy_nrf::gpio::Level::Low,
         embassy_nrf::gpio::OutputDrive::Standard,
