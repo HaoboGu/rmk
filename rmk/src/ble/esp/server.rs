@@ -1,11 +1,12 @@
 extern crate alloc;
 use alloc::sync::Arc;
 use defmt::{error, info, warn};
+use embassy_futures::block_on;
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
-    utilities::mutex::Mutex,
-    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer,
+    utilities::{mutex::Mutex, BleUuid},
+    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer, NimbleProperties,
 };
 use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
@@ -85,6 +86,13 @@ impl BleServer {
         });
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
         let output_keyboard = hid.output_report(BleCompositeReportType::Keyboard as u8);
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
