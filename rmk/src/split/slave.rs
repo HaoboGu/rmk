@@ -10,7 +10,6 @@ use embedded_io_async::{Read, Write};
 #[cfg(feature = "_nrf_ble")]
 use {
     crate::ble::nrf::softdevice_task,
-    crate::split::driver::nrf_ble::SplitBleDriver,
     core::mem,
     embassy_executor::Spawner,
     nrf_softdevice::ble::gatt_server::set_sys_attrs,
@@ -51,8 +50,8 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
     use embassy_futures::select::select;
     use nrf_softdevice::ble::gatt_server;
 
-    use crate::split::driver::nrf_ble::{
-        SplitBleServer, SplitBleServerEvent, SplitBleServiceEvent,
+    use crate::split::nrf::slave::{
+        SplitBleServer, SplitBleServerEvent, SplitBleServiceEvent, SplitBleSlaveDriver,
     };
 
     // Keyboard matrix, use COL2ROW by default
@@ -147,9 +146,14 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
             },
         });
 
-        let slave_fut =
-            run_slave::<_, _, ROW, COL>(&mut matrix, SplitBleDriver::new(&server, &conn));
-
+        let mut slave: SplitSlave<
+            '_,
+            Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
+            SplitBleSlaveDriver<'_>,
+            ROW,
+            COL,
+        > = SplitSlave::new(&mut matrix, SplitBleSlaveDriver::new(&server, &conn));
+        let slave_fut = slave.run();
         select(server_fut, slave_fut).await;
     }
 }
@@ -189,9 +193,90 @@ pub async fn initialize_serial_split_slave_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    run_slave::<_, _, ROW, COL>(&mut matrix, SerialSplitDriver::new(serial)).await
+    // run_slave::<_, _, ROW, COL>(&mut matrix, SerialSplitDriver::new(serial)).await
+    let mut slave: SplitSlave<
+        '_,
+        Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
+        SerialSplitDriver<S>,
+        ROW,
+        COL,
+    > = SplitSlave::new(&mut matrix, SerialSplitDriver::new(serial));
+    slave.run().await
 }
 
+pub(crate) struct SplitSlave<
+    'a,
+    M: MatrixTrait,
+    S: SplitWriter + SplitReader,
+    const ROW: usize,
+    const COL: usize,
+> {
+    matrix: &'a mut M,
+    split_driver: S,
+}
+
+/// Impl SplitSlave
+impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader, const ROW: usize, const COL: usize>
+    SplitSlave<'a, M, S, ROW, COL>
+{
+    pub(crate) fn new(matrix: &'a mut M, split_driver: S) -> Self {
+        Self {
+            matrix,
+            split_driver,
+        }
+    }
+
+    /// Run the slave keyboard service.
+    ///
+    /// The slave uses the general matrix, does scanning and send the key events through `SplitWriter`.
+    /// If also receives split messages from the master through `SplitReader`.
+    pub(crate) async fn run(&mut self) -> ! {
+        loop {
+            self.matrix.scan().await;
+
+            for row_idx in 0..ROW {
+                for col_idx in 0..COL {
+                    let key_state = self.matrix.get_key_state(row_idx, col_idx);
+                    if key_state.changed {
+                        let _ = self
+                            .split_driver
+                            .write(&SplitMessage::Key(
+                                row_idx as u8,
+                                col_idx as u8,
+                                key_state.pressed,
+                            ))
+                            .await;
+                    }
+                }
+            }
+
+            // Send key events to host
+            // for row_idx in 0..ROW {
+            //     for col_idx in 0..COL {
+            //         let key_state = self.matrix.get_key_state(row_idx, col_idx);
+            //         if key_state.changed {
+            //             let _ = self
+            //                 .split_driver
+            //                 .write(&SplitMessage::Key(
+            //                     row_idx as u8,
+            //                     col_idx as u8,
+            //                     key_state.pressed,
+            //                 ))
+            //                 .await;
+            //         }
+            //     }
+            // }
+
+            // 10KHZ scan rate
+            embassy_time::Timer::after_micros(10).await;
+        }
+    }
+}
+
+/// Run the slave keyboard service.
+///
+/// The slave uses the general matrix, does scanning and send the key events through `SplitWriter`.
+/// If also receives split messages from the master through `SplitReader`.
 pub(crate) async fn run_slave<
     M: MatrixTrait,
     S: SplitWriter + SplitReader,

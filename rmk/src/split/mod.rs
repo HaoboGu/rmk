@@ -1,9 +1,14 @@
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel, signal::Signal};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel, signal::Signal,
+};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
+/// Common abstraction layer of split driver
 pub(crate) mod driver;
 pub mod master;
+pub mod nrf;
+pub mod serial;
 pub mod slave;
 
 /// Maximum size of a split message
@@ -30,9 +35,7 @@ pub enum SplitMessage {
 /// Message used for synchronization between master thread and slave receiver(both in master board)
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum KeySyncMessage {
-    /// Sent from master to slave thread, indicating master starts to read the key state matrix
-    // StartRead,
-    /// Response of `StartRead`, sent from slave to master, indicating that the slave starts to send the key state matrix.
+    /// Response of `SyncSignal`, sent key state matrix from slave monitor to main
     /// u8 is the number of sent key states
     StartSend(u16),
     /// Key state: (row, col, key_pressing_state)
@@ -42,5 +45,5 @@ pub(crate) enum KeySyncMessage {
 /// Signal used for inform that the matrix starts receives key states from slave key receiver
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum KeySyncSignal {
-    Start
+    Start,
 }

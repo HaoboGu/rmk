@@ -23,7 +23,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    split::master::{initialize_split_ble_master_and_run, run_ble_slave_monitor},
+    split::nrf::master::{initialize_split_ble_master_and_run, run_ble_slave_monitor},
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};

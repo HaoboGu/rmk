@@ -4,8 +4,6 @@ use super::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
 use defmt::info;
 use embassy_futures::select::{select, Either};
 
-#[cfg(feature = "_nrf_ble")]
-pub(crate) mod nrf_ble;
 pub(crate) mod serial;
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
