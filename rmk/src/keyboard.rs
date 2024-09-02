@@ -8,7 +8,7 @@ use crate::{
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
 };
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn};
+use defmt::{debug, error, warn};
 use embassy_futures::yield_now;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -265,8 +265,8 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
         // process_key_change -> process_key_action_* -> process_action_*
-        for row_idx in 0..ROW {
-            for col_idx in 0..COL {
+        for row_idx in 0..self.matrix.get_row_num() {
+            for col_idx in 0..self.matrix.get_col_num() {
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
                 if ks.changed {
                     self.process_key_change(row_idx, col_idx, sender).await;

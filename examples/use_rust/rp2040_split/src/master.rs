@@ -25,7 +25,7 @@ use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
-        master::{initialize_split_master_and_run, run_serial_slave_monitor},
+        serial::{initialize_split_master_and_run, run_serial_slave_monitor},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };

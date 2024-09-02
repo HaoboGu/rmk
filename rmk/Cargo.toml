@@ -78,7 +78,7 @@ document-features = "0.2"
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "rapid_debouncer", "_nrf_ble"]
+default = ["col2row", "rapid_debouncer"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
 

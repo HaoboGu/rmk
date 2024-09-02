@@ -290,8 +290,8 @@ pub(crate) async fn run_slave<
         matrix.scan().await;
 
         // Send key events to host
-        for row_idx in 0..ROW {
-            for col_idx in 0..COL {
+        for row_idx in 0..matrix.get_row_num() {
+            for col_idx in 0..matrix.get_col_num() {
                 let key_state = matrix.get_key_state(row_idx, col_idx);
                 if key_state.changed {
                     let _ = split_driver

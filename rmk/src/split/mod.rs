@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
 pub mod master;
+#[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 pub mod serial;
 pub mod slave;
