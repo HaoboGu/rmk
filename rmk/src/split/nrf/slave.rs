@@ -18,23 +18,23 @@ pub(crate) struct SplitBleService {
 
 /// Gatt server in split slave
 #[nrf_softdevice::gatt_server]
-pub(crate) struct SplitBleServer {
+pub(crate) struct BleSplitSlaveServer {
     pub(crate) service: SplitBleService,
 }
 
 /// BLE driver for split slave
-pub(crate) struct SplitBleSlaveDriver<'a> {
-    server: &'a SplitBleServer,
+pub(crate) struct BleSplitSlaveDriver<'a> {
+    server: &'a BleSplitSlaveServer,
     conn: &'a Connection,
 }
 
-impl<'a> SplitBleSlaveDriver<'a> {
-    pub(crate) fn new(server: &'a SplitBleServer, conn: &'a Connection) -> Self {
+impl<'a> BleSplitSlaveDriver<'a> {
+    pub(crate) fn new(server: &'a BleSplitSlaveServer, conn: &'a Connection) -> Self {
         Self { server, conn }
     }
 }
 
-impl<'a> SplitReader for SplitBleSlaveDriver<'a> {
+impl<'a> SplitReader for BleSplitSlaveDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         let message = self
             .server
@@ -52,7 +52,7 @@ impl<'a> SplitReader for SplitBleSlaveDriver<'a> {
     }
 }
 
-impl<'a> SplitWriter for SplitBleSlaveDriver<'a> {
+impl<'a> SplitWriter for BleSplitSlaveDriver<'a> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
         let bytes = postcard::to_slice(message, &mut buf).map_err(|e| {

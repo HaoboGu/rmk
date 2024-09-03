@@ -19,7 +19,8 @@ use {
 };
 
 use super::{
-    driver::{serial::SerialSplitDriver, SplitReader, SplitWriter},
+    driver::{SplitReader, SplitWriter},
+    serial::SerialSplitDriver,
     SplitMessage,
 };
 
@@ -51,7 +52,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
     use nrf_softdevice::ble::gatt_server;
 
     use crate::split::nrf::slave::{
-        SplitBleServer, SplitBleServerEvent, SplitBleServiceEvent, SplitBleSlaveDriver,
+        BleSplitSlaveDriver, BleSplitSlaveServer, BleSplitSlaveServerEvent, SplitBleServiceEvent,
     };
 
     // Keyboard matrix, use COL2ROW by default
@@ -117,7 +118,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
         defmt::unwrap!(spawner.spawn(softdevice_task(sdv)))
     };
 
-    let server = defmt::unwrap!(SplitBleServer::new(sd));
+    let server = defmt::unwrap!(BleSplitSlaveServer::new(sd));
 
     loop {
         let advertisement = ConnectableAdvertisement::NonscannableDirected {
@@ -135,7 +136,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
         set_sys_attrs(&conn, None).unwrap();
 
         let server_fut = gatt_server::run(&conn, &server, |event| match event {
-            SplitBleServerEvent::Service(split_event) => match split_event {
+            BleSplitSlaveServerEvent::Service(split_event) => match split_event {
                 SplitBleServiceEvent::MessageToCentralCccdWrite { notifications } => {
                     info!("Split value CCCD updated: {}", notifications)
                 }
@@ -146,13 +147,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
             },
         });
 
-        let mut slave: SplitSlave<
-            '_,
-            Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
-            SplitBleSlaveDriver<'_>,
-            ROW,
-            COL,
-        > = SplitSlave::new(&mut matrix, SplitBleSlaveDriver::new(&server, &conn));
+        let mut slave = SplitSlave::new(&mut matrix, BleSplitSlaveDriver::new(&server, &conn));
         let slave_fut = slave.run();
         select(server_fut, slave_fut).await;
     }
@@ -193,32 +188,17 @@ pub async fn initialize_serial_split_slave_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    // run_slave::<_, _, ROW, COL>(&mut matrix, SerialSplitDriver::new(serial)).await
-    let mut slave: SplitSlave<
-        '_,
-        Matrix<In, Out, RapidDebouncer<ROW, COL>, ROW, COL>,
-        SerialSplitDriver<S>,
-        ROW,
-        COL,
-    > = SplitSlave::new(&mut matrix, SerialSplitDriver::new(serial));
+    let mut slave = SplitSlave::new(&mut matrix, SerialSplitDriver::new(serial));
     slave.run().await
 }
 
-pub(crate) struct SplitSlave<
-    'a,
-    M: MatrixTrait,
-    S: SplitWriter + SplitReader,
-    const ROW: usize,
-    const COL: usize,
-> {
+/// The split slave instance.
+pub(crate) struct SplitSlave<'a, M: MatrixTrait, S: SplitWriter + SplitReader> {
     matrix: &'a mut M,
     split_driver: S,
 }
 
-/// Impl SplitSlave
-impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader, const ROW: usize, const COL: usize>
-    SplitSlave<'a, M, S, ROW, COL>
-{
+impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitSlave<'a, M, S> {
     pub(crate) fn new(matrix: &'a mut M, split_driver: S) -> Self {
         Self {
             matrix,
@@ -234,8 +214,8 @@ impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader, const ROW: usize, const C
         loop {
             self.matrix.scan().await;
 
-            for row_idx in 0..ROW {
-                for col_idx in 0..COL {
+            for row_idx in 0..self.matrix.get_row_num() {
+                for col_idx in 0..self.matrix.get_col_num() {
                     let key_state = self.matrix.get_key_state(row_idx, col_idx);
                     if key_state.changed {
                         let _ = self
@@ -249,23 +229,6 @@ impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader, const ROW: usize, const C
                     }
                 }
             }
-
-            // Send key events to host
-            // for row_idx in 0..ROW {
-            //     for col_idx in 0..COL {
-            //         let key_state = self.matrix.get_key_state(row_idx, col_idx);
-            //         if key_state.changed {
-            //             let _ = self
-            //                 .split_driver
-            //                 .write(&SplitMessage::Key(
-            //                     row_idx as u8,
-            //                     col_idx as u8,
-            //                     key_state.pressed,
-            //                 ))
-            //                 .await;
-            //         }
-            //     }
-            // }
 
             // 10KHZ scan rate
             embassy_time::Timer::after_micros(10).await;

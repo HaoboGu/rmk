@@ -1,10 +1,11 @@
+///! The abstracted driver layer of the split keyboard.
+///!
+///!
 use crate::split::SYNC_SIGNALS;
 
 use super::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
 use defmt::info;
 use embassy_futures::select::{select, Either};
-
-pub(crate) mod serial;
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -15,17 +16,24 @@ pub(crate) enum SplitDriverError {
     BleError(u8),
 }
 
+/// Split message reader from other split devices
 pub(crate) trait SplitReader {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError>;
 }
+
+/// Split message writer to other split devices
 pub(crate) trait SplitWriter {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError>;
 }
 
-/// SplitMasterReceiver receives split message from corresponding slave via serial.
+/// SlaveMatrixMonitor runs in master.
+/// It reads split message from slave and updates key matrix cache of the slave.
+///
+/// When the master scans the matrix, the scanning thread sends sync signal and gets key state cache back.
+///
 /// The `ROW` and `COL` are the number of rows and columns of the corresponding slave's keyboard matrix.
 /// The `ROW_OFFSET` and `COL_OFFSET` are the offset of the slave's matrix in the keyboard's matrix.
-pub(crate) struct SplitMasterReceiver<
+pub(crate) struct SlaveMatrixMonitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -46,7 +54,7 @@ impl<
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
         R: SplitReader,
-    > SplitMasterReceiver<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+    > SlaveMatrixMonitor<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
         Self {
@@ -56,9 +64,10 @@ impl<
         }
     }
 
-    /// Run the receiver.
-    /// The receiver receives from the slave and waits for the sync message from the master matrix.
-    /// If a sync message is received from master, it sends the key state matrix to the master matrix.
+    /// Run the monitor.
+    ///
+    /// The monitor receives from the slave and waits for the sync message from the matrix scanning thread.
+    /// If a sync message is received from matrix scanning thread, it sends the key state matrix back.
     pub(crate) async fn run(mut self) -> ! {
         loop {
             let receive_fut = self.receiver.read();
@@ -74,6 +83,8 @@ impl<
                     }
                 }
                 Either::Second(_sync_signal) => {
+                    // Start synchronizing key state matrix
+
                     // First, send the number of states to be sent
                     MASTER_SYNC_CHANNELS[self.id]
                         .send(KeySyncMessage::StartSend((ROW * COL) as u16))
@@ -91,6 +102,7 @@ impl<
                                 .await;
                         }
                     }
+
                     // Reset key signal, enable next scan
                     SYNC_SIGNALS[self.id].reset();
                 }

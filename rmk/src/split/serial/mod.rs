@@ -24,7 +24,7 @@ use crate::keymap::KeyMap;
 use crate::run_usb_keyboard;
 use crate::split::master::MasterMatrix;
 use crate::split::{
-    driver::{SplitMasterReceiver, SplitReader, SplitWriter},
+    driver::{SlaveMatrixMonitor, SplitReader, SplitWriter},
     SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
 };
 use crate::storage::Storage;
@@ -214,13 +214,14 @@ pub async fn run_serial_slave_monitor<
     receiver: S,
     id: usize,
 ) {
-    let split_serial_driver = SerialSplitDriver::new(receiver);
+    let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
     let slave =
-        SplitMasterReceiver::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
+        SlaveMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
     info!("Running slave monitor {}", id);
     slave.run().await;
 }
 
+/// Serial driver for BOTH split master and slave
 pub(crate) struct SerialSplitDriver<S: Read + Write> {
     serial: S,
 }

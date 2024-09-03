@@ -1,22 +1,16 @@
 # Split keyboard design
 
-## API design
+## Overview
 
-For user API, since the number of used split matrix is flexible, it's not easy to use only one API to run the split keyboard. Each slave's number of row/col, offset of row/col are different.
+![split_keyboard_design](images/split_keyboard.svg)
 
-So, for master, I prefer the master board + slave monitor mode of user API.
+## Under the hood
 
-For slave, one slave run API is good.
+In RMK's current implementation, the slave continously scans it's matrix, if there's a key change, A `SplitMessage` is sent to the master.
 
-There are also two sets of api for BLE split and serial.
+In master, there's a slave monitor for each slave, which receives the `SplitMessage` from the slave and caches all key states in that slave. 
 
-
-### Master
-
-
-
-
-### Slave
+And there's a separate keyboard thread in master, which does the keyboard stuffs. The only difference is, in matrix scanning stage, it synchronizes key states from slave monitor and scans master's matrix.
 
 ## Protocol
 
@@ -34,18 +28,6 @@ pub enum SplitMessage {
 }
 ```
 
-The slave continously scans it's matrix, if there's a key change, A `SplitMessage` is sent to the master.
-
-In master, there's a key state cache for each slave, and a separate thread running to continously receives the key states from slave and saves key states to cache.
-
-Each slave cache in master runs in different threads, which is an infinite loop that receives all `SplitMessage` from actual slave boards. 
-
-For master, the matrix scanning has the following steps: 
-
-1. Scan the master's own key matrix
-2. Read the all slaves' key state caches
-3. Merge them to a final key states, finish matrix scanning. If the slave state is different from main key state, `changed` is true.
-4. If the keyboard is running in `async_matrix` mode, each received key states triggers matrix scanning. 
 
 ## Config file for split(draft)
 
