@@ -178,11 +178,11 @@ impl<'a> SplitReader for BleSplitMasterDriver<'a> {
 /// * `master_addr` - BLE random static address of master
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 // FIXME: move these public api to split module root?
-pub async fn initialize_split_ble_master_and_run<
-    D: Driver<'static>,
+pub async fn initialize_ble_split_master_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
+    D: Driver<'static>,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
     const MASTER_ROW: usize,
@@ -191,11 +191,11 @@ pub async fn initialize_split_ble_master_and_run<
     const MASTER_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] usb_driver: Option<D>,
     #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
     #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
     #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] usb_driver: Option<D>,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
     master_addr: [u8; 6],

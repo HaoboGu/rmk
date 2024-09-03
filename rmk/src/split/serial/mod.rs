@@ -47,12 +47,12 @@ use super::driver::SplitDriverError;
 /// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-pub async fn initialize_split_master_and_run<
-    F: AsyncNorFlash,
-    D: Driver<'static>,
+pub(crate) async fn initialize_serial_split_master_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
+    F: AsyncNorFlash,
+    D: Driver<'static>,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
     const MASTER_ROW: usize,
@@ -61,11 +61,11 @@ pub async fn initialize_split_master_and_run<
     const MASTER_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    driver: D,
     #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
     #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
     #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    driver: D,
     flash: Option<F>,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
