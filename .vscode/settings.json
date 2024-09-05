@@ -11,9 +11,9 @@
         // "riscv32imc-esp-espidf",
     ],
     "rust-analyzer.linkedProjects": [
-        // "rmk-config/Cargo.toml",
-        // "rmk-macro/Cargo.toml",
-        // "rmk/Cargo.toml",
+        "rmk-config/Cargo.toml",
+        "rmk-macro/Cargo.toml",
+        "rmk/Cargo.toml",
         // Enable ONE of the following for accurate analyzation of RA
         // "examples/use_rust/esp32c3_ble/Cargo.toml",
         // "examples/use_rust/esp32c6_ble/Cargo.toml",

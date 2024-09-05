@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- ### Changed
+### Changed
 
 - BREAKING: generate new public APIs
 - Add support for overriding chip initialization for nrf/rp/esp32
