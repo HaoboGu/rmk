@@ -7,7 +7,6 @@ mod keymap;
 mod macros;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -15,14 +14,14 @@ use embassy_rp::{
     bind_interrupts,
     flash::{Async, Flash},
     gpio::{AnyPin, Input, Output},
-    peripherals::{self, USB},
+    peripherals::USB,
     usb::{Driver, InterruptHandler},
 };
 // use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    initialize_keyboard_and_run_async_flash,
+    run_rmk_with_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -33,7 +32,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -66,23 +65,15 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    // initialize_keyboard_and_run::<
-    // Flash<peripherals::FLASH, Blocking, FLASH_SIZE>,
-    initialize_keyboard_and_run_async_flash::<
-        Flash<peripherals::FLASH, Async, FLASH_SIZE>,
-        Driver<'_, USB>,
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        driver,
+    // Use `run_rmk` for blocking flash
+    run_rmk_with_async_flash(
         input_pins,
         output_pins,
-        Some(flash),
+        driver,
+        flash,
         crate::keymap::KEYMAP,
         keyboard_config,
+        spawner
     )
     .await;
 }

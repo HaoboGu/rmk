@@ -1,0 +1,18 @@
+[build]
+target = "riscv32imac-esp-espidf"
+
+[target.riscv32imac-esp-espidf]
+linker = "ldproxy"
+runner = "espflash flash --monitor --log-format defmt"
+rustflags = [ "--cfg",  "espidf_time64"] # Extending time_t for ESP IDF 5: https://github.com/esp-rs/rust/issues/110
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+MCU="esp32c6"
+# Note: this variable is not used by the pio builder (`cargo build --features pio`)
+ESP_IDF_VERSION = "v5.1.3"
+DEFMT_LOG="debug"
+ESP_IDF_PATH_ISSUES="warn"
+CRATE_CC_NO_DEFAULTS="1"

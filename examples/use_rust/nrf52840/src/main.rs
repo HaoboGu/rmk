@@ -6,7 +6,6 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -15,11 +14,11 @@ use embassy_nrf::{
     gpio::{AnyPin, Input, Output},
     interrupt::InterruptExt,
     nvmc::Nvmc,
-    peripherals::{self, USBD},
+    peripherals,
     usb::{self, vbus_detect::HardwareVbusDetect, Driver},
 };
 use panic_probe as _;
-use rmk::{initialize_keyboard_and_run, config::{RmkConfig, VialConfig}};
+use rmk::{run_rmk, config::{RmkConfig, VialConfig}};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -28,7 +27,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let mut config = ::embassy_nrf::config::Config::default();
@@ -57,22 +56,14 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    // Start serving
-    initialize_keyboard_and_run::<
-        Nvmc,
-        Driver<'_, USBD, HardwareVbusDetect>,
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        driver,
+    run_rmk(
         input_pins,
         output_pins,
-        Some(f),
+        driver,
+        f,
         crate::keymap::KEYMAP,
         keyboard_config,
+        spawner,
     )
     .await;
 }
