@@ -14,7 +14,7 @@ use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals, task::block_on};
 use esp_println as _;
 use rmk::{
     config::{RmkConfig, VialConfig},
-    initialize_esp_ble_keyboard_with_config_and_run,
+    run_rmk,
 };
 
 fn main() {
@@ -39,16 +39,10 @@ fn main() {
     };
 
     // Start serving
-    block_on(initialize_esp_ble_keyboard_with_config_and_run::<
-        PinDriver<'_, AnyInputPin, Input>,
-        PinDriver<'_, AnyOutputPin, Output>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        crate::keymap::KEYMAP,
+    block_on(run_rmk(
         input_pins,
         output_pins,
+        crate::keymap::KEYMAP,
         keyboard_config,
     ));
 }

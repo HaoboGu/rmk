@@ -20,7 +20,7 @@ mod my_keyboard {
         usb_otg::Driver,
         Config,
     };
-    use rmk::initialize_keyboard_and_run;
+    use rmk::run_rmk;
     use static_cell::StaticCell;
 
     // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
@@ -88,7 +88,7 @@ mod my_keyboard {
     #[Override(entry)]
     fn run() {
         // Start serving
-        initialize_keyboard_and_run::<
+        run_rmk::<
             Flash<'_, Blocking>,
             Driver<'_, USB_OTG_HS>,
             ExtiInput<AnyPin>,

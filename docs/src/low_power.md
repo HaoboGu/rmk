@@ -36,7 +36,7 @@ There are a few more things that you have to do:
     // ...Other initialization code
 
     // Run RMK
-    initialize_keyboard_and_run::<
+    run_rmk::<
         Flash<'_, Blocking>,
         Driver<'_, USB_OTG_HS>,
         ExtiInput<AnyPin>, // Use ExtiInput<AnyPin> !
