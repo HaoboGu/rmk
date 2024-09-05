@@ -36,21 +36,14 @@ There are a few more things that you have to do:
     // ...Other initialization code
 
     // Run RMK
-    run_rmk::<
-        Flash<'_, Blocking>,
-        Driver<'_, USB_OTG_HS>,
-        ExtiInput<AnyPin>, // Use ExtiInput<AnyPin> !
-        Output<'_, AnyPin>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        driver,
+    run_rmk(
         input_pins,
         output_pins,
-        Some(f),
+        driver,
+        f,
         crate::keymap::KEYMAP,
         keyboard_config,
+        spawner,
     )
     .await;
 
