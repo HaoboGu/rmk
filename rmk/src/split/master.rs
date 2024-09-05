@@ -162,7 +162,8 @@ pub async fn initialize_split_master_and_run<
             run_usb_keyboard(
                 &mut usb_device,
                 &mut keyboard,
-                s,
+                // FIXME
+                // s,
                 &mut light_service,
                 &mut vial_service,
                 &mut keyboard_report_receiver,

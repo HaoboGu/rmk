@@ -13,18 +13,15 @@ mod vial;
 
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use hpm_hal::gpio::{Input, Output};
-use hpm_hal::usb::UsbDriver;
 use hpm_hal::flash::Flash;
 use hpm_hal::{bind_interrupts, peripherals};
 use riscv_rt as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
-    initialize_keyboard_and_run,
+    run_rmk,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 
 bind_interrupts!(struct Irqs {
     USB0 => hpm_hal::usb::InterruptHandler<peripherals::USB0>;
@@ -33,7 +30,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 1 * 1024 * 1024;
 
 #[embassy_executor::main(entry = "hpm_hal::entry")]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     let mut p = hpm_hal::init(Default::default());
 
     let usb_driver = hpm_hal::usb::UsbDriver::new(p.USB0, p.PA24, p.PA25);
@@ -61,21 +58,14 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    initialize_keyboard_and_run::<
-        Flash<_, FLASH_SIZE>,
-        UsbDriver<'_, peripherals::USB0>,
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        usb_driver,
+    run_rmk(
         input_pins,
         output_pins,
-        Some(flash),
+        usb_driver,
+        flash,
         crate::keymap::KEYMAP,
         keyboard_config,
+        spawner,
     )
     .await;
 }

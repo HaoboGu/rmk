@@ -76,7 +76,7 @@ document-features = "0.2"
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "rapid_debouncer"]
+default = ["col2row"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
 
@@ -86,6 +86,9 @@ async_matrix = ["dep:embedded-hal-async"]
 ## Use rapid debouncer
 rapid_debouncer = []
 
+### Split keyboard
+split = []
+
 #! ### BLE feature flags
 #! 
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
@@ -94,11 +97,26 @@ nrf52840_ble = ["_nrf_ble", "nrf-softdevice/nrf52840", "nrf-softdevice/s140"]
 ## Enable feature if you want to use nRF52833 with BLE.
 nrf52833_ble = ["_nrf_ble", "nrf-softdevice/nrf52833", "nrf-softdevice/s140"]
 ## Enable feature if you want to use nRF52832 with BLE.
-nrf52832_ble = ["_nrf_ble", "nrf-softdevice/nrf52832", "nrf-softdevice/s132"]
+nrf52832_ble = [
+    "_nrf_ble",
+    "_no_usb",
+    "nrf-softdevice/nrf52832",
+    "nrf-softdevice/s132",
+]
 ## Enable feature if you want to use nRF52811 with BLE.
-nrf52811_ble = ["_nrf_ble", "nrf-softdevice/nrf52811", "nrf-softdevice/s140"]
+nrf52811_ble = [
+    "_nrf_ble",
+    "_no_usb",
+    "nrf-softdevice/nrf52811",
+    "nrf-softdevice/s140",
+]
 ## Enable feature if you want to use nRF52810 with BLE.
-nrf52810_ble = ["_nrf_ble", "nrf-softdevice/nrf52810", "nrf-softdevice/s132"]
+nrf52810_ble = [
+    "_nrf_ble",
+    "_no_usb",
+    "nrf-softdevice/nrf52810",
+    "nrf-softdevice/s132",
+]
 
 ## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["_esp_ble"]
@@ -107,6 +125,7 @@ esp32c6_ble = ["_esp_ble"]
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
     "_ble",
+    "_no_usb",             # ESP doesn't have USB support right now
     "rmk-config/_esp_ble",
     "ssmarshal/std",
     "dep:esp32-nimble",
@@ -119,4 +138,10 @@ _nrf_ble = [
     "dep:embassy-nrf",
     "dep:once_cell",
 ]
-_ble = []
+_ble = ["_no_external_storage"]
+
+## Feature that indicates no USB is used, this feature will be auto-activated for some chips
+_no_usb = []
+
+## No storage available, or it's unnecessary to pass storage to the main RMK API
+_no_external_storage = []
