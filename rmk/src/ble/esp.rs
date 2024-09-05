@@ -51,8 +51,11 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     let (mut _storage, keymap) = (
         None::<EmptyFlashWrapper>,
         RefCell::new(
-            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<EmptyFlashWrapper>(default_keymap, None)
-                .await,
+            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<EmptyFlashWrapper>(
+                default_keymap,
+                None,
+            )
+            .await,
         ),
     );
 

@@ -11,15 +11,7 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
-    use embassy_stm32::{
-        exti::ExtiInput,
-        flash::{Blocking, Flash},
-        gpio::{AnyPin, Output},
-        peripherals::USB_OTG_HS,
-        time::Hertz,
-        usb_otg::Driver,
-        Config,
-    };
+    use embassy_stm32::{time::Hertz, usb_otg::Driver, Config};
     use rmk::run_rmk;
     use static_cell::StaticCell;
 
@@ -88,21 +80,14 @@ mod my_keyboard {
     #[Override(entry)]
     fn run() {
         // Start serving
-        run_rmk::<
-            Flash<'_, Blocking>,
-            Driver<'_, USB_OTG_HS>,
-            ExtiInput<AnyPin>,
-            Output<'_, AnyPin>,
-            ROW,
-            COL,
-            NUM_LAYER,
-        >(
-            driver,
+        run_rmk(
             input_pins,
             output_pins,
-            Some(f),
+            driver,
+            f,
             KEYMAP,
             keyboard_config,
+            spawner,
         )
         .await;
     }
