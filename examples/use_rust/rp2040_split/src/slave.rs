@@ -48,10 +48,6 @@ async fn main(_spawner: Spawner) {
     );
 
     // Start serving
-    run_rmk_split_slave::<Input<'_>, Output<'_>, _, 2, 2>(
-        input_pins,
-        output_pins,
-        uart_instance,
-    )
-    .await;
+    run_rmk_split_slave::<Input<'_>, Output<'_>, _, 2, 2>(input_pins, output_pins, uart_instance)
+        .await;
 }

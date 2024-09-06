@@ -7,10 +7,10 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
-#[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+#[cfg(feature = "_nrf_ble")]
+use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]

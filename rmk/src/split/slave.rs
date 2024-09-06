@@ -46,14 +46,18 @@ pub async fn run_rmk_split_slave<
     #[cfg(feature = "_nrf_ble")] spawner: Spawner,
 ) {
     #[cfg(not(feature = "_nrf_ble"))]
-    initialize_serial_split_slave_and_run::<In, Out, S, ROW, COL>(
-        input_pins, output_pins, serial,
-    ).await;
+    initialize_serial_split_slave_and_run::<In, Out, S, ROW, COL>(input_pins, output_pins, serial)
+        .await;
 
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_split_slave_and_run::<In, Out, ROW, COL>(
-        input_pins, output_pins, master_addr, slave_addr, spawner,
-    ).await;
+        input_pins,
+        output_pins,
+        master_addr,
+        slave_addr,
+        spawner,
+    )
+    .await;
 }
 
 /// Initialize and run the nRF slave keyboard service via BLE.
