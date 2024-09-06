@@ -28,6 +28,34 @@ use {
     embedded_io_async::{Read, Write},
 };
 
+pub async fn run_rmk_split_slave<
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    Out: OutputPin,
+    #[cfg(not(feature = "_nrf_ble"))] S: Write + Read,
+    const ROW: usize,
+    const COL: usize,
+>(
+    #[cfg(feature = "col2row")] input_pins: [In; ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    #[cfg(feature = "_nrf_ble")] master_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] slave_addr: [u8; 6],
+    #[cfg(not(feature = "_nrf_ble"))] serial: S,
+    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+) {
+    #[cfg(not(feature = "_nrf_ble"))]
+    initialize_serial_split_slave_and_run::<In, Out, S, ROW, COL>(
+        input_pins, output_pins, serial,
+    ).await;
+
+    #[cfg(feature = "_nrf_ble")]
+    initialize_nrf_ble_split_slave_and_run::<In, Out, ROW, COL>(
+        input_pins, output_pins, master_addr, slave_addr, spawner,
+    ).await;
+}
+
 /// Initialize and run the nRF slave keyboard service via BLE.
 ///
 /// # Arguments
@@ -36,7 +64,7 @@ use {
 /// * `output_pins` - output gpio pins
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 #[cfg(feature = "_nrf_ble")]
-pub async fn initialize_nrf_ble_split_slave_and_run<
+pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -165,7 +193,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
 /// * `output_pins` - output gpio pins
 /// * `serial` - serial port to send key events to master board
 #[cfg(not(feature = "_nrf_ble"))]
-pub async fn initialize_serial_split_slave_and_run<
+pub(crate) async fn initialize_serial_split_slave_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,

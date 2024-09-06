@@ -15,7 +15,7 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
 };
 use panic_probe as _;
-use rmk::split::slave::initialize_nrf_ble_split_slave_and_run;
+use rmk::split::slave::run_rmk_split_slave;
 
 bind_interrupts!(struct Irqs {
     SAADC => saadc::InterruptHandler;
@@ -64,7 +64,7 @@ async fn main(spawner: Spawner) {
     let master_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
-    initialize_nrf_ble_split_slave_and_run::<Input<'_>, Output<'_>, 2, 2>(
+    run_rmk_split_slave::<Input<'_>, Output<'_>, 2, 2>(
         input_pins,
         output_pins,
         master_addr,
