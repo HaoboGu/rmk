@@ -15,7 +15,7 @@ use embassy_rp::{
     usb::InterruptHandler,
 };
 use panic_probe as _;
-use rmk::split::{slave::initialize_split_slave_and_run, SPLIT_MESSAGE_MAX_SIZE};
+use rmk::split::{slave::run_rmk_split_slave, SPLIT_MESSAGE_MAX_SIZE};
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -37,7 +37,7 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_writer = BufferedUart::new(
+    let uart_instance = BufferedUart::new(
         p.UART0,
         Irqs,
         p.PIN_0,
@@ -48,10 +48,6 @@ async fn main(_spawner: Spawner) {
     );
 
     // Start serving
-    initialize_split_slave_and_run::<Input<'_>, Output<'_>, _, 2, 2>(
-        input_pins,
-        output_pins,
-        uart_writer,
-    )
-    .await;
+    run_rmk_split_slave::<Input<'_>, Output<'_>, _, 2, 2>(input_pins, output_pins, uart_instance)
+        .await;
 }

@@ -73,7 +73,7 @@ async fn main(spawner: Spawner) {
         flash,
         crate::keymap::KEYMAP,
         keyboard_config,
-        spawner
+        spawner,
     )
     .await;
 }

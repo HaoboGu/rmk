@@ -11,6 +11,7 @@ mod keyboard_config;
 mod layout;
 mod light;
 mod matrix;
+#[rustfmt::skip]
 mod usb_interrupt_map;
 
 use crate::keyboard::parse_keyboard_mod;

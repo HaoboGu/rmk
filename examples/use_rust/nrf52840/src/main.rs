@@ -18,7 +18,10 @@ use embassy_nrf::{
     usb::{self, vbus_detect::HardwareVbusDetect, Driver},
 };
 use panic_probe as _;
-use rmk::{run_rmk, config::{RmkConfig, VialConfig}};
+use rmk::{
+    config::{RmkConfig, VialConfig},
+    run_rmk,
+};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
@@ -52,7 +55,7 @@ async fn main(spawner: Spawner) {
 
     // Keyboard config
     let keyboard_config = RmkConfig {
-        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF,),
+        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF),
         ..Default::default()
     };
 

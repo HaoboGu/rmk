@@ -18,7 +18,10 @@ use embassy_stm32::{
     Config,
 };
 use panic_probe as _;
-use rmk::{run_rmk, config::{RmkConfig, VialConfig}};
+use rmk::{
+    config::{RmkConfig, VialConfig},
+    run_rmk,
+};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 

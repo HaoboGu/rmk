@@ -19,7 +19,7 @@ pub(crate) fn create_advertisement_data(keyboard_name: &str) -> LegacyAdvertisem
         .build()
 }
 
-pub static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
+pub(crate) static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
     .services_16(
         ServiceList::Complete,
         &[

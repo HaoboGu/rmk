@@ -22,7 +22,6 @@ use rmk::{
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
-
 bind_interrupts!(struct Irqs {
     USB0 => hpm_hal::usb::InterruptHandler<peripherals::USB0>;
 });

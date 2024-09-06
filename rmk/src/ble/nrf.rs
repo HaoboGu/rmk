@@ -65,6 +65,7 @@ use {
 };
 
 /// Maximum number of bonded devices
+// TODO: make it configurable
 pub const BONDED_DEVICE_NUM: usize = 8;
 
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
@@ -148,8 +149,8 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
         }),
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,
-            periph_role_count: 3,
-            central_role_count: 0,
+            periph_role_count: 4,
+            central_role_count: 4,
             central_sec_count: 0,
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
@@ -179,7 +180,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
+pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
@@ -382,13 +383,13 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             Err(e) => error!("Advertise error: {}", e),
         }
 
-        // Retry after 3 second
-        Timer::after_millis(100).await;
+        // Retry after 1 second
+        Timer::after_secs(1).await;
     }
 }
 
 // Run ble keyboard task for once
-async fn run_ble_keyboard<
+pub(crate) async fn run_ble_keyboard<
     'a,
     'b,
     F: AsyncNorFlash,
