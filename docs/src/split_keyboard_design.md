@@ -16,6 +16,10 @@ And there's a separate keyboard thread in master, which does the keyboard stuffs
 
 ### Communication protocol
 
+When the master & slave talk to each other, the **debounced key states** are sent. The master board receives the key states, converts them to actual keycode and then sends keycodes to the host.
+
+That means the master board should have a full keymap stored in the storage/ram. The slaves just do matrix scanning, debouncing and sending key states over serial/ble.
+
 A single message can be defined like:
 
 ```rust

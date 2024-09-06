@@ -1,6 +1,18 @@
-# nrf52840 BLE example
+# nrf52840 BLE split example
 
 RMK supports [nice!nano](https://nicekeyboards.com/) as well as any custom nrf52840 board you have. 
+
+## Build firmware
+
+You can build firmware for master and slave separately:
+
+```shell
+# Build master firmware
+cargo build --release --bin master
+
+# Build slave firmware
+cargo build --release --bin slave
+```
 
 ## Nice!nano support
 
@@ -15,7 +27,11 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    ```
 2. Compile RMK using `cargo objcopy`, get .bin firmware:
    ```shell
-   cargo objcopy --release -- -O binary rmk-52840.bin
+   # Build master firmware and generate .bin firmware
+   cargo objcopy --release --bin master -- -O binary rmk-master.bin
+
+   # Build slave firmware and generate .bin firmware
+   cargo objcopy --release --bin slave -- -O binary rmk-slave.bin
    ```
 3. Download uf2util from UF2 repo https://github.com/microsoft/uf2
    ```shell
@@ -56,5 +72,9 @@ The following are the detailed steps for flashing both nrf's softdevice and RMK 
    ```
 4. Compile, flash and run the example
    ```shell
-   cargo run --release
+   # Run master firmware
+   cargo run --release --bin master
+
+   # Run slave firmware
+   cargo run --release --bin slave
    ```
