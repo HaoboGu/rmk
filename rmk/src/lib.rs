@@ -71,16 +71,17 @@ mod storage;
 mod usb;
 mod via;
 
-/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+/// Run RMK keyboard service. This function should never return.
 ///
 /// # Arguments
 ///
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
+/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
 /// * `output_pins` - output gpio pins
-/// * `flash` - optional flash storage, which is used for storing keymap and keyboard configs
-/// * `keymap` - default keymap definition
+/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
+/// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
+/// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 pub async fn run_rmk<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -120,16 +121,17 @@ pub async fn run_rmk<
     .await
 }
 
-/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+/// Run RMK keyboard service. This function should never return.
 ///
 /// # Arguments
 ///
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
+/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
 /// * `output_pins` - output gpio pins
-/// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
-/// * `keymap` - default keymap definition
+/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
+/// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
+/// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
 pub async fn run_rmk_with_async_flash<

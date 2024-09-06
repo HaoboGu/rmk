@@ -28,6 +28,16 @@ use {
     embedded_io_async::{Read, Write},
 };
 
+/// Run the split slave service.
+/// 
+/// # Arguments
+///
+/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
+/// * `output_pins` - output gpio pins
+/// * `master_addr` - (optional) master's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `slave_addr` - (optional) slave's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `serial` - (optional) serial port used to send slave split message. This argument is enabled only for serial split now
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 pub async fn run_rmk_split_slave<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,

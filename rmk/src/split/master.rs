@@ -38,16 +38,18 @@ use {
 
 use super::{KeySyncMessage, MASTER_SYNC_CHANNELS};
 
-/// Initialize and run the keyboard service, with given keyboard usb config. This function never returns.
+/// Run RMK split master keyboard service. This function should never return.
 ///
 /// # Arguments
 ///
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
+/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
 /// * `output_pins` - output gpio pins
-/// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
-/// * `keymap` - default keymap definition
+/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
+/// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
+/// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `master_addr` - (optional) master's BLE static address. This argument is enabled only for nRF BLE split master now
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
 pub async fn run_rmk_split_master<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
@@ -123,6 +125,12 @@ pub async fn run_rmk_split_master<
     fut
 }
 
+/// Run master's slave monitor task.
+/// 
+/// # Arguments
+/// * `id` - slave id
+/// * `addr` - (optional) slave's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
 pub async fn run_slave_monitor<
     const ROW: usize,
     const COL: usize,

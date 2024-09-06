@@ -73,6 +73,9 @@ esp-idf-svc = { version = "0.49", default-features = false, optional = true }
 # Document feature
 document-features = "0.2"
 
+[package.metadata.docs.rs]
+features = ["split"]
+
 # Architecture specific dependencies
 [target.'cfg(all(target_arch = "arm", target_os = "none"))'.dependencies]
 cortex-m = { version = "0.7" }
@@ -147,3 +150,4 @@ _no_usb = []
 
 ## No storage available, or it's unnecessary to pass storage to the main RMK API
 _no_external_storage = []
+

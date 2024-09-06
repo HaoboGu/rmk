@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod driver;
 pub mod master;
 #[cfg(feature = "_nrf_ble")]
-pub mod nrf;
+pub(crate) mod nrf;
 #[cfg(not(feature = "_nrf_ble"))]
-pub mod serial;
+pub(crate) mod serial;
 pub mod slave;
 
 /// Maximum size of a split message
