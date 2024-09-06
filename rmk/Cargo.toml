@@ -94,10 +94,10 @@ rapid_debouncer = []
 ## Feature for split keyboard
 split = []
 
-## Feature that indicates no USB is used, this feature will be auto-activated for some chips
+## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
-## No storage available, or it's unnecessary to pass storage to the main RMK API
+## Internal feature that indicates no storage available, or it's unnecessary to pass storage to the main RMK API
 _no_external_storage = []
 
 #! ### BLE feature flags
