@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
+    "split",
     # "async_matrix",
 ] }
 cortex-m = "0.7.7"
@@ -48,12 +49,10 @@ const-gen = "1.6"
 [[bin]]
 name = "master"
 path = "src/master.rs"
-# required-features = []
 
 [[bin]]
 name = "slave"
 path = "src/slave.rs"
-# required-features = []
 
 [profile.dev]
 codegen-units = 1      # better optimizations

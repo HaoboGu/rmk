@@ -37,7 +37,6 @@ pub(crate) async fn keyboard_task<
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
-
     loop {
         keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;

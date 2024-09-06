@@ -17,7 +17,10 @@ use embassy_stm32::{
     Config,
 };
 use panic_halt as _;
-use rmk::{run_rmk, config::{RmkConfig, VialConfig}};
+use rmk::{
+    config::{RmkConfig, VialConfig},
+    run_rmk,
+};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 #[defmt::global_logger]

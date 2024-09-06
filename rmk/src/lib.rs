@@ -36,6 +36,7 @@ pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
 use keyboard::{communication_task, Keyboard, KeyboardReportMessage};
 use keymap::KeyMap;

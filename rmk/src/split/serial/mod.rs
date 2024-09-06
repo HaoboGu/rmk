@@ -204,15 +204,15 @@ pub(crate) async fn initialize_serial_split_master_and_run<
 /// - `const ROW_OFFSET`: row offset of the slave's matrix in the whole matrix
 /// - `const COL_OFFSET`: column offset of the slave's matrix in the whole matrix
 /// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
-pub async fn run_serial_slave_monitor<
+pub(crate) async fn run_serial_slave_monitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
     S: Read + Write,
 >(
-    receiver: S,
     id: usize,
+    receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
     let slave =

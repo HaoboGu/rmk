@@ -9,6 +9,7 @@ pub(crate) mod driver;
 pub mod master;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
+#[cfg(not(feature = "_nrf_ble"))]
 pub mod serial;
 pub mod slave;
 

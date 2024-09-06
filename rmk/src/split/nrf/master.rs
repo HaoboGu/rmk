@@ -4,7 +4,7 @@ use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_futures::{
     join::join,
-    select::{select, Either},
+    select::{select, select4, Either, Either4},
 };
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -15,6 +15,7 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use futures::pin_mut;
 use heapless::FnvIndexMap;
 use nrf_softdevice::{
     ble::{
@@ -43,7 +44,6 @@ use crate::{
     keyboard::{Keyboard, KeyboardReportMessage},
     keymap::KeyMap,
     light::LightService,
-    run_usb_keyboard,
     split::{
         driver::{SlaveMatrixMonitor, SplitDriverError, SplitReader},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
@@ -53,6 +53,8 @@ use crate::{
     via::process::VialService,
 };
 use crate::{debounce::DebouncerTrait, split::master::MasterMatrix};
+#[cfg(not(feature = "_no_usb"))]
+use crate::{keyboard::communication_task, keyboard_task, light::led_hid_task, via::vial_task};
 
 /// Gatt client used in split master to receive split message from slaves
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -64,8 +66,7 @@ pub(crate) struct BleSplitMasterClient {
     pub(crate) message_to_slave: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
-// FIXME: move these public api to split module root?
-pub async fn run_ble_slave_monitor<
+pub(crate) async fn run_ble_slave_monitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -78,7 +79,7 @@ pub async fn run_ble_slave_monitor<
     let channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
 
     let sender = channel.sender();
-    let ble_client_run = run_ble_client(sender, addr);
+    let run_ble_client = run_ble_client(sender, addr);
 
     let receiver = channel.receiver();
     let split_ble_driver = BleSplitMasterDriver { receiver };
@@ -87,7 +88,7 @@ pub async fn run_ble_slave_monitor<
         SlaveMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
     info!("Running slave monitor {}", id);
-    join(slave.run(), ble_client_run).await;
+    join(slave.run(), run_ble_client).await;
 }
 
 /// Run a single ble client, which receives split message from the ble slave.
@@ -177,12 +178,11 @@ impl<'a> SplitReader for BleSplitMasterDriver<'a> {
 /// * `keymap` - default keymap definition
 /// * `master_addr` - BLE random static address of master
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-// FIXME: move these public api to split module root?
-pub async fn initialize_ble_split_master_and_run<
+pub(crate) async fn initialize_ble_split_master_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
-    D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
     const MASTER_ROW: usize,
@@ -195,7 +195,7 @@ pub async fn initialize_ble_split_master_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
     #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
-    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))] usb_driver: Option<D>,
+    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
     master_addr: [u8; 6],
@@ -286,12 +286,11 @@ pub async fn initialize_ble_split_master_and_run<
 
     // Keyboard services
     let mut keyboard = Keyboard::new(matrix, &keymap);
-    #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+    #[cfg(not(feature = "_no_usb"))]
     let (mut usb_device, mut vial_service) = (
-        usb_driver.map(|u| KeyboardUsbDevice::new(u, keyboard_config.usb_config)),
+        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
     );
-
     let mut light_service = LightService::from_config(keyboard_config.light_config);
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
@@ -314,19 +313,42 @@ pub async fn initialize_ble_split_master_and_run<
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
-        #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
-        if let Some(ref mut usb_device) = usb_device {
+        #[cfg(not(feature = "_no_usb"))]
+        {
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
-                let usb_fut = run_usb_keyboard(
-                    usb_device,
-                    &mut keyboard,
-                    &mut storage,
-                    &mut light_service,
-                    &mut vial_service,
-                    &mut keyboard_report_receiver,
-                    &mut keyboard_report_sender,
-                );
+                // Run usb keyboard
+                let usb_fut = async {
+                    let usb_fut = usb_device.device.run();
+                    let keyboard_fut = keyboard_task(&mut keyboard, &mut keyboard_report_sender);
+                    let communication_fut = communication_task(
+                        &mut keyboard_report_receiver,
+                        &mut usb_device.keyboard_hid_writer,
+                        &mut usb_device.other_hid_writer,
+                    );
+                    let led_fut =
+                        led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
+                    let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+                    pin_mut!(usb_fut);
+                    pin_mut!(keyboard_fut);
+                    pin_mut!(led_fut);
+                    pin_mut!(via_fut);
+                    pin_mut!(communication_fut);
+
+                    match select4(
+                        select(usb_fut, keyboard_fut),
+                        via_fut,
+                        led_fut,
+                        communication_fut,
+                    )
+                    .await
+                    {
+                        Either4::First(_) => error!("Usb task or keyboard task exited"),
+                        Either4::Second(_) => error!("Storage or vial task is died"),
+                        Either4::Third(_) => error!("Led task is died"),
+                        Either4::Fourth(_) => error!("Communication task is died"),
+                    }
+                };
                 info!("Running USB keyboard!");
                 select(usb_fut, wait_for_usb_suspend()).await;
             }
@@ -374,33 +396,9 @@ pub async fn initialize_ble_split_master_and_run<
                     continue;
                 }
             }
-        } else {
-            // If no USB device, just start BLE advertising
-            info!("No USB, Start BLE advertising!");
-            match adv_fut.await {
-                Ok(conn) => {
-                    bonder.load_sys_attrs(&conn);
-                    run_ble_keyboard(
-                        &conn,
-                        &ble_server,
-                        &mut keyboard,
-                        &mut storage,
-                        &mut light_service,
-                        &mut keyboard_config.ble_battery_config,
-                        &mut keyboard_report_receiver,
-                        &mut keyboard_report_sender,
-                    )
-                    .await
-                }
-                Err(e) => error!("Advertise error: {}", e),
-            }
         }
 
-        #[cfg(any(
-            feature = "nrf52832_ble",
-            feature = "nrf52811_ble",
-            feature = "nrf52810_ble"
-        ))]
+        #[cfg(feature = "_no_usb")]
         match adv_fut.await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
@@ -418,7 +416,8 @@ pub async fn initialize_ble_split_master_and_run<
             }
             Err(e) => error!("Advertise error: {}", e),
         }
-        // Retry after 3 second
-        Timer::after_millis(100).await;
+
+        // Retry after 1 second
+        Timer::after_secs(1).await;
     }
 }

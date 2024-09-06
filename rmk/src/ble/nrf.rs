@@ -382,8 +382,8 @@ pub async fn initialize_nrf_ble_keyboard_with_config_and_run<
             Err(e) => error!("Advertise error: {}", e),
         }
 
-        // Retry after 3 second
-        Timer::after_millis(100).await;
+        // Retry after 1 second
+        Timer::after_secs(1).await;
     }
 }
 

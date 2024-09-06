@@ -15,7 +15,7 @@ use embassy_rp::{
     usb::InterruptHandler,
 };
 use panic_probe as _;
-use rmk::split::{SPLIT_MESSAGE_MAX_SIZE, slave::initialize_serial_split_slave_and_run};
+use rmk::split::{slave::initialize_serial_split_slave_and_run, SPLIT_MESSAGE_MAX_SIZE};
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {

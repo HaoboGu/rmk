@@ -6,7 +6,6 @@ use crate::matrix::{Matrix, MatrixTrait};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use embedded_io_async::{Read, Write};
 #[cfg(feature = "_nrf_ble")]
 use {
     crate::ble::nrf::softdevice_task,
@@ -20,8 +19,13 @@ use {
 
 use super::{
     driver::{SplitReader, SplitWriter},
-    serial::SerialSplitDriver,
     SplitMessage,
+};
+
+#[cfg(not(feature = "_nrf_ble"))]
+use {
+    super::serial::SerialSplitDriver,
+    embedded_io_async::{Read, Write},
 };
 
 /// Initialize and run the nRF slave keyboard service via BLE.
@@ -160,6 +164,7 @@ pub async fn initialize_nrf_ble_split_slave_and_run<
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `serial` - serial port to send key events to master board
+#[cfg(not(feature = "_nrf_ble"))]
 pub async fn initialize_serial_split_slave_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,

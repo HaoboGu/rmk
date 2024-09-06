@@ -23,7 +23,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    split::nrf::master::{initialize_split_ble_master_and_run, run_ble_slave_monitor},
+    split::master::{run_rmk_split_master, run_slave_monitor},
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -112,10 +112,10 @@ async fn main(spawner: Spawner) {
     let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
     join(
-        initialize_split_ble_master_and_run::<
-            Driver<'_, USBD, &SoftwareVbusDetect>,
+        run_rmk_split_master::<
             Input<'_>,
             Output<'_>,
+            Driver<'_, USBD, &SoftwareVbusDetect>,
             ROW,
             COL,
             2,
@@ -124,15 +124,15 @@ async fn main(spawner: Spawner) {
             0,
             NUM_LAYER,
         >(
-            Some(driver),
             input_pins,
             output_pins,
+            driver,
             crate::keymap::KEYMAP,
             keyboard_config,
             master_addr,
             spawner,
         ),
-        run_ble_slave_monitor::<2, 1, 2, 2>(0, slave_addr),
+        run_slave_monitor::<2, 1, 2, 2>(0, slave_addr),
     )
     .await;
 }
