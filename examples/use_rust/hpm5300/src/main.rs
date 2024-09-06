@@ -56,8 +56,6 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let flash = rmk::EmptyFlashWrapper::new();
-
     // Start serving
     run_rmk(
         input_pins,
