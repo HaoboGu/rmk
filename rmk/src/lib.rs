@@ -7,10 +7,10 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
-#[cfg(feature = "_esp_ble")]
-pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
-pub use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
+use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
+#[cfg(feature = "_esp_ble")]
+use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -194,7 +194,7 @@ pub async fn run_rmk_with_async_flash<
     fut
 }
 
-pub async fn initialize_usb_keyboard_and_run<
+pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,

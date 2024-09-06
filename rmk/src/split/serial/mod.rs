@@ -227,7 +227,7 @@ pub(crate) struct SerialSplitDriver<S: Read + Write> {
 }
 
 impl<S: Read + Write> SerialSplitDriver<S> {
-    pub fn new(serial: S) -> Self {
+    pub(crate) fn new(serial: S) -> Self {
         Self { serial }
     }
 }

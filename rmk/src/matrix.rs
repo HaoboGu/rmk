@@ -85,7 +85,7 @@ impl KeyState {
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-pub struct Matrix<
+pub(crate) struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,

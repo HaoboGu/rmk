@@ -1,6 +1,6 @@
 #[repr(u8)]
 #[derive(Clone, Copy)]
-pub enum VidSource {
+pub(crate) enum VidSource {
     BluetoothSIG = 1,
     UsbIF = 2,
 }
@@ -9,19 +9,19 @@ pub enum VidSource {
 /// These values are used to identify all devices of a given type/model/version using numbers.
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
-pub struct PnPID {
-    pub vid_source: VidSource,
-    pub vendor_id: u16,
-    pub product_id: u16,
-    pub product_version: u16,
+pub(crate) struct PnPID {
+    pub(crate) vid_source: VidSource,
+    pub(crate) vendor_id: u16,
+    pub(crate) product_id: u16,
+    pub(crate) product_version: u16,
 }
 
 #[derive(Debug, Default, defmt::Format)]
-pub struct DeviceInformation {
-    pub manufacturer_name: Option<&'static str>,
-    pub model_number: Option<&'static str>,
-    pub serial_number: Option<&'static str>,
-    pub hw_rev: Option<&'static str>,
-    pub fw_rev: Option<&'static str>,
-    pub sw_rev: Option<&'static str>,
+pub(crate) struct DeviceInformation {
+    pub(crate) manufacturer_name: Option<&'static str>,
+    pub(crate) model_number: Option<&'static str>,
+    pub(crate) serial_number: Option<&'static str>,
+    pub(crate) hw_rev: Option<&'static str>,
+    pub(crate) fw_rev: Option<&'static str>,
+    pub(crate) sw_rev: Option<&'static str>,
 }

@@ -86,7 +86,7 @@ impl CompositeReportType {
     }
 )]
 #[derive(Default)]
-pub struct CompositeReport {
+pub(crate) struct CompositeReport {
     pub(crate) buttons: u8,
     pub(crate) x: i8,
     pub(crate) y: i8,

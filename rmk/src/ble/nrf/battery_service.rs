@@ -7,7 +7,7 @@ use super::server::BleServer;
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 #[derive(Debug, Clone, Copy)]
-pub struct BatteryService {
+pub(crate) struct BatteryService {
     #[characteristic(uuid = "2a19", read, notify)]
     battery_level: u8,
 }

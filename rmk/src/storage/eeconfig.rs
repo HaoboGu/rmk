@@ -2,7 +2,7 @@ use bitfield_struct::bitfield;
 
 /// Keyboard configurations which should be saved in eeprom.
 #[derive(Default)]
-pub struct Eeconfig {
+pub(crate) struct Eeconfig {
     eeprom_enable: bool,
     default_layer: u8,
     keymap_config: EeKeymapConfig,

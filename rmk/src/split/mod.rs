@@ -27,7 +27,7 @@ pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyn
 /// Message used from master & slave communication
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]
 #[repr(u8)]
-pub enum SplitMessage {
+pub(crate) enum SplitMessage {
     /// Activated key info (row, col, pressed), from slave to master
     Key(u8, u8, bool),
     /// Led state, on/off

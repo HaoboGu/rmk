@@ -12,10 +12,10 @@ use nrf_softdevice::{
     Softdevice,
 };
 
-pub struct DeviceInformationService {}
+pub(crate) struct DeviceInformationService {}
 
 impl DeviceInformationService {
-    pub fn new(
+    pub(crate) fn new(
         sd: &mut Softdevice,
         pnp_id: &PnPID,
         info: DeviceInformation,
