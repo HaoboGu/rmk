@@ -126,7 +126,7 @@ pub async fn run_rmk_split_master<
 }
 
 /// Run master's slave monitor task.
-/// 
+///
 /// # Arguments
 /// * `id` - slave id
 /// * `addr` - (optional) slave's BLE static address. This argument is enabled only for nRF BLE split now

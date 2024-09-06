@@ -29,7 +29,7 @@ use {
 };
 
 /// Run the split slave service.
-/// 
+///
 /// # Arguments
 ///
 /// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
