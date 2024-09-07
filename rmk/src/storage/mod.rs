@@ -1,6 +1,8 @@
 mod eeconfig;
+pub mod nor_flash;
 
 use byteorder::{BigEndian, ByteOrder};
+use core::fmt::Debug;
 use core::ops::Range;
 use defmt::{error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -321,6 +323,13 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.num_sectors >= 2,
             "Number of used sector for storage must larger than 1"
         );
+        info!(
+            "Flash capacity {}, sector {}, config {} {}",
+            flash.capacity(),
+            F::ERASE_SIZE,
+            config.start_addr,
+            config.num_sectors
+        );
 
         // If config.start_addr == 0, use last `num_sectors` sectors
         // Other wise, use storage config setting
@@ -335,6 +344,7 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.start_addr as u32
                 ..(config.start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
+        info!("storage range {}", storage_range);
 
         let mut storage = Self {
             flash,
