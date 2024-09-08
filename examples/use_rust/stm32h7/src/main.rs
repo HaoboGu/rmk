@@ -8,13 +8,12 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_stm32::{
     bind_interrupts,
-    flash::{Blocking, Flash},
+    flash::Flash,
     gpio::{Input, Output},
     peripherals::USB_OTG_HS,
     time::Hertz,
@@ -24,7 +23,7 @@ use embassy_stm32::{
 use panic_probe as _;
 use rmk::{
     config::{RmkConfig, VialConfig},
-    initialize_keyboard_and_run,
+    run_rmk,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -34,7 +33,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("RMK start!");
     // RCC config
     let mut config = Config::default();
@@ -98,21 +97,14 @@ async fn main(_spawner: Spawner) {
     };
 
     // Start serving
-    initialize_keyboard_and_run::<
-        Flash<'_, Blocking>,
-        Driver<'_, USB_OTG_HS>,
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        driver,
+    run_rmk(
         input_pins,
         output_pins,
-        Some(f),
+        driver,
+        f,
         crate::keymap::KEYMAP,
         keyboard_config,
+        spawner,
     )
     .await;
 }

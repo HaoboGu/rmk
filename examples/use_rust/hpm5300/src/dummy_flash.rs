@@ -1,4 +1,3 @@
-
 pub struct DummyFlash {}
 
 impl embedded_storage_async::nor_flash::NorFlash for DummyFlash {

@@ -16,7 +16,7 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Current state of each layer
@@ -30,7 +30,7 @@ pub struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
 }
 
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
-    pub async fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+    pub(crate) async fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
@@ -40,7 +40,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
     }
 
-    pub async fn new_from_storage<F: NorFlash>(
+    pub(crate) async fn new_from_storage<F: NorFlash>(
         mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,
     ) -> Self {

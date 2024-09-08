@@ -7,7 +7,7 @@ use super::server::BleServer;
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 #[derive(Debug, Clone, Copy)]
-pub struct BatteryService {
+pub(crate) struct BatteryService {
     #[characteristic(uuid = "2a19", read, notify)]
     battery_level: u8,
 }
@@ -64,7 +64,7 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_millis(500).await;
+                    Timer::after_secs(500).await;
                     continue;
                 }
             } else {

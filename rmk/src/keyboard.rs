@@ -38,7 +38,7 @@ pub(crate) async fn keyboard_task<
     sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     loop {
-        let _ = keyboard.scan_matrix(sender).await;
+        keyboard.scan_matrix(sender).await;
         keyboard.send_keyboard_report(sender).await;
         keyboard.send_media_report(sender).await;
         keyboard.send_mouse_report(sender).await;
@@ -264,8 +264,8 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         // Check matrix states, process key if there is a key state change
         // Keys are processed in the following order:
         // process_key_change -> process_key_action_* -> process_action_*
-        for row_idx in 0..ROW {
-            for col_idx in 0..COL {
+        for row_idx in 0..self.matrix.get_row_num() {
+            for col_idx in 0..self.matrix.get_col_num() {
                 let ks = self.matrix.get_key_state(row_idx, col_idx);
                 if ks.changed {
                     self.process_key_change(row_idx, col_idx, sender).await;

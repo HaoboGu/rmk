@@ -20,7 +20,7 @@ use usbd_hid::descriptor::SerializedDescriptor as _;
 
 #[allow(dead_code)]
 #[derive(Debug, defmt::Format)]
-pub struct HidService {
+pub(crate) struct HidService {
     hid_info: u16,
     report_map: u16,
     hid_control: u16,
@@ -47,7 +47,7 @@ pub struct HidService {
 }
 
 impl HidService {
-    pub fn new(sd: &mut Softdevice) -> Result<Self, RegisterError> {
+    pub(crate) fn new(sd: &mut Softdevice) -> Result<Self, RegisterError> {
         let mut service_builder = ServiceBuilder::new(sd, BLE_HID_SERVICE_UUID)?;
 
         let hid_info_handle = service_builder
@@ -250,7 +250,7 @@ impl gatt_server::Service for HidService {
 
 #[allow(unused)]
 #[derive(Debug, Format)]
-pub enum HidServiceEvent {
+pub(crate) enum HidServiceEvent {
     InputKeyboardCccdWrite,
     InputMediaKeyCccdWrite,
     InputMouseKeyCccdWrite,

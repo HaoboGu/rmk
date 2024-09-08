@@ -64,7 +64,7 @@ pub(crate) async fn led_hid_task<R: HidReaderWrapper, Out: OutputPin>(
 
 #[bitfield(u8)]
 #[derive(Format, Eq, PartialEq)]
-pub struct LedIndicator {
+pub(crate) struct LedIndicator {
     #[bits(1)]
     numslock: bool,
     #[bits(1)]

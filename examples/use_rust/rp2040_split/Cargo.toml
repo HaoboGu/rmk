@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk" }
+rmk = { path = "../../../rmk", features = ["split"]}
 embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
 embassy-rp = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
@@ -47,12 +47,10 @@ const-gen = "1.6"
 [[bin]]
 name = "master"
 path = "src/master.rs"
-# required-features = []
 
 [[bin]]
 name = "slave"
 path = "src/slave.rs"
-# required-features = []
 
 [profile.dev]
 codegen-units = 1      # better optimizations

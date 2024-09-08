@@ -6,7 +6,6 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -14,7 +13,7 @@ use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
     interrupt::{self, InterruptExt, Priority},
-    peripherals::{self, SAADC, USBD},
+    peripherals::{self, SAADC},
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
@@ -22,7 +21,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    initialize_nrf_ble_keyboard_with_config_and_run,
+    run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -104,18 +103,11 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    initialize_nrf_ble_keyboard_with_config_and_run::<
-        Driver<'_, USBD, &SoftwareVbusDetect>,
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        crate::keymap::KEYMAP,
+    run_rmk(
         input_pins,
         output_pins,
-        Some(driver),
+        driver,
+        crate::keymap::KEYMAP,
         keyboard_config,
         spawner,
     )

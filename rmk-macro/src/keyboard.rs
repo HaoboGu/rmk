@@ -219,7 +219,7 @@ fn expand_main(
     let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
     let light_config = expand_light_config(&chip, toml_config.light);
     let matrix_config = expand_matrix_config(&chip, toml_config.matrix, async_matrix);
-    let run_rmk = expand_rmk_entry(&chip, &usb_info, comm_type, &item_mod, async_matrix);
+    let run_rmk = expand_rmk_entry(&chip, comm_type, &item_mod);
     let (ble_config, set_ble_config) = expand_ble_config(&chip, comm_type, toml_config.ble);
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {

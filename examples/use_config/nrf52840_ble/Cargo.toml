@@ -28,7 +28,7 @@ embassy-nrf = { version = "0.2.0", git = "https://github.com/embassy-rs/embassy"
 ] }
 embassy-executor = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
-    "task-arena-size-8192",
+    "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",
