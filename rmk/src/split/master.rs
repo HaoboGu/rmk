@@ -335,7 +335,42 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        todo!()
+        if let Some(start_time) = self.scan_start {
+            // If not key over 2 secs, wait for interupt in next loop
+            if start_time.elapsed().as_secs() < 1 {
+                return;
+            } else {
+                self.scan_start = None;
+            }
+        }
+        // First, set all output pin to high
+        for out in self.output_pins.iter_mut() {
+            out.set_high().ok();
+        }
+
+        Timer::after_micros(1).await;
+
+        // Enable SCAN_SIGNAL, wait for slave's report
+        SCAN_SIGNAL.reset();
+        
+        // Current board's matrix
+        let mut futs: Vec<_, INPUT_PIN_NUM> = self
+            .input_pins
+            .iter_mut()
+            .map(|input_pin| input_pin.wait_for_high())
+            .collect();
+        
+        // TODO: receive split event
+        let split_event = SCAN_SIGNAL.wait();
+
+        let _ = select(split_event, select_slice(futs.as_mut_slice())).await;
+
+        // Set all output pins back to low
+        for out in self.output_pins.iter_mut() {
+            out.set_low().ok();
+        }
+
+        self.scan_start = Some(Instant::now());
     }
 }
 

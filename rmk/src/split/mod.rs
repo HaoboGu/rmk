@@ -20,6 +20,7 @@ pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 const SYNC_SIGNAL_VALUE: Signal<CriticalSectionRawMutex, KeySyncSignal> = Signal::new();
 pub(crate) static SYNC_SIGNALS: [Signal<CriticalSectionRawMutex, KeySyncSignal>; 4] =
     [SYNC_SIGNAL_VALUE; 4];
+pub(crate) static SCAN_SIGNAL: Signal<CriticalSectionRawMutex, KeySyncSignal> = SYNC_SIGNAL_VALUE;
 const SYNC_CHANNEL_VALUE: Channel<CriticalSectionRawMutex, KeySyncMessage, 8> = Channel::new();
 pub(crate) static MASTER_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyncMessage, 8>; 4] =
     [SYNC_CHANNEL_VALUE; 4];

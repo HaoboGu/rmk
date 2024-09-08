@@ -80,6 +80,9 @@ impl<
                         if let SplitMessage::Key(row, col, pressed) = message {
                             self.pressed[row as usize][col as usize] = pressed;
                         }
+                        // TODO: Send message to master matrix to trigger scanning if in async matrix mode
+                        #[cfg(feature = "async_matrix")]
+                        SCAN_SIGNAL.signal(KeySyncSignal::Start);
                     }
                 }
                 Either::Second(_sync_signal) => {
