@@ -1,7 +1,10 @@
 ///! The abstracted driver layer of the split keyboard.
 ///!
 ///!
-use crate::split::SYNC_SIGNALS;
+use crate::{
+    split::{KeySyncSignal, SCAN_SIGNAL, SYNC_SIGNALS},
+    KEYBOARD_STATE,
+};
 
 use super::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
 use defmt::info;
@@ -80,9 +83,12 @@ impl<
                         if let SplitMessage::Key(row, col, pressed) = message {
                             self.pressed[row as usize][col as usize] = pressed;
                         }
-                        // TODO: Send message to master matrix to trigger scanning if in async matrix mode
+                        // In async matrix mode, signal to start matrix scanning
                         #[cfg(feature = "async_matrix")]
-                        SCAN_SIGNAL.signal(KeySyncSignal::Start);
+                        if KEYBOARD_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+                            SCAN_SIGNAL.signal(KeySyncSignal::Start);
+                            defmt::info!("Sending SCAN_SIGNAL");
+                        }
                     }
                 }
                 Either::Second(_sync_signal) => {

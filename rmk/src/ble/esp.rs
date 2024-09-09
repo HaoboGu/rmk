@@ -6,6 +6,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::matrix::Matrix;
+use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_task, config::RmkConfig, flash::EmptyFlashWrapper,
     keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
@@ -79,6 +80,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     // TODO: add usb service for other chips of esp32 which have USB device
 
     loop {
+        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
         info!("Waitting for connection..");

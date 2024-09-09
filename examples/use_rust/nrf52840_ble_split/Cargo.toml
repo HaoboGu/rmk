@@ -14,7 +14,7 @@ rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
     "split",
-    # "async_matrix",
+    "async_matrix",
 ] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"

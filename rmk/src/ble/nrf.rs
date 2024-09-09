@@ -12,6 +12,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::matrix::{Matrix, MatrixTrait};
+use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_task,
@@ -266,6 +267,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Main loop
     loop {
+        KEYBOARD_STATE.store(false, Ordering::Release);
         // Init BLE advertising data
         let mut config = peripheral::Config::default();
         // Interval: 500ms

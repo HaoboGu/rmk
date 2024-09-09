@@ -335,6 +335,10 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use super::SCAN_SIGNAL;
+        use embassy_futures::select::{select, select_slice};
+        use heapless::Vec;
+
         if let Some(start_time) = self.scan_start {
             // If not key over 2 secs, wait for interupt in next loop
             if start_time.elapsed().as_secs() < 1 {
@@ -352,15 +356,15 @@ impl<
 
         // Enable SCAN_SIGNAL, wait for slave's report
         SCAN_SIGNAL.reset();
-        
+
         // Current board's matrix
         let mut futs: Vec<_, INPUT_PIN_NUM> = self
             .input_pins
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-        
-        // TODO: receive split event
+
+        // Wait for split event
         let split_event = SCAN_SIGNAL.wait();
 
         let _ = select(split_event, select_slice(futs.as_mut_slice())).await;
@@ -371,6 +375,9 @@ impl<
         }
 
         self.scan_start = Some(Instant::now());
+
+        // Enable SCAN_SIGNAL, wait for slave's report
+        SCAN_SIGNAL.reset();
     }
 }
 
