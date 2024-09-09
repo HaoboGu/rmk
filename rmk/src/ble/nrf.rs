@@ -267,7 +267,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Main loop
     loop {
-        KEYBOARD_STATE.store(false, Ordering::Release);
+        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Init BLE advertising data
         let mut config = peripheral::Config::default();
         // Interval: 500ms
