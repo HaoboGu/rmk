@@ -106,7 +106,7 @@ async fn main(spawner: Spawner) {
     };
 
     let (input_pins, output_pins) =
-        config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10], output:  [P0_30, P0_31]);
+        config_matrix_pins_nrf!(peripherals: p, input: [P0_12, P0_13], output:  [P0_14, P0_15]);
 
     let master_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];

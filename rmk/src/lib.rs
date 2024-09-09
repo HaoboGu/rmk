@@ -21,7 +21,7 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
-use core::cell::RefCell;
+use core::{cell::RefCell, sync::atomic::AtomicBool};
 use defmt::*;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
@@ -70,6 +70,8 @@ pub mod split;
 mod storage;
 mod usb;
 mod via;
+
+pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -252,6 +254,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     let mut keyboard_report_receiver = keyboard_channel.receiver();
 
     loop {
+        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Run all tasks, if one of them fails, wait 1 second and then restart
         run_usb_keyboard(
             &mut usb_device,

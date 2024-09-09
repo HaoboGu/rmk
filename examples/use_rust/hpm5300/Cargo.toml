@@ -33,6 +33,15 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 # panic-probe = { version = "0.3", features = ["print-defmt"] }
 
+
+[patch.crates-io]
+embassy-sync = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+embassy-futures = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+embassy-executor = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+embassy-embedded-hal = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+embassy-time-driver = { version = "0.1", git = "https://github.com/embassy-rs/embassy", rev = "01d8508" }
+
 [build-dependencies]
 xz2 = "0.1.7"
 json = "0.12"

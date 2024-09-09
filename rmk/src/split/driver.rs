@@ -2,9 +2,14 @@
 ///!
 ///!
 use crate::split::SYNC_SIGNALS;
+#[cfg(feature = "async_matrix")]
+use crate::{
+    split::{KeySyncSignal, SCAN_SIGNAL},
+    KEYBOARD_STATE,
+};
 
 use super::{KeySyncMessage, SplitMessage, MASTER_SYNC_CHANNELS};
-use defmt::info;
+use defmt::debug;
 use embassy_futures::select::{select, Either};
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
@@ -74,11 +79,16 @@ impl<
             let sync_fut = SYNC_SIGNALS[self.id].wait();
             match select(receive_fut, sync_fut).await {
                 Either::First(received_message) => {
-                    info!("Receveid slave message: {}", received_message);
+                    debug!("Receveid slave message: {}", received_message);
                     if let Ok(message) = received_message {
                         // Update the key state matrix
                         if let SplitMessage::Key(row, col, pressed) = message {
                             self.pressed[row as usize][col as usize] = pressed;
+                        }
+                        // In async matrix mode, signal to start matrix scanning
+                        #[cfg(feature = "async_matrix")]
+                        if KEYBOARD_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+                            SCAN_SIGNAL.signal(KeySyncSignal::Start);
                         }
                     }
                 }
