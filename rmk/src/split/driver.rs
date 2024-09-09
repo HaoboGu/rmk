@@ -1,8 +1,10 @@
 ///! The abstracted driver layer of the split keyboard.
 ///!
 ///!
+use crate::split::SYNC_SIGNALS;
+#[cfg(feature = "async_matrix")]
 use crate::{
-    split::{KeySyncSignal, SCAN_SIGNAL, SYNC_SIGNALS},
+    split::{KeySyncSignal, SCAN_SIGNAL},
     KEYBOARD_STATE,
 };
 
