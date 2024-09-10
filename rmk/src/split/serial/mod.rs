@@ -183,11 +183,11 @@ pub(crate) async fn initialize_serial_split_central_and_run<
             .await
             {
                 Either4::First(_) => {
-                    error!("Usb task is died");
+                    error!("Usb task has died");
                 }
-                Either4::Second(_) => error!("Keyboard task is died"),
-                Either4::Third(_) => error!("Led task is died"),
-                Either4::Fourth(_) => error!("Via task is died"),
+                Either4::Second(_) => error!("Keyboard task has died"),
+                Either4::Third(_) => error!("Led task has died"),
+                Either4::Fourth(_) => error!("Via task has died"),
             }
         }
 
