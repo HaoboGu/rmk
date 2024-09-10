@@ -119,6 +119,5 @@ pub(crate) fn rmk_entry_default(
                 keyboard_config,
             ));
         },
-        ChipSeries::Unsupported => quote! {},
     }
 }

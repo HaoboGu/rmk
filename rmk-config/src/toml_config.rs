@@ -13,6 +13,7 @@ pub struct KeyboardTomlConfig {
     #[serde(default = "default_dep")]
     pub dependency: DependencyConfig,
     pub layout: Option<LayoutConfig>,
+    pub split: Option<SplitConfig>
 }
 
 /// Configurations for usb
@@ -103,7 +104,7 @@ fn default_num_sectors() -> u8 {
     2
 }
 
-fn default_bool() -> bool {
+fn default_false() -> bool {
     false
 }
 
@@ -114,7 +115,7 @@ fn default_true() -> bool {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct PinConfig {
     pub pin: String,
-    #[serde(default = "default_bool")]
+    #[serde(default = "default_false")]
     pub low_active: bool,
 }
 
@@ -142,4 +143,33 @@ fn default_storage_config() -> StorageConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct LayoutConfig {
     pub keymap: Vec<Vec<Vec<String>>>,
+}
+
+
+/// Configurations for split keyboards
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct SplitConfig {
+    pub connection: String,
+    pub central: SplitBoardConfig,
+    pub peripheral: Vec<SplitBoardConfig>,
+}
+
+/// Configurations for each split board
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct SplitBoardConfig {
+    pub rows: u8,
+    pub cols: u8,
+    pub row_offset: u8,
+    pub col_offset: u8,
+    pub ble_addr: Option<[u8; 6]>,
+    pub serial: Option<Vec<SerialConfig>>,
+    pub input_pins: Vec<String>,
+    pub output_pins: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct SerialConfig {
+    pub instance: String,
+    pub tx_pin: String,
+    pub rx_pin: String,
 }

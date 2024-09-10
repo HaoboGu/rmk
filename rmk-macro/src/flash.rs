@@ -49,7 +49,6 @@ pub(crate) fn expand_flash_init(
                 let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
             },
             ChipSeries::Esp32 => quote! {},
-            ChipSeries::Unsupported => quote! {},
         }
     );
 
