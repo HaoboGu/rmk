@@ -528,6 +528,8 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
             self.process_action_consumer_control(key, key_state);
         } else if key.is_system() {
             self.process_action_system_control(key, key_state);
+        } else if key.is_mouse_key() {
+            self.process_action_mouse(key, key_state);
         } else if key.is_basic() {
             self.need_send_key_report = true;
             if key_state.pressed {
@@ -535,8 +537,6 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
             } else {
                 self.unregister_key(key);
             }
-        } else if key.is_mouse_key() {
-            self.process_action_mouse(key, key_state);
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_state, sender).await;
