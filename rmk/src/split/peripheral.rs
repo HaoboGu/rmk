@@ -28,17 +28,17 @@ use {
     embedded_io_async::{Read, Write},
 };
 
-/// Run the split slave service.
+/// Run the split peripheral service.
 ///
 /// # Arguments
 ///
 /// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
 /// * `output_pins` - output gpio pins
-/// * `master_addr` - (optional) master's BLE static address. This argument is enabled only for nRF BLE split now
-/// * `slave_addr` - (optional) slave's BLE static address. This argument is enabled only for nRF BLE split now
-/// * `serial` - (optional) serial port used to send slave split message. This argument is enabled only for serial split now
+/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-pub async fn run_rmk_split_slave<
+pub async fn run_rmk_split_peripheral<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -50,27 +50,31 @@ pub async fn run_rmk_split_slave<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    #[cfg(feature = "_nrf_ble")] master_addr: [u8; 6],
-    #[cfg(feature = "_nrf_ble")] slave_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
     #[cfg(feature = "_nrf_ble")] spawner: Spawner,
 ) {
     #[cfg(not(feature = "_nrf_ble"))]
-    initialize_serial_split_slave_and_run::<In, Out, S, ROW, COL>(input_pins, output_pins, serial)
-        .await;
-
-    #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_split_slave_and_run::<In, Out, ROW, COL>(
+    initialize_serial_split_peripheral_and_run::<In, Out, S, ROW, COL>(
         input_pins,
         output_pins,
-        master_addr,
-        slave_addr,
+        serial,
+    )
+    .await;
+
+    #[cfg(feature = "_nrf_ble")]
+    initialize_nrf_ble_split_peripheral_and_run::<In, Out, ROW, COL>(
+        input_pins,
+        output_pins,
+        central_addr,
+        peripheral_addr,
         spawner,
     )
     .await;
 }
 
-/// Initialize and run the nRF slave keyboard service via BLE.
+/// Initialize and run the nRF peripheral keyboard service via BLE.
 ///
 /// # Arguments
 ///
@@ -78,7 +82,7 @@ pub async fn run_rmk_split_slave<
 /// * `output_pins` - output gpio pins
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 #[cfg(feature = "_nrf_ble")]
-pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
+pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -89,16 +93,17 @@ pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    master_addr: [u8; 6],
-    slave_addr: [u8; 6],
+    central_addr: [u8; 6],
+    peripheral_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
     use defmt::info;
     use embassy_futures::select::select;
     use nrf_softdevice::ble::gatt_server;
 
-    use crate::split::nrf::slave::{
-        BleSplitSlaveDriver, BleSplitSlaveServer, BleSplitSlaveServerEvent, SplitBleServiceEvent,
+    use crate::split::nrf::peripheral::{
+        BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
+        SplitBleServiceEvent,
     };
 
     // Keyboard matrix, use COL2ROW by default
@@ -143,9 +148,9 @@ pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: "rmk_slave_board".as_ptr() as _,
-            current_len: "rmk_slave_board".len() as u16,
-            max_len: "rmk_slave_board".len() as u16,
+            p_value: "rmk_peripheral_board".as_ptr() as _,
+            current_len: "rmk_peripheral_board".len() as u16,
+            max_len: "rmk_peripheral_board".len() as u16,
             write_perm: unsafe { mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
                 raw::BLE_GATTS_VLOC_STACK as u8,
@@ -155,7 +160,10 @@ pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
     };
 
     let sd = Softdevice::enable(&ble_config);
-    set_address(sd, &Address::new(AddressType::RandomStatic, slave_addr));
+    set_address(
+        sd,
+        &Address::new(AddressType::RandomStatic, peripheral_addr),
+    );
 
     {
         // Use the immutable ref of `Softdevice` to run the softdevice_task
@@ -164,50 +172,51 @@ pub(crate) async fn initialize_nrf_ble_split_slave_and_run<
         defmt::unwrap!(spawner.spawn(softdevice_task(sdv)))
     };
 
-    let server = defmt::unwrap!(BleSplitSlaveServer::new(sd));
+    let server = defmt::unwrap!(BleSplitPeripheralServer::new(sd));
 
     loop {
         let advertisement = ConnectableAdvertisement::NonscannableDirected {
-            peer: Address::new(AddressType::RandomStatic, master_addr),
+            peer: Address::new(AddressType::RandomStatic, central_addr),
         };
         let conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
             Ok(conn) => conn,
             Err(e) => {
-                defmt::error!("Split slave advertise error: {}", e);
+                defmt::error!("Split peripheral advertise error: {}", e);
                 continue;
             }
         };
 
-        // Set sys attr of slave
+        // Set sys attr of peripheral
         set_sys_attrs(&conn, None).unwrap();
 
         let server_fut = gatt_server::run(&conn, &server, |event| match event {
-            BleSplitSlaveServerEvent::Service(split_event) => match split_event {
+            BleSplitPeripheralServerEvent::Service(split_event) => match split_event {
                 SplitBleServiceEvent::MessageToCentralCccdWrite { notifications } => {
                     info!("Split value CCCD updated: {}", notifications)
                 }
                 SplitBleServiceEvent::MessageToPeripheralWrite(message) => {
-                    // TODO: Handle message from master to slave
-                    info!("Message from master: {:?}", message);
+                    // TODO: Handle message from central to peripheral
+                    info!("Message from central: {:?}", message);
                 }
             },
         });
 
-        let mut slave = SplitSlave::new(&mut matrix, BleSplitSlaveDriver::new(&server, &conn));
-        let slave_fut = slave.run();
-        select(server_fut, slave_fut).await;
+        let mut peripheral =
+            SplitPeripheral::new(&mut matrix, BleSplitPeripheralDriver::new(&server, &conn));
+        let peripheral_fut = peripheral.run();
+        select(server_fut, peripheral_fut).await;
     }
 }
 
-/// Initialize and run the slave keyboard service via serial.
+/// Initialize and run the peripheral keyboard service via serial.
 ///
 /// # Arguments
 ///
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
-/// * `serial` - serial port to send key events to master board
+/// * `serial` - serial port to send key events to central board
 #[cfg(not(feature = "_nrf_ble"))]
-pub(crate) async fn initialize_serial_split_slave_and_run<
+pub(crate) async fn initialize_serial_split_peripheral_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -235,17 +244,17 @@ pub(crate) async fn initialize_serial_split_slave_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    let mut slave = SplitSlave::new(&mut matrix, SerialSplitDriver::new(serial));
-    slave.run().await
+    let mut peripheral = SplitPeripheral::new(&mut matrix, SerialSplitDriver::new(serial));
+    peripheral.run().await
 }
 
-/// The split slave instance.
-pub(crate) struct SplitSlave<'a, M: MatrixTrait, S: SplitWriter + SplitReader> {
+/// The split peripheral instance.
+pub(crate) struct SplitPeripheral<'a, M: MatrixTrait, S: SplitWriter + SplitReader> {
     matrix: &'a mut M,
     split_driver: S,
 }
 
-impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitSlave<'a, M, S> {
+impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitPeripheral<'a, M, S> {
     pub(crate) fn new(matrix: &'a mut M, split_driver: S) -> Self {
         Self {
             matrix,
@@ -253,10 +262,10 @@ impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitSlave<'a, M, S> {
         }
     }
 
-    /// Run the slave keyboard service.
+    /// Run the peripheral keyboard service.
     ///
-    /// The slave uses the general matrix, does scanning and send the key events through `SplitWriter`.
-    /// If also receives split messages from the master through `SplitReader`.
+    /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
+    /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) -> ! {
         loop {
             self.matrix.scan().await;
@@ -283,11 +292,11 @@ impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitSlave<'a, M, S> {
     }
 }
 
-/// Run the slave keyboard service.
+/// Run the peripheral keyboard service.
 ///
-/// The slave uses the general matrix, does scanning and send the key events through `SplitWriter`.
-/// If also receives split messages from the master through `SplitReader`.
-pub(crate) async fn run_slave<
+/// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
+/// If also receives split messages from the central through `SplitReader`.
+pub(crate) async fn run_peripheral<
     M: MatrixTrait,
     S: SplitWriter + SplitReader,
     const ROW: usize,

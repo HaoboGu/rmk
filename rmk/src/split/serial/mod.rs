@@ -22,9 +22,9 @@ use crate::debounce::DebouncerTrait;
 use crate::keyboard::{communication_task, Keyboard, KeyboardReportMessage};
 use crate::keymap::KeyMap;
 use crate::run_usb_keyboard;
-use crate::split::master::MasterMatrix;
+use crate::split::central::CentralMatrix;
 use crate::split::{
-    driver::{SlaveMatrixMonitor, SplitReader, SplitWriter},
+    driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter},
     SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
 };
 use crate::storage::Storage;
@@ -47,7 +47,7 @@ use super::driver::SplitDriverError;
 /// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-pub(crate) async fn initialize_serial_split_master_and_run<
+pub(crate) async fn initialize_serial_split_central_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -55,16 +55,16 @@ pub(crate) async fn initialize_serial_split_master_and_run<
     D: Driver<'static>,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
-    const MASTER_ROW: usize,
-    const MASTER_COL: usize,
-    const MASTER_ROW_OFFSET: usize,
-    const MASTER_COL_OFFSET: usize,
+    const CENTRAL_ROW: usize,
+    const CENTRAL_COL: usize,
+    const CENTRAL_ROW_OFFSET: usize,
+    const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     driver: D,
     flash: Option<F>,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
@@ -102,37 +102,37 @@ pub(crate) async fn initialize_serial_split_master_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<MASTER_ROW, MASTER_COL> = RapidDebouncer::new();
+    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<MASTER_COL, MASTER_ROW> = RapidDebouncer::new();
+    let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<MASTER_ROW, MASTER_COL> = DefaultDebouncer::new();
+    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<MASTER_COL, MASTER_ROW> = DefaultDebouncer::new();
+    let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
 
     #[cfg(feature = "col2row")]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
         _,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_ROW,
-        MASTER_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
     >::new(input_pins, output_pins, debouncer);
     #[cfg(not(feature = "col2row"))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
         _,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_COL,
-        MASTER_ROW,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_COL,
+        CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
     // Create keyboard services and devices
@@ -167,7 +167,7 @@ pub(crate) async fn initialize_serial_split_master_and_run<
             );
             let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
             let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-            // let slave_fut = select_slice(&mut slave_futs);
+            // let peripheral_fut = select_slice(&mut peripheral_futs);
             pin_mut!(usb_fut);
             pin_mut!(keyboard_fut);
             pin_mut!(led_fut);
@@ -176,7 +176,7 @@ pub(crate) async fn initialize_serial_split_master_and_run<
             match select4(
                 usb_fut,
                 select(keyboard_fut, communication_fut),
-                // select(led_fut, slave_fut),
+                // select(led_fut, peripheral_fut),
                 led_fut,
                 via_fut,
             )
@@ -196,15 +196,15 @@ pub(crate) async fn initialize_serial_split_master_and_run<
     }
 }
 
-// Receive split message from slave via serial and process it
+// Receive split message from peripheral via serial and process it
 ///
 /// Generic parameters:
-/// - `const ROW`: row number of the slave's matrix
-/// - `const COL`: column number of the slave's matrix
-/// - `const ROW_OFFSET`: row offset of the slave's matrix in the whole matrix
-/// - `const COL_OFFSET`: column offset of the slave's matrix in the whole matrix
+/// - `const ROW`: row number of the peripheral's matrix
+/// - `const COL`: column number of the peripheral's matrix
+/// - `const ROW_OFFSET`: row offset of the peripheral's matrix in the whole matrix
+/// - `const COL_OFFSET`: column offset of the peripheral's matrix in the whole matrix
 /// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
-pub(crate) async fn run_serial_slave_monitor<
+pub(crate) async fn run_serial_peripheral_monitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -215,13 +215,15 @@ pub(crate) async fn run_serial_slave_monitor<
     receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let slave =
-        SlaveMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
-    info!("Running slave monitor {}", id);
-    slave.run().await;
+    let peripheral = PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(
+        split_serial_driver,
+        id,
+    );
+    info!("Running peripheral monitor {}", id);
+    peripheral.run().await;
 }
 
-/// Serial driver for BOTH split master and slave
+/// Serial driver for BOTH split central and peripheral
 pub(crate) struct SerialSplitDriver<S: Read + Write> {
     serial: S,
 }

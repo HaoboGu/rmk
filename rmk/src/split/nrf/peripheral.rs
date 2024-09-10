@@ -6,7 +6,7 @@ use crate::split::{
     SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
 };
 
-/// Gatt service used in split slave to send split message to master
+/// Gatt service used in split peripheral to send split message to central
 #[nrf_softdevice::gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
 pub(crate) struct SplitBleService {
     #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
@@ -16,25 +16,25 @@ pub(crate) struct SplitBleService {
     pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
-/// Gatt server in split slave
+/// Gatt server in split peripheral
 #[nrf_softdevice::gatt_server]
-pub(crate) struct BleSplitSlaveServer {
+pub(crate) struct BleSplitPeripheralServer {
     pub(crate) service: SplitBleService,
 }
 
-/// BLE driver for split slave
-pub(crate) struct BleSplitSlaveDriver<'a> {
-    server: &'a BleSplitSlaveServer,
+/// BLE driver for split peripheral
+pub(crate) struct BleSplitPeripheralDriver<'a> {
+    server: &'a BleSplitPeripheralServer,
     conn: &'a Connection,
 }
 
-impl<'a> BleSplitSlaveDriver<'a> {
-    pub(crate) fn new(server: &'a BleSplitSlaveServer, conn: &'a Connection) -> Self {
+impl<'a> BleSplitPeripheralDriver<'a> {
+    pub(crate) fn new(server: &'a BleSplitPeripheralServer, conn: &'a Connection) -> Self {
         Self { server, conn }
     }
 }
 
-impl<'a> SplitReader for BleSplitSlaveDriver<'a> {
+impl<'a> SplitReader for BleSplitPeripheralDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         let message = self
             .server
@@ -52,7 +52,7 @@ impl<'a> SplitReader for BleSplitSlaveDriver<'a> {
     }
 }
 
-impl<'a> SplitWriter for BleSplitSlaveDriver<'a> {
+impl<'a> SplitWriter for BleSplitPeripheralDriver<'a> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
         let bytes = postcard::to_slice(message, &mut buf).map_err(|e| {

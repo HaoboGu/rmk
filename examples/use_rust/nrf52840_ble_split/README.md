@@ -4,14 +4,14 @@ RMK supports [nice!nano](https://nicekeyboards.com/) as well as any custom nrf52
 
 ## Build firmware
 
-You can build firmware for master and slave separately:
+You can build firmware for central and peripheral separately:
 
 ```shell
-# Build master firmware
-cargo build --release --bin master
+# Build central firmware
+cargo build --release --bin central
 
-# Build slave firmware
-cargo build --release --bin slave
+# Build peripheral firmware
+cargo build --release --bin peripheral
 ```
 
 ## Nice!nano support
@@ -27,11 +27,11 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    ```
 2. Compile RMK using `cargo objcopy`, get .bin firmware:
    ```shell
-   # Build master firmware and generate .bin firmware
-   cargo objcopy --release --bin master -- -O binary rmk-master.bin
+   # Build central firmware and generate .bin firmware
+   cargo objcopy --release --bin central -- -O binary rmk-central.bin
 
-   # Build slave firmware and generate .bin firmware
-   cargo objcopy --release --bin slave -- -O binary rmk-slave.bin
+   # Build peripheral firmware and generate .bin firmware
+   cargo objcopy --release --bin peripheral -- -O binary rmk-peripheral.bin
    ```
 3. Download uf2util from UF2 repo https://github.com/microsoft/uf2
    ```shell
@@ -72,9 +72,9 @@ The following are the detailed steps for flashing both nrf's softdevice and RMK 
    ```
 4. Compile, flash and run the example
    ```shell
-   # Run master firmware
-   cargo run --release --bin master
+   # Run central firmware
+   cargo run --release --bin central
 
-   # Run slave firmware
-   cargo run --release --bin slave
+   # Run peripheral firmware
+   cargo run --release --bin peripheral
    ```

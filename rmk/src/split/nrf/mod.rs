@@ -1,2 +1,2 @@
-pub mod master;
-pub mod slave;
+pub mod central;
+pub mod peripheral;

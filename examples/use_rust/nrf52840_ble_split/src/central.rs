@@ -23,7 +23,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    split::master::{run_rmk_split_master, run_slave_monitor},
+    split::central::{run_peripheral_monitor, run_rmk_split_central},
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -108,11 +108,11 @@ async fn main(spawner: Spawner) {
     let (input_pins, output_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P0_12, P0_13], output:  [P0_14, P0_15]);
 
-    let master_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
-    let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
+    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
     join(
-        run_rmk_split_master::<
+        run_rmk_split_central::<
             Input<'_>,
             Output<'_>,
             Driver<'_, USBD, &SoftwareVbusDetect>,
@@ -129,10 +129,10 @@ async fn main(spawner: Spawner) {
             driver,
             crate::keymap::KEYMAP,
             keyboard_config,
-            master_addr,
+            central_addr,
             spawner,
         ),
-        run_slave_monitor::<2, 1, 2, 2>(0, slave_addr),
+        run_peripheral_monitor::<2, 1, 2, 2>(0, peripheral_addr),
     )
     .await;
 }

@@ -23,7 +23,7 @@ use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
 use crate::run_usb_keyboard;
 #[cfg(feature = "_nrf_ble")]
-use crate::split::nrf::master::initialize_ble_split_master_and_run;
+use crate::split::nrf::central::initialize_ble_split_central_and_run;
 use crate::split::KeySyncSignal;
 use crate::split::SYNC_SIGNALS;
 use crate::usb::KeyboardUsbDevice;
@@ -36,9 +36,9 @@ use {
     embedded_storage_async::nor_flash::NorFlash,
 };
 
-use super::{KeySyncMessage, MASTER_SYNC_CHANNELS};
+use super::{KeySyncMessage, CENTRAL_SYNC_CHANNELS};
 
-/// Run RMK split master keyboard service. This function should never return.
+/// Run RMK split central keyboard service. This function should never return.
 ///
 /// # Arguments
 ///
@@ -48,10 +48,10 @@ use super::{KeySyncMessage, MASTER_SYNC_CHANNELS};
 /// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `master_addr` - (optional) master's BLE static address. This argument is enabled only for nRF BLE split master now
+/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split central now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
-pub async fn run_rmk_split_master<
+pub async fn run_rmk_split_central<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -59,34 +59,34 @@ pub async fn run_rmk_split_master<
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
-    const MASTER_ROW: usize,
-    const MASTER_COL: usize,
-    const MASTER_ROW_OFFSET: usize,
-    const MASTER_COL_OFFSET: usize,
+    const CENTRAL_ROW: usize,
+    const CENTRAL_COL: usize,
+    const CENTRAL_ROW_OFFSET: usize,
+    const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
-    #[cfg(feature = "_nrf_ble")] master_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_ble_split_master_and_run::<
+    let fut = initialize_ble_split_central_and_run::<
         In,
         Out,
         D,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW,
-        MASTER_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
         NUM_LAYER,
     >(
         input_pins,
@@ -94,23 +94,23 @@ pub async fn run_rmk_split_master<
         usb_driver,
         default_keymap,
         keyboard_config,
-        master_addr,
+        central_addr,
         spawner,
     )
     .await;
 
     #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_split_master_and_run::<
+    let fut = initialize_usb_split_central_and_run::<
         In,
         Out,
         D,
         F,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW,
-        MASTER_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
         NUM_LAYER,
     >(
         input_pins,
@@ -125,13 +125,13 @@ pub async fn run_rmk_split_master<
     fut
 }
 
-/// Run master's slave monitor task.
+/// Run central's peripheral monitor task.
 ///
 /// # Arguments
-/// * `id` - slave id
-/// * `addr` - (optional) slave's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `id` - peripheral id
+/// * `addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
-pub async fn run_slave_monitor<
+pub async fn run_peripheral_monitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -144,19 +144,19 @@ pub async fn run_slave_monitor<
 ) {
     #[cfg(feature = "_nrf_ble")]
     {
-        use crate::split::nrf::master::run_ble_slave_monitor;
-        run_ble_slave_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
+        use crate::split::nrf::central::run_ble_peripheral_monitor;
+        run_ble_peripheral_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
     };
 
     #[cfg(not(feature = "_nrf_ble"))]
     {
-        use crate::split::serial::run_serial_slave_monitor;
-        run_serial_slave_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
+        use crate::split::serial::run_serial_peripheral_monitor;
+        run_serial_peripheral_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
     };
 }
 
-/// Split master is connected to host via usb
-pub(crate) async fn initialize_usb_split_master_and_run<
+/// Split central is connected to host via usb
+pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -164,16 +164,16 @@ pub(crate) async fn initialize_usb_split_master_and_run<
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
-    const MASTER_ROW: usize,
-    const MASTER_COL: usize,
-    const MASTER_ROW_OFFSET: usize,
-    const MASTER_COL_OFFSET: usize,
+    const CENTRAL_ROW: usize,
+    const CENTRAL_COL: usize,
+    const CENTRAL_ROW_OFFSET: usize,
+    const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
@@ -198,52 +198,52 @@ pub(crate) async fn initialize_usb_split_master_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
-        RapidDebouncer<MASTER_ROW, MASTER_COL>,
+        RapidDebouncer<CENTRAL_ROW, CENTRAL_COL>,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_ROW,
-        MASTER_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
     >::new(input_pins, output_pins, RapidDebouncer::new());
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
-        DefaultDebouncer<MASTER_ROW, MASTER_COL>,
+        DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL>,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_ROW,
-        MASTER_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
     >::new(input_pins, output_pins, DefaultDebouncer::new());
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
-        RapidDebouncer<MASTER_COL, MASTER_ROW>,
+        RapidDebouncer<CENTRAL_COL, CENTRAL_ROW>,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_COL,
-        MASTER_ROW,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_COL,
+        CENTRAL_ROW,
     >::new(input_pins, output_pins, RapidDebouncer::new());
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
-        DefaultDebouncer<MASTER_COL, MASTER_ROW>,
+        DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW>,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_COL,
-        MASTER_ROW,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_COL,
+        CENTRAL_ROW,
     >::new(input_pins, output_pins, DefaultDebouncer::new());
 
     // Create keyboard services and devices
@@ -279,7 +279,7 @@ pub(crate) async fn initialize_usb_split_master_and_run<
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-pub(crate) struct MasterMatrix<
+pub(crate) struct CentralMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -315,14 +315,14 @@ impl<
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
     > MatrixTrait
-    for MasterMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    for CentralMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;
 
     async fn scan(&mut self) {
         self.internal_scan().await;
-        self.scan_slave().await;
+        self.scan_peripheral().await;
     }
 
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
@@ -354,7 +354,7 @@ impl<
 
         Timer::after_micros(1).await;
 
-        // Enable SCAN_SIGNAL, wait for slave's report
+        // Enable SCAN_SIGNAL, wait for peripheral's report
         SCAN_SIGNAL.reset();
 
         // Current board's matrix
@@ -376,7 +376,7 @@ impl<
 
         self.scan_start = Some(Instant::now());
 
-        // Enable SCAN_SIGNAL, wait for slave's report
+        // Enable SCAN_SIGNAL, wait for peripheral's report
         SCAN_SIGNAL.reset();
     }
 }
@@ -392,15 +392,15 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > MasterMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > CentralMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
-    /// Initialization of master
+    /// Initialization of central
     pub(crate) fn new(
         input_pins: [In; INPUT_PIN_NUM],
         output_pins: [Out; OUTPUT_PIN_NUM],
         debouncer: D,
     ) -> Self {
-        MasterMatrix {
+        CentralMatrix {
             input_pins,
             output_pins,
             debouncer,
@@ -409,19 +409,20 @@ impl<
         }
     }
 
-    pub(crate) async fn scan_slave(&mut self) {
-        for (id, slave_channel) in MASTER_SYNC_CHANNELS.iter().enumerate() {
-            // TODO: Skip unused slaves
+    pub(crate) async fn scan_peripheral(&mut self) {
+        for (id, peripheral_channel) in CENTRAL_SYNC_CHANNELS.iter().enumerate() {
+            // TODO: Skip unused peripherals
             if id > 0 {
                 break;
             }
-            // Signal that slave scanning is started
+            // Signal that peripheral scanning is started
             SYNC_SIGNALS[id].signal(KeySyncSignal::Start);
-            // Receive slave key states
-            if let KeySyncMessage::StartSend(n) = slave_channel.receive().await {
-                // Update slave's key states
+            // Receive peripheral key states
+            if let KeySyncMessage::StartSend(n) = peripheral_channel.receive().await {
+                // Update peripheral's key states
                 for _ in 0..n {
-                    if let KeySyncMessage::Key(row, col, key_state) = slave_channel.receive().await
+                    if let KeySyncMessage::Key(row, col, key_state) =
+                        peripheral_channel.receive().await
                     {
                         if key_state != self.key_states[row as usize][col as usize].pressed {
                             self.key_states[row as usize][col as usize].pressed = key_state;
