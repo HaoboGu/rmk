@@ -344,9 +344,9 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     .await
                     {
                         Either4::First(_) => error!("Usb task or keyboard task exited"),
-                        Either4::Second(_) => error!("Storage or vial task is died"),
-                        Either4::Third(_) => error!("Led task is died"),
-                        Either4::Fourth(_) => error!("Communication task is died"),
+                        Either4::Second(_) => error!("Storage or vial task has died"),
+                        Either4::Third(_) => error!("Led task has died"),
+                        Either4::Fourth(_) => error!("Communication task has died"),
                     }
                 };
                 info!("Running USB keyboard!");

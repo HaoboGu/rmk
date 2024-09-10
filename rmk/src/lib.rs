@@ -324,10 +324,10 @@ pub(crate) async fn run_usb_keyboard<
     )
     .await
     {
-        Either4::First(_) => error!("Usb or keyboard task is died"),
-        Either4::Second(_) => error!("Storage or vial task is died"),
-        Either4::Third(_) => error!("Led task is died"),
-        Either4::Fourth(_) => error!("Communication task is died"),
+        Either4::First(_) => error!("Usb or keyboard task has died"),
+        Either4::Second(_) => error!("Storage or vial task has died"),
+        Either4::Third(_) => error!("Led task has died"),
+        Either4::Fourth(_) => error!("Communication task has died"),
     }
 }
 
