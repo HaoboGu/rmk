@@ -1,0 +1,60 @@
+[keyboard]
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "rp2040"
+
+[matrix]
+rows = 4
+cols = 3
+layers = 2
+# Input and output pins are mandatory
+input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+output_pins = ["PIN_19", "PIN_20", "PIN_21"]
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# row2col = true
+
+[storage]
+
+[split]
+connection = "serial"
+
+[split.central]
+rows = 2
+cols = 2
+row_offset = 0
+col_offset = 0
+serial = [
+    { instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" },
+    { instance = "UART1", tx_pin = "PIN_4", rx_pin = "PIN_5" },
+]
+input_pins = ["PIN_9", "PIN_11"]
+output_pins = ["PIN_10", "PIN_12"]
+# [[split.central.serial]]
+# instance = "UART0"
+# tx_pin = "PIN_0"
+# rx_pin = "PIN_1"
+# [[split.central.serial]]
+# instance = "UART1"
+# tx_pin = "PIN_2"
+# rx_pin = "PIN_3"
+
+
+[[split.peripheral]]
+rows = 2
+cols = 1
+row_offset = 2
+col_offset = 2
+serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
+input_pins = ["PIN_9", "PIN_11"]
+output_pins = ["PIN_10"]
+
+[[split.peripheral]]
+rows = 2
+cols = 1
+row_offset = 2
+col_offset = 2
+serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
+input_pins = ["PIN_9", "PIN_11"]
+output_pins = ["PIN_10"]

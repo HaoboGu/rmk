@@ -46,10 +46,8 @@ cols = 7
 layers = 2
 
 [split]
-split = true
-# Connection type between central & peripheral
-connection = "ble"/"uart"?
-main = "left" # or "right"
+# Connection type between central & peripherals
+connection = "ble"/"serial"
 
 [split.left]
 # Pin assignment
