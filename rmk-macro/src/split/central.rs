@@ -149,7 +149,46 @@ fn expand_split_central(
 fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> TokenStream2 {
     match chip.series {
         ChipSeries::Stm32 => todo!(),
-        ChipSeries::Nrf52 => todo!(),
+        ChipSeries::Nrf52 => {
+            let central_addr = split_config
+                .central
+                .ble_addr
+                .expect("No ble_addr defined for central");
+
+            let row = split_config.central.rows;
+            let col = split_config.central.cols;
+            let row_offset = split_config.central.row_offset;
+            let col_offset = split_config.central.col_offset;
+            let central_task = quote! {
+                ::rmk::split::central::run_rmk_split_central::<
+                    ::embassy_nrf::gpio::Input<'_>,
+                    ::embassy_nrf::gpio::Output<'_>,
+                    ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                    ROW,
+                    COL,
+                    #row,
+                    #col,
+                    #row_offset,
+                    #col_offset,
+                    NUM_LAYER,
+                >(input_pins, output_pins, driver, KEYMAP, keyboard_config, [#(#central_addr), *], spawner)
+            };
+            let mut tasks = vec![central_task];
+            split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
+                let row = p.rows ;
+                let col = p.cols ;
+                let row_offset = p.row_offset ;
+                let col_offset = p.col_offset ;
+                let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
+                tasks.push(quote! {
+                    ::rmk::split::central::run_peripheral_monitor::<#row, #col, #row_offset, #col_offset>(
+                        #idx,
+                        [#(#peripheral_ble_addr), *],
+                    )
+                }); 
+            });
+            join_all_tasks(tasks)
+        }
         ChipSeries::Rp2040 => {
             let row = split_config.central.rows as usize;
             let col = split_config.central.cols as usize;
@@ -171,7 +210,7 @@ fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> T
                 >(input_pins, output_pins, driver, flash, KEYMAP, keyboard_config, spawner)
             };
             let mut tasks = vec![central_task];
-            let central_serials = split_config.central.serial.clone().unwrap();
+            let central_serials = split_config.central.serial.clone().expect("No serial defined for central");
             split_config
                 .peripheral
                 .iter()
@@ -181,7 +220,7 @@ fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> T
                     let col = peripheral_config.cols as usize;
                     let row_offset = peripheral_config.row_offset as usize;
                     let col_offset = peripheral_config.col_offset as usize;
-                    let uart_instance = format_ident!("{}", central_serials.get(idx).unwrap().instance.to_lowercase());
+                    let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
 
                     tasks.push(quote! {
                         ::rmk::split::central::run_peripheral_monitor::<#row, #col, #row_offset, #col_offset, _>(
@@ -191,20 +230,7 @@ fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> T
                     });
                 });
 
-            let mut current_joined = quote! {};
-            tasks.iter().enumerate().for_each(|(id, task)| {
-                if id == 0 {
-                    current_joined = quote! {#task};
-                } else {
-                    current_joined = quote! {
-                        ::embassy_futures::join::join(#current_joined, #task)
-                    };
-                }
-            });
-
-            quote! {
-                #current_joined.await;
-            }
+            join_all_tasks(tasks)
         }
         ChipSeries::Esp32 => todo!(),
     }
@@ -264,7 +290,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                 let rx_pin = format_ident!("{}", s.rx_pin);
                 let irq_name = format_ident!("IrqsUart{}", idx);
                 quote! {
-                    bind_interrupts!(struct #irq_name {
+                    ::embassy_rp::bind_interrupts!(struct #irq_name {
                         #uart_irq => ::embassy_rp::uart::BufferedInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
                     });
                     let #uart_name = ::embassy_rp::uart::BufferedUart::new(
@@ -286,4 +312,21 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
         });
     });
     uart_initializers
+}
+
+fn join_all_tasks(tasks: Vec<TokenStream2>) -> TokenStream2 {
+    let mut current_joined = quote! {};
+    tasks.iter().enumerate().for_each(|(id, task)| {
+        if id == 0 {
+            current_joined = quote! {#task};
+        } else {
+            current_joined = quote! {
+                ::embassy_futures::join::join(#current_joined, #task)
+            };
+        }
+    });
+
+    quote! {
+        #current_joined.await;
+    }
 }

@@ -157,10 +157,10 @@ pub struct SplitConfig {
 /// Configurations for each split board
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitBoardConfig {
-    pub rows: u8,
-    pub cols: u8,
-    pub row_offset: u8,
-    pub col_offset: u8,
+    pub rows: usize,
+    pub cols: usize,
+    pub row_offset: usize,
+    pub col_offset: usize,
     pub ble_addr: Option<[u8; 6]>,
     pub serial: Option<Vec<SerialConfig>>,
     pub input_pins: Vec<String>,
