@@ -185,7 +185,7 @@ fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> T
                         #idx,
                         [#(#peripheral_ble_addr), *],
                     )
-                }); 
+                });
             });
             join_all_tasks(tasks)
         }
@@ -210,7 +210,11 @@ fn expand_split_central_entry(chip: &ChipModel, split_config: &SplitConfig) -> T
                 >(input_pins, output_pins, driver, flash, KEYMAP, keyboard_config, spawner)
             };
             let mut tasks = vec![central_task];
-            let central_serials = split_config.central.serial.clone().expect("No serial defined for central");
+            let central_serials = split_config
+                .central
+                .serial
+                .clone()
+                .expect("No serial defined for central");
             split_config
                 .peripheral
                 .iter()

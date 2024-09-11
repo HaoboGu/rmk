@@ -13,7 +13,7 @@ pub struct KeyboardTomlConfig {
     #[serde(default = "default_dep")]
     pub dependency: DependencyConfig,
     pub layout: Option<LayoutConfig>,
-    pub split: Option<SplitConfig>
+    pub split: Option<SplitConfig>,
 }
 
 /// Configurations for usb
@@ -144,7 +144,6 @@ fn default_storage_config() -> StorageConfig {
 pub struct LayoutConfig {
     pub keymap: Vec<Vec<Vec<String>>>,
 }
-
 
 /// Configurations for split keyboards
 #[derive(Clone, Debug, Default, Deserialize)]
