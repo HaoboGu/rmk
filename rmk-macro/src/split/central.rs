@@ -90,7 +90,7 @@ fn expand_split_central(
         split_config.central.output_pins.clone(),
         async_matrix,
     );
-    let split_communicate = expand_split_communicate(&chip, split_config);
+    let split_communication_config = expand_split_communication_config(&chip, split_config);
     let run_rmk = expand_split_central_entry(&chip, &usb_info, split_config);
     let (ble_config, set_ble_config) = expand_ble_config(&chip, comm_type, toml_config.ble);
 
@@ -123,11 +123,12 @@ fn expand_split_central(
             #flash_init
 
             // Initialize light config as `light_config`
-            #light_config;
+            #light_config
 
             // Initialize matrix config as `(input_pins, output_pins)`
-            #matrix_config;
+            #matrix_config
 
+            // Initialize split central ble config
             #ble_config
 
             // Set all keyboard config
@@ -140,7 +141,7 @@ fn expand_split_central(
                 ..Default::default()
             };
 
-            #split_communicate
+            #split_communication_config
 
             // Start serving
             #run_rmk
@@ -285,7 +286,7 @@ fn expand_split_central_entry(chip: &ChipModel, usb_info: &UsbInfo, split_config
     }
 }
 
-fn expand_split_communicate(chip: &ChipModel, split_config: &SplitConfig) -> TokenStream2 {
+fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfig) -> TokenStream2 {
     match &split_config.connection[..] {
         "ble" => {
             // We need to create addrs for BLE

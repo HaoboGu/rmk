@@ -67,17 +67,8 @@ pub(crate) fn parse_split_peripheral_mod(
 
         #main_function_sig {
             ::defmt::info!("RMK start!");
+
             #main_function
-            // // Initialize peripherals as `p`
-            // #chip_init
-
-            // // Initialize matrix config as `(input_pins, output_pins)`
-            // #matrix_config;
-
-            // #split_communicate
-
-            // // Start serving
-            // #run_rmk
         }
     }
 }
@@ -111,7 +102,7 @@ fn expand_split_peripheral(
     quote! {
         #imports
         #chip_init
-        #matrix_config; // FIXME: remove symbol ;
+        #matrix_config
         #run_rmk_peripheral
     }
 }

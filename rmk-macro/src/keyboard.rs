@@ -232,10 +232,10 @@ fn expand_main(
             #flash_init
 
             // Initialize light config as `light_config`
-            #light_config;
+            #light_config
 
             // Initialize matrix config as `(input_pins, output_pins)`
-            #matrix_config;
+            #matrix_config
 
             #ble_config
 
