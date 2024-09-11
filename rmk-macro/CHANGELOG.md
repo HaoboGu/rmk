@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add support for split keyboard(serial/BLE)
+- Add support for overriding chip initialization for nrf/rp/esp32
+
 ### Changed
 
 - BREAKING: generate new public APIs
-- Add support for overriding chip initialization for nrf/rp/esp32
+
+### Fixed
+
 - Fix broken link in error message
 
 ## [0.1.8] - 2024-08-06 
