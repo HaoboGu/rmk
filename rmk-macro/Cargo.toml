@@ -10,13 +10,13 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
+rmk-config = { version = "0.1.5", path = "../rmk-config", features = ["toml"] }
 toml = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
-rmk-config = { version = "0.1.4", path = "../rmk-config", features = ["toml"] }
 prettyplease = "0.2"
 darling = "0.20"
 once_cell = "1.19"
