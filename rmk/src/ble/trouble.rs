@@ -17,13 +17,15 @@ use crate::ble::{
 };
 
 /// Size of L2CAP packets (ATT MTU is this - 4)
-const L2CAP_MTU: usize = 128;
+const L2CAP_MTU: usize = 251;
 
 /// Max number of connections
 const CONNECTIONS_MAX: usize = 2;
 
 /// Max number of L2CAP channels.
 const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+
+const MAX_ATTRIBUTES: usize = 50;
 
 pub async fn run_ble_task<C: Controller>(controller: C) {
     static HOST_RESOURCES: StaticCell<
@@ -37,7 +39,7 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
     // info!("BLE host address = {:?}", address);
     ble.set_random_address(address);
 
-    let mut table: AttributeTable<'_, NoopRawMutex, 100> = AttributeTable::new();
+    let mut table: AttributeTable<'_, NoopRawMutex, MAX_ATTRIBUTES> = AttributeTable::new();
 
     // Generic Access Service (mandatory)
     let id = b"Trouble";
@@ -46,7 +48,7 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
     let mut svc = table.add_service(Service::new(0x1800));
     let _ = svc.add_characteristic_ro(0x2a00, id);
     let _ = svc.add_characteristic_ro(0x2a01, &appearance[..]);
-    drop(svc);
+    svc.build();
 
     // Generic attribute service (mandatory)
     table.add_service(Service::new(0x1801));
@@ -163,33 +165,26 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     let mut input_keyboard_desc_data = [BleCompositeReportType::Keyboard as u8, 1u8];
     let mut input_keyboard_data = [0u8; 8];
-    let mut hid_service = table
-    .add_service(Service::new(BleSpecification::HidService as u16));
-    let mut input_keyboard_handle = hid_service
-        .add_characteristic(
-            BleCharacteristics::HidReport as u16,
-            &[
-                CharacteristicProp::Read,
-                CharacteristicProp::Write,
-                CharacteristicProp::Notify,
-            ],
-            &mut input_keyboard_data,
-        );
-
-    let _input_keyboard_desc_handle = input_keyboard_handle.add_descriptor(
-        BleDescriptor::ReportReference as u16,
+    let mut hid_service = table.add_service(Service::new(BleSpecification::HidService as u16));
+    let mut input_keyboard_handle = hid_service.add_characteristic(
+        BleCharacteristics::HidReport as u16,
         &[
             CharacteristicProp::Read,
             CharacteristicProp::Write,
             CharacteristicProp::Notify,
         ],
+        &mut input_keyboard_data,
+    );
+
+    let _input_keyboard_desc_handle = input_keyboard_handle.add_descriptor_ro(
+        BleDescriptor::ReportReference as u16,
         &mut input_keyboard_desc_data,
     );
 
     let input_keyboard_handle = input_keyboard_handle.build();
     drop(hid_service);
 
-    let server = ble.gatt_server::<NoopRawMutex, 100, L2CAP_MTU>(&table);
+    let server = ble.gatt_server::<NoopRawMutex, MAX_ATTRIBUTES, L2CAP_MTU>(&table);
 
     let mut adv_data = [0; 64];
     AdStructure::encode_slice(
@@ -208,9 +203,11 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     let mut scan_data = [0; 64];
     AdStructure::encode_slice(
-        &[
-            AdStructure::ServiceUuids16(&[Uuid::Uuid16([0x0f, 0x18]), Uuid::Uuid16([0x12, 0x18]), Uuid::Uuid16([0x0a, 0x18]),]),
-        ],
+        &[AdStructure::ServiceUuids16(&[
+            Uuid::Uuid16([0x0f, 0x18]),
+            Uuid::Uuid16([0x12, 0x18]),
+            Uuid::Uuid16([0x0a, 0x18]),
+        ])],
         &mut scan_data[..],
     )
     .unwrap();
@@ -271,13 +268,12 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
             let conn = advertiser.accept().await.unwrap();
             info!("Connected");
             // Keep connection alive
-            let mut tick: u8 = 0;
             loop {
-                tick += 1;
                 server
                     .notify(&ble, level_handle, &conn, &[80])
                     .await
                     .unwrap();
+                embassy_time::Timer::after_secs(1).await;
             }
         },
     )
