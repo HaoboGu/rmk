@@ -15,6 +15,22 @@ output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 
+[layout]
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
+
 [storage]
 
 [split]
@@ -31,15 +47,6 @@ serial = [
 ]
 input_pins = ["PIN_9", "PIN_11"]
 output_pins = ["PIN_10", "PIN_12"]
-# [[split.central.serial]]
-# instance = "UART0"
-# tx_pin = "PIN_0"
-# rx_pin = "PIN_1"
-# [[split.central.serial]]
-# instance = "UART1"
-# tx_pin = "PIN_2"
-# rx_pin = "PIN_3"
-
 
 [[split.peripheral]]
 rows = 2
