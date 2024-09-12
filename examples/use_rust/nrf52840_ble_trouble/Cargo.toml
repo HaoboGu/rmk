@@ -24,11 +24,11 @@ nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", branch = "main", de
 nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", branch = "main", default-features = false, features = [
     "defmt",
 ] }
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", features = [
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "d9d2e80", features = [
     "defmt",
     "gatt",
 ] }
-bt-hci = { version = "0.1.0" }
+bt-hci = { version = "0.1" }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }

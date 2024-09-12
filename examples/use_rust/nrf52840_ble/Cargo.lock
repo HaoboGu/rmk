@@ -100,10 +100,11 @@ checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 
 [[package]]
 name = "bt-hci"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "499d74e90e6b1e61660adc8fb5f17aeac9487bced16f57c1f91a8783736ada53"
+checksum = "57a6508c63d7d137e8188833d9ed3ca97e40d676cf5217874c8c1c24851b012d"
 dependencies = [
+ "defmt",
  "embassy-sync 0.6.0",
  "embassy-time",
  "embedded-io",
@@ -1249,7 +1250,7 @@ checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
 name = "rmk"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1286,7 +1287,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "embassy-nrf",
  "embedded-hal 1.0.0",
@@ -1296,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.1.8"
+version = "0.2.0"
 dependencies = [
  "cargo_toml",
  "darling 0.20.3",
@@ -1532,7 +1533,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble/#c4b043ea8f2dd954d827131bfadf41ff61e5041c"
+source = "git+https://github.com/embassy-rs/trouble/?rev=d9d2e80#d9d2e80b6b2ed6c3aeae1de534de557906353522"
 dependencies = [
  "bt-hci",
  "defmt",
