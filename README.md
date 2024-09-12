@@ -20,8 +20,6 @@ A feature-rich Rust keyboard firmware.
 
 ## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
-</details>
-
 ## Real World Examples
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)

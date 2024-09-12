@@ -6,6 +6,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::matrix::Matrix;
+use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_task, config::RmkConfig, flash::EmptyFlashWrapper,
     keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
@@ -31,8 +32,7 @@ use futures::pin_mut;
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
-pub async fn initialize_esp_ble_keyboard_with_config_and_run<
-    // F: NorFlash,
+pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -40,11 +40,11 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     #[cfg(feature = "col2row")] input_pins: [In; ROW],
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // TODO: Use esp nvs as the storage
@@ -52,8 +52,11 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     let (mut _storage, keymap) = (
         None::<EmptyFlashWrapper>,
         RefCell::new(
-            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<EmptyFlashWrapper>(keymap, None)
-                .await,
+            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<EmptyFlashWrapper>(
+                default_keymap,
+                None,
+            )
+            .await,
         ),
     );
 
@@ -77,6 +80,7 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     // TODO: add usb service for other chips of esp32 which have USB device
 
     loop {
+        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
         info!("Waitting for connection..");

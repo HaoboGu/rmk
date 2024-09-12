@@ -13,12 +13,24 @@ use {
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
 pub(crate) trait MatrixTrait {
+    // Matrix size
+    const ROW: usize;
+    const COL: usize;
+
     // Do matrix scanning, save the result in matrix's key_state field.
     async fn scan(&mut self);
     // Read key state at position (row, col)
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
     // Update key state at position (row, col)
     fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState));
+    // Get matrix row num
+    fn get_row_num(&self) -> usize {
+        Self::ROW
+    }
+    // Get matrix col num
+    fn get_col_num(&self) -> usize {
+        Self::COL
+    }
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self);
 }
@@ -73,7 +85,7 @@ impl KeyState {
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-pub struct Matrix<
+pub(crate) struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -123,6 +135,15 @@ impl<
         const OUTPUT_PIN_NUM: usize,
     > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
+    #[cfg(feature = "col2row")]
+    const ROW: usize = INPUT_PIN_NUM;
+    #[cfg(feature = "col2row")]
+    const COL: usize = OUTPUT_PIN_NUM;
+    #[cfg(not(feature = "col2row"))]
+    const ROW: usize = OUTPUT_PIN_NUM;
+    #[cfg(not(feature = "col2row"))]
+    const COL: usize = OUTPUT_PIN_NUM;
+
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {

@@ -25,7 +25,7 @@ use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
-        master::{initialize_split_master_and_run, run_serial_slave_monitor},
+        central::{run_peripheral_monitor, run_rmk_split_central},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };
@@ -40,7 +40,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -89,11 +89,11 @@ async fn main(_spawner: Spawner) {
 
     // Start serving
     join(
-        initialize_split_master_and_run::<
-            Flash<peripherals::FLASH, Async, FLASH_SIZE>,
-            Driver<'_, USB>,
+        run_rmk_split_central::<
             Input<'_>,
             Output<'_>,
+            Driver<'_, USB>,
+            Flash<peripherals::FLASH, Async, FLASH_SIZE>,
             ROW,
             COL,
             2,
@@ -102,14 +102,15 @@ async fn main(_spawner: Spawner) {
             0,
             NUM_LAYER,
         >(
-            driver,
             input_pins,
             output_pins,
-            Some(flash),
+            driver,
+            flash,
             crate::keymap::KEYMAP,
             keyboard_config,
+            spawner,
         ),
-        run_serial_slave_monitor::<2, 1, 2, 2, _>(uart_receiver, 0),
+        run_peripheral_monitor::<2, 1, 2, 2, _>(0, uart_receiver),
     )
     .await;
 }

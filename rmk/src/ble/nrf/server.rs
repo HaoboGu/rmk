@@ -102,7 +102,7 @@ pub(crate) struct BleServer {
 }
 
 impl BleServer {
-    pub fn new(
+    pub(crate) fn new(
         sd: &mut Softdevice,
         usb_config: KeyboardUsbConfig<'static>,
         bonder: &'static dyn SecurityHandler,

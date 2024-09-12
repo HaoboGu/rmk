@@ -1197,6 +1197,7 @@ checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
 dependencies = [
  "cobs",
  "const_format",
+ "defmt",
  "heapless 0.7.17",
  "postcard-derive",
  "serde",

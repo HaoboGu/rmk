@@ -1,13 +1,13 @@
 use nrf_softdevice::ble::Uuid;
 
 /// HID service uuid defined in BLE protocol
-pub const BLE_HID_SERVICE_UUID: Uuid = Uuid::new_16(0x1812);
+pub(crate) const BLE_HID_SERVICE_UUID: Uuid = Uuid::new_16(0x1812);
 
 /// Specification uuid used in keyboards
 ///
 /// Full reference: https://www.bluetooth.com/specifications/assigned-numbers/
 /// UUID details: https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/service_uuids.yaml
-pub enum BleSpecification {
+pub(crate) enum BleSpecification {
     DeviceInformation = 0x180a,
     BatteryService = 0x180f,
     HidService = 0x1812,
@@ -16,7 +16,7 @@ pub enum BleSpecification {
 /// Characteristics uuids used in keyboards
 ///
 /// refernece: https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/uuids/characteristic_uuids.yaml
-pub enum BleCharacteristics {
+pub(crate) enum BleCharacteristics {
     BatteryLevel = 0x2a19,
     ModelNumber = 0x2a24,
     SerialNumber = 0x2a25,
@@ -33,24 +33,24 @@ pub enum BleCharacteristics {
     ProtocolMode = 0x2a4e,
 }
 
-pub enum BleDescriptor {
+pub(crate) enum BleDescriptor {
     ReportReference = 0x2908,
 }
 
 impl BleDescriptor {
-    pub fn uuid(self) -> Uuid {
+    pub(crate) fn uuid(self) -> Uuid {
         Uuid::new_16(self as u16)
     }
 }
 
 impl BleSpecification {
-    pub fn uuid(self) -> Uuid {
+    pub(crate) fn uuid(self) -> Uuid {
         Uuid::new_16(self as u16)
     }
 }
 
 impl BleCharacteristics {
-    pub fn uuid(self) -> Uuid {
+    pub(crate) fn uuid(self) -> Uuid {
         Uuid::new_16(self as u16)
     }
 }

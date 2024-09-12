@@ -3,6 +3,7 @@ mod ble;
 mod chip_init;
 mod comm;
 mod entry;
+mod feature;
 mod flash;
 mod gpio_config;
 mod import;
@@ -11,10 +12,14 @@ mod keyboard_config;
 mod layout;
 mod light;
 mod matrix;
+mod split;
+#[rustfmt::skip]
 mod usb_interrupt_map;
 
 use crate::keyboard::parse_keyboard_mod;
+use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
+use split::{central::parse_split_central_mod, peripheral::parse_split_peripheral_mod};
 use syn::parse_macro_input;
 use usb_interrupt_map::get_usb_info;
 
@@ -24,7 +29,6 @@ pub(crate) enum ChipSeries {
     Nrf52,
     Rp2040,
     Esp32,
-    Unsupported,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -52,7 +56,6 @@ impl ChipModel {
                     false
                 }
             }
-            ChipSeries::Unsupported => false,
         }
     }
 }
@@ -61,4 +64,37 @@ impl ChipModel {
 pub fn rmk_keyboard(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_mod = parse_macro_input!(item as syn::ItemMod);
     parse_keyboard_mod(attr, item_mod).into()
+}
+
+#[proc_macro_attribute]
+pub fn rmk_central(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item_mod = parse_macro_input!(item as syn::ItemMod);
+    parse_split_central_mod(attr, item_mod).into()
+}
+
+/// Attribute for `rmk_peripheral` macro
+#[derive(Debug, FromMeta)]
+struct PeripheralAttr {
+    #[darling(default)]
+    id: usize,
+}
+
+#[proc_macro_attribute]
+pub fn rmk_peripheral(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item_mod = parse_macro_input!(item as syn::ItemMod);
+    let attr_args = match NestedMeta::parse_meta_list(attr.clone().into()) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(darling::Error::from(e).write_errors());
+        }
+    };
+
+    let peripheral_id = match PeripheralAttr::from_list(&attr_args) {
+        Ok(v) => v.id,
+        Err(e) => {
+            return TokenStream::from(e.write_errors());
+        }
+    };
+
+    parse_split_peripheral_mod(peripheral_id, attr, item_mod).into()
 }

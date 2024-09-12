@@ -31,7 +31,7 @@ impl HidWriterWrapper for BleHidWriter {
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
         use ssmarshal::serialize;
         let mut buf: [u8; 32] = [0; 32];
-        match serialize(&mut buf, &r) {
+        match serialize(&mut buf, r) {
             Ok(n) => self.write(&buf[0..n]).await,
             Err(_) => Err(HidError::ReportSerializeError),
         }

@@ -78,7 +78,6 @@ pub(crate) fn convert_gpio_str_to_output_pin(
                 ::esp_idf_svc::hal::gpio::PinDriver::output(p.pins.#gpio_ident.downgrade_output()).unwrap()
             }
         }
-        ChipSeries::Unsupported => todo!(),
     }
 }
 
@@ -125,7 +124,6 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 ::esp_idf_svc::hal::gpio::PinDriver::input(p.pins.#gpio_ident.downgrade_input()).unwrap()
             }
         }
-        ChipSeries::Unsupported => todo!(),
     }
 }
 

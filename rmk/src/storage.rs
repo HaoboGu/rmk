@@ -274,7 +274,7 @@ pub(crate) struct KeymapKey<const ROW: usize, const COL: usize, const NUM_LAYER:
     action: KeyAction,
 }
 
-pub struct Storage<F: AsyncNorFlash> {
+pub(crate) struct Storage<F: AsyncNorFlash> {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],
@@ -311,7 +311,7 @@ macro_rules! write_storage {
 }
 
 impl<F: AsyncNorFlash> Storage<F> {
-    pub async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    pub(crate) async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         config: StorageConfig,

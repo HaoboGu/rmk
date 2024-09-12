@@ -90,7 +90,6 @@ pub(crate) fn usb_config_default(
             let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
         },
         ChipSeries::Esp32 => quote! {},
-        ChipSeries::Unsupported => quote! {},
     }
 }
 

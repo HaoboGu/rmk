@@ -6,7 +6,6 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -18,7 +17,7 @@ use embassy_nrf::{
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    initialize_nrf_ble_keyboard_with_config_and_run,
+    run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -56,16 +55,10 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    initialize_nrf_ble_keyboard_with_config_and_run::<
-        Input<'_>,
-        Output<'_>,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >(
-        crate::keymap::KEYMAP,
+    run_rmk(
         input_pins,
         output_pins,
+        crate::keymap::KEYMAP,
         keyboard_config,
         spawner,
     )

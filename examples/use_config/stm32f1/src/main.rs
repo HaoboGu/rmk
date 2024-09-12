@@ -18,7 +18,7 @@ mod keyboard {
         let mut config = Config::default();
         config.rcc.hse = Some(Hertz(8_000_000));
         config.rcc.sys_ck = Some(Hertz(48_000_000));
-        config.rcc.pclk1 = Some(Hertz(24_000_000)); 
+        config.rcc.pclk1 = Some(Hertz(24_000_000));
         config
     }
 }
