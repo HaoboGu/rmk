@@ -15,13 +15,13 @@ rmk = { path = "../../../rmk", features = [
     "col2row",
     "async_matrix",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", branch = "main", default-features = false, features = [
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa", default-features = false, features = [
     "defmt",
     "nrf52840",
     "peripheral",
     "central",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", branch = "main", default-features = false, features = [
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa", default-features = false, features = [
     "defmt",
 ] }
 trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "d9d2e80", features = [
@@ -53,6 +53,18 @@ defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 static_cell = "2"
 
+[patch.crates-io]
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
+
 [build-dependencies]
 xz2 = "0.1.7"
 json = "0.12"
@@ -74,6 +86,6 @@ panic = 'unwind'
 [profile.release]
 codegen-units = 1       # better optimizations
 debug = true            # no overhead for bare-metal
-opt-level = "z"         # optimize for binary size
+opt-level = 2        # optimize for binary size
 overflow-checks = false
 lto = "fat"

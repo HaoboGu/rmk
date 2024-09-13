@@ -1,13 +1,14 @@
-use defmt::info;
-use embassy_futures::join::join3;
+use defmt::{error, info};
+use embassy_futures::select::select3;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use static_cell::StaticCell;
 use trouble_host::advertise::{
     AdStructure, Advertisement, BR_EDR_NOT_SUPPORTED, LE_GENERAL_DISCOVERABLE,
 };
-use trouble_host::attribute::{AttributeTable, CharacteristicProp, Service, Uuid};
+use trouble_host::attribute::{AttributeTable, Characteristic, CharacteristicProp, Service, Uuid};
 use trouble_host::gatt::GattEvent;
-use trouble_host::{Address, BleHost, BleHostResources, Controller, PacketQos};
+use trouble_host::gatt::GattServer;
+use trouble_host::{Address, BleHost, BleHostError, BleHostResources, Controller, PacketQos};
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 use crate::ble::device_info::{DeviceInformation, PnPID, VidSource};
@@ -23,7 +24,7 @@ const L2CAP_MTU: usize = 251;
 const CONNECTIONS_MAX: usize = 2;
 
 /// Max number of L2CAP channels.
-const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+const L2CAP_CHANNELS_MAX: usize = 2; // Signal + att
 
 const MAX_ATTRIBUTES: usize = 50;
 
@@ -35,8 +36,9 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     let mut ble: BleHost<'_, _> = BleHost::new(controller, resources);
 
-    let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
-    // info!("BLE host address = {:?}", address);
+    //let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
+    let address = Address::random([0x41, 0x5A, 0xE3, 0x1E, 0x83, 0xE7]);
+    info!("Our address = {:?}", address);
     ble.set_random_address(address);
 
     let mut table: AttributeTable<'_, NoopRawMutex, MAX_ATTRIBUTES> = AttributeTable::new();
@@ -52,6 +54,16 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     // Generic attribute service (mandatory)
     table.add_service(Service::new(0x1801));
+
+    // Battery service
+    let level_handle = table
+        .add_service(Service::new(0x180f))
+        .add_characteristic(
+            0x2a19,
+            &[CharacteristicProp::Read, CharacteristicProp::Notify],
+            &mut bat_level,
+        )
+        .build();
 
     // Device info service
     let mut device_info_handle =
@@ -108,19 +120,8 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
     );
     device_info_handle.build();
 
-    // Battery service
-    let level_handle = table
-        .add_service(Service::new(BleSpecification::BatteryService as u16))
-        .add_characteristic(
-            BleCharacteristics::BatteryLevel as u16,
-            &[CharacteristicProp::Read, CharacteristicProp::Notify],
-            &mut bat_level,
-        )
-        .build();
-
     // Hid service
-    // let hid_service =
-    let hid_info_handle = table
+    let _hid_info_handle = table
         .add_service(Service::new(BleSpecification::HidService as u16))
         .add_characteristic_ro(
             BleCharacteristics::HidInfo as u16,
@@ -132,13 +133,13 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
         )
         .build();
 
-    let report_map_handle = table
+    let _report_map_handle = table
         .add_service(Service::new(BleSpecification::HidService as u16))
         .add_characteristic_ro(BleCharacteristics::ReportMap as u16, KeyboardReport::desc())
         .build();
 
     let mut hid_control_data = [0u8];
-    let hid_control_handle = table
+    let _hid_control_handle = table
         .add_service(Service::new(BleSpecification::HidService as u16))
         .add_characteristic(
             BleCharacteristics::HidControlPoint as u16,
@@ -151,7 +152,7 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
         .build();
 
     let mut protocol_mode_data = [1u8];
-    let protocol_mode_handle = table
+    let _protocol_mode_handle = table
         .add_service(Service::new(BleSpecification::HidService as u16))
         .add_characteristic(
             BleCharacteristics::ProtocolMode as u16,
@@ -186,11 +187,66 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     let server = ble.gatt_server::<NoopRawMutex, MAX_ATTRIBUTES, L2CAP_MTU>(&table);
 
-    let mut adv_data = [0; 64];
+    info!("Starting advertising and GATT service");
+    loop {
+        let _ = select3(
+            ble.run(),
+            gatt_task(&server, &table),
+            advertise_task(&ble, &server, level_handle, input_keyboard_handle),
+        )
+        .await;
+        error!("Restarting BLE stack");
+        embassy_time::Timer::after_secs(5).await;
+    }
+}
+
+async fn gatt_task(
+    server: &GattServer<'_, '_, NoopRawMutex, MAX_ATTRIBUTES, L2CAP_MTU>,
+    table: &AttributeTable<'_, NoopRawMutex, MAX_ATTRIBUTES>,
+) {
+    loop {
+        match server.next().await {
+            Ok(GattEvent::Write {
+                handle,
+                connection: _,
+            }) => {
+                if let Err(e) = table.get(handle, |value| {
+                    info!(
+                        "[gatt] Write event on {:?}. Value written: {:?}",
+                        handle, value
+                    );
+                }) {
+                    error!("[gatt] Error reading value: {:?}, handle: {}", e, handle);
+                };
+            }
+            Ok(GattEvent::Read {
+                handle,
+                connection: _,
+            }) => {
+                info!("[gatt] Read event on {:?}", handle);
+            }
+            Err(e) => {
+                error!("[gatt] Error processing GATT events: {:?}", e);
+            }
+        }
+    }
+}
+
+async fn advertise_task<C: Controller>(
+    ble: &BleHost<'_, C>,
+    server: &GattServer<'_, '_, NoopRawMutex, MAX_ATTRIBUTES, L2CAP_MTU>,
+    handle: Characteristic,
+    input_keyboard_handle: Characteristic,
+) -> Result<(), BleHostError<C::Error>> {
+    let mut adv_data = [0; 31];
     AdStructure::encode_slice(
         &[
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::ServiceUuids16(&[Uuid::Uuid16([0x0f, 0x18]), Uuid::Uuid16([0x12, 0x18])]),
+            AdStructure::ServiceUuids16(&[
+                Uuid::Uuid16([0x0a, 0x18]),
+                Uuid::Uuid16([0x12, 0x18]),
+                Uuid::Uuid16([0x0f, 0x18]),
+            ]),
             AdStructure::CompleteLocalName(b"Trouble"),
             AdStructure::Unknown {
                 ty: 0x19, // Appearance
@@ -198,84 +254,50 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
             },
         ],
         &mut adv_data[..],
-    )
-    .unwrap();
+    )?;
 
-    let mut scan_data = [0; 64];
-    AdStructure::encode_slice(
-        &[AdStructure::ServiceUuids16(&[
-            Uuid::Uuid16([0x0f, 0x18]),
-            Uuid::Uuid16([0x12, 0x18]),
-            Uuid::Uuid16([0x0a, 0x18]),
-        ])],
-        &mut scan_data[..],
-    )
-    .unwrap();
-
-    info!("Starting advertising and GATT service");
-    let _ = join3(
-        ble.run(),
-        async {
-            loop {
-                let re = server.next().await;
-                info!("GATT next event");
-                match re {
-                    Ok(GattEvent::Write {
-                        handle,
-                        connection: _,
-                    }) => {
-                        let _ = table.get(handle, |value| {
-                            info!("Write event. Value written: {:?}", value);
-                        });
-                    }
-                    Ok(GattEvent::Read {
-                        handle,
-                        connection: _,
-                    }) => {
-                        if handle == level_handle {
-                            info!("Battery level read");
-                        } else if handle == hid_info_handle {
-                            info!("HID info read");
-                        } else if handle == report_map_handle {
-                            info!("Report map read");
-                        } else if handle == hid_control_handle {
-                            info!("HID control read");
-                        } else if handle == protocol_mode_handle {
-                            info!("Protocol mode read");
-                        } else if handle == input_keyboard_handle {
-                            info!("Input keyboard read");
-                            // } else if handle == input_keyboard_desc_handle.han {
-                            // info!("Input keyboard desc read");
-                        }
-                    }
-                    Err(e) => {
-                        defmt::error!("Error processing GATT events: {}", e);
-                    }
-                }
-            }
-        },
-        async {
-            let mut advertiser = ble
-                .advertise(
-                    &Default::default(),
-                    Advertisement::ConnectableScannableUndirected {
-                        adv_data: &adv_data[..],
-                        scan_data: &scan_data[..],
-                    },
+    loop {
+        let mut advertiser = ble
+            .advertise(
+                &Default::default(),
+                Advertisement::ConnectableScannableUndirected {
+                    adv_data: &adv_data[..],
+                    scan_data: &[],
+                },
+            )
+            .await?;
+        let conn = advertiser.accept().await?;
+        info!("Connected");
+        // Keep connection alive
+        embassy_time::Timer::after_secs(5).await;
+        let mut value: u8 = 20;
+        while conn.is_connected() {
+            value = 100 - value;
+            info!("Notifying data");
+            // Write battery
+            server.notify(&ble, handle, &conn, &[value]).await.unwrap();
+            
+            // input keyboard handle
+            server
+                .notify(
+                    &ble,
+                    input_keyboard_handle,
+                    &conn,
+                    &[0x04, 0, 0, 0, 0, 0, 0, 0],
                 )
                 .await
                 .unwrap();
-            let conn = advertiser.accept().await.unwrap();
-            info!("Connected");
-            // Keep connection alive
-            loop {
-                server
-                    .notify(&ble, level_handle, &conn, &[80])
-                    .await
-                    .unwrap();
-                embassy_time::Timer::after_secs(1).await;
-            }
-        },
-    )
-    .await;
+            embassy_time::Timer::after_millis(50).await;
+            server
+                .notify(
+                    &ble,
+                    input_keyboard_handle,
+                    &conn,
+                    &[0, 0, 0, 0, 0, 0, 0, 0],
+                )
+                .await
+                .unwrap();
+            embassy_time::Timer::after_secs(5).await;
+        }
+    }
 }
