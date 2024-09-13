@@ -275,8 +275,8 @@ async fn advertise_task<C: Controller>(
             value = 100 - value;
             info!("Notifying data");
             // Write battery
-            server.notify(&ble, handle, &conn, &[value]).await.unwrap();
-            
+            server.notify(&ble, handle, &conn, &[value]).await?;
+
             // input keyboard handle
             server
                 .notify(
@@ -285,8 +285,7 @@ async fn advertise_task<C: Controller>(
                     &conn,
                     &[0x04, 0, 0, 0, 0, 0, 0, 0],
                 )
-                .await
-                .unwrap();
+                .await?;
             embassy_time::Timer::after_millis(50).await;
             server
                 .notify(
@@ -295,8 +294,7 @@ async fn advertise_task<C: Controller>(
                     &conn,
                     &[0, 0, 0, 0, 0, 0, 0, 0],
                 )
-                .await
-                .unwrap();
+                .await?;
             embassy_time::Timer::after_secs(5).await;
         }
     }
