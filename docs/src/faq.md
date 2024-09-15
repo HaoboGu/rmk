@@ -1,5 +1,11 @@
 # FAQ
 
+### Where is my built firmware?
+
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./user_guide/2_setup_environment.md/#3-install-your-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
+
+The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
+
 ### I can see a `RMK Start` log, but nothing else
 
 First you need to check the RCC config of your board, make sure that the USB's clock is enabled and set to 48MHZ. For example, if you're using stm32f1, you can set the RCC as the following:
