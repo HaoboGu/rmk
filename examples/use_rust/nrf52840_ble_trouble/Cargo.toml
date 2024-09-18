@@ -24,7 +24,7 @@ nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31
 nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa", default-features = false, features = [
     "defmt",
 ] }
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "d9d2e80", features = [
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "1776fbf", features = [
     "defmt",
     "gatt",
 ] }

@@ -183,7 +183,7 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
     );
 
     let input_keyboard_handle = input_keyboard_handle.build();
-    drop(hid_service);
+    hid_service.build();
 
     let server = ble.gatt_server::<NoopRawMutex, MAX_ATTRIBUTES, L2CAP_MTU>(&table);
 
@@ -193,6 +193,7 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
             ble.run(),
             gatt_task(&server, &table),
             advertise_task(&ble, &server, level_handle, input_keyboard_handle),
+            // advertise_task(&ble, &server, input_keyboard_handle),
         )
         .await;
         error!("Restarting BLE stack");

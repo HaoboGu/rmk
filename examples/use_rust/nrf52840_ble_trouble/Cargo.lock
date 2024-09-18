@@ -1780,7 +1780,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=d9d2e80#d9d2e80b6b2ed6c3aeae1de534de557906353522"
+source = "git+https://github.com/embassy-rs/trouble?rev=1776fbf#1776fbf8b40c798fd911ca68d66e44b5fc98f3ce"
 dependencies = [
  "bt-hci",
  "defmt",
