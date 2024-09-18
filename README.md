@@ -6,24 +6,13 @@
   </a>
 
   <p align="center">
-   A feature-rich Rust keyboard firmware. 
-   <br />
-   <br />
-   <a href="https://crates.io/crates/rmk">
-      <img src="https://img.shields.io/crates/v/rmk">
-   </a>
-    &nbsp;
-   <a href="https://docs.rs/rmk/latest/rmk/">
-      <img src="https://img.shields.io/docsrs/rmk">
-   </a>
-   &nbsp;
-   <a href="https://github.com/HaoboGu/rmk/actions">
-      <img src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg">
-   </a>
-   &nbsp;
-   <a href="https://discord.gg/HHGA7pQxkG">
-      <img src="https://img.shields.io/discord/1166665039793639424?label=discord">
-   </a>
+  A feature-rich Rust keyboard firmware. 
+  <br />
+  <br />
+  <a href="https://crates.io/crates/rmk"><img src="https://img.shields.io/crates/v/rmk"></a>
+  <a href="https://docs.rs/rmk/latest/rmk/"><img src="https://img.shields.io/docsrs/rmk"></a>
+  <a href="https://github.com/HaoboGu/rmk/actions"><img src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://discord.gg/HHGA7pQxkG"><img src="https://img.shields.io/discord/1166665039793639424?label=discord"></a>
   </p>
 </p>
 
