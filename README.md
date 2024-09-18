@@ -1,13 +1,35 @@
-# RMK
+<!-- PROJECT LOGO -->
+<br />
+<p align="center">
+  <a href="https://github.com/haobogu/rmk">
+    <img src="https://github.com/HaoboGu/rmk/blob/2b73951291fd829075277d64e0aeb8ea82d0bea9/docs/src/images/rmk_logo2.png?raw=true" alt="Logo" width="150">
+  </a>
 
-[![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
-[![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
-[![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
-[![Discord](https://img.shields.io/discord/1166665039793639424?label=discord)](https://discord.gg/HHGA7pQxkG)
+  <p align="center">
+   A feature-rich Rust keyboard firmware. 
+   <br />
+   <br />
+   <a href="https://crates.io/crates/rmk">
+      <img src="https://img.shields.io/crates/v/rmk">
+   </a>
+    &nbsp;
+   <a href="https://docs.rs/rmk/latest/rmk/">
+      <img src="https://img.shields.io/docsrs/rmk">
+   </a>
+   &nbsp;
+   <a href="https://github.com/HaoboGu/rmk/actions">
+      <img src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg">
+   </a>
+   &nbsp;
+   <a href="https://discord.gg/HHGA7pQxkG">
+      <img src="https://img.shields.io/discord/1166665039793639424?label=discord">
+   </a>
+  </p>
+</p>
 
 [中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
 
-A feature-rich Rust keyboard firmware. 
+-----
 
 ## Features
 
