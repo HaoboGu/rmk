@@ -39,6 +39,7 @@ fn main() {
         vial_config,
         ..Default::default()
     };
+    info!("Done config!");
 
     // Start serving
     block_on(run_rmk(

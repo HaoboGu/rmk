@@ -8,7 +8,7 @@
 #![cfg_attr(not(test), no_std)]
 
 #[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run as run_rmk;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
@@ -90,6 +90,7 @@ pub fn as_bytes<T: Sized>(p: &T) -> &[u8] {
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[cfg(not(feature = "_esp_ble"))]
 pub async fn run_rmk<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -110,6 +111,7 @@ pub async fn run_rmk<
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Hello RMK!");
     // Wrap `embedded-storage` to `embedded-storage-async`
     #[cfg(not(feature = "_no_external_storage"))]
     let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
@@ -140,6 +142,7 @@ pub async fn run_rmk<
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[cfg(not(feature = "_esp_ble"))]
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
 pub async fn run_rmk_with_async_flash<
@@ -162,6 +165,7 @@ pub async fn run_rmk_with_async_flash<
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Hello RMK Flash!");
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_keyboard_with_config_and_run(
@@ -172,15 +176,6 @@ pub async fn run_rmk_with_async_flash<
         default_keymap,
         keyboard_config,
         spawner,
-    )
-    .await;
-
-    #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(
-        input_pins,
-        output_pins,
-        default_keymap,
-        keyboard_config,
     )
     .await;
 
