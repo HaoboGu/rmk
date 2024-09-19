@@ -10,7 +10,7 @@ RMK is written in Rust, so first you have to install Rust to your host. Installi
 
 ## 2. Choose your hardware
 
-RMK firmware runs on microcontrollers, by using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the supported microcontroller makes your journey of RMK much easier. 
+RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the supported microcontroller makes your journey of RMK much easier. 
 
 If you're using other microcontrollers, make sure your microcontroller supports [Embassy](https://github.com/embassy-rs/embassy).
 
@@ -34,13 +34,19 @@ There are several other tools are highly recommended:
 
 - `cargo generate`: needed for creating a RMK firmware project from [RMK project template](https://github.com/HaoboGu/rmk-template)
 
-- `probe-rs`: used to flash and debug your firmware
+- `probe-rs`: used to flash and debug your firmware. [Here](https://probe.rs/docs/getting-started/installation/) is the installation instruction.
 
 You can use the following commands to install them:
 
 ```bash
-cargo install cargo-generate
-cargo install probe-rs --features cli
-```
+  # Install cargo-generate
+  cargo install cargo-generate
+  
+  # Install probe-rs using scripts
+  # Linux, macOS
+  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+  # Windows
+  irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.ps1 | iex
+  ```
 
 Now you're all set for RMK! In the next section, you'll learn how to create your own RMK firmware project. 
