@@ -653,14 +653,14 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                     KeyCode::MouseWheelLeft | KeyCode::MouseWheelRight => {
                         self.other_report.pan = 0;
                     }
-                    KeyCode::MouseBtn1 => self.other_report.buttons &= 0b0,
-                    KeyCode::MouseBtn2 => self.other_report.buttons &= 0b01,
-                    KeyCode::MouseBtn3 => self.other_report.buttons &= 0b011,
-                    KeyCode::MouseBtn4 => self.other_report.buttons &= 0b0111,
-                    KeyCode::MouseBtn5 => self.other_report.buttons &= 0b01111,
-                    KeyCode::MouseBtn6 => self.other_report.buttons &= 0b011111,
-                    KeyCode::MouseBtn7 => self.other_report.buttons &= 0b0111111,
-                    KeyCode::MouseBtn8 => self.other_report.buttons &= 0b01111111,
+                    KeyCode::MouseBtn1 => self.other_report.buttons &= !0b1,
+                    KeyCode::MouseBtn2 => self.other_report.buttons &= !0b10,
+                    KeyCode::MouseBtn3 => self.other_report.buttons &= !0b100,
+                    KeyCode::MouseBtn4 => self.other_report.buttons &= !0b1000,
+                    KeyCode::MouseBtn5 => self.other_report.buttons &= !0b10000,
+                    KeyCode::MouseBtn6 => self.other_report.buttons &= !0b100000,
+                    KeyCode::MouseBtn7 => self.other_report.buttons &= !0b1000000,
+                    KeyCode::MouseBtn8 => self.other_report.buttons &= !0b10000000,
                     _ => {}
                 }
             }
