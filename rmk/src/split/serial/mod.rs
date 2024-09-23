@@ -97,8 +97,8 @@ pub(crate) async fn initialize_serial_split_central_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -152,16 +152,16 @@ pub(crate) async fn initialize_serial_split_central_and_run<
                 s,
                 &mut light_service,
                 &mut vial_service,
-                &mut keyboard_report_receiver,
-                &mut keyboard_report_sender,
+                &keyboard_report_receiver,
+                &keyboard_report_sender,
             )
             .await;
         } else {
             // Run 5 tasks: usb, keyboard, led, vial, communication
             let usb_fut = usb_device.device.run();
-            let keyboard_fut = keyboard_task(&mut keyboard, &mut keyboard_report_sender);
+            let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
             let communication_fut = communication_task(
-                &mut keyboard_report_receiver,
+                &keyboard_report_receiver,
                 &mut usb_device.keyboard_hid_writer,
                 &mut usb_device.other_hid_writer,
             );

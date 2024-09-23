@@ -149,7 +149,11 @@ fn expand_split_central(
     }
 }
 
-fn expand_split_central_entry(chip: &ChipModel, usb_info: &UsbInfo, split_config: &SplitConfig) -> TokenStream2 {
+fn expand_split_central_entry(
+    chip: &ChipModel,
+    usb_info: &UsbInfo,
+    split_config: &SplitConfig,
+) -> TokenStream2 {
     let central_row = split_config.central.rows;
     let central_col = split_config.central.cols;
     let central_row_offset = split_config.central.row_offset;

@@ -62,8 +62,8 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     // Keyboard matrix
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -96,9 +96,9 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
-        let keyboard_fut = keyboard_task(&mut keyboard, &mut keyboard_report_sender);
+        let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
         let ble_fut = ble_task(
-            &mut keyboard_report_receiver,
+            &keyboard_report_receiver,
             &mut keyboard_writer,
             &mut media_writer,
             &mut system_writer,

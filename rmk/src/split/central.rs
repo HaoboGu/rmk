@@ -256,8 +256,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     loop {
         // Run all tasks, if one of them fails, wait 1 second and then restart
@@ -268,8 +268,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
             &mut storage,
             &mut light_service,
             &mut vial_service,
-            &mut keyboard_report_receiver,
-            &mut keyboard_report_sender,
+            &keyboard_report_receiver,
+            &keyboard_report_sender,
         )
         .await;
 
