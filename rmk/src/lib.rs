@@ -250,8 +250,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -263,8 +263,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
             &mut storage,
             &mut light_service,
             &mut vial_service,
-            &mut keyboard_report_receiver,
-            &mut keyboard_report_sender,
+            &keyboard_report_receiver,
+            &keyboard_report_sender,
         )
         .await;
 
@@ -290,8 +290,8 @@ pub(crate) async fn run_usb_keyboard<
     #[cfg(not(feature = "_no_external_storage"))] storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &mut Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &mut Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_sender: &Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
     let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);

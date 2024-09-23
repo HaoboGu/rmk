@@ -36,7 +36,7 @@ pub(crate) async fn keyboard_task<
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
-    sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
     loop {
@@ -51,7 +51,7 @@ pub(crate) async fn keyboard_task<
 
 /// This task processes all keyboard reports and send them to the host
 pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
-    receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     keybooard_hid_writer: &mut W,
     other_hid_writer: &mut W2,
 ) {
@@ -165,7 +165,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
 
     pub(crate) async fn send_keyboard_report(
         &mut self,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_key_report {
             debug!(
@@ -184,7 +184,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     /// Send system control report if needed
     pub(crate) async fn send_system_control_report(
         &mut self,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_system_control_report {
             sender
@@ -202,7 +202,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     /// Send media report if needed
     pub(crate) async fn send_media_report(
         &mut self,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_consumer_control_report {
             sender
@@ -220,7 +220,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     /// Send mouse report if needed
     pub(crate) async fn send_mouse_report(
         &mut self,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if self.need_send_mouse_report {
             // Prevent mouse report flooding, set maximum mouse report rate to 100 HZ
@@ -255,7 +255,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     /// `sender` is required because when there's tap action, the report should be sent immediately and then continue scanning
     pub(crate) async fn scan_matrix(
         &mut self,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         #[cfg(feature = "async_matrix")]
         self.matrix.wait_for_key().await;
@@ -311,7 +311,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         row: usize,
         col: usize,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         let key_state = self.matrix.get_key_state(row, col);
 
@@ -380,7 +380,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         action: Action,
         key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         match action {
             Action::Key(key) => self.process_action_keycode(key, key_state, sender).await,
@@ -413,7 +413,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         action: Action,
         modifier: ModifierCombination,
         key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if key_state.is_pressing() {
             // Process modifier
@@ -442,7 +442,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         action: Action,
         mut key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if key_state.is_pressing() {
             self.process_key_action_normal(action, key_state, sender)
@@ -479,7 +479,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         row: usize,
         col: usize,
         mut key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if key_state.is_releasing() {
             // Case 1, the key is released
@@ -523,7 +523,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         key: KeyCode,
         key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_state);
@@ -659,7 +659,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         key: KeyCode,
         key_state: KeyState,
-        sender: &mut Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
         // Execute the macro only when releasing the key
         if !key_state.is_releasing() {
