@@ -15,7 +15,7 @@ use crate::matrix::{Matrix, MatrixTrait};
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
-        ble_task,
+        ble_communication_task,
         nrf::{
             advertise::{create_advertisement_data, SCAN_DATA},
             bonder::{BondInfo, Bonder},
@@ -425,7 +425,7 @@ pub(crate) async fn run_ble_keyboard<
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
-    let ble_task = ble_task(
+    let ble_communication_task = ble_communication_task(
         keyboard_report_receiver,
         &mut ble_keyboard_writer,
         &mut ble_media_writer,
@@ -437,7 +437,7 @@ pub(crate) async fn run_ble_keyboard<
     // Exit if anyone of three futures exits
     match select4(
         ble_fut,
-        select(ble_task, keyboard_fut),
+        select(ble_communication_task, keyboard_fut),
         select(battery_fut, led_fut),
         storage_fut,
     )

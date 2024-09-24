@@ -8,7 +8,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::matrix::Matrix;
 use crate::KEYBOARD_STATE;
 use crate::{
-    action::KeyAction, ble::ble_task, config::RmkConfig, flash::EmptyFlashWrapper,
+    action::KeyAction, ble::ble_communication_task, config::RmkConfig, flash::EmptyFlashWrapper,
     keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
 };
 use core::cell::RefCell;
@@ -97,7 +97,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
         let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
-        let ble_fut = ble_task(
+        let ble_fut = ble_communication_task(
             &keyboard_report_receiver,
             &mut keyboard_writer,
             &mut media_writer,

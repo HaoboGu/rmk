@@ -19,7 +19,8 @@ use crate::{
 };
 
 /// BLE communication task, send reports to host via BLE.
-pub(crate) async fn ble_task<
+/// TODO: Merge `ble_communication_task` and `communication_task` into one task.
+pub(crate) async fn ble_communication_task<
     'a,
     W: HidWriterWrapper,
     W2: HidWriterWrapper,

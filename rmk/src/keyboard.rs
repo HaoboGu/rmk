@@ -81,12 +81,11 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
     match report.serialize(&mut buf[1..], report_type) {
         Ok(s) => {
             debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
-            match match other_hid_writer.get_conn_type() {
+            if let Err(e) = match other_hid_writer.get_conn_type() {
                 ConnectionType::Usb => other_hid_writer.write(&buf[0..s + 1]).await,
                 ConnectionType::Ble => other_hid_writer.write(&buf[1..s + 1]).await,
             } {
-                Ok(_) => {}
-                Err(e) => error!("Send other report error: {}", e),
+                error!("Send other report error: {}", e);
             }
         }
         Err(_) => error!("Serialize other report error"),
