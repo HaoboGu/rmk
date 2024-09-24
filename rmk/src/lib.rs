@@ -28,7 +28,7 @@ use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
+    channel::{Channel, Receiver},
 };
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -247,17 +247,17 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
-    );
-
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
     let keyboard_report_sender = keyboard_channel.sender();
     let keyboard_report_receiver = keyboard_channel.receiver();
+
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(matrix, &keymap, &keyboard_report_sender),
+        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
 
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -270,7 +270,6 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
             &mut light_service,
             &mut vial_service,
             &keyboard_report_receiver,
-            &keyboard_report_sender,
         )
         .await;
 
@@ -297,10 +296,9 @@ pub(crate) async fn run_usb_keyboard<
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
+    let keyboard_fut = keyboard_task(keyboard);
     let communication_fut = communication_task(
         keyboard_report_receiver,
         &mut usb_device.keyboard_hid_writer,
