@@ -4,17 +4,18 @@ use crate::{
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
-    matrix::{KeyState, MatrixTrait},
+    matrix::{MatrixTrait, RowCol},
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, warn};
+use defmt::{debug, error, warn, Format};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Receiver, Sender},
 };
-use embassy_time::Timer;
+use embassy_time::{Duration, Instant, Timer};
+use heapless::Vec;
 use usbd_hid::descriptor::KeyboardReport;
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
@@ -37,10 +38,7 @@ pub(crate) async fn keyboard_task<
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
 ) {
     KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
-    loop {
-        let _ = keyboard.scan_matrix().await;
-        Timer::after_micros(100).await;
-    }
+    let _ = keyboard.scan_matrix().await;
 }
 
 /// This task processes all keyboard reports and send them to the host
@@ -84,6 +82,14 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
         }
         Err(_) => error!("Serialize other report error"),
     }
+}
+
+#[derive(Copy, Clone, Debug, Format)]
+struct Holdingkey {
+    // If the key is held, `hold_start` records the time of it was pressed.
+    pub(crate) rowcol: RowCol,
+    pub(crate) action: KeyAction,
+    pub(crate) hold_start: Instant,
 }
 pub(crate) struct Keyboard<
     'a,
@@ -185,115 +191,143 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Main keyboard task, it scans matrix, processes active keys.
-    /// If there is any change of key states, set self.changed=true.
-    ///
-    /// `sender` is required because when there's tap action, the report should be sent immediately and then continue scanning
     pub(crate) async fn scan_matrix(&mut self) {
-        #[cfg(feature = "async_matrix")]
-        self.matrix.wait_for_key().await;
+        let mut holds: Vec<Holdingkey, 16> = Vec::new();
+        let mut holding = 0;
+        loop {
+            #[cfg(feature = "async_matrix")]
+            if holds.is_empty() {
+                self.matrix.wait_for_key().await;
+            }
+            let now = Instant::now();
+            // Matrix scan
+            self.matrix.scan().await;
 
-        // Matrix scan
-        self.matrix.scan().await;
-
-        // Check matrix states, process key if there is a key state change
-        // Keys are processed in the following order:
-        // process_key_change -> process_key_action_* -> process_action_*
-        for row_idx in 0..self.matrix.get_row_num() {
-            for col_idx in 0..self.matrix.get_col_num() {
-                let ks = self.matrix.get_key_state(row_idx, col_idx);
-                if ks.changed {
-                    self.process_key_change(row_idx, col_idx).await;
-                } else if ks.pressed {
-                    // When there's no key change, only tap/hold action needs to be processed
-                    // Continuously check the hold state
-                    let action = self
-                        .keymap
-                        .borrow_mut()
-                        .get_action_with_layer_cache(row_idx, col_idx, ks);
-                    let tap_hold = match action {
-                        KeyAction::TapHold(tap_action, hold_action) => {
-                            Some((tap_action, hold_action))
+            // Check matrix states, process key if there is a key state change
+            // Keys are processed in the following order:
+            // process_key_change -> process_key_action_* -> process_action_*
+            for row_idx in 0..self.matrix.get_row_num() {
+                for col_idx in 0..self.matrix.get_col_num() {
+                    let ks = self.matrix.get_key_state(row_idx, col_idx);
+                    if ks.changed {
+                        // Matrix should process key pressed event first, record the timestamp of key changes
+                        if ks.pressed {
+                            let _ = holds.push(Holdingkey {
+                                rowcol: RowCol(row_idx as u8, col_idx as u8),
+                                action: KeyAction::Transparent,
+                                hold_start: now,
+                            });
+                        } else {
+                            let mut releasing = 0;
+                            while releasing < holds.len() {
+                                let key = &mut holds[releasing];
+                                if releasing > holding {
+                                    self.process_key_change(key, true).await;
+                                }
+                                if key.rowcol == RowCol(row_idx as u8, col_idx as u8) {
+                                    self.process_key_change(key, false).await;
+                                    break;
+                                } else if releasing >= holding {
+                                    self.process_key_hold(key).await;
+                                }
+                                releasing += 1;
+                            }
+                            if releasing < holds.len() {
+                                holds.remove(releasing);
+                                if holding > releasing {
+                                    holding -= 1;
+                                } else {
+                                    holding = releasing
+                                }
+                            }
                         }
-                        KeyAction::LayerTapHold(tap_action, layer_num) => {
-                            Some((tap_action, Action::LayerOn(layer_num)))
-                        }
-                        KeyAction::ModifierTapHold(tap_action, modifier) => {
-                            Some((tap_action, Action::Modifier(modifier)))
-                        }
-                        _ => None,
-                    };
-                    if let Some((tap_action, hold_action)) = tap_hold {
-                        self.process_key_action_tap_hold(
-                            tap_action,
-                            hold_action,
-                            row_idx,
-                            col_idx,
-                            ks,
-                        )
-                        .await;
-                    };
+                    }
                 }
             }
+            while holding < holds.len() {
+                let key = &mut holds[holding];
+                if let Some(until) = self.process_key_change(key, true).await {
+                    if until > now {
+                        break;
+                    }
+                    self.process_key_hold(key).await;
+                }
+                holding += 1;
+            }
+
+            Timer::after_micros(100).await;
         }
     }
 
     /// Process key changes at (row, col)
-    async fn process_key_change(&mut self, row: usize, col: usize) {
-        let key_state = self.matrix.get_key_state(row, col);
-
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if key_state.pressed {
-            self.matrix.update_key_state(row, col, |ks| {
-                ks.start_timer();
-            });
-        }
-
+    async fn process_key_change(
+        &mut self,
+        key: &mut Holdingkey,
+        key_state: bool,
+    ) -> Option<Instant> {
         // Process key
-        let action = self
-            .keymap
-            .borrow_mut()
-            .get_action_with_layer_cache(row, col, key_state);
-        match action {
+        if key_state {
+            let uninitialized = key.action == KeyAction::Transparent;
+            if uninitialized {
+                let mut action = self
+                    .keymap
+                    .borrow_mut()
+                    .get_action_from_active_layer(key.rowcol.0 as usize, key.rowcol.1 as usize);
+                if action == KeyAction::Transparent {
+                    warn!("KeyAction::Transparent at {}", key.rowcol);
+                    action = KeyAction::No;
+                }
+                key.action = action;
+            }
+            if let Some(_) = key.action.tap_hold() {
+                return Some(key.hold_start + Duration::from_millis(200));
+            }
+            if !uninitialized {
+                return None;
+            }
+        }
+        match key.action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_state).await,
             KeyAction::WithModifier(a, m) => {
                 self.process_key_action_with_modifier(a, m, key_state).await
             }
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
-            KeyAction::TapHold(tap_action, hold_action) => {
-                self.process_key_action_tap_hold(tap_action, hold_action, row, col, key_state)
-                    .await;
-            }
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
-            KeyAction::LayerTapHold(tap_action, layer_num) => {
-                let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action, row, col, key_state)
-                    .await;
+            KeyAction::TapHold(tap_action, _)
+            | KeyAction::LayerTapHold(tap_action, _)
+            | KeyAction::ModifierTapHold(tap_action, _) => {
+                self.process_key_action_tap(tap_action, true).await;
             }
-            KeyAction::ModifierTapHold(tap_action, modifier) => {
-                let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action, row, col, key_state)
-                    .await;
-            }
+        };
+        None
+    }
+
+    /// Process key hold
+    async fn process_key_hold(&mut self, key: &mut Holdingkey) {
+        if let Some((_, hold_action)) = key.action.tap_hold() {
+            debug!("tap hold, got HOLD: {}, {}", key, hold_action);
+            key.action = KeyAction::Single(hold_action);
+            self.process_key_action_normal(hold_action, true).await;
         }
     }
 
-    async fn process_key_action_normal(&mut self, action: Action, key_state: KeyState) {
+    async fn process_key_action_normal(&mut self, action: Action, key_state: bool) {
         match action {
             Action::Key(key) => self.process_action_keycode(key, key_state).await,
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if key_state.is_pressing() {
+                if key_state {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
-                if key_state.is_releasing() {
+                if !key_state {
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
@@ -311,9 +345,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         action: Action,
         modifier: ModifierCombination,
-        key_state: KeyState,
+        key_state: bool,
     ) {
-        if key_state.is_pressing() {
+        if key_state {
             // Process modifier
             let (keycodes, n) = modifier.to_modifier_keycodes();
             for kc in keycodes.iter().take(n) {
@@ -331,74 +365,12 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         }
     }
 
-    /// Tap action, send a key when the key is pressed, then release the key.
-    async fn process_key_action_tap(&mut self, action: Action, mut key_state: KeyState) {
-        if key_state.is_pressing() {
+    /// Tap action, send a key when the key is key_state, then release the key.
+    async fn process_key_action_tap(&mut self, action: Action, mut key_state: bool) {
+        if key_state {
             self.process_key_action_normal(action, key_state).await;
-            key_state.pressed = false;
+            key_state = false;
             self.process_key_action_normal(action, key_state).await;
-        }
-    }
-
-    /// Process tap/hold action.
-    /// There are several cases:
-    ///
-    /// 1. `key_state.changed` is true, and `key_state.pressed` is false,
-    ///     which means the key is released. Then the duration time should be checked
-    ///
-    /// 2. `key_state.changed` is false, and `key_state.pressed` is true,
-    ///     which means that the key is held. The duration time should to be checked.
-    ///     
-    /// TODO: make tap/hold threshold customizable
-    async fn process_key_action_tap_hold(
-        &mut self,
-        tap_action: Action,
-        hold_action: Action,
-        row: usize,
-        col: usize,
-        mut key_state: KeyState,
-    ) {
-        if key_state.is_releasing() {
-            // Case 1, the key is released
-            match key_state.hold_start {
-                Some(s) => {
-                    // Released: tap
-                    // The hold_start isn't cleared, means that the key is released within the tap/hold threshold
-                    key_state.pressed = true;
-                    debug!(
-                        "Release tap hold, got TAP: {}, {}, time elapsed: {}ms",
-                        tap_action,
-                        key_state,
-                        s.elapsed().as_millis()
-                    );
-                    self.process_key_action_tap(tap_action, key_state).await;
-
-                    // Reset timer after release
-                    self.matrix.update_key_state(row, col, |ks| {
-                        ks.clear_timer();
-                    });
-                }
-                None => {
-                    // Released: hold action
-                    // The hold_start is cleared, means that the key is released after the tap/hold threshold
-                    debug!("Release tap hold, got HOLD: {}, {}", hold_action, key_state);
-                    self.process_key_action_normal(hold_action, key_state).await;
-                }
-            }
-        } else if key_state.pressed && !key_state.changed {
-            // Case 2, the key is held
-            if let Some(s) = key_state.hold_start {
-                let d = s.elapsed().as_millis();
-                if d > 200 {
-                    // The key is held for more than 200ms, send hold action, then clear timer
-                    self.process_key_action_normal(hold_action, key_state).await;
-
-                    // Clear timer if the key is held
-                    self.matrix.update_key_state(row, col, |ks| {
-                        ks.clear_timer();
-                    });
-                }
-            }
         }
     }
 
@@ -407,7 +379,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
-    async fn process_action_keycode(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_keycode(&mut self, key: KeyCode, key_state: bool) {
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_state).await;
         } else if key.is_system() {
@@ -415,7 +387,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_state).await;
         } else if key.is_basic() {
-            if key_state.pressed {
+            if key_state {
                 self.register_key(key);
             } else {
                 self.unregister_key(key);
@@ -428,9 +400,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, key_state: KeyState) {
+    fn process_action_layer_switch(&mut self, layer_num: u8, key_state: bool) {
         // Change layer state only when the key's state is changed
-        if key_state.pressed {
+        if key_state {
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -438,9 +410,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
-    async fn process_action_consumer_control(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_consumer_control(&mut self, key: KeyCode, key_state: bool) {
         if key.is_consumer() {
-            self.other_report.media_usage_id = if key_state.pressed {
+            self.other_report.media_usage_id = if key_state {
                 key.as_consumer_control_usage_id() as u16
             } else {
                 0
@@ -450,9 +422,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process system control action. System control keys are keys in system page, such as power key.
-    async fn process_action_system_control(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_system_control(&mut self, key: KeyCode, key_state: bool) {
         if key.is_system() {
-            if key_state.pressed {
+            if key_state {
                 if let Some(system_key) = key.as_system_control_usage_id() {
                     self.other_report.system_usage_id = system_key as u8;
                     self.send_system_control_report().await;
@@ -465,10 +437,10 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process mouse key action.
-    async fn process_action_mouse(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_mouse(&mut self, key: KeyCode, key_state: bool) {
         if key.is_mouse_key() {
             // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
-            if key_state.pressed {
+            if key_state {
                 match key {
                     // TODO: Add accerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
@@ -538,9 +510,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         }
     }
 
-    async fn process_action_macro(&mut self, key: KeyCode, key_state: KeyState) {
+    async fn process_action_macro(&mut self, key: KeyCode, key_state: bool) {
         // Execute the macro only when releasing the key
-        if !key_state.is_releasing() {
+        if !key_state {
             return;
         }
 

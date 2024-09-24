@@ -42,8 +42,6 @@ pub(crate) struct KeyState {
     pub(crate) pressed: bool,
     // True if the key's state is just changed
     pub(crate) changed: bool,
-    // If the key is held, `hold_start` records the time of it was pressed.
-    pub(crate) hold_start: Option<Instant>,
 }
 
 impl Default for KeyState {
@@ -57,22 +55,12 @@ impl KeyState {
         KeyState {
             pressed: false,
             changed: false,
-            hold_start: None,
         }
     }
 
-    // Record the start time of pressing
-    pub(crate) fn start_timer(&mut self) {
-        self.hold_start = Some(Instant::now());
-    }
-
-    // Clear held timer
-    pub(crate) fn clear_timer(&mut self) {
-        self.hold_start = None;
-    }
-
-    pub(crate) fn toggle_pressed(&mut self) {
+    pub(crate) fn toggle_pressed(&mut self) -> bool {
         self.pressed = !self.pressed;
+        self.pressed
     }
 
     pub(crate) fn is_releasing(&self) -> bool {
@@ -82,6 +70,17 @@ impl KeyState {
     pub(crate) fn is_pressing(&self) -> bool {
         self.pressed && self.changed
     }
+}
+
+/// RowCol
+#[derive(Copy, Clone, Debug, Format, PartialEq, Eq)]
+pub(crate) struct RowCol(pub u8, pub u8);
+
+/// key event
+#[derive(Copy, Clone, Debug, Format)]
+pub(crate) struct KeyEvent {
+    pub rowcol: RowCol,
+    pub pressed: bool,
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.

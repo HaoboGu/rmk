@@ -2,7 +2,6 @@ use crate::{
     action::KeyAction,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    matrix::KeyState,
     reboot_keyboard,
     storage::Storage,
 };
@@ -23,8 +22,6 @@ pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: us
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
     default_layer: u8,
-    /// Layer cache
-    layer_cache: [[u8; COL]; ROW],
     /// Macro cache
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
 }
@@ -35,7 +32,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             layers: action_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
-            layer_cache: [[0; COL]; ROW],
             macro_cache: [0; MACRO_SPACE_SIZE],
         }
     }
@@ -79,7 +75,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
             layers: action_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
-            layer_cache: [[0; COL]; ROW],
             macro_cache,
         }
     }
@@ -185,40 +180,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         self.layers[layer_num][row][col]
     }
 
-    /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_with_layer_cache(
-        &mut self,
-        row: usize,
-        col: usize,
-        key_state: KeyState,
-    ) -> KeyAction {
-        if key_state.is_releasing() {
-            // Releasing a pressed key, use cached layer and restore the cache
-            let layer = self.pop_layer_from_cache(row, col);
-            return self.layers[layer as usize][row][col];
-        }
-
-        if !key_state.changed && key_state.pressed {
-            // If current key_state doesn't change, and the key is pressed, use the cached layer.
-            //
-            // This situation is specifically for tap/hold, when the key is held, the layer could be continuously checked.
-            // The layer cache should not be popped in this case.
-            // This function should return the cached layer to make layer tap/hold action performs correctly.
-            let layer = self.layer_cache[row][col];
-            return self.layers[layer as usize][row][col];
-        }
-
+    /// Fetch the action in keymap
+    pub(crate) fn get_action_from_active_layer(&mut self, row: usize, col: usize) -> KeyAction {
         // Iterate from higher layer to lower layer, the lowest checked layer is the default layer
         for (layer_idx, layer) in self.layers.iter().enumerate().rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                 // This layer is activated
                 let action = layer[row][col];
-                if action == KeyAction::Transparent || action == KeyAction::No {
+                if action == KeyAction::Transparent {
                     continue;
                 }
-
-                // Found a valid action in the layer, cache it
-                self.save_layer_cache(row, col, layer_idx as u8);
 
                 return action;
             }
@@ -230,21 +201,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
 
         KeyAction::No
-    }
-
-    fn get_layer_from_cache(&self, row: usize, col: usize) -> u8 {
-        self.layer_cache[row][col]
-    }
-
-    fn pop_layer_from_cache(&mut self, row: usize, col: usize) -> u8 {
-        let layer = self.layer_cache[row][col];
-        self.layer_cache[row][col] = self.default_layer;
-
-        layer
-    }
-
-    fn save_layer_cache(&mut self, row: usize, col: usize, layer_num: u8) {
-        self.layer_cache[row][col] = layer_num;
     }
 
     /// Activate given layer

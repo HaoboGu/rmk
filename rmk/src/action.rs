@@ -51,6 +51,19 @@ pub enum KeyAction {
 }
 
 impl KeyAction {
+    pub(crate) fn tap_hold(&self) -> Option<(Action, Action)> {
+        match *self {
+            KeyAction::TapHold(tap_action, hold_action) => Some((tap_action, hold_action)),
+            KeyAction::LayerTapHold(tap_action, layer_num) => {
+                Some((tap_action, Action::LayerOn(layer_num)))
+            }
+            KeyAction::ModifierTapHold(tap_action, modifier) => {
+                Some((tap_action, Action::Modifier(modifier)))
+            }
+            _ => None,
+        }
+    }
+
     /// Convert a `KeyAction` to corresponding key action code.
     pub(crate) fn to_key_action_code(self) -> u16 {
         match self {
