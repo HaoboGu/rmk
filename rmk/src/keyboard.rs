@@ -260,13 +260,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process key changes at (row, col)
-    async fn process_key_change(
-        &mut self,
-        key: &mut Holdingkey,
-        key_state: bool,
-    ) -> Option<Instant> {
+    async fn process_key_change(&mut self, key: &mut Holdingkey, pressed: bool) -> Option<Instant> {
         // Process key
-        if key_state {
+        if pressed {
             let uninitialized = key.action == KeyAction::Transparent;
             if uninitialized {
                 let mut action = self
@@ -288,11 +284,11 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         }
         match key.action {
             KeyAction::No | KeyAction::Transparent => (),
-            KeyAction::Single(a) => self.process_key_action_normal(a, key_state).await,
+            KeyAction::Single(a) => self.process_key_action_normal(a, pressed).await,
             KeyAction::WithModifier(a, m) => {
-                self.process_key_action_with_modifier(a, m, key_state).await
+                self.process_key_action_with_modifier(a, m, pressed).await
             }
-            KeyAction::Tap(a) => self.process_key_action_tap(a, key_state).await,
+            KeyAction::Tap(a) => self.process_key_action_tap(a, pressed).await,
             KeyAction::OneShot(oneshot_action) => {
                 self.process_key_action_oneshot(oneshot_action).await
             }
@@ -314,27 +310,27 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         }
     }
 
-    async fn process_key_action_normal(&mut self, action: Action, key_state: bool) {
+    async fn process_key_action_normal(&mut self, action: Action, pressed: bool) {
         match action {
-            Action::Key(key) => self.process_action_keycode(key, key_state).await,
-            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_state),
+            Action::Key(key) => self.process_action_keycode(key, pressed).await,
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, pressed),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if key_state {
+                if pressed {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is release
-                if !key_state {
+                if !pressed {
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
             Action::Modifier(modifier) => {
                 let (keycodes, n) = modifier.to_modifier_keycodes();
                 for kc in keycodes.iter().take(n) {
-                    self.process_action_keycode(*kc, key_state).await;
+                    self.process_action_keycode(*kc, pressed).await;
                 }
             }
             _ => (),
@@ -345,32 +341,32 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         action: Action,
         modifier: ModifierCombination,
-        key_state: bool,
+        pressed: bool,
     ) {
-        if key_state {
+        if pressed {
             // Process modifier
             let (keycodes, n) = modifier.to_modifier_keycodes();
             for kc in keycodes.iter().take(n) {
-                self.process_action_keycode(*kc, key_state).await;
+                self.process_action_keycode(*kc, pressed).await;
             }
             // Send the modifier first, then send the key
-            self.process_key_action_normal(action, key_state).await;
+            self.process_key_action_normal(action, pressed).await;
         } else {
             // Releasing, release the key first, then release the modifier
-            self.process_key_action_normal(action, key_state).await;
+            self.process_key_action_normal(action, pressed).await;
             let (keycodes, n) = modifier.to_modifier_keycodes();
             for kc in keycodes.iter().take(n) {
-                self.process_action_keycode(*kc, key_state).await;
+                self.process_action_keycode(*kc, pressed).await;
             }
         }
     }
 
-    /// Tap action, send a key when the key is key_state, then release the key.
-    async fn process_key_action_tap(&mut self, action: Action, mut key_state: bool) {
-        if key_state {
-            self.process_key_action_normal(action, key_state).await;
-            key_state = false;
-            self.process_key_action_normal(action, key_state).await;
+    /// Tap action, send a key when the key is pressed, then release the key.
+    async fn process_key_action_tap(&mut self, action: Action, mut pressed: bool) {
+        if pressed {
+            self.process_key_action_normal(action, pressed).await;
+            pressed = false;
+            self.process_key_action_normal(action, pressed).await;
         }
     }
 
@@ -379,15 +375,15 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
-    async fn process_action_keycode(&mut self, key: KeyCode, key_state: bool) {
+    async fn process_action_keycode(&mut self, key: KeyCode, pressed: bool) {
         if key.is_consumer() {
-            self.process_action_consumer_control(key, key_state).await;
+            self.process_action_consumer_control(key, pressed).await;
         } else if key.is_system() {
-            self.process_action_system_control(key, key_state).await;
+            self.process_action_system_control(key, pressed).await;
         } else if key.is_mouse_key() {
-            self.process_action_mouse(key, key_state).await;
+            self.process_action_mouse(key, pressed).await;
         } else if key.is_basic() {
-            if key_state {
+            if pressed {
                 self.register_key(key);
             } else {
                 self.unregister_key(key);
@@ -395,14 +391,14 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
             self.send_keyboard_report().await;
         } else if key.is_macro() {
             // Process macro
-            self.process_action_macro(key, key_state).await;
+            self.process_action_macro(key, pressed).await;
         }
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, key_state: bool) {
+    fn process_action_layer_switch(&mut self, layer_num: u8, pressed: bool) {
         // Change layer state only when the key's state is changed
-        if key_state {
+        if pressed {
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -410,9 +406,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
-    async fn process_action_consumer_control(&mut self, key: KeyCode, key_state: bool) {
+    async fn process_action_consumer_control(&mut self, key: KeyCode, pressed: bool) {
         if key.is_consumer() {
-            self.other_report.media_usage_id = if key_state {
+            self.other_report.media_usage_id = if pressed {
                 key.as_consumer_control_usage_id() as u16
             } else {
                 0
@@ -422,9 +418,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process system control action. System control keys are keys in system page, such as power key.
-    async fn process_action_system_control(&mut self, key: KeyCode, key_state: bool) {
+    async fn process_action_system_control(&mut self, key: KeyCode, pressed: bool) {
         if key.is_system() {
-            if key_state {
+            if pressed {
                 if let Some(system_key) = key.as_system_control_usage_id() {
                     self.other_report.system_usage_id = system_key as u8;
                     self.send_system_control_report().await;
@@ -437,10 +433,10 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     }
 
     /// Process mouse key action.
-    async fn process_action_mouse(&mut self, key: KeyCode, key_state: bool) {
+    async fn process_action_mouse(&mut self, key: KeyCode, pressed: bool) {
         if key.is_mouse_key() {
             // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
-            if key_state {
+            if pressed {
                 match key {
                     // TODO: Add accerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
@@ -510,9 +506,9 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         }
     }
 
-    async fn process_action_macro(&mut self, key: KeyCode, key_state: bool) {
+    async fn process_action_macro(&mut self, key: KeyCode, pressed: bool) {
         // Execute the macro only when releasing the key
-        if !key_state {
+        if !pressed {
             return;
         }
 
