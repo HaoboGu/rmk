@@ -5,20 +5,28 @@ use self::server::BleServer;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::hid::{BleReceiver, ReaderWriter};
 use crate::matrix::Matrix;
+use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
+use crate::storage::Storage;
+use crate::via::process::VialService;
+use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
 use crate::{
-    action::KeyAction, ble::ble_communication_task, config::RmkConfig, flash::EmptyFlashWrapper,
-    keyboard::Keyboard, keyboard_task, keymap::KeyMap, KeyboardReportMessage,
+    action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
+    keyboard_task, keymap::KeyMap, KeyboardReportMessage,
 };
 use core::cell::RefCell;
-use defmt::{info, warn};
-use embassy_futures::select::select3;
+use defmt::{debug, info, warn};
+use embassy_futures::select::{select, select4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use embedded_storage_async::nor_flash::ReadNorFlash;
+use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
+use rmk_config::StorageConfig;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
@@ -47,17 +55,20 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
-    // TODO: Use esp nvs as the storage
-    // Related issue: https://github.com/esp-rs/esp-idf-svc/issues/405
-    let (mut _storage, keymap) = (
-        None::<EmptyFlashWrapper>,
-        RefCell::new(
-            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage::<EmptyFlashWrapper>(
-                default_keymap,
-                None,
-            )
-            .await,
-        ),
+    let f = Partition::new(PartitionType::Custom, Some(c"rmk"));
+    let num_sectors = (f.capacity() / Partition::SECTOR_SIZE) as u8;
+    let mut storage = Storage::new(
+        f,
+        &default_keymap,
+        StorageConfig {
+            start_addr: 0,
+            num_sectors,
+        },
+    )
+    .await;
+
+    let keymap = RefCell::new(
+        KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
     );
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
@@ -79,10 +90,17 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
+    static via_output: Channel<CriticalSectionRawMutex, [u8; 32], 2> = Channel::new();
+    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
+        ble_server.output_keyboard.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("output_keyboard {}, {}", data.len(), data[0]);
+        });
+
         info!("Waitting for connection..");
         ble_server.wait_for_connection().await;
 
@@ -105,11 +123,28 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             &mut mouse_writer,
         );
 
+        ble_server.output_vial.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("BLE received {} {=[u8]:#X}", data.len(), data);
+            block_on(via_output.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
+        });
+        let mut via_rw = ReaderWriter(BleReceiver(via_output.receiver()), ble_server.input_vial);
+        let via_fut = vial_task(&mut via_rw, &mut vial_service);
+
+        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+        pin_mut!(storage_fut);
+        pin_mut!(via_fut);
         pin_mut!(keyboard_fut);
         pin_mut!(disconnect);
         pin_mut!(ble_fut);
 
-        select3(keyboard_fut, disconnect, ble_fut).await;
+        select4(
+            select(storage_fut, keyboard_fut),
+            disconnect,
+            ble_fut,
+            via_fut,
+        )
+        .await;
 
         warn!("BLE disconnected!")
     }

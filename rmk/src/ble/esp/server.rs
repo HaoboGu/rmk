@@ -1,11 +1,12 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use defmt::{error, info, warn};
+use defmt::{debug, error, info, warn};
+use embassy_futures::block_on;
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
-    utilities::mutex::Mutex,
-    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer,
+    utilities::{mutex::Mutex, BleUuid},
+    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer, NimbleProperties,
 };
 use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
@@ -38,8 +39,9 @@ impl HidWriterWrapper for BleHidWriter {
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        debug!("BLE notify {} {=[u8]:#X}", report.len(), report);
         self.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
+        Timer::after_millis(7).await;
         Ok(())
     }
 }
@@ -85,6 +87,13 @@ impl BleServer {
         });
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
         let output_keyboard = hid.output_report(BleCompositeReportType::Keyboard as u8);
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
@@ -153,19 +162,5 @@ impl BleServer {
 impl ConnectionTypeWrapper for BleServer {
     fn get_conn_type(&self) -> crate::hid::ConnectionType {
         ConnectionType::Ble
-    }
-}
-
-impl HidWriterWrapper for BleServer {
-    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
-        self.input_keyboard.lock().set_from(r).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
-    }
-
-    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
-        self.input_keyboard.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
     }
 }
