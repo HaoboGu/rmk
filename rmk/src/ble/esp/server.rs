@@ -99,8 +99,25 @@ impl BleServer {
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
         let input_system_keys = hid.input_report(BleCompositeReportType::System as u8);
         let input_mouse_keys = hid.input_report(BleCompositeReportType::Mouse as u8);
-        let input_vial = hid.input_report(BleCompositeReportType::Vial as u8);
-        let output_vial = hid.output_report(BleCompositeReportType::Vial as u8);
+
+        let vial_hid =  BLEHIDDevice::new(server);
+        vial_hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+        let input_vial = vial_hid.input_report(BleCompositeReportType::Vial as u8);
+        let output_vial = vial_hid.output_report(BleCompositeReportType::Vial as u8);
+        vial_hid.pnp(
+            VidSource::UsbIF as u8,
+            usb_config.vid,
+            usb_config.pid,
+            0x0000,
+        );
+        vial_hid.hid_info(0x00, 0x03);
+        vial_hid.report_map(BleVialReport::desc());
 
         hid.pnp(
             VidSource::UsbIF as u8,
