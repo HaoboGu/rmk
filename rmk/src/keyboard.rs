@@ -482,32 +482,46 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     ) {
         if key_state.is_releasing() {
             // Case 1, the key is released
-            if let Some(s) = key_state.hold_start {
-                let d = s.elapsed().as_millis();
-                if d < 200 {
+            match key_state.hold_start {
+                Some(s) => {
                     // Released: tap
+                    // The hold_start isn't cleared, means that the key is released within the tap/hold threshold
                     key_state.pressed = true;
-                    debug!("Release tap hold, got TAP: {}, {}", tap_action, key_state);
+                    debug!(
+                        "Release tap hold, got TAP: {}, {}, time elapsed: {}ms",
+                        tap_action,
+                        key_state,
+                        s.elapsed().as_millis()
+                    );
                     self.process_key_action_tap(tap_action, key_state, sender)
                         .await;
-                } else {
+
+                    // Reset timer after release
+                    self.matrix.update_key_state(row, col, |ks| {
+                        ks.clear_timer();
+                    });
+                }
+                None => {
                     // Released: hold action
+                    // The hold_start is cleared, means that the key is released after the tap/hold threshold
                     debug!("Release tap hold, got HOLD: {}, {}", hold_action, key_state);
                     self.process_key_action_normal(hold_action, key_state, sender)
                         .await;
                 }
-                // Reset timer after release
-                self.matrix.update_key_state(row, col, |ks| {
-                    ks.clear_timer();
-                });
             }
         } else if key_state.pressed && !key_state.changed {
             // Case 2, the key is held
             if let Some(s) = key_state.hold_start {
                 let d = s.elapsed().as_millis();
                 if d > 200 {
+                    // The key is held for more than 200ms, send hold action, then clear timer
                     self.process_key_action_normal(hold_action, key_state, sender)
                         .await;
+
+                    // Clear timer if the key is held
+                    self.matrix.update_key_state(row, col, |ks| {
+                        ks.clear_timer();
+                    });
                 }
             }
         }
