@@ -164,7 +164,7 @@ pub async fn run_rmk_with_async_flash<
 ) -> ! {
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_nrf_ble_keyboard_with_config_and_run(
+    initialize_nrf_ble_keyboard_with_config_and_run(
         input_pins,
         output_pins,
         #[cfg(not(feature = "_no_usb"))]
@@ -176,7 +176,7 @@ pub async fn run_rmk_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    let fut = initialize_esp_ble_keyboard_with_config_and_run(
+    initialize_esp_ble_keyboard_with_config_and_run(
         input_pins,
         output_pins,
         default_keymap,
@@ -188,7 +188,7 @@ pub async fn run_rmk_with_async_flash<
         not(feature = "_no_usb"),
         not(any(feature = "_nrf_ble", feature = "_esp_ble"))
     ))]
-    let fut = initialize_usb_keyboard_and_run(
+    initialize_usb_keyboard_and_run(
         input_pins,
         output_pins,
         usb_driver,
@@ -201,7 +201,7 @@ pub async fn run_rmk_with_async_flash<
 
     // The fut should never return.
     // If there's no fut, the feature flags must not be correct.
-    fut
+    defmt::panic!("The run_rmk should never return");
 }
 
 pub(crate) async fn initialize_usb_keyboard_and_run<
