@@ -100,3 +100,18 @@ pub(crate) struct BleKeyboardReport {
     pub(crate) vial_input_data: [u8; 32],
     pub(crate) vial_output_data: [u8; 32],
 }
+
+#[gen_hid_descriptor(
+    (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
+        (usage = 0x62, logical_min = 0x0) = {
+            #[item_settings data,variable,absolute] vial_input_data=input;
+        };
+        (usage = 0x63, logical_min = 0x0) = {
+            #[item_settings data,variable,absolute] vial_output_data=output;
+        };
+    }
+)]
+pub(crate) struct BleVialReport {
+    pub(crate) vial_input_data: [u8; 32],
+    pub(crate) vial_output_data: [u8; 32],
+}

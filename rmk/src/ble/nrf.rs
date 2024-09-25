@@ -3,6 +3,7 @@ mod battery_service;
 pub(crate) mod bonder;
 mod device_information_service;
 mod hid_service;
+mod vial_service;
 pub(crate) mod server;
 pub(crate) mod spec;
 
@@ -146,7 +147,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
         }),
         conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 256 }),
         gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
-            attr_tab_size: raw::BLE_GATTS_ATTR_TAB_SIZE_DEFAULT,
+            attr_tab_size: 2048,
         }),
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,

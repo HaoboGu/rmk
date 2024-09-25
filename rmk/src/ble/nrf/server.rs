@@ -2,6 +2,7 @@ use super::{
     battery_service::{BatteryService, BatteryServiceEvent},
     device_information_service::DeviceInformationService,
     hid_service::{HidService, HidServiceEvent},
+    vial_service::{BleVialService, VialServiceEvent},
 };
 use crate::{
     ble::device_info::{DeviceInformation, PnPID, VidSource},
@@ -98,6 +99,7 @@ pub(crate) struct BleServer {
     _dis: DeviceInformationService,
     pub(crate) bas: BatteryService,
     pub(crate) hid: HidService,
+    pub(crate) vial: BleVialService,
     bonder: &'static dyn SecurityHandler,
 }
 
@@ -127,10 +129,13 @@ impl BleServer {
 
         let hid = HidService::new(sd)?;
 
+        let vial = BleVialService::new(sd)?;
+
         Ok(Self {
             _dis: dis,
             bas,
             hid,
+            vial,
             bonder,
         })
     }
@@ -152,13 +157,13 @@ impl gatt_server::Server for BleServer {
                 HidServiceEvent::InputKeyboardCccdWrite
                 | HidServiceEvent::InputMediaKeyCccdWrite
                 | HidServiceEvent::InputMouseKeyCccdWrite
-                | HidServiceEvent::InputSystemKeyCccdWrite
-                | HidServiceEvent::InputVialKeyCccdWrite => {
+                // | HidServiceEvent::InputVialKeyCccdWrite
+                | HidServiceEvent::InputSystemKeyCccdWrite => {
                     info!("{}, handle: {}, data: {}", event, handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 HidServiceEvent::OutputKeyboard => (),
-                HidServiceEvent::OutputVial => (),
+                // HidServiceEvent::OutputVial => (),
             }
         }
         if let Some(event) = self.bas.on_write(handle, data) {
@@ -170,6 +175,16 @@ impl gatt_server::Server for BleServer {
                     );
                     self.bonder.save_sys_attrs(conn)
                 }
+            }
+        }
+
+        if let Some(event) = self.vial.on_write(handle, data) {
+            match event {
+                VialServiceEvent::InputVialKeyCccdWrite => {
+                    info!("InputVialCccdWrite, handle: {}, data: {}", handle, data);
+                    self.bonder.save_sys_attrs(conn)
+                }
+                VialServiceEvent::OutputVial => (),
             }
         }
 
