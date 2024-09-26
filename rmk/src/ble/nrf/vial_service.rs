@@ -1,5 +1,3 @@
-use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
-use crate::ble::descriptor::{BleCompositeReportType, BleVialReport};
 use defmt::{error, info, Format};
 use nrf_softdevice::{
     ble::{
@@ -14,6 +12,10 @@ use nrf_softdevice::{
     Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor;
+
+use crate::usb::descriptor::ViaReport;
+
+use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 
 #[derive(Debug, defmt::Format)]
 pub(crate) struct BleVialService {
@@ -48,7 +50,7 @@ impl BleVialService {
         let report_map_handle = service_builder
             .add_characteristic(
                 BleCharacteristics::ReportMap.uuid(),
-                Attribute::new(BleVialReport::desc()).security(SecurityMode::JustWorks),
+                Attribute::new(ViaReport::desc()).security(SecurityMode::JustWorks),
                 Metadata::new(Properties::new().read()),
             )?
             .build();
@@ -77,8 +79,7 @@ impl BleVialService {
         )?;
         let input_vial_desc = input_vial.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([BleCompositeReportType::Vial as u8, 1u8])
-                .security(SecurityMode::JustWorks),
+            Attribute::new([0u8, 1u8]).security(SecurityMode::JustWorks),
         )?;
         let input_vial_handle = input_vial.build();
 
@@ -89,8 +90,7 @@ impl BleVialService {
         )?;
         let output_vial_desc = output_vial.add_descriptor(
             BleDescriptor::ReportReference.uuid(),
-            Attribute::new([BleCompositeReportType::Vial as u8, 2u8])
-                .security(SecurityMode::JustWorks),
+            Attribute::new([0u8, 2u8]).security(SecurityMode::JustWorks),
         )?;
         let output_vial_handle = output_vial.build();
 

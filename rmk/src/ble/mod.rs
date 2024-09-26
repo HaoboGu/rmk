@@ -6,7 +6,7 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
-use defmt::error;
+use defmt::{debug, error};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
@@ -38,6 +38,7 @@ pub(crate) async fn ble_communication_task<
     loop {
         match keyboard_report_receiver.receive().await {
             KeyboardReportMessage::KeyboardReport(report) => {
+                debug!("Send keyboard report: {}", report.keycodes);
                 match ble_keyboard_writer.write_serialize(&report).await {
                     Ok(()) => {}
                     Err(e) => error!("Send keyboard report error: {}", e),

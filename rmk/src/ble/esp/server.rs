@@ -12,11 +12,12 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
 use crate::{
     ble::{
-        descriptor::{BleCompositeReportType, BleKeyboardReport, BleVialReport},
+        descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
     },
     config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
+    usb::descriptor::ViaReport,
 };
 
 type BleHidWriter = Arc<Mutex<BLECharacteristic>>;
@@ -128,7 +129,7 @@ impl BleServer {
             0x0000,
         );
         vial_hid.hid_info(0x00, 0x03);
-        vial_hid.report_map(BleVialReport::desc());
+        vial_hid.report_map(ViaReport::desc());
 
         let ble_advertising = device.get_advertising();
         if let Err(e) = ble_advertising.lock().scan_response(false).set_data(
