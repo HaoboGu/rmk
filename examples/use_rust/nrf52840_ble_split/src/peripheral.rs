@@ -15,7 +15,7 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
 };
 use panic_probe as _;
-use rmk::split::slave::run_rmk_split_slave;
+use rmk::split::peripheral::run_rmk_split_peripheral;
 
 bind_interrupts!(struct Irqs {
     SAADC => saadc::InterruptHandler;
@@ -47,7 +47,7 @@ async fn main(spawner: Spawner) {
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_04.degrade_saadc();
-    // TODO: Slave's charging state and battery level
+    // TODO: Peripheral's charging state and battery level
     let _is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
     let _charging_led = Output::new(
         AnyPin::from(p.P0_08),
@@ -61,14 +61,14 @@ async fn main(spawner: Spawner) {
     let (input_pins, output_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10], output:  [P0_30, P0_31]);
 
-    let master_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
-    let slave_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
+    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
-    run_rmk_split_slave::<Input<'_>, Output<'_>, 2, 2>(
+    run_rmk_split_peripheral::<Input<'_>, Output<'_>, 2, 2>(
         input_pins,
         output_pins,
-        master_addr,
-        slave_addr,
+        central_addr,
+        peripheral_addr,
         spawner,
     )
     .await;

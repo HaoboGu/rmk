@@ -6,14 +6,14 @@ RMK provides both Rust code or config ways to set your default keymap.
 
 ## Define default keymap in `keyboard.toml`
 
-Please check [this section](keyboard_configuration.md#keymap-config) of keyboard configuration doc.
+Please check [this section](keyboard_configuration.md#layout) in keyboard configuration doc.
 
 ## Define default keymap in Rust source file
 
-The default keymap could also be defined at a Rust source file, [rmk-template](https://github.com/HaoboGu/rmk-template) provides an initial [`keymap.rs`](https://github.com/HaoboGu/rmk-template/blob/master/src/keymap.rs) which could be a good example of defining keymaps in RMK:
+The default keymap could also be defined at a Rust source file, [rmk-template](https://github.com/HaoboGu/rmk-template) provides an initial [`keymap.rs`](https://github.com/HaoboGu/rmk-template/blob/central/src/keymap.rs) which could be a good example of defining keymaps in RMK:
 
 ```rust
-/// https://github.com/HaoboGu/rmk-template/blob/master/src/keymap.rs
+/// https://github.com/HaoboGu/rmk-template/blob/central/src/keymap.rs
 use rmk::action::KeyAction;
 use rmk::{a, k, layer, mo};
 pub(crate) const COL: usize = 3;

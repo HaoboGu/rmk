@@ -6,7 +6,7 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
-use defmt::error;
+use defmt::{debug, error};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
@@ -19,14 +19,15 @@ use crate::{
 };
 
 /// BLE communication task, send reports to host via BLE.
-pub(crate) async fn ble_task<
+/// TODO: Merge `ble_communication_task` and `communication_task` into one task.
+pub(crate) async fn ble_communication_task<
     'a,
     W: HidWriterWrapper,
     W2: HidWriterWrapper,
     W3: HidWriterWrapper,
     W4: HidWriterWrapper,
 >(
-    keyboard_report_receiver: &mut Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ble_keyboard_writer: &mut W,
     ble_media_writer: &mut W2,
     ble_system_control_writer: &mut W3,
@@ -37,6 +38,7 @@ pub(crate) async fn ble_task<
     loop {
         match keyboard_report_receiver.receive().await {
             KeyboardReportMessage::KeyboardReport(report) => {
+                debug!("Send keyboard report: {}", report.keycodes);
                 match ble_keyboard_writer.write_serialize(&report).await {
                     Ok(()) => {}
                     Err(e) => error!("Send keyboard report error: {}", e),

@@ -72,16 +72,6 @@ pub(crate) enum BleCompositeReportType {
                 #[item_settings data,array,absolute,not_null] system_usage_id=input;
             };
         };
-    },
-    (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
-        (report_id = 0x05,) = {
-            (usage = 0x62, logical_min = 0x0) = {
-                #[item_settings data,variable,absolute] vial_input_data=input;
-            };
-            (usage = 0x63, logical_min = 0x0) = {
-                #[item_settings data,variable,absolute] vial_output_data=output;
-            };
-        };
     }
 )]
 #[allow(dead_code)]
@@ -97,6 +87,4 @@ pub(crate) struct BleKeyboardReport {
     pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
     pub(crate) media_usage_id: u16,
     pub(crate) system_usage_id: u8,
-    pub(crate) vial_input_data: [u8; 32],
-    pub(crate) vial_output_data: [u8; 32],
 }

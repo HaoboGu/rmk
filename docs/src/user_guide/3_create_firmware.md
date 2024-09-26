@@ -8,7 +8,7 @@ and [cargo-generate](https://github.com/cargo-generate/cargo-generate).
 
 RMK provides a [project template](https://github.com/HaoboGu/rmk-template), making it much easier to create your own
 firmware using your favorite microcontroller. `cargo-generate` is required to use the template, you can install it using
-the following command:
+the following command(if you've installed cargo-generate, just skip this):
 
 ```bash
 cargo install cargo-generate

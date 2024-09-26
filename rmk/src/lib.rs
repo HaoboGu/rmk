@@ -21,7 +21,7 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
-use core::cell::RefCell;
+use core::{cell::RefCell, sync::atomic::AtomicBool};
 use defmt::*;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
@@ -70,6 +70,14 @@ pub mod split;
 mod storage;
 mod usb;
 mod via;
+
+pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
+
+pub fn as_bytes<T: Sized>(p: &T) -> &[u8] {
+    unsafe {
+        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
+    }
+}
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -156,7 +164,7 @@ pub async fn run_rmk_with_async_flash<
 ) -> ! {
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_nrf_ble_keyboard_with_config_and_run(
+    initialize_nrf_ble_keyboard_with_config_and_run(
         input_pins,
         output_pins,
         #[cfg(not(feature = "_no_usb"))]
@@ -168,7 +176,7 @@ pub async fn run_rmk_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    let fut = initialize_esp_ble_keyboard_with_config_and_run(
+    initialize_esp_ble_keyboard_with_config_and_run(
         input_pins,
         output_pins,
         default_keymap,
@@ -180,7 +188,7 @@ pub async fn run_rmk_with_async_flash<
         not(feature = "_no_usb"),
         not(any(feature = "_nrf_ble", feature = "_esp_ble"))
     ))]
-    let fut = initialize_usb_keyboard_and_run(
+    initialize_usb_keyboard_and_run(
         input_pins,
         output_pins,
         usb_driver,
@@ -193,7 +201,7 @@ pub async fn run_rmk_with_async_flash<
 
     // The fut should never return.
     // If there's no fut, the feature flags must not be correct.
-    fut
+    defmt::panic!("The run_rmk should never return");
 }
 
 pub(crate) async fn initialize_usb_keyboard_and_run<
@@ -248,10 +256,11 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     loop {
+        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Run all tasks, if one of them fails, wait 1 second and then restart
         run_usb_keyboard(
             &mut usb_device,
@@ -260,8 +269,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
             &mut storage,
             &mut light_service,
             &mut vial_service,
-            &mut keyboard_report_receiver,
-            &mut keyboard_report_sender,
+            &keyboard_report_receiver,
+            &keyboard_report_sender,
         )
         .await;
 
@@ -287,8 +296,8 @@ pub(crate) async fn run_usb_keyboard<
     #[cfg(not(feature = "_no_external_storage"))] storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &mut Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &mut Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_sender: &Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
     let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
@@ -321,10 +330,10 @@ pub(crate) async fn run_usb_keyboard<
     )
     .await
     {
-        Either4::First(_) => error!("Usb or keyboard task is died"),
-        Either4::Second(_) => error!("Storage or vial task is died"),
-        Either4::Third(_) => error!("Led task is died"),
-        Either4::Fourth(_) => error!("Communication task is died"),
+        Either4::First(_) => error!("Usb or keyboard task has died"),
+        Either4::Second(_) => error!("Storage or vial task has died"),
+        Either4::Third(_) => error!("Led task has died"),
+        Either4::Fourth(_) => error!("Communication task has died"),
     }
 }
 

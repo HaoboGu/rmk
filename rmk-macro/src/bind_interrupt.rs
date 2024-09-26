@@ -85,7 +85,7 @@ pub(crate) fn bind_interrupt_default(
             quote! {
                 use ::embassy_nrf::bind_interrupts;
                 bind_interrupts!(struct Irqs {
-                #interrupt_binding
+                    #interrupt_binding
                 });
             }
         }
@@ -98,6 +98,5 @@ pub(crate) fn bind_interrupt_default(
             }
         }
         crate::ChipSeries::Esp32 => quote! {},
-        crate::ChipSeries::Unsupported => quote! {},
     }
 }

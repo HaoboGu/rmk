@@ -1,26 +1,35 @@
-# RMK
+<!-- PROJECT LOGO -->
+<br />
+<p align="center">
+  <a href="https://github.com/haobogu/rmk">
+    <img src="https://github.com/HaoboGu/rmk/blob/2b73951291fd829075277d64e0aeb8ea82d0bea9/docs/src/images/rmk_logo2.png?raw=true" alt="Logo" width="150">
+  </a>
 
-[![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
-[![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
-[![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
-[![Discord](https://img.shields.io/discord/1166665039793639424?label=discord)](https://discord.gg/HHGA7pQxkG)
+  <p align="center">
+  A feature-rich Rust keyboard firmware. 
+  <br />
+  <br />
+  <a href="https://crates.io/crates/rmk"><img src="https://img.shields.io/crates/v/rmk"></a>
+  <a href="https://docs.rs/rmk/latest/rmk/"><img src="https://img.shields.io/docsrs/rmk"></a>
+  <a href="https://github.com/HaoboGu/rmk/actions"><img src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://discord.gg/HHGA7pQxkG"><img src="https://img.shields.io/discord/1166665039793639424?label=discord"></a>
+  </p>
+</p>
 
 [中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
 
-A feature-rich Rust keyboard firmware. 
+-----
 
 ## Features
 
 - **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nRF/rp2040/esp32
-- **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
+- **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly. Vial need this [patch](https://github.com/vial-kb/vial-gui/pull/262) to support BLE.
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
 - **Wireless**: BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
 - **Low latency and low-power ready**: RMK has a typical 2 ms latency in wired mode and 10 ms latency in wireless mode. By enabling `async_matrix` feature, RMK has very low power consumption, with a 2000mah battery, RMK can provide several months battery life
 
 ## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
-
-</details>
 
 ## Real World Examples
 

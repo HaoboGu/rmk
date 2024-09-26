@@ -45,28 +45,28 @@ use crate::{
     keymap::KeyMap,
     light::LightService,
     split::{
-        driver::{SlaveMatrixMonitor, SplitDriverError, SplitReader},
+        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
     storage::{get_bond_info_key, Storage, StorageData},
     usb::{wait_for_usb_configured, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
     via::process::VialService,
 };
-use crate::{debounce::DebouncerTrait, split::master::MasterMatrix};
+use crate::{debounce::DebouncerTrait, split::central::CentralMatrix};
 #[cfg(not(feature = "_no_usb"))]
 use crate::{keyboard::communication_task, keyboard_task, light::led_hid_task, via::vial_task};
 
-/// Gatt client used in split master to receive split message from slaves
+/// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
-pub(crate) struct BleSplitMasterClient {
+pub(crate) struct BleSplitCentralClient {
     #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
-    pub(crate) message_to_master: [u8; SPLIT_MESSAGE_MAX_SIZE],
+    pub(crate) message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
 
     #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write)]
-    pub(crate) message_to_slave: [u8; SPLIT_MESSAGE_MAX_SIZE],
+    pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
-pub(crate) async fn run_ble_slave_monitor<
+pub(crate) async fn run_ble_peripheral_monitor<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -82,19 +82,19 @@ pub(crate) async fn run_ble_slave_monitor<
     let run_ble_client = run_ble_client(sender, addr);
 
     let receiver = channel.receiver();
-    let split_ble_driver = BleSplitMasterDriver { receiver };
+    let split_ble_driver = BleSplitCentralDriver { receiver };
 
-    let slave =
-        SlaveMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+    let peripheral =
+        PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
-    info!("Running slave monitor {}", id);
-    join(slave.run(), run_ble_client).await;
+    info!("Running peripheral monitor {}", id);
+    join(peripheral.run(), run_ble_client).await;
 }
 
-/// Run a single ble client, which receives split message from the ble slave.
+/// Run a single ble client, which receives split message from the ble peripheral.
 ///
-/// All received messages are sent to the sender, those message are received in `SplitBleMasterDriver`.
-/// Split driver will take `SplitBleMasterDriver` as the reader, process the message in matrix scanning.
+/// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
+/// Split driver will take `SplitBleCentralDriver` as the reader, process the message in matrix scanning.
 pub(crate) async fn run_ble_client(
     sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
     addr: [u8; 6],
@@ -114,7 +114,7 @@ pub(crate) async fn run_ble_client(
             }
         };
 
-        let ble_client: BleSplitMasterClient = match gatt_client::discover(&conn).await {
+        let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
             Ok(client) => client,
             Err(e) => {
                 error!("BLE discover error: {}", e);
@@ -123,14 +123,14 @@ pub(crate) async fn run_ble_client(
         };
 
         // Enable notifications from the peripherals
-        if let Err(e) = ble_client.message_to_master_cccd_write(true).await {
+        if let Err(e) = ble_client.message_to_central_cccd_write(true).await {
             error!("BLE message_to_central_cccd_write error: {}", e);
             continue;
         }
 
-        // Receive slave's notifications
+        // Receive peripheral's notifications
         let disconnect_error = gatt_client::run(&conn, &ble_client, |event| match event {
-            BleSplitMasterClientEvent::MessageToMasterNotification(message) => {
+            BleSplitCentralClientEvent::MessageToCentralNotification(message) => {
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
                         if let Err(e) = sender.try_send(split_message) {
@@ -151,17 +151,17 @@ pub(crate) async fn run_ble_client(
     }
 }
 
-/// Ble master driver which reads the split message.
+/// Ble central driver which reads the split message.
 ///
 /// Different from serial, BLE split message is received and processed in a separate service.
 /// The BLE service should keep running, it sends out the split message to the channel in the callback.
 /// It's impossible to implement `SplitReader` for BLE service,
 /// so we need this thin wrapper that receives the message from the channel.
-pub(crate) struct BleSplitMasterDriver<'a> {
+pub(crate) struct BleSplitCentralDriver<'a> {
     pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
 }
 
-impl<'a> SplitReader for BleSplitMasterDriver<'a> {
+impl<'a> SplitReader for BleSplitCentralDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         Ok(self.receiver.receive().await)
     }
@@ -176,29 +176,29 @@ impl<'a> SplitReader for BleSplitMasterDriver<'a> {
 /// * `output_pins` - output gpio pins
 /// * `flash` - optional **async** flash storage, which is used for storing keymap and keyboard configs
 /// * `keymap` - default keymap definition
-/// * `master_addr` - BLE random static address of master
+/// * `central_addr` - BLE random static address of central
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-pub(crate) async fn initialize_ble_split_master_and_run<
+pub(crate) async fn initialize_ble_split_central_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
-    const MASTER_ROW: usize,
-    const MASTER_COL: usize,
-    const MASTER_ROW_OFFSET: usize,
-    const MASTER_COL_OFFSET: usize,
+    const CENTRAL_ROW: usize,
+    const CENTRAL_COL: usize,
+    const CENTRAL_ROW_OFFSET: usize,
+    const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; MASTER_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; MASTER_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; MASTER_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; MASTER_ROW],
+    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
+    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
+    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
+    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
-    master_addr: [u8; 6],
+    central_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
     // Set ble config and start nrf-softdevice background task first
@@ -206,7 +206,7 @@ pub(crate) async fn initialize_ble_split_master_and_run<
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
-    set_address(sd, &Address::new(AddressType::RandomStatic, master_addr));
+    set_address(sd, &Address::new(AddressType::RandomStatic, central_addr));
 
     {
         // Use the immutable ref of `Softdevice` to run the softdevice_task
@@ -251,37 +251,37 @@ pub(crate) async fn initialize_ble_split_master_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<MASTER_ROW, MASTER_COL> = RapidDebouncer::new();
+    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<MASTER_COL, MASTER_ROW> = RapidDebouncer::new();
+    let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<MASTER_ROW, MASTER_COL> = DefaultDebouncer::new();
+    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<MASTER_COL, MASTER_ROW> = DefaultDebouncer::new();
+    let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
 
     #[cfg(feature = "col2row")]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
         _,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_ROW,
-        MASTER_COL,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
     >::new(input_pins, output_pins, debouncer);
     #[cfg(not(feature = "col2row"))]
-    let matrix = MasterMatrix::<
+    let matrix = CentralMatrix::<
         In,
         Out,
         _,
         TOTAL_ROW,
         TOTAL_COL,
-        MASTER_ROW_OFFSET,
-        MASTER_COL_OFFSET,
-        MASTER_COL,
-        MASTER_ROW,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_COL,
+        CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
     // Keyboard services
@@ -295,8 +295,8 @@ pub(crate) async fn initialize_ble_split_master_and_run<
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
-    let mut keyboard_report_sender = keyboard_channel.sender();
-    let mut keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
 
     // Main loop
     loop {
@@ -320,9 +320,9 @@ pub(crate) async fn initialize_ble_split_master_and_run<
                 // Run usb keyboard
                 let usb_fut = async {
                     let usb_fut = usb_device.device.run();
-                    let keyboard_fut = keyboard_task(&mut keyboard, &mut keyboard_report_sender);
+                    let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
                     let communication_fut = communication_task(
-                        &mut keyboard_report_receiver,
+                        &keyboard_report_receiver,
                         &mut usb_device.keyboard_hid_writer,
                         &mut usb_device.other_hid_writer,
                     );
@@ -344,9 +344,9 @@ pub(crate) async fn initialize_ble_split_master_and_run<
                     .await
                     {
                         Either4::First(_) => error!("Usb task or keyboard task exited"),
-                        Either4::Second(_) => error!("Storage or vial task is died"),
-                        Either4::Third(_) => error!("Led task is died"),
-                        Either4::Fourth(_) => error!("Communication task is died"),
+                        Either4::Second(_) => error!("Storage or vial task has died"),
+                        Either4::Third(_) => error!("Led task has died"),
+                        Either4::Fourth(_) => error!("Communication task has died"),
                     }
                 };
                 info!("Running USB keyboard!");
@@ -374,8 +374,8 @@ pub(crate) async fn initialize_ble_split_master_and_run<
                                 &mut storage,
                                 &mut light_service,
                                 &mut keyboard_config.ble_battery_config,
-                                &mut keyboard_report_receiver,
-                                &mut keyboard_report_sender,
+                                &keyboard_report_receiver,
+                                &keyboard_report_sender,
                             ),
                             select(usb_fut, usb_configured),
                         )
@@ -409,8 +409,8 @@ pub(crate) async fn initialize_ble_split_master_and_run<
                     &mut storage,
                     &mut light_service,
                     &mut keyboard_config.ble_battery_config,
-                    &mut keyboard_report_receiver,
-                    &mut keyboard_report_sender,
+                    &keyboard_report_receiver,
+                    &keyboard_report_sender,
                 )
                 .await
             }

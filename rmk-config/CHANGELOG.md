@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2024-09-11
+
+- Added config for split keyboard
+
 ## [0.1.4] - 2024-08-06
 
 - Update `embassy-nrf` to v0.2.0

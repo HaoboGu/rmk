@@ -1,6 +1,6 @@
 # Use Rust
 
-By default, the generated project uses `keyboard.toml` to config the RMK keyboard firmware. If you want to customize your firmware using Rust, there're some steps to do to make the generated firmware project compile:
+By default, the generated project uses `keyboard.toml` to config the RMK keyboard firmware. If you want to customize your firmware using Rust, there're steps to do to make the generated firmware project compile:
 
 ### Update memory.x
 
@@ -9,9 +9,11 @@ By default, the generated project uses `keyboard.toml` to config the RMK keyboar
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM to your microcontroller.
 You can either checkout your microcontroller's datasheet or existing Rust project of your microcontroller for it.
 
-### Update USB interrupt binding in `main.rs`
+### Update `main.rs`
 
-Next, you have to check generated `src/main.rs`, make sure that the binded USB interrupt is right. Different
+By default, generated `main.rs` uses proc-macro and `keyboard.toml`. To fully customize the firmware, you can copy the code from RMK's Rust example, such as <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/main.rs> to `src/main.rs`.
+
+Next, you have to check `src/main.rs`, make sure that the binded USB interrupt is right. Different
 microcontrollers have different types of USB peripheral, so does bind interrupt. You can check
 out [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind the USB interrupt
 correctly.
@@ -27,8 +29,6 @@ bind_interrupts!(struct Irqs {
 });
 ```
 
-Don't forget to import all used items!
-
 ### Add your own layout
 
 The next step is to add your own keymap layout for your firmware. RMK supports [vial app](https://get.vial.today/), an
@@ -42,9 +42,11 @@ at the root of the firmware project, replacing the default one. RMK would do all
 ### Add your default keymap
 
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined
-in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard. RMK provides a bunch of
+in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard.
+
+RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check
-out [keymap_configuration](../keymap.md) chapter for more details.
+out [keymap_configuration](../keymap.md) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
 
 ### Define your matrix
 

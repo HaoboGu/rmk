@@ -1,9 +1,7 @@
-use cargo_toml::Manifest;
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::toml_config::KeyboardTomlConfig;
-use std::fs;
 use syn::ItemMod;
 
 use crate::{
@@ -12,10 +10,12 @@ use crate::{
     chip_init::expand_chip_init,
     comm::expand_usb_init,
     entry::expand_rmk_entry,
+    feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, get_chip_model, get_communication_type,
+        read_keyboard_config,
     },
     layout::expand_layout_init,
     light::expand_light_config,
@@ -59,87 +59,39 @@ pub enum Overwritten {
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
-    let enabled_rmk_features = match Manifest::from_path("Cargo.toml") {
-        Ok(manifest) => manifest
-            .dependencies
-            .iter()
-            .find(|(name, _dep)| *name == "rmk")
-            .map(|(_name, dep)| dep.req_features().to_vec()),
-        Err(_e) => None,
-    };
+    let rmk_features = get_rmk_features();
+    let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
 
-    // Check whether the async matrix feature is enabled
-    let mut async_matrix = false;
-    if let Some(rmk_features) = enabled_rmk_features {
-        for f in rmk_features {
-            if f == "async_matrix" {
-                async_matrix = true
-            }
-        }
-    };
-
-    // Read keyboard config file at project root
-    let s = match fs::read_to_string("keyboard.toml") {
-        Ok(s) => s,
-        Err(e) => {
-            let msg = format!("Read keyboard config file `keyboard.toml` error: {}", e);
-            return syn::Error::new_spanned::<TokenStream2, String>(attr.into(), msg)
-                .to_compile_error()
-                .into();
-        }
-    };
-
-    // Parse keyboard config file content to `KeyboardTomlConfig`
-    let toml_config: KeyboardTomlConfig = match toml::from_str(&s) {
+    let toml_config = match read_keyboard_config(attr) {
         Ok(c) => c,
-        Err(e) => {
-            let msg = format!("Parse `keyboard.toml` error: {}", e.message());
-            return syn::Error::new_spanned::<TokenStream2, String>(attr.into(), msg)
-                .to_compile_error()
-                .into();
-        }
+        Err(e) => return e,
     };
 
-    // Generate code from toml config
-    let chip = get_chip_model(toml_config.keyboard.chip.clone());
-    if chip.series == ChipSeries::Unsupported {
-        return quote! {
-            compile_error!("Unsupported chip series, please check `chip` field in `keyboard.toml`");
-        }
-        .into();
-    }
-
-    // Get communication type: USB/BLE or BOTH
-    let comm_type = get_communication_type(&toml_config.keyboard, &toml_config.ble);
-    if comm_type == CommunicationType::None {
-        return quote! {
-            compile_error!("You must enable at least one of usb or ble");
-        }
-        .into();
-    }
-
-    // Check if the chip has usb
-    if !chip.has_usb() && comm_type.usb_enabled() {
-        return quote! {
-            compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again. Or you can set `usb_enable = false` in `[keyboard]` section of `keyboard.toml`");
-        }
-        .into();
-    }
-
-    // Get usb info from generated usb_interrupt_map.rs
-    let usb_info = if comm_type.usb_enabled() {
-        if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
-            usb_info
-        } else {
-            return quote! {
-                compile_error!("Unsupported chip model, please check `chip` field in `keyboard.toml` is a valid. For stm32, it should be a feature gate of `embassy-stm32`");
-            }
-            .into();
-        }
-    } else {
-        UsbInfo::new_default(&chip)
+    let (chip, comm_type, usb_info) = match get_chip_info(&toml_config) {
+        Ok(value) => value,
+        Err(e) => return e,
     };
 
+    let imports = gen_imports(&toml_config, &chip);
+
+    // Expanded main function
+    let main_function = expand_main(
+        &chip,
+        comm_type,
+        usb_info,
+        toml_config,
+        item_mod,
+        async_matrix,
+    );
+
+    quote! {
+        #imports
+
+        #main_function
+    }
+}
+
+pub(crate) fn gen_imports(toml_config: &KeyboardTomlConfig, chip: &ChipModel) -> TokenStream2 {
     // Create layout info
     let layout = expand_layout_init(toml_config.layout.clone(), toml_config.matrix.clone());
     // Create keyboard info and vial struct
@@ -149,6 +101,7 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         toml_config.matrix.cols as usize,
         toml_config.matrix.layers as usize,
     );
+
     // Create vial config
     let vial_static_var = expand_vial_config();
 
@@ -181,16 +134,6 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         }
     };
 
-    // Expanded main function
-    let main_function = expand_main(
-        &chip,
-        comm_type,
-        usb_info,
-        toml_config,
-        item_mod,
-        async_matrix,
-    );
-
     quote! {
         use defmt::*;
         #no_std_imports
@@ -198,9 +141,47 @@ pub(crate) fn parse_keyboard_mod(attr: proc_macro::TokenStream, item_mod: ItemMo
         #keyboard_info_static_var
         #vial_static_var
         #layout
-
-        #main_function
     }
+}
+
+pub(crate) fn get_chip_info(
+    toml_config: &KeyboardTomlConfig,
+) -> Result<(ChipModel, CommunicationType, UsbInfo), TokenStream2> {
+    let chip = get_chip_model(toml_config.keyboard.chip.clone());
+    let chip = match chip {
+        Some(c) => c,
+        None => return Err(quote! {
+            compile_error!("Unsupported chip series, please check `chip` field in `keyboard.toml`");
+        }
+        .into()),
+    };
+
+    let comm_type = get_communication_type(&toml_config.keyboard, &toml_config.ble);
+    if comm_type == CommunicationType::None {
+        return Err(quote! {
+            compile_error!("You must enable at least one of usb or ble");
+        }
+        .into());
+    }
+    if !chip.has_usb() && comm_type.usb_enabled() {
+        return Err(quote! {
+            compile_error!("The chip specified in `keyboard.toml` doesn't have a general USB peripheral, please check again. Or you can set `usb_enable = false` in `[keyboard]` section of `keyboard.toml`");
+        }
+        .into());
+    }
+    let usb_info = if comm_type.usb_enabled() {
+        if let Some(usb_info) = get_usb_info(&chip.chip.to_lowercase()) {
+            usb_info
+        } else {
+            return Err(quote! {
+                compile_error!("Unsupported chip model, please check `chip` field in `keyboard.toml` is a valid. For stm32, it should be a feature gate of `embassy-stm32`");
+            }
+            .into());
+        }
+    } else {
+        UsbInfo::new_default(&chip)
+    };
+    Ok((chip, comm_type, usb_info))
 }
 
 fn expand_main(
@@ -251,10 +232,10 @@ fn expand_main(
             #flash_init
 
             // Initialize light config as `light_config`
-            #light_config;
+            #light_config
 
             // Initialize matrix config as `(input_pins, output_pins)`
-            #matrix_config;
+            #matrix_config
 
             #ble_config
 

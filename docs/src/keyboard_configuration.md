@@ -65,61 +65,7 @@ output_pins = ["PD7", "PD8", "PD9"]
 
 ### `[layout]`
 
-`[layout]` section contains the default keymap for the keyboard. It's currently not implemented, PRs welcome!
-
-### `[light]`
-
-`[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
-
-`pin` field is just like IO pins in `[matrix]`, `low_active` defines whether the light low-active or high-active(`true` means low-active).
-
-```toml
-[light]
-# All light pins are high-active by default, uncomment if you want it to be low-active
-capslock.pin = "PA4"
-# capslock.low_active = true
-scrolllock.pin = "PA3"
-# scrolllock.low_active = true
-# Just ignore if no light pin is used for it
-# numslock.pin = "PA5"
-# numslock.low_active = true
-```
-
-### `[storage]`
-
-`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
-
-```toml
-[storage]
-# Storage feature is enabled by default
-# enabled = false
-# Start address of local storage, MUST BE start of a sector.
-# If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
-# start_addr = 0x00000000
-# How many sectors are used for storage, the default value is 2
-# num_sectors = 2
-```
-
-### `[ble]`
-
-To enable BLE, add `enabled = true` under the `[ble]` section. 
-
-There are several more configs for reading battery level and charging state, now they are available for nRF52840 only.
-
-```toml
-[ble]
-# Whether to enable BLE feature
-enabled = true
-# nRF52840's saadc pin for reading battery level
-battery_pin = "PA0"
-# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
-charge_state.pin = "PA0"
-charge_state.low_active = true
-```
-
-### Keymap config
-
-You can set your keyboard's default keymap in `keyboard.toml`. The config key is `keymap` under `[layout]` section:
+`[layout]` section contains the default keymap for the keyboard:
 
 ```toml
 [layout]
@@ -171,6 +117,55 @@ The key string should follow several rules:
 
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers)
 
+### `[light]`
+
+`[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
+
+`pin` field is just like IO pins in `[matrix]`, `low_active` defines whether the light low-active or high-active(`true` means low-active).
+
+```toml
+[light]
+# All light pins are high-active by default, uncomment if you want it to be low-active
+capslock.pin = "PA4"
+# capslock.low_active = true
+scrolllock.pin = "PA3"
+# scrolllock.low_active = true
+# Just ignore if no light pin is used for it
+# numslock.pin = "PA5"
+# numslock.low_active = true
+```
+
+### `[storage]`
+
+`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
+
+```toml
+[storage]
+# Storage feature is enabled by default
+# enabled = false
+# Start address of local storage, MUST BE start of a sector.
+# If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
+# start_addr = 0x00000000
+# How many sectors are used for storage, the default value is 2
+# num_sectors = 2
+```
+
+### `[ble]`
+
+To enable BLE, add `enabled = true` under the `[ble]` section. 
+
+There are several more configs for reading battery level and charging state, now they are available for nRF52840 only.
+
+```toml
+[ble]
+# Whether to enable BLE feature
+enabled = true
+# nRF52840's saadc pin for reading battery level
+battery_pin = "PA0"
+# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+charge_state.pin = "PA0"
+charge_state.low_active = true
+```
 
 ## More customization
 

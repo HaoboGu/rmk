@@ -6,25 +6,25 @@
 
 ## Under the hood
 
-In RMK's current implementation, the slave continously scans it's matrix, if there's a key change, A `SplitMessage` is sent to the master.
+In RMK's current implementation, the peripheral continously scans it's matrix, if there's a key change, A `SplitMessage` is sent to the central.
 
-In master, there's a slave monitor for each slave, which receives the `SplitMessage` from the slave and caches all key states in that slave. 
+In central, there's a peripheral monitor for each peripheral, which receives the `SplitMessage` from the peripheral and caches all key states in that peripheral. 
 
-And there's a separate keyboard thread in master, which does the keyboard stuffs. The only difference is, in matrix scanning stage, it synchronizes key states from slave monitor and scans master's matrix.
+And there's a separate keyboard thread in central, which does the keyboard stuffs. The only difference is, in matrix scanning stage, it synchronizes key states from peripheral monitor and scans central's matrix.
 
 ## Protocol
 
 ### Communication protocol
 
-When the master & slave talk to each other, the **debounced key states** are sent. The master board receives the key states, converts them to actual keycode and then sends keycodes to the host.
+When the central & peripheral talk to each other, the **debounced key states** are sent. The central board receives the key states, converts them to actual keycode and then sends keycodes to the host.
 
-That means the master board should have a full keymap stored in the storage/ram. The slaves just do matrix scanning, debouncing and sending key states over serial/ble.
+That means the central board should have a full keymap stored in the storage/ram. The peripherals just do matrix scanning, debouncing and sending key states over serial/ble.
 
 A single message can be defined like:
 
 ```rust
 pub enum SplitMessage {
-    /// Activated key info (row, col, pressed), from slave to master.
+    /// Activated key info (row, col, pressed), from peripheral to central.
     /// Only key changes are sent in the split message, aka if pressed = true, the actual event is this key state changes from released -> pressed and vice versa.
     Key(u8, u8, bool)
     /// Led state, on/off
@@ -46,10 +46,8 @@ cols = 7
 layers = 2
 
 [split]
-split = true
-# Connection type between master & slave
-connection = "ble"/"uart"?
-main = "left" # or "right"
+# Connection type between central & peripherals
+connection = "ble"/"serial"
 
 [split.left]
 # Pin assignment
@@ -97,9 +95,9 @@ uart_instance = ""
 
 ### How to establish the connection?
 
-According to the connection type, some more info should be added. For example, if serial is used, then the serial instance of both master/slave should be set in `keyboard.toml`.
+According to the connection type, some more info should be added. For example, if serial is used, then the serial instance of both central/peripheral should be set in `keyboard.toml`.
 
-If the communication is over BLE, a pairing step has to be done first, to establish the connection between master & slave. In this case, the random addr of master and slave should be set in `keyboard.toml`, to make sure that master &slave can be paired.
+If the communication is over BLE, a pairing step has to be done first, to establish the connection between central & peripheral. In this case, the random addr of central and peripheral should be set in `keyboard.toml`, to make sure that central &peripheral can be paired.
 
 ### Types of split keyboard
 

@@ -16,7 +16,9 @@ If you encountered any problems when compiling the firmware, please report it [h
 
 ## Flash the firmware
 
-The last step is to flash compiled firmware to your microcontroller. This needs a debug probe like [daplink](https://daplink.io/), [jlink](https://www.segger.com/products/debug-probes/j-link/) or stlink(stm32 only). If you've got your debug probe, connect it with your board and host, make sure you have installed [probe-rs](https://probe.rs/), then just run
+The last step is to flash compiled firmware to your microcontroller. RMK supports flashing the firmware via uf2 bootloader or debug probe. [Here](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble#nicenano-support) is an example for using nice!nano and converting and flashing uf2 firmware. 
+
+If you have a debug probe like [daplink](https://daplink.io/), [jlink](https://www.segger.com/products/debug-probes/j-link/) or [stlink](https://github.com/stlink-org/stlink)(stm32 only), things become much easier: connect it with your board and host, make sure you have installed [probe-rs](https://probe.rs/), then just run
 
 ```shell
 cargo run --release

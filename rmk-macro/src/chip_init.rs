@@ -48,7 +48,6 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
             ::esp_idf_svc::log::EspLogger::initialize_default();
             let p = ::esp_idf_svc::hal::peripherals::Peripherals::take().unwrap();
         },
-        ChipSeries::Unsupported => quote! {},
     }
 }
 
@@ -93,7 +92,6 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
         ChipSeries::Esp32 => initialization_tokens.extend(quote! {
             let p = ::esp_idf_svc::hal::peripherals::Peripherals::take().unwrap();
         }),
-        ChipSeries::Unsupported => initialization_tokens = quote! {},
     }
 
     initialization_tokens
