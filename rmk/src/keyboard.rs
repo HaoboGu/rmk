@@ -755,7 +755,6 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
 
     /// Register a key, the key can be a basic keycode or a modifier.
     fn register_key(&mut self, key: KeyCode) {
-        self.need_send_key_report = true;
         if key.is_modifier() {
             self.register_modifier(key.as_modifier_bit());
         } else if key.is_basic() {

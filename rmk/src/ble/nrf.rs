@@ -3,9 +3,9 @@ mod battery_service;
 pub(crate) mod bonder;
 mod device_information_service;
 mod hid_service;
-mod vial_service;
 pub(crate) mod server;
 pub(crate) mod spec;
+mod vial_service;
 
 use self::server::BleServer;
 #[cfg(not(feature = "rapid_debouncer"))]

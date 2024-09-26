@@ -157,13 +157,11 @@ impl gatt_server::Server for BleServer {
                 HidServiceEvent::InputKeyboardCccdWrite
                 | HidServiceEvent::InputMediaKeyCccdWrite
                 | HidServiceEvent::InputMouseKeyCccdWrite
-                // | HidServiceEvent::InputVialKeyCccdWrite
                 | HidServiceEvent::InputSystemKeyCccdWrite => {
                     info!("{}, handle: {}, data: {}", event, handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 HidServiceEvent::OutputKeyboard => (),
-                // HidServiceEvent::OutputVial => (),
             }
         }
         if let Some(event) = self.bas.on_write(handle, data) {
