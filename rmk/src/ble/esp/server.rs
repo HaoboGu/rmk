@@ -17,6 +17,7 @@ use crate::{
     },
     config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
+    usb::descriptor::ViaReport,
 };
 
 type BleHidWriter = Arc<Mutex<BLECharacteristic>>;
@@ -99,8 +100,6 @@ impl BleServer {
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
         let input_system_keys = hid.input_report(BleCompositeReportType::System as u8);
         let input_mouse_keys = hid.input_report(BleCompositeReportType::Mouse as u8);
-        let input_vial = hid.input_report(BleCompositeReportType::Vial as u8);
-        let output_vial = hid.output_report(BleCompositeReportType::Vial as u8);
 
         hid.pnp(
             VidSource::UsbIF as u8,
@@ -112,12 +111,33 @@ impl BleServer {
         hid.hid_info(0x00, 0x03);
         hid.report_map(BleKeyboardReport::desc());
 
+        let mut vial_hid = BLEHIDDevice::new(server);
+        vial_hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+        let input_vial = vial_hid.input_report(0);
+        let output_vial = vial_hid.output_report(0);
+
+        vial_hid.pnp(
+            VidSource::UsbIF as u8,
+            usb_config.vid,
+            usb_config.pid,
+            0x0000,
+        );
+        vial_hid.hid_info(0x00, 0x03);
+        vial_hid.report_map(ViaReport::desc());
+
         let ble_advertising = device.get_advertising();
         if let Err(e) = ble_advertising.lock().scan_response(false).set_data(
             BLEAdvertisementData::new()
                 .name(keyboard_name)
                 .appearance(0x03C1)
-                .add_service_uuid(hid.hid_service().lock().uuid()),
+                .add_service_uuid(hid.hid_service().lock().uuid())
+                .add_service_uuid(vial_hid.hid_service().lock().uuid()),
         ) {
             error!("BLE advertising error, error code: {}", e.code());
         }
