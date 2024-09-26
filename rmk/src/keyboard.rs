@@ -686,7 +686,8 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                 return;
             }
             // Read macro operations untill the end of the macro
-            if let Some(macro_start_idx) = self.keymap.borrow().get_macro_start(macro_idx) {
+            let macro_idx = self.keymap.borrow().get_macro_start(macro_idx);
+            if let Some(macro_start_idx) = macro_idx {
                 let mut offset = 0;
                 loop {
                     // First, get the next macro operation

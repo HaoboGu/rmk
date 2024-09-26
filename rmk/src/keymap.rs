@@ -58,9 +58,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 reboot_keyboard();
             } else {
                 // Read macro cache
-                if let Err(_) = storage
+                if storage
                     .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
                     .await
+                    .is_err()
                 {
                     error!("Wrong macro cache, clearing the storage...");
                     sequential_storage::erase_all(

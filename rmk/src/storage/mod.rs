@@ -173,7 +173,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
     where
         Self: Sized,
     {
-        if buffer.len() < 1 {
+        if buffer.is_empty() {
             return Err(SerializationError::InvalidFormat);
         }
         if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
