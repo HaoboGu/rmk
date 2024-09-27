@@ -89,6 +89,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         (ROW, COL, NUM_LAYER)
     }
 
+    /// Get the default layer number
+    pub(crate) fn get_default_layer(&self) -> u8 {
+        self.default_layer
+    }
+
+    /// Set the default layer number
+    pub(crate) fn set_default_layer(&mut self, layer_num: u8) {
+        self.default_layer = layer_num;
+    }
+
     /// Get the next macro operation starting from given index and offset
     /// Return current macro operation and the next operations's offset
     pub(crate) fn get_next_macro_operation(

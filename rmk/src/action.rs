@@ -1,6 +1,5 @@
 use crate::keycode::{KeyCode, ModifierCombination};
-use defmt::{error, warn, Format};
-use num_enum::FromPrimitive;
+use defmt::{error, Format};
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
@@ -78,36 +77,6 @@ impl KeyAction {
             }
         }
     }
-
-    pub(crate) fn from_key_action_code(code: u16) -> KeyAction {
-        match code {
-            0x0..=0xFFF => KeyAction::Single(Action::from_action_code(code)),
-            0x1000..=0x1FFF => KeyAction::Tap(Action::from_action_code(code & 0xFFF)),
-            0x2000..=0x2FFF => KeyAction::OneShot(Action::from_action_code(code & 0xFFF)),
-            0x3000..=0x3FFF => {
-                let layer = (code >> 8) & 0xF;
-                KeyAction::LayerTapHold(Action::from_action_code(code & 0xFF), layer as u8)
-            }
-            0x4000..=0x5FFF => {
-                let modifier_bits = (code >> 8) & 0x1F;
-                KeyAction::WithModifier(
-                    Action::from_action_code(code & 0xFF),
-                    ModifierCombination::from_bits(modifier_bits as u8),
-                )
-            }
-            0x6000..=0x7FFF => {
-                let modifier_bits = (code >> 8) & 0x1F;
-                KeyAction::ModifierTapHold(
-                    Action::from_action_code(code & 0xFF),
-                    ModifierCombination::from_bits(modifier_bits as u8),
-                )
-            }
-            0x8000..=0xFFFF => KeyAction::TapHold(
-                Action::from_action_code(code & 0xFF),
-                Action::from_action_code((code >> 8) & 0x7F),
-            ),
-        }
-    }
 }
 
 /// A single basic action that a keyboard can execute.
@@ -138,6 +107,10 @@ pub enum Action {
     ///
     /// Uses 0xE80 ~ 0xE9F. Serialized as 1110|100|layer_num(5bits)
     DefaultLayer(u8),
+    /// Activate a layer and deactivate all other layers(except default layer)
+    ///
+    /// Uses 0xEA0 ~ 0xEBF. Serialized as 1110|101|layer_num(5bits)
+    LayerToggleOnly(u8),
 }
 
 impl Action {
@@ -150,37 +123,7 @@ impl Action {
             Action::LayerOff(layer) => 0xE40 | (layer as u16),
             Action::LayerToggle(layer) => 0xE60 | (layer as u16),
             Action::DefaultLayer(layer) => 0xE80 | (layer as u16),
-        }
-    }
-
-    /// Create an `Action` from action_code, returns Key(KeyCode::No) if the action code is not valid.
-    pub(crate) fn from_action_code(action_code: u16) -> Action {
-        match action_code {
-            0x000..=0xCFF => Action::Key(KeyCode::from_primitive(action_code)),
-            0xE00..=0xE1F => {
-                let modifier_bits = (action_code & 0xFF) as u8;
-                Action::Modifier(ModifierCombination::from_bits(modifier_bits))
-            }
-            0xE20..=0xE3F => {
-                let layer = (action_code & 0xFF) as u8;
-                Action::LayerOn(layer)
-            }
-            0xE40..=0xE5F => {
-                let layer = (action_code & 0xFF) as u8;
-                Action::LayerOff(layer)
-            }
-            0xE60..=0xE7F => {
-                let layer = (action_code & 0xFF) as u8;
-                Action::LayerToggle(layer)
-            }
-            0xE80..=0xE9F => {
-                let layer = (action_code & 0xFF) as u8;
-                Action::DefaultLayer(layer)
-            }
-            _ => {
-                warn!("Not a valid 12-bit action code: {:#X}", action_code);
-                Action::Key(KeyCode::No)
-            }
+            Action::LayerToggleOnly(layer) => 0xEA0 | (layer as u16),
         }
     }
 
