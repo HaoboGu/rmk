@@ -397,13 +397,30 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                     self.keymap.borrow_mut().toggle_layer(layer_num);
                 }
             }
+            Action::LayerToggleOnly(layer_num) => {
+                // Activate a layer and deactivate all other layers(except default layer)
+                if key_state.is_pressing() {
+                    // Disable all layers except the default layer
+                    let default_layer = self.keymap.borrow().get_default_layer();
+                    for i in 0..NUM_LAYER as u8 {
+                        if i != default_layer {
+                            self.keymap.borrow_mut().deactivate_layer(i);
+                        }
+                    }
+                    // Activate the target layer
+                    self.keymap.borrow_mut().activate_layer(layer_num);
+                }
+            }
+            Action::DefaultLayer(layer_num) => {
+                // Set the default layer
+                self.keymap.borrow_mut().set_default_layer(layer_num);
+            }
             Action::Modifier(modifier) => {
                 let (keycodes, n) = modifier.to_modifier_keycodes();
                 for kc in keycodes.iter().take(n) {
                     self.process_action_keycode(*kc, key_state, sender).await;
                 }
             }
-            _ => (),
         }
     }
 

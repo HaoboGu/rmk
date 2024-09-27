@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Storage and vial support for ESP series
+- Vial over BLE support for Windows 
+- `TO` and `DF` action support
+
 ## [0.3.0] - 2024-09-11
 
 ### Changed
