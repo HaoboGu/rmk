@@ -1,6 +1,10 @@
 #![doc = include_str!("../README.md")]
 //! ## Feature flags
 #![doc = document_features::document_features!()]
+// Add docs.rs logo
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/HaoboGu/rmk/23d7e5009a7ba28bdab13d892c5aec53a6a94703/docs/src/images/rmk_logo.png"
+)]
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
 #![allow(non_snake_case, non_upper_case_globals)]
@@ -58,11 +62,11 @@ pub mod ble;
 mod debounce;
 mod flash;
 mod hid;
-pub mod keyboard;
-pub mod keyboard_macro;
+mod keyboard;
+mod keyboard_macro;
 pub mod keycode;
-pub mod keymap;
-pub mod layout_macro;
+mod keymap;
+mod layout_macro;
 mod light;
 mod matrix;
 #[cfg(feature = "split")]

@@ -1,17 +1,30 @@
 # Wireless
 
-RMK has built-in wireless(BLE) support for nRF52840 and nRF52832. Supporting of other nRF52 microcontrollers should be quite easy to add. To use the wireless feature, enable `nrf52832_ble` or `nrf52840_ble` feature gate in your `Cargo.toml`:
+RMK has built-in wireless(BLE) support for nRF52 series and ESP32. To use the wireless feature, you need to enable ble feature gate in your `Cargo.toml`:
 
 ```toml
-rmk = { version = "0.2.4", features = [
-    "nrf52840_ble",
+rmk = { version = "0.3.1", features = [
+    "nrf52840_ble", # Enable BLE feature for nRF52840
     "col2row",
 ] }
 ```
 
-RMK also provides ble examples, check [nrf52840_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble) and [nrf52832_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52832_ble).
+RMK also provides ble examples, check [nrf52840_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble), [nrf52832_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52832_ble) and [esp32c3_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/esp32c3_ble).
 
 Due to multiple targets are not supported by `docs.rs` right now, so API documentations are not there. Check examples for the usage. I'll add a separate doc site later.
+
+## Supported microcontrollers
+
+The following is the list of available feature gates(aka supported BLE chips): 
+
+- nrf52840_ble
+- nrf52833_ble
+- nrf52832_ble
+- nrf52810_ble
+- nrf52811_ble
+- esp32c3_ble
+- esp32c6_ble
+- esp32s3_ble
 
 ## Flashing to your board
 
