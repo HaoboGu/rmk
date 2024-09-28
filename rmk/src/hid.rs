@@ -1,6 +1,5 @@
 //! A thin hid wrapper layer which supports writing/reading HID reports via USB and BLE
 
-use crate::as_bytes;
 use defmt::Format;
 use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_usb::{
@@ -62,6 +61,13 @@ impl<T1: HidReaderWrapper, T2: HidWriterWrapper> HidWriterWrapper for ReaderWrit
     }
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
         self.1.write_serialize(r).await
+    }
+}
+
+// TODO
+pub(crate) fn as_bytes<T: Sized>(p: &T) -> &[u8] {
+    unsafe {
+        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
     }
 }
 

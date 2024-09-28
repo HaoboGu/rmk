@@ -73,12 +73,6 @@ mod via;
 
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 
-pub fn as_bytes<T: Sized>(p: &T) -> &[u8] {
-    unsafe {
-        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-    }
-}
-
 /// Run RMK keyboard service. This function should never return.
 ///
 /// # Arguments
