@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vial over BLE support for Windows 
 - `TO` and `DF` action support
 
+### Changed
+
+- Update `bitfield-struct` to v0.9
+- Update `esp32-nimble` to v0.8, as well as used `ESP_IDF_VERSION` to v5.2.3
+
 ## [0.3.0] - 2024-09-11
 
 ### Changed

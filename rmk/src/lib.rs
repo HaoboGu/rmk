@@ -26,7 +26,7 @@ use crate::{
 };
 use action::KeyAction;
 use core::{cell::RefCell, sync::atomic::AtomicBool};
-use defmt::*;
+use defmt::{warn, error};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};

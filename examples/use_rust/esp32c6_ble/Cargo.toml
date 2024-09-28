@@ -11,10 +11,10 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["col2row", "esp32c6_ble"] }
-esp32-nimble = { version = "0.7" }
+esp32-nimble = { version = "0.8" }
 defmt = "0.3"
 embassy-time = { version = "0.3.0", features = ["defmt", "generic-queue-8", "defmt-timestamp-uptime"] }
-esp-println = { version = "0.10", features = ["esp32c6", "defmt-espflash"] }
+esp-println = { version = "0.11", features = ["esp32c6", "defmt-espflash"] }
 esp-idf-svc = { version = "0.49", default-features = false, features = [
     "std",
     "alloc",
