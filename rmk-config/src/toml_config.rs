@@ -43,7 +43,7 @@ impl Default for KeyboardInfo {
             product_id: 0x4643,
             manufacturer: Some("RMK".to_string()),
             product_name: Some("RMK Keyboard".to_string()),
-            serial_number: Some("00000001".to_string()),
+            serial_number: Some("vial:f64c2b3c:000001".to_string()),
             chip: "rp2040".to_string(),
             usb_enable: true,
         }

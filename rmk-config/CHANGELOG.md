@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix no device on vial desktop
+
 ## [0.1.5] - 2024-09-11
 
-- Added config for split keyboard
+- Add config for split keyboard
 
 ## [0.1.4] - 2024-08-06
 
