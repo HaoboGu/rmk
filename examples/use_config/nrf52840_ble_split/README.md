@@ -33,19 +33,15 @@ If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
    # Build peripheral firmware and generate .bin firmware
    cargo objcopy --release --bin peripheral -- -O binary rmk-peripheral.bin
    ```
-3. Download uf2util from UF2 repo https://github.com/microsoft/uf2
+3. Convert your .bin firmware to uf2 format
    ```shell
-   git clone https://github.com/microsoft/uf2.git
-   cd uf2/utils
-   ``` 
-4. Convert your .bin firmware to uf2 format
-   ```shell
+   cd <PATH_TO_RMK>/scripts
    # If your nice!nano uses softdevice v6.x.x
    python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x26000 -f 0xADA52840 -o rmk-52840.uf2 
    # If your nice!nano uses softdevice v7.x.x
    python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x27000 -f 0xADA52840 -o rmk-52840.uf2 
    ```
-5. Flash
+4. Flash
 
    Set your nice!nano to bootloader mode, a USB drive will show. Just drag the .uf2 firmware to USB drive. RMK will be automatically flashed. Check nice!nano's document: https://nicekeyboards.com/docs/nice-nano/getting-started#flashing-firmware-and-bootloaders. 
 
