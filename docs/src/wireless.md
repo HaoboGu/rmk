@@ -5,7 +5,6 @@ RMK has built-in wireless(BLE) support for nRF52 series and ESP32. To use the wi
 ```toml
 rmk = { version = "0.3.1", features = [
     "nrf52840_ble", # Enable BLE feature for nRF52840
-    "col2row",
 ] }
 ```
 

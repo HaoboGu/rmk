@@ -88,3 +88,7 @@ In the latest git version of embassy, task arena size could be calculated automa
 
 If you're comfortable with nightly Rust, you can enable `nightly` feature of embassy-executor and remove `task-arena-size-*` feature.
 
+### RMK breaks my bootloader
+
+By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
+

@@ -2,9 +2,7 @@
 
 <div class="warning">
 
-RMK uses the **last 2 sectors** of your microcontroller's flash by default. If you're using a bootloader like [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader), which puts itself at the end of the flash, RMK will break it.
-
-Solving this by setting `start_addr` manually.
+RMK uses the **last 2 sectors** of your microcontroller's flash by default. If you're using a bootloader like [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader), which puts itself at the end of the flash, RMK will break it. Solving this by setting `start_addr` manually.
 
 </div>
 
