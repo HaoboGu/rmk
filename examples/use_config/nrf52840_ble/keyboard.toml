@@ -33,7 +33,7 @@ capslock.low_active = false
 
 [ble]
 enabled = true
-battery_adc_pin = "P0_05"
+battery_adc_pin = "vddh"
 charge_state.pin = "P0_25"
 charge_state.low_active = false
 charge_led.pin = "P0_29"
