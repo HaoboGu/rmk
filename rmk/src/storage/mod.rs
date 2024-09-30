@@ -331,18 +331,25 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.num_sectors
         );
 
-        // If config.start_addr == 0, use last `num_sectors` sectors
+        // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
-        let storage_range = if config.start_addr == 0 {
+        #[cfg(feature = "_nrf_ble")]
+        let start_addr = if config.start_addr == 0 {
+            0x0006_0000
+        } else {
+            config.start_addr
+        };
+        #[cfg(not(feature = "_nrf_ble"))]
+        let start_addr = config.start_addr;
+        let storage_range = if start_addr == 0 {
             (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
                 ..flash.capacity() as u32
         } else {
             assert!(
-                config.start_addr % F::ERASE_SIZE == 0,
+                start_addr % F::ERASE_SIZE == 0,
                 "Storage's start addr MUST BE a multiplier of sector size"
             );
-            config.start_addr as u32
-                ..(config.start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
+            start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
         info!("storage range {}", storage_range);
 

@@ -18,14 +18,7 @@ pub(crate) fn expand_flash_init(
             let storage_config = ::rmk::config::StorageConfig::default();
         };
     }
-    let num_sectors = storage_config.num_sectors;
-    let start_addr = storage_config.start_addr;
-    let mut flash_init = quote! {
-        let storage_config = ::rmk::config::StorageConfig {
-            num_sectors: #num_sectors,
-            start_addr: #start_addr
-        };
-    };
+    let mut flash_init = get_storage_config(chip, storage_config);
     flash_init.extend(
     match chip.series {
             ChipSeries::Stm32 => {
@@ -53,4 +46,31 @@ pub(crate) fn expand_flash_init(
     );
 
     flash_init
+}
+
+fn get_storage_config(chip: &ChipModel, storage_config: StorageConfig) -> TokenStream2 {
+    let (num_sectors, start_addr) = match chip.series {
+        ChipSeries::Nrf52 => {
+            // Special default config for nRF52
+            // It's common to use [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) for nRF52 chips, we don't want our default storage config breaks the bootloader
+            let start_addr = if storage_config.start_addr == 0x0000_0000 {
+                0x0006_0000
+            } else {
+                storage_config.start_addr
+            };
+            let num_sectors = if storage_config.num_sectors == 2 {
+                6
+            } else {
+                storage_config.num_sectors as usize
+            };
+            (num_sectors as u8, start_addr)
+        },
+        _ => (storage_config.num_sectors, storage_config.start_addr),
+    };
+    quote! {
+        let storage_config = ::rmk::config::StorageConfig {
+            num_sectors: #num_sectors,
+            start_addr: #start_addr
+        };
+    }
 }

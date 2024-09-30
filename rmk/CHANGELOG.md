@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update `bitfield-struct` to v0.9
 - Update `esp32-nimble` to v0.8, as well as used `ESP_IDF_VERSION` to v5.2.3
+- Use 0x60000 as the default start addr for nRF52
 
 ### Fixed
 
