@@ -35,15 +35,17 @@ pub(crate) fn expand_ble_config(
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();
                 if let Some(adc_pin) = ble.battery_adc_pin {
-                    let adc_pin_ident = format_ident!("{}", adc_pin);
+                    let adc_pin = if adc_pin == "vddh" {
+                        quote! { ::embassy_nrf::saadc::VddhDiv5Input }
+                    } else {
+                        let adc_pin_ident = format_ident!("{}", adc_pin);
+                        quote! {p.#adc_pin_ident.degrade_saadc()}
+                    };
                     ble_config_tokens.extend(quote! {
                         use ::embassy_nrf::saadc::Input as _;
-
-                        let adc_pin = p.#adc_pin_ident.degrade_saadc();
                         // Then we initialize the ADC. We are only using one channel in this example.
                         let config = ::embassy_nrf::saadc::Config::default();
-                        let channel_cfg = ::embassy_nrf::saadc::ChannelConfig::single_ended(adc_pin);
-                        // channel_cfg.gain = ::embassy_nrf::saadc:: Gain::GAIN1_3;
+                        let channel_cfg = ::embassy_nrf::saadc::ChannelConfig::single_ended(#adc_pin);
                         ::embassy_nrf::interrupt::SAADC.set_priority(::embassy_nrf::interrupt::Priority::P3);
                         let saadc = ::embassy_nrf::saadc::Saadc::new(p.SAADC, Irqs, config, [channel_cfg]);
                         // Wait for ADC calibration.
