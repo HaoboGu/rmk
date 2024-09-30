@@ -10,7 +10,7 @@ import argparse
 import json
 from time import sleep
 
-raw_families = [
+chip_families = [
     {
         "id": "0x16573617",
         "short_name": "ATMEGA32",
@@ -601,10 +601,10 @@ def load_families():
     # filename = "uf2families.json"
     # pathname = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
     # with open(pathname) as f:
-    #     raw_families = json.load(f)
+    #     chip_families = json.load(f)
 
     families = {}
-    for family in raw_families:
+    for family in chip_families:
         families[family["short_name"]] = int(family["id"], 0)
 
     return families
