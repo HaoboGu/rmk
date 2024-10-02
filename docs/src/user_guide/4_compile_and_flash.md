@@ -25,41 +25,23 @@ The last step is to flash compiled firmware to your microcontroller. RMK support
 
 By default, Rust firmware is an ELF file, so we have to do some extra steps converting it to uf2 format.
 
-Because the [official uf2 repo](https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py) doesn't provide a method which converts ELF to uf2, so we need to convert the ELF to `.hex` or `.bin` file first and then convert `.hex` or `.bin` file to uf2.
+RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate the uf2 firmware generation.
 
-Luckily, Rust provides `cargo-binutil` which simplifies it. First you should install it:
-
-```shell
-cargo install cargo-binutils
-rustup component add llvm-tools
-```
-
-Then you can use the following command to compile the RMK firmware and convert the compiled firmware to `.hex` or `.bin`:
+First, you'd install the `cargo-make` tool:
 
 ```shell
-# Compile and convert to a binary file
-cargo objcopy --release -- -O binary rmk-52840.bin
-# Compile and convert to a .hex file
-cargo objcopy --release -- -O ihex rmk-52840.hex
+cargo install --force cargo-make
 ```
 
-You can use the commands above to instead of `cargo build --release`, getting `.hex` or `.bin` automatically.
+Then, update the chip family argument(aka argument after -f) in `Makefile.toml` in your project. You can get your chip's family ID in `scripts/uf2conv.py`.
 
-The last step is getting uf2 file from `.hex` or `.bin`:
+That's all you need to set. The final step is to run
 
-```
-cd <PATH_TO_RMK>/scripts
-# Convert .bin to .uf2
-python uf2conv.py <PATH_TO_YOUR_BIN_FIRMWARE> -c -b 0x26000 -f <YOUR_CHIP_FAMILY> -o rmk.uf2 
-# Convert .hex to .uf2
-python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -f <YOUR_CHIP_FAMILY> -o rmk.uf2 
+```shell
+cargo make uf2 --release
 ```
 
-where `CHIP_FAMILY` can be found in `uf2conv.py`. If you cannot find your chip in the supported list, please open an issue!
-
-Note that when you're converting `.bin` to uf2, you should set the start addr using `-b` argument.
-
-[Here](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble#nicenano-support) is an example for using nice!nano and converting and flashing uf2 firmware. 
+to generate your uf2 firmware.
 
 ### Use debug probe
 
