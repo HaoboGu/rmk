@@ -33,24 +33,6 @@ RMK can be flashed via a debug probe or USB. Follow the instruction in the [`exa
 
 RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely used board for building wireless keyboard.
 
-nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format and flash to nice!nano.
+nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format.
 
-There is another way to flash RMK firmware to nice!nano. It requires a modified version of `elf2uf2-rs`. The following are the steps:
-
-1. Install `elf2uf2-rs` from <https://github.com/simmsb/elf2uf2-rs>:
-   ```
-   cargo install --git https://github.com/simmsb/elf2uf2-rs
-   ```
-2. Enter nice!nano's bootloader mode, a USB drive should appear in your machine
-3. Check the softdevice version of your nice!nano. If it's v6.x.x, edit `memory.x`:
-   ```diff
-   - FLASH : ORIGIN = 0x00027000, LENGTH = 868K
-   + FLASH : ORIGIN = 0x00026000, LENGTH = 872K
-   ```
-4. Update cargo runner in `.cargo/config.toml`, using `elf2uf2-rs`:
-    ```diff
-    [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-    - runner = "probe-rs run --chip nRF52840_xxAA"
-    + runner = "elf2uf2-rs -d"
-    ```
-5. Flash using `cargo run --release`
+You can also refer to [RMK user guide](./user_guide/4_compile_and_flash.md#use-uf2-bootloader) about the instructions.

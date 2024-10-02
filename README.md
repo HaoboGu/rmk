@@ -80,7 +80,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
 
 4. (Optional) Flash using USB
 
-   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
+   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your rp2040 firmware via USB. There are several additional steps you have to do:
 
    1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
    2. Update `examples/use_rust/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool

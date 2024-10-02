@@ -4,28 +4,19 @@ RMK supports [nice!nano](https://nicekeyboards.com/) as well as any custom nrf52
 
 ## Nice!nano support
 
-nice!nano has a bootloader built-in, which supports UF2 firmware format. That means you don't need any debug probe to flash your firmware. 
+nice!nano has a bootloader built-in, which supports .uf2 firmware format. That means you don't need any debugging probe to flash your firmware. RMK uses `cargo-make` tool to generate .uf2 firmware, then generation processing is defined in `Makefile.toml`
 
-If you're using nice!nano, there are steps of how to get .UF2 firmware of RMK:
+The following are steps of how to get .uf2 firmware work in RMK:
 
-1. Get `cargo-binutil` tool:
+1. Get `cargo-make` tool:
    ```shell
-   cargo install cargo-binutils
-   rustup component add llvm-tools
+   cargo install --force cargo-make
    ```
-2. Compile RMK using `cargo objcopy`, get .bin firmware:
+2. Compile RMK and get .uf2:
    ```shell
-   cargo objcopy --release -- -O binary rmk-52840.bin
+   cargo make uf2 --release
    ```
-3. Convert your .bin firmware to uf2 format
-   ```shell
-   cd <PATH_TO_RMK>/scripts
-   # If your nice!nano uses softdevice v6.x.x
-   python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x26000 -f 0xADA52840 -o rmk-52840.uf2 
-   # If your nice!nano uses softdevice v7.x.x
-   python uf2conv.py <PATH_TO_YOUR_HEX_FIRMWARE> -c -b 0x27000 -f 0xADA52840 -o rmk-52840.uf2 
-   ```
-4. Flash
+3. Flash
 
    Set your nice!nano to bootloader mode, a USB drive will show. Just drag the .uf2 firmware to USB drive. RMK will be automatically flashed. Check nice!nano's document: https://nicekeyboards.com/docs/nice-nano/getting-started#flashing-firmware-and-bootloaders. 
 
