@@ -5,6 +5,7 @@ target
 *.bin
 *.elf
 *.hex
+*.uf2
 
 .idea
 
