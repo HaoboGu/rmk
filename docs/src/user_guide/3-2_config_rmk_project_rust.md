@@ -7,6 +7,9 @@ By default, the generated project uses `keyboard.toml` to config the RMK keyboar
 `memory.x` is the linker script of Rust embedded project, it's used to define the memory layout of the microcontroller. RMK enables `memory-x` feature for `embassy-stm32`, so if you're using stm32, you can just ignore this step.
 
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM to your microcontroller.
+
+If you're using **nRF52840**, generally you have to change start address in `memory.x` to 0x27000 or 0x26000, according to your softdevice version. For example, softdevice v6.1.x should use 0x00026000 and v7.1.x should be 0x00027000
+
 You can either checkout your microcontroller's datasheet or existing Rust project of your microcontroller for it.
 
 ### Update `main.rs`
