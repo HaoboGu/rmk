@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2024-09-11
+
 ### Changed
 
 - Use 0x60000 as the default start addr for nRF52
