@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.6] - 2024-09-11
+## [0.1.6] - 2024-10-03
 
 - Fix no device on vial desktop
 
