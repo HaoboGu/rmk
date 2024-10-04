@@ -4,7 +4,7 @@ pub mod nor_flash;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use defmt::{error, info, Format};
+use defmt::{debug, error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
@@ -395,6 +395,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
+            debug!("Flash operation: {:?}", info);
             if let Err(e) = match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back

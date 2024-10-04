@@ -298,7 +298,9 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     let led_fut =
                         led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
                     let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+                    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
                     pin_mut!(usb_fut);
+                    pin_mut!(storage_fut);
                     pin_mut!(keyboard_fut);
                     pin_mut!(led_fut);
                     pin_mut!(via_fut);
@@ -306,7 +308,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
                     match select4(
                         select(usb_fut, keyboard_fut),
-                        via_fut,
+                        select(storage_fut, via_fut),
                         led_fut,
                         communication_fut,
                     )
