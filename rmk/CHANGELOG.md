@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2024-10-05
+
+### Fixed
+
+- Fix vial not work for nRF
+
+## [0.3.1] - 2024-10-03
+
+### Added
+
+- Automate uf2 firmware generation via `cargo-make`
+- Storage and vial support for ESP series
+- Vial over BLE support for Windows 
+- `TO` and `DF` action support
+
+### Changed
+
+- Update `bitfield-struct` to v0.9
+- Update `esp32-nimble` to v0.8, as well as used `ESP_IDF_VERSION` to v5.2.3
+- Use 0x60000 as the default start addr for nRF52
+
+### Fixed
+
+- Fix no device detected on vial desktop
+
 ## [0.3.0] - 2024-09-11
 
 ### Changed

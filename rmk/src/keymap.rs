@@ -58,9 +58,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 reboot_keyboard();
             } else {
                 // Read macro cache
-                if let Err(_) = storage
+                if storage
                     .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
                     .await
+                    .is_err()
                 {
                     error!("Wrong macro cache, clearing the storage...");
                     sequential_storage::erase_all(
@@ -86,6 +87,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
 
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         (ROW, COL, NUM_LAYER)
+    }
+
+    /// Get the default layer number
+    pub(crate) fn get_default_layer(&self) -> u8 {
+        self.default_layer
+    }
+
+    /// Set the default layer number
+    pub(crate) fn set_default_layer(&mut self, layer_num: u8) {
+        self.default_layer = layer_num;
     }
 
     /// Get the next macro operation starting from given index and offset

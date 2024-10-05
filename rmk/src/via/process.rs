@@ -236,7 +236,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Then flush macros to storage
                 let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
                 if size < 28 || num_zero >= NUM_MACRO {
-                    let buf = self.keymap.borrow_mut().macro_cache.clone();
+                    let buf = self.keymap.borrow_mut().macro_cache;
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteMacro(buf))
                         .await;

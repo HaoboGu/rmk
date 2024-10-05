@@ -4,7 +4,7 @@ pub mod nor_flash;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use defmt::{error, info, Format};
+use defmt::{debug, error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
@@ -173,7 +173,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
     where
         Self: Sized,
     {
-        if buffer.len() < 1 {
+        if buffer.is_empty() {
             return Err(SerializationError::InvalidFormat);
         }
         if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
@@ -331,18 +331,25 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.num_sectors
         );
 
-        // If config.start_addr == 0, use last `num_sectors` sectors
+        // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
-        let storage_range = if config.start_addr == 0 {
+        #[cfg(feature = "_nrf_ble")]
+        let start_addr = if config.start_addr == 0 {
+            0x0006_0000
+        } else {
+            config.start_addr
+        };
+        #[cfg(not(feature = "_nrf_ble"))]
+        let start_addr = config.start_addr;
+        let storage_range = if start_addr == 0 {
             (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
                 ..flash.capacity() as u32
         } else {
             assert!(
-                config.start_addr % F::ERASE_SIZE == 0,
+                start_addr % F::ERASE_SIZE == 0,
                 "Storage's start addr MUST BE a multiplier of sector size"
             );
-            config.start_addr as u32
-                ..(config.start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
+            start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
         info!("storage range {}", storage_range);
 
@@ -388,6 +395,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
+            debug!("Flash operation: {:?}", info);
             if let Err(e) = match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back

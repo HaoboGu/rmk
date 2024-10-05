@@ -1,6 +1,10 @@
 #![doc = include_str!("../README.md")]
 //! ## Feature flags
 #![doc = document_features::document_features!()]
+// Add docs.rs logo
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/HaoboGu/rmk/23d7e5009a7ba28bdab13d892c5aec53a6a94703/docs/src/images/rmk_logo.png"
+)]
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
 #![allow(non_snake_case, non_upper_case_globals)]
@@ -22,7 +26,7 @@ use crate::{
 };
 use action::KeyAction;
 use core::{cell::RefCell, sync::atomic::AtomicBool};
-use defmt::*;
+use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
@@ -58,11 +62,11 @@ pub mod ble;
 mod debounce;
 mod flash;
 mod hid;
-pub mod keyboard;
-pub mod keyboard_macro;
+mod keyboard;
+mod keyboard_macro;
 pub mod keycode;
-pub mod keymap;
-pub mod layout_macro;
+mod keymap;
+mod layout_macro;
 mod light;
 mod matrix;
 #[cfg(feature = "split")]
@@ -72,12 +76,6 @@ mod usb;
 mod via;
 
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
-
-pub fn as_bytes<T: Sized>(p: &T) -> &[u8] {
-    unsafe {
-        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-    }
-}
 
 /// Run RMK keyboard service. This function should never return.
 ///

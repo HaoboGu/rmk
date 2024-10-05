@@ -81,7 +81,7 @@ impl<'a> BatteryService {
     }
 
     // TODO: Make battery calculation user customizable
-    fn get_battery_percent(&self, val: i16) -> u8 {
+    fn get_battery_percent(&self, mut val: i16) -> u8 {
         info!("Detected adc value: {=i16}", val);
         // According to nRF52840's datasheet, for single_ended saadc:
         // val = v_adc * (gain / reference) * 2^(resolution)
@@ -94,6 +94,12 @@ impl<'a> BatteryService {
         //
         // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
         // To make calculation simple, adc val range 2650 ~ 3350 is used.
+        if 500 < val && val < 1000 {
+            // Thing becomes different when using vddh as reference
+            // The adc value for vddh pin is actually vddh/5,
+            // so we use this rough range to detect vddh
+            val = val * 5;
+        }
         if val > 3350 {
             100_u8
         } else if val < 2650 {

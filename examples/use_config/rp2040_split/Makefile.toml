@@ -1,0 +1,63 @@
+[tasks.install-llvm-tools]
+install_crate = { rustup_component_name = "llvm-tools" }
+
+[tasks.objcopy-central]
+install_crate = { crate_name = "cargo-binutils", binary = "cargo", test_arg = [
+    "objcopy",
+    "--help",
+] }
+command = "cargo"
+args = [
+    "objcopy",
+    "--release",
+    "--bin",
+    "central",
+    "--",
+    "-O",
+    "ihex",
+    "rmk-central.hex",
+]
+dependencies = ["install-llvm-tools"]
+
+[tasks.objcopy-peripheral]
+command = "cargo"
+args = [
+    "objcopy",
+    "--release",
+    "--bin",
+    "peripheral",
+    "--",
+    "-O",
+    "ihex",
+    "rmk-peripheral.hex",
+]
+dependencies = ["install-llvm-tools"]
+
+[tasks.uf2-central]
+command = "python"
+args = [
+    "../../../scripts/uf2conv.py",
+    "rmk-central.hex",
+    "-c",
+    "-f",
+    "0xe48bff56",                  # Use your chip family ID in the uf2conv.py file as -f argument
+    "-o",
+    "rmk-central.uf2",
+]
+dependencies = ["objcopy-central"]
+
+[tasks.uf2-peripheral]
+command = "python"
+args = [
+    "../../../scripts/uf2conv.py",
+    "rmk-peripheral.hex",
+    "-c",
+    "-f",
+    "0xe48bff56",                  # Use your chip family ID in the uf2conv.py file as -f argument
+    "-o",
+    "rmk-peripheral.uf2",
+]
+dependencies = ["objcopy-peripheral"]
+
+[tasks.uf2]
+dependencies = ["uf2-central", "uf2-peripheral"]

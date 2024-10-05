@@ -160,11 +160,14 @@ There are several more configs for reading battery level and charging state, now
 [ble]
 # Whether to enable BLE feature
 enabled = true
-# nRF52840's saadc pin for reading battery level
+# nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
 battery_pin = "PA0"
 # Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 charge_state.pin = "PA0"
 charge_state.low_active = true
+# Output pin for charging state LED 
+charge_led.pin = "PA1"
+charge_led.low_active = true
 ```
 
 ## More customization
