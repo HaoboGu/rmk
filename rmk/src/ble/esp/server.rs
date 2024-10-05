@@ -13,6 +13,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
 use crate::{
     ble::{
+        as_bytes,
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
     },
@@ -23,12 +24,6 @@ use crate::{
 
 type BleHidWriter = Arc<Mutex<BLECharacteristic>>;
 type BleHidReader = Arc<Mutex<BLECharacteristic>>;
-
-pub(crate) fn as_bytes<T: Sized>(p: &T) -> &[u8] {
-    unsafe {
-        ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-    }
-}
 
 impl ConnectionTypeWrapper for BleHidWriter {
     fn get_conn_type(&self) -> ConnectionType {
@@ -192,19 +187,14 @@ impl ConnectionTypeWrapper for BleServer {
     }
 }
 
-pub(crate) struct EspVialReaderWriter<
-    'ch,
-    M: RawMutex,
-    T: Sized,
-    const N: usize,
-    W: HidWriterWrapper,
-> {
+pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
+{
     pub(crate) receiver: Receiver<'ch, M, T, N>,
     pub(crate) hid_writer: W,
 }
 
 impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
-    for EspVialReaderWriter<'ch, M, T, N, W>
+    for VialReaderWriter<'ch, M, T, N, W>
 {
     fn get_conn_type(&self) -> ConnectionType {
         ConnectionType::Ble
@@ -212,7 +202,7 @@ impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> Connection
 }
 
 impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
-    for EspVialReaderWriter<'ch, M, T, N, W>
+    for VialReaderWriter<'ch, M, T, N, W>
 {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
         let v = self.receiver.receive().await;
@@ -222,7 +212,7 @@ impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderW
 }
 
 impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
-    for EspVialReaderWriter<'ch, M, T, N, W>
+    for VialReaderWriter<'ch, M, T, N, W>
 {
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
         self.hid_writer.write_serialize(r).await
