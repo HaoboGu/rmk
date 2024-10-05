@@ -1,11 +1,10 @@
 pub(crate) mod server;
 
-use self::server::BleServer;
+use self::server::{BleServer, EspVialReaderWriter};
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::hid::{BleReceiver, ReaderWriter};
 use crate::matrix::Matrix;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
@@ -128,7 +127,10 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             debug!("BLE received {} {=[u8]:#X}", data.len(), data);
             block_on(via_output.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
         });
-        let mut via_rw = ReaderWriter(BleReceiver(via_output.receiver()), ble_server.input_vial);
+        let mut via_rw = EspVialReaderWriter {
+            receiver: via_output.receiver(),
+            hid_writer: ble_server.input_vial,
+        };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
 
         let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
