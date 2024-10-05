@@ -49,6 +49,7 @@ use nrf_softdevice::{
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
+use vial_service::VialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::{
@@ -344,6 +345,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &mut keyboard,
                                 &mut storage,
                                 &mut light_service,
+                                &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                                 &keyboard_report_sender,
@@ -379,6 +381,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut keyboard,
                     &mut storage,
                     &mut light_service,
+                    &mut vial_service,
                     &mut keyboard_config.ble_battery_config,
                     &keyboard_report_receiver,
                     &keyboard_report_sender,
@@ -409,6 +412,7 @@ pub(crate) async fn run_ble_keyboard<
     keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
+    vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
     keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     keyboard_report_sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -421,6 +425,8 @@ pub(crate) async fn run_ble_keyboard<
         BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
     let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
+    let mut vial_rw = VialReaderWriter::new(ble_server.vial, &conn);
+    let vial_task = vial_task(&mut vial_rw, vial_service);
 
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
@@ -442,7 +448,7 @@ pub(crate) async fn run_ble_keyboard<
         ble_fut,
         select(ble_communication_task, keyboard_fut),
         select(battery_fut, led_fut),
-        storage_fut,
+        select(vial_task, storage_fut),
     )
     .await
     {

@@ -2,6 +2,7 @@ extern crate alloc;
 use alloc::sync::Arc;
 use defmt::{debug, error, info, warn};
 use embassy_futures::block_on;
+use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
@@ -12,6 +13,7 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
 use crate::{
     ble::{
+        as_bytes,
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
     },
@@ -182,5 +184,41 @@ impl BleServer {
 impl ConnectionTypeWrapper for BleServer {
     fn get_conn_type(&self) -> crate::hid::ConnectionType {
         ConnectionType::Ble
+    }
+}
+
+pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
+{
+    pub(crate) receiver: Receiver<'ch, M, T, N>,
+    pub(crate) hid_writer: W,
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::Ble
+    }
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+        let v = self.receiver.receive().await;
+        buf.copy_from_slice(as_bytes(&v));
+        Ok(as_bytes(&v).len())
+    }
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+        self.hid_writer.write_serialize(r).await
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        self.hid_writer.write(report).await
     }
 }
