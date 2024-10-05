@@ -381,6 +381,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut keyboard,
                     &mut storage,
                     &mut light_service,
+                    &mut vial_service,
                     &mut keyboard_config.ble_battery_config,
                     &keyboard_report_receiver,
                     &keyboard_report_sender,
