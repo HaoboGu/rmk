@@ -96,7 +96,9 @@ pub(crate) fn expand_keyboard_info(
         .product_name
         .unwrap_or("RMK Keyboard".to_string());
     let manufacturer = keyboard_info.manufacturer.unwrap_or("RMK".to_string());
-    let serial_number = keyboard_info.serial_number.unwrap_or("vial:f64c2b3c:000001".to_string());
+    let serial_number = keyboard_info
+        .serial_number
+        .unwrap_or("vial:f64c2b3c:000001".to_string());
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
