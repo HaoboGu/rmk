@@ -26,7 +26,7 @@ use crate::{
     keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
     light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
-    KeyAction, KeyMap, LightService, RmkConfig,
+    vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
 use core::{cell::RefCell, mem};
 use defmt::*;
@@ -56,8 +56,7 @@ use {
         keyboard::communication_task,
         light::led_hid_task,
         usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-        via::vial_task,
-        KeyboardUsbDevice, VialService,
+        KeyboardUsbDevice,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
@@ -256,10 +255,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     // Keyboard services
     let mut keyboard = Keyboard::new(matrix, &keymap);
     #[cfg(not(feature = "_no_usb"))]
-    let (mut usb_device, mut vial_service) = (
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-    );
+    let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
+    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);
 
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
