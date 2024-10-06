@@ -68,6 +68,7 @@ pub mod keycode;
 mod keymap;
 mod layout_macro;
 mod light;
+mod input_device;
 mod matrix;
 #[cfg(feature = "split")]
 pub mod split;

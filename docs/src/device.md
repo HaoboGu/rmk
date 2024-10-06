@@ -19,3 +19,10 @@ There are two types of device in RMK:
 - storage_task
 - vial_task
 - led_hid_task
+
+## Input device
+
+The keyboard itself is an input device. To use more types of input device, a good abstraction layer is needed.
+
+The first thing that needs to be determined, is what report should input device emit? And how it can be mapped to the keymap/vial? 
+
