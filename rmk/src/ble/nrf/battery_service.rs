@@ -81,8 +81,11 @@ impl<'a> BatteryService {
     }
 
     // TODO: Make battery calculation user customizable
-    fn get_battery_percent(&self, mut val: i16) -> u8 {
+    fn get_battery_percent(&self, val: i16) -> u8 {
         info!("Detected adc value: {=i16}", val);
+        // Avoid overflow
+        let val = val as i32;
+
         // According to nRF52840's datasheet, for single_ended saadc:
         // val = v_adc * (gain / reference) * 2^(resolution)
         //
@@ -90,22 +93,27 @@ impl<'a> BatteryService {
         // val = v_adc * 1137.8
         //
         // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, then,
-        // v_adc = v_bat * 0.7092 => val = v_bat * 806.93
+        // v_adc = v_bat * measured / total => val = v_bat * 1137.8 * measured / total
         //
-        // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
-        // To make calculation simple, adc val range 2650 ~ 3350 is used.
+        // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be (3755 ~ 4755) * measured / total
+        // TODO: make the voltage divider configurable
+        let mut measured = 200;
+        let mut total = 282;
         if 500 < val && val < 1000 {
             // Thing becomes different when using vddh as reference
             // The adc value for vddh pin is actually vddh/5,
             // so we use this rough range to detect vddh
-            val = val * 5;
+            measured = 1;
+            total = 5;
         }
-        if val > 3350 {
+        if val > 4755_i32 * measured / total {
+            // 4755 ~= 4.2v * 1137.8
             100_u8
-        } else if val < 2650 {
+        } else if val < 3755_i32 * measured / total {
+            // 3755 ~= 3.3v * 1137.8
             0_u8
         } else {
-            ((val - 2650) / 7) as u8
+            ((val * total / measured - 3755) / 10) as u8
         }
     }
 }
