@@ -19,7 +19,7 @@ use num_enum::FromPrimitive;
 pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    /// Current state of each layer
+    /// TODO: make it global? so that Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
     default_layer: u8,
@@ -241,6 +241,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
 
         KeyAction::No
+    }
+
+    fn get_activated_layer(&self) -> u8 {
+        for (layer_idx, _) in self.layers.iter().enumerate().rev() {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                return layer_idx as u8;
+            }
+        }
+
+        self.default_layer
     }
 
     fn get_layer_from_cache(&self, row: usize, col: usize) -> u8 {

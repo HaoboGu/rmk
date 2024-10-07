@@ -22,6 +22,7 @@ pub trait InputDevice<'a> {
 }
 
 /// Rotary encoder input device
+/// The push key in rotary encoder is in the key matrix, so it's not included in this struct
 pub struct RotaryEncoder<'a, P: InputPin> {
     sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     state: EncoderState,
