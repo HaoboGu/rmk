@@ -244,16 +244,20 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Keyboard matrix
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     // Keyboard services
-    let mut keyboard = Keyboard::new(matrix, &keymap);
+    let mut keyboard = Keyboard::new(&keymap);
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
@@ -331,6 +335,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             match select(adv_fut, select(usb_fut, usb_configured)).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
+                        let matrix_fut = matrix.scan();
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
                         let usb_configured = wait_for_usb_configured();
@@ -347,7 +352,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &keyboard_report_receiver,
                                 &keyboard_report_sender,
                             ),
-                            select(usb_fut, usb_configured),
+                            select(select(matrix_fut, usb_fut), usb_configured),
                         )
                         .await
                         {
@@ -399,14 +404,13 @@ pub(crate) async fn run_ble_keyboard<
     'b,
     F: AsyncNorFlash,
     Out: OutputPin,
-    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     conn: &Connection,
     ble_server: &BleServer,
-    keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,

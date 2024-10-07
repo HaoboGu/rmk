@@ -62,13 +62,13 @@ pub mod ble;
 mod debounce;
 mod flash;
 mod hid;
+mod input_device;
 mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
 mod keymap;
 mod layout_macro;
 mod light;
-mod input_device;
 mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
@@ -237,17 +237,21 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
+        Keyboard::new(&keymap),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
@@ -261,15 +265,18 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        run_usb_keyboard(
-            &mut usb_device,
-            &mut keyboard,
-            #[cfg(not(feature = "_no_external_storage"))]
-            &mut storage,
-            &mut light_service,
-            &mut vial_service,
-            &keyboard_report_receiver,
-            &keyboard_report_sender,
+        select(
+            matrix.scan(),
+            run_usb_keyboard(
+                &mut usb_device,
+                &mut keyboard,
+                #[cfg(not(feature = "_no_external_storage"))]
+                &mut storage,
+                &mut light_service,
+                &mut vial_service,
+                &keyboard_report_receiver,
+                &keyboard_report_sender,
+            ),
         )
         .await;
 
@@ -284,14 +291,13 @@ pub(crate) async fn run_usb_keyboard<
     'b,
     D: Driver<'a>,
     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
-    M: MatrixTrait,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, M, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
     #[cfg(not(feature = "_no_external_storage"))] storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,

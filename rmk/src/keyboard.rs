@@ -4,19 +4,27 @@ use crate::{
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
-    matrix::{KeyState, MatrixTrait},
+    matrix::KeyState,
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, warn};
+use defmt::{debug, error, info, warn};
 use embassy_futures::yield_now;
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Receiver, Sender},
+    channel::{Channel, Receiver, Sender},
 };
 use embassy_time::{Instant, Timer};
 use usbd_hid::descriptor::KeyboardReport;
+
+pub(crate) struct KeyEvent {
+    pub(crate) row: usize,
+    pub(crate) col: usize,
+    pub(crate) key_state: KeyState,
+}
+
+pub(crate) static keyboard_channel: Channel<CriticalSectionRawMutex, KeyEvent, 16> = Channel::new();
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
 pub(crate) enum KeyboardReportMessage {
@@ -30,12 +38,11 @@ pub(crate) enum KeyboardReportMessage {
 /// The report is sent to communication task, and finally sent to the host
 pub(crate) async fn keyboard_task<
     'a,
-    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
@@ -91,18 +98,12 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
         Err(_) => error!("Serialize other report error"),
     }
 }
-pub(crate) struct Keyboard<
-    'a,
-    M: MatrixTrait,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
-    /// Keyboard matrix, use COL2ROW by default
-    pub(crate) matrix: M,
-
+pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+
+    /// Timer which records the timestamp of key changes
+    pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -134,13 +135,13 @@ pub(crate) struct Keyboard<
     mouse_wheel_move_delta: i8,
 }
 
-impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Keyboard<'a, M, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    Keyboard<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) fn new(matrix: M, keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>) -> Self {
+    pub(crate) fn new(keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>) -> Self {
         Keyboard {
-            matrix,
             keymap,
+            timer: [[None; ROW]; COL],
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
@@ -256,52 +257,44 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        #[cfg(feature = "async_matrix")]
-        self.matrix.wait_for_key().await;
+        let KeyEvent {
+            row: row_idx,
+            col: col_idx,
+            key_state: ks,
+        } = keyboard_channel.receive().await;
 
-        // Matrix scan
-        self.matrix.scan().await;
+        info!("Got key event: {}, {}, {}", row_idx, col_idx, ks);
 
-        // Check matrix states, process key if there is a key state change
-        // Keys are processed in the following order:
-        // process_key_change -> process_key_action_* -> process_action_*
-        for row_idx in 0..self.matrix.get_row_num() {
-            for col_idx in 0..self.matrix.get_col_num() {
-                let ks = self.matrix.get_key_state(row_idx, col_idx);
-                if ks.changed {
-                    self.process_key_change(row_idx, col_idx, sender).await;
-                } else if ks.pressed {
-                    // When there's no key change, only tap/hold action needs to be processed
-                    // Continuously check the hold state
-                    let action = self
-                        .keymap
-                        .borrow_mut()
-                        .get_action_with_layer_cache(row_idx, col_idx, ks);
-                    let tap_hold = match action {
-                        KeyAction::TapHold(tap_action, hold_action) => {
-                            Some((tap_action, hold_action))
-                        }
-                        KeyAction::LayerTapHold(tap_action, layer_num) => {
-                            Some((tap_action, Action::LayerOn(layer_num)))
-                        }
-                        KeyAction::ModifierTapHold(tap_action, modifier) => {
-                            Some((tap_action, Action::Modifier(modifier)))
-                        }
-                        _ => None,
-                    };
-                    if let Some((tap_action, hold_action)) = tap_hold {
-                        self.process_key_action_tap_hold(
-                            tap_action,
-                            hold_action,
-                            row_idx,
-                            col_idx,
-                            ks,
-                            sender,
-                        )
-                        .await;
-                    };
+        if ks.changed {
+            self.process_key_change(row_idx, col_idx, ks, sender).await;
+        } else if ks.pressed {
+            // When there's no key change, only tap/hold action needs to be processed
+            // Continuously check the hold state
+            let action = self
+                .keymap
+                .borrow_mut()
+                .get_action_with_layer_cache(row_idx, col_idx, ks);
+            let tap_hold = match action {
+                KeyAction::TapHold(tap_action, hold_action) => Some((tap_action, hold_action)),
+                KeyAction::LayerTapHold(tap_action, layer_num) => {
+                    Some((tap_action, Action::LayerOn(layer_num)))
                 }
-            }
+                KeyAction::ModifierTapHold(tap_action, modifier) => {
+                    Some((tap_action, Action::Modifier(modifier)))
+                }
+                _ => None,
+            };
+            if let Some((tap_action, hold_action)) = tap_hold {
+                self.process_key_action_tap_hold(
+                    tap_action,
+                    hold_action,
+                    row_idx,
+                    col_idx,
+                    ks,
+                    sender,
+                )
+                .await;
+            };
         }
     }
 
@@ -310,15 +303,12 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
         &mut self,
         row: usize,
         col: usize,
+        key_state: KeyState,
         sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) {
-        let key_state = self.matrix.get_key_state(row, col);
-
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_state.pressed {
-            self.matrix.update_key_state(row, col, |ks| {
-                ks.start_timer();
-            });
+            self.timer[col][row] = Some(Instant::now());
         }
 
         // Process key
@@ -499,7 +489,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
     ) {
         if key_state.is_releasing() {
             // Case 1, the key is released
-            match key_state.hold_start {
+            match self.timer[col][row] {
                 Some(s) => {
                     // Released: tap
                     // The hold_start isn't cleared, means that the key is released within the tap/hold threshold
@@ -514,9 +504,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                         .await;
 
                     // Reset timer after release
-                    self.matrix.update_key_state(row, col, |ks| {
-                        ks.clear_timer();
-                    });
+                    self.timer[col][row] = None;
                 }
                 None => {
                     // Released: hold action
@@ -528,7 +516,8 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
             }
         } else if key_state.pressed && !key_state.changed {
             // Case 2, the key is held
-            if let Some(s) = key_state.hold_start {
+            let hold_start = self.timer[col][row];
+            if let Some(s) = hold_start {
                 let d = s.elapsed().as_millis();
                 if d > 200 {
                     // The key is held for more than 200ms, send hold action, then clear timer
@@ -536,9 +525,7 @@ impl<'a, M: MatrixTrait, const ROW: usize, const COL: usize, const NUM_LAYER: us
                         .await;
 
                     // Clear timer if the key is held
-                    self.matrix.update_key_state(row, col, |ks| {
-                        ks.clear_timer();
-                    });
+                    self.timer[col][row] = None;
                 }
             }
         }
