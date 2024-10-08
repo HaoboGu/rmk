@@ -2,7 +2,7 @@ use crate::{
     debounce::{DebounceState, DebouncerTrait},
     keyboard::{key_event_channel, KeyEvent},
 };
-use defmt::Format;
+use defmt::{error, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -188,24 +188,22 @@ impl<
 
                     match debounce_state {
                         DebounceState::Debounced => {
-                            defmt::info!("Got debounced");
                             self.key_states[out_idx][in_idx].toggle_pressed();
                             self.key_states[out_idx][in_idx].changed = true;
-                            // FIXME: add row2col
                             #[cfg(feature = "col2row")]
-                            {
-                                // `try_send` is used here to avoid blocking the matrix scanning
-                                let send_re = key_event_channel.try_send(KeyEvent {
-                                    row: in_idx as u8,
-                                    col: out_idx as u8,
-                                    key_state: KeyState {
-                                        pressed: self.key_states[out_idx][in_idx].pressed,
-                                        changed: true,
-                                    },
-                                });
-                                if send_re.is_err() {
-                                    defmt::info!("Failed to send key event");
-                                }
+                            let (row, col, key_state) =
+                                (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                            #[cfg(not(feature = "col2row"))]
+                            let (row, col, key_state) =
+                                (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+
+                            let send_re = key_event_channel.try_send(KeyEvent {
+                                row: row as u8,
+                                col: col as u8,
+                                key_state,
+                            });
+                            if send_re.is_err() {
+                                error!("Failed to send key event: key event channel full");
                             }
                         }
                         _ => self.key_states[out_idx][in_idx].changed = false,
