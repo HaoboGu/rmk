@@ -2,6 +2,7 @@
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::keyboard::key_event_channel;
 use crate::matrix::{Matrix, MatrixTrait};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -98,7 +99,7 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
     spawner: Spawner,
 ) -> ! {
     use defmt::info;
-    use embassy_futures::select::select;
+    use embassy_futures::select::select3;
     use nrf_softdevice::ble::gatt_server;
 
     use crate::split::nrf::peripheral::{
@@ -201,10 +202,10 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
             },
         });
 
-        let mut peripheral =
-            SplitPeripheral::new(&mut matrix, BleSplitPeripheralDriver::new(&server, &conn));
+        let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
         let peripheral_fut = peripheral.run();
-        select(server_fut, peripheral_fut).await;
+        let matrix_fut = matrix.scan();
+        select3(matrix_fut, server_fut, peripheral_fut).await;
     }
 }
 
@@ -230,6 +231,7 @@ pub(crate) async fn initialize_serial_split_peripheral_and_run<
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     serial: S,
 ) -> ! {
+    use embassy_futures::select::select;
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
     let mut matrix =
@@ -244,22 +246,20 @@ pub(crate) async fn initialize_serial_split_peripheral_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    let mut peripheral = SplitPeripheral::new(&mut matrix, SerialSplitDriver::new(serial));
-    peripheral.run().await
+    let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
+    loop {
+        select(matrix.scan(), peripheral.run()).await;
+    }
 }
 
 /// The split peripheral instance.
-pub(crate) struct SplitPeripheral<'a, M: MatrixTrait, S: SplitWriter + SplitReader> {
-    matrix: &'a mut M,
+pub(crate) struct SplitPeripheral<S: SplitWriter + SplitReader> {
     split_driver: S,
 }
 
-impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitPeripheral<'a, M, S> {
-    pub(crate) fn new(matrix: &'a mut M, split_driver: S) -> Self {
-        Self {
-            matrix,
-            split_driver,
-        }
+impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
+    pub(crate) fn new(split_driver: S) -> Self {
+        Self { split_driver }
     }
 
     /// Run the peripheral keyboard service.
@@ -268,63 +268,15 @@ impl<'a, M: MatrixTrait, S: SplitWriter + SplitReader> SplitPeripheral<'a, M, S>
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) -> ! {
         loop {
-            self.matrix.scan().await;
+            let e = key_event_channel.receive().await;
 
-            for row_idx in 0..self.matrix.get_row_num() {
-                for col_idx in 0..self.matrix.get_col_num() {
-                    let key_state = self.matrix.get_key_state(row_idx, col_idx);
-                    if key_state.changed {
-                        let _ = self
-                            .split_driver
-                            .write(&SplitMessage::Key(
-                                row_idx as u8,
-                                col_idx as u8,
-                                key_state.pressed,
-                            ))
-                            .await;
-                    }
-                }
-            }
+            self.split_driver
+                .write(&SplitMessage::Key(e.row, e.col, e.key_state.pressed))
+                .await
+                .ok();
 
             // 10KHZ scan rate
             embassy_time::Timer::after_micros(10).await;
         }
-    }
-}
-
-/// Run the peripheral keyboard service.
-///
-/// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
-/// If also receives split messages from the central through `SplitReader`.
-pub(crate) async fn run_peripheral<
-    M: MatrixTrait,
-    S: SplitWriter + SplitReader,
-    const ROW: usize,
-    const COL: usize,
->(
-    matrix: &mut M,
-    mut split_driver: S,
-) -> ! {
-    loop {
-        matrix.scan().await;
-
-        // Send key events to host
-        for row_idx in 0..matrix.get_row_num() {
-            for col_idx in 0..matrix.get_col_num() {
-                let key_state = matrix.get_key_state(row_idx, col_idx);
-                if key_state.changed {
-                    let _ = split_driver
-                        .write(&SplitMessage::Key(
-                            row_idx as u8,
-                            col_idx as u8,
-                            key_state.pressed,
-                        ))
-                        .await;
-                }
-            }
-        }
-
-        // 10KHZ scan rate
-        embassy_time::Timer::after_micros(10).await;
     }
 }

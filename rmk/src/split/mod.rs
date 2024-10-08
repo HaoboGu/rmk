@@ -1,6 +1,3 @@
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel, signal::Signal,
-};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
@@ -15,15 +12,6 @@ pub(crate) mod serial;
 
 /// Maximum size of a split message
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
-
-/// Channels for synchronization between central and peripheral threads
-const SYNC_SIGNAL_VALUE: Signal<CriticalSectionRawMutex, KeySyncSignal> = Signal::new();
-pub(crate) static SYNC_SIGNALS: [Signal<CriticalSectionRawMutex, KeySyncSignal>; 4] =
-    [SYNC_SIGNAL_VALUE; 4];
-pub(crate) static SCAN_SIGNAL: Signal<CriticalSectionRawMutex, KeySyncSignal> = SYNC_SIGNAL_VALUE;
-const SYNC_CHANNEL_VALUE: Channel<CriticalSectionRawMutex, KeySyncMessage, 8> = Channel::new();
-pub(crate) static CENTRAL_SYNC_CHANNELS: [Channel<CriticalSectionRawMutex, KeySyncMessage, 8>; 4] =
-    [SYNC_CHANNEL_VALUE; 4];
 
 /// Message used from central & peripheral communication
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]

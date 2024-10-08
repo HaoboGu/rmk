@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use defmt::warn;
+use defmt::{error, warn};
 use embassy_executor::Spawner;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
@@ -15,15 +15,13 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::keyboard::{keyboard_report_channel, Keyboard};
+use crate::keyboard::{key_event_channel, keyboard_report_channel, KeyEvent, Keyboard};
 use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
 use crate::run_usb_keyboard;
 #[cfg(feature = "_nrf_ble")]
 use crate::split::nrf::central::initialize_ble_split_central_and_run;
-use crate::split::KeySyncSignal;
-use crate::split::SYNC_SIGNALS;
 use crate::usb::KeyboardUsbDevice;
 use crate::via::process::VialService;
 
@@ -33,8 +31,6 @@ use {
     embedded_io_async::{Read, Write},
     embedded_storage_async::nor_flash::NorFlash,
 };
-
-use super::{KeySyncMessage, CENTRAL_SYNC_CHANNELS};
 
 /// Run RMK split central keyboard service. This function should never return.
 ///
@@ -200,8 +196,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         In,
         Out,
         RapidDebouncer<CENTRAL_ROW, CENTRAL_COL>,
-        TOTAL_ROW,
-        TOTAL_COL,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_ROW,
@@ -212,8 +206,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         In,
         Out,
         DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL>,
-        TOTAL_ROW,
-        TOTAL_COL,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_ROW,
@@ -224,8 +216,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         In,
         Out,
         RapidDebouncer<CENTRAL_COL, CENTRAL_ROW>,
-        TOTAL_ROW,
-        TOTAL_COL,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_COL,
@@ -236,8 +226,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         In,
         Out,
         DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW>,
-        TOTAL_ROW,
-        TOTAL_COL,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_COL,
@@ -280,8 +268,6 @@ pub(crate) struct CentralMatrix<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const TOTAL_ROW: usize,
-    const TOTAL_COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
     const INPUT_PIN_NUM: usize,
@@ -294,7 +280,7 @@ pub(crate) struct CentralMatrix<
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    key_states: [[KeyState; TOTAL_COL]; TOTAL_ROW],
+    key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
     /// Start scanning
     scan_start: Option<Instant>,
 }
@@ -304,21 +290,82 @@ impl<
         #[cfg(not(feature = "async_matrix"))] In: InputPin,
         Out: OutputPin,
         D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
     > MatrixTrait
-    for CentralMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
+    #[cfg(feature = "col2row")]
+    const ROW: usize = INPUT_PIN_NUM;
+    #[cfg(feature = "col2row")]
+    const COL: usize = OUTPUT_PIN_NUM;
+    #[cfg(not(feature = "col2row"))]
+    const ROW: usize = OUTPUT_PIN_NUM;
+    #[cfg(not(feature = "col2row"))]
+    const COL: usize = INPUT_PIN_NUM;
 
     async fn scan(&mut self) {
-        self.internal_scan().await;
-        self.scan_peripheral().await;
+        defmt::info!("Central matrix scanning");
+        loop {
+            #[cfg(feature = "async_matrix")]
+            self.wait_for_key().await;
+
+            // Scan matrix and send report
+            for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
+                // Pull up output pin, wait 1us ensuring the change comes into effect
+                out_pin.set_high().ok();
+                Timer::after_micros(1).await;
+                for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
+                    // Check input pins and debounce
+                    let debounce_state = self.debouncer.detect_change_with_debounce(
+                        in_idx,
+                        out_idx,
+                        in_pin.is_high().ok().unwrap_or_default(),
+                        &self.key_states[out_idx][in_idx],
+                    );
+
+                    match debounce_state {
+                        DebounceState::Debounced => {
+                            self.key_states[out_idx][in_idx].toggle_pressed();
+                            #[cfg(feature = "col2row")]
+                            let (row, col, key_state) = (
+                                (in_idx + ROW_OFFSET) as u8,
+                                (out_idx + COL_OFFSET) as u8,
+                                self.key_states[out_idx][in_idx],
+                            );
+                            #[cfg(not(feature = "col2row"))]
+                            let (row, col, key_state) = (
+                                out_idx + ROW_OFFSET as u8,
+                                in_idx + COL_OFFSET as u8,
+                                self.key_states[out_idx][in_idx],
+                            );
+
+                            // `try_send` is used here because we don't want to block scanning if the channel is full
+                            let send_re = key_event_channel.try_send(KeyEvent {
+                                row,
+                                col,
+                                key_state,
+                            });
+                            if send_re.is_err() {
+                                error!("Failed to send key event: key event channel full");
+                            }
+                        }
+                        _ => (),
+                    }
+
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if self.key_states[out_idx][in_idx].pressed {
+                        self.scan_start = Some(Instant::now());
+                    }
+                }
+                out_pin.set_low().ok();
+            }
+
+            embassy_time::Timer::after_micros(100).await;
+        }
     }
 
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
@@ -331,8 +378,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        use super::SCAN_SIGNAL;
-        use embassy_futures::select::{select, select_slice};
+        use defmt::info;
+        use embassy_futures::select::select_slice;
         use heapless::Vec;
 
         if let Some(start_time) = self.scan_start {
@@ -347,23 +394,14 @@ impl<
         for out in self.output_pins.iter_mut() {
             out.set_high().ok();
         }
-
         Timer::after_micros(1).await;
-
-        // Enable SCAN_SIGNAL, wait for peripheral's report
-        SCAN_SIGNAL.reset();
-
-        // Current board's matrix
+        info!("Waiting for high");
         let mut futs: Vec<_, INPUT_PIN_NUM> = self
             .input_pins
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-
-        // Wait for split event
-        let split_event = SCAN_SIGNAL.wait();
-
-        let _ = select(split_event, select_slice(futs.as_mut_slice())).await;
+        let _ = select_slice(futs.as_mut_slice()).await;
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
@@ -371,9 +409,6 @@ impl<
         }
 
         self.scan_start = Some(Instant::now());
-
-        // Enable SCAN_SIGNAL, wait for peripheral's report
-        SCAN_SIGNAL.reset();
     }
 }
 
@@ -382,13 +417,11 @@ impl<
         #[cfg(not(feature = "async_matrix"))] In: InputPin,
         Out: OutputPin,
         D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > CentralMatrix<In, Out, D, ROW, COL, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Initialization of central
     pub(crate) fn new(
@@ -400,89 +433,9 @@ impl<
             input_pins,
             output_pins,
             debouncer,
-            key_states: [[KeyState::default(); COL]; ROW],
+            key_states: [[KeyState::default(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
         }
     }
-
-    pub(crate) async fn scan_peripheral(&mut self) {
-        for (id, peripheral_channel) in CENTRAL_SYNC_CHANNELS.iter().enumerate() {
-            // TODO: Skip unused peripherals
-            if id > 0 {
-                break;
-            }
-            // Signal that peripheral scanning is started
-            SYNC_SIGNALS[id].signal(KeySyncSignal::Start);
-            // Receive peripheral key states
-            if let KeySyncMessage::StartSend(n) = peripheral_channel.receive().await {
-                // Update peripheral's key states
-                for _ in 0..n {
-                    if let KeySyncMessage::Key(row, col, key_state) =
-                        peripheral_channel.receive().await
-                    {
-                        if key_state != self.key_states[row as usize][col as usize].pressed {
-                            self.key_states[row as usize][col as usize].pressed = key_state;
-                            self.key_states[row as usize][col as usize].changed = true;
-                        } else {
-                            self.key_states[row as usize][col as usize].changed = false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) async fn internal_scan(&mut self) {
-        // Get the row and col index of current board in the whole key matrix
-        for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
-            // Pull up output pin, wait 1us ensuring the change comes into effect
-            out_pin.set_high().ok();
-            Timer::after_micros(1).await;
-            for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
-                #[cfg(feature = "col2row")]
-                let (row_idx, col_idx) = (in_idx + ROW_OFFSET, out_idx + COL_OFFSET);
-                #[cfg(not(feature = "col2row"))]
-                let (row_idx, col_idx) = (out_idx + ROW_OFFSET, in_idx + COL_OFFSET);
-
-                // Check input pins and debounce
-                let debounce_state = self.debouncer.detect_change_with_debounce(
-                    in_idx,
-                    out_idx,
-                    in_pin.is_high().ok().unwrap_or_default(),
-                    &self.key_states[row_idx][col_idx],
-                );
-
-                match debounce_state {
-                    DebounceState::Debounced => {
-                        self.key_states[row_idx][col_idx].toggle_pressed();
-                        self.key_states[row_idx][col_idx].changed = true;
-                    }
-                    _ => self.key_states[row_idx][col_idx].changed = false,
-                }
-
-                // If there's key changed or pressed, always refresh the self.scan_start
-                if self.key_states[row_idx][col_idx].changed
-                    || self.key_states[row_idx][col_idx].pressed
-                {
-                    #[cfg(feature = "async_matrix")]
-                    {
-                        self.scan_start = Some(Instant::now());
-                    }
-                }
-            }
-            out_pin.set_low().ok();
-        }
-    }
-
-    /// Read key state OF CURRENT BOARD at position (row, col)
-    pub(crate) fn get_key_state_current_board(
-        &mut self,
-        out_idx: usize,
-        in_idx: usize,
-    ) -> KeyState {
-        #[cfg(feature = "col2row")]
-        return self.key_states[in_idx + ROW_OFFSET][out_idx + COL_OFFSET];
-        #[cfg(not(feature = "col2row"))]
-        return self.key_states[out_idx + ROW_OFFSET][in_idx + COL_OFFSET];
-    }
+    
 }
