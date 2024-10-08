@@ -106,15 +106,14 @@ impl<'a, P: InputPin> InputDevice<'a> for RotaryEncoder<'a, P> {
     }
 
     async fn send_report(&self) {
+        // TODO: Remap the rotary encoder action to keymap, how?
         match self.dir {
             Direction::None => (),
             Direction::Clockwise => {
-                // TODO: Remap the rotary encoder action to keymap, how?
                 info!("Rotary Encoder Clockwise");
                 // self.sender.send().await
             }
             Direction::CounterClockwise => {
-                // TODO:
                 info!("Rotary Encoder CounterClockwise");
             }
         }

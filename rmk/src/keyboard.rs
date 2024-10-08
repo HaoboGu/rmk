@@ -10,7 +10,7 @@ use crate::{
 };
 use core::cell::RefCell;
 use defmt::{debug, error, warn};
-use embassy_futures::yield_now;
+use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
@@ -110,6 +110,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Report Sender
     pub(crate) sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 
+    /// Unprocessed events
+    unprocessed_events: heapless::Vec<KeyEvent, 8>,
+
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
@@ -142,6 +145,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             keymap,
             sender,
             timer: [[None; ROW]; COL],
+            unprocessed_events: heapless::Vec::new(),
             report: KeyboardReport {
                 modifier: 0,
                 reserved: 0,
@@ -233,30 +237,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         let row_idx = row as usize;
         let col_idx = col as usize;
 
-        if ks.changed {
-            self.process_key_change(row_idx, col_idx, ks).await;
-        } else if ks.pressed {
-            // TODO: NO pressed event now, only changed event, so tap/hold action needs special processing
-            // When there's no key change, only tap/hold action needs to be processed
-            // Continuously check the hold state
-            let action = self
-                .keymap
-                .borrow_mut()
-                .get_action_with_layer_cache(row_idx, col_idx, ks);
-            let tap_hold = match action {
-                KeyAction::TapHold(tap_action, hold_action) => Some((tap_action, hold_action)),
-                KeyAction::LayerTapHold(tap_action, layer_num) => {
-                    Some((tap_action, Action::LayerOn(layer_num)))
-                }
-                KeyAction::ModifierTapHold(tap_action, modifier) => {
-                    Some((tap_action, Action::Modifier(modifier)))
-                }
-                _ => None,
-            };
-            if let Some((tap_action, hold_action)) = tap_hold {
-                self.process_key_action_tap_hold(tap_action, hold_action, row_idx, col_idx, ks)
+        // Process the key change
+        self.process_key_change(row_idx, col_idx, ks).await;
+
+        // After processing the key change, check if there are unprocessed events
+        // This will happen if there's recursion in key processing
+        loop {
+            if self.unprocessed_events.is_empty() {
+                break;
+            }
+            // Process unprocessed events
+            if let Some(KeyEvent {
+                row,
+                col,
+                key_state,
+            }) = self.unprocessed_events.pop()
+            {
+                self.process_key_change(row as usize, col as usize, key_state)
                     .await;
-            };
+            }
         }
     }
 
@@ -376,11 +375,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
-            // Manually trigger send report
-            self.send_keyboard_report().await;
-            self.send_media_report().await;
-            self.send_system_control_report().await;
-            self.send_mouse_report().await;
+            // FIXME: double check whether the tap report is sent in process_key_action_normal
+            // // Manually trigger send report
+            // self.send_keyboard_report().await;
+            // self.send_media_report().await;
+            // self.send_system_control_report().await;
+            // self.send_mouse_report().await;
 
             key_state.pressed = false;
             self.process_key_action_normal(action, key_state).await;
@@ -388,13 +388,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Process tap/hold action.
-    /// There are several cases:
     ///
-    /// 1. `key_state.changed` is true, and `key_state.pressed` is false,
-    ///     which means the key is released. Then the duration time should be checked
+    /// This function will wait until timeout or a new key event comes:
+    /// - timeout: trigger hold action
+    /// - new key event: means there's another key within the threshold
+    ///     - if it's the same key, trigger tap action
+    ///     - if it's another key, trigger hold action + that key
     ///
-    /// 2. `key_state.changed` is false, and `key_state.pressed` is true,
-    ///     which means that the key is held. The duration time should to be checked.
+    /// This behavior is same as "Hold On Other Key Press" in qmk or "hold-preferred" in zmk
     ///     
     /// TODO: make tap/hold threshold customizable
     async fn process_key_action_tap_hold(
@@ -405,41 +406,51 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         col: usize,
         mut key_state: KeyState,
     ) {
-        if key_state.is_releasing() {
-            // Case 1, the key is released
-            match self.timer[col][row] {
-                Some(s) => {
-                    // Released: tap
-                    // The hold_start isn't cleared, means that the key is released within the tap/hold threshold
-                    key_state.pressed = true;
-                    debug!(
-                        "Release tap hold, got TAP: {}, {}, time elapsed: {}ms",
-                        tap_action,
-                        key_state,
-                        s.elapsed().as_millis()
-                    );
-                    self.process_key_action_tap(tap_action, key_state).await;
-
-                    // Reset timer after release
-                    self.timer[col][row] = None;
-                }
-                None => {
-                    // Released: hold action
-                    // The hold_start is cleared, means that the key is released after the tap/hold threshold
-                    debug!("Release tap hold, got HOLD: {}, {}", hold_action, key_state);
+        if key_state.is_pressing() {
+            self.timer[col][row] = Some(Instant::now());
+            let hold_timeout = embassy_time::Timer::after_millis(200);
+            match select(hold_timeout, key_event_channel.receive()).await {
+                embassy_futures::select::Either::First(_) => {
+                    // Timeout, trigger hold
+                    debug!("Hold timeout, got HOLD: {}, {}", hold_action, key_state);
                     self.process_key_action_normal(hold_action, key_state).await;
+                }
+                embassy_futures::select::Either::Second(key_event) => {
+                    if key_event.row == row as u8 && key_event.col == col as u8 {
+                        // If it's same key event and releasing within 200ms, trigger tap
+                        if key_event.key_state.is_releasing() {
+                            key_state.pressed = true;
+                            let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
+                            debug!("TAP action: {}, time elapsed: {}ms", tap_action, elapsed);
+                            self.process_key_action_tap(tap_action, key_state).await;
+
+                            // Clear timer
+                            self.timer[col][row] = None;
+                        }
+                    } else {
+                        // A different key comes within the threshold, trigger hold + that key
+
+                        // Process hold action first
+                        self.process_key_action_normal(hold_action, key_state).await;
+
+                        // The actual processing is postponed because we cannot do recursion on async function without alloc
+                        // After current key processing is done, we can process events in queue until the queue is empty
+                        if self.unprocessed_events.push(key_event).is_err() {
+                            warn!("unprocessed event queue is full, dropping event");
+                        }
+                    }
                 }
             }
-        } else if key_state.pressed && !key_state.changed {
-            // Case 2, the key is held
-            let hold_start = self.timer[col][row];
-            if let Some(s) = hold_start {
-                let d = s.elapsed().as_millis();
-                if d > 200 {
-                    // The key is held for more than 200ms, send hold action, then clear timer
+        } else if key_state.is_releasing() {
+            if let Some(start) = self.timer[col][row] {
+                let elapsed = start.elapsed().as_millis();
+                if elapsed > 200 {
+                    // Release hold action, then clear timer
+                    debug!(
+                        "HOLD releasing: {}, {}, time elapsed: {}ms",
+                        hold_action, key_state, elapsed
+                    );
                     self.process_key_action_normal(hold_action, key_state).await;
-
-                    // Clear timer if the key is held
                     self.timer[col][row] = None;
                 }
             }

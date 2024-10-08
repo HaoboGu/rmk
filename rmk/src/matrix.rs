@@ -44,7 +44,7 @@ pub(crate) struct KeyState {
     // True if the key is pressed
     pub(crate) pressed: bool,
     // True if the key's state is just changed
-    pub(crate) changed: bool,
+    // pub(crate) changed: bool,
 }
 
 impl Default for KeyState {
@@ -57,7 +57,6 @@ impl KeyState {
     fn new() -> Self {
         KeyState {
             pressed: false,
-            changed: false,
         }
     }
 
@@ -66,11 +65,11 @@ impl KeyState {
     }
 
     pub(crate) fn is_releasing(&self) -> bool {
-        !self.pressed && self.changed
+        !self.pressed
     }
 
     pub(crate) fn is_pressing(&self) -> bool {
-        self.pressed && self.changed
+        self.pressed
     }
 }
 
@@ -189,7 +188,6 @@ impl<
                     match debounce_state {
                         DebounceState::Debounced => {
                             self.key_states[out_idx][in_idx].toggle_pressed();
-                            self.key_states[out_idx][in_idx].changed = true;
                             #[cfg(feature = "col2row")]
                             let (row, col, key_state) =
                                 (in_idx, out_idx, self.key_states[out_idx][in_idx]);
@@ -197,6 +195,7 @@ impl<
                             let (row, col, key_state) =
                                 (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
+                            // `try_send` is used here because we don't want to block scanning if the channel is full
                             let send_re = key_event_channel.try_send(KeyEvent {
                                 row: row as u8,
                                 col: col as u8,
@@ -206,14 +205,12 @@ impl<
                                 error!("Failed to send key event: key event channel full");
                             }
                         }
-                        _ => self.key_states[out_idx][in_idx].changed = false,
+                        _ => (),
                     }
 
-                    // If there's key changed or pressed, always refresh the self.scan_start
+                    // If there's key still pressed, always refresh the self.scan_start
                     #[cfg(feature = "async_matrix")]
-                    if self.key_states[out_idx][in_idx].changed
-                        || self.key_states[out_idx][in_idx].pressed
-                    {
+                    if self.key_states[out_idx][in_idx].pressed {
                         self.scan_start = Some(Instant::now());
                     }
                 }
