@@ -19,12 +19,18 @@ use embassy_time::{Instant, Timer};
 use usbd_hid::descriptor::KeyboardReport;
 
 pub(crate) struct KeyEvent {
-    pub(crate) row: usize,
-    pub(crate) col: usize,
+    pub(crate) row: u8,
+    pub(crate) col: u8,
     pub(crate) key_state: KeyState,
 }
 
-pub(crate) static keyboard_channel: Channel<CriticalSectionRawMutex, KeyEvent, 16> = Channel::new();
+pub(crate) static key_event_channel: Channel<CriticalSectionRawMutex, KeyEvent, 16> =
+    Channel::new();
+pub(crate) static keyboard_report_channel: Channel<
+    CriticalSectionRawMutex,
+    KeyboardReportMessage,
+    8,
+> = Channel::new();
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
 pub(crate) enum KeyboardReportMessage {
@@ -220,10 +226,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Main keyboard task, it receives input devices result, processes active keys.
     pub(crate) async fn process(&mut self) {
         let KeyEvent {
-            row: row_idx,
-            col: col_idx,
+            row,
+            col,
             key_state: ks,
-        } = keyboard_channel.receive().await;
+        } = key_event_channel.receive().await;
+        let row_idx = row as usize;
+        let col_idx = col as usize;
 
         if ks.changed {
             self.process_key_change(row_idx, col_idx, ks).await;

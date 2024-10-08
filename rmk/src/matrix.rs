@@ -1,6 +1,6 @@
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
-    keyboard::{keyboard_channel, KeyEvent},
+    keyboard::{key_event_channel, KeyEvent},
 };
 use defmt::Format;
 use embassy_time::{Instant, Timer};
@@ -45,8 +45,6 @@ pub(crate) struct KeyState {
     pub(crate) pressed: bool,
     // True if the key's state is just changed
     pub(crate) changed: bool,
-    // If the key is held, `hold_start` records the time of it was pressed.
-    // pub(crate) hold_start: Option<Instant>,
 }
 
 impl Default for KeyState {
@@ -60,19 +58,8 @@ impl KeyState {
         KeyState {
             pressed: false,
             changed: false,
-            // hold_start: None,
         }
     }
-
-    // // Record the start time of pressing
-    // pub(crate) fn start_timer(&mut self) {
-    //     self.hold_start = Some(Instant::now());
-    // }
-
-    // // Clear held timer
-    // pub(crate) fn clear_timer(&mut self) {
-    //     self.hold_start = None;
-    // }
 
     pub(crate) fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
@@ -207,9 +194,10 @@ impl<
                             // FIXME: add row2col
                             #[cfg(feature = "col2row")]
                             {
-                                let send_re = keyboard_channel.try_send(KeyEvent {
-                                    row: in_idx,
-                                    col: out_idx,
+                                // `try_send` is used here to avoid blocking the matrix scanning
+                                let send_re = key_event_channel.try_send(KeyEvent {
+                                    row: in_idx as u8,
+                                    col: out_idx as u8,
                                     key_state: KeyState {
                                         pressed: self.key_states[out_idx][in_idx].pressed,
                                         changed: true,

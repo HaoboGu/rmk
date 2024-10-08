@@ -2,8 +2,6 @@ use core::cell::RefCell;
 
 use defmt::warn;
 use embassy_executor::Spawner;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -17,7 +15,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::keyboard::{Keyboard, KeyboardReportMessage};
+use crate::keyboard::{keyboard_report_channel, Keyboard};
 use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
@@ -246,10 +244,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, DefaultDebouncer::new());
 
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (

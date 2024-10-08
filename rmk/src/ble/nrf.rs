@@ -12,6 +12,7 @@ use self::server::BleServer;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
 use crate::KEYBOARD_STATE;
 use crate::{
@@ -32,10 +33,7 @@ use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver},
-};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -256,10 +254,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let mut matrix =
         Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard services
     let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);

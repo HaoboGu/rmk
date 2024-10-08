@@ -5,6 +5,7 @@ use self::server::{BleServer, VialReaderWriter};
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
@@ -13,7 +14,7 @@ use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
-    keyboard_task, keymap::KeyMap, KeyboardReportMessage,
+    keyboard_task, keymap::KeyMap,
 };
 use core::cell::RefCell;
 use defmt::{debug, info, warn};
@@ -70,10 +71,8 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
     );
 
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard matrix
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]

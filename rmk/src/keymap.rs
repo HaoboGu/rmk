@@ -19,7 +19,7 @@ use num_enum::FromPrimitive;
 pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    /// TODO: make it global? so that Current state of each layer
+    /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
     default_layer: u8,

@@ -41,7 +41,7 @@ use crate::{
         server::BleServer,
         softdevice_task, BONDED_DEVICE_NUM,
     },
-    keyboard::{Keyboard, KeyboardReportMessage},
+    keyboard::{keyboard_report_channel, Keyboard},
     keymap::KeyMap,
     light::LightService,
     matrix::MatrixTrait,
@@ -285,10 +285,8 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard services
     let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
