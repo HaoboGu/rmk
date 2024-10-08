@@ -11,13 +11,14 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk" }
-embassy-time = { version = "0.3", features = ["defmt"] }
-embassy-rp = { version = "0.2", features = [
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["defmt"] }
+embassy-rp = { version = "0.2", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
+    "rp2040",
     "time-driver",
     "critical-section-impl",
 ] }
-embassy-executor = { version = "0.6", features = [
+embassy-executor = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
