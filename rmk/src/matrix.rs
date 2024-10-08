@@ -213,7 +213,6 @@ impl<
                                     key_state: KeyState {
                                         pressed: self.key_states[out_idx][in_idx].pressed,
                                         changed: true,
-                                        // hold_start: None,
                                     },
                                 });
                                 if send_re.is_err() {

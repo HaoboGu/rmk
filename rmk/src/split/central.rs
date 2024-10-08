@@ -198,7 +198,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         RapidDebouncer<CENTRAL_ROW, CENTRAL_COL>,
@@ -210,7 +210,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         CENTRAL_COL,
     >::new(input_pins, output_pins, RapidDebouncer::new());
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL>,
@@ -222,7 +222,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         CENTRAL_COL,
     >::new(input_pins, output_pins, DefaultDebouncer::new());
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         RapidDebouncer<CENTRAL_COL, CENTRAL_ROW>,
@@ -234,7 +234,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, RapidDebouncer::new());
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW>,
@@ -246,30 +246,30 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, DefaultDebouncer::new());
 
-    // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
-    );
-
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
     let keyboard_report_sender = keyboard_channel.sender();
     let keyboard_report_receiver = keyboard_channel.receiver();
+
+    // Create keyboard services and devices
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(&keymap, &keyboard_report_sender),
+        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
 
     loop {
         // Run all tasks, if one of them fails, wait 1 second and then restart
         run_usb_keyboard(
             &mut usb_device,
             &mut keyboard,
+            &mut matrix,
             #[cfg(not(feature = "_no_external_storage"))]
             &mut storage,
             &mut light_service,
             &mut vial_service,
             &keyboard_report_receiver,
-            &keyboard_report_sender,
         )
         .await;
 

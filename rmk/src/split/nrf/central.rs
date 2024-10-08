@@ -44,6 +44,7 @@ use crate::{
     keyboard::{Keyboard, KeyboardReportMessage},
     keymap::KeyMap,
     light::LightService,
+    matrix::MatrixTrait,
     split::{
         driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
@@ -260,7 +261,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
 
     #[cfg(feature = "col2row")]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         _,
@@ -272,7 +273,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         CENTRAL_COL,
     >::new(input_pins, output_pins, debouncer);
     #[cfg(not(feature = "col2row"))]
-    let matrix = CentralMatrix::<
+    let mut matrix = CentralMatrix::<
         In,
         Out,
         _,
@@ -284,19 +285,19 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
+    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
+        Channel::new();
+    let keyboard_report_sender = keyboard_channel.sender();
+    let keyboard_report_receiver = keyboard_channel.receiver();
+
     // Keyboard services
-    let mut keyboard = Keyboard::new(matrix, &keymap);
+    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     #[cfg(not(feature = "_no_usb"))]
     let (mut usb_device, mut vial_service) = (
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
     );
     let mut light_service = LightService::from_config(keyboard_config.light_config);
-
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
 
     // Main loop
     loop {
@@ -320,7 +321,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                 // Run usb keyboard
                 let usb_fut = async {
                     let usb_fut = usb_device.device.run();
-                    let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
+                    let keyboard_fut = keyboard_task(&mut keyboard);
                     let communication_fut = communication_task(
                         &keyboard_report_receiver,
                         &mut usb_device.keyboard_hid_writer,
@@ -329,15 +330,17 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     let led_fut =
                         led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
                     let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
+                    let matrix_fut = matrix.scan();
                     pin_mut!(usb_fut);
                     pin_mut!(keyboard_fut);
                     pin_mut!(led_fut);
                     pin_mut!(via_fut);
                     pin_mut!(communication_fut);
+                    pin_mut!(matrix_fut);
 
                     match select4(
                         select(usb_fut, keyboard_fut),
-                        via_fut,
+                        select(matrix_fut, via_fut),
                         led_fut,
                         communication_fut,
                     )
@@ -371,11 +374,12 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                                 &conn,
                                 &ble_server,
                                 &mut keyboard,
+                                &mut matrix,
                                 &mut storage,
                                 &mut light_service,
+                                &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
-                                &keyboard_report_sender,
                             ),
                             select(usb_fut, usb_configured),
                         )
@@ -406,11 +410,11 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     &conn,
                     &ble_server,
                     &mut keyboard,
+                    &mut matrix,
                     &mut storage,
                     &mut light_service,
                     &mut keyboard_config.ble_battery_config,
                     &keyboard_report_receiver,
-                    &keyboard_report_sender,
                 )
                 .await
             }
