@@ -51,16 +51,14 @@ use vial_service::VialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::{
-        keyboard::communication_task,
-        light::led_hid_task,
-        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        run_usb_keyboard,
+        usb::{wait_for_usb_suspend, USB_DEVICE_ENABLED},
         KeyboardUsbDevice,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
-    futures::pin_mut,
     once_cell::sync::OnceCell,
 };
 
@@ -285,58 +283,28 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
                 // Run usb keyboard
-                let usb_fut = async {
-                    let usb_fut = usb_device.device.run();
-                    let keyboard_fut = keyboard_task(&mut keyboard);
-                    let communication_fut = communication_task(
-                        &keyboard_report_receiver,
-                        &mut usb_device.keyboard_hid_writer,
-                        &mut usb_device.other_hid_writer,
-                    );
-                    let led_fut =
-                        led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-                    let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-                    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-                    let matrix_fut = matrix.scan();
-                    pin_mut!(usb_fut);
-                    pin_mut!(storage_fut);
-                    pin_mut!(keyboard_fut);
-                    pin_mut!(led_fut);
-                    pin_mut!(via_fut);
-                    pin_mut!(matrix_fut);
-                    pin_mut!(communication_fut);
-
-                    match select4(
-                        select(usb_fut, keyboard_fut),
-                        select(storage_fut, via_fut),
-                        led_fut,
-                        select(matrix_fut, communication_fut),
-                    )
-                    .await
-                    {
-                        Either4::First(_) => error!("Usb task or keyboard task exited"),
-                        Either4::Second(_) => error!("Storage or vial task has died"),
-                        Either4::Third(_) => error!("Led task has died"),
-                        Either4::Fourth(_) => error!("Communication task has died"),
-                    }
-                };
+                let usb_fut = run_usb_keyboard(
+                    &mut usb_device,
+                    &mut keyboard,
+                    &mut matrix,
+                    &mut storage,
+                    &mut light_service,
+                    &mut vial_service,
+                    &keyboard_report_receiver,
+                );
                 info!("Running USB keyboard!");
                 select(usb_fut, wait_for_usb_suspend()).await;
             }
 
             // Usb device have to be started to check if usb is configured
-            let usb_fut = usb_device.device.run();
-            let usb_configured = wait_for_usb_configured();
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, select(usb_fut, usb_configured)).await {
+            match select(adv_fut, usb_device.wait_for_usb_configured()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
-                        let usb_configured = wait_for_usb_configured();
-                        let usb_fut = usb_device.device.run();
                         match select(
                             run_ble_keyboard(
                                 &conn,
@@ -349,7 +317,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                             ),
-                            select(usb_fut, usb_configured),
+                            usb_device.wait_for_usb_configured(),
                         )
                         .await
                         {

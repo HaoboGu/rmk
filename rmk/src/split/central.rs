@@ -26,11 +26,9 @@ use crate::usb::KeyboardUsbDevice;
 use crate::via::process::VialService;
 
 #[cfg(not(feature = "_nrf_ble"))]
-use {
-    crate::storage::Storage,
-    embedded_io_async::{Read, Write},
-    embedded_storage_async::nor_flash::NorFlash,
-};
+use embedded_io_async::{Read, Write};
+#[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
 /// Run RMK split central keyboard service. This function should never return.
 ///
@@ -155,7 +153,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: NorFlash,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
     const CENTRAL_ROW: usize,
@@ -169,13 +167,13 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
     // For USB keyboard, the "external" storage means the storage initialized by the user.
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
         let keymap = RefCell::new(
@@ -187,7 +185,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         );
         (s, keymap)
     };
-    #[cfg(feature = "_no_external_storage")]
+
+    #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
 
     // Keyboard matrix, use COL2ROW by default
@@ -249,7 +248,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
             &mut usb_device,
             &mut keyboard,
             &mut matrix,
-            #[cfg(not(feature = "_no_external_storage"))]
+            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
             &mut storage,
             &mut light_service,
             &mut vial_service,
@@ -437,5 +436,4 @@ impl<
             scan_start: None,
         }
     }
-    
 }

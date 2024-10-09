@@ -37,6 +37,8 @@ pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+#[cfg(not(feature = "_no_external_storage"))]
+use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
 use keyboard::{communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage};
@@ -47,11 +49,8 @@ use rmk_config::RmkConfig;
 pub use rmk_macro as macros;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
-#[cfg(not(feature = "_no_external_storage"))]
-use {
-    embedded_storage::nor_flash::NorFlash,
-    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage,
-};
+#[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 pub mod action;
 #[cfg(feature = "_ble")]
@@ -205,7 +204,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -215,13 +214,13 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
     // For USB keyboard, the "external" storage means the storage initialized by the user.
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
         let keymap = RefCell::new(
@@ -229,7 +228,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         );
         (s, keymap)
     };
-    #[cfg(feature = "_no_external_storage")]
+    #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
     // Keyboard matrix, use COL2ROW by default
@@ -264,7 +263,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
             &mut usb_device,
             &mut keyboard,
             &mut matrix,
-            #[cfg(not(feature = "_no_external_storage"))]
+            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
             &mut storage,
             &mut light_service,
             &mut vial_service,
@@ -283,7 +282,7 @@ pub(crate) async fn run_usb_keyboard<
     'b,
     D: Driver<'a>,
     M: MatrixTrait,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -292,7 +291,9 @@ pub(crate) async fn run_usb_keyboard<
     usb_device: &mut KeyboardUsbDevice<'a, D>,
     keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
-    #[cfg(not(feature = "_no_external_storage"))] storage: &mut Storage<F>,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
+        F,
+    >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -314,15 +315,16 @@ pub(crate) async fn run_usb_keyboard<
     pin_mut!(via_fut);
     pin_mut!(communication_fut);
 
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     pin_mut!(storage_fut);
 
     match select4(
         select(usb_fut, keyboard_fut),
-        #[cfg(not(feature = "_no_external_storage"))]
+        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         select(storage_fut, via_fut),
+        #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
         #[cfg(feature = "_no_external_storage")]
         via_fut,
         led_fut,

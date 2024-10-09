@@ -4,7 +4,7 @@ use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_futures::{
     join::join,
-    select::{select, select4, Either, Either4},
+    select::{select, Either},
 };
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -15,7 +15,6 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use futures::pin_mut;
 use heapless::FnvIndexMap;
 use nrf_softdevice::{
     ble::{
@@ -44,18 +43,16 @@ use crate::{
     keyboard::{keyboard_report_channel, Keyboard},
     keymap::KeyMap,
     light::LightService,
-    matrix::MatrixTrait,
+    run_usb_keyboard,
     split::{
         driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
     storage::{get_bond_info_key, Storage, StorageData},
-    usb::{wait_for_usb_configured, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
+    usb::{wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
     via::process::VialService,
 };
 use crate::{debounce::DebouncerTrait, split::central::CentralMatrix};
-#[cfg(not(feature = "_no_usb"))]
-use crate::{keyboard::communication_task, keyboard_task, light::led_hid_task, via::vial_task};
 
 /// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -313,56 +310,28 @@ pub(crate) async fn initialize_ble_split_central_and_run<
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
                 // Run usb keyboard
-                let usb_fut = async {
-                    let usb_fut = usb_device.device.run();
-                    let keyboard_fut = keyboard_task(&mut keyboard);
-                    let communication_fut = communication_task(
-                        &keyboard_report_receiver,
-                        &mut usb_device.keyboard_hid_writer,
-                        &mut usb_device.other_hid_writer,
-                    );
-                    let led_fut =
-                        led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-                    let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-                    let matrix_fut = matrix.scan();
-                    pin_mut!(usb_fut);
-                    pin_mut!(keyboard_fut);
-                    pin_mut!(led_fut);
-                    pin_mut!(via_fut);
-                    pin_mut!(communication_fut);
-                    pin_mut!(matrix_fut);
-
-                    match select4(
-                        select(usb_fut, keyboard_fut),
-                        select(matrix_fut, via_fut),
-                        led_fut,
-                        communication_fut,
-                    )
-                    .await
-                    {
-                        Either4::First(_) => error!("Usb task or keyboard task exited"),
-                        Either4::Second(_) => error!("Storage or vial task has died"),
-                        Either4::Third(_) => error!("Led task has died"),
-                        Either4::Fourth(_) => error!("Communication task has died"),
-                    }
-                };
+                let usb_fut = run_usb_keyboard(
+                    &mut usb_device,
+                    &mut keyboard,
+                    &mut matrix,
+                    &mut storage,
+                    &mut light_service,
+                    &mut vial_service,
+                    &keyboard_report_receiver,
+                );
                 info!("Running USB keyboard!");
                 select(usb_fut, wait_for_usb_suspend()).await;
             }
 
             // Usb device have to be started to check if usb is configured
-            let usb_fut = usb_device.device.run();
-            let usb_configured = wait_for_usb_configured();
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, select(usb_fut, usb_configured)).await {
+            match select(adv_fut, usb_device.wait_for_usb_configured()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
-                        let usb_configured = wait_for_usb_configured();
-                        let usb_fut = usb_device.device.run();
                         match select(
                             run_ble_keyboard(
                                 &conn,
@@ -375,7 +344,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                             ),
-                            select(usb_fut, usb_configured),
+                            usb_device.wait_for_usb_configured(),
                         )
                         .await
                         {

@@ -55,9 +55,7 @@ impl Default for KeyState {
 
 impl KeyState {
     fn new() -> Self {
-        KeyState {
-            pressed: false,
-        }
+        KeyState { pressed: false }
     }
 
     pub(crate) fn toggle_pressed(&mut self) {
