@@ -1,8 +1,8 @@
 use crate::{
     action::KeyAction,
+    keyboard::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    matrix::KeyState,
     reboot_keyboard,
     storage::Storage,
 };
@@ -197,13 +197,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_with_layer_cache(
-        &mut self,
-        row: usize,
-        col: usize,
-        key_state: KeyState,
-    ) -> KeyAction {
-        if key_state.is_releasing() {
+    pub(crate) fn get_action_with_layer_cache(&mut self, key_event: KeyEvent) -> KeyAction {
+        let row = key_event.row as usize;
+        let col = key_event.col as usize;
+        if !key_event.pressed {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(row, col);
             return self.layers[layer as usize][row][col];

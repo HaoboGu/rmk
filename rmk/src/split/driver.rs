@@ -1,9 +1,6 @@
 ///! The abstracted driver layer of the split keyboard.
 ///!
-use crate::{
-    keyboard::{key_event_channel, KeyEvent},
-    matrix::KeyState,
-};
+use crate::keyboard::{key_event_channel, KeyEvent};
 
 use super::SplitMessage;
 use defmt::{debug, error};
@@ -67,17 +64,17 @@ impl<
             match self.receiver.read().await {
                 Ok(received_message) => {
                     debug!("Received peripheral message: {}", received_message);
-                    if let SplitMessage::Key(row, col, pressed) = received_message {
+                    if let SplitMessage::Key(e) = received_message {
                         // Check row/col
-                        if row as usize > ROW || col as usize > COL {
-                            error!("Invalid peripheral row/col: {} {}", row, col);
+                        if e.row as usize > ROW || e.col as usize > COL {
+                            error!("Invalid peripheral row/col: {} {}", e.row, e.col);
                             continue;
                         }
                         key_event_channel
                             .send(KeyEvent {
-                                row: row + ROW_OFFSET as u8,
-                                col: col + COL_OFFSET as u8,
-                                key_state: KeyState { pressed },
+                                row: e.row + ROW_OFFSET as u8,
+                                col: e.col + COL_OFFSET as u8,
+                                pressed: e.pressed,
                             })
                             .await;
                     }

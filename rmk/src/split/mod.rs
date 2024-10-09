@@ -1,6 +1,8 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
+use crate::keyboard::KeyEvent;
+
 pub mod central;
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
@@ -18,7 +20,7 @@ pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 #[repr(u8)]
 pub(crate) enum SplitMessage {
     /// Activated key info (row, col, pressed), from peripheral to central
-    Key(u8, u8, bool),
+    Key(KeyEvent),
     /// Led state, on/off
     LedState(bool),
 }

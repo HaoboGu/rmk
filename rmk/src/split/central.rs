@@ -345,7 +345,7 @@ impl<
                             let send_re = key_event_channel.try_send(KeyEvent {
                                 row,
                                 col,
-                                key_state,
+                                pressed: key_state.pressed,
                             });
                             if send_re.is_err() {
                                 error!("Failed to send key event: key event channel full");

@@ -270,10 +270,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         loop {
             let e = key_event_channel.receive().await;
 
-            self.split_driver
-                .write(&SplitMessage::Key(e.row, e.col, e.key_state.pressed))
-                .await
-                .ok();
+            self.split_driver.write(&SplitMessage::Key(e)).await.ok();
 
             // 10KHZ scan rate
             embassy_time::Timer::after_micros(10).await;
