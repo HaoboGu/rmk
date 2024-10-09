@@ -58,7 +58,6 @@ pub mod ble;
 mod debounce;
 mod flash;
 mod hid;
-mod input_device;
 mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
