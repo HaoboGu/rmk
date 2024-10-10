@@ -39,7 +39,7 @@ use rmk_config::StorageConfig;
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
-pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
+pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -85,7 +85,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
     let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    let mut keyboard = Keyboard::new(matrix, &keymap);
+    let mut keyboard = Keyboard::new(matrix, &keymap, &keyboard_report_sender);
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
@@ -113,7 +113,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
-        let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
+        let keyboard_fut = keyboard_task(&mut keyboard);
         let ble_fut = ble_communication_task(
             &keyboard_report_receiver,
             &mut keyboard_writer,

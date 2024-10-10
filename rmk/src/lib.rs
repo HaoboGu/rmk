@@ -12,7 +12,7 @@
 #![cfg_attr(not(test), no_std)]
 
 #[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+pub use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run as run_rmk;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
@@ -32,7 +32,7 @@ use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
+    channel::{Channel, Receiver},
 };
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -88,6 +88,7 @@ pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[cfg(not(feature = "_esp_ble"))]
 pub async fn run_rmk<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -108,6 +109,7 @@ pub async fn run_rmk<
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Hello RMK!");
     // Wrap `embedded-storage` to `embedded-storage-async`
     #[cfg(not(feature = "_no_external_storage"))]
     let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
@@ -138,6 +140,7 @@ pub async fn run_rmk<
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[cfg(not(feature = "_esp_ble"))]
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
 pub async fn run_rmk_with_async_flash<
@@ -160,6 +163,7 @@ pub async fn run_rmk_with_async_flash<
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Hello RMK Flash!");
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_keyboard_with_config_and_run(
@@ -170,15 +174,6 @@ pub async fn run_rmk_with_async_flash<
         default_keymap,
         keyboard_config,
         spawner,
-    )
-    .await;
-
-    #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(
-        input_pins,
-        output_pins,
-        default_keymap,
-        keyboard_config,
     )
     .await;
 
@@ -245,17 +240,17 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
-    );
-
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
     let keyboard_report_sender = keyboard_channel.sender();
     let keyboard_report_receiver = keyboard_channel.receiver();
+
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(matrix, &keymap, &keyboard_report_sender),
+        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
 
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -268,7 +263,6 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
             &mut light_service,
             &mut vial_service,
             &keyboard_report_receiver,
-            &keyboard_report_sender,
         )
         .await;
 
@@ -295,10 +289,9 @@ pub(crate) async fn run_usb_keyboard<
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
+    let keyboard_fut = keyboard_task(keyboard);
     let communication_fut = communication_task(
         keyboard_report_receiver,
         &mut usb_device.keyboard_hid_writer,

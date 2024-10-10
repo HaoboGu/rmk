@@ -247,17 +247,17 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     >::new(input_pins, output_pins, DefaultDebouncer::new());
 
     // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
-    );
-
     static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
         Channel::new();
     let keyboard_report_sender = keyboard_channel.sender();
     let keyboard_report_receiver = keyboard_channel.receiver();
+
+    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+        Keyboard::new(matrix, &keymap, &keyboard_report_sender),
+        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
+        VialService::new(&keymap, keyboard_config.vial_config),
+        LightService::from_config(keyboard_config.light_config),
+    );
 
     loop {
         // Run all tasks, if one of them fails, wait 1 second and then restart
@@ -269,7 +269,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
             &mut light_service,
             &mut vial_service,
             &keyboard_report_receiver,
-            &keyboard_report_sender,
         )
         .await;
 
