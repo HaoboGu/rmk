@@ -130,12 +130,12 @@ impl<
     const ROW: usize = OUTPUT_PIN_NUM;
     #[cfg(not(feature = "col2row"))]
     const COL: usize = OUTPUT_PIN_NUM;
-
+    
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {
-            // If not key over 2 secs, wait for interupt in next loop
-            if start_time.elapsed().as_secs() < 1 {
+            // If no key press over 1ms, stop scanning and wait for interupt
+            if start_time.elapsed().as_millis() <= 1 {
                 return;
             } else {
                 self.scan_start = None;
