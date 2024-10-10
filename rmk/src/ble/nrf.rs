@@ -14,6 +14,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
+use crate::usb::wait_for_usb_enabled;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -66,15 +67,17 @@ use {
 // TODO: make it configurable
 pub const BONDED_DEVICE_NUM: usize = 8;
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
+
+    use crate::usb::USB_SUSPENDED;
 
     // Enable dcdc-mode, reduce power consumption
     unsafe {
@@ -97,8 +100,16 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 
     sd.run_with_callback(|event: SocEvent| {
         match event {
-            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
-            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbRemoved =>{
+                software_vbus.detected(false);
+                USB_SUSPENDED.store(true, Ordering::Release);
+                USB_DEVICE_ENABLED.store(false, Ordering::Release);
+            }
+            SocEvent::PowerUsbDetected => {
+                software_vbus.detected(true);
+                USB_SUSPENDED.store(false, Ordering::Release);
+                USB_DEVICE_ENABLED.store(true, Ordering::Release);
+            },
             SocEvent::PowerUsbPowerReady => software_vbus.ready(),
             _ => {}
         };
@@ -107,11 +118,7 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 }
 
 // Some nRF BLE chips doesn't have USB, so the softdevice_task is different
-#[cfg(any(
-    feature = "nrf52832_ble",
-    feature = "nrf52811_ble",
-    feature = "nrf52810_ble"
-))]
+#[cfg(feature = "_no_usb")]
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     // Enable dcdc-mode, reduce power consumption
@@ -300,7 +307,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, usb_device.wait_for_usb_configured()).await {
+            match select(adv_fut, wait_for_usb_enabled()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
@@ -317,7 +324,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                             ),
-                            usb_device.wait_for_usb_configured(),
+                            wait_for_usb_enabled(),
                         )
                         .await
                         {
