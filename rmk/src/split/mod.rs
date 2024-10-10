@@ -19,7 +19,7 @@ pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]
 #[repr(u8)]
 pub(crate) enum SplitMessage {
-    /// Activated key info (row, col, pressed), from peripheral to central
+    /// Key event from peripheral to central
     Key(KeyEvent),
     /// Led state, on/off
     LedState(bool),
