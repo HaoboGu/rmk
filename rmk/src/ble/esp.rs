@@ -14,7 +14,7 @@ use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
-    keyboard_task, keymap::KeyMap,
+    keymap::KeyMap,
 };
 use core::cell::RefCell;
 use defmt::{debug, info, warn};
@@ -116,7 +116,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
-        let keyboard_fut = keyboard_task(&mut keyboard);
+        let keyboard_fut = keyboard.run();
         let ble_fut = ble_communication_task(
             &keyboard_report_receiver,
             &mut keyboard_writer,

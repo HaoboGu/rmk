@@ -24,7 +24,7 @@ use crate::{
             server::BleHidWriter,
         },
     },
-    keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
+    keyboard::{Keyboard, KeyboardReportMessage},
     light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
@@ -401,7 +401,7 @@ pub(crate) async fn run_ble_keyboard<
     let matrix_fut = matrix.scan();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
-    let keyboard_fut = keyboard_task(keyboard);
+    let keyboard_fut = keyboard.run();
     let ble_communication_task = ble_communication_task(
         keyboard_report_receiver,
         &mut ble_keyboard_writer,

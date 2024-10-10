@@ -43,27 +43,6 @@ pub(crate) enum KeyboardReportMessage {
     CompositeReport(CompositeReport, CompositeReportType),
 }
 
-/// This is the main keyboard task, this task do the matrix scanning and key processing
-/// The report is sent to communication task, and finally sent to the host
-pub(crate) async fn keyboard_task<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-) {
-    KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
-    loop {
-        keyboard.process().await;
-        keyboard.send_keyboard_report().await;
-        keyboard.send_media_report().await;
-        keyboard.send_mouse_report().await;
-        keyboard.send_system_control_report().await;
-        Timer::after_micros(100).await;
-    }
-}
-
 /// This task processes all keyboard reports and send them to the host
 pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
     receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -169,10 +148,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     pub(crate) async fn send_keyboard_report(&mut self) {
-        debug!(
-            "Sending keyboard report: {=[u8]:#X}, modifier: {:b}",
-            self.report.keycodes, self.report.modifier
-        );
         self.sender
             .send(KeyboardReportMessage::KeyboardReport(self.report))
             .await;
@@ -205,7 +180,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Send mouse report if needed
-    /// TODO: mouse report rework
     pub(crate) async fn send_mouse_report(&mut self) {
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
         self.sender
@@ -217,22 +191,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         yield_now().await;
     }
 
-    /// Main keyboard task, it receives input devices result, processes active keys.
-    pub(crate) async fn process(&mut self) {
-        let key_event = key_event_channel.receive().await;
-
-        // Process the key change
-        self.process_key_change(key_event).await;
-
-        // After processing the key change, check if there are unprocessed events
-        // This will happen if there's recursion in key processing
+    /// Main keyboard task, it receives input devices result, processes keys.
+    /// The report is sent to communication task via keyboard_report_channel, and finally sent to the host
+    pub(crate) async fn run(&mut self) {
+        KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {
-            if self.unprocessed_events.is_empty() {
-                break;
-            }
-            // Process unprocessed events
-            if let Some(e) = self.unprocessed_events.pop() {
-                self.process_key_change(e).await;
+            let key_event = key_event_channel.receive().await;
+
+            // Process the key change
+            self.process_key_change(key_event).await;
+
+            // After processing the key change, check if there are unprocessed events
+            // This will happen if there's recursion in key processing
+            loop {
+                if self.unprocessed_events.is_empty() {
+                    break;
+                }
+                // Process unprocessed events
+                if let Some(e) = self.unprocessed_events.pop() {
+                    self.process_key_change(e).await;
+                }
             }
         }
     }
@@ -353,12 +331,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
             // Wait 10ms, then send release
             Timer::after_millis(10).await;
-            // FIXME: double check whether the tap report is sent in process_key_action_normal
-            // // Manually trigger send report
-            // self.send_keyboard_report().await;
-            // self.send_media_report().await;
-            // self.send_system_control_report().await;
-            // self.send_mouse_report().await;
 
             key_event.pressed = false;
             self.process_key_action_normal(action, key_event).await;
@@ -380,7 +352,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         &mut self,
         tap_action: Action,
         hold_action: Action,
-        mut key_event: KeyEvent,
+        key_event: KeyEvent,
     ) {
         let row = key_event.row as usize;
         let col = key_event.col as usize;
@@ -397,7 +369,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     if e.row == key_event.row && e.col == key_event.col {
                         // If it's same key event and releasing within 200ms, trigger tap
                         if !e.pressed {
-                            key_event.pressed = true;
                             let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
                             debug!("TAP action: {}, time elapsed: {}ms", tap_action, elapsed);
                             self.process_key_action_tap(tap_action, key_event).await;
@@ -419,7 +390,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     }
                 }
             }
-        } else if !key_event.pressed {
+        } else {
             if let Some(start) = self.timer[col][row] {
                 let elapsed = start.elapsed().as_millis();
                 if elapsed > 200 {

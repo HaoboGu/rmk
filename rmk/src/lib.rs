@@ -20,7 +20,6 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
-    keyboard::keyboard_task,
     light::{led_hid_task, LightService},
     via::vial_task,
 };
@@ -298,7 +297,7 @@ pub(crate) async fn run_usb_keyboard<
     keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(keyboard);
+    let keyboard_fut = keyboard.run();
     let matrix_fut = matrix.scan();
     let communication_fut = communication_task(
         keyboard_report_receiver,
