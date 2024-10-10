@@ -1,5 +1,8 @@
-use crate::debounce::{DebounceState, DebouncerTrait};
-use defmt::Format;
+use crate::{
+    debounce::{DebounceState, DebouncerTrait},
+    keyboard::{key_event_channel, KeyEvent},
+};
+use defmt::{error, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -41,9 +44,7 @@ pub(crate) struct KeyState {
     // True if the key is pressed
     pub(crate) pressed: bool,
     // True if the key's state is just changed
-    pub(crate) changed: bool,
-    // If the key is held, `hold_start` records the time of it was pressed.
-    pub(crate) hold_start: Option<Instant>,
+    // pub(crate) changed: bool,
 }
 
 impl Default for KeyState {
@@ -54,21 +55,7 @@ impl Default for KeyState {
 
 impl KeyState {
     fn new() -> Self {
-        KeyState {
-            pressed: false,
-            changed: false,
-            hold_start: None,
-        }
-    }
-
-    // Record the start time of pressing
-    pub(crate) fn start_timer(&mut self) {
-        self.hold_start = Some(Instant::now());
-    }
-
-    // Clear held timer
-    pub(crate) fn clear_timer(&mut self) {
-        self.hold_start = None;
+        KeyState { pressed: false }
     }
 
     pub(crate) fn toggle_pressed(&mut self) {
@@ -76,11 +63,11 @@ impl KeyState {
     }
 
     pub(crate) fn is_releasing(&self) -> bool {
-        !self.pressed && self.changed
+        !self.pressed
     }
 
     pub(crate) fn is_pressing(&self) -> bool {
-        self.pressed && self.changed
+        self.pressed
     }
 }
 
@@ -177,36 +164,58 @@ impl<
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
     async fn scan(&mut self) {
-        for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
-            // Pull up output pin, wait 1us ensuring the change comes into effect
-            out_pin.set_high().ok();
-            Timer::after_micros(1).await;
-            for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
-                // Check input pins and debounce
-                let debounce_state = self.debouncer.detect_change_with_debounce(
-                    in_idx,
-                    out_idx,
-                    in_pin.is_high().ok().unwrap_or_default(),
-                    &self.key_states[out_idx][in_idx],
-                );
+        defmt::info!("Matrix scanning");
+        loop {
+            #[cfg(feature = "async_matrix")]
+            self.wait_for_key().await;
 
-                match debounce_state {
-                    DebounceState::Debounced => {
-                        self.key_states[out_idx][in_idx].toggle_pressed();
-                        self.key_states[out_idx][in_idx].changed = true;
+            // Scan matrix and send report
+            for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
+                // Pull up output pin, wait 1us ensuring the change comes into effect
+                out_pin.set_high().ok();
+                Timer::after_micros(1).await;
+                for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
+                    // Check input pins and debounce
+                    let debounce_state = self.debouncer.detect_change_with_debounce(
+                        in_idx,
+                        out_idx,
+                        in_pin.is_high().ok().unwrap_or_default(),
+                        &self.key_states[out_idx][in_idx],
+                    );
+
+                    match debounce_state {
+                        DebounceState::Debounced => {
+                            self.key_states[out_idx][in_idx].toggle_pressed();
+                            #[cfg(feature = "col2row")]
+                            let (row, col, key_state) =
+                                (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                            #[cfg(not(feature = "col2row"))]
+                            let (row, col, key_state) =
+                                (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+
+                            // `try_send` is used here because we don't want to block scanning if the channel is full
+                            let send_re = key_event_channel.try_send(KeyEvent {
+                                row: row as u8,
+                                col: col as u8,
+                                pressed: key_state.pressed,
+                            });
+                            if send_re.is_err() {
+                                error!("Failed to send key event: key event channel full");
+                            }
+                        }
+                        _ => (),
                     }
-                    _ => self.key_states[out_idx][in_idx].changed = false,
-                }
 
-                // If there's key changed or pressed, always refresh the self.scan_start
-                #[cfg(feature = "async_matrix")]
-                if self.key_states[out_idx][in_idx].changed
-                    || self.key_states[out_idx][in_idx].pressed
-                {
-                    self.scan_start = Some(Instant::now());
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if self.key_states[out_idx][in_idx].pressed {
+                        self.scan_start = Some(Instant::now());
+                    }
                 }
+                out_pin.set_low().ok();
             }
-            out_pin.set_low().ok();
+
+            embassy_time::Timer::after_micros(100).await;
         }
     }
 

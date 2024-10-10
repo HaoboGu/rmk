@@ -8,9 +8,7 @@
 
 In RMK's current implementation, the peripheral continously scans it's matrix, if there's a key change, A `SplitMessage` is sent to the central.
 
-In central, there's a peripheral monitor for each peripheral, which receives the `SplitMessage` from the peripheral and caches all key states in that peripheral. 
-
-And there's a separate keyboard thread in central, which does the keyboard stuffs. The only difference is, in matrix scanning stage, it synchronizes key states from peripheral monitor and scans central's matrix.
+In central, there's a peripheral monitor for each peripheral, which receives the `SplitMessage` from the peripheral and forwards the key event to keyboard task. 
 
 ## Protocol
 
@@ -24,9 +22,8 @@ A single message can be defined like:
 
 ```rust
 pub enum SplitMessage {
-    /// Activated key info (row, col, pressed), from peripheral to central.
-    /// Only key changes are sent in the split message, aka if pressed = true, the actual event is this key state changes from released -> pressed and vice versa.
-    Key(u8, u8, bool)
+    /// Key event from peripheral to central
+    Key(KeyEvent)
     /// Led state, on/off
     LedState(u8),
 }

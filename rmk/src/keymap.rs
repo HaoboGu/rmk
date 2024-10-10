@@ -1,8 +1,8 @@
 use crate::{
     action::KeyAction,
+    keyboard::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    matrix::KeyState,
     reboot_keyboard,
     storage::Storage,
 };
@@ -197,25 +197,12 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_with_layer_cache(
-        &mut self,
-        row: usize,
-        col: usize,
-        key_state: KeyState,
-    ) -> KeyAction {
-        if key_state.is_releasing() {
+    pub(crate) fn get_action_with_layer_cache(&mut self, key_event: KeyEvent) -> KeyAction {
+        let row = key_event.row as usize;
+        let col = key_event.col as usize;
+        if !key_event.pressed {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(row, col);
-            return self.layers[layer as usize][row][col];
-        }
-
-        if !key_state.changed && key_state.pressed {
-            // If current key_state doesn't change, and the key is pressed, use the cached layer.
-            //
-            // This situation is specifically for tap/hold, when the key is held, the layer could be continuously checked.
-            // The layer cache should not be popped in this case.
-            // This function should return the cached layer to make layer tap/hold action performs correctly.
-            let layer = self.layer_cache[row][col];
             return self.layers[layer as usize][row][col];
         }
 
@@ -241,6 +228,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
 
         KeyAction::No
+    }
+
+    fn get_activated_layer(&self) -> u8 {
+        for (layer_idx, _) in self.layers.iter().enumerate().rev() {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                return layer_idx as u8;
+            }
+        }
+
+        self.default_layer
     }
 
     fn get_layer_from_cache(&self, row: usize, col: usize) -> u8 {

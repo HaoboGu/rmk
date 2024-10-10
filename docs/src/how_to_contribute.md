@@ -31,31 +31,19 @@ So, if you want to contribute new features of RMK, just look into `rmk` core cra
 
 `rmk` crate is the main crate, it provides several entry API to start the keyboard firmware. All the entry APIs are similar, it:
 
-- Initialize the storage and keymap first
-- Create services: main keyboard service, usb service, ble service, vial service, light service, etc.
-- Create `keyboard_report_channel` which is used to send message from matrix scanner to communication task(USB or BLE)
+- Initialize the storage, keymap and matrix first
+- Create services: main keyboard service, matrix service, usb service, ble service, vial service, light service, etc.
 - Run all tasks in an infinite loop, if there's a task failed, wait some time and rerun
 
-Generally, there are 4-5 running tasks in the meanwhile, according to the user's config. Communication between tasks is done by channel. There are two common channel: `FLASH_CHANNEL` and `keyboard_report_channel`. 
+Generally, there are 4-5 running tasks in the meanwhile, according to the user's config. Communication between tasks is done by channels.There are several built-in channels: 
 
-The former is global, which is actually a multi-sender, single-receiver channel. There are many tasks send the `FlashOperationMessage`, such as BLE task(which saves bond info), vial task(which saves key), etc.
+- `FLASH_CHANNEL`: a multi-sender, single-receiver channel. There are many tasks send the `FlashOperationMessage`, such as BLE task(which saves bond info), vial task(which saves key), etc.
+- `key_event_channel`: a multi-sender, single-receiver channel. The sender can be a matrix task which scans the key matrix or a split peripheral monitor which receives key event from split peripheral. The receiver, i.e. keyboard task, receives the key event and processes the key
+- `keyboard_report_channel`: a single-sender, single-receiver channel, keyboard task sends keyboard report to channel after the key event is processed, and USB/BLE task receives the keyboard report and sends the key to the host.
 
-`keyboard_report_channel` is a SPSC channel: keyboard task sends keyboard report to channel when scanning the matrix, and USB/BLE task receives the keyboard report and sends the key to the host.
-
-### Matrix scanning
+### Matrix scanning & key processing
 
 An important part of a keyboard firmware is how it performs [matrix scanning](https://en.wikipedia.org/wiki/Keyboard_matrix_circuit) and how it processes the scanning result to generate keys.
 
-In RMK, this work is done in `keyboard_task`. The `keyboard_task` is very simple: it scans the matrix, saves scanning result in `Keyboard` struct and sends keyboard reports to USB/BLE tasks after each scanning:
-
-```rust
-// Main loop of keybaord_task 
-loop {
-    let _ = keyboard.scan_matrix(sender).await;
-    keyboard.send_keyboard_report(sender).await;
-    keyboard.send_media_report(sender).await;
-    keyboard.send_mouse_report(sender).await;
-    keyboard.send_system_control_report(sender).await;
-}
-```
+In RMK, this work is done in `Matrix` and `Keyboard` respectively. The `Matrix` scans the key matrix and send `KeyEvent` if there's a key change in matrix. Then the `Keyboard` receives the `KeyEvent` and processes it into actual keyboard report. Finally, the keyboard report is sent to USB/BLE tasks and forwarded to the host via USB/BLE.
 

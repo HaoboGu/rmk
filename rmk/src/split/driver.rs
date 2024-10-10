@@ -1,16 +1,9 @@
 ///! The abstracted driver layer of the split keyboard.
 ///!
-///!
-use crate::split::SYNC_SIGNALS;
-#[cfg(feature = "async_matrix")]
-use crate::{
-    split::{KeySyncSignal, SCAN_SIGNAL},
-    KEYBOARD_STATE,
-};
+use crate::keyboard::{key_event_channel, KeyEvent};
 
-use super::{KeySyncMessage, SplitMessage, CENTRAL_SYNC_CHANNELS};
-use defmt::debug;
-use embassy_futures::select::{select, Either};
+use super::SplitMessage;
+use defmt::{debug, error};
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -45,8 +38,6 @@ pub(crate) struct PeripheralMatrixMonitor<
     const COL_OFFSET: usize,
     R: SplitReader,
 > {
-    /// Key state cache matrix
-    pressed: [[bool; COL]; ROW],
     /// Receiver
     receiver: R,
     /// Peripheral id
@@ -62,60 +53,33 @@ impl<
     > PeripheralMatrixMonitor<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
-        Self {
-            pressed: [[false; COL]; ROW],
-            receiver,
-            id,
-        }
+        Self { receiver, id }
     }
 
     /// Run the monitor.
     ///
-    /// The monitor receives from the peripheral and waits for the sync message from the matrix scanning thread.
-    /// If a sync message is received from matrix scanning thread, it sends the key state matrix back.
+    /// The monitor receives from the peripheral and forward the message to key_event_channel.
     pub(crate) async fn run(mut self) -> ! {
         loop {
-            let receive_fut = self.receiver.read();
-            let sync_fut = SYNC_SIGNALS[self.id].wait();
-            match select(receive_fut, sync_fut).await {
-                Either::First(received_message) => {
-                    debug!("Receveid peripheral message: {}", received_message);
-                    if let Ok(message) = received_message {
-                        // Update the key state matrix
-                        if let SplitMessage::Key(row, col, pressed) = message {
-                            self.pressed[row as usize][col as usize] = pressed;
+            match self.receiver.read().await {
+                Ok(received_message) => {
+                    debug!("Received peripheral message: {}", received_message);
+                    if let SplitMessage::Key(e) = received_message {
+                        // Check row/col
+                        if e.row as usize > ROW || e.col as usize > COL {
+                            error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                            continue;
                         }
-                        // In async matrix mode, signal to start matrix scanning
-                        #[cfg(feature = "async_matrix")]
-                        if KEYBOARD_STATE.load(core::sync::atomic::Ordering::Relaxed) {
-                            SCAN_SIGNAL.signal(KeySyncSignal::Start);
-                        }
+                        key_event_channel
+                            .send(KeyEvent {
+                                row: e.row + ROW_OFFSET as u8,
+                                col: e.col + COL_OFFSET as u8,
+                                pressed: e.pressed,
+                            })
+                            .await;
                     }
                 }
-                Either::Second(_sync_signal) => {
-                    // Start synchronizing key state matrix
-
-                    // First, send the number of states to be sent
-                    CENTRAL_SYNC_CHANNELS[self.id]
-                        .send(KeySyncMessage::StartSend((ROW * COL) as u16))
-                        .await;
-                    // Send the key state matrix
-                    // TODO: Optimize: send only the changed key states
-                    for row in 0..ROW {
-                        for col in 0..COL {
-                            CENTRAL_SYNC_CHANNELS[self.id]
-                                .send(KeySyncMessage::Key(
-                                    (row + ROW_OFFSET) as u8,
-                                    (col + COL_OFFSET) as u8,
-                                    self.pressed[row][col],
-                                ))
-                                .await;
-                        }
-                    }
-
-                    // Reset key signal, enable next scan
-                    SYNC_SIGNALS[self.id].reset();
-                }
+                Err(e) => error!("Peripheral message read error: {:?}", e),
             }
         }
     }

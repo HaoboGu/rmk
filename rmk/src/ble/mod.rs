@@ -38,7 +38,10 @@ pub(crate) async fn ble_communication_task<
     loop {
         match keyboard_report_receiver.receive().await {
             KeyboardReportMessage::KeyboardReport(report) => {
-                debug!("Send keyboard report: {}", report.keycodes);
+                debug!(
+                    "Send keyboard report via BLE: {=[u8]:#X}, modifier: {:b}",
+                    report.keycodes, report.modifier
+                );
                 match ble_keyboard_writer.write_serialize(&report).await {
                     Ok(()) => {}
                     Err(e) => error!("Send keyboard report error: {}", e),
