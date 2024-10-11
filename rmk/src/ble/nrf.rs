@@ -14,6 +14,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
+use crate::usb::wait_for_usb_enabled;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -32,6 +33,7 @@ use crate::{
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
@@ -40,6 +42,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
+use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
@@ -66,15 +69,17 @@ use {
 // TODO: make it configurable
 pub const BONDED_DEVICE_NUM: usize = 8;
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
+
+    use crate::usb::USB_SUSPENDED;
 
     // Enable dcdc-mode, reduce power consumption
     unsafe {
@@ -97,8 +102,16 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 
     sd.run_with_callback(|event: SocEvent| {
         match event {
-            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
-            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbRemoved => {
+                software_vbus.detected(false);
+                USB_SUSPENDED.store(true, Ordering::Release);
+                USB_DEVICE_ENABLED.store(false, Ordering::Release);
+            }
+            SocEvent::PowerUsbDetected => {
+                software_vbus.detected(true);
+                USB_SUSPENDED.store(false, Ordering::Release);
+                USB_DEVICE_ENABLED.store(true, Ordering::Release);
+            }
             SocEvent::PowerUsbPowerReady => software_vbus.ready(),
             _ => {}
         };
@@ -107,11 +120,7 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 }
 
 // Some nRF BLE chips doesn't have USB, so the softdevice_task is different
-#[cfg(any(
-    feature = "nrf52832_ble",
-    feature = "nrf52811_ble",
-    feature = "nrf52810_ble"
-))]
+#[cfg(feature = "_no_usb")]
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     // Enable dcdc-mode, reduce power consumption
@@ -300,7 +309,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, usb_device.wait_for_usb_configured()).await {
+            match select(adv_fut, wait_for_usb_enabled()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
@@ -317,7 +326,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                             ),
-                            usb_device.wait_for_usb_configured(),
+                            wait_for_usb_enabled(),
                         )
                         .await
                         {
@@ -360,6 +369,26 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
         // Retry after 1 second
         Timer::after_secs(1).await;
+    }
+}
+
+async fn set_conn_params(conn: &Connection) {
+    // Wait for 5 seconds before setting connection parameters to avoid connection drop
+    embassy_time::Timer::after_secs(5).await;
+    if let Some(conn_handle) = conn.handle() {
+        // Update connection parameters
+        unsafe {
+            let re = sd_ble_gap_conn_param_update(
+                conn_handle,
+                &raw::ble_gap_conn_params_t {
+                    min_conn_interval: 6,
+                    max_conn_interval: 6,
+                    slave_latency: 99, 
+                    conn_sup_timeout: 500, // timeout: 5s
+                },
+            );
+            info!("Set conn params result: {:?}", re);
+        }
     }
 }
 
@@ -410,10 +439,11 @@ pub(crate) async fn run_ble_keyboard<
         &mut ble_mouse_writer,
     );
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let set_conn_param = set_conn_params(&conn);
 
     // Exit if anyone of three futures exits
     match select4(
-        select(matrix_fut, ble_fut),
+        select(matrix_fut, join(ble_fut, set_conn_param)),
         select(ble_communication_task, keyboard_fut),
         select(battery_fut, led_fut),
         select(vial_task, storage_fut),

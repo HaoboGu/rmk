@@ -2,7 +2,6 @@ pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
-use embassy_futures::select::select;
 use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
@@ -31,6 +30,17 @@ pub(crate) async fn wait_for_usb_suspend() {
             break;
         }
         // Check usb suspended state every 500ms
+        Timer::after_millis(500).await
+    }
+}
+
+pub(crate) async fn wait_for_usb_enabled() {
+    loop {
+        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
+        if enabled {
+            break;
+        }
+        // Check usb enable state every 500ms
         Timer::after_millis(500).await
     }
 }
@@ -136,21 +146,6 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             other_hid_writer: UsbHidWriter::new(other_hid),
             via_hid: UsbHidReaderWriter::new(via_hid),
         }
-    }
-
-    pub(crate) async fn wait_for_usb_configured(&mut self) {
-        let run = self.device.run();
-        let wait_for_configured = async {
-            loop {
-                let suspended = USB_CONFIGURED.load(core::sync::atomic::Ordering::Acquire);
-                if suspended {
-                    break;
-                }
-                // Check usb configured state every 500ms
-                Timer::after_millis(500).await
-            }
-        };
-        select(run, wait_for_configured).await;
     }
 }
 
