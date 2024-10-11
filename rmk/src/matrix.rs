@@ -129,7 +129,7 @@ impl<
     #[cfg(not(feature = "col2row"))]
     const ROW: usize = OUTPUT_PIN_NUM;
     #[cfg(not(feature = "col2row"))]
-    const COL: usize = OUTPUT_PIN_NUM;
+    const COL: usize = INPUT_PIN_NUM;
     
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
