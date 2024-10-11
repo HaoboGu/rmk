@@ -161,16 +161,11 @@ fn expand_split_central_entry(
     match chip.series {
         ChipSeries::Stm32 => {
             let usb_name = format_ident!("{}", usb_info.peripheral_name);
-            let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
-                format_ident!("{}", "usb_otg")
-            } else {
-                format_ident!("{}", "usb")
-            };
             let central_task = quote! {
                 ::rmk::split::central::run_rmk_split_central::<
                     ::embassy_stm32::gpio::Input<'_>,
                     ::embassy_stm32::gpio::Output<'_>,
-                    ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                    ::embassy_stm32::usb::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
                     ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
                     ROW,
                     COL,

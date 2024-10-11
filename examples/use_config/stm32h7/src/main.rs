@@ -11,7 +11,7 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
-    use embassy_stm32::{time::Hertz, usb_otg::Driver, Config};
+    use embassy_stm32::{time::Hertz, usb::Driver, Config};
     use rmk::run_rmk;
     use static_cell::StaticCell;
 
@@ -63,7 +63,7 @@ mod my_keyboard {
     #[Override(usb)]
     fn usb() -> Driver<'_, USB_OTG_HS> {
         static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-        let mut usb_config = embassy_stm32::usb_otg::Config::default();
+        let mut usb_config = embassy_stm32::usb::Config::default();
         usb_config.vbus_detection = false;
         let driver = Driver::new_fs(
             p.USB_OTG_HS,
