@@ -49,7 +49,7 @@ use crate::{
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
     storage::{get_bond_info_key, Storage, StorageData},
-    usb::{wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
+    usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
     via::process::VialService,
 };
 use crate::{debounce::DebouncerTrait, split::central::CentralMatrix};
@@ -327,7 +327,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, usb_device.wait_for_usb_configured()).await {
+            match select(adv_fut, wait_for_usb_enabled()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
@@ -344,7 +344,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
                             ),
-                            usb_device.wait_for_usb_configured(),
+                            wait_for_usb_enabled(),
                         )
                         .await
                         {
