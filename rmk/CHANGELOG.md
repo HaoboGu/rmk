@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use divider to estimate battery voltage
+
 ## [0.3.2] - 2024-10-05
 
 ### Fixed

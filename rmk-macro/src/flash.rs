@@ -64,7 +64,7 @@ fn get_storage_config(chip: &ChipModel, storage_config: StorageConfig) -> TokenS
                 storage_config.num_sectors as usize
             };
             (num_sectors as u8, start_addr)
-        },
+        }
         _ => (storage_config.num_sectors, storage_config.start_addr),
     };
     quote! {

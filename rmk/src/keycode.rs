@@ -188,7 +188,7 @@ pub enum SystemControlKey {
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, Hash)]
 #[repr(u16)]
 pub enum KeyCode {
     /// Reserved, no-key.

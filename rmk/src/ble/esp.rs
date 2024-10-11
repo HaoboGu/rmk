@@ -1,12 +1,12 @@
 pub(crate) mod server;
 
-use self::server::BleServer;
+use self::server::{BleServer, VialReaderWriter};
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::hid::{BleReceiver, ReaderWriter};
-use crate::matrix::Matrix;
+use crate::keyboard::keyboard_report_channel;
+use crate::matrix::{Matrix, MatrixTrait};
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
 use crate::via::process::VialService;
@@ -14,7 +14,7 @@ use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
-    keyboard_task, keymap::KeyMap, KeyboardReportMessage,
+    keymap::KeyMap,
 };
 use core::cell::RefCell;
 use defmt::{debug, info, warn};
@@ -71,22 +71,24 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
     );
 
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard matrix
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
-    let mut keyboard = Keyboard::new(matrix, &keymap);
+    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
@@ -114,7 +116,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
-        let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
+        let keyboard_fut = keyboard.run();
         let ble_fut = ble_communication_task(
             &keyboard_report_receiver,
             &mut keyboard_writer,
@@ -128,19 +130,23 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             debug!("BLE received {} {=[u8]:#X}", data.len(), data);
             block_on(via_output.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
         });
-        let mut via_rw = ReaderWriter(BleReceiver(via_output.receiver()), ble_server.input_vial);
+        let mut via_rw = VialReaderWriter {
+            receiver: via_output.receiver(),
+            hid_writer: ble_server.input_vial,
+        };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
-
+        let matrix_fut = matrix.scan();
         let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
         pin_mut!(storage_fut);
         pin_mut!(via_fut);
         pin_mut!(keyboard_fut);
         pin_mut!(disconnect);
         pin_mut!(ble_fut);
+        pin_mut!(matrix_fut);
 
         select4(
             select(storage_fut, keyboard_fut),
-            disconnect,
+            select(disconnect, matrix_fut),
             ble_fut,
             via_fut,
         )

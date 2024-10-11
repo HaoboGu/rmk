@@ -1,4 +1,5 @@
-use defmt::{error, info, Format};
+use defmt::{debug, error, Format};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -13,11 +14,17 @@ use nrf_softdevice::{
 };
 use usbd_hid::descriptor::SerializedDescriptor;
 
-use crate::usb::descriptor::ViaReport;
+use crate::{
+    ble::as_bytes,
+    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
+    usb::descriptor::ViaReport,
+};
 
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 
-#[derive(Debug, defmt::Format)]
+static vial_output_channel: Channel<CriticalSectionRawMutex, [u8; 32], 2> = Channel::new();
+
+#[derive(Clone, Copy)]
 pub(crate) struct BleVialService {
     pub(crate) input_vial: u16,
     input_vial_cccd: u16,
@@ -123,11 +130,63 @@ impl gatt_server::Service for BleVialService {
         if handle == self.input_vial_cccd {
             Some(VialServiceEvent::InputVialKeyCccdWrite)
         } else if handle == self.output_vial {
-            info!("Vial output: {:?}", data);
+            debug!("Vial output: {:?}", data);
+            let data = unsafe { *(data.as_ptr() as *const [u8; 32]) };
+            // Retry at most 3 times
+            for _ in 0..3 {
+                if let Ok(_) = vial_output_channel.try_send(data) {
+                    break;
+                }
+                error!("Vial output channel full");
+            }
             Some(VialServiceEvent::OutputVial)
         } else {
             None
         }
+    }
+}
+
+pub(crate) struct VialReaderWriter<'a> {
+    pub(crate) service: BleVialService,
+    pub(crate) conn: &'a Connection,
+}
+
+impl<'a> VialReaderWriter<'a> {
+    pub(crate) fn new(service: BleVialService, conn: &'a Connection) -> Self {
+        Self { service, conn }
+    }
+}
+
+impl<'a> ConnectionTypeWrapper for VialReaderWriter<'a> {
+    fn get_conn_type(&self) -> crate::hid::ConnectionType {
+        ConnectionType::Ble
+    }
+}
+
+impl<'a> HidReaderWrapper for VialReaderWriter<'a> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, crate::hid::HidError> {
+        let v = vial_output_channel.receive().await;
+        buf.copy_from_slice(as_bytes(&v));
+        Ok(as_bytes(&v).len())
+    }
+}
+
+impl<'a> HidWriterWrapper for VialReaderWriter<'a> {
+    async fn write_serialize<IR: usbd_hid::descriptor::AsInputReport>(
+        &mut self,
+        r: &IR,
+    ) -> Result<(), crate::hid::HidError> {
+        use ssmarshal::serialize;
+        let mut buf: [u8; 32] = [0; 32];
+        match serialize(&mut buf, r) {
+            Ok(n) => self.write(&buf[0..n]).await,
+            Err(_) => Err(HidError::ReportSerializeError),
+        }
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
+        self.service.send_ble_vial_report(self.conn, report);
+        Ok(())
     }
 }
 

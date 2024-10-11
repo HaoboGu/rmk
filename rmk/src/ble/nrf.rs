@@ -12,7 +12,9 @@ use self::server::BleServer;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
+use crate::usb::wait_for_usb_enabled;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -23,25 +25,24 @@ use crate::{
             server::BleHidWriter,
         },
     },
-    keyboard::{keyboard_task, Keyboard, KeyboardReportMessage},
+    keyboard::{Keyboard, KeyboardReportMessage},
     light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
-    KeyAction, KeyMap, LightService, RmkConfig,
+    vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
-};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
+use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
@@ -49,20 +50,18 @@ use nrf_softdevice::{
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
+use vial_service::VialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::{
-        keyboard::communication_task,
-        light::led_hid_task,
-        usb::{wait_for_usb_configured, wait_for_usb_suspend, USB_DEVICE_ENABLED},
-        via::vial_task,
-        KeyboardUsbDevice, VialService,
+        run_usb_keyboard,
+        usb::{wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        KeyboardUsbDevice,
     },
     core::sync::atomic::Ordering,
     embassy_futures::select::Either,
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
-    futures::pin_mut,
     once_cell::sync::OnceCell,
 };
 
@@ -70,15 +69,17 @@ use {
 // TODO: make it configurable
 pub const BONDED_DEVICE_NUM: usize = 8;
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Software Vbus detect when using BLE + USB
 pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 
-#[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
+#[cfg(not(feature = "_no_usb"))]
 /// Background task of nrf_softdevice
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
+
+    use crate::usb::USB_SUSPENDED;
 
     // Enable dcdc-mode, reduce power consumption
     unsafe {
@@ -101,8 +102,16 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 
     sd.run_with_callback(|event: SocEvent| {
         match event {
-            SocEvent::PowerUsbRemoved => software_vbus.detected(false),
-            SocEvent::PowerUsbDetected => software_vbus.detected(true),
+            SocEvent::PowerUsbRemoved => {
+                software_vbus.detected(false);
+                USB_SUSPENDED.store(true, Ordering::Release);
+                USB_DEVICE_ENABLED.store(false, Ordering::Release);
+            }
+            SocEvent::PowerUsbDetected => {
+                software_vbus.detected(true);
+                USB_SUSPENDED.store(false, Ordering::Release);
+                USB_DEVICE_ENABLED.store(true, Ordering::Release);
+            }
             SocEvent::PowerUsbPowerReady => software_vbus.ready(),
             _ => {}
         };
@@ -111,11 +120,7 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 }
 
 // Some nRF BLE chips doesn't have USB, so the softdevice_task is different
-#[cfg(any(
-    feature = "nrf52832_ble",
-    feature = "nrf52811_ble",
-    feature = "nrf52810_ble"
-))]
+#[cfg(feature = "_no_usb")]
 #[embassy_executor::task]
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     // Enable dcdc-mode, reduce power consumption
@@ -244,27 +249,27 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Keyboard matrix
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard services
-    let mut keyboard = Keyboard::new(matrix, &keymap);
+    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     #[cfg(not(feature = "_no_usb"))]
-    let (mut usb_device, mut vial_service) = (
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-    );
+    let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
+    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);
-
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
 
     // Main loop
     loop {
@@ -287,68 +292,41 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             // Check and run via USB first
             if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
                 // Run usb keyboard
-                let usb_fut = async {
-                    let usb_fut = usb_device.device.run();
-                    let keyboard_fut = keyboard_task(&mut keyboard, &keyboard_report_sender);
-                    let communication_fut = communication_task(
-                        &keyboard_report_receiver,
-                        &mut usb_device.keyboard_hid_writer,
-                        &mut usb_device.other_hid_writer,
-                    );
-                    let led_fut =
-                        led_hid_task(&mut usb_device.keyboard_hid_reader, &mut light_service);
-                    let via_fut = vial_task(&mut usb_device.via_hid, &mut vial_service);
-                    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-                    pin_mut!(usb_fut);
-                    pin_mut!(storage_fut);
-                    pin_mut!(keyboard_fut);
-                    pin_mut!(led_fut);
-                    pin_mut!(via_fut);
-                    pin_mut!(communication_fut);
-
-                    match select4(
-                        select(usb_fut, keyboard_fut),
-                        select(storage_fut, via_fut),
-                        led_fut,
-                        communication_fut,
-                    )
-                    .await
-                    {
-                        Either4::First(_) => error!("Usb task or keyboard task exited"),
-                        Either4::Second(_) => error!("Storage or vial task has died"),
-                        Either4::Third(_) => error!("Led task has died"),
-                        Either4::Fourth(_) => error!("Communication task has died"),
-                    }
-                };
+                let usb_fut = run_usb_keyboard(
+                    &mut usb_device,
+                    &mut keyboard,
+                    &mut matrix,
+                    &mut storage,
+                    &mut light_service,
+                    &mut vial_service,
+                    &keyboard_report_receiver,
+                );
                 info!("Running USB keyboard!");
                 select(usb_fut, wait_for_usb_suspend()).await;
             }
 
             // Usb device have to be started to check if usb is configured
-            let usb_fut = usb_device.device.run();
-            let usb_configured = wait_for_usb_configured();
             info!("USB suspended, BLE Advertising");
 
             // Wait for BLE or USB connection
-            match select(adv_fut, select(usb_fut, usb_configured)).await {
+            match select(adv_fut, wait_for_usb_enabled()).await {
                 Either::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
-                        let usb_configured = wait_for_usb_configured();
-                        let usb_fut = usb_device.device.run();
                         match select(
                             run_ble_keyboard(
                                 &conn,
                                 &ble_server,
                                 &mut keyboard,
+                                &mut matrix,
                                 &mut storage,
                                 &mut light_service,
+                                &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
                                 &keyboard_report_receiver,
-                                &keyboard_report_sender,
                             ),
-                            select(usb_fut, usb_configured),
+                            wait_for_usb_enabled(),
                         )
                         .await
                         {
@@ -377,11 +355,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &conn,
                     &ble_server,
                     &mut keyboard,
+                    &mut matrix,
                     &mut storage,
                     &mut light_service,
+                    &mut vial_service,
                     &mut keyboard_config.ble_battery_config,
                     &keyboard_report_receiver,
-                    &keyboard_report_sender,
                 )
                 .await
             }
@@ -393,25 +372,46 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     }
 }
 
+async fn set_conn_params(conn: &Connection) {
+    // Wait for 5 seconds before setting connection parameters to avoid connection drop
+    embassy_time::Timer::after_secs(5).await;
+    if let Some(conn_handle) = conn.handle() {
+        // Update connection parameters
+        unsafe {
+            let re = sd_ble_gap_conn_param_update(
+                conn_handle,
+                &raw::ble_gap_conn_params_t {
+                    min_conn_interval: 6,
+                    max_conn_interval: 6,
+                    slave_latency: 99, 
+                    conn_sup_timeout: 500, // timeout: 5s
+                },
+            );
+            info!("Set conn params result: {:?}", re);
+        }
+    }
+}
+
 // Run ble keyboard task for once
 pub(crate) async fn run_ble_keyboard<
     'a,
     'b,
+    M: MatrixTrait,
     F: AsyncNorFlash,
     Out: OutputPin,
-    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     conn: &Connection,
     ble_server: &BleServer,
-    keyboard: &mut Keyboard<'a, M, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+    matrix: &mut M,
     storage: &mut Storage<F>,
     light_service: &mut LightService<Out>,
+    vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
     keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
@@ -421,13 +421,16 @@ pub(crate) async fn run_ble_keyboard<
         BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
     let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
+    let mut vial_rw = VialReaderWriter::new(ble_server.vial, &conn);
+    let vial_task = vial_task(&mut vial_rw, vial_service);
 
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
     let led_fut = led_service_task(light_service);
+    let matrix_fut = matrix.scan();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
-    let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
+    let keyboard_fut = keyboard.run();
     let ble_communication_task = ble_communication_task(
         keyboard_report_receiver,
         &mut ble_keyboard_writer,
@@ -436,13 +439,14 @@ pub(crate) async fn run_ble_keyboard<
         &mut ble_mouse_writer,
     );
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let set_conn_param = set_conn_params(&conn);
 
     // Exit if anyone of three futures exits
     match select4(
-        ble_fut,
+        select(matrix_fut, join(ble_fut, set_conn_param)),
         select(ble_communication_task, keyboard_fut),
         select(battery_fut, led_fut),
-        storage_fut,
+        select(vial_task, storage_fut),
     )
     .await
     {

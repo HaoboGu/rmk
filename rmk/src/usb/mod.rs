@@ -29,19 +29,19 @@ pub(crate) async fn wait_for_usb_suspend() {
         if suspended || (!enabled) {
             break;
         }
-        // Check usb suspended state every 10ms
-        Timer::after_millis(10).await
+        // Check usb suspended state every 500ms
+        Timer::after_millis(500).await
     }
 }
 
-pub(crate) async fn wait_for_usb_configured() {
+pub(crate) async fn wait_for_usb_enabled() {
     loop {
-        let suspended = USB_CONFIGURED.load(core::sync::atomic::Ordering::Acquire);
-        if suspended {
+        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
+        if enabled {
             break;
         }
-        // Check usb configured state every 10ms
-        Timer::after_millis(10).await
+        // Check usb enable state every 500ms
+        Timer::after_millis(500).await
     }
 }
 

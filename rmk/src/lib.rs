@@ -20,7 +20,6 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::{
-    keyboard::keyboard_task,
     light::{led_hid_task, LightService},
     via::vial_task,
 };
@@ -30,19 +29,18 @@ use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
-};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+#[cfg(not(feature = "_no_external_storage"))]
+use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{communication_task, Keyboard, KeyboardReportMessage};
+use keyboard::{communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_config as config;
@@ -50,11 +48,8 @@ use rmk_config::RmkConfig;
 pub use rmk_macro as macros;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
-#[cfg(not(feature = "_no_external_storage"))]
-use {
-    embedded_storage::nor_flash::NorFlash,
-    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage,
-};
+#[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 pub mod action;
 #[cfg(feature = "_ble")]
@@ -207,7 +202,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -217,13 +212,13 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
     // For USB keyboard, the "external" storage means the storage initialized by the user.
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
         let keymap = RefCell::new(
@@ -231,31 +226,33 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         );
         (s, keymap)
     };
-    #[cfg(feature = "_no_external_storage")]
+    #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let matrix = Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let matrix = Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+    let mut matrix =
+        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
+
+    let keyboard_report_sender = keyboard_report_channel.sender();
+    let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(matrix, &keymap),
+        Keyboard::new(&keymap, &keyboard_report_sender),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
     );
-
-    static keyboard_channel: Channel<CriticalSectionRawMutex, KeyboardReportMessage, 8> =
-        Channel::new();
-    let keyboard_report_sender = keyboard_channel.sender();
-    let keyboard_report_receiver = keyboard_channel.receiver();
 
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -263,12 +260,12 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         run_usb_keyboard(
             &mut usb_device,
             &mut keyboard,
-            #[cfg(not(feature = "_no_external_storage"))]
+            &mut matrix,
+            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
             &mut storage,
             &mut light_service,
             &mut vial_service,
             &keyboard_report_receiver,
-            &keyboard_report_sender,
         )
         .await;
 
@@ -282,23 +279,26 @@ pub(crate) async fn run_usb_keyboard<
     'a,
     'b,
     D: Driver<'a>,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
     M: MatrixTrait,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, M, ROW, COL, NUM_LAYER>,
-    #[cfg(not(feature = "_no_external_storage"))] storage: &mut Storage<F>,
+    keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
+    matrix: &mut M,
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
+        F,
+    >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
-    keyboard_report_sender: &Sender<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard_task(keyboard, keyboard_report_sender);
+    let keyboard_fut = keyboard.run();
+    let matrix_fut = matrix.scan();
     let communication_fut = communication_task(
         keyboard_report_receiver,
         &mut usb_device.keyboard_hid_writer,
@@ -308,23 +308,25 @@ pub(crate) async fn run_usb_keyboard<
     let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
     pin_mut!(usb_fut);
     pin_mut!(keyboard_fut);
+    pin_mut!(matrix_fut);
     pin_mut!(led_fut);
     pin_mut!(via_fut);
     pin_mut!(communication_fut);
 
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-    #[cfg(not(feature = "_no_external_storage"))]
+    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     pin_mut!(storage_fut);
 
     match select4(
         select(usb_fut, keyboard_fut),
-        #[cfg(not(feature = "_no_external_storage"))]
+        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         select(storage_fut, via_fut),
+        #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
         #[cfg(feature = "_no_external_storage")]
         via_fut,
         led_fut,
-        communication_fut,
+        select(matrix_fut, communication_fut),
     )
     .await
     {
