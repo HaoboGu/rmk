@@ -64,7 +64,7 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_secs(500).await;
+                    Timer::after_millis(200).await;
                     continue;
                 }
             } else {
@@ -95,7 +95,7 @@ impl<'a> BatteryService {
         // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, then,
         // v_adc = v_bat * measured / total => val = v_bat * 1137.8 * measured / total
         //
-        // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be (3755 ~ 4755) * measured / total
+        // If the battery voltage range is 3.6v ~ 4.2v, the adc val range should be (4096 ~ 4755) * measured / total
         // TODO: make the voltage divider configurable
         let mut measured = 200;
         let mut total = 282;
@@ -109,11 +109,12 @@ impl<'a> BatteryService {
         if val > 4755_i32 * measured / total {
             // 4755 ~= 4.2v * 1137.8
             100_u8
-        } else if val < 3755_i32 * measured / total {
-            // 3755 ~= 3.3v * 1137.8
+        } else if val < 4055_i32 * measured / total {
+            // 4096 ~= 3.6v * 1137.8
+            // To simplify the calculation, we use 4055 here
             0_u8
         } else {
-            ((val * total / measured - 3755) / 10) as u8
+            ((val * total / measured - 4055) / 7) as u8
         }
     }
 }
