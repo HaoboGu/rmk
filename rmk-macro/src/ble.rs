@@ -61,8 +61,13 @@ pub(crate) fn expand_ble_config(
                 if let Some(charging_state_config) = ble.charge_state {
                     let charging_state_pin = format_ident!("{}", charging_state_config.pin);
                     let low_active = charging_state_config.low_active;
+                    let pull = if low_active {
+                        quote! { ::embassy_nrf::gpio::Pull::Up }
+                    } else {
+                        quote! { ::embassy_nrf::gpio::Pull::Down }
+                    };
                     ble_config_tokens.extend(quote! {
-                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_state_pin), ::embassy_nrf::gpio::Pull::None));
+                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_state_pin), #pull));
                         let charging_state_low_active = #low_active;
                     });
                 } else {
