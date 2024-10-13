@@ -378,16 +378,31 @@ async fn set_conn_params(conn: &Connection) {
     if let Some(conn_handle) = conn.handle() {
         // Update connection parameters
         unsafe {
+            // For macOS/iOS(aka Apple devices), both interval should be set to 12
+            let re = sd_ble_gap_conn_param_update(
+                conn_handle,
+                &raw::ble_gap_conn_params_t {
+                    min_conn_interval: 12,
+                    max_conn_interval: 12,
+                    slave_latency: 99,
+                    conn_sup_timeout: 500, // timeout: 5s
+                },
+            );
+            debug!("Set conn params result: {:?}", re);
+
+            embassy_time::Timer::after_millis(50).await;
+
+            // Setting the conn param the second time ensures that we have best performance on all platforms
             let re = sd_ble_gap_conn_param_update(
                 conn_handle,
                 &raw::ble_gap_conn_params_t {
                     min_conn_interval: 6,
                     max_conn_interval: 6,
-                    slave_latency: 99, 
+                    slave_latency: 99,
                     conn_sup_timeout: 500, // timeout: 5s
                 },
             );
-            info!("Set conn params result: {:?}", re);
+            debug!("Set conn params result: {:?}", re);
         }
     }
 }
