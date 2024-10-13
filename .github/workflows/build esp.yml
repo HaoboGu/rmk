@@ -4,6 +4,10 @@ on:
   push:
     branches: ["main"]
     paths: ["examples/**", "rmk/**", "rmk-config/**", "rmk-macro/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["examples/**", "rmk/**", "rmk-config/**", "rmk-macro/**"]
+
 
 env:
   CARGO_TERM_COLOR: always
