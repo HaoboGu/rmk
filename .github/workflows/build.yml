@@ -24,7 +24,7 @@ jobs:
         run: cargo install --force cargo-make
       - name: Build rmk
         working-directory: ./rmk
-        run: cargo make uf2 --release 
+        run: cargo build --release 
       - name: Build rp2040
         working-directory: ./examples/use_rust/rp2040
         run: cargo make uf2 --release
