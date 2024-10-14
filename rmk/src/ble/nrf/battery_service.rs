@@ -66,6 +66,15 @@ impl<'a> BatteryService {
                     }
                     Timer::after_millis(200).await;
                     continue;
+                } else {
+                    // Turn off the led
+                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                        if battery_config.charge_led_low_active {
+                            charge_led.set_high();
+                        } else {
+                            charge_led.set_low();
+                        }
+                    }
                 }
             } else {
                 // No SAADC, skip battery check
