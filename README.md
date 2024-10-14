@@ -16,9 +16,11 @@
   </p>
 </p>
 
+👉 Join our [Discord server](https://discord.gg/HHGA7pQxkG) if you have anything to discuss!
+
+----- 
 [中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
 
------
 
 ## Features
 
