@@ -241,8 +241,8 @@ fn expand_main(
 
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
-                usb_config: keyboard_usb_config,
-                vial_config,
+                usb_config: KEYBOARD_USB_CONFIG,
+                vial_config: VIAL_CONFIG,
                 light_config,
                 storage_config,
                 #set_ble_config

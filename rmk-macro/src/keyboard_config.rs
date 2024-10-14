@@ -103,7 +103,7 @@ pub(crate) fn expand_keyboard_info(
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
-        static keyboard_usb_config: ::rmk::config::keyboard_config::KeyboardUsbConfig = ::rmk::config::keyboard_config::KeyboardUsbConfig {
+        static KEYBOARD_USB_CONFIG: ::rmk::config::keyboard_config::KeyboardUsbConfig = ::rmk::config::keyboard_config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,
             manufacturer: #manufacturer,
@@ -115,7 +115,7 @@ pub(crate) fn expand_keyboard_info(
 
 pub(crate) fn expand_vial_config() -> proc_macro2::TokenStream {
     quote! {
-        static vial_config: ::rmk::config::keyboard_config::VialConfig = ::rmk::config::keyboard_config::VialConfig {
+        static VIAL_CONFIG: ::rmk::config::keyboard_config::VialConfig = ::rmk::config::keyboard_config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
         };
