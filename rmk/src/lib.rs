@@ -346,7 +346,7 @@ pub(crate) fn reboot_keyboard() {
         any(target_abi = "eabi", target_abi = "eabihf")
     ))]
     cortex_m::peripheral::SCB::sys_reset();
-    // TODO: Implement reboot for other platforms
-    // - RISCV
-    // - ESP32
+
+    #[cfg(feature = "_esp_ble")]
+    esp_idf_svc::hal::reset::restart();
 }
