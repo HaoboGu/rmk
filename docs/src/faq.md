@@ -89,14 +89,14 @@ If you have more sectors available in your internal flash, you can increase `num
 
 ### panicked at embassy-executor: task arena is full.
 
-The current embassy requires manually setting of the task arena size. By default, RMK set's it to 8192 in all examples:
+The current embassy requires manually setting of the task arena size. By default, RMK set's it to 32768 in all examples:
 
 ```toml
 # Cargo.toml
 embassy-executor = { version = "0.6", features = [
     "defmt",
     "arch-cortex-m",
-    "task-arena-size-8192",
+    "task-arena-size-32768",
     "executor-thread",
     "integrated-timers",
 ] }
@@ -109,7 +109,7 @@ If you got `ERROR panicked at 'embassy-executor: task arena is full.` error afte
 embassy-executor = { version = "0.6", features = [
     "defmt",
     "arch-cortex-m",
--   "task-arena-size-8192",
+-   "task-arena-size-32768",
 +   "task-arena-size-65536",
     "executor-thread",
     "integrated-timers",
