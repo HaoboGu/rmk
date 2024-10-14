@@ -7,7 +7,7 @@ pub mod esp;
 pub mod nrf;
 
 use defmt::{debug, error};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver, signal::Signal};
 use embassy_time::Timer;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 pub use nrf::SOFTWARE_VBUS;
@@ -17,6 +17,8 @@ use crate::{
     keyboard::{write_other_report_to_host, KeyboardReportMessage},
     usb::descriptor::CompositeReportType,
 };
+
+pub(crate) static START_ADV: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 
 /// BLE communication task, send reports to host via BLE.
 /// TODO: Merge `ble_communication_task` and `communication_task` into one task.

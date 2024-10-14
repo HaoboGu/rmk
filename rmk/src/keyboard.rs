@@ -419,6 +419,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
         } else if key.is_basic() {
+            #[cfg(feature = "_ble")]
+            if key == KeyCode::User0 {
+                // Start advertisement, enabled only for BLE
+                crate::ble::START_ADV.signal(true);
+            }
             if key_event.pressed {
                 self.register_key(key);
             } else {

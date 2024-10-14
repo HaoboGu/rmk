@@ -8,6 +8,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::ble::START_ADV;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -33,7 +34,7 @@ use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{select, select3, select4, Either3, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -272,6 +273,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Main loop
     loop {
+        
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Init BLE advertising data
         let mut config = peripheral::Config::default();
@@ -313,7 +315,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     Ok(conn) => {
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
-                        match select(
+                        match select3(
                             run_ble_keyboard(
                                 &conn,
                                 &ble_server,
@@ -326,13 +328,22 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &keyboard_report_receiver,
                             ),
                             wait_for_usb_enabled(),
+                            START_ADV.wait(),
                         )
                         .await
                         {
-                            Either::First(_) => (),
-                            Either::Second(_) => {
+                            Either3::First(_) => (),
+                            Either3::Second(_) => {
                                 info!("Detected USB configured, quit BLE");
                                 continue;
+                            }
+                            Either3::Third(sig) => {
+                                if sig {
+                                    // TODO: Add current connection to blacklist, restart advertisement
+                                    
+                                    
+                                    START_ADV.reset();
+                                }
                             }
                         }
                     }

@@ -36,3 +36,21 @@ RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely us
 nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format.
 
 You can also refer to [RMK user guide](./user_guide/4_compile_and_flash.md#use-uf2-bootloader) about the instructions.
+
+## Multiple-profile support
+
+Now RMK supports multiple bonded profile, but the switching between profiles is not implemented yet.
+
+Expected behavior for multiple profile support: https://github.com/zmkfirmware/zmk/issues/249
+
+Some extra behaviours:
+
+- when usb is connected, all reports goes to usb by default
+- report channel?
+
+
+### Implementation
+
+1. A simple `manual disconnection -> re-advertise with BLACKLIST -> new connection` loop
+2. Multiple-device multiple slot, slot switching 
+3. + USB
