@@ -14,7 +14,6 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
-use crate::usb::wait_for_usb_enabled;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -55,7 +54,7 @@ use vial_service::VialReaderWriter;
 use {
     crate::{
         run_usb_keyboard,
-        usb::{wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        usb::{wait_for_usb_enabled, wait_for_usb_suspend, USB_DEVICE_ENABLED},
         KeyboardUsbDevice,
     },
     core::sync::atomic::Ordering,
