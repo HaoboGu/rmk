@@ -54,7 +54,7 @@ pub(crate) fn rmk_entry_default(
                     output_pins,
                     driver,
                     f,
-                    KEYMAP,
+                    &mut get_default_keymap(),
                     keyboard_config,
                     spawner,
                 )
@@ -69,7 +69,7 @@ pub(crate) fn rmk_entry_default(
                         output_pins,
                         driver,
                         f,
-                        KEYMAP,
+                        &mut get_default_keymap(),
                         keyboard_config,
                         spawner
                     )
@@ -81,7 +81,7 @@ pub(crate) fn rmk_entry_default(
                     input_pins,
                     output_pins,
                     driver,
-                    KEYMAP,
+                    &mut get_default_keymap(),
                     keyboard_config,
                     spawner,
                 )
@@ -91,7 +91,7 @@ pub(crate) fn rmk_entry_default(
                 ::rmk::run_rmk(
                     input_pins,
                     output_pins,
-                    KEYMAP,
+                    &mut get_default_keymap(),
                     keyboard_config,
                     spawner,
                 )
@@ -105,7 +105,7 @@ pub(crate) fn rmk_entry_default(
                 output_pins,
                 driver,
                 flash,
-                KEYMAP,
+                &mut get_default_keymap(),
                 keyboard_config,
                 spawner,
             )
@@ -115,7 +115,7 @@ pub(crate) fn rmk_entry_default(
             ::esp_idf_svc::hal::task::block_on(::rmk::run_rmk(
                 input_pins,
                 output_pins,
-                KEYMAP,
+                &mut get_default_keymap(),
                 keyboard_config,
             ));
         },

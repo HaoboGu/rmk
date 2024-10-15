@@ -87,7 +87,7 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
 }
 pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     /// Report Sender
     pub(crate) sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
@@ -122,7 +122,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
     ) -> Self {
         Keyboard {

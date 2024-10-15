@@ -62,7 +62,7 @@ async fn main(spawner: Spawner) {
         output_pins,
         usb_driver,
         flash,
-        crate::keymap::KEYMAP,
+        &mut keymap::get_default_keymap(),
         keyboard_config,
         spawner,
     )

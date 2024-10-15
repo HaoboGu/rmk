@@ -200,7 +200,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {
@@ -270,6 +270,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);
 
+    info!("Start loop");
     // Main loop
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);

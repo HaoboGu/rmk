@@ -2,7 +2,7 @@
 #![no_std]
 
 //! NOTE: This example compiles on latest main branch, which may be different from released version
-mod keymap;
+
 mod vial;
 
 use rmk::macros::rmk_keyboard;
@@ -85,7 +85,7 @@ mod my_keyboard {
             output_pins,
             driver,
             f,
-            KEYMAP,
+            &mut get_default_keymap(),
             keyboard_config,
             spawner,
         )

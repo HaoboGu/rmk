@@ -58,7 +58,7 @@ async fn main(spawner: Spawner) {
     run_rmk(
         input_pins,
         output_pins,
-        crate::keymap::KEYMAP,
+        &mut keymap::get_default_keymap(),
         keyboard_config,
         spawner,
     )

@@ -5,7 +5,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::toml_config::{LayoutConfig, MatrixConfig};
 
-/// Read the default keymap setting in `keyboard.toml` and add as a `static KEYMAP`
+/// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 pub(crate) fn expand_layout_init(
     layout_config: Option<LayoutConfig>,
     matrix_config: MatrixConfig,
@@ -22,7 +22,11 @@ pub(crate) fn expand_layout_init(
         for layer in l.keymap {
             layers.push(expand_layer(layer));
         }
-        return quote! { static KEYMAP: [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] = [#(#layers), *]; };
+        return quote! {
+            pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+                [#(#layers), *]
+            }
+        };
     };
     quote! {}
 }

@@ -179,7 +179,7 @@ fn expand_split_central_entry(
                     #central_row_offset,
                     #central_col_offset,
                     NUM_LAYER,
-                >(input_pins, output_pins, driver, flash, KEYMAP, keyboard_config, spawner)
+                >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config
@@ -225,7 +225,7 @@ fn expand_split_central_entry(
                     #central_row_offset,
                     #central_col_offset,
                     NUM_LAYER,
-                >(input_pins, output_pins, driver, KEYMAP, keyboard_config, [#(#central_addr), *], spawner)
+                >(input_pins, output_pins, driver, &mut get_default_keymap(), keyboard_config, [#(#central_addr), *], spawner)
             };
             let mut tasks = vec![central_task];
             split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
@@ -257,7 +257,7 @@ fn expand_split_central_entry(
                     #central_row_offset,
                     #central_col_offset,
                     NUM_LAYER,
-                >(input_pins, output_pins, driver, flash, KEYMAP, keyboard_config, spawner)
+                >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config

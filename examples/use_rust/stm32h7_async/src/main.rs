@@ -109,7 +109,7 @@ async fn main(spawner: Spawner) {
         output_pins,
         driver,
         f,
-        crate::keymap::KEYMAP,
+        &mut keymap::get_default_keymap(),
         keyboard_config,
         spawner,
     )
