@@ -16,6 +16,22 @@ output_pins = ["P1_05", "P1_06", "P1_03"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
 
+[layout]
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
+
 [storage]
 
 [ble]

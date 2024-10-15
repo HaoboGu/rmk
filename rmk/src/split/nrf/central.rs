@@ -194,7 +194,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
     central_addr: [u8; 6],
     spawner: Spawner,

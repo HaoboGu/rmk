@@ -40,7 +40,7 @@ There are a few more things that you have to do:
         output_pins,
         driver,
         f,
-        crate::keymap::KEYMAP,
+        &mut get_default_keymap(),
         keyboard_config,
         spawner,
     )
