@@ -6,6 +6,38 @@ By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TA
 
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
+### I want `hex`/`bin`/`uf2` file, how can I get it?
+
+By default, Rust compiler generates `elf` file in target folder. There're a little extra steps for generating `hex`, `bin` or `uf2` file.
+
+- `hex`/`bin`: To generate `hex`/`bin` file, you need [cargo-binutils](https://github.com/rust-embedded/cargo-binutils). You can use
+
+  ```
+  cargo install cargo-binutils
+  rustup component add llvm-tools
+  ```
+
+  to install it. Then, you can use the following command to generate `hex` or `bin` firmware:
+
+  ```
+  # Generate .bin file
+  cargo objcopy --release -- -O binary rmk.bin
+  # Generate .hex file
+  cargo objcopy --release -- -O ihex rmk.hex
+  ```
+
+- `uf2`: RMK provides [cargo-make](https://github.com/sagiegurari/cargo-make) config for all examples to generate `uf2` file automatically. Check `Makefile.toml` files in the example folders. The following command can be used to generate uf2 firmware:
+  
+  ```shell
+  # Install cargo-make
+  cargo install --force cargo-make
+
+  # Generate uf2
+  cargo make uf2 --release
+  ```
+  
+  This script requires you have `python` command available in your commandline. Some platforms have `python3` command only, you can change `python` in `Makefile.toml` to `python3` in this case.
+
 ### I can see a `RMK Start` log, but nothing else
 
 First you need to check the RCC config of your board, make sure that the USB's clock is enabled and set to 48MHZ. For example, if you're using stm32f1, you can set the RCC as the following:
@@ -57,14 +89,14 @@ If you have more sectors available in your internal flash, you can increase `num
 
 ### panicked at embassy-executor: task arena is full.
 
-The current embassy requires manually setting of the task arena size. By default, RMK set's it to 8192 in all examples:
+The current embassy requires manually setting of the task arena size. By default, RMK set's it to 32768 in all examples:
 
 ```toml
 # Cargo.toml
 embassy-executor = { version = "0.6", features = [
     "defmt",
     "arch-cortex-m",
-    "task-arena-size-8192",
+    "task-arena-size-32768",
     "executor-thread",
     "integrated-timers",
 ] }
@@ -77,7 +109,7 @@ If you got `ERROR panicked at 'embassy-executor: task arena is full.` error afte
 embassy-executor = { version = "0.6", features = [
     "defmt",
     "arch-cortex-m",
--   "task-arena-size-8192",
+-   "task-arena-size-32768",
 +   "task-arena-size-65536",
     "executor-thread",
     "integrated-timers",
@@ -87,4 +119,8 @@ embassy-executor = { version = "0.6", features = [
 In the latest git version of embassy, task arena size could be calculated automatically, but it requires **nightly** version of Rust.
 
 If you're comfortable with nightly Rust, you can enable `nightly` feature of embassy-executor and remove `task-arena-size-*` feature.
+
+### RMK breaks my bootloader
+
+By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
 

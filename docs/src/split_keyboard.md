@@ -13,6 +13,7 @@ See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split
 See `examples/use_config/nrf52840_ble_split` for the `keyboard.toml` + wireless split keyboard example using nRF52840.
 
 **NOTE:** for `nrf52840_ble_split`, add 
+
 ```toml
 [patch.crates-io]
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "d5f023b"}
@@ -45,7 +46,7 @@ run_rmk_split_central::<
             input_pins,
             output_pins,
             driver,
-            crate::keymap::KEYMAP,
+            &mut get_default_keymap(),
             keyboard_config,
             central_addr,
             spawner,

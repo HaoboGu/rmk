@@ -16,14 +16,16 @@
   </p>
 </p>
 
+👉 Join our [Discord server](https://discord.gg/HHGA7pQxkG) if you have anything to discuss!
+
+----- 
 [中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
 
------
 
 ## Features
 
 - **Support a wide range of microcontrollers**: Powered by [embassy](https://github.com/embassy-rs/embassy), RMK supports a wide range of microcontrollers, such as stm32/nRF/rp2040/esp32
-- **Real-time keymap editing**: RMK has built-in [vial](https://get.vial.today) support, the keymap can be changed on-the-fly
+- **Real-time keymap editing**: RMK has built-in [Vial](https://get.vial.today) support, the keymap can be changed on-the-fly. You can even use Vial to edit keymap over BLE directly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
 - **Wireless**: BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
 - **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
@@ -51,8 +53,7 @@ Then follow the steps in generated `README.md`. Check RMK's [User Guide](https:/
 
 ### Option 2: Try built-in examples
 
-Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples). The following is a simple
-step-to-step instruction for rp2040. For other microcontrollers, the steps should be identical with a debug probe.
+Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/examples). The following is a simple step-to-step instruction for rp2040. For other microcontrollers, the steps should be identical with a debug probe.
 
 #### rp2040
 
@@ -80,7 +81,7 @@ step-to-step instruction for rp2040. For other microcontrollers, the steps shoul
 
 4. (Optional) Flash using USB
 
-   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your firmware via USB. There are several additional steps you have to do:
+   If you don't have a debug probe, you can use `elf2uf2-rs` to flash your rp2040 firmware via USB. There are several additional steps you have to do:
 
    1. Install `elf2uf2-rs`: `cargo install elf2uf2-rs`
    2. Update `examples/use_rust/rp2040/.cargo/config.toml`, use `elf2uf2` as the flashing tool

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add restart to ESP32
+- Optimize nRF BLE power consumption, now the idle current is decreased to about 20uA
+
+### Changed
+
+- BREAKING: use reference of keymap in `run_rmk` 
+- BREAKING: refactor the whole macro crate, update `keyboard.toml` config, old `keyboard.toml` config may raise compilation error
+- Decouple the matrix(input device) and keyboard implementation
+- Stop scanning matrix after releasing all keys
+- Use divider to estimate battery voltage
+
+### Fixed
+
+- Fix unexpected power consumption for nRF
+- Fix extra memory usage by duplicating keymaps
+- Fix COL/ROW typo
+- Fix ESP stackoverflow by increasing default ESP main stack size
+
+## [0.3.2] - 2024-10-05
+
+### Fixed
+
+- Fix vial not work for nRF
+
+## [0.3.1] - 2024-10-03
+
+### Added
+
+- Automate uf2 firmware generation via `cargo-make`
+- Storage and vial support for ESP series
+- Vial over BLE support for Windows 
+- `TO` and `DF` action support
+
+### Changed
+
+- Update `bitfield-struct` to v0.9
+- Update `esp32-nimble` to v0.8, as well as used `ESP_IDF_VERSION` to v5.2.3
+- Use 0x60000 as the default start addr for nRF52
+
+### Fixed
+
+- Fix no device detected on vial desktop
+
 ## [0.3.0] - 2024-09-11
 
 ### Changed

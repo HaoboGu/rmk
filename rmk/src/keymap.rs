@@ -1,8 +1,8 @@
 use crate::{
     action::KeyAction,
+    keyboard::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    matrix::KeyState,
     reboot_keyboard,
     storage::Storage,
 };
@@ -16,9 +16,9 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
-    pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -29,8 +29,10 @@ pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: us
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
-    pub(crate) async fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    KeyMap<'a, ROW, COL, NUM_LAYER>
+{
+    pub(crate) async fn new(action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
@@ -41,14 +43,14 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     }
 
     pub(crate) async fn new_from_storage<F: NorFlash>(
-        mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
         if let Some(storage) = storage {
             // Read keymap to `action_map`
-            if storage.read_keymap(&mut action_map).await.is_err() {
+            if storage.read_keymap(action_map).await.is_err() {
                 error!("Keymap reading aborted by an error, clearing the storage...");
                 // Dont sent flash message here, since the storage task is not running yet
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
@@ -58,9 +60,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
                 reboot_keyboard();
             } else {
                 // Read macro cache
-                if let Err(_) = storage
+                if storage
                     .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
                     .await
+                    .is_err()
                 {
                     error!("Wrong macro cache, clearing the storage...");
                     sequential_storage::erase_all(
@@ -86,6 +89,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
 
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         (ROW, COL, NUM_LAYER)
+    }
+
+    /// Get the default layer number
+    pub(crate) fn get_default_layer(&self) -> u8 {
+        self.default_layer
+    }
+
+    /// Set the default layer number
+    pub(crate) fn set_default_layer(&mut self, layer_num: u8) {
+        self.default_layer = layer_num;
     }
 
     /// Get the next macro operation starting from given index and offset
@@ -186,25 +199,12 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_with_layer_cache(
-        &mut self,
-        row: usize,
-        col: usize,
-        key_state: KeyState,
-    ) -> KeyAction {
-        if key_state.is_releasing() {
+    pub(crate) fn get_action_with_layer_cache(&mut self, key_event: KeyEvent) -> KeyAction {
+        let row = key_event.row as usize;
+        let col = key_event.col as usize;
+        if !key_event.pressed {
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(row, col);
-            return self.layers[layer as usize][row][col];
-        }
-
-        if !key_state.changed && key_state.pressed {
-            // If current key_state doesn't change, and the key is pressed, use the cached layer.
-            //
-            // This situation is specifically for tap/hold, when the key is held, the layer could be continuously checked.
-            // The layer cache should not be popped in this case.
-            // This function should return the cached layer to make layer tap/hold action performs correctly.
-            let layer = self.layer_cache[row][col];
             return self.layers[layer as usize][row][col];
         }
 
@@ -230,6 +230,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
         }
 
         KeyAction::No
+    }
+
+    fn get_activated_layer(&self) -> u8 {
+        for (layer_idx, _) in self.layers.iter().enumerate().rev() {
+            if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
+                return layer_idx as u8;
+            }
+        }
+
+        self.default_layer
     }
 
     fn get_layer_from_cache(&self, row: usize, col: usize) -> u8 {

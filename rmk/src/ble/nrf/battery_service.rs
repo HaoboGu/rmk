@@ -64,8 +64,17 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_secs(500).await;
+                    Timer::after_millis(200).await;
                     continue;
+                } else {
+                    // Turn off the led
+                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                        if battery_config.charge_led_low_active {
+                            charge_led.set_high();
+                        } else {
+                            charge_led.set_low();
+                        }
+                    }
                 }
             } else {
                 // No SAADC, skip battery check
@@ -83,6 +92,9 @@ impl<'a> BatteryService {
     // TODO: Make battery calculation user customizable
     fn get_battery_percent(&self, val: i16) -> u8 {
         info!("Detected adc value: {=i16}", val);
+        // Avoid overflow
+        let val = val as i32;
+
         // According to nRF52840's datasheet, for single_ended saadc:
         // val = v_adc * (gain / reference) * 2^(resolution)
         //
@@ -90,16 +102,28 @@ impl<'a> BatteryService {
         // val = v_adc * 1137.8
         //
         // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, then,
-        // v_adc = v_bat * 0.7092 => val = v_bat * 806.93
+        // v_adc = v_bat * measured / total => val = v_bat * 1137.8 * measured / total
         //
-        // If the battery voltage range is 3.3v ~ 4.2v, the adc val range should be 2663 ~ 3389
-        // To make calculation simple, adc val range 2650 ~ 3350 is used.
-        if val > 3350 {
+        // If the battery voltage range is 3.6v ~ 4.2v, the adc val range should be (4096 ~ 4755) * measured / total
+        // TODO: make the voltage divider configurable
+        let mut measured = 200;
+        let mut total = 282;
+        if 500 < val && val < 1000 {
+            // Thing becomes different when using vddh as reference
+            // The adc value for vddh pin is actually vddh/5,
+            // so we use this rough range to detect vddh
+            measured = 1;
+            total = 5;
+        }
+        if val > 4755_i32 * measured / total {
+            // 4755 ~= 4.2v * 1137.8
             100_u8
-        } else if val < 2650 {
+        } else if val < 4055_i32 * measured / total {
+            // 4096 ~= 3.6v * 1137.8
+            // To simplify the calculation, we use 4055 here
             0_u8
         } else {
-            ((val - 2650) / 7) as u8
+            ((val * total / measured - 4055) / 7) as u8
         }
     }
 }

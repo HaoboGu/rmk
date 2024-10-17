@@ -7,9 +7,6 @@ manufacturer = "haobo"
 chip = "stm32h7b0vb"
 
 [matrix]
-rows = 4
-cols = 3
-layers = 2
 # Input and output pins are mandatory
 input_pins = ["PD9", "PD8", "PB13", "PB12"]
 output_pins = ["PE13", "PE14", "PE15"]
@@ -17,6 +14,9 @@ output_pins = ["PE13", "PE14", "PE15"]
 # row2col = true
 
 [layout]
+rows = 4
+cols = 3
+layers = 2
 keymap = [
     [
         ["A", "B", "C"],
@@ -35,9 +35,9 @@ keymap = [
 [light]
 # All light pins are high-active by default, uncomment if you want it to be low-active
 capslock.pin = "PA4"
-# capslock.low_active = true
+capslock.low_active = false
 scrolllock.pin = "PA3"
-# scrolllock.low_active = true
+scrolllock.low_active = false
 # Just ignore if no light pin is used for it
 # numslock.pin = "PA5"
 # numslock.low_active = true

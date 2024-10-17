@@ -1,0 +1,24 @@
+[tasks.install-llvm-tools]
+install_crate = { rustup_component_name = "llvm-tools" }
+
+[tasks.objcopy]
+install_crate = { crate_name = "cargo-binutils", binary = "cargo", test_arg = [
+    "objcopy",
+    "--help",
+] }
+command = "cargo"
+args = ["objcopy", "--release", "--", "-O", "ihex", "rmk.hex"]
+dependencies = ["install-llvm-tools"]
+
+[tasks.uf2]
+command = "python"
+args = [
+    "../../../scripts/uf2conv.py",
+    "rmk.hex",
+    "-c",
+    "-f",
+    "0x72721d4e",                  # Use your chip family ID in the uf2conv.py file as -f argument
+    "-o",
+    "rmk.uf2",
+]
+dependencies = ["objcopy"]

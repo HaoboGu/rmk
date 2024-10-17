@@ -11,6 +11,12 @@ impl embedded_storage_async::nor_flash::NorFlashError for EmptyFlashErrorWrapper
 /// An empty implementation of `NorFlash`
 pub struct EmptyFlashWrapper {}
 
+impl Default for EmptyFlashWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EmptyFlashWrapper {
     pub fn new() -> Self {
         Self {}

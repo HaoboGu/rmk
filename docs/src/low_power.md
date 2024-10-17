@@ -3,9 +3,8 @@
 RMK supports low-power mode by using utilizing embassy's low-power feature and `Wait` trait in `embedded-hal-async`. To enable low-power mode, add `async_matrix` feature to your `Cargo.toml`:
 
 ```diff
-rmk = { version = "0.2.4", features = [
+rmk = { version = "0.3.1", features = [
      "nrf52840_ble",
-     "col2row",
 +    "async_matrix",
 ] }
 ```
@@ -41,7 +40,7 @@ There are a few more things that you have to do:
         output_pins,
         driver,
         f,
-        crate::keymap::KEYMAP,
+        &mut get_default_keymap(),
         keyboard_config,
         spawner,
     )

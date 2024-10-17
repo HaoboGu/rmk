@@ -40,6 +40,7 @@ pub(crate) trait HidWriterWrapper: ConnectionTypeWrapper {
 }
 
 pub(crate) trait HidReaderWriterWrapper: HidReaderWrapper + HidWriterWrapper {}
+impl<T: HidReaderWrapper + HidWriterWrapper> HidReaderWriterWrapper for T {}
 
 /// Wrapper struct for writing via USB
 pub(crate) struct UsbHidWriter<'d, D: Driver<'d>, const N: usize> {
@@ -115,11 +116,6 @@ impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize>
     pub(crate) fn new(usb_reader_writer: HidReaderWriter<'d, D, READ_N, WRITE_N>) -> Self {
         Self { usb_reader_writer }
     }
-}
-
-impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidReaderWriterWrapper
-    for UsbHidReaderWriter<'d, D, READ_N, WRITE_N>
-{
 }
 
 impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> ConnectionTypeWrapper

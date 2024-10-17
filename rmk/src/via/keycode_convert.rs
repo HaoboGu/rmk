@@ -18,6 +18,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16
                 }
             }
+            Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
@@ -106,10 +107,9 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::LayerTapHold(Action::Key(keycode), layer as u8)
         }
         0x5200..=0x521F => {
-            // TODO: TO(n)
             // Activate layer X and deactivate other layers(except default layer)
-            warn!("TO(n) not supported");
-            KeyAction::No
+            let layer = via_keycode as u8 & 0x0F;
+            KeyAction::Single(Action::LayerToggleOnly(layer))
         }
         0x5220..=0x523F => {
             // Layer activate

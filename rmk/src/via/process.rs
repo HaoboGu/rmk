@@ -16,7 +16,7 @@ use rmk_config::VialConfig;
 
 pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     // Vial config
     vial_config: VialConfig<'a>,
@@ -26,7 +26,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     VialService<'a, ROW, COL, NUM_LAYER>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         vial_config: VialConfig<'a>,
     ) -> Self {
         Self {
@@ -71,7 +71,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     ) {
         let command_id = report.output_data[0];
 
@@ -236,7 +236,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Then flush macros to storage
                 let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
                 if size < 28 || num_zero >= NUM_MACRO {
-                    let buf = self.keymap.borrow_mut().macro_cache.clone();
+                    let buf = self.keymap.borrow_mut().macro_cache;
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteMacro(buf))
                         .await;

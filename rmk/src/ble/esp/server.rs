@@ -1,21 +1,25 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use defmt::{error, info, warn};
+use defmt::{debug, error, info, warn};
+use embassy_futures::block_on;
+use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
-    utilities::mutex::Mutex,
-    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer,
+    utilities::{mutex::Mutex, BleUuid},
+    BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer, NimbleProperties,
 };
 use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
 
 use crate::{
     ble::{
+        as_bytes,
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
     },
     config::KeyboardUsbConfig,
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
+    usb::descriptor::ViaReport,
 };
 
 type BleHidWriter = Arc<Mutex<BLECharacteristic>>;
@@ -38,8 +42,9 @@ impl HidWriterWrapper for BleHidWriter {
     }
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        debug!("BLE notify {} {=[u8]:#X}", report.len(), report);
         self.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
+        Timer::after_millis(7).await;
         Ok(())
     }
 }
@@ -85,13 +90,18 @@ impl BleServer {
         });
         let mut hid = BLEHIDDevice::new(server);
         hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+
         let input_keyboard = hid.input_report(BleCompositeReportType::Keyboard as u8);
         let output_keyboard = hid.output_report(BleCompositeReportType::Keyboard as u8);
         let input_media_keys = hid.input_report(BleCompositeReportType::Media as u8);
         let input_system_keys = hid.input_report(BleCompositeReportType::System as u8);
         let input_mouse_keys = hid.input_report(BleCompositeReportType::Mouse as u8);
-        let input_vial = hid.input_report(BleCompositeReportType::Vial as u8);
-        let output_vial = hid.output_report(BleCompositeReportType::Vial as u8);
 
         hid.pnp(
             VidSource::UsbIF as u8,
@@ -103,12 +113,33 @@ impl BleServer {
         hid.hid_info(0x00, 0x03);
         hid.report_map(BleKeyboardReport::desc());
 
+        let mut vial_hid = BLEHIDDevice::new(server);
+        vial_hid.manufacturer(usb_config.manufacturer);
+        block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
+            .unwrap()
+            .lock()
+            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .lock()
+            .set_value(usb_config.serial_number.as_bytes());
+        let input_vial = vial_hid.input_report(0);
+        let output_vial = vial_hid.output_report(0);
+
+        vial_hid.pnp(
+            VidSource::UsbIF as u8,
+            usb_config.vid,
+            usb_config.pid,
+            0x0000,
+        );
+        vial_hid.hid_info(0x00, 0x03);
+        vial_hid.report_map(ViaReport::desc());
+
         let ble_advertising = device.get_advertising();
         if let Err(e) = ble_advertising.lock().scan_response(false).set_data(
             BLEAdvertisementData::new()
                 .name(keyboard_name)
                 .appearance(0x03C1)
-                .add_service_uuid(hid.hid_service().lock().uuid()),
+                .add_service_uuid(hid.hid_service().lock().uuid())
+                .add_service_uuid(vial_hid.hid_service().lock().uuid()),
         ) {
             error!("BLE advertising error, error code: {}", e.code());
         }
@@ -156,16 +187,38 @@ impl ConnectionTypeWrapper for BleServer {
     }
 }
 
-impl HidWriterWrapper for BleServer {
+pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
+{
+    pub(crate) receiver: Receiver<'ch, M, T, N>,
+    pub(crate) hid_writer: W,
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::Ble
+    }
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+        let v = self.receiver.receive().await;
+        buf.copy_from_slice(as_bytes(&v));
+        Ok(as_bytes(&v).len())
+    }
+}
+
+impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
+    for VialReaderWriter<'ch, M, T, N, W>
+{
     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
-        self.input_keyboard.lock().set_from(r).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
+        self.hid_writer.write_serialize(r).await
     }
 
-    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
-        self.input_keyboard.lock().set_value(report).notify();
-        esp_idf_svc::hal::delay::Ets::delay_ms(7);
-        Ok(())
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        self.hid_writer.write(report).await
     }
 }

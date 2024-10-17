@@ -154,7 +154,7 @@ impl<'a> Default for KeyboardUsbConfig<'a> {
             pid: 0x4643,
             manufacturer: "RMK",
             product_name: "RMK Keyboard",
-            serial_number: "00000001",
+            serial_number: "vial:f64c2b3c:000001",
         }
     }
 }
