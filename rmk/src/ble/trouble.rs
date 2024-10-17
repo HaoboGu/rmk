@@ -18,15 +18,15 @@ use crate::ble::{
 };
 
 /// Size of L2CAP packets (ATT MTU is this - 4)
-const L2CAP_MTU: usize = 251;
+const L2CAP_MTU: usize = 27;
 
 /// Max number of connections
-const CONNECTIONS_MAX: usize = 2;
+const CONNECTIONS_MAX: usize = 1;
 
 /// Max number of L2CAP channels.
 const L2CAP_CHANNELS_MAX: usize = 2; // Signal + att
 
-const MAX_ATTRIBUTES: usize = 50;
+const MAX_ATTRIBUTES: usize = 45;
 
 pub async fn run_ble_task<C: Controller>(controller: C) {
     static HOST_RESOURCES: StaticCell<
@@ -36,15 +36,15 @@ pub async fn run_ble_task<C: Controller>(controller: C) {
 
     let mut ble: BleHost<'_, _> = BleHost::new(controller, resources);
 
-    //let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
-    let address = Address::random([0x41, 0x5A, 0xE3, 0x1E, 0x83, 0xE7]);
+    // let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
+    let address = Address::random([0x41, 0x5A, 0xE3, 0x1E, 0x82, 0xE7]);
     info!("Our address = {:?}", address);
     ble.set_random_address(address);
 
     let mut table: AttributeTable<'_, NoopRawMutex, MAX_ATTRIBUTES> = AttributeTable::new();
 
     // Generic Access Service (mandatory)
-    let id = b"Trouble";
+    let id = b"Trouble1";
     let appearance = [0x80, 0x07];
     let mut bat_level = [23; 1];
     let mut svc = table.add_service(Service::new(0x1800));
@@ -248,7 +248,7 @@ async fn advertise_task<C: Controller>(
                 Uuid::Uuid16([0x12, 0x18]),
                 Uuid::Uuid16([0x0f, 0x18]),
             ]),
-            AdStructure::CompleteLocalName(b"Trouble"),
+            AdStructure::CompleteLocalName(b"Trouble2"),
             AdStructure::Unknown {
                 ty: 0x19, // Appearance
                 data: &[0xC1, 0x03],

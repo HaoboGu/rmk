@@ -15,16 +15,15 @@ rmk = { path = "../../../rmk", features = [
     "col2row",
     "async_matrix",
 ] }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa", default-features = false, features = [
+
+nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
     "nrf52840",
     "peripheral",
     "central",
 ] }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa", default-features = false, features = [
-    "defmt",
-] }
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "1776fbf", features = [
+nrf-mpsl = { version = "0.1.0", default-features = false, features = ["defmt"] }
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "7f8c904", features = [
     "defmt",
     "gatt",
 ] }
@@ -60,7 +59,7 @@ embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
 embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
+embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
 embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
 nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
 nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
@@ -86,6 +85,6 @@ panic = 'unwind'
 [profile.release]
 codegen-units = 1       # better optimizations
 debug = true            # no overhead for bare-metal
-opt-level = 2        # optimize for binary size
+opt-level = 2           # optimize for binary size
 overflow-checks = false
 lto = "fat"
