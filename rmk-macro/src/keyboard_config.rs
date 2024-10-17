@@ -343,7 +343,7 @@ impl KeyboardConfig {
             for _ in layout.keymap.len()..layout.layers as usize {
                 // Add 2D vector of empty keys
                 layout.keymap.push(vec![
-                    vec!["-".to_string(); layout.cols as usize];
+                    vec!["_".to_string(); layout.cols as usize];
                     layout.rows as usize
                 ]);
             }
