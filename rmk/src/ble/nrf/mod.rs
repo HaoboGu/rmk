@@ -270,7 +270,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);
 
-    info!("Start loop");
     // Main loop
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);

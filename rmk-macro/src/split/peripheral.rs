@@ -1,14 +1,13 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::{SplitBoardConfig, SplitConfig};
+use rmk_config::toml_config::SplitBoardConfig;
 use syn::ItemMod;
 
 use crate::{
     chip_init::expand_chip_init,
     feature::{get_rmk_features, is_feature_enabled},
     import::expand_imports,
-    keyboard::get_chip_info,
-    keyboard_config::read_keyboard_config,
+    keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     matrix::expand_matrix_input_output_pins,
     split::central::expand_serial_init,
     ChipModel, ChipSeries,
@@ -17,7 +16,7 @@ use crate::{
 /// Parse split central mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
     id: usize,
-    attr: proc_macro::TokenStream,
+    _attr: proc_macro::TokenStream,
     item_mod: ItemMod,
 ) -> TokenStream2 {
     let rmk_features = get_rmk_features();
@@ -29,25 +28,19 @@ pub(crate) fn parse_split_peripheral_mod(
 
     let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
 
-    let toml_config = match read_keyboard_config(attr) {
+    let toml_config = match read_keyboard_toml_config() {
         Ok(c) => c,
         Err(e) => return e,
     };
 
-    let (chip, _comm_type, _usb_info) = match get_chip_info(&toml_config) {
-        Ok(value) => value,
+    let keyboard_config = match KeyboardConfig::new(toml_config) {
+        Ok(c) => c,
         Err(e) => return e,
     };
 
-    // Check whether keyboard.toml contains split section
-    let split_config = match &toml_config.split {
-        Some(c) => c,
-        None => return quote! { compile_error!("No `split` field in `keyboard.toml`"); }.into(),
-    };
+    let main_function = expand_split_peripheral(id, &keyboard_config, item_mod, async_matrix);
 
-    let main_function = expand_split_peripheral(id, &chip, split_config, item_mod, async_matrix);
-
-    let main_function_sig = if chip.series == ChipSeries::Esp32 {
+    let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
             use ::esp_idf_svc::hal::gpio::*;
             use esp_println as _;
@@ -75,11 +68,20 @@ pub(crate) fn parse_split_peripheral_mod(
 
 fn expand_split_peripheral(
     id: usize,
-    chip: &ChipModel,
-    split_config: &SplitConfig,
+    keyboard_config: &KeyboardConfig,
     item_mod: ItemMod,
     async_matrix: bool,
 ) -> TokenStream2 {
+    // Check whether keyboard.toml contains split section
+    let split_config = match &keyboard_config.board {
+        BoardConfig::Split(split) => split,
+        BoardConfig::Normal(_) => {
+            return quote! {
+                compile_error!("No `split` field in `keyboard.toml`");
+            }
+        }
+    };
+
     let peripheral_config = split_config
         .peripheral
         .get(id)
@@ -88,16 +90,16 @@ fn expand_split_peripheral(
     let central_config = &split_config.central;
 
     let imports = expand_imports(&item_mod);
-    let chip_init = expand_chip_init(chip, &item_mod);
+    let chip_init = expand_chip_init(keyboard_config, &item_mod);
     let matrix_config = expand_matrix_input_output_pins(
-        chip,
+        &keyboard_config.chip,
         peripheral_config.input_pins.clone(),
         peripheral_config.output_pins.clone(),
         async_matrix,
     );
 
     let run_rmk_peripheral =
-        expand_split_peripheral_entry(chip, peripheral_config, &central_config);
+        expand_split_peripheral_entry(&keyboard_config.chip, peripheral_config, &central_config);
 
     quote! {
         #imports

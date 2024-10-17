@@ -2,7 +2,7 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::{KeyboardTomlConfig, SerialConfig, SplitConfig};
+use rmk_config::toml_config::{SerialConfig, SplitConfig};
 use syn::ItemMod;
 
 use crate::{
@@ -13,17 +13,16 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
-    keyboard::{gen_imports, get_chip_info, CommunicationType},
-    keyboard_config::read_keyboard_config,
+    keyboard::gen_imports,
+    keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     light::expand_light_config,
     matrix::expand_matrix_input_output_pins,
-    usb_interrupt_map::UsbInfo,
     ChipModel, ChipSeries,
 };
 
 /// Parse split central mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_central_mod(
-    attr: proc_macro::TokenStream,
+    _attr: proc_macro::TokenStream,
     item_mod: ItemMod,
 ) -> TokenStream2 {
     let rmk_features = get_rmk_features();
@@ -35,26 +34,19 @@ pub(crate) fn parse_split_central_mod(
 
     let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
 
-    let toml_config = match read_keyboard_config(attr) {
+    let toml_config = match read_keyboard_toml_config() {
         Ok(c) => c,
         Err(e) => return e,
     };
 
-    let (chip, comm_type, usb_info) = match get_chip_info(&toml_config) {
-        Ok(value) => value,
+    let keyboard_config = match KeyboardConfig::new(toml_config) {
+        Ok(c) => c,
         Err(e) => return e,
     };
 
-    let imports = gen_imports(&toml_config, &chip);
+    let imports = gen_imports(&keyboard_config);
 
-    let main_function = expand_split_central(
-        &chip,
-        comm_type,
-        usb_info,
-        toml_config,
-        item_mod,
-        async_matrix,
-    );
+    let main_function = expand_split_central(&keyboard_config, item_mod, async_matrix);
 
     quote! {
         #imports
@@ -64,37 +56,37 @@ pub(crate) fn parse_split_central_mod(
 }
 
 fn expand_split_central(
-    chip: &ChipModel,
-    comm_type: CommunicationType,
-    usb_info: UsbInfo,
-    toml_config: KeyboardTomlConfig,
+    keyboard_config: &KeyboardConfig,
     item_mod: ItemMod,
     async_matrix: bool,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let split_config = match &toml_config.split {
-        Some(c) => c,
-        None => return quote! { compile_error!("No `split` field in `keyboard.toml`"); }.into(),
+    let split_config = if let BoardConfig::Split(split_config) = &keyboard_config.board {
+        split_config
+    } else {
+        return quote! { compile_error!("No `split` field in `keyboard.toml`"); }.into();
     };
 
     // Expand components of main function
     let imports = expand_imports(&item_mod);
-    let bind_interrupt = expand_bind_interrupt(&chip, &usb_info, &toml_config, &item_mod);
-    let chip_init = expand_chip_init(&chip, &item_mod);
-    let usb_init = expand_usb_init(&chip, &usb_info, comm_type, &item_mod);
-    let flash_init = expand_flash_init(&chip, comm_type, toml_config.storage);
-    let light_config = expand_light_config(&chip, toml_config.light);
+    let bind_interrupt = expand_bind_interrupt(keyboard_config, &item_mod);
+    let chip_init = expand_chip_init(keyboard_config, &item_mod);
+    let usb_init = expand_usb_init(keyboard_config, &item_mod);
+    let flash_init = expand_flash_init(keyboard_config);
+    let light_config = expand_light_config(keyboard_config);
+
     let matrix_config = expand_matrix_input_output_pins(
-        &chip,
+        &keyboard_config.chip,
         split_config.central.input_pins.clone(),
         split_config.central.output_pins.clone(),
         async_matrix,
     );
-    let split_communication_config = expand_split_communication_config(&chip, split_config);
-    let run_rmk = expand_split_central_entry(&chip, &usb_info, split_config);
-    let (ble_config, set_ble_config) = expand_ble_config(&chip, comm_type, toml_config.ble);
+    let split_communication_config =
+        expand_split_communication_config(&keyboard_config.chip, split_config);
+    let run_rmk = expand_split_central_entry(keyboard_config, split_config);
+    let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
 
-    let main_function_sig = if chip.series == ChipSeries::Esp32 {
+    let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
             use ::esp_idf_svc::hal::gpio::*;
             use esp_println as _;
@@ -106,6 +98,7 @@ fn expand_split_central(
             async fn main(spawner: ::embassy_executor::Spawner)
         }
     };
+
     quote! {
         #imports
 
@@ -133,8 +126,8 @@ fn expand_split_central(
 
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
-                usb_config: keyboard_usb_config,
-                vial_config,
+                usb_config: KEYBOARD_USB_CONFIG,
+                vial_config: VIAL_CONFIG,
                 light_config,
                 storage_config,
                 #set_ble_config
@@ -150,16 +143,16 @@ fn expand_split_central(
 }
 
 fn expand_split_central_entry(
-    chip: &ChipModel,
-    usb_info: &UsbInfo,
+    keyboard_config: &KeyboardConfig,
     split_config: &SplitConfig,
 ) -> TokenStream2 {
     let central_row = split_config.central.rows;
     let central_col = split_config.central.cols;
     let central_row_offset = split_config.central.row_offset;
     let central_col_offset = split_config.central.col_offset;
-    match chip.series {
+    match keyboard_config.chip.series {
         ChipSeries::Stm32 => {
+            let usb_info = keyboard_config.communication.get_usb_info().unwrap();
             let usb_name = format_ident!("{}", usb_info.peripheral_name);
             let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
                 format_ident!("{}", "usb_otg")

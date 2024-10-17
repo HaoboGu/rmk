@@ -4,13 +4,13 @@ use quote::quote;
 use syn::{ItemFn, ItemMod};
 
 use crate::{
-    keyboard::{CommunicationType, Overwritten},
-    ChipModel, ChipSeries,
+    keyboard::Overwritten,
+    keyboard_config::{CommunicationConfig, KeyboardConfig},
+    ChipSeries,
 };
 
 pub(crate) fn expand_rmk_entry(
-    chip: &ChipModel,
-    communication_type: CommunicationType,
+    keyboard_config: &KeyboardConfig,
     item_mod: &ItemMod,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
@@ -29,9 +29,9 @@ pub(crate) fn expand_rmk_entry(
                 }
                 None
             })
-            .unwrap_or(rmk_entry_default(chip, communication_type))
+            .unwrap_or(rmk_entry_default(keyboard_config))
     } else {
-        rmk_entry_default(chip, communication_type)
+        rmk_entry_default(keyboard_config)
     }
 }
 
@@ -42,11 +42,8 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
     }
 }
 
-pub(crate) fn rmk_entry_default(
-    chip: &ChipModel,
-    communication_type: CommunicationType,
-) -> TokenStream2 {
-    match chip.series {
+pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    match keyboard_config.chip.series {
         ChipSeries::Stm32 => {
             quote! {
                 ::rmk::run_rmk(
@@ -61,8 +58,8 @@ pub(crate) fn rmk_entry_default(
                 .await;
             }
         }
-        ChipSeries::Nrf52 => match communication_type {
-            CommunicationType::Usb => {
+        ChipSeries::Nrf52 => match keyboard_config.communication {
+            CommunicationConfig::Usb(_) => {
                 quote! {
                     ::rmk::run_rmk(
                         input_pins,
@@ -76,7 +73,7 @@ pub(crate) fn rmk_entry_default(
                     .await;
                 }
             }
-            CommunicationType::Both => quote! {
+            CommunicationConfig::Both(_, _) => quote! {
                 ::rmk::run_rmk(
                     input_pins,
                     output_pins,
@@ -87,7 +84,7 @@ pub(crate) fn rmk_entry_default(
                 )
                 .await;
             },
-            CommunicationType::Ble => quote! {
+            CommunicationConfig::Ble(_) => quote! {
                 ::rmk::run_rmk(
                     input_pins,
                     output_pins,
@@ -97,7 +94,7 @@ pub(crate) fn rmk_entry_default(
                 )
                 .await;
             },
-            CommunicationType::None => quote! {},
+            CommunicationConfig::None => quote! {},
         },
         ChipSeries::Rp2040 => quote! {
             ::rmk::run_rmk_with_async_flash(

@@ -53,9 +53,6 @@ Here is an example toml of `[matrix]` section for stm32:
 
 ```toml
 [matrix]
-rows = 4
-cols = 3
-layers = 2
 # Input and output pins are mandatory
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
@@ -69,6 +66,9 @@ output_pins = ["PD7", "PD8", "PD9"]
 
 ```toml
 [layout]
+rows = 4
+cols = 3
+layers = 2
 keymap = [
   # Your default keymap here
 ]
@@ -78,6 +78,9 @@ The keymap inside is a 2-D array, which represents layer -> row -> key structure
 
 ```toml
 [layout]
+rows = 4
+cols = 3
+layers = 2
 keymap = [
   # Layer 1
   [
