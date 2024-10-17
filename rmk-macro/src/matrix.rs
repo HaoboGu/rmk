@@ -1,24 +1,27 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
-use rmk_config::toml_config::MatrixConfig;
 
 use crate::{
     gpio_config::{convert_input_pins_to_initializers, convert_output_pins_to_initializers},
+    keyboard_config::{BoardConfig, KeyboardConfig},
     ChipModel, ChipSeries,
 };
 
 pub(crate) fn expand_matrix_config(
-    chip: &ChipModel,
-    matrix_config: MatrixConfig,
+    keyboard_config: &KeyboardConfig,
     async_matrix: bool,
 ) -> proc_macro2::TokenStream {
-    expand_matrix_input_output_pins(
-        chip,
-        matrix_config.input_pins,
-        matrix_config.output_pins,
-        async_matrix,
-    )
+    if let BoardConfig::Normal(matrix) = &keyboard_config.board {
+        expand_matrix_input_output_pins(
+            &keyboard_config.chip,
+            matrix.input_pins.clone(),
+            matrix.output_pins.clone(),
+            async_matrix,
+        )
+    } else {
+        quote! {}
+    }
 }
 
 pub(crate) fn expand_matrix_input_output_pins(

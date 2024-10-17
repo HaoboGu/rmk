@@ -1,14 +1,12 @@
 [keyboard]
-product_name = "RMK Keyboard"
+name = "RMK Keyboard"
+product_name = "My RMK Keyboard"
 vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
 chip = "nrf52840"
 
 [matrix]
-rows = 4
-cols = 3
-layers = 2
 # Input and output pins are mandatory
 input_pins = ["P1_00", "P1_01", "P1_02", "P1_07"]
 output_pins = ["P1_05", "P1_06", "P1_03"]
@@ -16,6 +14,9 @@ output_pins = ["P1_05", "P1_06", "P1_03"]
 # row2col = true
 
 [layout]
+rows = 4
+cols = 3
+layers = 2
 keymap = [
     [
         ["A", "B", "C"],

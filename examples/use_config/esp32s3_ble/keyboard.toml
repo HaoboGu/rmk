@@ -1,4 +1,5 @@
 [keyboard]
+name = "RMK Keyboard"
 product_name = "RMK Keyboard"
 vendor_id = 0x4c4b
 product_id = 0x4643
@@ -7,9 +8,6 @@ chip = "esp32s3"
 usb_enable = false
 
 [matrix]
-rows = 4
-cols = 3
-layers = 2
 # Input and output pins are mandatory
 input_pins = ["gpio6", "gpio7", "gpio20", "gpio21"]
 output_pins = ["gpio3", "gpio4", "gpio5"]
@@ -17,6 +15,9 @@ output_pins = ["gpio3", "gpio4", "gpio5"]
 # row2col = true
 
 [layout]
+rows = 4
+cols = 3
+layers = 2
 keymap = [
     [
         ["A", "B", "C"],

@@ -3,32 +3,20 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::{LayoutConfig, MatrixConfig};
+
+use crate::keyboard_config::KeyboardConfig;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
-pub(crate) fn expand_layout_init(
-    layout_config: Option<LayoutConfig>,
-    matrix_config: MatrixConfig,
-) -> TokenStream2 {
-    if let Some(l) = layout_config {
-        // Check the size of layers, rows and cols first
-        if let Err(err_msg) = check_keymap_size(&l, matrix_config) {
-            return syn::Error::new_spanned::<TokenStream2, String>(quote! {}, err_msg)
-                .to_compile_error()
-                .into();
+pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    let mut layers = vec![];
+    for layer in keyboard_config.layout.keymap.clone() {
+        layers.push(expand_layer(layer));
+    }
+    return quote! {
+        pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+            [#(#layers), *]
         }
-
-        let mut layers = vec![];
-        for layer in l.keymap {
-            layers.push(expand_layer(layer));
-        }
-        return quote! {
-            pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
-                [#(#layers), *]
-            }
-        };
     };
-    quote! {}
 }
 
 /// Push rows in the layer
@@ -47,45 +35,6 @@ fn expand_row(row: Vec<String>) -> TokenStream2 {
         keys.push(parse_key(key));
     }
     quote! { [#(#keys), *] }
-}
-
-/// Check whether the size of keymap matches matrix config
-fn check_keymap_size(l: &LayoutConfig, matrix_config: MatrixConfig) -> Result<(), String> {
-    // Layer
-    let layer_num = l.keymap.len();
-    if layer_num as u8 != matrix_config.layers {
-        return Err(
-            "keyboard.toml: Layer number in keymap doesn't match with [matrix.layers]".to_string(),
-        );
-    }
-    // Row
-    if let Some(_) = l
-        .keymap
-        .iter()
-        .map(|r| r.len())
-        .find(|l| *l as u8 != matrix_config.rows)
-    {
-        return Err(
-            "keyboard.toml: Row number in keymap doesn't match with [matrix.row]".to_string(),
-        );
-    }
-    // Col
-    if let Some(_) = l
-        .keymap
-        .iter()
-        .filter_map(|r| {
-            r.iter()
-                .map(|c| c.len())
-                .find(|l| *l as u8 != matrix_config.cols)
-        })
-        .next()
-    {
-        // Find a row whose col num is wrong
-        return Err(
-            "keyboard.toml: Col number in keymap doesn't match with [matrix.col]".to_string(),
-        );
-    }
-    Ok(())
 }
 
 /// Parse the key string at a single position

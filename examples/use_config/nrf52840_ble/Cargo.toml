@@ -24,6 +24,7 @@ embassy-nrf = { version = "0.2.0", features = [
     "time-driver-rtc1",
     "gpiote",
     "unstable-pac",
+    "nfc-pins-as-gpio",
     "time",
 ] }
 embassy-executor = { version = "0.6", features = [

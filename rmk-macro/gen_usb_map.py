@@ -28,7 +28,7 @@ for chip in chips:
                         dp = p["pin"]
                         # if p["pin"] != "PA12":
                         #     print(chip, "PIN", p)
-                periphral = item["name"]
+                peripheral = item["name"]
                 for i in item["interrupts"]:
                     if i["signal"] == "GLOBAL":
                         s.add(f"{item['name']}____{i['interrupt']}")
@@ -40,20 +40,20 @@ for chip in chips:
                         interrupt = i["interrupt"]
                         flag = True
                         break
-                print(chip, periphral, interrupt)
+                print(chip, peripheral, interrupt)
                 chip_name = chip.replace(".json", "").lower()
-                if chip_name in results and periphral == "USB_OTG_HS" and results[chip_name]['periphral'] == "USB_OTG_FS":
+                if chip_name in results and peripheral == "USB_OTG_HS" and results[chip_name]['peripheral'] == "USB_OTG_FS":
                     # Some chips have both `USB_OTG_HS` and `USB_OTG_FS`, we use `USB_OTG_FS` for now 
                     continue
                 results[chip_name] = {
-                    "periphral": periphral,
+                    "peripheral": peripheral,
                     "interrupt": interrupt,
                     "dm": dm,
                     "dp": dp,
                 }
 lines = []
 for k, v in results.items():
-    line = f"    m.insert(\"{k}\".to_string(), UsbInfo::new(\"{v['dm']}\", \"{v['dp']}\", \"{v['periphral']}\", \"{v['interrupt']}\"));"
+    line = f"    m.insert(\"{k}\".to_string(), UsbInfo::new(\"{v['dm']}\", \"{v['dp']}\", \"{v['peripheral']}\", \"{v['interrupt']}\"));"
     lines.append(line)
 
 content = "\n".join(lines)

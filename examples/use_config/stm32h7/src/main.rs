@@ -3,10 +3,7 @@
 
 //! NOTE: This example compiles on latest main branch, which may be different from released version
 
-mod vial;
-
 use rmk::macros::rmk_keyboard;
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
