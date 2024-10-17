@@ -4,7 +4,7 @@ RMK provides an easy and accessible way to set up the keyboard with a toml confi
 
 ## Usage 
 
-A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml`:
+A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml` if you're unfamiliar with toml:
   - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
 [Here] is an example `keyboard.toml` for stm32 microcontroller, put your `keyboard.toml` at the root of your firmware project.
@@ -12,6 +12,8 @@ A `toml` file named `keyboard.toml` is used as a configuration file. The followi
 RMK provides a proc-macro to load the `keyboard.toml`: `#[rmk_keyboard]`, add it to your `main.rs` like:
 
 ```rust
+use rmk::macros::rmk_keyboard;
+
 #[rmk_keyboard]
 mod my_keyboard {}
 ```
@@ -22,7 +24,9 @@ If you don't want any other customizations beyond the `keyboard.toml`, `#[rmk_ke
 
 ## What's in the config file?
 
-The config file contains almost EVERYTHING that users could customize to build a keyboard. There are several sections in the config file:
+The config file contains almost EVERYTHING to customize a keyboard. For the full reference of `keyboard.toml`, please refer to [this](#keyboardtoml). Also, we have pre-defined default configurations for chips, at [`rmk-macro/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/default_config) folder. We're going to add default configurations for more chips, contributions are welcome!
+
+The following is the introduction of each section:
 
 ### `[keyboard]`
 
@@ -41,9 +45,13 @@ usb_enable = true
 
 ### `[matrix]`
 
-`[matrix]` section defines the key matrix information of the keyboard, like number of rows, cols and keymap layers, input/output pins.
+`[matrix]` section defines the key matrix information of the keyboard, aka input/output pins. 
 
-IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html to get the valid GPIO peripheral name:
+<div class="warning">
+For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[spilt]` section.
+</div>
+
+IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:
 
 ![gpio_peripheral_name](images/gpio_peripheral_name.png)
 
@@ -62,7 +70,7 @@ output_pins = ["PD7", "PD8", "PD9"]
 
 ### `[layout]`
 
-`[layout]` section contains the default keymap for the keyboard:
+`[layout]` section contains the layout and the default keymap for the keyboard:
 
 ```toml
 [layout]
@@ -77,10 +85,6 @@ keymap = [
 The keymap inside is a 2-D array, which represents layer -> row -> key structure of your keymap:
 
 ```toml
-[layout]
-rows = 4
-cols = 3
-layers = 2
 keymap = [
   # Layer 1
   [
@@ -98,7 +102,11 @@ keymap = [
 ]
 ```
 
-The number of layers/rows/cols should be identical with what's already in `[matrix]` section. [Here](https://github.com/HaoboGu/rmk/blob/main/examples/use_config/stm32h7/keyboard.toml) is an example of keymap definition.
+The number of rows/cols in default keymap should be identical with what's already defined. [Here](https://github.com/HaoboGu/rmk/blob/main/examples/use_config/stm32h7/keyboard.toml) is an example of keymap definition. 
+
+<div class="warning">
+If the number of layer in default keymap is smaller than defined layer number, RMK will fill empty layers automatically. But the empty layers still consumes flash and RAM, so if you don't have a enough space for them, it's not recommended to use a big layer num.
+</div>
 
 In each row, some keys are set. Due to the limitation of `toml` file, all keys are strings. RMK would parse the strings and fill them to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
@@ -117,8 +125,8 @@ The key string should follow several rules:
     4. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
     5. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
     6. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
-
-  The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers)
+    
+  The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
 ### `[light]`
 
@@ -126,31 +134,27 @@ The key string should follow several rules:
 
 `pin` field is just like IO pins in `[matrix]`, `low_active` defines whether the light low-active or high-active(`true` means low-active).
 
+You can safely ignore any of them, or the whole `[light]` section if you don't need them.
+
 ```toml
 [light]
-# All light pins are high-active by default, uncomment if you want it to be low-active
-capslock.pin = "PA4"
-# capslock.low_active = true
-scrolllock.pin = "PA3"
-# scrolllock.low_active = true
-# Just ignore if no light pin is used for it
-# numslock.pin = "PA5"
-# numslock.low_active = true
+capslock = { pin = "PIN_0", low_active = true }
+scrolllock = { pin = "PIN_1", low_active = true }
+numslock= { pin = "PIN_2", low_active = true }
 ```
 
 ### `[storage]`
 
-`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. If you don't want to change the default setting, just leave this section empty.
-
+`[storage]` section defines storage related configs. Storage feature is required to persist keymap data, it's strongly recommended to make it enabled(and it's enabled by default!). RMK will automatically use the last two section of chip's internal flash as the pre-served storage space. For some chips, there's also predefined default configuration, such as [nRF52840](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/default_config/nrf52840.rs). If you don't want to change the default setting, just ignore this section.
 ```toml
 [storage]
 # Storage feature is enabled by default
-# enabled = false
+enabled = true
 # Start address of local storage, MUST BE start of a sector.
 # If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
-# start_addr = 0x00000000
+start_addr = 0x00000000
 # How many sectors are used for storage, the default value is 2
-# num_sectors = 2
+num_sectors = 2
 ```
 
 ### `[ble]`
@@ -160,17 +164,17 @@ To enable BLE, add `enabled = true` under the `[ble]` section.
 There are several more configs for reading battery level and charging state, now they are available for nRF52840 only.
 
 ```toml
+# Ble configuration
+# To use the default configuration, ignore this section completely
 [ble]
 # Whether to enable BLE feature
 enabled = true
 # nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
-battery_pin = "PA0"
+battery_adc_pin = { pin = "vddh", low_active = true }
 # Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
-charge_state.pin = "PA0"
-charge_state.low_active = true
-# Output pin for charging state LED 
-charge_led.pin = "PA1"
-charge_led.low_active = true
+charge_state = { pin = "PIN_1", low_active = true }
+# Output LED pin that blinks when the battery is low
+charge_led= { pin = "PIN_2", low_active = true }
 ```
 
 ## More customization
@@ -196,6 +200,180 @@ mod MyKeyboard {
 ```
 
 RMK should use the config from the user defined function to initialize the singleton of chip peripheral, for stm32, you can assume that it's initialized using `let p = embassy_stm32::init(config);`.
+
+
+## Appendix
+
+### `keyboard.toml`
+
+The following toml contains all available settings in `keyboard.toml`
+
+```toml
+# Basic info of the keyboard
+[keyboard]
+name = "RMK Keyboard" # Keyboard name
+product_name = "RMK Keyboard" # Display name of this keyboard
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+serial_number = "vial:f64c2b3c:000001"
+# The chip or existing board used in keyboard
+# Either \"board\" or \"chip\" can be set, but not both
+chip = "rp2040" 
+board = "nice!nano_v2"
+# USB is enabled by default for most chips
+# Set to false if you don't want USB
+usb_enable = true
+
+# Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
+[matrix]
+# Input and output pins
+input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+output_pins = ["PIN_19", "PIN_20", "PIN_21"]
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+
+# Layout info for the keyboard, this section is mandatory
+[layout]
+# Number of rows. For split keyboard, this is the total rows contains all splits
+rows = 4
+# Number of cols. For split keyboard, this is the total cols contains all splits
+cols = 3
+# Number of layers. Be careful, since large layer number takes more flash and RAM
+layers = 2
+# Default keymap definition, the size should be consist with rows/cols
+# Empty layers will be used to fill if the number of layers set in default keymap is less than `layers` setting
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
+
+# Lighting configuration, if you don't have any light, just ignore this section.
+[light]
+# LED pins, capslock, scrolllock, numslock. You can safely ignore any of them if you don't have
+capslock = { pin = "PIN_0", low_active = true }
+scrolllock = { pin = "PIN_1", low_active = true }
+numslock= { pin = "PIN_2", low_active = true }
+
+# Storage configuration.
+# To use the default configuration, ignore this section completely
+[storage]
+# Whether the storage is enabled
+enabled = true
+# The start address of storage
+start_addr = 0x60000
+# Number of sectors used for storage, >= 2
+start_addr = 16
+
+# Ble configuration
+# To use the default configuration, ignore this section completely
+[ble]
+# Whether the ble is enabled
+enabled = true
+# BLE related pins, ignore any of them if you don't have
+# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
+battery_adc_pin = { pin = "vddh", low_active = true }
+# Input pin that indicates the charging state
+charge_state = { pin = "PIN_1", low_active = true }
+# Output LED pin that blinks when the battery is low
+charge_led= { pin = "PIN_2", low_active = true }
+
+# Split configuration
+# This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH
+[split]
+# Connection type of split, "serial" or "ble"
+connection = "serial"
+
+# Split central config
+[split.central]
+# Number of rows on central board
+rows = 2
+# Number of cols on central board
+cols = 2
+# Row offset of central matrix to the whole matrix
+row_offset = 0
+# Col offset of central matrix to the whole matrix
+col_offset = 0
+# If the connection type is "serial", the serial instances used on the central board are defined using "serial" field.
+# It's a list of serial instances with a length equal to the number of splits.
+# The order of the serial instances is important: the first serial instance on the central board
+# communicates with the first split peripheral defined, and so on.
+serial = [
+    { instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" },
+    { instance = "UART1", tx_pin = "PIN_4", rx_pin = "PIN_5" },
+]
+# If the connection type is "ble", we should have `ble_addr` to define the central's BLE static address
+# This address should be a valid BLE random static address, see: https://academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/lesson-2-bluetooth-le-advertising/topic/bluetooth-address/
+ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
+
+# Matrix IO definition on central board
+input_pins = ["PIN_9", "PIN_11"]
+output_pins = ["PIN_10", "PIN_12"]
+
+# Configuration for the first split peripheral
+# Note the double brackets [[ ]], which indicate that multiple split peripherals can be defined.
+# The order of peripherals is important: it should match the order of the serial instances(if serial is used).
+[[split.peripheral]]
+# Number of rows on peripheral board
+rows = 2
+# Number of cols on peripheral board
+cols = 1
+# Row offset of peripheral matrix to the whole matrix
+row_offset = 2
+# Col offset of peripheral matrix to the whole matrix
+col_offset = 2
+# The serial instance used to communication with the central board, if the connection type is "serial"
+serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
+# The BLE random static address of the peripheral board
+ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
+# Matrix IO definition on peripheral board
+input_pins = ["PIN_9", "PIN_11"]
+output_pins = ["PIN_10"]
+
+# More split peripherals(if you have)
+[[split.peripheral]]
+# The configuration is same with the first split peripheral
+...
+...
+...
+
+# Dependency config
+[dependency]
+# Whether to enable defmt, set to false for reducing binary size 
+defmt_log = true
+```
+
+### Available chip names
+
+Available chip names in `chip` field:
+- rp2040
+- nrf52840
+- nrf52833
+- nrf52832
+- nrf52811
+- nrf52810
+- esp32c3
+- esp32c6
+- esp32s3
+- ALL stm32s supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB
+
+### Available board names
+
+Available board names in `board` field:
+- nice!nano
+- nice!nano_v2
+- XIAO BLE
+
+If you want to add more built-in boards, feel free to open a PR!
 
 ## TODOs:
 
