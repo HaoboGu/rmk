@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add default config for chips
+
 ### Changed
 
+- BREAKING: refactor the whole macro crate, update `keyboard.toml` fields
 - Use reference of keymap in `run_rmk` 
 
 ### Fixed

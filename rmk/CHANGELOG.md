@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - BREAKING: use reference of keymap in `run_rmk` 
+- BREAKING: refactor the whole macro crate, update `keyboard.toml` config, old `keyboard.toml` config may raise compilation error
 - Decouple the matrix(input device) and keyboard implementation
 - Stop scanning matrix after releasing all keys
 - Use divider to estimate battery voltage
