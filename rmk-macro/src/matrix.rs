@@ -53,7 +53,7 @@ pub(crate) fn expand_matrix_input_output_pins(
         #extra_import
         let (input_pins, output_pins) = {
             #pin_initialization
-            (output_pins, input_pins)
+            (input_pins, output_pins)
         };
     }
 }
