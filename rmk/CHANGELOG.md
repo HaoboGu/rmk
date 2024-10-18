@@ -10,10 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add restart to ESP32
+- Optimize nRF BLE power consumption, now the idle current is decreased to about 20uA
 
 ### Changed
 
+- BREAKING: use reference of keymap in `run_rmk` 
+- BREAKING: refactor the whole macro crate, update `keyboard.toml` config, old `keyboard.toml` config may raise compilation error
+- Decouple the matrix(input device) and keyboard implementation
+- Stop scanning matrix after releasing all keys
 - Use divider to estimate battery voltage
+
+### Fixed
+
+- Fix unexpected power consumption for nRF
+- Fix extra memory usage by duplicating keymaps
+- Fix COL/ROW typo
+- Fix ESP stackoverflow by increasing default ESP main stack size
 
 ## [0.3.2] - 2024-10-05
 

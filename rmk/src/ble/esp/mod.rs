@@ -52,7 +52,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     let f = Partition::new(PartitionType::Custom, Some(c"rmk"));

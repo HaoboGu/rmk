@@ -1,87 +1,66 @@
 use serde_derive::Deserialize;
 
 /// Configurations for RMK keyboard.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct KeyboardTomlConfig {
+    /// Basic keyboard info
     pub keyboard: KeyboardInfo,
-    pub matrix: MatrixConfig,
-    #[serde(default = "default_light_config")]
-    pub light: LightConfig,
-    #[serde(default = "default_storage_config")]
-    pub storage: StorageConfig,
+    /// Matrix of the keyboard, only for non-split keyboards
+    pub matrix: Option<MatrixConfig>,
+    /// Layout config.
+    /// For split keyboard, the total row/col should be defined in this section
+    pub layout: LayoutConfig,
+    /// Light config
+    pub light: Option<LightConfig>,
+    /// Storage config
+    pub storage: Option<StorageConfig>,
+    /// Ble config
     pub ble: Option<BleConfig>,
-    #[serde(default = "default_dep")]
-    pub dependency: DependencyConfig,
-    pub layout: Option<LayoutConfig>,
+    /// Dependency config
+    pub dependency: Option<DependencyConfig>,
+    /// Split config
     pub split: Option<SplitConfig>,
 }
 
-/// Configurations for usb
+/// Configurations for keyboard info
 #[derive(Clone, Debug, Deserialize)]
 pub struct KeyboardInfo {
+    /// Keyboard name
+    pub name: String,
     /// Vender id
     pub vendor_id: u16,
     /// Product id
     pub product_id: u16,
     /// Manufacturer
     pub manufacturer: Option<String>,
-    /// Product name
+    /// Product name, if not set, it will use `name` as default
     pub product_name: Option<String>,
     /// Serial number
     pub serial_number: Option<String>,
-    /// chip model
-    pub chip: String,
+    /// Board name(if a supported board is used)
+    pub board: Option<String>,
+    /// Chip model
+    pub chip: Option<String>,
     /// enable usb
-    #[serde(default = "default_true")]
-    pub usb_enable: bool,
-}
-
-impl Default for KeyboardInfo {
-    fn default() -> Self {
-        Self {
-            vendor_id: 0x4c4b,
-            product_id: 0x4643,
-            manufacturer: Some("RMK".to_string()),
-            product_name: Some("RMK Keyboard".to_string()),
-            serial_number: Some("vial:f64c2b3c:000001".to_string()),
-            chip: "rp2040".to_string(),
-            usb_enable: true,
-        }
-    }
+    pub usb_enable: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
-    pub rows: u8,
-    pub cols: u8,
-    pub layers: u8,
     pub input_pins: Vec<String>,
     pub output_pins: Vec<String>,
 }
 
 /// Config for storage
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
 pub struct StorageConfig {
     /// Start address of local storage, MUST BE start of a sector.
     /// If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
-    #[serde(default)]
-    pub start_addr: usize,
+    pub start_addr: Option<usize>,
     // Number of sectors used for storage, >= 2.
-    #[serde(default = "default_num_sectors")]
-    pub num_sectors: u8,
-    ///
+    pub num_sectors: Option<u8>,
     #[serde(default = "default_true")]
     pub enabled: bool,
-}
-
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            start_addr: 0,
-            num_sectors: 2,
-            enabled: false,
-        }
-    }
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
@@ -100,48 +79,33 @@ pub struct LightConfig {
     pub numslock: Option<PinConfig>,
 }
 
-fn default_num_sectors() -> u8 {
-    2
-}
-
-fn default_false() -> bool {
-    false
-}
-
-fn default_true() -> bool {
-    true
-}
-
+/// Config for a single pin
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct PinConfig {
     pub pin: String,
-    #[serde(default = "default_false")]
     pub low_active: bool,
 }
 
-/// Configurations for usb
-#[derive(Clone, Debug, Default, Deserialize)]
+/// Configurations for dependencies
+#[derive(Clone, Debug, Deserialize)]
 pub struct DependencyConfig {
     /// Enable defmt log or not
     #[serde(default = "default_true")]
     pub defmt_log: bool,
 }
 
-fn default_dep() -> DependencyConfig {
-    DependencyConfig { defmt_log: true }
+impl Default for DependencyConfig {
+    fn default() -> Self {
+        Self { defmt_log: true }
+    }
 }
 
-fn default_light_config() -> LightConfig {
-    LightConfig::default()
-}
-
-fn default_storage_config() -> StorageConfig {
-    StorageConfig::default()
-}
-
-/// Configurations for usb
+/// Configurations for keyboard layout
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct LayoutConfig {
+    pub rows: u8,
+    pub cols: u8,
+    pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
 }
 
@@ -154,21 +118,36 @@ pub struct SplitConfig {
 }
 
 /// Configurations for each split board
+///
+/// Either ble_addr or serial must be set, but not both.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitBoardConfig {
+    /// Row number of the split board
     pub rows: usize,
+    /// Col number of the split board
     pub cols: usize,
+    /// Row offset of the split board
     pub row_offset: usize,
+    /// Col offset of the split board
     pub col_offset: usize,
+    /// Ble address
     pub ble_addr: Option<[u8; 6]>,
+    /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
+    /// Input pin config
     pub input_pins: Vec<String>,
+    /// Output pin config
     pub output_pins: Vec<String>,
 }
 
+/// Serial port config
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SerialConfig {
     pub instance: String,
     pub tx_pin: String,
     pub rx_pin: String,
+}
+
+fn default_true() -> bool {
+    true
 }

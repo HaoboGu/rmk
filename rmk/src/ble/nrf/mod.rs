@@ -201,7 +201,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(feature = "col2row")] output_pins: [Out; COL],
     #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
     spawner: Spawner,
 ) -> ! {

@@ -39,7 +39,7 @@ fn main() {
     block_on(run_rmk(
         input_pins,
         output_pins,
-        crate::keymap::KEYMAP,
+        &mut keymap::get_default_keymap(),
         keyboard_config,
     ));
 }

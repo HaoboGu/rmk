@@ -14,7 +14,7 @@ cd examples/use_rust/stm32f1 && cargo build --release && cd ../../..
 cd examples/use_rust/stm32f4 && cargo build --release && cd ../../..
 cd examples/use_rust/stm32h7 && cargo build --release && cd ../../.. 
 cd examples/use_rust/stm32h7_async && cargo build --release && cd ../../.. 
-cd examples/use_rust/hpm5300 && cargo +nightly build --release && cd ../../.. 
+cd examples/use_rust/hpm5300 && cargo build --release && cd ../../.. 
 cd examples/use_rust/rp2040_split && cargo build --release --bin central && cargo build --release --bin peripheral && cd ../../.. 
 cd examples/use_rust/nrf52840_ble_split && cargo build --release --bin central && cargo build --release --bin peripheral && cd ../../.. 
 

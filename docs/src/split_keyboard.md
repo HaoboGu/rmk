@@ -46,7 +46,7 @@ run_rmk_split_central::<
             input_pins,
             output_pins,
             driver,
-            crate::keymap::KEYMAP,
+            &mut get_default_keymap(),
             keyboard_config,
             central_addr,
             spawner,

@@ -6,16 +6,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
-use crate::{
-    keyboard::{CommunicationType, Overwritten},
-    usb_interrupt_map::UsbInfo,
-    ChipModel, ChipSeries,
-};
+use crate::{keyboard::Overwritten, keyboard_config::KeyboardConfig, ChipSeries};
 
 pub(crate) fn expand_usb_init(
-    chip: &ChipModel,
-    usb_info: &UsbInfo,
-    communication_type: CommunicationType,
+    keyboard_config: &KeyboardConfig,
     item_mod: &ItemMod,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
@@ -33,63 +27,66 @@ pub(crate) fn expand_usb_init(
                 }
                 None
             })
-            .unwrap_or(usb_config_default(chip, usb_info, communication_type))
+            .unwrap_or(usb_config_default(keyboard_config))
     } else {
-        usb_config_default(chip, usb_info, communication_type)
+        usb_config_default(keyboard_config)
     }
 }
 
 /// Default implementation of usb initialization
-pub(crate) fn usb_config_default(
-    chip: &ChipModel,
-    usb_info: &UsbInfo,
-    comm_type: CommunicationType,
-) -> TokenStream2 {
-    let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-    match chip.series {
-        ChipSeries::Stm32 => {
-            let dp = format_ident!("{}", usb_info.dp);
-            let dm = format_ident!("{}", usb_info.dm);
-            if usb_info.peripheral_name.contains("OTG") {
-                quote! {
-                    static EP_OUT_BUFFER: ::static_cell::StaticCell<[u8; 1024]> = ::static_cell::StaticCell::new();
-                    let mut usb_config = ::embassy_stm32::usb_otg::Config::default();
-                    usb_config.vbus_detection = false;
-                    let driver = ::embassy_stm32::usb_otg::Driver::new_fs(
-                        p.#peripheral_name,
-                        Irqs,
-                        p.#dp,
-                        p.#dm,
-                        &mut EP_OUT_BUFFER.init([0; 1024])[..],
-                        usb_config,
-                    );
-                }
-            } else {
-                quote! {
-                    {
-                        let _dp = ::embassy_stm32::gpio::Output::new(&mut p.#dp, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::Low);
-                        ::embassy_time::Timer::after_millis(10).await;
+pub(crate) fn usb_config_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
+        let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+        match keyboard_config.chip.series {
+            ChipSeries::Stm32 => {
+                let dp = format_ident!("{}", usb_info.dp);
+                let dm = format_ident!("{}", usb_info.dm);
+                if usb_info.peripheral_name.contains("OTG") {
+                    quote! {
+                        static EP_OUT_BUFFER: ::static_cell::StaticCell<[u8; 1024]> = ::static_cell::StaticCell::new();
+                        let mut usb_config = ::embassy_stm32::usb_otg::Config::default();
+                        usb_config.vbus_detection = false;
+                        let driver = ::embassy_stm32::usb_otg::Driver::new_fs(
+                            p.#peripheral_name,
+                            Irqs,
+                            p.#dp,
+                            p.#dm,
+                            &mut EP_OUT_BUFFER.init([0; 1024])[..],
+                            usb_config,
+                        );
                     }
-                    // Usb driver
-                    let driver = ::embassy_stm32::usb::Driver::new(p.#peripheral_name, Irqs, p.#dp, p.#dm);
+                } else {
+                    quote! {
+                        {
+                            let _dp = ::embassy_stm32::gpio::Output::new(&mut p.#dp, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::Low);
+                            ::embassy_time::Timer::after_millis(10).await;
+                        }
+                        // Usb driver
+                        let driver = ::embassy_stm32::usb::Driver::new(p.#peripheral_name, Irqs, p.#dp, p.#dm);
+                    }
                 }
             }
+            ChipSeries::Nrf52 => {
+                if keyboard_config.communication.ble_enabled() {
+                    // Both BLE + USB, software vbus is used
+                    quote! {
+                        let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
+                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
+                    }
+                } else {
+                    // USB only, use hardware vbus
+                    quote! {
+                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
+                    }
+                }
+            }
+            ChipSeries::Rp2040 => quote! {
+                let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
+            },
+            ChipSeries::Esp32 => quote! {},
         }
-        ChipSeries::Nrf52 => match comm_type {
-            CommunicationType::Usb => quote! {
-                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
-            },
-            CommunicationType::Both => quote! {
-                let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
-                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
-            },
-            CommunicationType::Ble => quote! {},
-            CommunicationType::None => quote! {},
-        },
-        ChipSeries::Rp2040 => quote! {
-            let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
-        },
-        ChipSeries::Esp32 => quote! {},
+    } else {
+        quote! {}
     }
 }
 

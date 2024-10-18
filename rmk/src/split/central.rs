@@ -63,7 +63,7 @@ pub async fn run_rmk_split_central<
     #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -168,7 +168,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
-    default_keymap: [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+    default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap

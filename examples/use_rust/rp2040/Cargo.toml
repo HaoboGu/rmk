@@ -22,7 +22,7 @@ embassy-executor = { version = "0.6", features = [
     "arch-cortex-m",
     "executor-thread",
     "integrated-timers",
-    "task-arena-size-8192",
+    "task-arena-size-32768",
 ] }
 cortex-m-rt = "0.7.3"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
