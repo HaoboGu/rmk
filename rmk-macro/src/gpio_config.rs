@@ -17,7 +17,7 @@ pub(crate) fn convert_output_pins_to_initializers(
         });
 
     initializers.extend(pin_initializers);
-    initializers.extend(quote! {let input_pins = [#(#idents), *];});
+    initializers.extend(quote! {let output_pins = [#(#idents), *];});
     initializers
 }
 
@@ -42,7 +42,7 @@ pub(crate) fn convert_input_pins_to_initializers(
             quote! { let #ident_name = #ts;}
         });
     initializers.extend(pin_initializers);
-    initializers.extend(quote! {let output_pins = [#(#idents), *];});
+    initializers.extend(quote! {let input_pins = [#(#idents), *];});
     initializers
 }
 

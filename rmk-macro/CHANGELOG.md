@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Add pull to pins
+- Fix reversed input_pins and output_pins
 
 ## [0.2.1] - 2024-10-03
 
