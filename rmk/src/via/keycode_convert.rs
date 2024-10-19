@@ -15,7 +15,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 if k.is_macro() {
                     k as u16 & 0xFF | 0x7700
                 } else if k.is_user() {
-                    k as u16 & 0xFF | 0x7E00
+                    k as u16 & 0xF | 0x7E00
                 } else {
                     k as u16
                 }
