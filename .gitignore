@@ -16,6 +16,7 @@ rmk-macro/Cargo.lock
 
 # mdbook site
 docs/book
+docs/po/messages.pot
 
 # esp idf build files
 .embuild
