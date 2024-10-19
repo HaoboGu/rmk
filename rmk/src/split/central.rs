@@ -68,10 +68,42 @@ pub async fn run_rmk_split_central<
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
-    #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_ble_split_central_and_run::<
+    // Create the debouncer, use COL2ROW by default
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
+
+    // Keyboard matrix, use COL2ROW by default
+    #[cfg(feature = "col2row")]
+    let matrix = CentralMatrix::<
         In,
         Out,
+        _,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_ROW,
+        CENTRAL_COL,
+    >::new(input_pins, output_pins, debouncer);
+    #[cfg(not(feature = "col2row"))]
+    let matrix = CentralMatrix::<
+        In,
+        Out,
+        _,
+        CENTRAL_ROW_OFFSET,
+        CENTRAL_COL_OFFSET,
+        CENTRAL_COL,
+        CENTRAL_ROW,
+    >::new(input_pins, output_pins, debouncer);
+
+    #[cfg(feature = "_nrf_ble")]
+    let fut = initialize_ble_split_central_and_run::<
+        _,
+        _,
         D,
         TOTAL_ROW,
         TOTAL_COL,
@@ -81,8 +113,7 @@ pub async fn run_rmk_split_central<
         CENTRAL_COL_OFFSET,
         NUM_LAYER,
     >(
-        input_pins,
-        output_pins,
+        matrix,
         usb_driver,
         default_keymap,
         keyboard_config,
@@ -93,8 +124,8 @@ pub async fn run_rmk_split_central<
 
     #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
     let fut = initialize_usb_split_central_and_run::<
-        In,
-        Out,
+        _,
+        _,
         D,
         F,
         TOTAL_ROW,
@@ -104,14 +135,7 @@ pub async fn run_rmk_split_central<
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         NUM_LAYER,
-    >(
-        input_pins,
-        output_pins,
-        usb_driver,
-        flash,
-        default_keymap,
-        keyboard_config,
-    )
+    >(matrix, usb_driver, flash, default_keymap, keyboard_config)
     .await;
 
     fut
@@ -149,8 +173,7 @@ pub async fn run_peripheral_monitor<
 
 /// Split central is connected to host via usb
 pub(crate) async fn initialize_usb_split_central_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    M: MatrixTrait,
     Out: OutputPin,
     D: Driver<'static>,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: NorFlash,
@@ -162,10 +185,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
+    mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
@@ -188,48 +208,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
 
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
-
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        RapidDebouncer<CENTRAL_ROW, CENTRAL_COL>,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-    >::new(input_pins, output_pins, RapidDebouncer::new());
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL>,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-    >::new(input_pins, output_pins, DefaultDebouncer::new());
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        RapidDebouncer<CENTRAL_COL, CENTRAL_ROW>,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_COL,
-        CENTRAL_ROW,
-    >::new(input_pins, output_pins, RapidDebouncer::new());
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW>,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_COL,
-        CENTRAL_ROW,
-    >::new(input_pins, output_pins, DefaultDebouncer::new());
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();

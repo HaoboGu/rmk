@@ -12,9 +12,7 @@ use embassy_sync::{
 };
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
+use embedded_hal::digital::OutputPin;
 use heapless::FnvIndexMap;
 use nrf_softdevice::{
     ble::{
@@ -27,10 +25,7 @@ use rmk_config::RmkConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::matrix::MatrixTrait;
 use crate::{
     action::KeyAction,
     ble::nrf::{
@@ -52,7 +47,6 @@ use crate::{
     usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
     via::process::VialService,
 };
-use crate::{debounce::DebouncerTrait, split::central::CentralMatrix};
 
 /// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -177,8 +171,7 @@ impl<'a> SplitReader for BleSplitCentralDriver<'a> {
 /// * `central_addr` - BLE random static address of central
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 pub(crate) async fn initialize_ble_split_central_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    M: MatrixTrait,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     const TOTAL_ROW: usize,
@@ -189,10 +182,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; CENTRAL_ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; CENTRAL_COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; CENTRAL_COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; CENTRAL_ROW],
+    mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
@@ -246,37 +236,6 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
 
     let ble_server = defmt::unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
-
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
-
-    #[cfg(feature = "col2row")]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        _,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-    >::new(input_pins, output_pins, debouncer);
-    #[cfg(not(feature = "col2row"))]
-    let mut matrix = CentralMatrix::<
-        In,
-        Out,
-        _,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_COL,
-        CENTRAL_ROW,
-    >::new(input_pins, output_pins, debouncer);
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();

@@ -102,11 +102,15 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {
+    pub(crate) fn new(
+        input_pins: [In; INPUT_PIN_NUM],
+        output_pins: [Out; OUTPUT_PIN_NUM],
+        debouncer: D,
+    ) -> Self {
         Matrix {
             input_pins,
             output_pins,
-            debouncer: D::new(),
+            debouncer,
             key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
         }
