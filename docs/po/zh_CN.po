@@ -1,0 +1,2583 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: RMK Documentation\n"
+"POT-Creation-Date: 2024-10-19T14:45:28+08:00\n"
+"PO-Revision-Date: 2024-10-19 18:27+0800\n"
+"Last-Translator: Decaday <myDecaday@outlook.com>\n"
+"Language-Team: Chinese (simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.5\n"
+
+#: src\SUMMARY.md:1
+msgid "Summary"
+msgstr ""
+
+#: src\SUMMARY.md:3
+msgid "Introduction"
+msgstr "介绍"
+
+#: src\SUMMARY.md:7
+msgid "User Guide"
+msgstr "用户手册"
+
+#: src\SUMMARY.md:9
+msgid "1. Overview"
+msgstr "1. 概览"
+
+#: src\SUMMARY.md:10
+msgid "2. Setup RMK environment"
+msgstr "2. 设置RMK环境"
+
+#: src\SUMMARY.md:11
+msgid "3. Create RMK firmware project"
+msgstr "3.创建 RMK 固件项目"
+
+#: src\SUMMARY.md:12 src\user_guide/3-1_config_rmk_project_toml.md:1
+msgid "Use `keyboard.toml`"
+msgstr "使用 `keyboard.toml`"
+
+#: src\SUMMARY.md:13 src\user_guide/3-2_config_rmk_project_rust.md:1
+msgid "Use Rust"
+msgstr "使用Rust"
+
+#: src\SUMMARY.md:14
+msgid "4. Compile and flash!"
+msgstr "4.编译并烧录！"
+
+#: src\SUMMARY.md:15
+msgid "FAQs"
+msgstr "常见问题"
+
+#: src\SUMMARY.md:16 src\real_world_examples.md:1
+msgid "Real world examples"
+msgstr "真实案例"
+
+#: src\SUMMARY.md:18
+msgid "Features"
+msgstr "特色"
+
+#: src\SUMMARY.md:19
+msgid "Keyboard Configuration"
+msgstr "键盘配置"
+
+#: src\SUMMARY.md:20
+msgid "Keymap"
+msgstr "键盘映射"
+
+#: src\SUMMARY.md:21 src\vial_support.md:1
+msgid "Vial support"
+msgstr "Vial支持"
+
+#: src\SUMMARY.md:22 src\wireless.md:1 src\roadmap.md:27
+msgid "Wireless"
+msgstr "无线"
+
+#: src\SUMMARY.md:23 src\low_power.md:1
+msgid "Low-power"
+msgstr "低功耗"
+
+#: src\SUMMARY.md:24 src\storage.md:1
+msgid "Storage"
+msgstr "存储"
+
+#: src\SUMMARY.md:25 src\split_keyboard.md:1
+msgid "Split keyboard"
+msgstr "分体键盘"
+
+#: src\SUMMARY.md:26
+msgid "Binary size optimization"
+msgstr "优化二进制大小"
+
+#: src\SUMMARY.md:28
+msgid "Development"
+msgstr "开发"
+
+#: src\SUMMARY.md:29 src\roadmap.md:1
+msgid "Roadmap"
+msgstr "路线图"
+
+#: src\SUMMARY.md:30
+msgid "How to contribute"
+msgstr "如何贡献"
+
+#: src\index.md:1
+msgid "RMK"
+msgstr ""
+
+#: src\index.md:3
+msgid ""
+"[![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/"
+"rmk) [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/"
+"rmk/) [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/"
+"badge.svg)](https://github.com/HaoboGu/rmk/actions)"
+msgstr ""
+
+#: src\index.md:7
+msgid ""
+"RMK is a Rust keyboard firmware crate with lots of usable features, like "
+"layer support, dynamic keymap, vial support, BLE wireless, etc, makes "
+"firmware customization easy and accessible."
+msgstr ""
+"RMK 是一个 Rust 编写的键盘固件库，拥有许多实用的功能，如层支持、动态键盘映"
+"射、Vial 支持、无线 BLE 等，使得固件定制变得简单易用。"
+
+#: src\user_guide/1_guide_overview.md:1
+msgid "Overview"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:3
+msgid ""
+"This guide aims to introduce you how to build your own keyboard firmware "
+"using RMK and run it on your microcontroller. There are 3 steps of the guide:"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:5
+msgid "setup the RMK environment"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:7
+msgid "create a RMK project"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:9
+msgid "compile the firmware and flash"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:11
+msgid ""
+"If you get any questions or problems following this guide, please fire an "
+"issue at <https://github.com/HaoboGu/rmk/issues>."
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:13
+msgid "Before we start"
+msgstr ""
+
+#: src\user_guide/1_guide_overview.md:15
+msgid ""
+"Using RMK requires basic knowledge of **Rust programming** and **embedded "
+"devices**. If you're not familiar with Rust, [The Official Rust Book]"
+"(https://doc.rust-lang.org/book/) is a good start. And, if you're not "
+"familiar with embedded Rust, we recommend you to read [The Embedded Rust "
+"Book](https://docs.rust-embedded.org/book/) first. We'll keep working on "
+"making RMK more accessible for everybody."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:1
+msgid "Setup RMK environment"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:3
+msgid ""
+"In this section, you'll setup the Rust development environment, install all "
+"needed components for compiling and flashing RMK."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:5
+msgid "1. Install Rust"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:7
+msgid ""
+"RMK is written in Rust, so first you have to install Rust to your host. "
+"Installing Rust is easy, checkout [https://rustup.rs](https://rustup.rs) and "
+"follow the instructions."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:9
+msgid ""
+"[Here](https://doc.rust-lang.org/book/ch01-01-installation.html) is a more "
+"detailed guide for installing Rust."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:11
+msgid "2. Choose your hardware"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:13
+msgid ""
+"RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/"
+"embassy-rs/embassy) as the runtime, RMK supports many series of "
+"microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the "
+"supported microcontroller makes your journey of RMK much easier."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:15
+msgid ""
+"If you're using other microcontrollers, make sure your microcontroller "
+"supports [Embassy](https://github.com/embassy-rs/embassy)."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:17
+msgid "3. Install your target"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:19
+msgid ""
+"The next step is to add Rust's compilation target of your chosen "
+"microcontroller. Rust's default installation include only your host's "
+"compilation target, so you have to install the compilation target of your "
+"microcontroller manually."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:21
+msgid ""
+"Different microcontrollers with different architectures may have different "
+"compilation targets, if you're using ARM Cortex-M microcontrollers, [here]"
+"(https://docs.rust-embedded.org/book/intro/install.html#rust-toolchain) is a "
+"simple target list."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:23
+msgid ""
+"For example, rp2040 is a Cortex-M0+ microcontroller, it's compilation target "
+"is `thumbv6m-none-eabi`. Use `rustup target add` command to install it:"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:31
+msgid "4. Add other tools"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:33
+msgid "There are several other tools are highly recommended:"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:35
+msgid ""
+"`cargo generate`: needed for creating a RMK firmware project from [RMK "
+"project template](https://github.com/HaoboGu/rmk-template)"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:37
+msgid ""
+"`probe-rs`: used to flash and debug your firmware. [Here](https://probe.rs/"
+"docs/getting-started/installation/) is the installation instruction."
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:39
+msgid "You can use the following commands to install them:"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:42
+msgid "# Install cargo-generate"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:45
+msgid "# Install probe-rs using scripts"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:45
+msgid "  # Linux, macOS"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:47
+msgid "'=https'"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:48
+msgid "# Windows"
+msgstr ""
+
+#: src\user_guide/2_setup_environment.md:52
+msgid ""
+"Now you're all set for RMK! In the next section, you'll learn how to create "
+"your own RMK firmware project."
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:1
+msgid "Create RMK firmware project"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:3
+msgid ""
+"In this section, you'll create your own RMK firmware project using [RMK "
+"project template](https://github.com/HaoboGu/rmk-template) and [cargo-"
+"generate](https://github.com/cargo-generate/cargo-generate)."
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:7
+msgid "1. Create from template"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:9
+msgid ""
+"RMK provides a [project template](https://github.com/HaoboGu/rmk-template), "
+"making it much easier to create your own firmware using your favorite "
+"microcontroller. `cargo-generate` is required to use the template, you can "
+"install it using the following command(if you've installed cargo-generate, "
+"just skip this):"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:17
+msgid "Then you can create your RMK firmware project with a single command:"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:23
+msgid ""
+"This command would ask you to fill some basic info of your project, it "
+"requires a little bit deeper understanding of your chosen hardware. If you "
+"don't know what to fill, check [this section](2_setup_environment.md/#3-"
+"install-your-target) in overview first. The following is an example. In the "
+"example, a `stm32` microcontroller `stm32h7b0vb` is used, the corresponding "
+"target is `thumbv7em-none-eabihf`:"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:28
+msgid ""
+"```shell\n"
+"$ cargo generate --git https://github.com/HaoboGu/rmk-template\n"
+"🤷   Project Name: rmk-demo\n"
+"🔧   Destination: /Users/haobogu/Projects/keyboard/rmk-demo ...\n"
+"🔧   project-name: rmk-demo ...\n"
+"🔧   Generating template ...\n"
+"✔ 🤷   Choose your microcontroller family · stm32\n"
+"✔ 🤷   Choose your microcontroller's target · thumbv7em-none-eabihf\n"
+"🤷   Enter your MCU model(Embassy feature name): stm32h7b0vb\n"
+"️️👉👉👉 For the following steps, search 'TODO' in generated project\n"
+"🔧   Moving generated files into: `/Users/haobogu/Projects/keyboard/rmk-"
+"demo`...\n"
+"🔧   Initializing a fresh Git repository\n"
+"✨   Done! New project created /Users/haobogu/Projects/keyboard/rmk-demo\n"
+"```"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:43
+msgid ""
+"A RMK firmware project will be automatically created after you fill out all "
+"required fields. Use `code <your-project-name>` to open the project in "
+"VSCode. If you're lucky enough, you project could just compile with `cargo "
+"build` command! But for the most of the cases, there are minor modifications "
+"you have to do. There are two ways to use config your RMK keyboard in your "
+"firmware project:"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:46
+msgid "[use a config file: `keyboard.toml`](3-1_config_rmk_project_toml.md)"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:48
+msgid ""
+"For new users, it's recommend to use `keyboard.toml` to config your "
+"keyboard. This config file contains almost all about your keyboard, with it, "
+"you can create your firmware very conveniently, no Rust code needed! Please "
+"check [Keyboard Configuration](../keyboard_configuration.md) feature for "
+"configuration details."
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:50
+msgid "[use Rust code](3-2_config_rmk_project_rust.md)"
+msgstr ""
+
+#: src\user_guide/3_create_firmware.md:52
+msgid ""
+"If the configuration doesn't satisfy all your needs(it would mostly do!), "
+"you can write your own Rust code to do more customization! RMK also provides "
+"some [examples](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust) "
+"to help you quickly get throught it."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:3
+msgid "The generated `main.rs` should be like:"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:13
+msgid ""
+"There's a macro `rmk_keyboard` that does the magic for you. This macro will "
+"automatically read the `keyboard.toml` in your project root and generate all "
+"boilerplate code for you."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:15
+msgid "There're steps you have to do to customize your own firmware:"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:17
+msgid "Edit `keyboard.toml`"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:19
+msgid ""
+"The generated `keyboard.toml` should have some fields configured from `cargo "
+"generate`. But there are still some fields that you want to fill, such as "
+"the pin matrix, default keymap, led config, etc."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:21
+msgid ""
+"The [Keyboard Configuration](../keyboard_configuration.md) section has full "
+"instructions of how to write your own `keyboard.toml`. Follow the doc and "
+"report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We "
+"appreciate your feedback!"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:23
+msgid "Update `memory.x`"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:25
+#: src\user_guide/3-2_config_rmk_project_rust.md:7
+msgid ""
+"`memory.x` is the linker script of Rust embedded project, it's used to "
+"define the memory layout of the microcontroller. RMK enables `memory-x` "
+"feature for `embassy-stm32`, so if you're using stm32, you can just ignore "
+"this step."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:27
+#: src\user_guide/3-2_config_rmk_project_rust.md:9
+msgid ""
+"For other ARM Cortex-M microcontrollers, you only need to update the "
+"`LENGTH` of FLASH and RAM to your microcontroller."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:29
+msgid ""
+"If you're using **nRF52840**, generally you have to change start address in "
+"`memory.x` to 0x27000 or 0x26000, according to your softdevice version. For "
+"example, softdevice v6.1.x should use 0x00026000 and v7.3.0 should be "
+"0x00027000"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:31
+#: src\user_guide/3-2_config_rmk_project_rust.md:13
+msgid ""
+"You can either checkout your microcontroller's datasheet or existing Rust "
+"project of your microcontroller for it."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:33
+#: src\user_guide/3-2_config_rmk_project_rust.md:35
+msgid "Add your own layout"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:35
+msgid ""
+"The layout should be consistent with the default keymap set in `keyboard."
+"toml`"
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:37
+#: src\user_guide/3-2_config_rmk_project_rust.md:37
+msgid ""
+"The next step is to add your own keymap layout for your firmware. RMK "
+"supports [vial app](https://get.vial.today/), an open-source cross-"
+"platform(windows/macos/linux/web) keyboard configurator. So the vial like "
+"keymap definition has to be imported to the firmware project."
+msgstr ""
+
+#: src\user_guide/3-1_config_rmk_project_toml.md:41
+#: src\user_guide/3-2_config_rmk_project_rust.md:41
+msgid ""
+"Fortunately, RMK does most of the heavy things for you, all you need to do "
+"is to create your own keymap definition and convert it to `vial.json` "
+"following **[vial's doc here](https://get.vial.today/docs/porting-to-via."
+"html)**, and place it at the root of the firmware project, replacing the "
+"default one. RMK would do all the rest things for you."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:3
+msgid ""
+"By default, the generated project uses `keyboard.toml` to config the RMK "
+"keyboard firmware. If you want to customize your firmware using Rust, "
+"there're steps to do to make the generated firmware project compile:"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:5
+msgid "Update memory.x"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:11
+msgid ""
+"If you're using **nRF52840**, generally you have to change start address in "
+"`memory.x` to 0x27000 or 0x26000, according to your softdevice version. For "
+"example, softdevice v6.1.x should use 0x00026000 and v7.1.x should be "
+"0x00027000"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:15
+msgid "Update `main.rs`"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:17
+msgid ""
+"By default, generated `main.rs` uses proc-macro and `keyboard.toml`. To "
+"fully customize the firmware, you can copy the code from RMK's Rust example, "
+"such as <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/"
+"src/main.rs> to `src/main.rs`."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:19
+msgid ""
+"Next, you have to check `src/main.rs`, make sure that the binded USB "
+"interrupt is right. Different microcontrollers have different types of USB "
+"peripheral, so does bind interrupt. You can check out [Embassy's examples]"
+"(https://github.com/embassy-rs/embassy/tree/main/examples) for how to bind "
+"the USB interrupt correctly."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:24
+msgid ""
+"For example, if you're using stm32f4, there is an [usb serial example]"
+"(https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/"
+"usb_serial.rs) there. And code for binding USB interrupt is at [line 15-17]"
+"(https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4/src/bin/"
+"usb_serial.rs#L15-L17):"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:45
+msgid "Add your default keymap"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:47
+msgid ""
+"After adding the layout of your keyboard, the default keymap should also be "
+"updated. The default keymap is defined in `src/keymap.rs`, update keyboard "
+"matrix constants and add a `get_default_keymap()` function which returns the "
+"default keymap of your keyboard."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:50
+msgid ""
+"RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/"
+"#macros) helping you define your keymap. Check out [keymap_configuration](../"
+"keymap.md) chapter for more details. You can also check `src/keymap.rs` "
+"files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> "
+"examples for reference."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:54
+msgid "Define your matrix"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:56
+msgid ""
+"Next, you're going to change the IO pins of keyboard matrix making RMK run "
+"on your own PCB. Generally, IO pins are defined in `src/main.rs`. RMK will "
+"generate a helper macro to help you to define the matrix. For example, if "
+"you're using rp2040, you can define your pins using `config_matrix_pins_rp!`:"
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:68
+msgid "`input` and `output` are lists of used pins, change them accordingly."
+msgstr ""
+
+#: src\user_guide/3-2_config_rmk_project_rust.md:70
+msgid ""
+"So far so good, you've done all necessary modifications of your firmware "
+"project. You can also check TODOs listed in the generated `README.md` file."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:1
+msgid "Compile and flash!"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:3
+msgid ""
+"In this section, you'll be able to compile your firmware and flash it to "
+"your microcontroller."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:5
+msgid "Compile the firmware"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:7
+msgid "To compile the firmware is easy, just run"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:13
+msgid ""
+"If you've done all the previous steps correctly, you can find your compiled "
+"firmware at `target/<your_target>/release` folder, whose name is your "
+"project's name or the name set in `Cargo.toml`'s `[[bin]]` section."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:15
+msgid ""
+"The firmware generated by Rust has no extension, which is actually an ELF "
+"file."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:17
+msgid ""
+"If you encountered any problems when compiling the firmware, please report "
+"it [here](https://github.com/HaoboGu/rmk/issues)."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:19
+msgid "Flash the firmware"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:21
+msgid ""
+"The last step is to flash compiled firmware to your microcontroller. RMK "
+"supports flashing the firmware via uf2 bootloader or debug probe."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:24
+msgid "Use uf2 bootloader"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:26
+msgid ""
+"By default, Rust firmware is an ELF file, so we have to do some extra steps "
+"converting it to uf2 format."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:28
+msgid ""
+"RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate "
+"the uf2 firmware generation."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:30
+msgid "First, you'd install the `cargo-make` tool:"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:36
+msgid ""
+"Then, update the chip family argument(aka argument after -f) in `Makefile."
+"toml` in your project. You can get your chip's family ID in `scripts/uf2conv."
+"py`."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:38
+msgid "That's all you need to set. The final step is to run"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:44
+msgid "to generate your uf2 firmware."
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:46
+msgid "Use debug probe"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:48
+msgid ""
+"If you have a debug probe like [daplink](https://daplink.io/), [jlink]"
+"(https://www.segger.com/products/debug-probes/j-link/) or [stlink](https://"
+"github.com/stlink-org/stlink)(stm32 only), things become much easier: "
+"connect it with your board and host, make sure you have installed [probe-rs]"
+"(https://probe.rs/), then just run"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:54
+msgid ""
+"Then the command configured in `.cargo/config.toml` will be executed. The "
+"firmware will be flashed to your microcontroller and run automatically, yay!"
+msgstr ""
+
+#: src\user_guide/4_compile_and_flash.md:56
+msgid ""
+"For more configurations of RMK, you can check out feature documentations on "
+"the left."
+msgstr ""
+
+#: src\faq.md:1
+msgid "FAQ"
+msgstr ""
+
+#: src\faq.md:3
+msgid "Where is my built firmware?"
+msgstr ""
+
+#: src\faq.md:5
+msgid ""
+"By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where "
+"`<TARGET>` is your microcontroller's [target](./"
+"user_guide/2_setup_environment.md/#3-install-your-target) and `<MODE>` is "
+"`debug` or `release`, depending on your build mode."
+msgstr ""
+
+#: src\faq.md:7
+msgid ""
+"The firmware's name is your project name in `Cargo.toml`. It's actually an "
+"`elf` file, but without file extension."
+msgstr ""
+
+#: src\faq.md:9
+msgid "I want `hex`/`bin`/`uf2` file, how can I get it?"
+msgstr ""
+
+#: src\faq.md:11
+msgid ""
+"By default, Rust compiler generates `elf` file in target folder. There're a "
+"little extra steps for generating `hex`, `bin` or `uf2` file."
+msgstr ""
+
+#: src\faq.md:13
+msgid ""
+"`hex`/`bin`: To generate `hex`/`bin` file, you need [cargo-binutils](https://"
+"github.com/rust-embedded/cargo-binutils). You can use"
+msgstr ""
+
+#: src\faq.md:20
+msgid ""
+"to install it. Then, you can use the following command to generate `hex` or "
+"`bin` firmware:"
+msgstr ""
+
+#: src\faq.md:29
+msgid ""
+"`uf2`: RMK provides [cargo-make](https://github.com/sagiegurari/cargo-make) "
+"config for all examples to generate `uf2` file automatically. Check "
+"`Makefile.toml` files in the example folders. The following command can be "
+"used to generate uf2 firmware:"
+msgstr ""
+
+#: src\faq.md:39
+msgid ""
+"This script requires you have `python` command available in your "
+"commandline. Some platforms have `python3` command only, you can change "
+"`python` in `Makefile.toml` to `python3` in this case."
+msgstr ""
+
+#: src\faq.md:41
+msgid "I can see a `RMK Start` log, but nothing else"
+msgstr ""
+
+#: src\faq.md:43
+msgid ""
+"First you need to check the RCC config of your board, make sure that the "
+"USB's clock is enabled and set to 48MHZ. For example, if you're using "
+"stm32f1, you can set the RCC as the following:"
+msgstr ""
+
+#: src\faq.md:46
+msgid "// If you're using a keyboard.toml"
+msgstr ""
+
+#: src\faq.md:62
+msgid ""
+"If the keyboard still doesn't work, enabling full logging trace at `.cargo/"
+"config.toml`:"
+msgstr ""
+
+#: src\faq.md:64
+msgid ""
+"```toml\n"
+"[env]\n"
+"DEFMT_LOG = \"trace\"\n"
+"```"
+msgstr ""
+
+#: src\faq.md:69
+msgid ""
+"run `cargo clean` and then `cargo run --release`. Open an [issue](https://"
+"github.com/HaoboGu/rmk/issues) with the detailed logs."
+msgstr ""
+
+#: src\faq.md:71
+msgid ""
+"rust-lld: error: section will not fit in region 'FLASH': overflowed by x "
+"bytes"
+msgstr ""
+
+#: src\faq.md:73
+msgid ""
+"This is because your MCU's flash is too small. Try building in release mode: "
+"`cargo build --release`. If the error still there, follow our [`binary size "
+"optimization`](binary_size_optimization.md) doc to reduce your code size."
+msgstr ""
+
+#: src\faq.md:75
+msgid "I see ERROR: Storage is full error in the log"
+msgstr ""
+
+#: src\faq.md:77
+msgid ""
+"By default, RMK uses only 2 sectors of your microcontroller's internal "
+"flash. You may get the following error if 2 sectors is not big enough to "
+"store all your keymaps:"
+msgstr ""
+
+#: src\faq.md:88
+msgid ""
+"If you have more sectors available in your internal flash, you can increase "
+"`num_sectors` in `[storage]` section of your `keyboard.toml`, or change "
+"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/"
+"rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API."
+msgstr ""
+
+#: src\faq.md:90
+msgid "panicked at embassy-executor: task arena is full."
+msgstr ""
+
+#: src\faq.md:92
+msgid ""
+"The current embassy requires manually setting of the task arena size. By "
+"default, RMK set's it to 32768 in all examples:"
+msgstr ""
+
+#: src\faq.md:94
+msgid ""
+"```toml\n"
+"# Cargo.toml\n"
+"embassy-executor = { version = \"0.6\", features = [\n"
+"    \"defmt\",\n"
+"    \"arch-cortex-m\",\n"
+"    \"task-arena-size-32768\",\n"
+"    \"executor-thread\",\n"
+"    \"integrated-timers\",\n"
+"] }\n"
+"```"
+msgstr ""
+
+#: src\faq.md:105
+msgid ""
+"If you got `ERROR panicked at 'embassy-executor: task arena is full.` error "
+"after flashing to your MCU, that means that you should increase your "
+"embassy's task arena. Embassy has a series cargo features to do this, for "
+"example, changing task arena size to 65536:"
+msgstr ""
+
+#: src\faq.md:119
+msgid ""
+"In the latest git version of embassy, task arena size could be calculated "
+"automatically, but it requires **nightly** version of Rust."
+msgstr ""
+
+#: src\faq.md:121
+msgid ""
+"If you're comfortable with nightly Rust, you can enable `nightly` feature of "
+"embassy-executor and remove `task-arena-size-*` feature."
+msgstr ""
+
+#: src\faq.md:123
+msgid "RMK breaks my bootloader"
+msgstr ""
+
+#: src\faq.md:125
+msgid ""
+"By default RMK uses last 2 sectors as the storage. If your bootloader is "
+"placed there too, RMK will erase it. To avoid it, you can change "
+"`start_addr` in `[storage]` section of your `keyboard.toml`, or change "
+"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/"
+"rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API."
+msgstr ""
+
+#: src\real_world_examples.md:3
+msgid "This pages contains real world examples of RMK keyboards."
+msgstr ""
+
+#: src\real_world_examples.md:5
+msgid "[rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)"
+msgstr ""
+
+#: src\real_world_examples.md:7
+msgid "A BLE/USB dual-mode GH60 keyboard using Ebyte's E73 nRF52840 module."
+msgstr ""
+
+#: src\real_world_examples.md:9
+msgid "![rmk-ble-keyboard](images/rmk_ble_keyboard.jpg)"
+msgstr ""
+
+#: src\real_world_examples.md:11
+msgid "Show your keyboard!"
+msgstr ""
+
+#: src\real_world_examples.md:13
+msgid ""
+"If you're using RMK to build your keyboard, feel free to open a PR adding "
+"your project to this page!"
+msgstr ""
+
+#: src\keyboard_configuration.md:1
+msgid "Configuration"
+msgstr ""
+
+#: src\keyboard_configuration.md:3
+msgid ""
+"RMK provides an easy and accessible way to set up the keyboard with a toml "
+"config file, even without Rust code!"
+msgstr ""
+
+#: src\keyboard_configuration.md:5
+msgid "Usage"
+msgstr ""
+
+#: src\keyboard_configuration.md:7
+msgid ""
+"A `toml` file named `keyboard.toml` is used as a configuration file. The "
+"following is the spec of `toml` if you're unfamiliar with toml:"
+msgstr ""
+
+#: src\keyboard_configuration.md:8
+msgid ""
+"[English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)"
+msgstr ""
+
+#: src\keyboard_configuration.md:10
+msgid ""
+"\\[Here\\] is an example `keyboard.toml` for stm32 microcontroller, put your "
+"`keyboard.toml` at the root of your firmware project."
+msgstr ""
+
+#: src\keyboard_configuration.md:12
+msgid ""
+"RMK provides a proc-macro to load the `keyboard.toml`: `#[rmk_keyboard]`, "
+"add it to your `main.rs` like:"
+msgstr ""
+
+#: src\keyboard_configuration.md:21
+msgid ""
+"And, that's it! `#[rmk_keyboard]` macro would load your `keyboard.toml` "
+"config and create everything that's needed for creating a RMK keyboard "
+"instance."
+msgstr ""
+
+#: src\keyboard_configuration.md:23
+msgid ""
+"If you don't want any other customizations beyond the `keyboard.toml`, "
+"`#[rmk_keyboard]` macro will just work. For the full examples, please check "
+"the [`example/use_config`](https://github.com/HaoboGu/rmk/tree/main/examples/"
+"use_config) folder."
+msgstr ""
+
+#: src\keyboard_configuration.md:25
+msgid "What's in the config file?"
+msgstr ""
+
+#: src\keyboard_configuration.md:27
+msgid ""
+"The config file contains almost EVERYTHING to customize a keyboard. For the "
+"full reference of `keyboard.toml`, please refer to [this](#keyboardtoml). "
+"Also, we have pre-defined default configurations for chips, at [`rmk-macro/"
+"src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/"
+"default_config) folder. We're going to add default configurations for more "
+"chips, contributions are welcome!"
+msgstr ""
+
+#: src\keyboard_configuration.md:29
+msgid "The following is the introduction of each section:"
+msgstr ""
+
+#: src\keyboard_configuration.md:31
+msgid "`[keyboard]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:33
+msgid ""
+"`[keyboard]` section contains basic information of the keyboard, such as "
+"keyboard's name, chip, etc:"
+msgstr ""
+
+#: src\keyboard_configuration.md:35
+msgid ""
+"```toml\n"
+"[keyboard]\n"
+"name = \"RMK Keyboard\"\n"
+"vendor_id = 0x4c4b\n"
+"product_id = 0x4643\n"
+"manufacturer = \"RMK\"\n"
+"chip = \"stm32h7b0vb\"\n"
+"# If your chip doesn't have a functional USB peripheral, for example, "
+"nRF52832/esp32c3(esp32c3 has only USB serial, not full functional USB), set "
+"`usb_enable` to false\n"
+"usb_enable = true\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:46
+msgid "`[matrix]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:48
+msgid ""
+"`[matrix]` section defines the key matrix information of the keyboard, aka "
+"input/output pins."
+msgstr ""
+
+#: src\keyboard_configuration.md:54
+msgid ""
+"IO pins are represented with an array of string, the string value should be "
+"the **GPIO peripheral name** of the chip. For example, if you're using "
+"stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/"
+"stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:"
+msgstr ""
+
+#: src\keyboard_configuration.md:56
+msgid "![gpio_peripheral_name](images/gpio_peripheral_name.png)"
+msgstr ""
+
+#: src\keyboard_configuration.md:58
+msgid ""
+"The GPIO peripheral name varies for different chips. For example, RP2040 has "
+"`PIN_0`, nRF52840 has `P0_00` and stm32 has `PA0`. So it's recommended to "
+"check the embassy's doc for your chip to get the valid GPIO name first."
+msgstr ""
+
+#: src\keyboard_configuration.md:60
+msgid "Here is an example toml of `[matrix]` section for stm32:"
+msgstr ""
+
+#: src\keyboard_configuration.md:62
+msgid ""
+"```toml\n"
+"[matrix]\n"
+"# Input and output pins are mandatory\n"
+"input_pins = [\"PD4\", \"PD5\", \"PD6\", \"PD3\"]\n"
+"output_pins = [\"PD7\", \"PD8\", \"PD9\"]\n"
+"# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs "
+"here do nothing actually\n"
+"# row2col = true\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:71
+msgid "`[layout]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:73
+msgid ""
+"`[layout]` section contains the layout and the default keymap for the "
+"keyboard:"
+msgstr ""
+
+#: src\keyboard_configuration.md:85
+msgid ""
+"The keymap inside is a 2-D array, which represents layer -> row -> key "
+"structure of your keymap:"
+msgstr ""
+
+#: src\keyboard_configuration.md:87
+msgid ""
+"```toml\n"
+"keymap = [\n"
+"  # Layer 1\n"
+"  [\n"
+"    [\"key1\", \"key2\"], # Row 1\n"
+"    [\"key1\", \"key2\"], # Row 2\n"
+"    ...\n"
+"  ],\n"
+"  # Layer 2\n"
+"  [\n"
+"    [..], # Row 1\n"
+"    [..], # Row 2\n"
+"    ...\n"
+"  ],\n"
+"  ...\n"
+"]\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:105
+msgid ""
+"The number of rows/cols in default keymap should be identical with what's "
+"already defined. [Here](https://github.com/HaoboGu/rmk/blob/main/examples/"
+"use_config/stm32h7/keyboard.toml) is an example of keymap definition."
+msgstr ""
+
+#: src\keyboard_configuration.md:111
+msgid ""
+"In each row, some keys are set. Due to the limitation of `toml` file, all "
+"keys are strings. RMK would parse the strings and fill them to actual keymap "
+"initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/"
+"tree/main/examples/use_rust/rp2040/src/keymap.rs)"
+msgstr ""
+
+#: src\keyboard_configuration.md:113
+msgid "The key string should follow several rules:"
+msgstr ""
+
+#: src\keyboard_configuration.md:115
+msgid ""
+"For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/"
+"latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name."
+msgstr ""
+
+#: src\keyboard_configuration.md:117
+msgid ""
+"For example, if you set a keycode `\"Backspace\"`, it will be turned to "
+"`KeyCode::Backspace`. So you have to ensure that the keycode string is "
+"valid, or RMK wouldn't compile!"
+msgstr ""
+
+#: src\keyboard_configuration.md:119
+msgid "For no-key, use `\"__\"`"
+msgstr ""
+
+#: src\keyboard_configuration.md:121
+msgid "RMK supports many advanced layer operations:"
+msgstr ""
+
+#: src\keyboard_configuration.md:122
+msgid ""
+"Use `\"MO(n)\"` to create a layer activate action, `n` is the layer number"
+msgstr ""
+
+#: src\keyboard_configuration.md:123
+msgid ""
+"Use `\"LM(n, modifier)\"` to create layer activate with modifier action. The "
+"modifier can be like `LShift | RGui`"
+msgstr ""
+
+#: src\keyboard_configuration.md:124
+msgid ""
+"Use `\"LT(n, key)\"` to create a layer activate action or tap key(tap/hold). "
+"The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/"
+"enum.KeyCode.html)"
+msgstr ""
+
+#: src\keyboard_configuration.md:125
+msgid ""
+"Use `\"OSL(n)\"` to create a one-shot layer action, `n` is the layer number"
+msgstr ""
+
+#: src\keyboard_configuration.md:126
+msgid ""
+"Use `\"TT(n)\"` to create a layer activate or tap toggle action, `n` is the "
+"layer number"
+msgstr ""
+
+#: src\keyboard_configuration.md:127
+msgid ""
+"Use `\"TG(n)\"` to create a layer toggle action, `n` is the layer number"
+msgstr ""
+
+#: src\keyboard_configuration.md:129
+msgid ""
+"The definitions of those operations are same with QMK, you can found [here]"
+"(https://docs.qmk.fm/#/feature_layers). If you want other actions, please "
+"[fire an issue](https://github.com/HaoboGu/rmk/issues/new)."
+msgstr ""
+
+#: src\keyboard_configuration.md:131
+msgid "`[light]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:133
+msgid ""
+"`[light]` section defines lights of the keyboard, aka `capslock`, "
+"`scrolllock` and `numslock`. They are actually an input pin, so there are "
+"two fields available: `pin` and `low_active`."
+msgstr ""
+
+#: src\keyboard_configuration.md:135
+msgid ""
+"`pin` field is just like IO pins in `[matrix]`, `low_active` defines whether "
+"the light low-active or high-active(`true` means low-active)."
+msgstr ""
+
+#: src\keyboard_configuration.md:137
+msgid ""
+"You can safely ignore any of them, or the whole `[light]` section if you "
+"don't need them."
+msgstr ""
+
+#: src\keyboard_configuration.md:139
+msgid ""
+"```toml\n"
+"[light]\n"
+"capslock = { pin = \"PIN_0\", low_active = true }\n"
+"scrolllock = { pin = \"PIN_1\", low_active = true }\n"
+"numslock= { pin = \"PIN_2\", low_active = true }\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:146
+msgid "`[storage]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:148
+msgid ""
+"`[storage]` section defines storage related configs. Storage feature is "
+"required to persist keymap data, it's strongly recommended to make it "
+"enabled(and it's enabled by default!). RMK will automatically use the last "
+"two section of chip's internal flash as the pre-served storage space. For "
+"some chips, there's also predefined default configuration, such as [nRF52840]"
+"(https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/default_config/"
+"nrf52840.rs). If you don't want to change the default setting, just ignore "
+"this section."
+msgstr ""
+
+#: src\keyboard_configuration.md:160
+msgid "`[ble]`"
+msgstr ""
+
+#: src\keyboard_configuration.md:162
+msgid "To enable BLE, add `enabled = true` under the `[ble]` section."
+msgstr ""
+
+#: src\keyboard_configuration.md:164
+msgid ""
+"There are several more configs for reading battery level and charging state, "
+"now they are available for nRF52840 only."
+msgstr ""
+
+#: src\keyboard_configuration.md:166
+msgid ""
+"```toml\n"
+"# Ble configuration\n"
+"# To use the default configuration, ignore this section completely\n"
+"[ble]\n"
+"# Whether to enable BLE feature\n"
+"enabled = true\n"
+"# nRF52840's saadc pin for reading battery level, you can use a pin number "
+"or \"vddh\"\n"
+"battery_adc_pin = { pin = \"vddh\", low_active = true }\n"
+"# Pin that reads battery's charging state, `low-active` means the battery is "
+"charging when `charge_state.pin` is low\n"
+"charge_state = { pin = \"PIN_1\", low_active = true }\n"
+"# Output LED pin that blinks when the battery is low\n"
+"charge_led= { pin = \"PIN_2\", low_active = true }\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:180
+msgid "More customization"
+msgstr ""
+
+#: src\keyboard_configuration.md:182
+msgid ""
+"`#[rmk_keyboard]` macro also provides some flexibilities of customizing the "
+"keyboard's behavior. For example, the clock config:"
+msgstr ""
+
+#: src\keyboard_configuration.md:195
+msgid "// ... other rcc configs below"
+msgstr ""
+
+#: src\keyboard_configuration.md:202
+msgid ""
+"RMK should use the config from the user defined function to initialize the "
+"singleton of chip peripheral, for stm32, you can assume that it's "
+"initialized using `let p = embassy_stm32::init(config);`."
+msgstr ""
+
+#: src\keyboard_configuration.md:205
+msgid "Appendix"
+msgstr ""
+
+#: src\keyboard_configuration.md:207
+msgid "`keyboard.toml`"
+msgstr ""
+
+#: src\keyboard_configuration.md:209
+msgid "The following toml contains all available settings in `keyboard.toml`"
+msgstr ""
+
+#: src\keyboard_configuration.md:211
+msgid ""
+"```toml\n"
+"# Basic info of the keyboard\n"
+"[keyboard]\n"
+"name = \"RMK Keyboard\" # Keyboard name\n"
+"product_name = \"RMK Keyboard\" # Display name of this keyboard\n"
+"vendor_id = 0x4c4b\n"
+"product_id = 0x4643\n"
+"manufacturer = \"haobo\"\n"
+"serial_number = \"vial:f64c2b3c:000001\"\n"
+"# The chip or existing board used in keyboard\n"
+"# Either \\\"board\\\" or \\\"chip\\\" can be set, but not both\n"
+"chip = \"rp2040\" \n"
+"board = \"nice!nano_v2\"\n"
+"# USB is enabled by default for most chips\n"
+"# Set to false if you don't want USB\n"
+"usb_enable = true\n"
+"\n"
+"# Set matrix IO for the board. This section is for non-split keyboard and is "
+"conflict with [split] section\n"
+"[matrix]\n"
+"# Input and output pins\n"
+"input_pins = [\"PIN_6\", \"PIN_7\", \"PIN_8\", \"PIN_9\"]\n"
+"output_pins = [\"PIN_19\", \"PIN_20\", \"PIN_21\"]\n"
+"# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs "
+"here do nothing actually\n"
+"\n"
+"# Layout info for the keyboard, this section is mandatory\n"
+"[layout]\n"
+"# Number of rows. For split keyboard, this is the total rows contains all "
+"splits\n"
+"rows = 4\n"
+"# Number of cols. For split keyboard, this is the total cols contains all "
+"splits\n"
+"cols = 3\n"
+"# Number of layers. Be careful, since large layer number takes more flash "
+"and RAM\n"
+"layers = 2\n"
+"# Default keymap definition, the size should be consist with rows/cols\n"
+"# Empty layers will be used to fill if the number of layers set in default "
+"keymap is less than `layers` setting\n"
+"keymap = [\n"
+"    [\n"
+"        [\"A\", \"B\", \"C\"],\n"
+"        [\"Kc1\", \"Kc2\", \"Kc3\"],\n"
+"        [\"LCtrl\", \"MO(1)\", \"LShift\"],\n"
+"        [\"OSL(1)\", \"LT(2, Kc9)\", \"LM(1, LShift | LGui)\"]\n"
+"    ],\n"
+"    [\n"
+"        [\"_\", \"TT(1)\", \"TG(2)\"],\n"
+"        [\"_\", \"_\", \"_\"],\n"
+"        [\"_\", \"_\", \"_\"],\n"
+"        [\"_\", \"_\", \"_\"]\n"
+"    ],\n"
+"]\n"
+"\n"
+"# Lighting configuration, if you don't have any light, just ignore this "
+"section.\n"
+"[light]\n"
+"# LED pins, capslock, scrolllock, numslock. You can safely ignore any of "
+"them if you don't have\n"
+"capslock = { pin = \"PIN_0\", low_active = true }\n"
+"scrolllock = { pin = \"PIN_1\", low_active = true }\n"
+"numslock= { pin = \"PIN_2\", low_active = true }\n"
+"\n"
+"# Storage configuration.\n"
+"# To use the default configuration, ignore this section completely\n"
+"[storage]\n"
+"# Whether the storage is enabled\n"
+"enabled = true\n"
+"# The start address of storage\n"
+"start_addr = 0x60000\n"
+"# Number of sectors used for storage, >= 2\n"
+"start_addr = 16\n"
+"\n"
+"# Ble configuration\n"
+"# To use the default configuration, ignore this section completely\n"
+"[ble]\n"
+"# Whether the ble is enabled\n"
+"enabled = true\n"
+"# BLE related pins, ignore any of them if you don't have\n"
+"# Pin that reads battery's charging state, `low-active` means the battery is "
+"charging when `charge_state.pin` is low\n"
+"battery_adc_pin = { pin = \"vddh\", low_active = true }\n"
+"# Input pin that indicates the charging state\n"
+"charge_state = { pin = \"PIN_1\", low_active = true }\n"
+"# Output LED pin that blinks when the battery is low\n"
+"charge_led= { pin = \"PIN_2\", low_active = true }\n"
+"\n"
+"# Split configuration\n"
+"# This section is conflict with [split] section, you could only have either "
+"[matrix] or [split], but NOT BOTH\n"
+"[split]\n"
+"# Connection type of split, \"serial\" or \"ble\"\n"
+"connection = \"serial\"\n"
+"\n"
+"# Split central config\n"
+"[split.central]\n"
+"# Number of rows on central board\n"
+"rows = 2\n"
+"# Number of cols on central board\n"
+"cols = 2\n"
+"# Row offset of central matrix to the whole matrix\n"
+"row_offset = 0\n"
+"# Col offset of central matrix to the whole matrix\n"
+"col_offset = 0\n"
+"# If the connection type is \"serial\", the serial instances used on the "
+"central board are defined using \"serial\" field.\n"
+"# It's a list of serial instances with a length equal to the number of "
+"splits.\n"
+"# The order of the serial instances is important: the first serial instance "
+"on the central board\n"
+"# communicates with the first split peripheral defined, and so on.\n"
+"serial = [\n"
+"    { instance = \"UART0\", tx_pin = \"PIN_0\", rx_pin = \"PIN_1\" },\n"
+"    { instance = \"UART1\", tx_pin = \"PIN_4\", rx_pin = \"PIN_5\" },\n"
+"]\n"
+"# If the connection type is \"ble\", we should have `ble_addr` to define the "
+"central's BLE static address\n"
+"# This address should be a valid BLE random static address, see: https://"
+"academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/"
+"lesson-2-bluetooth-le-advertising/topic/bluetooth-address/\n"
+"ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]\n"
+"\n"
+"# Matrix IO definition on central board\n"
+"input_pins = [\"PIN_9\", \"PIN_11\"]\n"
+"output_pins = [\"PIN_10\", \"PIN_12\"]\n"
+"\n"
+"# Configuration for the first split peripheral\n"
+"# Note the double brackets [[ ]], which indicate that multiple split "
+"peripherals can be defined.\n"
+"# The order of peripherals is important: it should match the order of the "
+"serial instances(if serial is used).\n"
+"[[split.peripheral]]\n"
+"# Number of rows on peripheral board\n"
+"rows = 2\n"
+"# Number of cols on peripheral board\n"
+"cols = 1\n"
+"# Row offset of peripheral matrix to the whole matrix\n"
+"row_offset = 2\n"
+"# Col offset of peripheral matrix to the whole matrix\n"
+"col_offset = 2\n"
+"# The serial instance used to communication with the central board, if the "
+"connection type is \"serial\"\n"
+"serial = [{ instance = \"UART0\", tx_pin = \"PIN_0\", rx_pin = \"PIN_1\" }]\n"
+"# The BLE random static address of the peripheral board\n"
+"ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]\n"
+"# Matrix IO definition on peripheral board\n"
+"input_pins = [\"PIN_9\", \"PIN_11\"]\n"
+"output_pins = [\"PIN_10\"]\n"
+"\n"
+"# More split peripherals(if you have)\n"
+"[[split.peripheral]]\n"
+"# The configuration is same with the first split peripheral\n"
+"...\n"
+"...\n"
+"...\n"
+"\n"
+"# Dependency config\n"
+"[dependency]\n"
+"# Whether to enable defmt, set to false for reducing binary size \n"
+"defmt_log = true\n"
+"```"
+msgstr ""
+
+#: src\keyboard_configuration.md:355
+msgid "Available chip names"
+msgstr ""
+
+#: src\keyboard_configuration.md:357
+msgid "Available chip names in `chip` field:"
+msgstr ""
+
+#: src\keyboard_configuration.md:358
+msgid "rp2040"
+msgstr ""
+
+#: src\keyboard_configuration.md:359
+msgid "nrf52840"
+msgstr ""
+
+#: src\keyboard_configuration.md:360
+msgid "nrf52833"
+msgstr ""
+
+#: src\keyboard_configuration.md:361
+msgid "nrf52832"
+msgstr ""
+
+#: src\keyboard_configuration.md:362
+msgid "nrf52811"
+msgstr ""
+
+#: src\keyboard_configuration.md:363
+msgid "nrf52810"
+msgstr ""
+
+#: src\keyboard_configuration.md:364
+msgid "esp32c3"
+msgstr ""
+
+#: src\keyboard_configuration.md:365
+msgid "esp32c6"
+msgstr ""
+
+#: src\keyboard_configuration.md:366
+msgid "esp32s3"
+msgstr ""
+
+#: src\keyboard_configuration.md:367
+msgid ""
+"ALL stm32s supported by [embassy-stm32](https://github.com/embassy-rs/"
+"embassy/blob/main/embassy-stm32/Cargo.toml) with USB"
+msgstr ""
+
+#: src\keyboard_configuration.md:369
+msgid "Available board names"
+msgstr ""
+
+#: src\keyboard_configuration.md:371
+msgid "Available board names in `board` field:"
+msgstr ""
+
+#: src\keyboard_configuration.md:372
+msgid "nice!nano"
+msgstr ""
+
+#: src\keyboard_configuration.md:373
+msgid "nice!nano_v2"
+msgstr ""
+
+#: src\keyboard_configuration.md:374
+msgid "XIAO BLE"
+msgstr ""
+
+#: src\keyboard_configuration.md:376
+msgid "If you want to add more built-in boards, feel free to open a PR!"
+msgstr ""
+
+#: src\keyboard_configuration.md:378
+msgid "TODOs:"
+msgstr ""
+
+#: src\keyboard_configuration.md:380
+msgid "gen keymap from `keyboard.toml`"
+msgstr ""
+
+#: src\keyboard_configuration.md:381
+msgid "read vial.json and gen"
+msgstr ""
+
+#: src\keymap.md:1
+msgid "Keymap configuration"
+msgstr ""
+
+#: src\keymap.md:3
+msgid ""
+"RMK supports configuring the default keymap at the compile time. Keymap in "
+"RMK is a 3-D matrix of [`KeyAction`](https://docs.rs/rmk/latest/rmk/action/"
+"enum.KeyAction.html), which represent the keyboard's action after you "
+"trigger a physical key. The 3 dimensions are the number of columns, rows and "
+"layers."
+msgstr ""
+
+#: src\keymap.md:5
+msgid "RMK provides both Rust code or config ways to set your default keymap."
+msgstr ""
+
+#: src\keymap.md:7
+msgid "Define default keymap in `keyboard.toml`"
+msgstr ""
+
+#: src\keymap.md:9
+msgid ""
+"Please check [this section](keyboard_configuration.md#layout) in keyboard "
+"configuration doc."
+msgstr ""
+
+#: src\keymap.md:11
+msgid "Define default keymap in Rust source file"
+msgstr ""
+
+#: src\keymap.md:13
+msgid ""
+"The default keymap could also be defined at a Rust source file, There are "
+"`keymap.rs`s in example folder, such as [this](https://github.com/HaoboGu/"
+"rmk/blob/main/examples/use_rust/nrf52840_ble/src/keymap.rs), which could be "
+"a good example of defining keymaps using Rust in RMK:"
+msgstr ""
+
+#: src\keymap.md:16
+msgid ""
+"// https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/"
+"src/keymap.rs"
+msgstr ""
+
+#: src\keymap.md:45
+msgid ""
+"First of all, the keyboard matrix's basic info(number of rows, cols and "
+"layers) is defined as consts:"
+msgstr ""
+
+#: src\keymap.md:53
+msgid "Then, the keymap is defined as a static 3-D matrix of `KeyAction`:"
+msgstr ""
+
+#: src\keymap.md:56
+msgid "// You should define a function that returns defualt keymap by yourself"
+msgstr ""
+
+#: src\keymap.md:62
+msgid ""
+"A keymap in RMK is a 3-level hierarchy: layer - row - column. Each keymap is "
+"a slice of layers whose length is `NUM_LAYER`. Each layer is a slice of rows "
+"whose length is `ROW`, and each row is a slice of `KeyAction`s whose length "
+"is `COL`."
+msgstr ""
+
+#: src\keymap.md:64
+msgid ""
+"RMK provides a bunch of macros which simplify the keymap definition a lot. "
+"You can check all available macros in [RMK doc](https://docs.rs/rmk/latest/"
+"rmk/index.html#macros). For example, `layer!` macro is used to define a "
+"layer. `k!` macro is used to define a normal key in the keymap. If there is "
+"no actual key at a position, you can use `a!(No)` to represent `KeyAction::"
+"No`."
+msgstr ""
+
+#: src\vial_support.md:3
+msgid ""
+"RMK uses [vial](https://get.vial.today/) as the default keymap editor. By "
+"using vial, you can change your keymapping at real-time, no more programming/"
+"flashing is needed."
+msgstr ""
+
+#: src\vial_support.md:7
+msgid ""
+"To persistently save your keymap data, RMK will use the **last two sectors** "
+"of your microcontroller's internal flash. See [storage](./storage.md). If "
+"you don't have enough flash for saving keymaps, changing in vial will lose "
+"after keyboard reboot."
+msgstr ""
+
+#: src\vial_support.md:11
+msgid "Port vial"
+msgstr ""
+
+#: src\vial_support.md:13
+msgid ""
+"To use vial in RMK, a keyboard definition file named `vial.json` is "
+"necessary. Vial has a very detailed documentation for how to generate this "
+"JSON file: <https://get.vial.today/docs/porting-to-via.html>. One note for "
+"generating `vial.json` is that you have to use same layout definition of "
+"internal keymap of RMK, defined in `src/keymap.rs` or `keyboard.toml`."
+msgstr ""
+
+#: src\vial_support.md:15
+msgid ""
+"After getting your `vial.json`, just place it at the root of RMK firmware "
+"project, and that's all. RMK will do all the rest work for you."
+msgstr ""
+
+#: src\wireless.md:3
+msgid ""
+"RMK has built-in wireless(BLE) support for nRF52 series and ESP32. To use "
+"the wireless feature, you need to enable ble feature gate in your `Cargo."
+"toml`:"
+msgstr ""
+
+#: src\wireless.md:5
+msgid ""
+"```toml\n"
+"rmk = { version = \"0.3.1\", features = [\n"
+"    \"nrf52840_ble\", # Enable BLE feature for nRF52840\n"
+"] }\n"
+"```"
+msgstr ""
+
+#: src\wireless.md:11
+msgid ""
+"RMK also provides ble examples, check [nrf52840_ble](https://github.com/"
+"HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble), [nrf52832_ble]"
+"(https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52832_ble) "
+"and [esp32c3_ble](https://github.com/HaoboGu/rmk/tree/main/examples/"
+"use_config/esp32c3_ble)."
+msgstr ""
+
+#: src\wireless.md:13
+msgid ""
+"Due to multiple targets are not supported by `docs.rs` right now, so API "
+"documentations are not there. Check examples for the usage. I'll add a "
+"separate doc site later."
+msgstr ""
+
+#: src\wireless.md:15
+msgid "Supported microcontrollers"
+msgstr ""
+
+#: src\wireless.md:17
+msgid ""
+"The following is the list of available feature gates(aka supported BLE "
+"chips):"
+msgstr ""
+
+#: src\wireless.md:19
+msgid "nrf52840_ble"
+msgstr ""
+
+#: src\wireless.md:20
+msgid "nrf52833_ble"
+msgstr ""
+
+#: src\wireless.md:21
+msgid "nrf52832_ble"
+msgstr ""
+
+#: src\wireless.md:22
+msgid "nrf52810_ble"
+msgstr ""
+
+#: src\wireless.md:23
+msgid "nrf52811_ble"
+msgstr ""
+
+#: src\wireless.md:24
+msgid "esp32c3_ble"
+msgstr ""
+
+#: src\wireless.md:25
+msgid "esp32c6_ble"
+msgstr ""
+
+#: src\wireless.md:26
+msgid "esp32s3_ble"
+msgstr ""
+
+#: src\wireless.md:28
+msgid "Flashing to your board"
+msgstr ""
+
+#: src\wireless.md:30
+msgid ""
+"RMK can be flashed via a debug probe or USB. Follow the instruction in the "
+"[`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/"
+"blob/main/examples/use_rust/nrf52840_ble/README.md)"
+msgstr ""
+
+#: src\wireless.md:32
+msgid "Nice!nano support"
+msgstr ""
+
+#: src\wireless.md:34
+msgid ""
+"RMK has special support for [nice!nano](https://nicekeyboards.com/), a "
+"widely used board for building wireless keyboard."
+msgstr ""
+
+#: src\wireless.md:36
+msgid ""
+"nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware "
+"via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github."
+"com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides "
+"instructions to convert RMK firmware to .uf2 format."
+msgstr ""
+
+#: src\wireless.md:38
+msgid ""
+"You can also refer to [RMK user guide](./user_guide/4_compile_and_flash."
+"md#use-uf2-bootloader) about the instructions."
+msgstr ""
+
+#: src\low_power.md:3
+msgid ""
+"RMK supports low-power mode by using utilizing embassy's low-power feature "
+"and `Wait` trait in `embedded-hal-async`. To enable low-power mode, add "
+"`async_matrix` feature to your `Cargo.toml`:"
+msgstr ""
+
+#: src\low_power.md:12
+msgid ""
+"If you're using nRF chips or rp2040, you're all set! You've already got your "
+"keyboard running in low-power mode."
+msgstr ""
+
+#: src\low_power.md:14
+msgid ""
+"For stm32, there's some limitations about Exti(see [here](https://docs."
+"embassy.dev/embassy-stm32/git/stm32g474pc/exti/struct.ExtiInput.html)):"
+msgstr ""
+
+#: src\low_power.md:16
+msgid ""
+"EXTI is not built into Input itself because it needs to take ownership of "
+"the corresponding EXTI channel, which is a limited resource."
+msgstr ""
+
+#: src\low_power.md:18
+msgid ""
+"Pins PA5, PB5, PC5… all use EXTI channel 5, so you can’t use EXTI on, say, "
+"PA5 and PC5 at the same time."
+msgstr ""
+
+#: src\low_power.md:20
+msgid "There are a few more things that you have to do:"
+msgstr ""
+
+#: src\low_power.md:22
+msgid "Enable `exti` feature of your `embassy-stm32` dependency"
+msgstr ""
+
+#: src\low_power.md:24
+msgid "Ensure that your input pins don't share same EXTI channel"
+msgstr ""
+
+#: src\low_power.md:26
+msgid ""
+"If you're using `keyboard.toml`, nothing more to do. The `[rmk_keyboard]` "
+"macro will check your `Cargo.toml` and do the work for you. But if you're "
+"using Rust code, you need to use `ExtiInput` as your input pins, and update "
+"generics type of RMK keyboard run:"
+msgstr ""
+
+#: src\low_power.md:35
+msgid "// ...Other initialization code"
+msgstr ""
+
+#: src\low_power.md:37
+msgid "// Run RMK"
+msgstr ""
+
+#: src\storage.md:5
+msgid ""
+"RMK uses the **last 2 sectors** of your microcontroller's flash by default. "
+"If you're using a bootloader like [Adafruit_nRF52_Bootloader](https://github."
+"com/adafruit/Adafruit_nRF52_Bootloader), which puts itself at the end of the "
+"flash, RMK will break it. Solving this by setting `start_addr` manually."
+msgstr ""
+
+#: src\storage.md:9
+msgid "Storage feature is used by saving keymap edits to internal flash."
+msgstr ""
+
+#: src\storage.md:11
+msgid "Storage configuration"
+msgstr ""
+
+#: src\storage.md:13
+msgid ""
+"If you're using the `keyboard.toml`, you can set the storage using the "
+"following config:"
+msgstr ""
+
+#: src\storage.md:26
+msgid ""
+"You can also edit `storage_config` field in `RmkConfig` if you're using Rust "
+"API:"
+msgstr ""
+
+#: src\storage.md:29
+msgid ""
+"// https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52832_ble/"
+"src/main.rs#L48"
+msgstr ""
+
+#: src\storage.md:44
+msgid ""
+"By default, RMK uses **last 2 sectors** of your microcontroller's internal "
+"flash as the storage space. So you have to ensure that you have enough flash "
+"space for storage feature. If there is not enough space, passing `None` is "
+"acceptable."
+msgstr ""
+
+#: src\split_keyboard.md:3
+msgid ""
+"RMK supports multi-split keyboard, which contains at least one central board "
+"and at most 8 peripheral boards. The host is connected to the central board "
+"via USB or BLE. All features in RMK are supported in split mode, such as "
+"VIAL via USB, layers, etc."
+msgstr ""
+
+#: src\split_keyboard.md:5
+msgid "Example"
+msgstr ""
+
+#: src\split_keyboard.md:7
+msgid ""
+"See `examples/use_rust/rp2040_split` and for the wired split keyboard "
+"example using rp2040."
+msgstr ""
+
+#: src\split_keyboard.md:9
+msgid ""
+"See `examples/use_rust/nrf52840_ble_split` for the wireless split keyboard "
+"example using nRF52840."
+msgstr ""
+
+#: src\split_keyboard.md:11
+msgid ""
+"See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired "
+"split keyboard example using rp2040."
+msgstr ""
+
+#: src\split_keyboard.md:13
+msgid ""
+"See `examples/use_config/nrf52840_ble_split` for the `keyboard.toml` + "
+"wireless split keyboard example using nRF52840."
+msgstr ""
+
+#: src\split_keyboard.md:15
+msgid "**NOTE:** for `nrf52840_ble_split`, add"
+msgstr ""
+
+#: src\split_keyboard.md:17
+msgid ""
+"```toml\n"
+"[patch.crates-io]\n"
+"nrf-softdevice = { version = \"0.1.0\", git = \"https://github.com/embassy-"
+"rs/nrf-softdevice\", rev = \"d5f023b\"}\n"
+"```"
+msgstr ""
+
+#: src\split_keyboard.md:22
+msgid ""
+"to your `Cargo.toml` if there's compilation error in `nrf-softdevice` "
+"dependency."
+msgstr ""
+
+#: src\split_keyboard.md:24
+msgid "Define central and peripherals via Rust"
+msgstr ""
+
+#: src\split_keyboard.md:26
+msgid ""
+"In RMK, split keyboard's matrix are defined with row/col number and their "
+"offsets in the whole matrix."
+msgstr ""
+
+#: src\split_keyboard.md:28
+msgid "Central"
+msgstr ""
+
+#: src\split_keyboard.md:30
+msgid ""
+"Running split central is quite similar with the general keyboard, the only "
+"difference is for split central, total row/col number, central matrix's row/"
+"col number, and central matrix's offsets should be passed to "
+"`run_rmk_split_central`:"
+msgstr ""
+
+#: src\split_keyboard.md:33
+msgid ""
+"// nRF52840 split central, arguments might be different for other "
+"microcontrollers, check the API docs for the detail."
+msgstr ""
+
+#: src\split_keyboard.md:38
+msgid "// TOTAL_ROW"
+msgstr ""
+
+#: src\split_keyboard.md:39
+msgid "// TOTAL_COL"
+msgstr ""
+
+#: src\split_keyboard.md:40
+msgid "// CENTRAL_ROW"
+msgstr ""
+
+#: src\split_keyboard.md:41
+msgid "// CENTRAL_COL"
+msgstr ""
+
+#: src\split_keyboard.md:42
+msgid "// CENTRAL_ROW_OFFSET"
+msgstr ""
+
+#: src\split_keyboard.md:43
+msgid "// CENTRAL_COL_OFFSET"
+msgstr ""
+
+#: src\split_keyboard.md:56
+msgid ""
+"In peripheral central, you should also run the peripheral monitor for each "
+"peripheral. This task monitors the peripheral key changes and forwards them "
+"to central core keyboard task"
+msgstr ""
+
+#: src\split_keyboard.md:60
+msgid "// PERIPHERAL_ROW"
+msgstr ""
+
+#: src\split_keyboard.md:61
+msgid "// PERIPHERAL_COL"
+msgstr ""
+
+#: src\split_keyboard.md:62
+msgid "// PERIPHERAL_ROW_OFFSET"
+msgstr ""
+
+#: src\split_keyboard.md:63
+msgid "// PERIPHERAL_COL_OFFSET"
+msgstr ""
+
+#: src\split_keyboard.md:67
+msgid "Peripheral"
+msgstr ""
+
+#: src\split_keyboard.md:69
+msgid ""
+"Running split peripheral is simplier. For peripheral, we don't need to "
+"specify peripheral matrix's offsets(we've done it in central!). So, the "
+"split peripheral API is like:"
+msgstr ""
+
+#: src\split_keyboard.md:81
+msgid "where `2,2` are the size of peripheral's matrix."
+msgstr ""
+
+#: src\split_keyboard.md:83
+msgid "Define central and peripherals via `keyboard.toml`"
+msgstr ""
+
+#: src\split_keyboard.md:85
+msgid ""
+"You can also use the [`keyboard.toml`](./keyboard_configuration.md) to "
+"define a split keyboard."
+msgstr ""
+
+#: src\split_keyboard.md:87
+msgid ""
+"All split related configurations are defined under `[split]` section. The "
+"following is an example using BLE:"
+msgstr ""
+
+#: src\split_keyboard.md:89
+msgid ""
+"```toml\n"
+"[split]\n"
+"# split connection type\n"
+"connection = \"ble\"\n"
+"\n"
+"# Split central\n"
+"[split.central]\n"
+"# Central's matrix definition and offsets\n"
+"rows = 2\n"
+"cols = 2\n"
+"row_offset = 0\n"
+"col_offset = 0\n"
+"# Central's matrix pins \n"
+"input_pins = [\"P0_12\", \"P0_13\"]\n"
+"output_pins = [\"P0_14\", \"P0_15\"]\n"
+"# Central's ble addr\n"
+"ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]\n"
+"\n"
+"# Note there're TWO brackets, since the peripheral is a list\n"
+"# Peripheral 0\n"
+"[[split.peripheral]]\n"
+"# Matrix definition\n"
+"rows = 2\n"
+"cols = 1\n"
+"row_offset = 2\n"
+"col_offset = 2\n"
+"input_pins = [\"P1_11\", \"P1_10\"]\n"
+"output_pins = [\"P0_30\"]\n"
+"# Peripheral's ble addr\n"
+"ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x11, 0xe3]\n"
+"\n"
+"# Peripheral 1\n"
+"[[split.peripheral]]\n"
+"# Matrix definition\n"
+"rows = 2\n"
+"cols = 1\n"
+"row_offset = 2\n"
+"col_offset = 2\n"
+"input_pins = [\"P1_11\", \"P1_10\"]\n"
+"output_pins = [\"P0_30\"]\n"
+"# Peripheral's ble addr\n"
+"ble_addr = [0x7e, 0xfe, 0x71, 0x91, 0x11, 0xe3]\n"
+"```"
+msgstr ""
+
+#: src\split_keyboard.md:133
+msgid ""
+"When using split, the input/output pins defined in `[matrix]` section is not "
+"valid anymore. Instead, the input/output pins of split boards are defined in "
+"`[split.central]` and `[[split.peripheral]]`. The rows/cols in `[matrix]` "
+"section is the total number of rows/cols of the whole keyboard."
+msgstr ""
+
+#: src\split_keyboard.md:135
+msgid ""
+"If you're using BLE, `ble_addr` is required for both central and peripheral. "
+"Each device needs a `ble_addr`."
+msgstr ""
+
+#: src\split_keyboard.md:137
+msgid ""
+"If you're using serial, in `[split.central]` you need to defined a list of "
+"serial ports, the number of the list should be same with the number of the "
+"peripherals:"
+msgstr ""
+
+#: src\split_keyboard.md:139
+msgid ""
+"```toml\n"
+"[split]\n"
+"connection = \"serial\"\n"
+"\n"
+"[split.central]\n"
+"..\n"
+"# Two serial ports used in central. The order matters.\n"
+"serial = [\n"
+"    # Serial port which is connected to peripheral 0.\n"
+"    { instance = \"UART0\", tx_pin = \"PIN_0\", rx_pin = \"PIN_1\" },\n"
+"    # Serial port which is connected to peripheral 1.\n"
+"    { instance = \"UART1\", tx_pin = \"PIN_4\", rx_pin = \"PIN_5\" },\n"
+"]\n"
+"\n"
+"# Peripheral 0\n"
+"[[split.peripheral]]\n"
+"..\n"
+"# Serial port used in peripheral 0, it's a list with only one serial port "
+"element.\n"
+"serial = [{ instance = \"UART0\", tx_pin = \"PIN_0\", rx_pin = \"PIN_1\" }]\n"
+"\n"
+"# Peripheral 1\n"
+"[[split.peripheral]]\n"
+"..\n"
+"serial = [{ instance = \"UART0\", tx_pin = \"PIN_0\", rx_pin = \"PIN_1\" }]\n"
+"```"
+msgstr ""
+
+#: src\split_keyboard.md:167
+msgid "Communication"
+msgstr ""
+
+#: src\split_keyboard.md:169
+msgid "RMK supports both wired and wireless communication."
+msgstr ""
+
+#: src\split_keyboard.md:171
+msgid ""
+"Currently, the communication type indicates that how split central "
+"communicates with split peripherals. How the central talks with the host "
+"depends only on the central."
+msgstr ""
+
+#: src\split_keyboard.md:173
+msgid ""
+"For communication over BLE: the central talks with the host via BLE or USB, "
+"depends on whether the USB cable is connected"
+msgstr ""
+
+#: src\split_keyboard.md:174
+msgid ""
+"For communication over serial: the central can only use USB to talk with the "
+"host"
+msgstr ""
+
+#: src\split_keyboard.md:177
+msgid "Wired split"
+msgstr ""
+
+#: src\split_keyboard.md:179
+msgid ""
+"RMK uses `embedded-io-async` as the abstract layer of wired communication. "
+"Any device that implements `embedded-io-async::Read` and `embedded-io-async::"
+"Write` traits can be used as RMK split central/peripheral. The most common "
+"implementations of those traits are serial ports(UART/USART), such as "
+"`embassy_rp::uart::BufferedUart` and `embassy_stm32::usart::BufferedUart`. "
+"That unlocks many possibilities of RMK's split keyboard. For example, using "
+"different chips for central/peripheral is easy in RMK."
+msgstr ""
+
+#: src\split_keyboard.md:181
+msgid ""
+"For hardwire connection, the TRRS cable is widely used in split keyboards to "
+"connect central and peripherals. It's also compatible with UART/USART, that "
+"means RMK can be used in most existing opensource serial based split "
+"keyboard hardwares."
+msgstr ""
+
+#: src\split_keyboard.md:183
+msgid "Wireless split"
+msgstr ""
+
+#: src\split_keyboard.md:185
+msgid ""
+"RMK supports BLE wireless split on only nRF chips right now. The [BLE random "
+"static address](https://novelbits.io/bluetooth-address-privacy-ble/) for "
+"both central and peripheral should be defined."
+msgstr ""
+
+#: src\split_keyboard.md:188
+msgid "Split keyboard project"
+msgstr ""
+
+#: src\split_keyboard.md:190
+msgid "A project of split keyboard could be like:"
+msgstr ""
+
+#: src\binary_size_optimization.md:1
+msgid "Binary size"
+msgstr ""
+
+#: src\binary_size_optimization.md:3
+msgid ""
+"RMK has included many optimizations by default to of binary size. But there "
+"are still some tricks to reduce the binary size more. If you got linker "
+"error like:"
+msgstr ""
+
+#: src\binary_size_optimization.md:11
+msgid ""
+"or some errors occur when writing configs to flash, that means that your "
+"microcontroller's internal flash is not big enough."
+msgstr ""
+
+#: src\binary_size_optimization.md:13
+msgid "There are several approaches to solve the problem:"
+msgstr ""
+
+#: src\binary_size_optimization.md:15
+msgid "Change `DEFMT_LOG` level"
+msgstr ""
+
+#: src\binary_size_optimization.md:17
+msgid ""
+"Logging is quite useful when debugging the firmware, but it requires a lot "
+"of flash. You can change the default logging level to `error` at `.cargo/"
+"config.toml`, to print only error messages and save flash:"
+msgstr ""
+
+#: src\binary_size_optimization.md:27
+msgid "Use `panic-halt`"
+msgstr ""
+
+#: src\binary_size_optimization.md:29
+msgid ""
+"By default, RMK uses `panic-probe` to print error messages if panic occurs. "
+"But `panic-probe` actually takes lots of flash because the panic call can "
+"not be optimized. The solution is to use `panic-halt` instead of `panic-"
+"probe`:"
+msgstr ""
+
+#: src\binary_size_optimization.md:38
+msgid "The in `main.rs`, use `panic-halt` instead:"
+msgstr ""
+
+#: src\binary_size_optimization.md:48
+msgid "Remove `defmt-rtt`"
+msgstr ""
+
+#: src\binary_size_optimization.md:50
+msgid "You can also remove the entire defmt-rtt logger to save flash."
+msgstr ""
+
+#: src\binary_size_optimization.md:57
+msgid "In this case, you have to implement an empty defmt logger."
+msgstr ""
+
+#: src\binary_size_optimization.md:75
+msgid "Enable unstable feature"
+msgstr ""
+
+#: src\binary_size_optimization.md:77
+msgid ""
+"According to [embassy's doc](https://embassy.dev/book/dev/faq."
+"html#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the "
+"following in your `.cargo/config.toml`"
+msgstr ""
+
+#: src\binary_size_optimization.md:79
+msgid ""
+"```toml\n"
+"[unstable]\n"
+"build-std = [\"core\"]\n"
+"build-std-features = [\"panic_immediate_abort\"]\n"
+"```"
+msgstr ""
+
+#: src\binary_size_optimization.md:85
+msgid "And then compile your project with **nightly** Rust:"
+msgstr ""
+
+#: src\binary_size_optimization.md:93
+msgid "This config will reduce about 4-6kb of binary size furthermore."
+msgstr ""
+
+#: src\binary_size_optimization.md:95
+msgid ""
+"After applying all above approaches, total binary size of stm32h7 example "
+"can be reduced from about 93KB to 54KB, which means the binary size "
+"decreases about 42%!"
+msgstr ""
+
+#: src\binary_size_optimization.md:97
+msgid "Make storage optional"
+msgstr ""
+
+#: src\binary_size_optimization.md:99
+msgid ""
+"Making storage feature optional and marking `sequential-storage` dependency "
+"as optional could also reduce the binary size a lot."
+msgstr ""
+
+#: src\binary_size_optimization.md:101
+msgid ""
+"This work is not done yet, if there is still binary size issue for your "
+"microcontroller, please fire an issue at <https://github.com/HaoboGu/rmk/"
+"issues> and let us know! We'll improve the priority of this feature if we "
+"got sufficient feedback."
+msgstr ""
+
+#: src\binary_size_optimization.md:103
+msgid "Any PRs are also welcomed."
+msgstr ""
+
+#: src\roadmap.md:3
+msgid ""
+"There are a bunch of things to do with RMK in the near future. I plan to "
+"ship 1.0.0 after all the following items are accomplished."
+msgstr ""
+
+#: src\roadmap.md:5
+msgid "Roadmap to 1.0.0"
+msgstr ""
+
+#: src\roadmap.md:7
+msgid "Mark"
+msgstr ""
+
+#: src\roadmap.md:7
+msgid "Description"
+msgstr ""
+
+#: src\roadmap.md:9
+msgid "🔴"
+msgstr ""
+
+#: src\roadmap.md:9
+msgid "important"
+msgstr ""
+
+#: src\roadmap.md:10
+msgid "🟢"
+msgstr ""
+
+#: src\roadmap.md:10
+msgid "easy"
+msgstr ""
+
+#: src\roadmap.md:11
+msgid "🔵"
+msgstr ""
+
+#: src\roadmap.md:11
+msgid "heavy work"
+msgstr ""
+
+#: src\roadmap.md:14
+msgid "keyboard feature"
+msgstr ""
+
+#: src\roadmap.md:15
+msgid "layer support"
+msgstr ""
+
+#: src\roadmap.md:16
+msgid "system/media/mouse keys"
+msgstr ""
+
+#: src\roadmap.md:17
+msgid "LED"
+msgstr ""
+
+#: src\roadmap.md:18
+msgid "tap/hold"
+msgstr ""
+
+#: src\roadmap.md:19
+msgid "keyboard macros"
+msgstr ""
+
+#: src\roadmap.md:20
+msgid "async key detection and report sending"
+msgstr ""
+
+#: src\roadmap.md:21
+msgid "🔵 split keyboard support"
+msgstr ""
+
+#: src\roadmap.md:22
+msgid "Direct pin"
+msgstr ""
+
+#: src\roadmap.md:23
+msgid "🔴 RGB"
+msgstr ""
+
+#: src\roadmap.md:24
+msgid "🟢 encoder"
+msgstr ""
+
+#: src\roadmap.md:25
+msgid "🔵 display support"
+msgstr ""
+
+#: src\roadmap.md:28
+msgid "BLE support - nRF"
+msgstr ""
+
+#: src\roadmap.md:29
+msgid "auto switch between BLE/USB"
+msgstr ""
+
+#: src\roadmap.md:30
+msgid "battery service from ADC"
+msgstr ""
+
+#: src\roadmap.md:31
+msgid "🔴 BLE support - esp32c3 and esp32s3"
+msgstr ""
+
+#: src\roadmap.md:32
+msgid "sleep mode to save battery"
+msgstr ""
+
+#: src\roadmap.md:33
+msgid ""
+"🔵 universal BLE wrapper, including BLE management, battery management, "
+"supports both nRF and ESP"
+msgstr ""
+
+#: src\roadmap.md:34
+msgid "stablizing BLE feature gate/API"
+msgstr ""
+
+#: src\roadmap.md:35
+msgid "BLE support - ch58x/ch59x"
+msgstr ""
+
+#: src\roadmap.md:37
+msgid "User experience"
+msgstr ""
+
+#: src\roadmap.md:38
+msgid "vial support"
+msgstr ""
+
+#: src\roadmap.md:39
+msgid "easy keyboard configuration with good default, support different MCUs"
+msgstr ""
+
+#: src\roadmap.md:40
+msgid "making vial and default keymap consistent automatically"
+msgstr ""
+
+#: src\roadmap.md:41
+msgid "🔴🔵 GUI configurator which supports windows/macos/linux/web"
+msgstr ""
+
+#: src\roadmap.md:42
+msgid "default bootloader"
+msgstr ""
+
+#: src\roadmap.md:43
+msgid "USB DFU/OTA"
+msgstr ""
+
+#: src\roadmap.md:45
+msgid ""
+"If you want to contribute, please feel free to open an issue or PR, or just "
+"ping me! Any forms of contribution are welcome :D"
+msgstr ""
+
+#: src\how_to_contribute.md:1
+msgid "Contributing"
+msgstr ""
+
+#: src\how_to_contribute.md:3
+msgid ""
+"ANY contributions are welcome! There is a simple step by step guide for "
+"developers:"
+msgstr ""
+
+#: src\how_to_contribute.md:5
+msgid ""
+"Before you start, you may want to read the \\[under the hood\\] section to "
+"understand how RMK works. [Github Issue](https://github.com/haobogu/rmk/"
+"issues) is also a good place for questions."
+msgstr ""
+
+#: src\how_to_contribute.md:7
+msgid ""
+"Checkout the active PRs, make sure that what you want to add isn't "
+"implemented by others."
+msgstr ""
+
+#: src\how_to_contribute.md:9
+msgid "Write your code!"
+msgstr ""
+
+#: src\how_to_contribute.md:11
+msgid "Open a PR merging your code to main repo, make sure all CIs pass."
+msgstr ""
+
+#: src\how_to_contribute.md:13
+msgid "Under the hood"
+msgstr ""
+
+#: src\how_to_contribute.md:15
+msgid ""
+"If you're not familiar with RMK, the following is a simple introduction of "
+"source code of RMK."
+msgstr ""
+
+#: src\how_to_contribute.md:17
+msgid "Project architecture"
+msgstr ""
+
+#: src\how_to_contribute.md:19
+msgid ""
+"There're three crates in RMK project, `rmk`, `rmk-config` and `rmk-macro`."
+msgstr ""
+
+#: src\how_to_contribute.md:21
+msgid ""
+"`rmk-config` crate is the dependency of both `rmk` and `rmk-macro`, it "
+"includes both toml configs used in `keyboard.toml` and normal config used in "
+"RMK core. `rmk-macro` is a proc-macro helper of RMK, it reads `keyboard."
+"toml` config file and converts toml config to RMK config, generates the "
+"boilerplate code. The core of RMK stays in `rmk` crate."
+msgstr ""
+
+#: src\how_to_contribute.md:28
+msgid ""
+"So, if you want to contribute new features of RMK, just look into `rmk` core "
+"crate. If you want to add new chip support, `rmk` and `rmk-macro` should be "
+"updated, so that users could use `keyboard.toml` to config keyboard with "
+"your new chip. And, if you want to add new configurations, look into `rmk-"
+"config`."
+msgstr ""
+
+#: src\how_to_contribute.md:30
+msgid "RMK core"
+msgstr ""
+
+#: src\how_to_contribute.md:32
+msgid ""
+"`rmk` crate is the main crate, it provides several entry API to start the "
+"keyboard firmware. All the entry APIs are similar, it:"
+msgstr ""
+
+#: src\how_to_contribute.md:34
+msgid "Initialize the storage, keymap and matrix first"
+msgstr ""
+
+#: src\how_to_contribute.md:35
+msgid ""
+"Create services: main keyboard service, matrix service, usb service, ble "
+"service, vial service, light service, etc."
+msgstr ""
+
+#: src\how_to_contribute.md:36
+msgid ""
+"Run all tasks in an infinite loop, if there's a task failed, wait some time "
+"and rerun"
+msgstr ""
+
+#: src\how_to_contribute.md:38
+msgid ""
+"Generally, there are 4-5 running tasks in the meanwhile, according to the "
+"user's config. Communication between tasks is done by channels.There are "
+"several built-in channels:"
+msgstr ""
+
+#: src\how_to_contribute.md:40
+msgid ""
+"`FLASH_CHANNEL`: a multi-sender, single-receiver channel. There are many "
+"tasks send the `FlashOperationMessage`, such as BLE task(which saves bond "
+"info), vial task(which saves key), etc."
+msgstr ""
+
+#: src\how_to_contribute.md:41
+msgid ""
+"`key_event_channel`: a multi-sender, single-receiver channel. The sender can "
+"be a matrix task which scans the key matrix or a split peripheral monitor "
+"which receives key event from split peripheral. The receiver, i.e. keyboard "
+"task, receives the key event and processes the key"
+msgstr ""
+
+#: src\how_to_contribute.md:42
+msgid ""
+"`keyboard_report_channel`: a single-sender, single-receiver channel, "
+"keyboard task sends keyboard report to channel after the key event is "
+"processed, and USB/BLE task receives the keyboard report and sends the key "
+"to the host."
+msgstr ""
+
+#: src\how_to_contribute.md:44
+msgid "Matrix scanning & key processing"
+msgstr ""
+
+#: src\how_to_contribute.md:46
+msgid ""
+"An important part of a keyboard firmware is how it performs [matrix scanning]"
+"(https://en.wikipedia.org/wiki/Keyboard_matrix_circuit) and how it processes "
+"the scanning result to generate keys."
+msgstr ""
+
+#: src\how_to_contribute.md:48
+msgid ""
+"In RMK, this work is done in `Matrix` and `Keyboard` respectively. The "
+"`Matrix` scans the key matrix and send `KeyEvent` if there's a key change in "
+"matrix. Then the `Keyboard` receives the `KeyEvent` and processes it into "
+"actual keyboard report. Finally, the keyboard report is sent to USB/BLE "
+"tasks and forwarded to the host via USB/BLE."
+msgstr ""
