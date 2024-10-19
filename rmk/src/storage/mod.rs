@@ -36,6 +36,9 @@ pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
+    // Current active BLE profile number
+    #[cfg(feature = "_nrf_ble")]
+    ActiveBleProfile(u8),
     // Clear the storage
     Reset,
     // Clear info of given slot number
@@ -473,7 +476,19 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-
+                #[cfg(feature = "_nrf_ble")]
+                FlashOperationMessage::ActiveBleProfile(profile) => {
+                    let data = StorageData::ActiveBleProfile(profile);
+                    store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &data.key(),
+                        &data,
+                    )
+                    .await
+                }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);

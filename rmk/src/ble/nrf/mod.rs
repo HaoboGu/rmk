@@ -3,25 +3,26 @@ mod battery_service;
 pub(crate) mod bonder;
 mod device_information_service;
 mod hid_service;
+pub(crate) mod profile;
 pub(crate) mod server;
 pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
-use crate::ble::START_ADV;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::{Matrix, MatrixTrait};
+use crate::storage::StorageKeys;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
         nrf::{
             advertise::{create_advertisement_data, SCAN_DATA},
-            bonder::{BondInfo, Bonder},
+            bonder::BondInfo,
             server::BleHidWriter,
         },
     },
@@ -30,6 +31,8 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
+use bonder::MultiBonder;
+use core::sync::atomic::AtomicU8;
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
@@ -42,11 +45,13 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
+use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
 };
+use profile::update_profile;
 use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
@@ -59,7 +64,6 @@ use {
         KeyboardUsbDevice,
     },
     core::sync::atomic::Ordering,
-    embassy_futures::select::Either,
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
     once_cell::sync::OnceCell,
@@ -67,7 +71,8 @@ use {
 
 /// Maximum number of bonded devices
 // TODO: make it configurable
-pub const BONDED_DEVICE_NUM: usize = 8;
+pub const BONDED_DEVICE_NUM: usize = 4;
+pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 #[cfg(not(feature = "_no_usb"))]
 /// Software Vbus detect when using BLE + USB
@@ -224,8 +229,25 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
     );
 
-    // Get all saved bond info, config BLE bonder
     let mut buf: [u8; 128] = [0; 128];
+    // Read current active profil
+    if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
+        fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+            &mut storage.flash,
+            storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut buf,
+            &(StorageKeys::ActiveBleProfile as u32),
+        )
+        .await
+    {
+        ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
+    } else {
+        // If no saved active profile, use 0 as default
+        ACTIVE_PROFILE.store(0, Ordering::SeqCst);
+    };
+
+    // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(StorageData::BondInfo(info))) =
@@ -241,9 +263,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             bond_info.insert(key as u8, info).ok();
         }
     }
+
     info!("Loaded {} saved bond info", bond_info.len());
-    static BONDER: StaticCell<Bonder> = StaticCell::new();
-    let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+    // static BONDER: StaticCell<Bonder> = StaticCell::new();
+    // let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+    static MBONDER: StaticCell<MultiBonder> = StaticCell::new();
+    let bonder = MBONDER.init(MultiBonder::new(RefCell::new(bond_info)));
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
@@ -273,15 +298,13 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Main loop
     loop {
-        
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Init BLE advertising data
         let mut config = peripheral::Config::default();
         // Interval: 500ms
         config.interval = 800;
-        let adv_data = create_advertisement_data(keyboard_name);
-        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &adv_data,
+        let adv = ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
         };
         let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
@@ -303,17 +326,38 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &keyboard_report_receiver,
                 );
                 info!("Running USB keyboard!");
-                select(usb_fut, wait_for_usb_suspend()).await;
+                select3(usb_fut, wait_for_usb_suspend(), update_profile()).await;
             }
 
             // Usb device have to be started to check if usb is configured
-            info!("USB suspended, BLE Advertising");
+            let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+            info!(
+                "USB suspended, BLE Advertising on profile: {}",
+                active_profile
+            );
 
             // Wait for BLE or USB connection
-            match select(adv_fut, wait_for_usb_enabled()).await {
-                Either::First(re) => match re {
+            let dummy_task = run_dummy_keyboard(
+                &mut keyboard,
+                &mut matrix,
+                &mut storage,
+                &keyboard_report_receiver,
+            );
+            match select3(
+                adv_fut,
+                wait_for_usb_enabled(),
+                select(dummy_task, update_profile()),
+            )
+            .await
+            {
+                Either3::First(re) => match re {
                     Ok(conn) => {
                         info!("Connected to BLE");
+                        // Check whether the peer address is matched with current profile
+                        if !bonder.check_connection(&conn) {
+                            error!("Bonded peer address doesn't match active profile, disconnect");
+                            continue;
+                        }
                         bonder.load_sys_attrs(&conn);
                         match select3(
                             run_ble_keyboard(
@@ -328,7 +372,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &keyboard_report_receiver,
                             ),
                             wait_for_usb_enabled(),
-                            START_ADV.wait(),
+                            update_profile(),
                         )
                         .await
                         {
@@ -337,20 +381,21 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 info!("Detected USB configured, quit BLE");
                                 continue;
                             }
-                            Either3::Third(sig) => {
-                                if sig {
-                                    // TODO: Add current connection to blacklist, restart advertisement
-                                    
-                                    
-                                    START_ADV.reset();
-                                }
+                            Either3::Third(_) => {
+                                info!("Switch profile");
+                                continue;
                             }
                         }
                     }
                     Err(e) => error!("Advertise error: {}", e),
                 },
-                Either::Second(_) => {
+                Either3::Second(_) => {
                     // Wait 10ms for usb resuming
+                    Timer::after_millis(10).await;
+                    continue;
+                }
+                Either3::Third(_) => {
+                    // Switch profile
                     Timer::after_millis(10).await;
                     continue;
                 }
@@ -414,6 +459,42 @@ async fn set_conn_params(conn: &Connection) {
             );
             debug!("Set conn params result: {:?}", re);
         }
+    }
+}
+
+// Dummy keyboard service is used to monitoring keys when there's no actual connection.
+// It's useful for functions like switching active profiles when there's no connection.
+// TODO: make matrix + keyboard + storage task running in the background ALWAYS,
+// add a dummy receiver preventing everything blocks
+pub(crate) async fn run_dummy_keyboard<
+    'a,
+    'b,
+    M: MatrixTrait,
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+    matrix: &mut M,
+    storage: &mut Storage<F>,
+    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+) {
+    let matrix_fut = matrix.scan();
+    let keyboard_fut = keyboard.run();
+    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let dummy_communication = async {
+        loop {
+            keyboard_report_receiver.receive().await;
+            warn!("Dummy service receives")
+        }
+    };
+
+    match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
+        Either4::First(_) => (),
+        Either4::Second(_) => (),
+        Either4::Third(_) => (),
+        Either4::Fourth(_) => (),
     }
 }
 
