@@ -2,8 +2,10 @@
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::debounce::DebouncerTrait;
 use crate::keyboard::key_event_channel;
-use crate::matrix::{Matrix, MatrixTrait};
+use crate::matrix::Matrix;
+use crate::matrix::MatrixTrait;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -56,18 +58,28 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
     #[cfg(feature = "_nrf_ble")] spawner: Spawner,
 ) {
+    // Create the debouncer, use COL2ROW by default
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<ROW, COL>::new();
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+
+    // Keyboard matrix, use COL2ROW by default
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
+
     #[cfg(not(feature = "_nrf_ble"))]
-    initialize_serial_split_peripheral_and_run::<In, Out, S, ROW, COL>(
-        input_pins,
-        output_pins,
-        serial,
-    )
-    .await;
+    initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
 
     #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_split_peripheral_and_run::<In, Out, ROW, COL>(
-        input_pins,
-        output_pins,
+    initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
+        matrix,
         central_addr,
         peripheral_addr,
         spawner,
@@ -84,16 +96,11 @@ pub async fn run_rmk_split_peripheral<
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 #[cfg(feature = "_nrf_ble")]
 pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
+    M: MatrixTrait,
     const ROW: usize,
     const COL: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    mut matrix: M,
     central_addr: [u8; 6],
     peripheral_addr: [u8; 6],
     spawner: Spawner,
@@ -106,20 +113,6 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
         BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
         SplitBleServiceEvent,
     };
-
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     let ble_config = Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
@@ -218,33 +211,15 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
 /// * `serial` - serial port to send key events to central board
 #[cfg(not(feature = "_nrf_ble"))]
 pub(crate) async fn initialize_serial_split_peripheral_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
+    M: MatrixTrait,
     S: Write + Read,
     const ROW: usize,
     const COL: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    mut matrix: M,
     serial: S,
 ) -> ! {
     use embassy_futures::select::select;
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
     loop {
