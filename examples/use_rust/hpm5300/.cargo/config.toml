@@ -10,7 +10,7 @@ runner = [
     "--protocol","jtag",
     "--log-format", "{t} {L} {F}:{l} {s}",
 ]
-
+linker = "flip-link"
 rustflags = [
     # Target features:
     # The default for imacf is is "+m,+a,+c,+f"
