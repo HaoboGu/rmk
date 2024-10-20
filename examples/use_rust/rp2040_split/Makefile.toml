@@ -1,6 +1,9 @@
 [tasks.install-llvm-tools]
 install_crate = { rustup_component_name = "llvm-tools" }
 
+[tasks.flip-link]
+install_crate = { crate_name = "flip-link", binary = "flip-link", test_arg = ["flip-link", "-h"] }
+
 [tasks.objcopy-central]
 install_crate = { crate_name = "cargo-binutils", binary = "cargo", test_arg = [
     "objcopy",
