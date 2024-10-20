@@ -17,7 +17,7 @@ args = [
     "ihex",
     "rmk-central.hex",
 ]
-dependencies = ["install-llvm-tools"]
+dependencies = ["install-llvm-tools", "flip-link"]
 
 [tasks.objcopy-peripheral]
 install_crate = { crate_name = "cargo-binutils", binary = "cargo", test_arg = [
@@ -35,7 +35,7 @@ args = [
     "ihex",
     "rmk-peripheral.hex",
 ]
-dependencies = ["install-llvm-tools"]
+dependencies = ["install-llvm-tools", "flip-link"]
 
 [tasks.uf2-central]
 command = "python"

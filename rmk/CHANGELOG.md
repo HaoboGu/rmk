@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Decouple the matrix(input device) and keyboard implementation
 - Stop scanning matrix after releasing all keys
 - Use divider to estimate battery voltage
+- Create Debouncer and Matrix in `run_rmk_*` function ahead of time instead of in the `initialize_*_and_run` function.
 
 ### Fixed
 

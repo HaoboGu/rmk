@@ -8,7 +8,7 @@
 runner = "probe-rs run --chip STM32H7B0VBTx"
 # runner = "gdb-multiarch -q -x openocd.gdb"
 # runner = "gdb -q -x openocd.gdb"
-
+linker = "flip-link"
 rustflags = [
   # Previously, the linker arguments --nmagic and -Tlink.x were set here.
   # They are now set by build.rs instead. The linker argument can still
