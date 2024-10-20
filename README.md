@@ -45,7 +45,7 @@
 You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
 
 ```shell
-cargo install cargo-generate
+cargo install cargo-generate flip-link
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
 
