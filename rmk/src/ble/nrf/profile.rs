@@ -12,6 +12,8 @@ use crate::{
     storage::{FlashOperationMessage, FLASH_CHANNEL},
 };
 
+use super::bonder::MultiBonder;
+
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<CriticalSectionRawMutex, BleProfileAction, 1> =
     Channel::new();
 
@@ -24,7 +26,7 @@ pub(crate) enum BleProfileAction {
 }
 
 // Wait for profile switch action and update the active profile
-pub(crate) async fn update_profile() {
+pub(crate) async fn update_profile(bonder: &MultiBonder) {
     // Wait until there's a profile switch action
     loop {
         match BLE_PROFILE_CHANNEL.receive().await {
@@ -61,6 +63,7 @@ pub(crate) async fn update_profile() {
             }
             BleProfileAction::ClearProfile => {
                 let profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+                bonder.clear_bonded(profile);
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::ActiveBleProfile(profile))
                     .await;

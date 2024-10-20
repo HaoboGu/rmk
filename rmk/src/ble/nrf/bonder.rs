@@ -71,13 +71,11 @@ impl MultiBonder {
         Self { bond_info }
     }
 
-    pub(crate) fn get_bonded_peer(&self, profile: u8) -> Option<Peer> {
-        if let Some(info) = self.bond_info.borrow().get(&profile) {
-            if !info.removed {
-                return Some(info.peer);
-            }
+    pub(crate) fn clear_bonded(&self, slot_num: u8) {
+        let mut bond_info = self.bond_info.borrow_mut();
+        if let Some(info) = bond_info.get_mut(&slot_num) {
+            info.removed = true;
         }
-        None
     }
 
     pub(crate) fn check_connection(&self, conn: &Connection) -> bool {
@@ -87,10 +85,7 @@ impl MultiBonder {
             .bond_info
             .borrow()
             .iter()
-            .find(|(_, info)| {
-                info.peer.peer_id.is_match(addr)
-                    && info.removed == false
-            })
+            .find(|(_, info)| info.peer.peer_id.is_match(addr) && info.removed == false)
             .map(|(i, _)| *i);
 
         if let Some(slot_num) = saved_slot_num_for_conn {
@@ -252,13 +247,15 @@ impl SecurityHandler for MultiBonder {
     }
 }
 
-// Bonder aka security handler used in advertising & pairing
+// Bonder aka security handler used in advertising & pairing.
+// This bonder impl automatically connects to new host when there's not a connected one.
 pub(crate) struct Bonder {
     // Info of all bonded devices
     // `slot_num` is used as the key, because using peer as key will bring a lot more complexity
     bond_info: RefCell<FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM>>,
 }
 
+#[deprecated = "It's different from current implementation that respects active profile number. Some code maybe useful in the future, so we keep it for now."]
 impl Bonder {
     pub(crate) fn new(bond_info: RefCell<FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM>>) -> Self {
         Self { bond_info }

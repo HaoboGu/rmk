@@ -10,9 +10,8 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::keyboard::keyboard_report_channel;
-use crate::matrix::{Matrix, MatrixTrait};
-use crate::storage::StorageKeys;
 use crate::matrix::MatrixTrait;
+use crate::storage::StorageKeys;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -29,12 +28,12 @@ use crate::{
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
 use bonder::MultiBonder;
-use core::sync::atomic::AtomicU8;
+use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select3, select4, Either3, Either4};
+use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
@@ -58,7 +57,7 @@ use {
         usb::{wait_for_usb_enabled, wait_for_usb_suspend, USB_DEVICE_ENABLED},
         KeyboardUsbDevice,
     },
-    core::sync::atomic::Ordering,
+    embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
     once_cell::sync::OnceCell,
@@ -258,8 +257,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     info!("Loaded {} saved bond info", bond_info.len());
     // static BONDER: StaticCell<Bonder> = StaticCell::new();
     // let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
-    static MBONDER: StaticCell<MultiBonder> = StaticCell::new();
-    let bonder = MBONDER.init(MultiBonder::new(RefCell::new(bond_info)));
+    static BONDER: StaticCell<MultiBonder> = StaticCell::new();
+    let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
@@ -303,7 +302,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &keyboard_report_receiver,
                 );
                 info!("Running USB keyboard!");
-                select3(usb_fut, wait_for_usb_suspend(), update_profile()).await;
+                select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await;
             }
 
             // Usb device have to be started to check if usb is configured
@@ -323,7 +322,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             match select3(
                 adv_fut,
                 wait_for_usb_enabled(),
-                select(dummy_task, update_profile()),
+                select(dummy_task, update_profile(bonder)),
             )
             .await
             {
@@ -349,7 +348,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &keyboard_report_receiver,
                             ),
                             wait_for_usb_enabled(),
-                            update_profile(),
+                            update_profile(bonder),
                         )
                         .await
                         {
@@ -383,18 +382,21 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         match adv_fut.await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
-                run_ble_keyboard(
-                    &conn,
-                    &ble_server,
-                    &mut keyboard,
-                    &mut matrix,
-                    &mut storage,
-                    &mut light_service,
-                    &mut vial_service,
-                    &mut keyboard_config.ble_battery_config,
-                    &keyboard_report_receiver,
+                select(
+                    run_ble_keyboard(
+                        &conn,
+                        &ble_server,
+                        &mut keyboard,
+                        &mut matrix,
+                        &mut storage,
+                        &mut light_service,
+                        &mut vial_service,
+                        &mut keyboard_config.ble_battery_config,
+                        &keyboard_report_receiver,
+                    ),
+                    update_profile(bonder),
                 )
-                .await
+                .await;
             }
             Err(e) => error!("Advertise error: {}", e),
         }
