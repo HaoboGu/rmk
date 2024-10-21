@@ -418,6 +418,35 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_system_control(key, key_event).await;
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
+        } else if key.is_user() {
+            #[cfg(feature = "_nrf_ble")]
+            use crate::ble::nrf::profile::{BleProfileAction, BLE_PROFILE_CHANNEL};
+            #[cfg(feature = "_nrf_ble")]
+            if !key_event.pressed {
+                // Get user key id
+                let id = key as u8 - KeyCode::User0 as u8;
+                if id < 8 {
+                    // Swtich to a specific profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::SwitchProfile(id))
+                        .await;
+                } else if id == 8 {
+                    // Next profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::NextProfile)
+                        .await;
+                } else if id == 9 {
+                    // Previous profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::PreviousProfile)
+                        .await;
+                } else if id == 10 {
+                    // Clear profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::ClearProfile)
+                        .await;
+                }
+            }
         } else if key.is_basic() {
             if key_event.pressed {
                 self.register_key(key);
@@ -428,6 +457,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_event).await;
+        } else {
+            warn!("Unsupported key: {:?}", key);
         }
     }
 

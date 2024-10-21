@@ -58,7 +58,7 @@ msgstr "真实案例"
 
 #: src\SUMMARY.md:18
 msgid "Features"
-msgstr "特色"
+msgstr "特性"
 
 #: src\SUMMARY.md:19
 msgid "Keyboard Configuration"
@@ -66,7 +66,7 @@ msgstr "键盘配置"
 
 #: src\SUMMARY.md:20
 msgid "Keymap"
-msgstr "键盘映射"
+msgstr "键位映射"
 
 #: src\SUMMARY.md:21 src\vial_support.md:1
 msgid "Vial support"
@@ -74,7 +74,7 @@ msgstr "Vial支持"
 
 #: src\SUMMARY.md:22 src\wireless.md:1 src\roadmap.md:27
 msgid "Wireless"
-msgstr "无线"
+msgstr "无线支持"
 
 #: src\SUMMARY.md:23 src\low_power.md:1
 msgid "Low-power"
