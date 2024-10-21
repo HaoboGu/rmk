@@ -18,11 +18,11 @@ use sequential_storage::{
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::{
     action::KeyAction,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
+use crate::{keyboard_macro::MACRO_SPACE_SIZE, BackgroundTask};
 
 use self::eeconfig::EeKeymapConfig;
 
@@ -293,12 +293,6 @@ pub(crate) struct KeymapKey<const ROW: usize, const COL: usize, const NUM_LAYER:
     action: KeyAction,
 }
 
-pub(crate) struct Storage<F: AsyncNorFlash> {
-    pub(crate) flash: F,
-    pub(crate) storage_range: Range<u32>,
-    buffer: [u8; get_buffer_size()],
-}
-
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
 macro_rules! write_storage {
@@ -329,89 +323,15 @@ macro_rules! write_storage {
     };
 }
 
-impl<F: AsyncNorFlash> Storage<F> {
-    pub(crate) async fn new<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-        flash: F,
-        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        config: StorageConfig,
-    ) -> Self {
-        // Check storage setting
-        assert!(
-            config.num_sectors >= 2,
-            "Number of used sector for storage must larger than 1"
-        );
+#[embassy_executor::task]
+pub(crate) async fn storage_task(mut storage: impl BackgroundTask + 'static) {
+    storage.run().await
+}
 
-        // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
-        // Other wise, use storage config setting
-        #[cfg(feature = "_nrf_ble")]
-        let start_addr = if config.start_addr == 0 {
-            0x0006_0000
-        } else {
-            config.start_addr
-        };
-
-        #[cfg(not(feature = "_nrf_ble"))]
-        let start_addr = config.start_addr;
-
-        // Check storage setting
-        info!(
-            "Flash capacity {} KB, RMK use {} KB({} sectors) starting from 0x{:X} as storage",
-            flash.capacity() / 1024,
-            (F::ERASE_SIZE * config.num_sectors as usize) / 1024,
-            config.num_sectors,
-            config.start_addr,
-        );
-        let storage_range = if start_addr == 0 {
-            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
-                ..flash.capacity() as u32
-        } else {
-            assert!(
-                start_addr % F::ERASE_SIZE == 0,
-                "Storage's start addr MUST BE a multiplier of sector size"
-            );
-            start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
-        };
-        info!("storage range {}", storage_range);
-
-        let mut storage = Self {
-            flash,
-            storage_range,
-            buffer: [0; get_buffer_size()],
-        };
-
-        // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable::<ROW, COL, NUM_LAYER>().await {
-            // Initialize storage from keymap and config
-            if storage
-                .initialize_storage_with_config(keymap)
-                .await
-                .is_err()
-            {
-                // When there's an error, `enable: false` should be saved back to storage, preventing partial initialization of storage
-                store_item(
-                    &mut storage.flash,
-                    storage.storage_range.clone(),
-                    &mut NoCache::new(),
-                    &mut storage.buffer,
-                    &(StorageKeys::StorageConfig as u32),
-                    &StorageData::StorageConfig::<ROW, COL, NUM_LAYER>(LocalStorageConfig {
-                        enable: false,
-                    }),
-                )
-                .await
-                .ok();
-            }
-        }
-
-        storage
-    }
-
-    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
-    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
-        // Self { flash }
-    }
-
-    pub(crate) async fn run<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(&mut self) {
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> BackgroundTask
+    for Storage<F, ROW, COL, NUM_LAYER>
+{
+    async fn run(&mut self) {
         let mut storage_cache = NoCache::new();
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
@@ -527,8 +447,104 @@ impl<F: AsyncNorFlash> Storage<F> {
             }
         }
     }
+}
 
-    pub(crate) async fn read_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub(crate) struct Storage<
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> {
+    pub(crate) flash: F,
+    pub(crate) storage_range: Range<u32>,
+    buffer: [u8; get_buffer_size()],
+}
+
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    Storage<F, ROW, COL, NUM_LAYER>
+{
+    pub(crate) async fn new(
+        flash: F,
+        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+        config: StorageConfig,
+    ) -> Self {
+        // Check storage setting
+        assert!(
+            config.num_sectors >= 2,
+            "Number of used sector for storage must larger than 1"
+        );
+
+        // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
+        // Other wise, use storage config setting
+        #[cfg(feature = "_nrf_ble")]
+        let start_addr = if config.start_addr == 0 {
+            0x0006_0000
+        } else {
+            config.start_addr
+        };
+
+        #[cfg(not(feature = "_nrf_ble"))]
+        let start_addr = config.start_addr;
+
+        // Check storage setting
+        info!(
+            "Flash capacity {} KB, RMK use {} KB({} sectors) starting from 0x{:X} as storage",
+            flash.capacity() / 1024,
+            (F::ERASE_SIZE * config.num_sectors as usize) / 1024,
+            config.num_sectors,
+            config.start_addr,
+        );
+        let storage_range = if start_addr == 0 {
+            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
+                ..flash.capacity() as u32
+        } else {
+            assert!(
+                start_addr % F::ERASE_SIZE == 0,
+                "Storage's start addr MUST BE a multiplier of sector size"
+            );
+            start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
+        };
+        info!("storage range {}", storage_range);
+
+        let mut storage = Self {
+            flash,
+            storage_range,
+            buffer: [0; get_buffer_size()],
+        };
+
+        // Check whether keymap and configs have been storaged in flash
+        if !storage.check_enable().await {
+            // Initialize storage from keymap and config
+            if storage
+                .initialize_storage_with_config(keymap)
+                .await
+                .is_err()
+            {
+                // When there's an error, `enable: false` should be saved back to storage, preventing partial initialization of storage
+                store_item(
+                    &mut storage.flash,
+                    storage.storage_range.clone(),
+                    &mut NoCache::new(),
+                    &mut storage.buffer,
+                    &(StorageKeys::StorageConfig as u32),
+                    &StorageData::StorageConfig::<ROW, COL, NUM_LAYER>(LocalStorageConfig {
+                        enable: false,
+                    }),
+                )
+                .await
+                .ok();
+            }
+        }
+
+        storage
+    }
+
+    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
+    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
+        // Self { flash }
+    }
+
+    pub(crate) async fn read_keymap(
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
@@ -573,14 +589,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         Ok(())
     }
 
-    pub(crate) async fn read_macro_cache<
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    >(
-        &mut self,
-        macro_cache: &mut [u8],
-    ) -> Result<(), ()> {
+    pub(crate) async fn read_macro_cache(&mut self, macro_cache: &mut [u8]) -> Result<(), ()> {
         // Read storage and send back from send_channel
         let read_data = fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
             &mut self.flash,
@@ -600,11 +609,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         Ok(())
     }
 
-    async fn initialize_storage_with_config<
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    >(
+    async fn initialize_storage_with_config(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
@@ -666,9 +671,7 @@ impl<F: AsyncNorFlash> Storage<F> {
         Ok(())
     }
 
-    async fn check_enable<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-        &mut self,
-    ) -> bool {
+    async fn check_enable(&mut self) -> bool {
         if let Ok(Some(StorageData::StorageConfig(config))) =
             fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
                 &mut self.flash,

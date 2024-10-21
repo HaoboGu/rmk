@@ -13,6 +13,7 @@ use crate::keyboard::keyboard_report_channel;
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 use crate::KEYBOARD_STATE;
+use crate::BackgroundTask;
 use crate::{
     ble::{
         ble_communication_task,
@@ -456,12 +457,12 @@ pub(crate) async fn run_dummy_keyboard<
 >(
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
-    storage: &mut Storage<F>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let storage_fut = storage.run();
     let dummy_communication = async {
         loop {
             keyboard_report_receiver.receive().await;
@@ -492,7 +493,7 @@ pub(crate) async fn run_ble_keyboard<
     ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
-    storage: &mut Storage<F>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
@@ -523,7 +524,7 @@ pub(crate) async fn run_ble_keyboard<
         &mut ble_system_control_writer,
         &mut ble_mouse_writer,
     );
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let storage_fut = storage.run();
     let set_conn_param = set_conn_params(&conn);
 
     // Exit if anyone of three futures exits

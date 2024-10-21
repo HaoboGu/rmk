@@ -5,6 +5,7 @@ use crate::keyboard::keyboard_report_channel;
 use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
+use crate::BackgroundTask;
 use crate::via::process::VialService;
 use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
@@ -112,7 +113,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
         let matrix_fut = matrix.scan();
-        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+        let storage_fut = storage.run();
         pin_mut!(storage_fut);
         pin_mut!(via_fut);
         pin_mut!(keyboard_fut);

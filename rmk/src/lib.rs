@@ -282,6 +282,9 @@ pub(crate) async fn run_usb_keyboard<
     matrix: &mut M,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
         F,
+        ROW,
+        COL,
+        NUM_LAYER,
     >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
@@ -305,7 +308,7 @@ pub(crate) async fn run_usb_keyboard<
     pin_mut!(communication_fut);
 
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+    let storage_fut = storage.run();
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     pin_mut!(storage_fut);
 
@@ -340,4 +343,8 @@ pub(crate) fn reboot_keyboard() {
 
     #[cfg(feature = "_esp_ble")]
     esp_idf_svc::hal::reset::restart();
+}
+
+pub(crate) trait BackgroundTask {
+    async fn run(&mut self);
 }
