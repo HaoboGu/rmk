@@ -41,17 +41,6 @@ You can also refer to [RMK user guide](./user_guide/4_compile_and_flash.md#use-u
 
 RMK supports at most 8 wireless profiles, profile 0 is activated by default. Vial key `User0` - `User7` are used to switch to specific profile, `User8` and `User9` are switching to next, previous profile, `User10` is clear profile.
 
-
-Now RMK supports multiple bonded profile, but the switching between profiles is not implemented yet.
-
-Expected behavior for multiple profile support: https://github.com/zmkfirmware/zmk/issues/249
-
-Some extra behaviours:
-
-- when usb is connected, all reports goes to usb by default
-- report channel?
-
-
 ### Implementation
 
 1. A simple `manual disconnection -> re-advertise with BLACKLIST -> new connection` loop

@@ -65,7 +65,7 @@ use {
 
 /// Maximum number of bonded devices
 // TODO: make it configurable
-pub const BONDED_DEVICE_NUM: usize = 4;
+pub const BONDED_DEVICE_NUM: usize = 8;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 #[cfg(not(feature = "_no_usb"))]
