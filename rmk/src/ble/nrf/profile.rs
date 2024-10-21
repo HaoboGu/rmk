@@ -65,7 +65,7 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
                 let profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
                 bonder.clear_bonded(profile);
                 FLASH_CHANNEL
-                    .send(FlashOperationMessage::ActiveBleProfile(profile))
+                    .send(FlashOperationMessage::ClearSlot(profile))
                     .await;
                 info!("Clear profile");
             }
