@@ -30,7 +30,7 @@ use crate::{
     action::KeyAction,
     ble::nrf::{
         advertise::{create_advertisement_data, SCAN_DATA},
-        bonder::{BondInfo, Bonder},
+        bonder::{BondInfo, MultiBonder},
         nrf_ble_config, run_ble_keyboard,
         server::BleServer,
         softdevice_task, BONDED_DEVICE_NUM,
@@ -232,8 +232,10 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         }
     }
     info!("Loaded {} saved bond info", bond_info.len());
-    static BONDER: StaticCell<Bonder> = StaticCell::new();
-    let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+    // static BONDER: StaticCell<Bonder> = StaticCell::new();
+    // let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
+    static BONDER: StaticCell<MultiBonder> = StaticCell::new();
+    let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
 
     let ble_server = defmt::unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 

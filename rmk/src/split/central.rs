@@ -43,6 +43,7 @@ use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 /// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split central now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
+#[allow(unreachable_code)]
 pub async fn run_rmk_split_central<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
