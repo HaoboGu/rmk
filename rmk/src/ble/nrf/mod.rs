@@ -156,8 +156,11 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,
             periph_role_count: 4,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_role_count: 4,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_sec_count: 0,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
