@@ -239,6 +239,9 @@ pub(crate) async fn initialize_ble_split_central_and_run<
 
     let ble_server = defmt::unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
+    use crate::storage_task;
+    spawner.spawn(storage_task(storage)).unwrap();
+
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
 
@@ -275,7 +278,6 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     &mut usb_device,
                     &mut keyboard,
                     &mut matrix,
-                    &mut storage,
                     &mut light_service,
                     &mut vial_service,
                     &keyboard_report_receiver,
@@ -299,7 +301,6 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                                 &ble_server,
                                 &mut keyboard,
                                 &mut matrix,
-                                &mut storage,
                                 &mut light_service,
                                 &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
@@ -335,7 +336,6 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     &ble_server,
                     &mut keyboard,
                     &mut matrix,
-                    &mut storage,
                     &mut light_service,
                     &mut keyboard_config.ble_battery_config,
                     &keyboard_report_receiver,

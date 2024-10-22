@@ -11,9 +11,8 @@ mod vial_service;
 use self::server::BleServer;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::MatrixTrait;
-use crate::storage::StorageKeys;
+use crate::storage::{storage_task, StorageKeys};
 use crate::KEYBOARD_STATE;
-use crate::BackgroundTask;
 use crate::{
     ble::{
         ble_communication_task,
@@ -38,7 +37,6 @@ use embassy_futures::select::{select, select4, Either4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
-use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
@@ -255,6 +253,9 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         }
     }
 
+    // Start storage task
+    spawner.spawn(storage_task(storage)).unwrap();
+
     info!("Loaded {} saved bond info", bond_info.len());
     // static BONDER: StaticCell<Bonder> = StaticCell::new();
     // let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
@@ -297,7 +298,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut usb_device,
                     &mut keyboard,
                     &mut matrix,
-                    &mut storage,
                     &mut light_service,
                     &mut vial_service,
                     &keyboard_report_receiver,
@@ -314,12 +314,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             );
 
             // Wait for BLE or USB connection
-            let dummy_task = run_dummy_keyboard(
-                &mut keyboard,
-                &mut matrix,
-                &mut storage,
-                &keyboard_report_receiver,
-            );
+            let dummy_task =
+                run_dummy_keyboard(&mut keyboard, &mut matrix, &keyboard_report_receiver);
             match select3(
                 adv_fut,
                 wait_for_usb_enabled(),
@@ -342,7 +338,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                                 &ble_server,
                                 &mut keyboard,
                                 &mut matrix,
-                                &mut storage,
                                 &mut light_service,
                                 &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
@@ -389,7 +384,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                         &ble_server,
                         &mut keyboard,
                         &mut matrix,
-                        &mut storage,
                         &mut light_service,
                         &mut vial_service,
                         &mut keyboard_config.ble_battery_config,
@@ -450,31 +444,27 @@ pub(crate) async fn run_dummy_keyboard<
     'a,
     'b,
     M: MatrixTrait,
-    F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
 ) {
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
-    let storage_fut = storage.run();
     let dummy_communication = async {
         loop {
             keyboard_report_receiver.receive().await;
             warn!("Dummy service receives")
         }
     };
-
-    match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
-        Either4::First(_) => (),
-        Either4::Second(_) => (),
-        Either4::Third(_) => (),
-        Either4::Fourth(_) => (),
+    use embassy_futures::select::{select3, Either3};
+    match select3(matrix_fut, keyboard_fut, dummy_communication).await {
+        Either3::First(_) => (),
+        Either3::Second(_) => (),
+        Either3::Third(_) => (),
     }
 }
 
@@ -483,7 +473,6 @@ pub(crate) async fn run_ble_keyboard<
     'a,
     'b,
     M: MatrixTrait,
-    F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -493,7 +482,6 @@ pub(crate) async fn run_ble_keyboard<
     ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
@@ -524,7 +512,6 @@ pub(crate) async fn run_ble_keyboard<
         &mut ble_system_control_writer,
         &mut ble_mouse_writer,
     );
-    let storage_fut = storage.run();
     let set_conn_param = set_conn_params(&conn);
 
     // Exit if anyone of three futures exits
@@ -532,7 +519,7 @@ pub(crate) async fn run_ble_keyboard<
         select(matrix_fut, join(ble_fut, set_conn_param)),
         select(ble_communication_task, keyboard_fut),
         select(battery_fut, led_fut),
-        select(vial_task, storage_fut),
+        vial_task,
     )
     .await
     {

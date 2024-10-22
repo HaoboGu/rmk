@@ -5,7 +5,7 @@ use crate::keyboard::keyboard_report_channel;
 use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
-use crate::BackgroundTask;
+use crate::storage::StorageTask;
 use crate::via::process::VialService;
 use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
@@ -15,6 +15,8 @@ use crate::{
 };
 use core::cell::RefCell;
 use defmt::{debug, info, warn};
+#[cfg(not(feature = "_esp_ble"))]
+use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::OutputPin;

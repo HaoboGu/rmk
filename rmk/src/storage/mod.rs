@@ -18,11 +18,11 @@ use sequential_storage::{
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::{
     action::KeyAction,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
-use crate::{keyboard_macro::MACRO_SPACE_SIZE, BackgroundTask};
 
 use self::eeconfig::EeKeymapConfig;
 
@@ -323,12 +323,17 @@ macro_rules! write_storage {
     };
 }
 
+/// We should have one trait for every task, according to https://github.com/embassy-rs/embassy/issues/3420
+pub(crate) trait StorageTask {
+    async fn run(&mut self);
+}
+
 #[embassy_executor::task]
-pub(crate) async fn storage_task(mut storage: impl BackgroundTask + 'static) {
+pub(crate) async fn storage_task(mut storage: impl StorageTask + 'static) {
     storage.run().await
 }
 
-impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> BackgroundTask
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageTask
     for Storage<F, ROW, COL, NUM_LAYER>
 {
     async fn run(&mut self) {
