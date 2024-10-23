@@ -26,13 +26,18 @@ pub(crate) struct KeyEvent {
     pub(crate) col: u8,
     pub(crate) pressed: bool,
 }
+pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
+pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
 
-pub(crate) static key_event_channel: Channel<CriticalSectionRawMutex, KeyEvent, 16> =
-    Channel::new();
+pub(crate) static key_event_channel: Channel<
+    CriticalSectionRawMutex,
+    KeyEvent,
+    EVENT_CHANNEL_SIZE,
+> = Channel::new();
 pub(crate) static keyboard_report_channel: Channel<
     CriticalSectionRawMutex,
     KeyboardReportMessage,
-    8,
+    REPORT_CHANNEL_SIZE,
 > = Channel::new();
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
@@ -45,7 +50,7 @@ pub(crate) enum KeyboardReportMessage {
 
 /// This task processes all keyboard reports and send them to the host
 pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
-    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     keybooard_hid_writer: &mut W,
     other_hid_writer: &mut W2,
 ) {
@@ -90,7 +95,8 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     /// Report Sender
-    pub(crate) sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    pub(crate) sender:
+        &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
@@ -123,7 +129,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 {
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     ) -> Self {
         Keyboard {
             keymap,

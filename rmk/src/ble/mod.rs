@@ -14,7 +14,7 @@ pub use nrf::SOFTWARE_VBUS;
 
 use crate::{
     hid::HidWriterWrapper,
-    keyboard::{write_other_report_to_host, KeyboardReportMessage},
+    keyboard::{write_other_report_to_host, KeyboardReportMessage, REPORT_CHANNEL_SIZE},
     usb::descriptor::CompositeReportType,
 };
 
@@ -27,7 +27,12 @@ pub(crate) async fn ble_communication_task<
     W3: HidWriterWrapper,
     W4: HidWriterWrapper,
 >(
-    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'a,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
     ble_keyboard_writer: &mut W,
     ble_media_writer: &mut W2,
     ble_system_control_writer: &mut W3,

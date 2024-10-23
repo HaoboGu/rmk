@@ -9,7 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
-use crate::keyboard::keyboard_report_channel;
+use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 use crate::KEYBOARD_STATE;
@@ -460,7 +460,12 @@ pub(crate) async fn run_dummy_keyboard<
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
     storage: &mut Storage<F>,
-    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'a,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
 ) {
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
@@ -499,7 +504,12 @@ pub(crate) async fn run_ble_keyboard<
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
-    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'a,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
 ) {
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
