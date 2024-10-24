@@ -14,6 +14,14 @@ macro_rules! k {
     };
 }
 
+/// Create a normal key with modifier active
+#[macro_export]
+macro_rules! wm {
+    ($x: ident, $m: expr) => {
+        $crate::action::KeyAction::WithModifier($crate::action::Action::Key($crate::keycode::KeyCode::$x), $m)
+    };
+}
+
 /// Create a normal action: `KeyAction`
 #[macro_export]
 macro_rules! a {

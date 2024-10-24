@@ -48,6 +48,68 @@ fn parse_key(key: String) -> TokenStream2 {
         };
     }
     match &key[0..3] {
+        "WM(" => {
+            if let Some(internal) = key.trim_start_matches("WM(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+
+                let ident = format_ident!("{}", keys[0].to_string());
+
+                // Get modifier combination, in types of mod1 | mod2 | ...
+                let mut right = false;
+                let mut gui = false;
+                let mut alt = false;
+                let mut shift = false;
+                let mut ctrl = false;
+                keys[1].split_terminator("|").for_each(|w| {
+                    let w = w.trim();
+                    match w {
+                        "LShift" => shift = true,
+                        "LCtrl" => ctrl = true,
+                        "LAlt" => alt = true,
+                        "Lgui" => gui = true,
+                        "RShift" => {
+                            right = true;
+                            shift = true;
+                        }
+                        "RCtrl" => {
+                            right = true;
+                            ctrl = true;
+                        }
+                        "RAlt" => {
+                            right = true;
+                            alt = true;
+                        }
+                        "Rgui" => {
+                            right = true;
+                            gui = true;
+                        }
+                        _ => (),
+                    }
+                });
+
+                if (gui || alt || shift || ctrl) == false {
+                    return quote! {
+                        compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                quote! {
+                    ::rmk::wm!(#ident, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
+            }
+        }
         "MO(" => {
             let layer = get_layer(key, "MO(", ")");
             quote! {
