@@ -98,7 +98,7 @@ fn parse_key(key: String) -> TokenStream2 {
 
                 if (gui || alt || shift || ctrl) == false {
                     return quote! {
-                        compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                        compile_error!("keyboard.toml: modifier in WM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 quote! {

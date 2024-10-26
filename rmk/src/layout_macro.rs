@@ -14,7 +14,7 @@ macro_rules! k {
     };
 }
 
-/// Create a normal key with modifier active
+/// Create a normal key with modifier action
 #[macro_export]
 macro_rules! wm {
     ($x: ident, $m: expr) => {
