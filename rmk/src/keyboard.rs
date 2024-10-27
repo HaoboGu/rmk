@@ -397,17 +397,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 }
             }
         } else {
-            if let Some(start) = self.timer[col][row] {
-                let elapsed = start.elapsed().as_millis();
-                if elapsed > 200 {
-                    // Release hold action, then clear timer
-                    debug!(
-                        "HOLD releasing: {}, {}, time elapsed: {}ms",
-                        hold_action, key_event.pressed, elapsed
-                    );
-                    self.process_key_action_normal(hold_action, key_event).await;
-                    self.timer[col][row] = None;
-                }
+            if let Some(_) = self.timer[col][row] {
+                // Release hold action, then clear timer
+                debug!("HOLD releasing: {}, {}", hold_action, key_event.pressed);
+                self.process_key_action_normal(hold_action, key_event).await;
+                self.timer[col][row] = None;
             }
         }
     }
