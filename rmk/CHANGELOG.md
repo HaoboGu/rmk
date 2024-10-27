@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add restart to ESP32
 - Optimize nRF BLE power consumption, now the idle current is decreased to about 20uA
+- Added new `wm` "With Modifier" macro to support basic keycodes with modifiers active
 
 ### Changed
 
