@@ -390,7 +390,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                         // The actual processing is postponed because we cannot do recursion on async function without alloc
                         // After current key processing is done, we can process events in queue until the queue is empty
-                        if self.unprocessed_events.push(key_event).is_err() {
+                        if self.unprocessed_events.push(e).is_err() {
                             warn!("unprocessed event queue is full, dropping event");
                         }
                     }
