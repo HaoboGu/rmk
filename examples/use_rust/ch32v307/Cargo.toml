@@ -1,0 +1,47 @@
+[package]
+name = "ch32v307-examples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rmk = { path = "../../../rmk" }
+ch32-hal = { git = "https://github.com/vapor-keeb/ch32-hal", features = [
+    "ch32v307vct6",
+    "embassy",
+    # "defmt",
+    "rt",
+    "highcode",
+    "time-driver-tim1",
+    "usb",
+] }
+embassy-executor = { version = "0.6.0", features = [
+    "integrated-timers",
+    # "defmt",
+    "arch-spin",
+    "executor-thread",
+] }
+static_cell = "2"
+critical-section = "1.2.0"
+
+embassy-time = "0.3.2"
+embassy-usb = "0.3.0"
+nb = "1.1.0"
+
+qingke = "0.4.0"
+qingke-rt = "0.4.0"
+
+# Not working for now
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+panic-halt = "0.2.0"
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+
+[profile.release]
+strip = false   # symbols are not flashed to the microcontroller, so don't strip them.
+lto = true
+opt-level = "z" # Optimize for size.
