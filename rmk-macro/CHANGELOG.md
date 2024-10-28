@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2024-10-28
+
 ### Added
 
 - Add default config for chips
 - Implemented `keyboard.toml` parsing for the new `WM(key, modifier)` "With Modifier" macro 
+
 ### Changed
 
 - BREAKING: refactor the whole macro crate, update `keyboard.toml` fields
