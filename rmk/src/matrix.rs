@@ -7,7 +7,9 @@ use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {
-    defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
+    defmt::info,
+    embassy_futures::select::{select_slice, select_array},
+    embedded_hal_async::digital::Wait,
     heapless::Vec,
 };
 
@@ -241,6 +243,139 @@ impl<
 
         // ROW2COL
         #[cfg(not(feature = "col2row"))]
+        f(&mut self.key_states[row][col]);
+    }
+}
+
+/// DirectPinMartex only has input pins.
+pub(crate) struct DirectPinMatrix<
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+> {
+    /// Input pins of the pcb matrix
+    input_pins: [[In; COL]; ROW],
+    /// Debouncer
+    debouncer: D,
+    /// Key state matrix
+    key_states: [[KeyState; COL]; ROW],
+    /// Start scanning
+    scan_start: Option<Instant>,
+}
+
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        D: DebouncerTrait,
+        const ROW: usize,
+        const COL: usize,
+    > DirectPinMatrix<In, D, ROW, COL>
+{
+    /// Create a matrix from input and output pins.
+    pub(crate) fn new(input_pins: [[In; COL]; ROW]) -> Self {
+        DirectPinMatrix {
+            input_pins,
+            debouncer: D::new(),
+            key_states: [[KeyState::new(); COL]; ROW],
+            scan_start: None,
+        }
+    }
+}
+
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        D: DebouncerTrait,
+        const ROW: usize,
+        const COL: usize,
+    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL>
+{
+    const ROW: usize = ROW;
+    const COL: usize = COL;
+
+    #[cfg(feature = "async_matrix")]
+    async fn wait_for_key(&mut self) {
+        if let Some(start_time) = self.scan_start {
+            // If no key press over 1ms, stop scanning and wait for interupt
+            if start_time.elapsed().as_millis() <= 1 {
+                return;
+            } else {
+                self.scan_start = None;
+            }
+        }
+        Timer::after_micros(1).await;
+        info!("Waiting for active level");
+
+        let mut futs: [Option<_>; ROW] = [const { None }; ROW];
+        for (row_idx, in_pins_row) in self.input_pins.iter_mut().enumerate() {
+            let mut futs_row: [Option<_>; COL] = [const { None }; COL];
+            for (col_idx, in_pin) in in_pins_row.iter_mut().enumerate() {
+                futs_row[col_idx] = Some(in_pin.wait_for_high());
+            }
+            futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
+        }
+        let _ = select_array(futs.map(|option| option.unwrap())).await;
+
+        self.scan_start = Some(Instant::now());
+    }
+
+    /// Do matrix scanning, the result is stored in matrix's key_state field.
+    async fn scan(&mut self) {
+        defmt::info!("Matrix scanning");
+        loop {
+            #[cfg(feature = "async_matrix")]
+            self.wait_for_key().await;
+
+            // Scan matrix and send report
+            for (row_idx, in_pins_row) in self.input_pins.iter_mut().enumerate() {
+                for (col_idx, in_pin) in in_pins_row.iter_mut().enumerate() {
+                    // Check input pins and debounce
+                    let debounce_state = self.debouncer.detect_change_with_debounce(
+                        col_idx,
+                        row_idx,
+                        in_pin.is_low().ok().unwrap_or_default(),
+                        &self.key_states[row_idx][col_idx],
+                    );
+
+                    match debounce_state {
+                        DebounceState::Debounced => {
+                            self.key_states[row_idx][col_idx].toggle_pressed();
+                            let key_state = self.key_states[row_idx][col_idx];
+
+                            // `try_send` is used here because we don't want to block scanning if the channel is full
+                            let send_re = key_event_channel.try_send(KeyEvent {
+                                row: row_idx as u8,
+                                col: col_idx as u8,
+                                pressed: key_state.pressed,
+                            });
+                            defmt::println!("send event: {}, {} {}", row_idx, col_idx, key_state.pressed);
+                            if send_re.is_err() {
+                                error!("Failed to send key event: key event channel full");
+                            }
+                        }
+                        _ => (),
+                    }
+
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if self.key_states[row_idx][col_idx].pressed {
+                        self.scan_start = Some(Instant::now());
+                    }
+                }
+            }
+
+            embassy_time::Timer::after_micros(100).await;
+        }
+    }
+
+    /// Read key state at position (row, col)
+    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+        return self.key_states[row][col];
+    }
+
+    fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
         f(&mut self.key_states[row][col]);
     }
 }
