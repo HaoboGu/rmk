@@ -390,24 +390,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                         // The actual processing is postponed because we cannot do recursion on async function without alloc
                         // After current key processing is done, we can process events in queue until the queue is empty
-                        if self.unprocessed_events.push(key_event).is_err() {
+                        if self.unprocessed_events.push(e).is_err() {
                             warn!("unprocessed event queue is full, dropping event");
                         }
                     }
                 }
             }
         } else {
-            if let Some(start) = self.timer[col][row] {
-                let elapsed = start.elapsed().as_millis();
-                if elapsed > 200 {
-                    // Release hold action, then clear timer
-                    debug!(
-                        "HOLD releasing: {}, {}, time elapsed: {}ms",
-                        hold_action, key_event.pressed, elapsed
-                    );
-                    self.process_key_action_normal(hold_action, key_event).await;
-                    self.timer[col][row] = None;
-                }
+            if let Some(_) = self.timer[col][row] {
+                // Release hold action, then clear timer
+                debug!("HOLD releasing: {}, {}", hold_action, key_event.pressed);
+                self.process_key_action_normal(hold_action, key_event).await;
+                self.timer[col][row] = None;
             }
         }
     }
