@@ -5,19 +5,19 @@ edition = "2021"
 
 [dependencies]
 rmk = { path = "../../../rmk" }
-ch32-hal = { git = "https://github.com/vapor-keeb/ch32-hal", features = [
+ch32-hal = { git = "https://github.com/vapor-keeb/ch32-hal", rev = "cab34df", features = [
     "ch32v307vct6",
     "embassy",
     # "defmt",
     "rt",
     "highcode",
     "time-driver-tim1",
-    "usb",
 ] }
 embassy-executor = { version = "0.6.0", features = [
     "integrated-timers",
     # "defmt",
     "arch-spin",
+    "task-arena-size-32768",
     "executor-thread",
 ] }
 static_cell = "2"
@@ -32,9 +32,8 @@ qingke-rt = "0.4.0"
 
 # Not working for now
 defmt = "0.3"
-defmt-rtt = "0.4"
 
-panic-halt = "0.2.0"
+panic-halt = "1.0.0"
 
 [build-dependencies]
 xz2 = "0.1.7"

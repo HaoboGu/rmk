@@ -3,26 +3,37 @@
 
 mod vial;
 
-use defmt::*;
-use defmt_rtt as _;
+// use defmt::*;
+// use defmt_rtt as _;
 use ch32_hal::gpio::{Input, Level, Output, Pull, Speed};
 use ch32_hal::otg_fs::endpoint::EndpointDataBuffer;
 use ch32_hal::otg_fs::{self, Driver};
-use ch32_hal::{self as hal, bind_interrupts, peripherals, Config};
+use ch32_hal::{self as hal, bind_interrupts, peripherals, println, Config};
 use embassy_executor::Spawner;
 use panic_halt as _;
 use rmk::config::{KeyboardUsbConfig, RmkConfig, VialConfig};
 use rmk::{k, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-
 bind_interrupts!(struct Irq {
     OTG_FS => otg_fs::InterruptHandler<peripherals::OTG_FS>;
 });
 
+#[defmt::global_logger]
+struct Logger;
+
+unsafe impl defmt::Logger for Logger {
+    fn acquire() {}
+    unsafe fn flush() {}
+    unsafe fn release() {}
+    unsafe fn write(_bytes: &[u8]) {
+        println!("{}", core::str::from_utf8(_bytes).unwrap());
+    }
+}
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
-    info!("RMK start");
+    hal::debug::SDIPrint::enable();
+    println!("RMK start");
     // setup clocks
     let cfg = Config {
         rcc: ch32_hal::rcc::Config::SYSCLK_FREQ_144MHZ_HSI,
@@ -70,9 +81,4 @@ async fn main(spawner: Spawner) -> ! {
         spawner,
     )
     .await
-}
-
-#[defmt::panic_handler]
-fn panic() -> ! {
-    core::panic!("panic via `defmt::panic!`")
 }

@@ -107,7 +107,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "ch32-hal"
 version = "0.1.0"
-source = "git+https://github.com/vapor-keeb/ch32-hal#3ac087b7348f897783c829512c21918d102c1387"
+source = "git+https://github.com/vapor-keeb/ch32-hal?rev=cab34df#cab34dff8698c1a4fea6c3352e93057adc360d9a"
 dependencies = [
  "ch32-metapac",
  "critical-section",
@@ -134,7 +134,7 @@ dependencies = [
 [[package]]
 name = "ch32-metapac"
 version = "0.1.0"
-source = "git+https://github.com/vapor-keeb/ch32-metapac.git?branch=main#99a015e1fe696ae7dc05e8293b33f6b4d664980b"
+source = "git+https://github.com/ch32-rs/ch32-metapac?rev=c1287c192368a0a6cfc075e6df82d26ad2ddcdd1#c1287c192368a0a6cfc075e6df82d26ad2ddcdd1"
 dependencies = [
  "riscv 0.11.1",
  "vcell",
@@ -148,7 +148,6 @@ dependencies = [
  "const-gen",
  "critical-section",
  "defmt",
- "defmt-rtt",
  "embassy-executor",
  "embassy-time",
  "embassy-usb",
@@ -271,16 +270,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff4a5fefe330e8d7f31b16a318f9ce81000d8e35e69b93eae154d16d2278f70f"
 dependencies = [
  "thiserror",
-]
-
-[[package]]
-name = "defmt-rtt"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab697b3dbbc1750b7c8b821aa6f6e7f2480b47a99bc057a2ed7b170ebef0c51"
-dependencies = [
- "critical-section",
- "defmt",
 ]
 
 [[package]]
@@ -782,9 +771,9 @@ checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
 
 [[package]]
 name = "panic-halt"
-version = "0.2.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de96540e0ebde571dc55c73d60ef407c653844e6f9a1e2fdbd40c07b9252d812"
+checksum = "a513e167849a384b7f9b746e517604398518590a9142f4846a32e3c2a4de7b11"
 
 [[package]]
 name = "paste"
@@ -973,7 +962,7 @@ checksum = "8188909339ccc0c68cfb5a04648313f09621e8b87dc03095454f1a11f6c5d436"
 
 [[package]]
 name = "rmk"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1005,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
  "serde",
@@ -1014,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "cargo_toml",
  "darling",
