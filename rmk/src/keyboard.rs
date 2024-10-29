@@ -26,13 +26,18 @@ pub(crate) struct KeyEvent {
     pub(crate) col: u8,
     pub(crate) pressed: bool,
 }
+pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
+pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
 
-pub(crate) static key_event_channel: Channel<CriticalSectionRawMutex, KeyEvent, 16> =
-    Channel::new();
+pub(crate) static key_event_channel: Channel<
+    CriticalSectionRawMutex,
+    KeyEvent,
+    EVENT_CHANNEL_SIZE,
+> = Channel::new();
 pub(crate) static keyboard_report_channel: Channel<
     CriticalSectionRawMutex,
     KeyboardReportMessage,
-    8,
+    REPORT_CHANNEL_SIZE,
 > = Channel::new();
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
@@ -45,7 +50,7 @@ pub(crate) enum KeyboardReportMessage {
 
 /// This task processes all keyboard reports and send them to the host
 pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
-    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     keybooard_hid_writer: &mut W,
     other_hid_writer: &mut W2,
 ) {
@@ -90,7 +95,8 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     /// Report Sender
-    pub(crate) sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    pub(crate) sender:
+        &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
@@ -123,7 +129,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 {
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     ) -> Self {
         Keyboard {
             keymap,
@@ -384,24 +390,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                         // The actual processing is postponed because we cannot do recursion on async function without alloc
                         // After current key processing is done, we can process events in queue until the queue is empty
-                        if self.unprocessed_events.push(key_event).is_err() {
+                        if self.unprocessed_events.push(e).is_err() {
                             warn!("unprocessed event queue is full, dropping event");
                         }
                     }
                 }
             }
         } else {
-            if let Some(start) = self.timer[col][row] {
-                let elapsed = start.elapsed().as_millis();
-                if elapsed > 200 {
-                    // Release hold action, then clear timer
-                    debug!(
-                        "HOLD releasing: {}, {}, time elapsed: {}ms",
-                        hold_action, key_event.pressed, elapsed
-                    );
-                    self.process_key_action_normal(hold_action, key_event).await;
-                    self.timer[col][row] = None;
-                }
+            if let Some(_) = self.timer[col][row] {
+                // Release hold action, then clear timer
+                debug!("HOLD releasing: {}, {}", hold_action, key_event.pressed);
+                self.process_key_action_normal(hold_action, key_event).await;
+                self.timer[col][row] = None;
             }
         }
     }
@@ -418,6 +418,35 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_system_control(key, key_event).await;
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
+        } else if key.is_user() {
+            #[cfg(feature = "_nrf_ble")]
+            use crate::ble::nrf::profile::{BleProfileAction, BLE_PROFILE_CHANNEL};
+            #[cfg(feature = "_nrf_ble")]
+            if !key_event.pressed {
+                // Get user key id
+                let id = key as u8 - KeyCode::User0 as u8;
+                if id < 8 {
+                    // Swtich to a specific profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::SwitchProfile(id))
+                        .await;
+                } else if id == 8 {
+                    // Next profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::NextProfile)
+                        .await;
+                } else if id == 9 {
+                    // Previous profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::PreviousProfile)
+                        .await;
+                } else if id == 10 {
+                    // Clear profile
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::ClearProfile)
+                        .await;
+                }
+            }
         } else if key.is_basic() {
             if key_event.pressed {
                 self.register_key(key);
@@ -428,6 +457,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_event).await;
+        } else {
+            warn!("Unsupported key: {:?}", key);
         }
     }
 

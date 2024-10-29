@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Update toml config fields
+## [0.2.0] - 2024-10-28
+
+- Update toml config fields according to new `keyboard.toml` definition
 
 ## [0.1.6] - 2024-10-03
 

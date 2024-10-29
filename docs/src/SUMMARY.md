@@ -28,3 +28,4 @@
 # Development
 - [Roadmap](roadmap.md)
 - [How to contribute](how_to_contribute.md)
+- [Contributing to the documentation](documentation_contributing.md)

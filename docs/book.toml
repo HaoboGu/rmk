@@ -8,9 +8,15 @@ title = "RMK Documentation"
 [build]
 build-dir = "book"                # the directory where the output is placed
 create-missing = true             # whether or not to create missing pages
-use-default-preprocessors = true  # use the default preprocessors
-extra-watch-dirs = []             # directories to watch for triggering builds
+extra-watch-dirs = ["po"]             # directories to watch for triggering builds
 
+[preprocessor.gettext]
+after = ["links"]
+
+[output.xgettext]
+optional = true
+pot-file = "messages.pot"
+granularity = 0
 
 [output.html]
 default-theme = "light"
@@ -22,3 +28,10 @@ no-section-label = true
 git-repository-url = "https://github.com/HaoboGu/rmk"
 git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/HaoboGu/rmk/docs/{path}"
+additional-css = [
+  "theme/css/language-picker.css",
+]
+
+[output.html.fold]
+enable = true
+level = 0

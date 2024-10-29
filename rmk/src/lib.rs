@@ -25,6 +25,7 @@ use crate::{
 };
 use action::KeyAction;
 use core::{cell::RefCell, sync::atomic::AtomicBool};
+use debounce::DebouncerTrait;
 use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
@@ -40,7 +41,10 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage};
+use keyboard::{
+    communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
+    REPORT_CHANNEL_SIZE,
+};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_config as config;
@@ -155,11 +159,26 @@ pub async fn run_rmk_with_async_flash<
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    // Create the debouncer, use COL2ROW by default
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<ROW, COL>::new();
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+
+    // Keyboard matrix, use COL2ROW by default
+    #[cfg(feature = "col2row")]
+    let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    #[cfg(not(feature = "col2row"))]
+    let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
+
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_keyboard_with_config_and_run(
-        input_pins,
-        output_pins,
+        matrix,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
@@ -169,21 +188,14 @@ pub async fn run_rmk_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(
-        input_pins,
-        output_pins,
-        default_keymap,
-        keyboard_config,
-    )
-    .await;
+    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
 
     #[cfg(all(
         not(feature = "_no_usb"),
         not(any(feature = "_nrf_ble", feature = "_esp_ble"))
     ))]
     initialize_usb_keyboard_and_run(
-        input_pins,
-        output_pins,
+        matrix,
         usb_driver,
         #[cfg(not(feature = "_no_external_storage"))]
         flash,
@@ -198,19 +210,15 @@ pub async fn run_rmk_with_async_flash<
 }
 
 pub(crate) async fn initialize_usb_keyboard_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: Driver<'static>,
+    M: MatrixTrait,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    mut matrix: M,
     usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -228,20 +236,6 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
-
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
@@ -294,7 +288,12 @@ pub(crate) async fn run_usb_keyboard<
     >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'b,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
 ) {
     let usb_fut = usb_device.device.run();
     let keyboard_fut = keyboard.run();

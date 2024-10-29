@@ -9,8 +9,8 @@ use std::fs;
 
 use crate::{
     default_config::{
-        esp32::default_esp32, nrf52832::default_nrf52832, nrf52840::default_nrf52840,
-        rp2040::default_rp2040, stm32::default_stm32,
+        esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,
+        nrf52840::default_nrf52840, rp2040::default_rp2040, stm32::default_stm32,
     },
     usb_interrupt_map::{get_usb_info, UsbInfo},
     ChipModel, ChipSeries,
@@ -249,8 +249,9 @@ impl KeyboardConfig {
         }
 
         let config = match chip.chip.as_str() {
-            "nrf52840" => default_nrf52840(chip),
+            "nrf52840" | "nrf52833" => default_nrf52840(chip),
             "nrf52832" => default_nrf52832(chip),
+            "nrf52810" | "nrf52811" => default_nrf52810(chip),
             "rp2040" => default_rp2040(chip),
             s if s.starts_with("stm32") => default_stm32(chip),
             s if s.starts_with("esp32") => default_esp32(chip),
