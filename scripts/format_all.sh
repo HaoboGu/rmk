@@ -10,6 +10,7 @@ cd examples/use_rust/nrf52840 && cargo fmt && cd ../../..
 cd examples/use_rust/nrf52840_ble && cargo fmt && cd ../../..
 cd examples/use_rust/nrf52840_ble_split && cargo fmt && cd ../../..
 cd examples/use_rust/rp2040 && cargo fmt && cd ../../..
+cd examples/use_rust/rp2040_direct_pin && cargo fmt && cd ../../..
 cd examples/use_rust/rp2040_split && cargo fmt && cd ../../..
 cd examples/use_rust/stm32f1 && cargo fmt && cd ../../..
 cd examples/use_rust/stm32f4 && cargo fmt && cd ../../..
@@ -23,6 +24,7 @@ cd examples/use_config/nrf52840_ble && cargo fmt && cd ../../..
 cd examples/use_config/nrf52840_ble_split && cargo fmt && cd ../../.. 
 cd examples/use_config/nrf52840_usb && cargo fmt && cd ../../.. 
 cd examples/use_config/rp2040 && cargo fmt && cd ../../.. 
+cd examples/use_config/rp2040_direct_pin && cargo fmt && cd ../../..
 cd examples/use_config/rp2040_split && cargo fmt && cd ../../.. 
 cd examples/use_config/stm32f1 && cargo fmt && cd ../../..
 cd examples/use_config/stm32f4 && cargo fmt && cd ../../..
