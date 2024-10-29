@@ -34,10 +34,12 @@ pub(crate) fn expand_matrix_config(
             let rows = keyboard_config.layout.rows as usize;
             let cols = keyboard_config.layout.cols as usize;
             let layers = keyboard_config.layout.layers as usize;
+            let low_active = matrix.direct_pin_low_active;
             matrix_config.extend(quote! {
                 pub(crate) const ROW: usize = #rows;
                 pub(crate) const COL: usize = #cols;
                 pub(crate) const LAYER_NUM: usize = #layers;
+                let low_active = #low_active;
             });
         }
         _ => (),

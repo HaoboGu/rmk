@@ -48,6 +48,7 @@ use {
 /// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `low_active`: pin active level
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 pub async fn run_rmk_direct_pin<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
@@ -64,6 +65,7 @@ pub async fn run_rmk_direct_pin<
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
+    low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     // Wrap `embedded-storage` to `embedded-storage-async`
@@ -78,6 +80,7 @@ pub async fn run_rmk_direct_pin<
         async_flash,
         default_keymap,
         keyboard_config,
+        low_active,
         #[cfg(not(feature = "_esp_ble"))]
         spawner,
     )
@@ -93,6 +96,7 @@ pub async fn run_rmk_direct_pin<
 /// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `low_active`: pin active level
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
@@ -111,6 +115,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
+    low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     // Create the debouncer, use COL2ROW by default
@@ -121,9 +126,9 @@ pub async fn run_rmk_direct_pin_with_async_flash<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(feature = "col2row")]
-    let matrix = DirectPinMatrix::<_, _, ROW, COL>::new(direct_pins, debouncer);
+    let matrix = DirectPinMatrix::<_, _, ROW, COL>::new(direct_pins, debouncer, low_active);
     #[cfg(not(feature = "col2row"))]
-    let matrix = DirectPinMatrix::<_, _, COL, ROW>::new(direct_pins, debouncer);
+    let matrix = DirectPinMatrix::<_, _, COL, ROW>::new(direct_pins, debouncer, low_active);
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
@@ -174,6 +179,8 @@ pub(crate) struct DirectPinMatrix<
     key_states: [[KeyState; COL]; ROW],
     /// Start scanning
     scan_start: Option<Instant>,
+    /// Pin active level
+    low_active: bool,
 }
 
 impl<
@@ -185,12 +192,13 @@ impl<
     > DirectPinMatrix<In, D, ROW, COL>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(direct_pins: [[In; COL]; ROW], debouncer: D) -> Self {
+    pub(crate) fn new(direct_pins: [[In; COL]; ROW], debouncer: D, low_active: bool) -> Self {
         DirectPinMatrix {
             direct_pins,
             debouncer: debouncer,
             key_states: [[KeyState::new(); COL]; ROW],
             scan_start: None,
+            low_active,
         }
     }
 }
@@ -227,7 +235,11 @@ impl<
         for (row_idx, in_pins_row) in self.direct_pins.iter_mut().enumerate() {
             let mut futs_row: [Option<_>; COL] = [const { None }; COL];
             for (col_idx, in_pin) in in_pins_row.iter_mut().enumerate() {
-                futs_row[col_idx] = Some(in_pin.wait_for_high());
+                futs_row[col_idx] = if self.low_active {
+                    Some(in_pin.wait_for_high())
+                } else {
+                    Some(in_pin.wait_for_low())
+                }
             }
             futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
         }
@@ -246,11 +258,16 @@ impl<
             // Scan matrix and send report
             for (row_idx, pins_row) in self.direct_pins.iter_mut().enumerate() {
                 for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
-                    // Check input pins and debounce
+                    let pin_state = if self.low_active {
+                        direct_pin.is_low().ok().unwrap_or_default()
+                    } else {
+                        direct_pin.is_high().ok().unwrap_or_default()
+                    };
+
                     let debounce_state = self.debouncer.detect_change_with_debounce(
                         col_idx,
                         row_idx,
-                        direct_pin.is_low().ok().unwrap_or_default(),
+                        pin_state,
                         &self.key_states[row_idx][col_idx],
                     );
 
