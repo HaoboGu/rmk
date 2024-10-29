@@ -55,6 +55,7 @@ pub enum MatrixType {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
+    #[serde(default)]
     pub matrix_type: MatrixType,
     pub input_pins: Option<Vec<String>>,
     pub output_pins: Option<Vec<String>>,
