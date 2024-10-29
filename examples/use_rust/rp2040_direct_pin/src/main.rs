@@ -24,6 +24,7 @@ use rmk::{
     direct_pin::run_rmk_direct_pin_with_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use keymap::{ROW, COL, SIZE, NUM_LAYER};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -45,9 +46,9 @@ async fn main(spawner: Spawner) {
     let direct_pins = config_matrix_pins_rp! {
         peripherals: p,
         direct_pins: [
-            [PIN_0, PIN_1,  PIN_2],
+            [PIN_0, PIN_1,  _],
             [PIN_3, PIN_4,  PIN_5],
-            [PIN_6, PIN_7,  PIN_8],
+            [PIN_6, _,  PIN_8],
             [PIN_9, PIN_10, PIN_11],
         ]
     };
@@ -75,7 +76,7 @@ async fn main(spawner: Spawner) {
 
     // Start serving
     // Use `run_rmk_direct_pin` for blocking flash
-    run_rmk_direct_pin_with_async_flash(
+    run_rmk_direct_pin_with_async_flash::<_, _, _, _, ROW, COL, SIZE, NUM_LAYER>(
         direct_pins,
         driver,
         flash,

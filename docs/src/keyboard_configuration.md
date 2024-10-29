@@ -79,7 +79,7 @@ Here is an example for rp2040.
 matrix_type = "direct_pin"
 direct_pins = [
     ["PIN_0", "PIN_1", "PIN_2"],
-    ["PIN_3", "PIN_4", "PIN_5"]
+    ["PIN_3", "_", "PIN_5"]
 ]
 # `direct_pin_low_active` is optional. Default is `true`.
 direct_pin_low_active = true
@@ -256,7 +256,7 @@ output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 matrix_type = "direct_pin"
 direct_pins = [
     ["PIN_0", "PIN_1", "PIN_2"],
-    ["PIN_3", "PIN_4", "PIN_5"]
+    ["PIN_3", "_", "PIN_5"]
 ]
 
 # `direct_pin_low_active` is optional. Default is `true`.

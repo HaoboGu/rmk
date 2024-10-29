@@ -73,7 +73,7 @@ If your keys are directly connected to the microcontroller pins, you can define 
         peripherals: p,
         direct_pins: [
             [PIN_0, PIN_1,  PIN_2],
-            [PIN_3, PIN_4,  PIN_5],
+            [PIN_3, _,  PIN_5],
         ]
     };
 ```

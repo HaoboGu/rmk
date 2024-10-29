@@ -57,7 +57,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
         ChipSeries::Stm32 => {
             quote! {
                 // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
-                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_stm32::gpio::Output, _, _, ROW, COL, NUM_LAYER>(
+                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_stm32::gpio::Output, _, _, ROW, COL, SIZE, NUM_LAYER>(
                     direct_pins,
                     driver,
                     f,
@@ -72,7 +72,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
         ChipSeries::Nrf52 => match keyboard_config.communication {
             CommunicationConfig::Usb(_) => {
                 quote! {
-                    ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, _, _, ROW, COL, NUM_LAYER>(
+                    ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, _, _, ROW, COL, SIZE, NUM_LAYER>(
                         direct_pins,
                         driver,
                         f,
@@ -85,7 +85,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                 }
             }
             CommunicationConfig::Both(_, _) => quote! {
-                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, _, ROW, COL, NUM_LAYER>(
+                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, _, ROW, COL, SIZE, NUM_LAYER>(
                     direct_pins,
                     driver,
                     &mut get_default_keymap(),
@@ -96,7 +96,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                 .await;
             },
             CommunicationConfig::Ble(_) => quote! {
-                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, ROW, COL, NUM_LAYER>(
+                ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, ROW, COL, SIZE, NUM_LAYER>(
                     direct_pins,
                     &mut get_default_keymap(),
                     keyboard_config,
@@ -108,7 +108,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
             CommunicationConfig::None => quote! {},
         },
         ChipSeries::Rp2040 => quote! {
-            ::rmk::direct_pin::run_rmk_direct_pin_with_async_flash::<_, ::embassy_rp::gpio::Output, _, _, ROW, COL, NUM_LAYER>(
+            ::rmk::direct_pin::run_rmk_direct_pin_with_async_flash::<_, ::embassy_rp::gpio::Output, _, _, ROW, COL, SIZE, NUM_LAYER>(
                 direct_pins,
                 driver,
                 flash,
@@ -120,7 +120,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
             .await;
         },
         ChipSeries::Esp32 => quote! {
-            ::esp_idf_svc::hal::task::block_on(::rmk::direct_pin::run_rmk_direct_pin::<_, ::esp_idf_svc::hal::gpio::Output, ROW, COL, NUM_LAYER>(
+            ::esp_idf_svc::hal::task::block_on(::rmk::direct_pin::run_rmk_direct_pin::<_, ::esp_idf_svc::hal::gpio::Output, ROW, COL, SIZE, NUM_LAYER>(
                 direct_pins,
                 &mut get_default_keymap(),
                 keyboard_config,

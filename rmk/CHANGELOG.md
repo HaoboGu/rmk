@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Direct pin mod. Including `DirectPinMatrix`, `run_rmk_direct_pin` functions etc.
 - Added pin active level parameter `low_active` to direct pin.
+- Support no_pin for `DirectPinMatrix`.
 
 ## [0.4.0] - 2024-10-28
 

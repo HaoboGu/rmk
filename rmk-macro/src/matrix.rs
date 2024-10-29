@@ -36,11 +36,13 @@ pub(crate) fn expand_matrix_config(
             // So we need to declaring them in advance.
             let rows = keyboard_config.layout.rows as usize;
             let cols = keyboard_config.layout.cols as usize;
+            let size  = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
             let layers = keyboard_config.layout.layers as usize;
             let low_active = matrix.direct_pin_low_active;
             matrix_config.extend(quote! {
                 pub(crate) const ROW: usize = #rows;
                 pub(crate) const COL: usize = #cols;
+                pub(crate) const SIZE: usize = #size;
                 pub(crate) const LAYER_NUM: usize = #layers;
                 let low_active = #low_active;
             });

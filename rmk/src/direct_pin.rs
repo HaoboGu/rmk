@@ -26,6 +26,7 @@ use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_time::Instant;
 use embassy_time::Timer;
+#[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -34,7 +35,7 @@ use embedded_storage::nor_flash::NorFlash;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 #[cfg(feature = "async_matrix")]
-use {embassy_futures::select::select_array, embedded_hal_async::digital::Wait};
+use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -55,9 +56,13 @@ pub async fn run_rmk_direct_pin<
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
     const ROW: usize,
     const COL: usize,
+    // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
+    // generic parameters may not be used in const operations.
+    // Maybe we can use nightly only feature `generic_const_exprs`
+    const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[In; COL]; ROW],
+    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -69,19 +74,51 @@ pub async fn run_rmk_direct_pin<
     #[cfg(not(feature = "_no_external_storage"))]
     let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
 
-    run_rmk_direct_pin_with_async_flash(
+    #[cfg(all(feature = "_no_usb", feature = "_no_external_storage"))]
+    {
+        run_rmk_direct_pin_with_async_flash::<_, _, ROW, COL, SIZE, NUM_LAYER>(
+            direct_pins,
+            default_keymap,
+            keyboard_config,
+            low_active,
+            #[cfg(not(feature = "_esp_ble"))]
+            spawner,
+        ).await
+    }
+
+    #[cfg(all(not(feature = "_no_usb"), feature = "_no_external_storage"))]
+   { run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
         direct_pins,
-        #[cfg(not(feature = "_no_usb"))]
         usb_driver,
-        #[cfg(not(feature = "_no_external_storage"))]
+        default_keymap,
+        keyboard_config,
+        low_active,
+        #[cfg(not(feature = "_esp_ble"))]
+        spawner,
+    ).await}
+
+    #[cfg(all(feature = "_no_usb", not(feature = "_no_external_storage")))]
+    {run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
+        direct_pins,
         async_flash,
         default_keymap,
         keyboard_config,
         low_active,
         #[cfg(not(feature = "_esp_ble"))]
         spawner,
-    )
-    .await
+    ).await}
+
+    #[cfg(all(not(feature = "_no_usb"), not(feature = "_no_external_storage")))]
+    {run_rmk_direct_pin_with_async_flash::<_, _, _, _, ROW, COL, SIZE, NUM_LAYER>(
+        direct_pins,
+        usb_driver,
+        async_flash,
+        default_keymap,
+        keyboard_config,
+        low_active,
+        #[cfg(not(feature = "_esp_ble"))]
+        spawner,
+    ).await}
 }
 
 /// Run RMK keyboard service. This function should never return.
@@ -105,9 +142,10 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
+    const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[In; COL]; ROW],
+    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -121,12 +159,9 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(feature = "col2row")]
-    let matrix = DirectPinMatrix::<_, _, ROW, COL>::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = DirectPinMatrix::<_, _, COL, ROW>::new(direct_pins, debouncer, low_active);
-
+    // Keyboard matrix
+    let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
+    
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_keyboard_with_config_and_run(
@@ -167,9 +202,10 @@ pub(crate) struct DirectPinMatrix<
     D: DebouncerTrait,
     const ROW: usize,
     const COL: usize,
+    const SIZE: usize
 > {
     /// Input pins of the pcb matrix
-    direct_pins: [[In; COL]; ROW],
+    direct_pins: [[Option<In>; COL]; ROW],
     /// Debouncer
     debouncer: D,
     /// Key state matrix
@@ -186,10 +222,11 @@ impl<
         D: DebouncerTrait,
         const ROW: usize,
         const COL: usize,
-    > DirectPinMatrix<In, D, ROW, COL>
+        const SIZE: usize,
+    > DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(direct_pins: [[In; COL]; ROW], debouncer: D, low_active: bool) -> Self {
+    pub(crate) fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
         DirectPinMatrix {
             direct_pins,
             debouncer: debouncer,
@@ -206,7 +243,8 @@ impl<
         D: DebouncerTrait,
         const ROW: usize,
         const COL: usize,
-    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL>
+        const SIZE: usize,
+    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;
@@ -224,34 +262,27 @@ impl<
         Timer::after_micros(1).await;
         info!("Waiting for active level");
 
-        // TODO: make it more efficient.
-        // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
-        // generic parameters may not be used in const operations.
-        // Maybe we can use nightly only feature `generic_const_exprs`
         if self.low_active {
-            let mut futs: [Option<_>; ROW] = [const { None }; ROW];
-
-            for (row_idx, direct_pins_row) in self.direct_pins.iter_mut().enumerate() {
-                let mut futs_row: [Option<_>; COL] = [const { None }; COL];
-                for (col_idx, direct_pin) in direct_pins_row.iter_mut().enumerate() {
-                    futs_row[col_idx] = Some(direct_pin.wait_for_low());
+            let mut futs: Vec<_, SIZE> = Vec::new();
+            for direct_pins_row in self.direct_pins.iter_mut() {
+                for direct_pin in direct_pins_row.iter_mut() {
+                    if let Some(direct_pin) = direct_pin {
+                        let _ = futs.push(direct_pin.wait_for_low());
+                    }
                 }
-                futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
             }
-            let _ = select_array(futs.map(|option| option.unwrap())).await;
+            let _ = select_slice(futs.as_mut_slice()).await;
         } else {
-            let mut futs: [Option<_>; ROW] = [const { None }; ROW];
-
-            for (row_idx, direct_pins_row) in self.direct_pins.iter_mut().enumerate() {
-                let mut futs_row: [Option<_>; COL] = [const { None }; COL];
-                for (col_idx, direct_pin) in direct_pins_row.iter_mut().enumerate() {
-                    futs_row[col_idx] = Some(direct_pin.wait_for_high());
+            let mut futs: Vec<_, SIZE> = Vec::new();
+            for direct_pins_row in self.direct_pins.iter_mut() {
+                for direct_pin in direct_pins_row.iter_mut() {
+                    if let Some(direct_pin) = direct_pin {
+                        let _ = futs.push(direct_pin.wait_for_high());
+                    }
                 }
-                futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
             }
-            let _ = select_array(futs.map(|option| option.unwrap())).await;
+            let _ = select_slice(futs.as_mut_slice()).await;
         }
-
         self.scan_start = Some(Instant::now());
     }
 
@@ -265,41 +296,43 @@ impl<
             // Scan matrix and send report
             for (row_idx, pins_row) in self.direct_pins.iter_mut().enumerate() {
                 for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
-                    let pin_state = if self.low_active {
-                        direct_pin.is_low().ok().unwrap_or_default()
-                    } else {
-                        direct_pin.is_high().ok().unwrap_or_default()
-                    };
-
-                    let debounce_state = self.debouncer.detect_change_with_debounce(
-                        col_idx,
-                        row_idx,
-                        pin_state,
-                        &self.key_states[row_idx][col_idx],
-                    );
-
-                    match debounce_state {
-                        DebounceState::Debounced => {
-                            self.key_states[row_idx][col_idx].toggle_pressed();
-                            let key_state = self.key_states[row_idx][col_idx];
-
-                            // `try_send` is used here because we don't want to block scanning if the channel is full
-                            let send_re = key_event_channel.try_send(KeyEvent {
-                                row: row_idx as u8,
-                                col: col_idx as u8,
-                                pressed: key_state.pressed,
-                            });
-                            if send_re.is_err() {
-                                error!("Failed to send key event: key event channel full");
+                    if let Some(direct_pin) = direct_pin {
+                        let pin_state = if self.low_active {
+                            direct_pin.is_low().ok().unwrap_or_default()
+                        } else {
+                            direct_pin.is_high().ok().unwrap_or_default()
+                        };
+    
+                        let debounce_state = self.debouncer.detect_change_with_debounce(
+                            col_idx,
+                            row_idx,
+                            pin_state,
+                            &self.key_states[row_idx][col_idx],
+                        );
+    
+                        match debounce_state {
+                            DebounceState::Debounced => {
+                                self.key_states[row_idx][col_idx].toggle_pressed();
+                                let key_state = self.key_states[row_idx][col_idx];
+    
+                                // `try_send` is used here because we don't want to block scanning if the channel is full
+                                let send_re = key_event_channel.try_send(KeyEvent {
+                                    row: row_idx as u8,
+                                    col: col_idx as u8,
+                                    pressed: key_state.pressed,
+                                });
+                                if send_re.is_err() {
+                                    error!("Failed to send key event: key event channel full");
+                                }
                             }
+                            _ => (),
                         }
-                        _ => (),
-                    }
-
-                    // If there's key still pressed, always refresh the self.scan_start
-                    #[cfg(feature = "async_matrix")]
-                    if self.key_states[row_idx][col_idx].pressed {
-                        self.scan_start = Some(Instant::now());
+    
+                        // If there's key still pressed, always refresh the self.scan_start
+                        #[cfg(feature = "async_matrix")]
+                        if self.key_states[row_idx][col_idx].pressed {
+                            self.scan_start = Some(Instant::now());
+                        }
                     }
                 }
             }

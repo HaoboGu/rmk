@@ -54,18 +54,23 @@ pub(crate) fn convert_direct_pins_to_initializers(
 ) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
     let mut row_idents = vec![];
-
     // Process each row of pins
     for (row_idx, row_pins) in pins.into_iter().enumerate() {
         let mut col_idents = vec![];
-
         // Process each pin in the current row
         let pin_initializers = row_pins
             .into_iter()
             .map(|p| {
                 (
                     p.clone(),
-                    convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active),
+                    if p != "_" {
+                        // Convert pin to Some(pin) when it's not "_"
+                        let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active);
+                        quote! { Some(#pin) }
+                    } else {
+                        // Use None for "_" pins
+                        quote! { None }
+                    }
                 )
             })
             .map(|(p, ts)| {
@@ -73,10 +78,8 @@ pub(crate) fn convert_direct_pins_to_initializers(
                 col_idents.push(ident_name.clone());
                 quote! { let #ident_name = #ts; }
             });
-
         // Extend initializers with current row's pin initializations
         initializers.extend(pin_initializers);
-
         // Create array for current row
         let row_ident = format_ident!("direct_pins_row_{}", row_idx);
         initializers.extend(quote! {
@@ -84,12 +87,10 @@ pub(crate) fn convert_direct_pins_to_initializers(
         });
         row_idents.push(row_ident);
     }
-
     // Create final 2D array
     initializers.extend(quote! {
         let direct_pins = [#(#row_idents),*];
     });
-
     initializers
 }
 
