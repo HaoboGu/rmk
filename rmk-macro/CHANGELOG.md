@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add DirectPinMatrix, Including entry, gpio config, matrix config, board type.
+
+## [0.3.0] - 2024-10-28
+
 ### Added
 
 - Add default config for chips
 - Implemented `keyboard.toml` parsing for the new `WM(key, modifier)` "With Modifier" macro 
-- Add DirectPinMatrix, Including entry, gpio config, matrix config, board type.
 
 ### Changed
 
