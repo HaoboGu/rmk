@@ -58,7 +58,7 @@ pub(crate) fn convert_direct_pins_to_initializers(
     // Process each row of pins
     for (row_idx, row_pins) in pins.into_iter().enumerate() {
         let mut col_idents = vec![];
-        
+
         // Process each pin in the current row
         let pin_initializers = row_pins
             .into_iter()
@@ -76,7 +76,7 @@ pub(crate) fn convert_direct_pins_to_initializers(
 
         // Extend initializers with current row's pin initializations
         initializers.extend(pin_initializers);
-        
+
         // Create array for current row
         let row_ident = format_ident!("direct_pins_row_{}", row_idx);
         initializers.extend(quote! {

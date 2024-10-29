@@ -7,9 +7,7 @@ use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {
-    defmt::info,
-    embassy_futures::select::select_slice,
-    embedded_hal_async::digital::Wait,
+    defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
     heapless::Vec,
 };
 

@@ -1,15 +1,15 @@
 use crate::action::KeyAction;
-use crate::keyboard::key_event_channel;
-use crate::keyboard::KeyEvent;
-use crate::matrix::KeyState;
-use crate::RmkConfig;
-use crate::MatrixTrait;
-use crate::debounce::DebouncerTrait;
-use crate::debounce::DebounceState;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::debounce::DebounceState;
+use crate::debounce::DebouncerTrait;
+use crate::keyboard::key_event_channel;
+use crate::keyboard::KeyEvent;
+use crate::matrix::KeyState;
+use crate::MatrixTrait;
+use crate::RmkConfig;
 
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
@@ -24,20 +24,17 @@ use crate::initialize_usb_keyboard_and_run;
 use defmt::{error, info};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
-use embassy_time::Timer;
 use embassy_time::Instant;
+use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(not(feature = "_no_external_storage"))]
-use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-#[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage::nor_flash::NorFlash;
+#[cfg(not(feature = "_no_external_storage"))]
+use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 #[cfg(feature = "async_matrix")]
-use {
-    embassy_futures::select::select_array,
-    embedded_hal_async::digital::Wait,
-};
+use {embassy_futures::select::select_array, embedded_hal_async::digital::Wait};
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -242,7 +239,6 @@ impl<
                 futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
             }
             let _ = select_array(futs.map(|option| option.unwrap())).await;
-        
         } else {
             let mut futs: [Option<_>; ROW] = [const { None }; ROW];
 

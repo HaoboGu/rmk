@@ -5,7 +5,7 @@ use syn::{ItemFn, ItemMod};
 
 use crate::{
     keyboard::Overwritten,
-    keyboard_config::{CommunicationConfig, KeyboardConfig, BoardConfig},
+    keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig},
     ChipSeries,
 };
 
@@ -46,7 +46,9 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
     match &keyboard_config.board {
         BoardConfig::Normal(_) => rmk_entry_default(keyboard_config),
         BoardConfig::DirectPin(_) => rmk_entry_direct_pin(keyboard_config),
-        BoardConfig::Split(_) => quote! { compile_error!("You should use #[rmk_central] or #[rmk_peripheral] macro instead.");},
+        BoardConfig::Split(_) => {
+            quote! { compile_error!("You should use #[rmk_central] or #[rmk_peripheral] macro instead.");}
+        }
     }
 }
 
@@ -127,7 +129,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
         },
     }
 }
-
 
 pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     match keyboard_config.chip.series {

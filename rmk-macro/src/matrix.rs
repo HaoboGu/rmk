@@ -3,7 +3,10 @@
 use quote::quote;
 
 use crate::{
-    gpio_config::{convert_input_pins_to_initializers, convert_output_pins_to_initializers, convert_direct_pins_to_initializers},
+    gpio_config::{
+        convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
+        convert_output_pins_to_initializers,
+    },
     keyboard_config::{BoardConfig, KeyboardConfig},
     ChipModel, ChipSeries,
 };
@@ -27,7 +30,7 @@ pub(crate) fn expand_matrix_config(
                 &keyboard_config.chip,
                 matrix.direct_pins.clone().unwrap(),
                 async_matrix,
-                matrix.direct_pin_low_active
+                matrix.direct_pin_low_active,
             ));
             // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
             // So we need to declaring them in advance.
@@ -93,7 +96,7 @@ pub(crate) fn expand_matrix_input_output_pins(
     ));
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(&chip, output_pins));
-    
+
     // Generate a macro that does pin matrix config
     quote! {
         #extra_import

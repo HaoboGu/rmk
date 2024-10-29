@@ -59,6 +59,7 @@ pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod debounce;
+pub mod direct_pin;
 mod flash;
 mod hid;
 mod keyboard;
@@ -68,7 +69,6 @@ mod keymap;
 mod layout_macro;
 mod light;
 mod matrix;
-pub mod direct_pin;
 #[cfg(feature = "split")]
 pub mod split;
 mod storage;

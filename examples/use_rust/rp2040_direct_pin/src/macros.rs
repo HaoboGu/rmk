@@ -11,7 +11,7 @@ macro_rules! config_matrix_pins_rp {
                     ]
                 ),+
             ];
-            
+
             pins
         }
     };
