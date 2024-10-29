@@ -6,15 +6,9 @@ product_id = 0x4643
 manufacturer = "haobo"
 chip = "nrf52840"
 
-# [matrix]
-# # Input and output pins are mandatory
-# # TODO: Remove it since it's not usable in split
-# input_pins = ["P1_00", "P1_01", "P1_02", "P1_07"]
-# output_pins = ["P1_05", "P1_06", "P1_03"]
+[layout]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
 # row2col = true
-
-[layout]
 rows = 4
 cols = 3
 layers = 2
