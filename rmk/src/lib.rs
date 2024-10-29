@@ -68,6 +68,7 @@ mod keymap;
 mod layout_macro;
 mod light;
 mod matrix;
+pub mod direct_pin;
 #[cfg(feature = "split")]
 pub mod split;
 mod storage;
