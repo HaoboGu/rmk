@@ -16,9 +16,9 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
-    pub(crate) layers: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -29,8 +29,10 @@ pub(crate) struct KeyMap<const ROW: usize, const COL: usize, const NUM_LAYER: us
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL, NUM_LAYER> {
-    pub(crate) async fn new(action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    KeyMap<'a, ROW, COL, NUM_LAYER>
+{
+    pub(crate) async fn new(action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
@@ -41,14 +43,14 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeyMap<ROW, COL
     }
 
     pub(crate) async fn new_from_storage<F: NorFlash>(
-        mut action_map: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F>>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
         if let Some(storage) = storage {
             // Read keymap to `action_map`
-            if storage.read_keymap(&mut action_map).await.is_err() {
+            if storage.read_keymap(action_map).await.is_err() {
                 error!("Keymap reading aborted by an error, clearing the storage...");
                 // Dont sent flash message here, since the storage task is not running yet
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())

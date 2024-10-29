@@ -1,23 +1,21 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::BleConfig;
 
-use crate::{keyboard::CommunicationType, ChipModel, ChipSeries};
+use crate::{
+    keyboard_config::{CommunicationConfig, KeyboardConfig},
+    ChipSeries,
+};
 
 // Default implementations of ble configuration.
 // Because ble configuration in `rmk_config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
-pub(crate) fn expand_ble_config(
-    chip: &ChipModel,
-    comm_type: CommunicationType,
-    ble_config: Option<BleConfig>,
-) -> (TokenStream2, TokenStream2) {
-    if !comm_type.ble_enabled() {
+pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStream2, TokenStream2) {
+    if !keyboard_config.communication.ble_enabled() {
         return (quote! {}, quote! {});
     }
-    // Support nrf52 only (for now)
-    if chip.series != ChipSeries::Nrf52 {
-        if chip.series == ChipSeries::Esp32 {
+    // Support only nrf52 and esp32 (for now)
+    if keyboard_config.chip.series != ChipSeries::Nrf52 {
+        if keyboard_config.chip.series == ChipSeries::Esp32 {
             return (
                 quote! {
                     let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
@@ -30,11 +28,11 @@ pub(crate) fn expand_ble_config(
             return (quote! {}, quote! {});
         }
     }
-    match ble_config {
-        Some(ble) => {
+    match &keyboard_config.communication {
+        CommunicationConfig::Ble(ble) | CommunicationConfig::Both(_, ble) => {
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();
-                if let Some(adc_pin) = ble.battery_adc_pin {
+                if let Some(adc_pin) = ble.battery_adc_pin.clone() {
                     let adc_pin = if adc_pin == "vddh" {
                         quote! { ::embassy_nrf::saadc::VddhDiv5Input }
                     } else {
@@ -58,11 +56,16 @@ pub(crate) fn expand_ble_config(
                     });
                 };
 
-                if let Some(charging_state_config) = ble.charge_state {
+                if let Some(charging_state_config) = ble.charge_state.clone() {
                     let charging_state_pin = format_ident!("{}", charging_state_config.pin);
                     let low_active = charging_state_config.low_active;
+                    let pull = if low_active {
+                        quote! { ::embassy_nrf::gpio::Pull::Up }
+                    } else {
+                        quote! { ::embassy_nrf::gpio::Pull::Down }
+                    };
                     ble_config_tokens.extend(quote! {
-                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_state_pin), ::embassy_nrf::gpio::Pull::None));
+                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_state_pin), #pull));
                         let charging_state_low_active = #low_active;
                     });
                 } else {
@@ -74,7 +77,7 @@ pub(crate) fn expand_ble_config(
                     )
                 }
 
-                if let Some(charging_led_config) = ble.charge_led {
+                if let Some(charging_led_config) = ble.charge_led.clone() {
                     let charging_led_pin = format_ident!("{}", charging_led_config.pin);
                     let charging_led_low_active = charging_led_config.low_active;
                     let default_level = if charging_led_low_active {
@@ -118,13 +121,6 @@ pub(crate) fn expand_ble_config(
                 )
             }
         }
-        None => (
-            quote! {
-                let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-            },
-            quote! {
-                ble_battery_config,
-            },
-        ),
+        _ => (quote! {}, quote! {}),
     }
 }

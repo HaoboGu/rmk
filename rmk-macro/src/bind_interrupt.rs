@@ -3,16 +3,14 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::{BleConfig, KeyboardTomlConfig};
+use rmk_config::toml_config::BleConfig;
 use syn::ItemMod;
 
-use crate::{usb_interrupt_map::UsbInfo, ChipModel};
+use crate::keyboard_config::KeyboardConfig;
 
 // Expand `bind_interrupt!` stuffs
 pub(crate) fn expand_bind_interrupt(
-    chip: &ChipModel,
-    usb_info: &UsbInfo,
-    toml_config: &KeyboardTomlConfig,
+    keyboard_config: &KeyboardConfig,
     item_mod: &ItemMod,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
@@ -34,69 +32,70 @@ pub(crate) fn expand_bind_interrupt(
                 }
                 None
             })
-            .unwrap_or(bind_interrupt_default(chip, usb_info, toml_config))
+            .unwrap_or(bind_interrupt_default(keyboard_config))
     } else {
-        bind_interrupt_default(chip, usb_info, toml_config)
+        bind_interrupt_default(keyboard_config)
     }
 }
 
-pub(crate) fn bind_interrupt_default(
-    chip: &ChipModel,
-    usb_info: &UsbInfo,
-    toml_config: &KeyboardTomlConfig,
-) -> TokenStream2 {
-    let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
-    let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-    match chip.series {
-        crate::ChipSeries::Stm32 => {
-            if !chip.has_usb() {
-                return quote! {};
-            }
-            quote! {
-                use ::embassy_stm32::bind_interrupts;
-                bind_interrupts!(struct Irqs {
-                    #interrupt_name => ::embassy_stm32::usb::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
-                });
-            }
-        }
-        crate::ChipSeries::Nrf52 => {
-            let saadc_interrupt = if let Some(BleConfig {
-                enabled: true,
-                battery_adc_pin: Some(_adc_pin),
-                charge_state: _,
-                charge_led: _,
-            }) = &toml_config.ble
-            {
-                Some(quote! {
-                    SAADC => ::embassy_nrf::saadc::InterruptHandler;
-                })
-            } else {
-                None
-            };
-            let interrupt_binding = if chip.has_usb() {
-                quote! {
-                    #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
-                    #saadc_interrupt
-                    POWER_CLOCK => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
+pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
+        let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
+        let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+        match keyboard_config.chip.series {
+            crate::ChipSeries::Stm32 => {
+                if !keyboard_config.chip.has_usb() {
+                    return quote! {};
                 }
-            } else {
-                quote! { #saadc_interrupt }
-            };
-            quote! {
-                use ::embassy_nrf::bind_interrupts;
-                bind_interrupts!(struct Irqs {
-                    #interrupt_binding
-                });
+
+                quote! {
+                    use ::embassy_stm32::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #interrupt_name => ::embassy_stm32::usb::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
+                    });
+                }
             }
-        }
-        crate::ChipSeries::Rp2040 => {
-            quote! {
-                use ::embassy_rp::bind_interrupts;
-                bind_interrupts!(struct Irqs {
-                    #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
-                });
+            crate::ChipSeries::Nrf52 => {
+                let saadc_interrupt = if let Some(BleConfig {
+                    enabled: true,
+                    battery_adc_pin: Some(_adc_pin),
+                    charge_state: _,
+                    charge_led: _,
+                }) = keyboard_config.communication.get_ble_config()
+                {
+                    Some(quote! {
+                        SAADC => ::embassy_nrf::saadc::InterruptHandler;
+                    })
+                } else {
+                    None
+                };
+                let interrupt_binding = if keyboard_config.chip.has_usb() {
+                    quote! {
+                        #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
+                        #saadc_interrupt
+                        POWER_CLOCK => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
+                    }
+                } else {
+                    quote! { #saadc_interrupt }
+                };
+                quote! {
+                    use ::embassy_nrf::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #interrupt_binding
+                    });
+                }
             }
+            crate::ChipSeries::Rp2040 => {
+                quote! {
+                    use ::embassy_rp::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                    });
+                }
+            }
+            crate::ChipSeries::Esp32 => quote! {},
         }
-        crate::ChipSeries::Esp32 => quote! {},
+    } else {
+        quote! {}
     }
 }

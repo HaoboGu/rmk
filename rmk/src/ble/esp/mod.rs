@@ -1,12 +1,8 @@
 pub(crate) mod server;
 
 use self::server::{BleServer, VialReaderWriter};
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::keyboard::keyboard_report_channel;
-use crate::matrix::{Matrix, MatrixTrait};
+use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
 use crate::via::process::VialService;
@@ -20,9 +16,7 @@ use core::cell::RefCell;
 use defmt::{debug, info, warn};
 use embassy_futures::select::{select, select4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
+use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
@@ -41,18 +35,14 @@ use rmk_config::StorageConfig;
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
 pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    M: MatrixTrait,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    default_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    mut matrix: M,
+    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     let f = Partition::new(PartitionType::Custom, Some(c"rmk"));
@@ -73,20 +63,6 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
-
-    // Keyboard matrix
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<ROW, COL>, ROW, COL>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let mut matrix =
-        Matrix::<_, _, RapidDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let mut matrix =
-        Matrix::<_, _, DefaultDebouncer<COL, ROW>, COL, ROW>::new(input_pins, output_pins);
 
     let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     // esp32c3 doesn't have USB device, so there is no usb here

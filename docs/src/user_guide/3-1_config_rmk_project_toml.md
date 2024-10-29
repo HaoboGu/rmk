@@ -3,7 +3,6 @@
 The generated `main.rs` should be like:
 
 ```rust
-use crate::keymap::KEYMAP;
 use rmk::macros::rmk_keyboard;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 

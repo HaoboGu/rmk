@@ -2,7 +2,7 @@
 # Have to use simmsb's elf2uf2 fork to flash https://github.com/simmsb/elf2uf2-rs 
 # runner = "elf2uf2-rs -d"
 runner = "probe-rs run --chip nRF52840_xxAA"
-
+linker = "flip-link"
 rustflags = [
   # Previously, the linker arguments --nmagic and -Tlink.x were set here.
   # They are now set by build.rs instead. The linker argument can still

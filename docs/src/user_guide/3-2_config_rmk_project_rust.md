@@ -45,7 +45,7 @@ at the root of the firmware project, replacing the default one. RMK would do all
 ### Add your default keymap
 
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined
-in `src/keymap.rs`, update keyboard matrix constants and `KEYMAP` according to your keyboard.
+in `src/keymap.rs`, update keyboard matrix constants and add a `get_default_keymap()` function which returns the default keymap of your keyboard.
 
 RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check

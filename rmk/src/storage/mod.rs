@@ -36,6 +36,9 @@ pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
+    // Current active BLE profile number
+    #[cfg(feature = "_nrf_ble")]
+    ActiveBleProfile(u8),
     // Clear the storage
     Reset,
     // Clear info of given slot number
@@ -63,6 +66,8 @@ pub(crate) enum StorageKeys {
     LayoutConfig,
     KeymapKeys,
     MacroData,
+    #[cfg(feature = "_nrf_ble")]
+    ActiveBleProfile = 0xEE,
     #[cfg(feature = "_nrf_ble")]
     BleBondInfo = 0xEF,
 }
@@ -93,6 +98,8 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     MacroData([u8; MACRO_SPACE_SIZE]),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
+    #[cfg(feature = "_nrf_ble")]
+    ActiveBleProfile(u8),
 }
 
 pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
@@ -145,6 +152,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                 buffer[5] = k.row as u8;
                 Ok(6)
             }
+            StorageData::MacroData(d) => {
+                if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::MacroData as u8;
+                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
+                Ok(MACRO_SPACE_SIZE + 1)
+            }
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => {
                 if buffer.len() < 121 {
@@ -158,13 +173,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                 buffer[1..121].copy_from_slice(&buf);
                 Ok(121)
             }
-            StorageData::MacroData(d) => {
-                if buffer.len() < MACRO_SPACE_SIZE + 1 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-                buffer[0] = StorageKeys::MacroData as u8;
-                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
-                Ok(MACRO_SPACE_SIZE + 1)
+            #[cfg(feature = "_nrf_ble")]
+            StorageData::ActiveBleProfile(slot_num) => {
+                buffer[0] = StorageKeys::ActiveBleProfile as u8;
+                buffer[1] = *slot_num;
+                Ok(2)
             }
         }
     }
@@ -217,6 +230,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                         action,
                     }))
                 }
+                StorageKeys::MacroData => {
+                    if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
+                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
+                    Ok(StorageData::MacroData(buf))
+                }
                 #[cfg(feature = "_nrf_ble")]
                 StorageKeys::BleBondInfo => {
                     // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
@@ -226,14 +247,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
 
                     Ok(StorageData::BondInfo(info))
                 }
-                StorageKeys::MacroData => {
-                    if buffer.len() < MACRO_SPACE_SIZE + 1 {
-                        return Err(SerializationError::InvalidData);
-                    }
-                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
-                    Ok(StorageData::MacroData(buf))
-                }
+                #[cfg(feature = "_nrf_ble")]
+                StorageKeys::ActiveBleProfile => Ok(StorageData::ActiveBleProfile(buffer[1])),
             }
         } else {
             Err(SerializationError::Custom(1))
@@ -247,13 +262,15 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageData<ROW
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
             StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as u32,
-            #[cfg(feature = "_nrf_ble")]
-            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             StorageData::KeymapKey(k) => {
                 let kk = *k;
                 get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer)
             }
             StorageData::MacroData(_) => StorageKeys::MacroData as u32,
+            #[cfg(feature = "_nrf_ble")]
+            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
+            #[cfg(feature = "_nrf_ble")]
+            StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
         }
     }
 }
@@ -323,13 +340,6 @@ impl<F: AsyncNorFlash> Storage<F> {
             config.num_sectors >= 2,
             "Number of used sector for storage must larger than 1"
         );
-        info!(
-            "Flash capacity {}, sector {}, config {} {}",
-            flash.capacity(),
-            F::ERASE_SIZE,
-            config.start_addr,
-            config.num_sectors
-        );
 
         // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
@@ -339,8 +349,18 @@ impl<F: AsyncNorFlash> Storage<F> {
         } else {
             config.start_addr
         };
+
         #[cfg(not(feature = "_nrf_ble"))]
         let start_addr = config.start_addr;
+
+        // Check storage setting
+        info!(
+            "Flash capacity {} KB, RMK use {} KB({} sectors) starting from 0x{:X} as storage",
+            flash.capacity() / 1024,
+            (F::ERASE_SIZE * config.num_sectors as usize) / 1024,
+            config.num_sectors,
+            config.start_addr,
+        );
         let storage_range = if start_addr == 0 {
             (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
                 ..flash.capacity() as u32
@@ -456,7 +476,19 @@ impl<F: AsyncNorFlash> Storage<F> {
                     )
                     .await
                 }
-
+                #[cfg(feature = "_nrf_ble")]
+                FlashOperationMessage::ActiveBleProfile(profile) => {
+                    let data = StorageData::ActiveBleProfile(profile);
+                    store_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &data.key(),
+                        &data,
+                    )
+                    .await
+                }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);

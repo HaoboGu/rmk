@@ -914,7 +914,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
  "serde",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "cargo_toml",
  "darling",

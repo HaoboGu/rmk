@@ -102,11 +102,15 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM]) -> Self {
+    pub(crate) fn new(
+        input_pins: [In; INPUT_PIN_NUM],
+        output_pins: [Out; OUTPUT_PIN_NUM],
+        debouncer: D,
+    ) -> Self {
         Matrix {
             input_pins,
             output_pins,
-            debouncer: D::new(),
+            debouncer,
             key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
         }
@@ -129,8 +133,8 @@ impl<
     #[cfg(not(feature = "col2row"))]
     const ROW: usize = OUTPUT_PIN_NUM;
     #[cfg(not(feature = "col2row"))]
-    const COL: usize = OUTPUT_PIN_NUM;
-    
+    const COL: usize = INPUT_PIN_NUM;
+
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {

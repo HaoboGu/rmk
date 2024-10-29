@@ -3,28 +3,20 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::{LayoutConfig, MatrixConfig};
 
-/// Read the default keymap setting in `keyboard.toml` and add as a `static KEYMAP`
-pub(crate) fn expand_layout_init(
-    layout_config: Option<LayoutConfig>,
-    matrix_config: MatrixConfig,
-) -> TokenStream2 {
-    if let Some(l) = layout_config {
-        // Check the size of layers, rows and cols first
-        if let Err(err_msg) = check_keymap_size(&l, matrix_config) {
-            return syn::Error::new_spanned::<TokenStream2, String>(quote! {}, err_msg)
-                .to_compile_error()
-                .into();
-        }
+use crate::keyboard_config::KeyboardConfig;
 
-        let mut layers = vec![];
-        for layer in l.keymap {
-            layers.push(expand_layer(layer));
+/// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
+pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    let mut layers = vec![];
+    for layer in keyboard_config.layout.keymap.clone() {
+        layers.push(expand_layer(layer));
+    }
+    return quote! {
+        pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+            [#(#layers), *]
         }
-        return quote! { static KEYMAP: [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] = [#(#layers), *]; };
     };
-    quote! {}
 }
 
 /// Push rows in the layer
@@ -45,45 +37,6 @@ fn expand_row(row: Vec<String>) -> TokenStream2 {
     quote! { [#(#keys), *] }
 }
 
-/// Check whether the size of keymap matches matrix config
-fn check_keymap_size(l: &LayoutConfig, matrix_config: MatrixConfig) -> Result<(), String> {
-    // Layer
-    let layer_num = l.keymap.len();
-    if layer_num as u8 != matrix_config.layers {
-        return Err(
-            "keyboard.toml: Layer number in keymap doesn't match with [matrix.layers]".to_string(),
-        );
-    }
-    // Row
-    if let Some(_) = l
-        .keymap
-        .iter()
-        .map(|r| r.len())
-        .find(|l| *l as u8 != matrix_config.rows)
-    {
-        return Err(
-            "keyboard.toml: Row number in keymap doesn't match with [matrix.row]".to_string(),
-        );
-    }
-    // Col
-    if let Some(_) = l
-        .keymap
-        .iter()
-        .filter_map(|r| {
-            r.iter()
-                .map(|c| c.len())
-                .find(|l| *l as u8 != matrix_config.cols)
-        })
-        .next()
-    {
-        // Find a row whose col num is wrong
-        return Err(
-            "keyboard.toml: Col number in keymap doesn't match with [matrix.col]".to_string(),
-        );
-    }
-    Ok(())
-}
-
 /// Parse the key string at a single position
 fn parse_key(key: String) -> TokenStream2 {
     if key.len() < 5 {
@@ -95,6 +48,68 @@ fn parse_key(key: String) -> TokenStream2 {
         };
     }
     match &key[0..3] {
+        "WM(" => {
+            if let Some(internal) = key.trim_start_matches("WM(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+
+                let ident = format_ident!("{}", keys[0].to_string());
+
+                // Get modifier combination, in types of mod1 | mod2 | ...
+                let mut right = false;
+                let mut gui = false;
+                let mut alt = false;
+                let mut shift = false;
+                let mut ctrl = false;
+                keys[1].split_terminator("|").for_each(|w| {
+                    let w = w.trim();
+                    match w {
+                        "LShift" => shift = true,
+                        "LCtrl" => ctrl = true,
+                        "LAlt" => alt = true,
+                        "Lgui" => gui = true,
+                        "RShift" => {
+                            right = true;
+                            shift = true;
+                        }
+                        "RCtrl" => {
+                            right = true;
+                            ctrl = true;
+                        }
+                        "RAlt" => {
+                            right = true;
+                            alt = true;
+                        }
+                        "Rgui" => {
+                            right = true;
+                            gui = true;
+                        }
+                        _ => (),
+                    }
+                });
+
+                if (gui || alt || shift || ctrl) == false {
+                    return quote! {
+                        compile_error!("keyboard.toml: modifier in WM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                quote! {
+                    ::rmk::wm!(#ident, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
+            }
+        }
         "MO(" => {
             let layer = get_layer(key, "MO(", ")");
             quote! {

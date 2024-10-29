@@ -14,6 +14,8 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::Key(k) => {
                 if k.is_macro() {
                     k as u16 & 0xFF | 0x7700
+                } else if k.is_user() {
+                    k as u16 & 0xF | 0x7E00
                 } else {
                     k as u16
                 }
@@ -171,9 +173,8 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7E00..=0x7E0F => {
-            // TODO: User 1-16
-            warn!("User {:#X} not supported", via_keycode);
-            KeyAction::No
+            let keycode = via_keycode & 0xFF | 0x840;
+            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
         _ => {
             warn!("Via keycode {:#X} is not processed", via_keycode);

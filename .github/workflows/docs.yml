@@ -3,6 +3,16 @@ on:
   push:
     branches:
       - main
+      # testing..
+      - docs/i18n
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  TRANSLATED_LANGUAGES: zh_CN
 
 jobs:
   deploy:
@@ -22,19 +32,36 @@ jobs:
           mkdir mdbook
           curl -sSL $url | tar -xz --directory=./mdbook
           echo `pwd`/mdbook >> $GITHUB_PATH
-      - name: Build Book
+      - name: Install gettext
         run: |
-          # This assumes your book is in the root of your repository.
-          # Just add a `cd` here if you need to change to another directory.
-          cd docs
-          mdbook build
+          sudo apt update
+          sudo apt install gettext
+      - name: Install mdbook-i18n-helpers
+        run: cargo install mdbook-i18n-helpers --locked --version 0.3.3
+        shell: bash
+      
+      - name: Make script executable
+        run: chmod +x .github/workflows/build_docs.sh
+      - name: Build Book in English
+        run: .github/workflows/build_docs.sh en book
+      - name: Build all translations
+        run: |
+          for po_lang in ${{ env.TRANSLATED_LANGUAGES }}; do
+              .github/workflows/build_docs.sh $po_lang book/$po_lang
+              cd docs
+              find . -type d -mindepth 1 -maxdepth 4
+              cd ../
+              echo "1234"
+              find . -type d -mindepth 1 -maxdepth 4
+              mv docs/book/$po_lang/html docs/book/html/$po_lang
+          done
+      
       - name: Setup Pages
         uses: actions/configure-pages@v2
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          # Upload entire repository
-          path: 'docs/book'
+          path: 'docs/book/html'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1

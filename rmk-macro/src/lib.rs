@@ -2,6 +2,7 @@ mod bind_interrupt;
 mod ble;
 mod chip_init;
 mod comm;
+mod default_config;
 mod entry;
 mod feature;
 mod flash;
@@ -23,18 +24,20 @@ use split::{central::parse_split_central_mod, peripheral::parse_split_peripheral
 use syn::parse_macro_input;
 use usb_interrupt_map::get_usb_info;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum ChipSeries {
     Stm32,
     Nrf52,
+    #[default]
     Rp2040,
     Esp32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ChipModel {
     pub(crate) series: ChipSeries,
     pub(crate) chip: String,
+    pub(crate) board: Option<String>,
 }
 
 impl ChipModel {
@@ -61,9 +64,9 @@ impl ChipModel {
 }
 
 #[proc_macro_attribute]
-pub fn rmk_keyboard(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn rmk_keyboard(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_mod = parse_macro_input!(item as syn::ItemMod);
-    parse_keyboard_mod(attr, item_mod).into()
+    parse_keyboard_mod(item_mod).into()
 }
 
 #[proc_macro_attribute]

@@ -16,9 +16,11 @@
   </p>
 </p>
 
+👉 Join our [Discord server](https://discord.gg/HHGA7pQxkG) if you have anything to discuss!
+
+----- 
 [中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
 
------
 
 ## Features
 
@@ -43,7 +45,7 @@
 You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
 
 ```shell
-cargo install cargo-generate
+cargo install cargo-generate flip-link
 cargo generate --git https://github.com/HaoboGu/rmk-template
 ```
 

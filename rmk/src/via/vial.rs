@@ -64,6 +64,10 @@ pub(crate) fn process_vial(
                 .for_each(|(i, v)| {
                     report.input_data[i] = *v;
                 });
+            debug!(
+                "Vial return: page:{} start:{} end: {}, data: {:?}",
+                page, start, end, report.input_data
+            );
         }
         VialCommand::GetUnlockStatus => {
             debug!("Received Vial - GetUnlockStatus");

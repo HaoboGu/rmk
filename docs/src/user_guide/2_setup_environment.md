@@ -32,16 +32,18 @@ rustup target add thumbv6m-none-eabi
 
 There are several other tools are highly recommended:
 
-- `cargo generate`: needed for creating a RMK firmware project from [RMK project template](https://github.com/HaoboGu/rmk-template)
+- `cargo generate`: needed for creating a RMK firmware project from [RMK project template](https://github.com/HaoboGu/rmk-template).
 
 - `probe-rs`: used to flash and debug your firmware. [Here](https://probe.rs/docs/getting-started/installation/) is the installation instruction.
+
+- `flip-link`: zero-cost stack overflow protection.
 
 You can use the following commands to install them:
 
 ```bash
-  # Install cargo-generate
-  cargo install cargo-generate
-  
+  # Install cargo-generate and flip-link
+  cargo install cargo-generate flip-link
+
   # Install probe-rs using scripts
   # Linux, macOS
   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
