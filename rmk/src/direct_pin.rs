@@ -231,19 +231,30 @@ impl<
         // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
         // generic parameters may not be used in const operations.
         // Maybe we can use nightly only feature `generic_const_exprs`
-        let mut futs: [Option<_>; ROW] = [const { None }; ROW];
-        for (row_idx, in_pins_row) in self.direct_pins.iter_mut().enumerate() {
-            let mut futs_row: [Option<_>; COL] = [const { None }; COL];
-            for (col_idx, in_pin) in in_pins_row.iter_mut().enumerate() {
-                futs_row[col_idx] = if self.low_active {
-                    Some(in_pin.wait_for_high())
-                } else {
-                    Some(in_pin.wait_for_low())
+        if self.low_active {
+            let mut futs: [Option<_>; ROW] = [const { None }; ROW];
+
+            for (row_idx, direct_pins_row) in self.direct_pins.iter_mut().enumerate() {
+                let mut futs_row: [Option<_>; COL] = [const { None }; COL];
+                for (col_idx, direct_pin) in direct_pins_row.iter_mut().enumerate() {
+                    futs_row[col_idx] = Some(direct_pin.wait_for_low());
                 }
+                futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
             }
-            futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
+            let _ = select_array(futs.map(|option| option.unwrap())).await;
+        
+        } else {
+            let mut futs: [Option<_>; ROW] = [const { None }; ROW];
+
+            for (row_idx, direct_pins_row) in self.direct_pins.iter_mut().enumerate() {
+                let mut futs_row: [Option<_>; COL] = [const { None }; COL];
+                for (col_idx, direct_pin) in direct_pins_row.iter_mut().enumerate() {
+                    futs_row[col_idx] = Some(direct_pin.wait_for_high());
+                }
+                futs[row_idx] = Some(select_array(futs_row.map(|option| option.unwrap())));
+            }
+            let _ = select_array(futs.map(|option| option.unwrap())).await;
         }
-        let _ = select_array(futs.map(|option| option.unwrap())).await;
 
         self.scan_start = Some(Instant::now());
     }
@@ -282,7 +293,6 @@ impl<
                                 col: col_idx as u8,
                                 pressed: key_state.pressed,
                             });
-                            defmt::println!("send event: {}, {} {}", row_idx, col_idx, key_state.pressed);
                             if send_re.is_err() {
                                 error!("Failed to send key event: key event channel full");
                             }
