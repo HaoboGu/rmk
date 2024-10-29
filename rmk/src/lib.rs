@@ -40,7 +40,10 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage};
+use keyboard::{
+    communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
+    REPORT_CHANNEL_SIZE,
+};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_config as config;
@@ -169,9 +172,9 @@ pub async fn run_rmk_with_async_flash<
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    #[cfg(feature = "col2row")]
     let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     // Dispatch according to chip and communication type
@@ -288,7 +291,12 @@ pub(crate) async fn run_usb_keyboard<
     matrix: &mut M,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<'b, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'b,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
 ) {
     let usb_fut = usb_device.device.run();
     let keyboard_fut = keyboard.run();

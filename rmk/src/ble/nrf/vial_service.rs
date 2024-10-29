@@ -1,4 +1,5 @@
 use defmt::{debug, error, Format};
+use embassy_futures::block_on;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
@@ -22,7 +23,7 @@ use crate::{
 
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 
-static vial_output_channel: Channel<CriticalSectionRawMutex, [u8; 32], 2> = Channel::new();
+static vial_output_channel: Channel<CriticalSectionRawMutex, [u8; 32], 4> = Channel::new();
 
 #[derive(Clone, Copy)]
 pub(crate) struct BleVialService {
@@ -137,6 +138,8 @@ impl gatt_server::Service for BleVialService {
                 if let Ok(_) = vial_output_channel.try_send(data) {
                     break;
                 }
+                // Wait for 20ms before sending the next report
+                block_on(embassy_time::Timer::after_millis(20));
                 error!("Vial output channel full");
             }
             Some(VialServiceEvent::OutputVial)

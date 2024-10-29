@@ -9,7 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
-use crate::keyboard::keyboard_report_channel;
+use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::{storage_task, StorageKeys};
 use crate::KEYBOARD_STATE;
@@ -155,8 +155,11 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,
             periph_role_count: 4,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_role_count: 4,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_sec_count: 0,
+            #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
@@ -485,7 +488,12 @@ pub(crate) async fn run_ble_keyboard<
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
-    keyboard_report_receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, 8>,
+    keyboard_report_receiver: &Receiver<
+        'a,
+        CriticalSectionRawMutex,
+        KeyboardReportMessage,
+        REPORT_CHANNEL_SIZE,
+    >,
 ) {
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;

@@ -1,6 +1,6 @@
 [package]
 name = "rmk-macro"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Proc-macro crate of RMK"
@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-config = { version = "0.1.6", path = "../rmk-config", features = ["toml"] }
+rmk-config = { version = "0.2.0", path = "../rmk-config", features = ["toml"] }
 toml = "0.8"
 serde = "1.0"
 serde_derive = "1.0"

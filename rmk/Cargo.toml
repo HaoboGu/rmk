@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.3.2"
+version = "0.4.0"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,8 +11,8 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-config = { version = "0.1.6", path = "../rmk-config" }
-rmk-macro = { version = "0.2.1", path = "../rmk-macro" }
+rmk-config = { version = "0.2.0", path = "../rmk-config" }
+rmk-macro = { version = "0.3.0", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal-async = { version = "1.0.0", features = [
     "defmt-03",
@@ -57,7 +57,6 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "critical-section-impl",
     "ble-gatt-server",
     "ble-gatt-client",
-    "ble-central",
     "ble-sec",
 ], optional = true }
 embassy-nrf = { version = "0.2.0", features = [
@@ -104,14 +103,25 @@ _no_external_storage = []
 #! 
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
-nrf52840_ble = ["_nrf_ble", "nrf-softdevice/nrf52840", "nrf-softdevice/s140"]
+nrf52840_ble = [
+    "_nrf_ble",
+    "nrf-softdevice/nrf52840",
+    "nrf-softdevice/s140",
+    "nrf-softdevice/ble-central",
+]
 ## Enable feature if you want to use nRF52833 with BLE.
-nrf52833_ble = ["_nrf_ble", "nrf-softdevice/nrf52833", "nrf-softdevice/s140"]
+nrf52833_ble = [
+    "_nrf_ble",
+    "nrf-softdevice/nrf52833",
+    "nrf-softdevice/s140",
+    "nrf-softdevice/ble-central",
+]
 ## Enable feature if you want to use nRF52832 with BLE.
 nrf52832_ble = [
     "_nrf_ble",
     "_no_usb",
     "nrf-softdevice/nrf52832",
+    "nrf-softdevice/ble-central",
     "nrf-softdevice/s132",
 ]
 ## Enable feature if you want to use nRF52811 with BLE.
@@ -119,14 +129,14 @@ nrf52811_ble = [
     "_nrf_ble",
     "_no_usb",
     "nrf-softdevice/nrf52811",
-    "nrf-softdevice/s140",
+    "nrf-softdevice/s112",
 ]
 ## Enable feature if you want to use nRF52810 with BLE.
 nrf52810_ble = [
     "_nrf_ble",
     "_no_usb",
     "nrf-softdevice/nrf52810",
-    "nrf-softdevice/s132",
+    "nrf-softdevice/s112",
 ]
 
 ## Enable feature if you want to use ESP32C3 with BLE.

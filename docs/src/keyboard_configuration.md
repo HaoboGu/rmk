@@ -116,11 +116,12 @@ The key string should follow several rules:
 
     For example, if you set a keycode `"Backspace"`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile!
 
+    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 2. For no-key, use `"__"`
 
 3. RMK supports many advanced layer operations:
     1. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
-    2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be like `LShift | RGui`
+    2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
     3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
     4. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
     5. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number

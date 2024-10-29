@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2024-10-28
+
 ### Added
 
-- Add restart to ESP32
-- Optimize nRF BLE power consumption, now the idle current is decreased to about 20uA
+- Restart function of ESP32
+- Methods for optimizing nRF BLE power consumption, now the idle current is decreased to about 20uA
+- Multi-device support for nRF BLE
+- New `wm` "With Modifier" macro to support basic keycodes with modifiers active
+- Voltage divider to estimate battery voltage
+- Per chip/board default settings
+- i18n support of documentation
+- Use flip-link as default linker
 
 ### Changed
 
@@ -18,15 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BREAKING: refactor the whole macro crate, update `keyboard.toml` config, old `keyboard.toml` config may raise compilation error
 - Decouple the matrix(input device) and keyboard implementation
 - Stop scanning matrix after releasing all keys
-- Use divider to estimate battery voltage
-- Create Debouncer and Matrix in `run_rmk_*` function ahead of time instead of in the `initialize_*_and_run` function.
+- Move creation of Debouncer and Matrix to `run_rmk_*` function from `initialize_*_and_run`
 
 ### Fixed
 
-- Fix unexpected power consumption for nRF
-- Fix extra memory usage by duplicating keymaps
-- Fix COL/ROW typo
-- Fix ESP stackoverflow by increasing default ESP main stack size
+- Unexpected power consumption for nRF
+- Extra memory usage by duplicating keymaps
+- A COL/ROW typo
+- Stackoverflow of some ESP32 chips by increasing default ESP main stack size
 
 ## [0.3.2] - 2024-10-05
 
