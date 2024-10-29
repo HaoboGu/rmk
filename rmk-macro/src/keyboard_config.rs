@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::toml_config::{
     BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig, LightConfig,
-    MatrixConfig, SplitConfig, StorageConfig,
+    MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
 use serde::Deserialize;
 use std::fs;
@@ -83,6 +83,7 @@ pub(crate) struct KeyboardConfig {
 pub(crate) enum BoardConfig {
     Normal(MatrixConfig),
     Split(SplitConfig),
+    DirectPin(MatrixConfig),
 }
 
 impl Default for BoardConfig {
@@ -330,9 +331,28 @@ impl KeyboardConfig {
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
             (None, Some(s)) => Ok(BoardConfig::Split(s)),
-            (Some(m), None) => Ok(BoardConfig::Normal(m)),
+            (Some(m), None) => {
+                match m.matrix_type {
+                    MatrixType::normal => {
+                        if m.input_pins == None || m.output_pins == None {
+                            rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
+                        }
+                        else {
+                            Ok(BoardConfig::Normal(m))
+                        }
+                    },
+                    MatrixType::direct_pin => {
+                        if m.direct_pins == None {
+                            rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
+                        }
+                        else {
+                            Ok(BoardConfig::DirectPin(m))
+                        }
+                    },
+                }
+            },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
-            (Some(_), Some(_)) => rmk_compile_error!("Use either [matrix] or [split] in your keyboard.toml, but NOT BOTH\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard".to_string()),
+            _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
         }
     }
 

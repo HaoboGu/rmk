@@ -1,0 +1,56 @@
+[keyboard]
+name = "RMK Keyboard"
+product_name = "RMK Keyboard"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "haobo"
+chip = "rp2040"
+
+# [matrix]
+# input_pins = ["PIN_0", "PIN_1", "PIN_2", "PIN_3", "PIN_4", "PIN_5", "PIN_6", "PIN_7", "PIN_8", "PIN_9", "PIN_10", "PIN_11"]
+# output_pins = ["PIN_19", "PIN_20", "PIN_21"]
+
+[matrix]
+matrix_type = "direct_pin"
+direct_pin_low_active = true
+direct_pins = [
+    ["PIN_0", "PIN_1", "PIN_2"],
+    ["PIN_3", "PIN_4", "PIN_5"],
+    ["PIN_6", "_", "PIN_8"],
+    ["PIN_9", "PIN_10", "_"],
+]
+
+[layout]
+rows = 4
+cols = 3
+layers = 2
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "_", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "_"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
+
+[light]
+# All light pins are high-active by default, uncomment if you want it to be low-active
+# capslock.pin = "PB2"
+# capslock.low_active = true
+# scrolllock.pin = "PA3"
+# scrolllock.low_active = true
+# Just ignore if no light pin is used for it
+# numslock.pin = "PA5"
+# numslock.low_active = true
+
+
+
+[storage]
+# Storage feature is enabled by default
+# enabled = false

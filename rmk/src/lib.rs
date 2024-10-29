@@ -59,6 +59,7 @@ pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod debounce;
+pub mod direct_pin;
 mod flash;
 mod hid;
 mod keyboard;

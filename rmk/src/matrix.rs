@@ -54,7 +54,7 @@ impl Default for KeyState {
 }
 
 impl KeyState {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         KeyState { pressed: false }
     }
 
