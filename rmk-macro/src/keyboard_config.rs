@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::toml_config::{
     BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig, LightConfig,
-    MatrixConfig, DirectPinMatrixConfig, SplitConfig, StorageConfig,
+    MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
 use serde::Deserialize;
 use std::fs;
@@ -83,7 +83,7 @@ pub(crate) struct KeyboardConfig {
 pub(crate) enum BoardConfig {
     Normal(MatrixConfig),
     Split(SplitConfig),
-    DirectPin(DirectPinMatrixConfig),
+    DirectPin(MatrixConfig),
 }
 
 impl Default for BoardConfig {
@@ -159,7 +159,7 @@ impl KeyboardConfig {
         config.basic = Self::get_basic_info(config.basic, toml_config.keyboard);
 
         // Board config
-        config.board = Self::get_board_config(toml_config.matrix, toml_config.direct_pin_matrix, toml_config.split)?;
+        config.board = Self::get_board_config(toml_config.matrix, toml_config.split)?;
 
         // Layout config
         config.layout = Self::get_layout_from_toml(toml_config.layout)?;
@@ -327,15 +327,32 @@ impl KeyboardConfig {
 
     fn get_board_config(
         matrix: Option<MatrixConfig>,
-        direct_pin_matrix: Option<DirectPinMatrixConfig>,
         split: Option<SplitConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
-        match (matrix, direct_pin_matrix, split) {
-            (None, None, Some(s)) => Ok(BoardConfig::Split(s)),
-            (Some(m), None, None) => Ok(BoardConfig::Normal(m)),
-            (None, Some(d), None ) => Ok(BoardConfig::DirectPin(d)),
-            (None, None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
-            _ => rmk_compile_error!("Use at most one of [matrix], [split], or [direct_pin_martix] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n-> [direct_pin_matrix] is used to define a keyboard of buttons connected directly to pins".to_string()),
+        match (matrix, split) {
+            (None, Some(s)) => Ok(BoardConfig::Split(s)),
+            (Some(m), None) => {
+                match m.matrix_type {
+                    MatrixType::normal => {
+                        if m.input_pins == None || m.output_pins == None {
+                            rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
+                        }
+                        else {
+                            Ok(BoardConfig::Normal(m))
+                        }
+                    },
+                    MatrixType::direct_pin => {
+                        if m.direct_pins == None {
+                            rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
+                        }
+                        else {
+                            Ok(BoardConfig::DirectPin(m))
+                        }
+                    },
+                }
+            },
+            (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
+            _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
         }
     }
 
