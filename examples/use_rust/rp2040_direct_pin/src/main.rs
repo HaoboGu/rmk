@@ -81,6 +81,7 @@ async fn main(spawner: Spawner) {
         flash,
         &mut keymap::get_default_keymap(),
         keyboard_config,
+        true,
         spawner,
     )
     .await;

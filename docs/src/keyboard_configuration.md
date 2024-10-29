@@ -68,6 +68,23 @@ output_pins = ["PD7", "PD8", "PD9"]
 # row2col = true
 ```
 
+If your keys are directly connected to the microcontroller pins, set `matrix_type` to `direct_pin`. (The default value for `matrix_type` is `normal`)
+
+`direct_pins` is a two-dimensional array that represents the physical layout of your keys.
+
+If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
+
+Here is an example for rp2040.
+```toml
+matrix_type = "direct_pin"
+direct_pins = [
+    ["PIN_0", "PIN_1", "PIN_2"],
+    ["PIN_3", "PIN_4", "PIN_5"]
+]
+# `direct_pin_low_active` is optional. Default is `true`.
+direct_pin_low_active = true
+```
+
 ### `[layout]`
 
 `[layout]` section contains the layout and the default keymap for the keyboard:
@@ -228,10 +245,24 @@ usb_enable = true
 
 # Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
 [matrix]
+# `matrix_type` is optional. Default is "normal"
+matrix_type = "normal"
 # Input and output pins
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+
+# Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
+matrix_type = "direct_pin"
+direct_pins = [
+    ["PIN_0", "PIN_1", "PIN_2"],
+    ["PIN_3", "PIN_4", "PIN_5"]
+]
+
+# `direct_pin_low_active` is optional. Default is `true`.
+# If your pin needs to be pulled up and the pin is pulled down when the button is turned on, please set it to true
+# WARNING: If you use a normal matrix, it will be ineffective
+direct_pin_low_active = true
 
 # Layout info for the keyboard, this section is mandatory
 [layout]
