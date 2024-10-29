@@ -33,7 +33,7 @@ pub(crate) fn convert_input_pins_to_initializers(
         .map(|p| {
             (
                 p.clone(),
-                convert_gpio_str_to_input_pin(chip, p, async_matrix),
+                convert_gpio_str_to_input_pin(chip, p, async_matrix, false),
             )
         })
         .map(|(p, ts)| {
@@ -43,6 +43,53 @@ pub(crate) fn convert_input_pins_to_initializers(
         });
     initializers.extend(pin_initializers);
     initializers.extend(quote! {let input_pins = [#(#idents), *];});
+    initializers
+}
+
+pub(crate) fn convert_direct_pins_to_initializers(
+    chip: &ChipModel,
+    pins: Vec<Vec<String>>,
+    async_matrix: bool,
+    low_active: bool,
+) -> proc_macro2::TokenStream {
+    let mut initializers = proc_macro2::TokenStream::new();
+    let mut row_idents = vec![];
+
+    // Process each row of pins
+    for (row_idx, row_pins) in pins.into_iter().enumerate() {
+        let mut col_idents = vec![];
+        
+        // Process each pin in the current row
+        let pin_initializers = row_pins
+            .into_iter()
+            .map(|p| {
+                (
+                    p.clone(),
+                    convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active),
+                )
+            })
+            .map(|(p, ts)| {
+                let ident_name = format_ident!("{}_{}", p.to_lowercase(), row_idx);
+                col_idents.push(ident_name.clone());
+                quote! { let #ident_name = #ts; }
+            });
+
+        // Extend initializers with current row's pin initializations
+        initializers.extend(pin_initializers);
+        
+        // Create array for current row
+        let row_ident = format_ident!("direct_pins_row_{}", row_idx);
+        initializers.extend(quote! {
+            let #row_ident = [#(#col_idents),*];
+        });
+        row_idents.push(row_ident);
+    }
+
+    // Create final 2D array
+    initializers.extend(quote! {
+        let direct_pins = [#(#row_idents),*];
+    });
+
     initializers
 }
 
@@ -85,8 +132,14 @@ pub(crate) fn convert_gpio_str_to_input_pin(
     chip: &ChipModel,
     gpio_name: String,
     async_matrix: bool,
+    low_active: bool,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
+    let default_pull_ident = if low_active {
+        format_ident!("Up")
+    } else {
+        format_ident!("Down")
+    };
     match chip.series {
         ChipSeries::Stm32 => {
             if async_matrix {
@@ -95,7 +148,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                     Some(pin_num) => {
                         let pin_num_ident = format_ident!("EXTI{}", pin_num);
                         quote! {
-                            ::embassy_stm32::exti::ExtiInput::new(::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade(), p.#pin_num_ident.degrade())
+                            ::embassy_stm32::exti::ExtiInput::new(::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::#default_pull_ident).degrade(), p.#pin_num_ident.degrade())
                         }
                     }
                     None => {
@@ -105,18 +158,18 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 }
             } else {
                 quote! {
-                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down).degrade()
+                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::#default_pull_ident).degrade()
                 }
             }
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Pull::Down)
+                ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Pull::#default_pull_ident)
             }
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Input::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Pull::Down)
+                ::embassy_rp::gpio::Input::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Pull::#default_pull_ident)
             }
         }
         ChipSeries::Esp32 => {

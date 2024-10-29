@@ -7,6 +7,8 @@ pub struct KeyboardTomlConfig {
     pub keyboard: KeyboardInfo,
     /// Matrix of the keyboard, only for non-split keyboards
     pub matrix: Option<MatrixConfig>,
+    /// Matrix of buttons connected directly to pins
+    pub direct_pin_matrix: Option<DirectPinMatrixConfig>,
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
     pub layout: LayoutConfig,
@@ -49,6 +51,13 @@ pub struct KeyboardInfo {
 pub struct MatrixConfig {
     pub input_pins: Vec<String>,
     pub output_pins: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct DirectPinMatrixConfig {
+    pub direct_pins: Vec<Vec<String>>,
+    #[serde(default = "default_true")]
+    pub low_active: bool,
 }
 
 /// Config for storage

@@ -151,7 +151,7 @@ fn expand_main(
             // Initialize light config as `light_config`
             #light_config
 
-            // Initialize matrix config as `(input_pins, output_pins)`
+            // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
 
             #ble_config
