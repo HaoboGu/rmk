@@ -62,13 +62,13 @@ async fn main(spawner: Spawner) -> ! {
 
     info!("test");
     /* USB DRIVER SECION */
-    static BUFFER: StaticCell<[EndpointDataBuffer; 1]> = StaticCell::new();
+    static BUFFER: StaticCell<[EndpointDataBuffer; 8]> = StaticCell::new();
     // let mut buffer = ;
     let driver = Driver::new(
         p.OTG_FS,
         p.PA12,
         p.PA11,
-        BUFFER.init([EndpointDataBuffer::default()]),
+        BUFFER.init(core::array::from_fn(|_| EndpointDataBuffer::default())),
     );
 
     let i = [Input::new(p.PB3, Pull::Up)];
