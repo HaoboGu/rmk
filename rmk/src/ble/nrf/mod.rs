@@ -315,68 +315,56 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                 active_profile
             );
 
-            // Wait for BLE or USB connection
             let dummy_task = run_dummy_keyboard(
                 &mut keyboard,
                 &mut matrix,
                 &mut storage,
                 &keyboard_report_receiver,
             );
-            match select3(
+
+            // Wait for BLE or USB connection
+            match select4(
                 adv_fut,
                 wait_for_usb_enabled(),
-                select(dummy_task, update_profile(bonder)),
+                dummy_task,
+                update_profile(bonder),
             )
             .await
             {
-                Either3::First(re) => match re {
-                    Ok(conn) => {
-                        info!("Connected to BLE");
-                        // Check whether the peer address is matched with current profile
-                        if !bonder.check_connection(&conn) {
-                            error!("Bonded peer address doesn't match active profile, disconnect");
-                            continue;
-                        }
-                        bonder.load_sys_attrs(&conn);
-                        match select3(
-                            run_ble_keyboard(
-                                &conn,
-                                &ble_server,
-                                &mut keyboard,
-                                &mut matrix,
-                                &mut storage,
-                                &mut light_service,
-                                &mut vial_service,
-                                &mut keyboard_config.ble_battery_config,
-                                &keyboard_report_receiver,
-                            ),
-                            wait_for_usb_enabled(),
-                            update_profile(bonder),
-                        )
-                        .await
-                        {
-                            Either3::First(_) => (),
-                            Either3::Second(_) => {
-                                info!("Detected USB configured, quit BLE");
-                                continue;
-                            }
-                            Either3::Third(_) => {
-                                info!("Switch profile");
-                                continue;
-                            }
-                        }
+                Either4::First(Ok(conn)) => {
+                    info!("Connected to BLE");
+                    // Check whether the peer address is matched with current profile
+                    if !bonder.check_connection(&conn) {
+                        error!("Bonded peer address doesn't match active profile, disconnect");
+                        continue;
                     }
-                    Err(e) => error!("Advertise error: {}", e),
-                },
-                Either3::Second(_) => {
-                    // Wait 10ms for usb resuming
-                    Timer::after_millis(10).await;
-                    continue;
+                    bonder.load_sys_attrs(&conn);
+                    // Run the ble keyboard, wait for disconnection or USB connect
+                    match select3(
+                        run_ble_keyboard(
+                            &conn,
+                            &ble_server,
+                            &mut keyboard,
+                            &mut matrix,
+                            &mut storage,
+                            &mut light_service,
+                            &mut vial_service,
+                            &mut keyboard_config.ble_battery_config,
+                            &keyboard_report_receiver,
+                        ),
+                        wait_for_usb_enabled(),
+                        update_profile(bonder),
+                    )
+                    .await
+                    {
+                        Either3::First(_) => info!("BLE disconnected"),
+                        Either3::Second(_) => info!("Detected USB configured, quit BLE"),
+                        Either3::Third(_) => info!("Switch profile"),
+                    }
                 }
-                Either3::Third(_) => {
-                    // Switch profile
+                _ => {
+                    // Wait 10ms for usb resuming/switching profile/advertising error
                     Timer::after_millis(10).await;
-                    continue;
                 }
             }
         }
@@ -404,8 +392,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             Err(e) => error!("Advertise error: {}", e),
         }
 
-        // Retry after 1 second
-        Timer::after_secs(1).await;
+        // Retry after 200 ms
+        Timer::after_millis(200).await;
     }
 }
 
@@ -539,7 +527,7 @@ pub(crate) async fn run_ble_keyboard<
     let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
     let set_conn_param = set_conn_params(&conn);
 
-    // Exit if anyone of three futures exits
+    // Exit if anyone of those futures exits
     match select4(
         select(matrix_fut, join(ble_fut, set_conn_param)),
         select(ble_communication_task, keyboard_fut),
@@ -548,10 +536,7 @@ pub(crate) async fn run_ble_keyboard<
     )
     .await
     {
-        Either4::First(disconnected_error) => error!(
-            "BLE gatt_server run exited with error: {:?}",
-            disconnected_error
-        ),
+        Either4::First(e) => error!("ble_fut exited with error: {:?}", e),
         Either4::Second(_) => error!("Keyboard task or ble task exited"),
         Either4::Third(_) => error!("Battery task or led task exited"),
         Either4::Fourth(_) => error!("Storage task exited"),
