@@ -107,7 +107,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "ch32-hal"
 version = "0.1.0"
-source = "git+https://github.com/vapor-keeb/ch32-hal?rev=cab34df#cab34dff8698c1a4fea6c3352e93057adc360d9a"
+source = "git+https://github.com/ch32-rs/ch32-hal?rev=749577a#749577aa60421ea1dcd37a8b1821444f0ff0f06e"
 dependencies = [
  "ch32-metapac",
  "critical-section",
@@ -134,7 +134,7 @@ dependencies = [
 [[package]]
 name = "ch32-metapac"
 version = "0.1.0"
-source = "git+https://github.com/ch32-rs/ch32-metapac?rev=c1287c192368a0a6cfc075e6df82d26ad2ddcdd1#c1287c192368a0a6cfc075e6df82d26ad2ddcdd1"
+source = "git+https://github.com/ch32-rs/ch32-metapac?rev=43066e18cf51106dff448f679dfff368a41431d7#43066e18cf51106dff448f679dfff368a41431d7"
 dependencies = [
  "riscv 0.11.1",
  "vcell",

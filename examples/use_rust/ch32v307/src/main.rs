@@ -1,16 +1,23 @@
 #![no_std]
 #![no_main]
 
+mod logger;
 mod vial;
 
-// use defmt::*;
-// use defmt_rtt as _;
+use core::mem::MaybeUninit;
+use core::panic::PanicInfo;
+
 use ch32_hal::gpio::{Input, Level, Output, Pull, Speed};
+use ch32_hal::mode::Blocking;
 use ch32_hal::otg_fs::endpoint::EndpointDataBuffer;
 use ch32_hal::otg_fs::{self, Driver};
-use ch32_hal::{self as hal, bind_interrupts, peripherals, println, Config};
+use ch32_hal::peripherals::USART1;
+use ch32_hal::usart::UartTx;
+use ch32_hal::{self as hal, bind_interrupts, peripherals, usart, Config};
+use defmt::{info, println, Display2Format};
 use embassy_executor::Spawner;
-use panic_halt as _;
+use embassy_time::Timer;
+use logger::set_logger;
 use rmk::config::{KeyboardUsbConfig, RmkConfig, VialConfig};
 use rmk::{k, run_rmk};
 use static_cell::StaticCell;
@@ -19,29 +26,41 @@ bind_interrupts!(struct Irq {
     OTG_FS => otg_fs::InterruptHandler<peripherals::OTG_FS>;
 });
 
-#[defmt::global_logger]
-struct Logger;
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    critical_section::with(|_| {
+        println!("{}", Display2Format(info));
 
-unsafe impl defmt::Logger for Logger {
-    fn acquire() {}
-    unsafe fn flush() {}
-    unsafe fn release() {}
-    unsafe fn write(_bytes: &[u8]) {
-        println!("{}", core::str::from_utf8(_bytes).unwrap());
-    }
+        loop {}
+    })
 }
+
+static mut LOGGER_UART: MaybeUninit<UartTx<'static, USART1, Blocking>> = MaybeUninit::uninit();
+
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
-    hal::debug::SDIPrint::enable();
-    println!("RMK start");
     // setup clocks
     let cfg = Config {
         rcc: ch32_hal::rcc::Config::SYSCLK_FREQ_144MHZ_HSI,
         ..Default::default()
     };
     let p = hal::init(cfg);
-    hal::embassy::init();
+    // Setup the printer
+    let uart1_config = usart::Config::default();
+    unsafe {
+        LOGGER_UART = MaybeUninit::new(
+            UartTx::<'static, _, _>::new_blocking(p.USART1, p.PA9, uart1_config).unwrap(),
+        );
+    };
+    set_logger(&|data| unsafe {
+        #[allow(unused_must_use, static_mut_refs)]
+        LOGGER_UART.assume_init_mut().blocking_write(data).ok();
+    });
 
+    // wait for serial-cat
+    Timer::after_millis(300).await;
+
+    info!("test");
     /* USB DRIVER SECION */
     static BUFFER: StaticCell<[EndpointDataBuffer; 1]> = StaticCell::new();
     // let mut buffer = ;
@@ -75,7 +94,7 @@ async fn main(spawner: Spawner) -> ! {
         i,
         o,
         driver,
-        rmk::EmptyFlashWrapper::new(),
+        // rmk::EmptyFlashWrapper::new(),
         &mut default_keymap,
         keyboard_config,
         spawner,

@@ -2,7 +2,7 @@
 target = "riscv32imafc-unknown-none-elf"
 
 [target.riscv32imafc-unknown-none-elf]
-runner = "wlink -v flash --chip ch32v30x --erase --enable-sdi-print --watch-serial"
+runner = "wlink -v flash --chip ch32v30x --erase --watch-serial"
 # runner = "wlink -v flash --no-erase --dry-run"
 # runner = "probe-rs run --chip CH32V307"
 # runner = "wlink -v flash"
