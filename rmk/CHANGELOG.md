@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2024-10-31
+
+### Fixed
+
+- Fix lagging for split peripheral 
+
+### Added
+
 - Direct pin mod. Including `DirectPinMatrix`, `run_rmk_direct_pin` functions etc.
 - Added pin active level parameter `low_active` to direct pin.
 - Support no_pin for `DirectPinMatrix`.
