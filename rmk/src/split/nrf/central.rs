@@ -25,7 +25,6 @@ use rmk_config::RmkConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 
-use crate::matrix::MatrixTrait;
 use crate::{
     action::KeyAction,
     ble::nrf::{
@@ -47,6 +46,7 @@ use crate::{
     usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
     via::process::VialService,
 };
+use crate::{ble::nrf::set_conn_params, matrix::MatrixTrait};
 
 /// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -294,16 +294,19 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                         info!("Connected to BLE");
                         bonder.load_sys_attrs(&conn);
                         match select(
-                            run_ble_keyboard(
-                                &conn,
-                                &ble_server,
-                                &mut keyboard,
-                                &mut matrix,
-                                &mut storage,
-                                &mut light_service,
-                                &mut vial_service,
-                                &mut keyboard_config.ble_battery_config,
-                                &keyboard_report_receiver,
+                            join(
+                                run_ble_keyboard(
+                                    &conn,
+                                    &ble_server,
+                                    &mut keyboard,
+                                    &mut matrix,
+                                    &mut storage,
+                                    &mut light_service,
+                                    &mut vial_service,
+                                    &mut keyboard_config.ble_battery_config,
+                                    &keyboard_report_receiver,
+                                ),
+                                set_conn_params(&conn),
                             ),
                             wait_for_usb_enabled(),
                         )

@@ -397,7 +397,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     }
 }
 
-async fn set_conn_params(conn: &Connection) {
+pub(crate) async fn set_conn_params(conn: &Connection) {
     // Wait for 5 seconds before setting connection parameters to avoid connection drop
     embassy_time::Timer::after_secs(5).await;
     if let Some(conn_handle) = conn.handle() {

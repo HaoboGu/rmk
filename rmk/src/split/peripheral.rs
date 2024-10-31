@@ -6,6 +6,7 @@ use crate::debounce::DebouncerTrait;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
 use crate::matrix::MatrixTrait;
+use defmt::info;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -106,12 +107,15 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
     spawner: Spawner,
 ) -> ! {
     use defmt::info;
-    use embassy_futures::select::select3;
+    use embassy_futures::{join::join, select::select3};
     use nrf_softdevice::ble::gatt_server;
 
-    use crate::split::nrf::peripheral::{
-        BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
-        SplitBleServiceEvent,
+    use crate::{
+        ble::nrf::set_conn_params,
+        split::nrf::peripheral::{
+            BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
+            SplitBleServiceEvent,
+        },
     };
 
     let ble_config = Config {
@@ -198,7 +202,12 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
         let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
         let peripheral_fut = peripheral.run();
         let matrix_fut = matrix.scan();
-        select3(matrix_fut, server_fut, peripheral_fut).await;
+        select3(
+            matrix_fut,
+            join(server_fut, set_conn_params(&conn)),
+            peripheral_fut,
+        )
+        .await;
     }
 }
 
