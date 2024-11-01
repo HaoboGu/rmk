@@ -24,7 +24,10 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
-use core::{cell::RefCell, sync::atomic::AtomicBool};
+use core::{
+    cell::RefCell,
+    sync::atomic::{AtomicBool, AtomicU8},
+};
 use debounce::DebouncerTrait;
 use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
@@ -75,7 +78,13 @@ mod storage;
 mod usb;
 mod via;
 
+/// Keyboard state, true for started, false for stopped
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
+/// Current connection type:
+/// - 0: USB
+/// - 1: BLE
+/// - Other: reserved
+pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 
 /// Run RMK keyboard service. This function should never return.
 ///
