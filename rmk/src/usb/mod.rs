@@ -1,6 +1,6 @@
 pub(crate) mod descriptor;
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicU8, Ordering};
 use defmt::info;
 use embassy_time::Timer;
 use embassy_usb::{
@@ -18,30 +18,52 @@ use crate::{
     usb::descriptor::{CompositeReport, ViaReport},
 };
 
-pub(crate) static USB_SUSPENDED: AtomicBool = AtomicBool::new(false);
-pub(crate) static USB_CONFIGURED: AtomicBool = AtomicBool::new(false);
-pub(crate) static USB_DEVICE_ENABLED: AtomicBool = AtomicBool::new(false);
+pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
 
-pub(crate) async fn wait_for_usb_suspend() {
-    loop {
-        let suspended = USB_SUSPENDED.load(core::sync::atomic::Ordering::Acquire);
-        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
-        if suspended || (!enabled) {
-            break;
+/// USB state
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum UsbState {
+    // Disconnected
+    Disabled = 0x0,
+    // Connected, but NOT ready
+    Enabled = 0x1,
+    // Connected, ready to use
+    Configured = 0x2,
+}
+
+impl From<u8> for UsbState {
+    fn from(state: u8) -> Self {
+        match state {
+            0 => UsbState::Disabled,
+            1 => UsbState::Enabled,
+            2 => UsbState::Configured,
+            _ => UsbState::Disabled,
         }
-        // Check usb suspended state every 500ms
-        Timer::after_millis(500).await
     }
 }
 
-pub(crate) async fn wait_for_usb_enabled() {
+pub(crate) async fn wait_for_usb_suspend() {
     loop {
-        let enabled = USB_DEVICE_ENABLED.load(core::sync::atomic::Ordering::Acquire);
-        if enabled {
+        // Check usbuspended state every 500ms
+        Timer::after_millis(500).await;
+        let usb_state: UsbState = USB_STATE.load(Ordering::Acquire).into();
+        if usb_state != UsbState::Configured {
             break;
         }
+    }
+}
+
+/// Wait for USB connected(but USB might not be configured yet)
+pub(crate) async fn wait_for_usb_enabled() {
+    loop {
         // Check usb enable state every 500ms
-        Timer::after_millis(500).await
+        Timer::after_millis(500).await;
+
+        let usb_state: UsbState = USB_STATE.load(Ordering::Acquire).into();
+        if usb_state == UsbState::Enabled {
+            break;
+        }
     }
 }
 
@@ -152,23 +174,9 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
 struct UsbRequestHandler {}
 
 impl RequestHandler for UsbRequestHandler {
-    fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
-        info!("Get report for {}", id);
-        None
-    }
-
     fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
         info!("Set report for {}: {}", id, data);
         OutResponse::Accepted
-    }
-
-    fn set_idle_ms(&mut self, id: Option<ReportId>, dur: u32) {
-        info!("Set idle rate for {} to {}", id, dur);
-    }
-
-    fn get_idle_ms(&mut self, id: Option<ReportId>) -> Option<u32> {
-        info!("Get idle rate for {}", id);
-        None
     }
 }
 
@@ -182,51 +190,41 @@ impl UsbDeviceHandler {
 
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
-        USB_CONFIGURED.store(false, Ordering::Relaxed);
-        USB_SUSPENDED.store(false, Ordering::Release);
         if enabled {
-            USB_DEVICE_ENABLED.store(true, Ordering::Release);
+            USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
             info!("Device enabled");
         } else {
-            USB_DEVICE_ENABLED.store(false, Ordering::Release);
+            USB_STATE.store(UsbState::Disabled as u8, Ordering::Relaxed);
             info!("Device disabled");
         }
     }
 
     fn reset(&mut self) {
-        USB_CONFIGURED.store(false, Ordering::Relaxed);
+        USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
         info!("Bus reset, the Vbus current limit is 100mA");
     }
 
     fn addressed(&mut self, addr: u8) {
-        USB_CONFIGURED.store(false, Ordering::Relaxed);
+        USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
         info!("USB address set to: {}", addr);
     }
 
     fn configured(&mut self, configured: bool) {
-        USB_CONFIGURED.store(configured, Ordering::Relaxed);
         if configured {
-            info!(
-                "Device configured, it may now draw up to the configured current limit from Vbus."
-            )
+            USB_STATE.store(UsbState::Configured as u8, Ordering::Relaxed);
+            info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
+            USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
             info!("Device is no longer configured, the Vbus current limit is 100mA.");
         }
     }
 
     fn suspended(&mut self, suspended: bool) {
+        USB_STATE.store(UsbState::Enabled as u8, Ordering::Release);
         if suspended {
             info!("Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
-            USB_SUSPENDED.store(true, Ordering::Release);
         } else {
-            USB_SUSPENDED.store(false, Ordering::Release);
-            if USB_CONFIGURED.load(Ordering::Relaxed) {
-                info!(
-                    "Device resumed, it may now draw up to the configured current limit from Vbus"
-                );
-            } else {
-                info!("Device resumed, the Vbus current limit is 100mA");
-            }
+            info!("Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
         }
     }
 }

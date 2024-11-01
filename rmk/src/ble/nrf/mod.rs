@@ -12,6 +12,7 @@ use self::server::BleServer;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
+use crate::usb::{UsbState, USB_STATE};
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -54,7 +55,7 @@ use vial_service::VialReaderWriter;
 use {
     crate::{
         run_usb_keyboard,
-        usb::{wait_for_usb_enabled, wait_for_usb_suspend, USB_DEVICE_ENABLED},
+        usb::{wait_for_usb_enabled, wait_for_usb_suspend},
         KeyboardUsbDevice,
     },
     embassy_futures::select::{select3, Either3},
@@ -78,7 +79,7 @@ pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
 
-    use crate::usb::USB_SUSPENDED;
+    use crate::usb::{UsbState, USB_STATE};
 
     // Enable dcdc-mode, reduce power consumption
     unsafe {
@@ -99,17 +100,23 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 
     let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, true));
 
+    // Read the USB status at the beginning
+    let mut usb_reg: u32 = 0;
+    unsafe { raw::sd_power_usbregstatus_get(&mut usb_reg) };
+    if usb_reg & 1 == 1 {
+        software_vbus.detected(true);
+        USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
+    }
+
     sd.run_with_callback(|event: SocEvent| {
         match event {
             SocEvent::PowerUsbRemoved => {
                 software_vbus.detected(false);
-                USB_SUSPENDED.store(true, Ordering::Release);
-                USB_DEVICE_ENABLED.store(false, Ordering::Release);
+                USB_STATE.store(UsbState::Disabled as u8, Ordering::Relaxed);
             }
             SocEvent::PowerUsbDetected => {
                 software_vbus.detected(true);
-                USB_SUSPENDED.store(false, Ordering::Release);
-                USB_DEVICE_ENABLED.store(true, Ordering::Release);
+                USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
             }
             SocEvent::PowerUsbPowerReady => software_vbus.ready(),
             _ => {}
@@ -293,7 +300,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         #[cfg(not(feature = "_no_usb"))]
         {
             // Check and run via USB first
-            if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
+            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8 {
                 // Run usb keyboard
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,

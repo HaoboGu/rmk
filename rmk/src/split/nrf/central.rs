@@ -43,7 +43,7 @@ use crate::{
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
     storage::{get_bond_info_key, Storage, StorageData},
-    usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
+    usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, UsbState, USB_STATE},
     via::process::VialService,
 };
 use crate::{ble::nrf::set_conn_params, matrix::MatrixTrait};
@@ -269,7 +269,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         #[cfg(not(feature = "_no_usb"))]
         {
             // Check and run via USB first
-            if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
+            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8 {
                 // Run usb keyboard
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,
