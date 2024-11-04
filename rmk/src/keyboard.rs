@@ -245,7 +245,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     .await;
             }
             KeyAction::OneShot(oneshot_action) => {
-                self.process_key_action_oneshot(oneshot_action).await
+                self.process_key_action_oneshot(oneshot_action, key_event).await
             }
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
@@ -406,8 +406,45 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    async fn process_key_action_oneshot(&mut self, _oneshot_action: Action) {
-        warn!("oneshot action not implemented");
+    async fn process_key_action_oneshot(&mut self, oneshot_action: Action, mut key_event: KeyEvent) {
+        let Action::Modifier(modifier) = oneshot_action else { return; };
+        if key_event.pressed {
+            // Press modifier
+            let (keycodes, n) = modifier.to_modifier_keycodes();
+            for kc in keycodes.iter().take(n) {
+                self.process_action_keycode(*kc, key_event).await;
+            }
+
+            let next_event = key_event_channel.receive().await;
+            if next_event.row == key_event.row && next_event.col == key_event.col {
+                if !next_event.pressed {
+                    // One shot released, process next event until it's a key release
+                    // TODO: Add timeout here
+
+                    // Release modifier
+                    key_event.pressed = false;
+                    if self.unprocessed_events.push(key_event).is_err() {
+                        warn!("unprocessed event queue is full, dropping event");
+                    }
+
+                    let next_event = key_event_channel.receive().await;
+                    if self.unprocessed_events.push(next_event).is_err() {
+                        warn!("unprocessed event queue is full, dropping event");
+                    }
+                };
+            } else {
+                // Other key pressed while one shot is held, treat it as a normal modifier
+                if self.unprocessed_events.push(next_event).is_err() {
+                    warn!("unprocessed event queue is full, dropping event");
+                }
+            }
+        } else {
+            // Release modifier
+            let (keycodes, n) = modifier.to_modifier_keycodes();
+            for kc in keycodes.iter().take(n) {
+                self.process_action_keycode(*kc, key_event).await;
+            }
+        }
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
