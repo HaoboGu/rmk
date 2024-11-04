@@ -10,6 +10,7 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use crate::{
     ble::nrf::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
     storage::{FlashOperationMessage, FLASH_CHANNEL},
+    CONNECTION_TYPE,
 };
 
 use super::bonder::MultiBonder;
@@ -23,6 +24,7 @@ pub(crate) enum BleProfileAction {
     PreviousProfile,
     NextProfile,
     ClearProfile,
+    ToggleConnection,
 }
 
 // Wait for profile switch action and update the active profile
@@ -68,6 +70,14 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
                     .send(FlashOperationMessage::ClearSlot(profile))
                     .await;
                 info!("Clear profile");
+            }
+            BleProfileAction::ToggleConnection => {
+                let current = CONNECTION_TYPE.load(Ordering::SeqCst);
+                if current == 0 {
+                    CONNECTION_TYPE.store(1, Ordering::SeqCst);
+                } else {
+                    CONNECTION_TYPE.store(0, Ordering::SeqCst);
+                }
             }
         }
         break;

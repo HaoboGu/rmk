@@ -13,7 +13,6 @@ use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 use crate::usb::{UsbState, USB_STATE};
-use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
@@ -28,10 +27,11 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
+use crate::{CONNECTION_TYPE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
-use defmt::*;
+use defmt::{debug, error, info, unwrap, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
@@ -299,9 +299,10 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         // Remember that USB ALWAYS has higher priority than BLE.
         #[cfg(not(feature = "_no_usb"))]
         {
-            // Check and run via USB first
-            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8 {
-                // Run usb keyboard
+            // If USB is enabled and activated conn type is USB
+            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8
+                && CONNECTION_TYPE.load(Ordering::Relaxed) == 0
+            {
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,
                     &mut keyboard,
@@ -311,16 +312,15 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut vial_service,
                     &keyboard_report_receiver,
                 );
-                info!("Running USB keyboard!");
-                select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await;
+                match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
+                    Either3::Third(_) => continue,
+                    _ => (),
+                }
             }
 
             // Usb device have to be started to check if usb is configured
             let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
-            info!(
-                "USB suspended, BLE Advertising on profile: {}",
-                active_profile
-            );
+            info!("BLE Advertising on profile: {}", active_profile);
 
             let dummy_task = run_dummy_keyboard(
                 &mut keyboard,
@@ -330,15 +330,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             );
 
             // Wait for BLE or USB connection
-            match select4(
-                adv_fut,
-                wait_for_usb_enabled(),
-                dummy_task,
-                update_profile(bonder),
-            )
-            .await
-            {
-                Either4::First(Ok(conn)) => {
+            match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
+                Either3::First(Ok(conn)) => {
                     info!("Connected to BLE");
                     // Check whether the peer address is matched with current profile
                     if !bonder.check_connection(&conn) {
@@ -477,6 +470,17 @@ pub(crate) async fn run_dummy_keyboard<
         Either4::Second(_) => (),
         Either4::Third(_) => (),
         Either4::Fourth(_) => (),
+    }
+}
+
+// Wait for USB enabled or BLE state changed
+pub(crate) async fn wait_for_status_change(bonder: &MultiBonder) {
+    if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
+        // Connection type is USB, USB has higher priority
+        select(wait_for_usb_enabled(), update_profile(bonder)).await;
+    } else {
+        // Connection type is BLE, so we don't consider USB
+        update_profile(bonder).await;
     }
 }
 
