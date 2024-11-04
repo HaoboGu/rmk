@@ -64,7 +64,6 @@ use {
 };
 
 /// Maximum number of bonded devices
-// TODO: make it configurable
 pub const BONDED_DEVICE_NUM: usize = 8;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 

@@ -3,13 +3,28 @@ use embassy_nrf::{
     saadc::Saadc,
 };
 
-#[derive(Default)]
 pub struct BleBatteryConfig<'a> {
     pub charge_state_pin: Option<Input<'a>>,
     pub charge_led_pin: Option<Output<'a>>,
     pub charge_state_low_active: bool,
     pub charge_led_low_active: bool,
     pub saadc: Option<Saadc<'a, 1>>,
+    pub adc_divider_measured: u32,
+    pub adc_divider_total: u32,
+}
+
+impl<'a> Default for BleBatteryConfig<'a> {
+    fn default() -> Self {
+        Self {
+            charge_state_pin: None,
+            charge_led_pin: None,
+            charge_state_low_active: false,
+            charge_led_low_active: false,
+            saadc: None,
+            adc_divider_measured: 1,
+            adc_divider_total: 1,
+        }
+    }
 }
 
 impl<'a> BleBatteryConfig<'a> {
@@ -19,6 +34,8 @@ impl<'a> BleBatteryConfig<'a> {
         charge_led_pin: Option<Output<'a>>,
         charge_led_low_active: bool,
         saadc: Option<Saadc<'a, 1>>,
+        adc_divider_measured: u32,
+        adc_divider_total: u32,
     ) -> Self {
         Self {
             charge_state_pin,
@@ -26,6 +43,8 @@ impl<'a> BleBatteryConfig<'a> {
             charge_led_pin,
             charge_led_low_active,
             saadc,
+            adc_divider_measured,
+            adc_divider_total,
         }
     }
 }

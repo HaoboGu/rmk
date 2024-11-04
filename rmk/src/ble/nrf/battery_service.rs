@@ -51,7 +51,7 @@ impl<'a> BatteryService {
                 let mut buf = [0i16; 1];
                 saadc.sample(&mut buf).await;
                 // We only sampled one ADC channel.
-                let val: u8 = self.get_battery_percent(buf[0]);
+                let val: u8 = self.get_battery_percent(buf[0], battery_config);
                 match self.battery_level_notify(conn, &val) {
                     Ok(_) => info!("Battery value: {}", val),
                     Err(e) => match self.battery_level_set(&val) {
@@ -90,7 +90,7 @@ impl<'a> BatteryService {
     }
 
     // TODO: Make battery calculation user customizable
-    fn get_battery_percent(&self, val: i16) -> u8 {
+    fn get_battery_percent(&self, val: i16, battery_config: &BleBatteryConfig<'a>) -> u8 {
         info!("Detected adc value: {=i16}", val);
         // Avoid overflow
         let val = val as i32;
@@ -105,9 +105,8 @@ impl<'a> BatteryService {
         // v_adc = v_bat * measured / total => val = v_bat * 1137.8 * measured / total
         //
         // If the battery voltage range is 3.6v ~ 4.2v, the adc val range should be (4096 ~ 4755) * measured / total
-        // TODO: make the voltage divider configurable
-        let mut measured = 200;
-        let mut total = 282;
+        let mut measured = battery_config.adc_divider_measured as i32;
+        let mut total = battery_config.adc_divider_total as i32;
         if 500 < val && val < 1000 {
             // Thing becomes different when using vddh as reference
             // The adc value for vddh pin is actually vddh/5,

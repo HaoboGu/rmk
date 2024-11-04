@@ -82,6 +82,8 @@ pub struct BleConfig {
     pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
     pub charge_led: Option<PinConfig>,
+    pub adc_divider_measured: Option<u32>,
+    pub adc_divider_total: Option<u32>,
 }
 
 /// Config for lights
