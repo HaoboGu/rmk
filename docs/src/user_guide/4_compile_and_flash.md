@@ -27,13 +27,15 @@ By default, Rust firmware is an ELF file, so we have to do some extra steps conv
 
 RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate the uf2 firmware generation.
 
-First, you'd install the `cargo-make` tool:
+First, install the `cargo-make` tool:
 
 ```shell
 cargo install --force cargo-make
 ```
 
-Then, update the chip family argument(aka argument after -f) in `Makefile.toml` in your project. You can get your chip's family ID in `scripts/uf2conv.py`.
+Generating uf2 firmware also requires you have `python` command available. [Here](https://wiki.python.org/moin/BeginnersGuide/Download) is a guide for installing python.
+
+Then, you should update the chip family argument(aka argument after -f) in `Makefile.toml` in your project. You can get your chip's family ID in `scripts/uf2conv.py`.
 
 That's all you need to set. The final step is to run
 
@@ -42,6 +44,36 @@ cargo make uf2 --release
 ```
 
 to generate your uf2 firmware.
+
+#### Tips for nRF52840
+
+For nRF52840, there are several widely used UF2 bootloaders, they require slight different configs.
+
+First, you should check the used softdevice version of your bootloader. Enter bootloader mode, there will be an USB driver shown in your computer. Open `INFO_UF2.TXT` in the USB driver, the content of `INFO_UF2.TXT` should be like:
+
+```
+UF2 Bootloader 0.6.0 lib/nrfx (v2.0.0) lib/tinyusb (0.10.1-41-gdf0cda2d) lib/uf2 (remotes/origin/configupdate-9-gadbb8c7)
+Model: nice!nano
+Board-ID: nRF52840-nicenano
+SoftDevice: S140 version 6.1.1
+Date: Jun 19 2021
+```
+
+As you can see, the version of softdevice is `S140 version 6.1.1`. For nRF52840, RMK supports S140 version 6.X and 7.X. The `memory.x` config is slightly different for softdevice 6.X and 7.X:
+
+```ld
+MEMORY
+{
+  /* These values correspond to the NRF52840 with Softdevices S140 6.1.1 */
+  /* FLASH : ORIGIN = 0x00026000, LENGTH = 872K */
+
+  /* These values correspond to the NRF52840 with Softdevices S140 7.3.0 */
+  FLASH : ORIGIN = 0x00027000, LENGTH = 868K
+  RAM : ORIGIN = 0x20020000, LENGTH = 128K
+}
+```
+
+You can edit your `memory.x` to choose correct value for your bootloader.
 
 ### Use debug probe
 
