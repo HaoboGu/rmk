@@ -343,6 +343,34 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
+    /// Process tap/hold action for home row mods(HRM)
+    /// 
+    /// For HRMs, the "tap" action actually has higher priority, especially when typing fast.
+    /// 
+    /// There are only several cases that we should trigger "hold":
+    /// 
+    /// - When another key is pressed and released within the tapping-term, or released at approximately the same time with the tap/hold key
+    /// - When the holding threshold is expired(a relatively longer holding threshold should be set)
+    /// - When mouse keys are triggered
+    /// 
+    /// Furthermore, the "tap" action can be resolved immediately in the following cases, to increase the speed:
+    /// - the key is in the "key streak", similar with setting `require-prior-idle-ms` in zmk. The previous key should be non-modifier.
+    /// - the next key is on the same side of the keyboard
+    /// 
+    /// When do we make the decision of tap/hold?
+    /// - When the key is pressed("key streak", or position based tap/hold)
+    /// - When the next key is releasing
+    /// - When current tap/hold key is releasing
+    /// - When tap/hold key is expired
+    async fn process_key_action_tap_hold_hrm(
+        &mut self,
+        tap_action: Action,
+        hold_action: Action,
+        key_event: KeyEvent,
+    ) {
+        todo!()
+    }
+
     /// Process tap/hold action.
     ///
     /// This function will wait until timeout or a new key event comes:
