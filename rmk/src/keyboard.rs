@@ -40,6 +40,30 @@ pub(crate) static keyboard_report_channel: Channel<
     REPORT_CHANNEL_SIZE,
 > = Channel::new();
 
+/// State machine for one shot keys
+#[derive(Default)]
+enum OneShotState {
+    /// First osm key press
+    Initial(ModifierCombination),
+    /// One shot key was released before any other key, normal one shot behavior
+    Single(ModifierCombination),
+    /// Another key was pressed before osm key was released, treat as a normal modifier/layer
+    Held(ModifierCombination),
+    /// One shot inactive
+    #[default]
+    None,
+}
+
+impl OneShotState {
+    /// Get the current one shot modifier if any
+    pub fn modifier(&self) -> Option<ModifierCombination> {
+        match self {
+            OneShotState::Initial(m) | OneShotState::Single(m) | OneShotState::Held(m) => Some(*m),
+            OneShotState::None => None,
+        }
+    }
+}
+
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
 pub(crate) enum KeyboardReportMessage {
     /// Normal keyboard hid report
@@ -90,6 +114,7 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
         Err(_) => error!("Serialize other report error"),
     }
 }
+
 pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
@@ -103,6 +128,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
+
+    /// One shot modifier state
+    one_shot_state: OneShotState,
 
     /// Keyboard internal hid report buf
     report: KeyboardReport,
@@ -135,6 +163,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             keymap,
             sender,
             timer: [[None; ROW]; COL],
+            one_shot_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
             report: KeyboardReport {
                 modifier: 0,
@@ -245,7 +274,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     .await;
             }
             KeyAction::OneShot(oneshot_action) => {
-                self.process_key_action_oneshot(oneshot_action, key_event).await
+                self.process_key_action_oneshot(oneshot_action, key_event)
+                    .await
             }
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
@@ -262,7 +292,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
         match action {
-            Action::Key(key) => self.process_action_keycode(key, key_event).await,
+            Action::Key(key) => {
+                self.process_action_keycode(key, key_event).await;
+
+                // Update one shot
+                match self.one_shot_state {
+                    OneShotState::Initial(m) => self.one_shot_state = OneShotState::Held(m),
+                    OneShotState::Single(modifier) => {
+                        if !key_event.pressed {
+                            let (keycodes, n) = modifier.to_modifier_keycodes();
+                            for kc in keycodes.iter().take(n) {
+                                self.process_action_keycode(*kc, key_event).await;
+                            }
+                            self.one_shot_state = OneShotState::None;
+                        }
+                    }
+                    _ => (),
+                }
+            }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
@@ -406,44 +453,45 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    async fn process_key_action_oneshot(&mut self, oneshot_action: Action, mut key_event: KeyEvent) {
-        let Action::Modifier(modifier) = oneshot_action else { return; };
+    /// Process one shot action.
+    ///     
+    /// TODO: add support for one shot layers
+    async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
+        // Process only modifiers
+        let Action::Modifier(modifier) = oneshot_action else {
+            self.process_key_action_normal(oneshot_action, key_event)
+                .await;
+            return;
+        };
+
+        // Update one shot state
         if key_event.pressed {
+            // Add new modifier to existing one shot or init if none
+            self.one_shot_state = match self.one_shot_state {
+                OneShotState::None => OneShotState::Initial(modifier),
+                OneShotState::Initial(m) => OneShotState::Initial(m | modifier),
+                OneShotState::Single(m) => OneShotState::Single(m | modifier),
+                OneShotState::Held(m) => OneShotState::Held(m | modifier),
+            };
+
             // Press modifier
             let (keycodes, n) = modifier.to_modifier_keycodes();
             for kc in keycodes.iter().take(n) {
                 self.process_action_keycode(*kc, key_event).await;
             }
-
-            let next_event = key_event_channel.receive().await;
-            if next_event.row == key_event.row && next_event.col == key_event.col {
-                if !next_event.pressed {
-                    // One shot released, process next event until it's a key release
-                    // TODO: Add timeout here
-
-                    // Release modifier
-                    key_event.pressed = false;
-                    if self.unprocessed_events.push(key_event).is_err() {
-                        warn!("unprocessed event queue is full, dropping event");
-                    }
-
-                    let next_event = key_event_channel.receive().await;
-                    if self.unprocessed_events.push(next_event).is_err() {
-                        warn!("unprocessed event queue is full, dropping event");
-                    }
-                };
-            } else {
-                // Other key pressed while one shot is held, treat it as a normal modifier
-                if self.unprocessed_events.push(next_event).is_err() {
-                    warn!("unprocessed event queue is full, dropping event");
-                }
-            }
         } else {
-            // Release modifier
-            let (keycodes, n) = modifier.to_modifier_keycodes();
-            for kc in keycodes.iter().take(n) {
-                self.process_action_keycode(*kc, key_event).await;
-            }
+            match self.one_shot_state {
+                OneShotState::Initial(m) => self.one_shot_state = OneShotState::Single(m),
+                OneShotState::Held(modifier) => {
+                    // Release modifier
+                    let (keycodes, n) = modifier.to_modifier_keycodes();
+                    for kc in keycodes.iter().take(n) {
+                        self.process_action_keycode(*kc, key_event).await;
+                    }
+                    self.one_shot_state = OneShotState::None;
+                }
+                _ => (),
+            };
         }
     }
 
