@@ -456,6 +456,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Process one shot action.
     ///     
     /// TODO: add support for one shot layers
+    /// TODO: make timeout customizable
     async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
         // Process only modifiers
         let Action::Modifier(modifier) = oneshot_action else {
@@ -481,14 +482,35 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         } else {
             match self.one_shot_state {
-                OneShotState::Initial(m) => self.one_shot_state = OneShotState::Single(m),
+                OneShotState::Initial(m) | OneShotState::Single(m) => {
+                    self.one_shot_state = OneShotState::Single(m);
+
+                    let timeout = embassy_time::Timer::after_secs(5);
+                    match select(timeout, key_event_channel.receive()).await {
+                        embassy_futures::select::Either::First(_) => {
+                            // Timeout, release modifier
+                            let (keycodes, n) = modifier.to_modifier_keycodes();
+                            for kc in keycodes.iter().take(n) {
+                                self.process_action_keycode(*kc, key_event).await;
+                            }
+                            self.one_shot_state = OneShotState::None;
+                        }
+                        embassy_futures::select::Either::Second(e) => {
+                            // New event, send it to queue
+                            if self.unprocessed_events.push(e).is_err() {
+                                warn!("unprocessed event queue is full, dropping event");
+                            }
+                        }
+                    }
+                }
                 OneShotState::Held(modifier) => {
+                    self.one_shot_state = OneShotState::None;
+
                     // Release modifier
                     let (keycodes, n) = modifier.to_modifier_keycodes();
                     for kc in keycodes.iter().take(n) {
                         self.process_action_keycode(*kc, key_event).await;
                     }
-                    self.one_shot_state = OneShotState::None;
                 }
                 _ => (),
             };
