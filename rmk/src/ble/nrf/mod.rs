@@ -11,7 +11,7 @@ mod vial_service;
 use self::server::BleServer;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
-use crate::storage::StorageKeys;
+use crate::storage::{read_storage, StorageKeys};
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -229,16 +229,10 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     );
 
     let mut buf: [u8; 128] = [0; 128];
-    // Read current active profil
+
+    // Load current active profile
     if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
-        fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
-            &mut storage.flash,
-            storage.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut buf,
-            &(StorageKeys::ActiveBleProfile as u32),
-        )
-        .await
+        read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
     {
         ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
     } else {
@@ -246,18 +240,24 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
         ACTIVE_PROFILE.store(0, Ordering::SeqCst);
     };
 
+    // Load current connection type
+    if let Ok(Some(StorageData::ConnectionType(conn_type))) =
+        read_storage!(storage, &(StorageKeys::ConnectionType as u32), buf)
+    {
+        CONNECTION_TYPE.store(conn_type, Ordering::Relaxed);
+    } else {
+        // If no saved connection type, use 0 as default
+        CONNECTION_TYPE.store(0, Ordering::Relaxed);
+    };
+
+    #[cfg(feature = "_no_usb")]
+    CONNECTION_TYPE.store(0, Ordering::Relaxed);
+
     // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(StorageData::BondInfo(info))) =
-            fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
-                &mut storage.flash,
-                storage.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut buf,
-                &get_bond_info_key(key as u8),
-            )
-            .await
+            read_storage!(storage, &get_bond_info_key(key as u8), buf)
         {
             bond_info.insert(key as u8, info).ok();
         }

@@ -73,11 +73,11 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
             }
             BleProfileAction::ToggleConnection => {
                 let current = CONNECTION_TYPE.load(Ordering::SeqCst);
-                if current == 0 {
-                    CONNECTION_TYPE.store(1, Ordering::SeqCst);
-                } else {
-                    CONNECTION_TYPE.store(0, Ordering::SeqCst);
-                }
+                let updated = 1 - current;
+                CONNECTION_TYPE.store(updated, Ordering::SeqCst);
+                FLASH_CHANNEL
+                    .send(FlashOperationMessage::ConnectionType(updated))
+                    .await;
             }
         }
         break;
