@@ -45,7 +45,7 @@ impl From<u8> for UsbState {
 
 pub(crate) async fn wait_for_usb_suspend() {
     loop {
-        // Check usbuspended state every 500ms
+        // Check usb suspend state every 500ms
         Timer::after_millis(500).await;
         let usb_state: UsbState = USB_STATE.load(Ordering::Acquire).into();
         if usb_state != UsbState::Configured {
