@@ -315,8 +315,8 @@ impl<
                             );
                             #[cfg(not(feature = "col2row"))]
                             let (row, col, key_state) = (
-                                out_idx + ROW_OFFSET as u8,
-                                in_idx + COL_OFFSET as u8,
+                                (out_idx + ROW_OFFSET) as u8,
+                                (in_idx + COL_OFFSET) as u8,
                                 self.key_states[out_idx][in_idx],
                             );
 
