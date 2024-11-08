@@ -292,16 +292,13 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
         };
-        let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
         #[cfg(not(feature = "_no_usb"))]
         {
-            // If USB is enabled and activated conn type is USB
-            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8
-                && CONNECTION_TYPE.load(Ordering::Relaxed) == 0
-            {
+            // Check whether the USB is connected
+            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8 {
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,
                     &mut keyboard,
@@ -311,65 +308,116 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                     &mut vial_service,
                     &keyboard_report_receiver,
                 );
-                match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
-                    Either3::Third(_) => continue,
-                    _ => (),
-                }
-            }
-
-            // Usb device have to be started to check if usb is configured
-            let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
-            info!("BLE Advertising on profile: {}", active_profile);
-
-            let dummy_task = run_dummy_keyboard(
-                &mut keyboard,
-                &mut matrix,
-                &mut storage,
-                &keyboard_report_receiver,
-            );
-
-            // Wait for BLE or USB connection
-            match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
-                Either3::First(Ok(conn)) => {
-                    info!("Connected to BLE");
-                    // Check whether the peer address is matched with current profile
-                    if !bonder.check_connection(&conn) {
-                        error!("Bonded peer address doesn't match active profile, disconnect");
-                        continue;
+                if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
+                    info!("Running USB keyboard");
+                    // USB is connected, connection_type is USB, then run USB keyboard
+                    match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
+                        Either3::Third(_) => {
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
+                        _ => (),
                     }
-                    bonder.load_sys_attrs(&conn);
-                    // Run the ble keyboard, wait for disconnection or USB connect
-                    match select3(
-                        run_ble_keyboard(
-                            &conn,
-                            &ble_server,
-                            &mut keyboard,
-                            &mut matrix,
-                            &mut storage,
-                            &mut light_service,
-                            &mut vial_service,
-                            &mut keyboard_config.ble_battery_config,
-                            &keyboard_report_receiver,
-                        ),
-                        wait_for_usb_enabled(),
-                        update_profile(bonder),
-                    )
-                    .await
-                    {
-                        Either3::First(_) => info!("BLE disconnected"),
-                        Either3::Second(_) => info!("Detected USB configured, quit BLE"),
-                        Either3::Third(_) => info!("Switch profile"),
+                } else {
+                    // USB is connected, but connection type is BLE, try BLE while running USB keyboard
+                    info!("Running USB keyboard, while advertising");
+                    let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+                    // TODO: Test power consumption in this case
+                    match select3(adv_fut, usb_fut, update_profile(bonder)).await {
+                        Either3::First(Ok(conn)) => {
+                            info!("Connected to BLE");
+                            // Check whether the peer address is matched with current profile
+                            if !bonder.check_connection(&conn) {
+                                error!(
+                                    "Bonded peer address doesn't match active profile, disconnect"
+                                );
+                                continue;
+                            }
+                            bonder.load_sys_attrs(&conn);
+                            // Run the ble keyboard, wait for disconnection or USB connect
+                            match select3(
+                                run_ble_keyboard(
+                                    &conn,
+                                    &ble_server,
+                                    &mut keyboard,
+                                    &mut matrix,
+                                    &mut storage,
+                                    &mut light_service,
+                                    &mut vial_service,
+                                    &mut keyboard_config.ble_battery_config,
+                                    &keyboard_report_receiver,
+                                ),
+                                wait_for_usb_enabled(),
+                                update_profile(bonder),
+                            )
+                            .await
+                            {
+                                Either3::First(_) => info!("BLE disconnected"),
+                                Either3::Second(_) => info!("Detected USB configured, quit BLE"),
+                                Either3::Third(_) => info!("Switch profile"),
+                            }
+                        }
+                        _ => {
+                            // Wait 10ms
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
                     }
                 }
-                _ => {
-                    // Wait 10ms for usb resuming/switching profile/advertising error
-                    Timer::after_millis(10).await;
+            } else {
+                // USB isn't connected, wait for any of BLE/USB connection
+                let dummy_task = run_dummy_keyboard(
+                    &mut keyboard,
+                    &mut matrix,
+                    &mut storage,
+                    &keyboard_report_receiver,
+                );
+                let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+
+                info!("BLE advertising");
+                // Wait for BLE or USB connection
+                match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
+                    Either3::First(Ok(conn)) => {
+                        info!("Connected to BLE");
+                        // Check whether the peer address is matched with current profile
+                        if !bonder.check_connection(&conn) {
+                            error!("Bonded peer address doesn't match active profile, disconnect");
+                            continue;
+                        }
+                        bonder.load_sys_attrs(&conn);
+                        // Run the ble keyboard, wait for disconnection or USB connect
+                        match select3(
+                            run_ble_keyboard(
+                                &conn,
+                                &ble_server,
+                                &mut keyboard,
+                                &mut matrix,
+                                &mut storage,
+                                &mut light_service,
+                                &mut vial_service,
+                                &mut keyboard_config.ble_battery_config,
+                                &keyboard_report_receiver,
+                            ),
+                            wait_for_usb_enabled(),
+                            update_profile(bonder),
+                        )
+                        .await
+                        {
+                            Either3::First(_) => info!("BLE disconnected"),
+                            Either3::Second(_) => info!("Detected USB configured, quit BLE"),
+                            Either3::Third(_) => info!("Switch profile"),
+                        }
+                    }
+                    _ => {
+                        // Wait 10ms for usb resuming/switching profile/advertising error
+                        Timer::after_millis(10).await;
+                    }
                 }
             }
         }
 
         #[cfg(feature = "_no_usb")]
-        match adv_fut.await {
+        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
                 select(
