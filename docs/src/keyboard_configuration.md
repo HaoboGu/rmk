@@ -137,12 +137,14 @@ The key string should follow several rules:
 2. For no-key, use `"__"`
 
 3. RMK supports many advanced layer operations:
-    1. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
-    2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
-    3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
-    4. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
-    5. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
-    6. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
+    1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
+    2. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
+    3. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
+    4. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
+    5. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
+    6. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
+    7. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
+    8. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
     
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
