@@ -292,13 +292,13 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
             adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
         };
-
+        debug!("usb state: {}, connection type: {}", USB_STATE.load(Ordering::SeqCst), CONNECTION_TYPE.load(Ordering::Relaxed));
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
         #[cfg(not(feature = "_no_usb"))]
         {
             // Check whether the USB is connected
-            if USB_STATE.load(Ordering::SeqCst) == UsbState::Enabled as u8 {
+            if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,
                     &mut keyboard,
@@ -385,7 +385,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
                             continue;
                         }
                         bonder.load_sys_attrs(&conn);
-                        // Run the ble keyboard, wait for disconnection or USB connect
+                        // Run the ble keyboard, wait for disconnection
                         match select3(
                             run_ble_keyboard(
                                 &conn,
