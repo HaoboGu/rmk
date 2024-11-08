@@ -12,7 +12,7 @@ use self::server::BleServer;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::usb::{UsbState, USB_STATE};
+use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
@@ -27,7 +27,6 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService,
 };
-use crate::{CONNECTION_TYPE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -55,8 +54,8 @@ use vial_service::VialReaderWriter;
 use {
     crate::{
         run_usb_keyboard,
-        usb::{wait_for_usb_enabled, wait_for_usb_suspend},
-        KeyboardUsbDevice,
+        usb::{wait_for_usb_enabled, wait_for_usb_suspend, UsbState, USB_STATE},
+        KeyboardUsbDevice, CONNECTION_TYPE,
     },
     embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
@@ -473,6 +472,7 @@ pub(crate) async fn run_dummy_keyboard<
     }
 }
 
+#[cfg(not(feature = "_no_usb"))]
 // Wait for USB enabled or BLE state changed
 pub(crate) async fn wait_for_status_change(bonder: &MultiBonder) {
     if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
