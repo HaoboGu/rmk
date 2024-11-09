@@ -39,6 +39,10 @@
 
 <img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
 
+### [dactyl-lynx-rmk](https://github.com/whitelynx/dactyl-lynx-rmk)
+
+<img src="https://raw.githubusercontent.com/whitelynx/dactyl-lynx-keyboard/refs/heads/main/resources/skeleton-prototype.jpg" width="60%">
+
 ## Usage
 
 ### Option 1: Initialize from template
