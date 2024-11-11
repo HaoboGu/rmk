@@ -68,6 +68,14 @@ macro_rules! osl {
     };
 }
 
+/// Create an oneshot modifier key in keymap
+#[macro_export]
+macro_rules! osm {
+    ($m: expr) => {
+        $crate::action::KeyAction::OneShot($crate::action::Action::Modifier($m))
+    };
+}
+
 /// Create a layer toggle action
 #[macro_export]
 macro_rules! tg {
