@@ -405,24 +405,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         key_event: KeyEvent,
     ) {
         // Check whether the key is in key streak
-        if key_event.pressed {
-            if let Some(last_release_time) = self.last_release.2 {
+        if let Some(last_release_time) = self.last_release.2 {
+            if key_event.pressed {
                 // TODO: make this prior-idle-time configurable
                 if last_release_time.elapsed().as_millis() < 120 {
                     // The previous key is released within 50ms, it's in key streak
                     debug!("Key streak detected, trigger tap action");
-                    self.process_key_action_normal(tap_action, key_event).await;
+                    self.process_key_action_tap(tap_action, key_event).await;
                     return;
                 }
             }
-        } else {
-            if key_event.row == self.last_release.0.row && key_event.col == self.last_release.0.col
-            {
-                // Release the same tap/hold key which has been triggered as tap
-                return;
-            }
         }
-
         let row = key_event.row as usize;
         let col = key_event.col as usize;
         if key_event.pressed {
