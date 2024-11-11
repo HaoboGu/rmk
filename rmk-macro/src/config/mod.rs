@@ -175,10 +175,7 @@ pub struct SplitBoardConfig {
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
-    /// Input pin config
-    pub input_pins: Vec<String>,
-    /// Output pin config
-    pub output_pins: Vec<String>,
+    pub matrix: MatrixConfig,
 }
 
 /// Serial port config
