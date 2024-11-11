@@ -426,24 +426,29 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Get user key id
                 let id = key as u8 - KeyCode::User0 as u8;
                 if id < 8 {
-                    // Swtich to a specific profile
+                    // User0~7: Swtich to the specific profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::SwitchProfile(id))
                         .await;
                 } else if id == 8 {
-                    // Next profile
+                    // User8: Next profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::NextProfile)
                         .await;
                 } else if id == 9 {
-                    // Previous profile
+                    // User9: Previous profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::PreviousProfile)
                         .await;
                 } else if id == 10 {
-                    // Clear profile
+                    // User10: Clear profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::ClearProfile)
+                        .await;
+                } else if id == 11 {
+                    // User11:
+                    BLE_PROFILE_CHANNEL
+                        .send(BleProfileAction::ToggleConnection)
                         .await;
                 }
             }

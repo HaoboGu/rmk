@@ -24,7 +24,10 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
-use core::{cell::RefCell, sync::atomic::AtomicBool};
+use core::{
+    cell::RefCell,
+    sync::atomic::{AtomicBool, AtomicU8},
+};
 use debounce::DebouncerTrait;
 use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
@@ -75,7 +78,13 @@ mod storage;
 mod usb;
 mod via;
 
+/// Keyboard state, true for started, false for stopped
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
+/// Current connection type:
+/// - 0: USB
+/// - 1: BLE
+/// - Other: reserved
+pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -249,24 +258,19 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         LightService::from_config(keyboard_config.light_config),
     );
 
-    loop {
-        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
-        // Run all tasks, if one of them fails, wait 1 second and then restart
-        run_usb_keyboard(
-            &mut usb_device,
-            &mut keyboard,
-            &mut matrix,
-            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-            &mut storage,
-            &mut light_service,
-            &mut vial_service,
-            &keyboard_report_receiver,
-        )
-        .await;
-
-        warn!("Detected failure, restarting keyboard sevice after 1 second");
-        Timer::after_secs(1).await;
-    }
+    KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
+    // Run all tasks, if one of them fails, wait 1 second and then restart
+    run_usb_keyboard(
+        &mut usb_device,
+        &mut keyboard,
+        &mut matrix,
+        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+        &mut storage,
+        &mut light_service,
+        &mut vial_service,
+        &keyboard_report_receiver,
+    )
+    .await
 }
 
 // Run usb keyboard task for once
@@ -295,45 +299,51 @@ pub(crate) async fn run_usb_keyboard<
         KeyboardReportMessage,
         REPORT_CHANNEL_SIZE,
     >,
-) {
-    let usb_fut = usb_device.device.run();
-    let keyboard_fut = keyboard.run();
-    let matrix_fut = matrix.scan();
-    let communication_fut = communication_task(
-        keyboard_report_receiver,
-        &mut usb_device.keyboard_hid_writer,
-        &mut usb_device.other_hid_writer,
-    );
-    let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
-    let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
-    pin_mut!(usb_fut);
-    pin_mut!(keyboard_fut);
-    pin_mut!(matrix_fut);
-    pin_mut!(led_fut);
-    pin_mut!(via_fut);
-    pin_mut!(communication_fut);
+) -> ! {
+    loop {
+        let usb_fut = usb_device.device.run();
+        let keyboard_fut = keyboard.run();
+        let matrix_fut = matrix.scan();
+        let communication_fut = communication_task(
+            keyboard_report_receiver,
+            &mut usb_device.keyboard_hid_writer,
+            &mut usb_device.other_hid_writer,
+        );
+        let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
+        let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
 
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-    let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-    pin_mut!(storage_fut);
+        pin_mut!(usb_fut);
+        pin_mut!(keyboard_fut);
+        pin_mut!(matrix_fut);
+        pin_mut!(led_fut);
+        pin_mut!(via_fut);
+        pin_mut!(communication_fut);
 
-    match select4(
-        select(usb_fut, keyboard_fut),
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-        select(storage_fut, via_fut),
-        #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-        #[cfg(feature = "_no_external_storage")]
-        via_fut,
-        led_fut,
-        select(matrix_fut, communication_fut),
-    )
-    .await
-    {
-        Either4::First(_) => error!("Usb or keyboard task has died"),
-        Either4::Second(_) => error!("Storage or vial task has died"),
-        Either4::Third(_) => error!("Led task has died"),
-        Either4::Fourth(_) => error!("Communication task has died"),
+        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+        pin_mut!(storage_fut);
+
+        match select4(
+            select(usb_fut, keyboard_fut),
+            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+            select(storage_fut, via_fut),
+            #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
+            #[cfg(feature = "_no_external_storage")]
+            via_fut,
+            led_fut,
+            select(matrix_fut, communication_fut),
+        )
+        .await
+        {
+            Either4::First(_) => error!("Usb or keyboard task has died"),
+            Either4::Second(_) => error!("Storage or vial task has died"),
+            Either4::Third(_) => error!("Led task has died"),
+            Either4::Fourth(_) => error!("Communication task has died"),
+        }
+
+        warn!("Detected failure, restarting keyboard sevice after 1 second");
+        Timer::after_secs(1).await;
     }
 }
 
