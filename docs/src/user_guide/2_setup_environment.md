@@ -8,13 +8,9 @@ RMK is written in Rust, so first you have to install Rust to your host. Installi
 
 [Here](https://doc.rust-lang.org/book/ch01-01-installation.html) is a more detailed guide for installing Rust.
 
-## 2. Choose your hardware
+## 2. Choose your hardware and install the target
 
-RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the supported microcontroller makes your journey of RMK much easier. 
-
-If you're using other microcontrollers, make sure your microcontroller supports [Embassy](https://github.com/embassy-rs/embassy).
-
-## 3. Install your target
+RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the supported microcontroller makes your journey of RMK much easier. In RMK repo, there are many examples, microcontrollers in examples are safe options. If you're using other microcontrollers, make sure your microcontroller supports [Embassy](https://github.com/embassy-rs/embassy).
 
 The next step is to add Rust's compilation target of your chosen microcontroller. Rust's default installation include only your host's compilation target, so you have to install the compilation target of your microcontroller manually.
 
@@ -22,11 +18,15 @@ Different microcontrollers with different architectures may have different compi
 
 For example, rp2040 is a Cortex-M0+ microcontroller, it's compilation target is `thumbv6m-none-eabi`. Use `rustup target add` command to install it:
 
-
 ```bash
 rustup target add thumbv6m-none-eabi
 ```
 
+nRF52840 is also commonly used in wireless keyboards, it's compilation target is `thumbv7em-none-eabihf`. To add the target, run:
+
+```bash
+rustup target add thumbv7em-none-eabihf
+```
 
 ## 4. Add other tools
 
