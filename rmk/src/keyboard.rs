@@ -294,36 +294,42 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
+    async fn update_osm(&mut self, key_event: KeyEvent) {
+        match self.osm_state {
+            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
+            OneShotState::Single(modifier) => {
+                if !key_event.pressed {
+                    let (keycodes, n) = modifier.to_modifier_keycodes();
+                    for kc in keycodes.iter().take(n) {
+                        self.process_action_keycode(*kc, key_event).await;
+                    }
+                    self.osm_state = OneShotState::None;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn update_osl(&mut self, key_event: KeyEvent) {
+        match self.osl_state {
+            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
+            OneShotState::Single(layer_num) => {
+                if key_event.pressed {
+                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.osl_state = OneShotState::None;
+                }
+            }
+            _ => (),
+        }
+    }
+
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
         match action {
             Action::Key(key) => {
                 self.process_action_keycode(key, key_event).await;
-
-                // Update one shot
-                match self.osm_state {
-                    OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-                    OneShotState::Single(modifier) => {
-                        if !key_event.pressed {
-                            let (keycodes, n) = modifier.to_modifier_keycodes();
-                            for kc in keycodes.iter().take(n) {
-                                self.process_action_keycode(*kc, key_event).await;
-                            }
-                            self.osm_state = OneShotState::None;
-                        }
-                    }
-                    _ => (),
-                }
-                match self.osl_state {
-                    OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
-                    OneShotState::Single(layer_num) => {
-                        if !key_event.pressed {
-                            self.keymap.borrow_mut().deactivate_layer(layer_num);
-                            self.osl_state = OneShotState::None;
-                        }
-                    }
-                    _ => (),
-                }
-            }
+                self.update_osm(key_event).await;
+                self.update_osl(key_event);
+            },
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
@@ -361,6 +367,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 for kc in keycodes.iter().take(n) {
                     self.process_action_keycode(*kc, key_event).await;
                 }
+
+                self.update_osl(key_event);
             }
         }
     }
@@ -500,7 +508,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after_secs(5);
+                    let timeout = embassy_time::Timer::after_secs(1);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
@@ -551,7 +559,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after_secs(5);
+                    let timeout = embassy_time::Timer::after_secs(1);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer
