@@ -70,9 +70,9 @@ pub async fn run_rmk_split_peripheral<
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix, use COL2ROW by default
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    #[cfg(feature = "col2row")]
     let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     #[cfg(not(feature = "_nrf_ble"))]
