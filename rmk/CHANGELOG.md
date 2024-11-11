@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Use `User11` to manually switch between USB mode and BLE mode
+
 ## [0.4.1] - 2024-10-31
 
 ### Fixed
