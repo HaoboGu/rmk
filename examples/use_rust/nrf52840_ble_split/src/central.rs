@@ -93,7 +93,7 @@ async fn main(spawner: Spawner) {
         false,
         Some(saadc),
         2000,
-        2820,
+        2806,
     );
     let storage_config = StorageConfig {
         start_addr: 0,

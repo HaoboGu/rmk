@@ -300,6 +300,8 @@ impl KeyboardConfig {
                 config.battery_adc_pin = config.battery_adc_pin.or(default.battery_adc_pin);
                 config.charge_state = config.charge_state.or(default.charge_state);
                 config.charge_led = config.charge_led.or(default.charge_led);
+                config.adc_divider_measured = config.adc_divider_measured.or(default.adc_divider_measured);
+                config.adc_divider_total = config.adc_divider_total.or(default.adc_divider_total);
                 Some(config)
             }
             (_, c) => c,
