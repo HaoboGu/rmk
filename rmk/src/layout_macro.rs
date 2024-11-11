@@ -83,3 +83,19 @@ macro_rules! tt {
         $crate::action::KeyAction::LayerTapHold($crate::action::Action::LayerToggle($x), $x)
     };
 }
+
+/// Create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
+#[macro_export]
+macro_rules! to {
+    ($x: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::LayerToggleOnly($x))
+    };
+}
+
+/// create a switch default layer action, `n` is the layer number
+#[macro_export]
+macro_rules! df {
+    ($x: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::DefaultLayer($x))
+    };
+}
