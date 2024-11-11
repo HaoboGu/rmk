@@ -1,10 +1,10 @@
 use core::{cell::RefCell, sync::atomic::Ordering};
 
-use defmt::{error, info};
+use defmt::{debug, error, info};
 use embassy_executor::Spawner;
 use embassy_futures::{
     join::join,
-    select::{select, Either},
+    select::{select3, Either3},
 };
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -30,23 +30,26 @@ use crate::{
     ble::nrf::{
         advertise::{create_advertisement_data, SCAN_DATA},
         bonder::{BondInfo, MultiBonder},
-        nrf_ble_config, run_ble_keyboard,
+        nrf_ble_config,
+        profile::update_profile,
+        run_ble_keyboard, run_dummy_keyboard,
         server::BleServer,
-        softdevice_task, BONDED_DEVICE_NUM,
+        softdevice_task, wait_for_status_change, ACTIVE_PROFILE, BONDED_DEVICE_NUM,
     },
     keyboard::{keyboard_report_channel, Keyboard},
     keymap::KeyMap,
     light::LightService,
+    matrix::MatrixTrait,
     run_usb_keyboard,
     split::{
         driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
-    storage::{get_bond_info_key, Storage, StorageData},
-    usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, USB_DEVICE_ENABLED},
+    storage::{get_bond_info_key, Storage, StorageData, StorageKeys},
+    usb::{wait_for_usb_enabled, wait_for_usb_suspend, KeyboardUsbDevice, UsbState, USB_STATE},
     via::process::VialService,
+    CONNECTION_TYPE,
 };
-use crate::{ble::nrf::set_conn_params, matrix::MatrixTrait};
 
 /// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -214,8 +217,45 @@ pub(crate) async fn initialize_ble_split_central_and_run<
         .await,
     );
 
-    // Get all saved bond info, config BLE bonder
     let mut buf: [u8; 128] = [0; 128];
+    // Load current active profile
+    if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
+        fetch_item::<u32, StorageData<TOTAL_ROW, TOTAL_COL, NUM_LAYER>, _>(
+            &mut storage.flash,
+            storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut buf,
+            &(StorageKeys::ActiveBleProfile as u32),
+        )
+        .await
+    {
+        ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
+    } else {
+        // If no saved active profile, use 0 as default
+        ACTIVE_PROFILE.store(0, Ordering::SeqCst);
+    };
+
+    // Load current connection type
+    if let Ok(Some(StorageData::ConnectionType(conn_type))) =
+        fetch_item::<u32, StorageData<TOTAL_ROW, TOTAL_COL, NUM_LAYER>, _>(
+            &mut storage.flash,
+            storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut buf,
+            &(StorageKeys::ConnectionType as u32),
+        )
+        .await
+    {
+        CONNECTION_TYPE.store(conn_type, Ordering::Relaxed);
+    } else {
+        // If no saved connection type, use 0 as default
+        CONNECTION_TYPE.store(0, Ordering::Relaxed);
+    };
+
+    #[cfg(feature = "_no_usb")]
+    CONNECTION_TYPE.store(0, Ordering::Relaxed);
+
+    // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
         if let Ok(Some(StorageData::BondInfo(info))) =
@@ -262,15 +302,18 @@ pub(crate) async fn initialize_ble_split_central_and_run<
             adv_data: &adv_data,
             scan_data: &SCAN_DATA,
         };
-        let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
 
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
         // Remember that USB ALWAYS has higher priority than BLE.
         #[cfg(not(feature = "_no_usb"))]
         {
-            // Check and run via USB first
-            if USB_DEVICE_ENABLED.load(Ordering::SeqCst) {
-                // Run usb keyboard
+            debug!(
+                "usb state: {}, connection type: {}",
+                USB_STATE.load(Ordering::SeqCst),
+                CONNECTION_TYPE.load(Ordering::Relaxed)
+            );
+            // Check whether the USB is connected
+            if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_usb_keyboard(
                     &mut usb_device,
                     &mut keyboard,
@@ -280,21 +323,34 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                     &mut vial_service,
                     &keyboard_report_receiver,
                 );
-                info!("Running USB keyboard!");
-                select(usb_fut, wait_for_usb_suspend()).await;
-            }
-
-            // Usb device have to be started to check if usb is configured
-            info!("USB suspended, BLE Advertising");
-
-            // Wait for BLE or USB connection
-            match select(adv_fut, wait_for_usb_enabled()).await {
-                Either::First(re) => match re {
-                    Ok(conn) => {
-                        info!("Connected to BLE");
-                        bonder.load_sys_attrs(&conn);
-                        match select(
-                            join(
+                if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
+                    info!("Running USB keyboard");
+                    // USB is connected, connection_type is USB, then run USB keyboard
+                    match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
+                        Either3::Third(_) => {
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
+                        _ => (),
+                    }
+                } else {
+                    // USB is connected, but connection type is BLE, try BLE while running USB keyboard
+                    info!("Running USB keyboard, while advertising");
+                    let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+                    // TODO: Test power consumption in this case
+                    match select3(adv_fut, usb_fut, update_profile(bonder)).await {
+                        Either3::First(Ok(conn)) => {
+                            info!("Connected to BLE");
+                            // Check whether the peer address is matched with current profile
+                            if !bonder.check_connection(&conn) {
+                                error!(
+                                    "Bonded peer address doesn't match active profile, disconnect"
+                                );
+                                continue;
+                            }
+                            bonder.load_sys_attrs(&conn);
+                            // Run the ble keyboard, wait for disconnection or USB connect
+                            match select3(
                                 run_ble_keyboard(
                                     &conn,
                                     &ble_server,
@@ -306,49 +362,99 @@ pub(crate) async fn initialize_ble_split_central_and_run<
                                     &mut keyboard_config.ble_battery_config,
                                     &keyboard_report_receiver,
                                 ),
-                                set_conn_params(&conn),
+                                wait_for_usb_enabled(),
+                                update_profile(bonder),
+                            )
+                            .await
+                            {
+                                Either3::First(_) => info!("BLE disconnected"),
+                                Either3::Second(_) => info!("Detected USB configured, quit BLE"),
+                                Either3::Third(_) => info!("Switch profile"),
+                            }
+                        }
+                        _ => {
+                            // Wait 10ms
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
+                    }
+                }
+            } else {
+                // USB isn't connected, wait for any of BLE/USB connection
+                let dummy_task = run_dummy_keyboard(
+                    &mut keyboard,
+                    &mut matrix,
+                    &mut storage,
+                    &keyboard_report_receiver,
+                );
+                let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+
+                info!("BLE advertising");
+                // Wait for BLE or USB connection
+                match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
+                    Either3::First(Ok(conn)) => {
+                        info!("Connected to BLE");
+                        // Check whether the peer address is matched with current profile
+                        if !bonder.check_connection(&conn) {
+                            error!("Bonded peer address doesn't match active profile, disconnect");
+                            continue;
+                        }
+                        bonder.load_sys_attrs(&conn);
+                        // Run the ble keyboard, wait for disconnection
+                        match select3(
+                            run_ble_keyboard(
+                                &conn,
+                                &ble_server,
+                                &mut keyboard,
+                                &mut matrix,
+                                &mut storage,
+                                &mut light_service,
+                                &mut vial_service,
+                                &mut keyboard_config.ble_battery_config,
+                                &keyboard_report_receiver,
                             ),
                             wait_for_usb_enabled(),
+                            update_profile(bonder),
                         )
                         .await
                         {
-                            Either::First(_) => (),
-                            Either::Second(_) => {
-                                info!("Detected USB configured, quit BLE");
-                                continue;
-                            }
+                            Either3::First(_) => info!("BLE disconnected"),
+                            Either3::Second(_) => info!("Detected USB configured, quit BLE"),
+                            Either3::Third(_) => info!("Switch profile"),
                         }
                     }
-                    Err(e) => error!("Advertise error: {}", e),
-                },
-                Either::Second(_) => {
-                    // Wait 10ms for usb resuming
-                    Timer::after_millis(10).await;
-                    continue;
+                    _ => {
+                        // Wait 10ms for usb resuming/switching profile/advertising error
+                        Timer::after_millis(10).await;
+                    }
                 }
             }
         }
 
         #[cfg(feature = "_no_usb")]
-        match adv_fut.await {
+        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
                 bonder.load_sys_attrs(&conn);
-                run_ble_keyboard(
-                    &conn,
-                    &ble_server,
-                    &mut keyboard,
-                    &mut matrix,
-                    &mut storage,
-                    &mut light_service,
-                    &mut keyboard_config.ble_battery_config,
-                    &keyboard_report_receiver,
+                select(
+                    run_ble_keyboard(
+                        &conn,
+                        &ble_server,
+                        &mut keyboard,
+                        &mut matrix,
+                        &mut storage,
+                        &mut light_service,
+                        &mut vial_service,
+                        &mut keyboard_config.ble_battery_config,
+                        &keyboard_report_receiver,
+                    ),
+                    update_profile(bonder),
                 )
-                .await
+                .await;
             }
             Err(e) => error!("Advertise error: {}", e),
         }
 
-        // Retry after 1 second
-        Timer::after_secs(1).await;
+        // Retry after 200 ms
+        Timer::after_millis(200).await;
     }
 }
