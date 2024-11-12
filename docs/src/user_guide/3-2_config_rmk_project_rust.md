@@ -67,4 +67,15 @@ let (input_pins, output_pins) = config_matrix_pins_rp!(
 
 `input` and `output` are lists of used pins, change them accordingly.
 
+If your keys are directly connected to the microcontroller pins, you can define your pins like this:
+```rust
+    let direct_pins = config_matrix_pins_rp! {
+        peripherals: p,
+        direct_pins: [
+            [PIN_0, PIN_1,  PIN_2],
+            [PIN_3, _,  PIN_5],
+        ]
+    };
+```
+
 So far so good, you've done all necessary modifications of your firmware project. You can also check TODOs listed in the generated `README.md` file.

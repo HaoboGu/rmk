@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add direct pin matrix configs
+
 ## [0.2.0] - 2024-10-28
 
 - Update toml config fields according to new `keyboard.toml` definition

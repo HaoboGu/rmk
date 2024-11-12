@@ -68,6 +68,23 @@ output_pins = ["PD7", "PD8", "PD9"]
 # row2col = true
 ```
 
+If your keys are directly connected to the microcontroller pins, set `matrix_type` to `direct_pin`. (The default value for `matrix_type` is `normal`)
+
+`direct_pins` is a two-dimensional array that represents the physical layout of your keys.
+
+If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
+
+Here is an example for rp2040.
+```toml
+matrix_type = "direct_pin"
+direct_pins = [
+    ["PIN_0", "PIN_1", "PIN_2"],
+    ["PIN_3", "_", "PIN_5"]
+]
+# `direct_pin_low_active` is optional. Default is `true`.
+direct_pin_low_active = true
+```
+
 ### `[layout]`
 
 `[layout]` section contains the layout and the default keymap for the keyboard:
@@ -120,12 +137,14 @@ The key string should follow several rules:
 2. For no-key, use `"__"`
 
 3. RMK supports many advanced layer operations:
-    1. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
-    2. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
-    3. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
-    4. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
-    5. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
-    6. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
+    1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
+    2. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
+    3. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
+    4. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
+    5. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
+    6. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
+    7. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
+    8. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
     
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
@@ -171,7 +190,7 @@ There are several more configs for reading battery level and charging state, now
 # Whether to enable BLE feature
 enabled = true
 # nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
-battery_adc_pin = { pin = "vddh", low_active = true }
+battery_adc_pin = "vddh"
 # Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 charge_state = { pin = "PIN_1", low_active = true }
 # Output LED pin that blinks when the battery is low
@@ -228,10 +247,24 @@ usb_enable = true
 
 # Set matrix IO for the board. This section is for non-split keyboard and is conflict with [split] section
 [matrix]
+# `matrix_type` is optional. Default is "normal"
+matrix_type = "normal"
 # Input and output pins
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+
+# Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
+matrix_type = "direct_pin"
+direct_pins = [
+    ["PIN_0", "PIN_1", "PIN_2"],
+    ["PIN_3", "_", "PIN_5"]
+]
+
+# `direct_pin_low_active` is optional. Default is `true`.
+# If your pin needs to be pulled up and the pin is pulled down when the button is turned on, please set it to true
+# WARNING: If you use a normal matrix, it will be ineffective
+direct_pin_low_active = true
 
 # Layout info for the keyboard, this section is mandatory
 [layout]
@@ -282,7 +315,7 @@ start_addr = 16
 enabled = true
 # BLE related pins, ignore any of them if you don't have
 # Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
-battery_adc_pin = { pin = "vddh", low_active = true }
+battery_adc_pin = "vddh"
 # Input pin that indicates the charging state
 charge_state = { pin = "PIN_1", low_active = true }
 # Output LED pin that blinks when the battery is low
