@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["_no_external_storage"] }
-ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "749577a", features = [
+ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "3ccf0c8", features = [
     "ch32v307vct6",
     "memory-x",
     "embassy",
@@ -26,8 +26,8 @@ embassy-time = "0.3.2"
 embassy-usb = "0.3.0"
 nb = "1.1.0"
 
-qingke = "0.4.0"
-qingke-rt = "0.4.0"
+qingke = { version = "0.5.0", features = ["unsafe-trust-wch-atomics"] }
+qingke-rt = "0.5.0"
 
 # Not working for now
 defmt = "0.3"

@@ -9,7 +9,7 @@ use core::panic::PanicInfo;
 
 use ch32_hal::gpio::{Input, Level, Output, Pull, Speed};
 use ch32_hal::mode::Blocking;
-use ch32_hal::otg_fs::endpoint::EndpointDataBuffer;
+use ch32_hal::usb::EndpointDataBuffer;
 use ch32_hal::otg_fs::{self, Driver};
 use ch32_hal::peripherals::USART1;
 use ch32_hal::usart::UartTx;

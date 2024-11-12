@@ -107,7 +107,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "ch32-hal"
 version = "0.1.0"
-source = "git+https://github.com/ch32-rs/ch32-hal?rev=749577a#749577aa60421ea1dcd37a8b1821444f0ff0f06e"
+source = "git+https://github.com/ch32-rs/ch32-hal?rev=3ccf0c8#3ccf0c87ed952b2d8bef7b9e6193e5059a00101c"
 dependencies = [
  "ch32-metapac",
  "critical-section",
@@ -134,7 +134,7 @@ dependencies = [
 [[package]]
 name = "ch32-metapac"
 version = "0.1.0"
-source = "git+https://github.com/ch32-rs/ch32-metapac?rev=43066e18cf51106dff448f679dfff368a41431d7#43066e18cf51106dff448f679dfff368a41431d7"
+source = "git+https://github.com/ch32-rs/ch32-metapac?rev=b1cbc7a98e43af3fd3170821654784e2c01cb26b#b1cbc7a98e43af3fd3170821654784e2c01cb26b"
 dependencies = [
  "riscv 0.11.1",
  "vcell",
@@ -874,9 +874,9 @@ dependencies = [
 
 [[package]]
 name = "qingke"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f626759202434af781f805f39816be09a9172b339eb0aabc196da7a3643a1c79"
+checksum = "c0230c5310b68c08a3cf8b59fbeec3e9d8e352bc6500f62cbaf9c677f42c8dfc"
 dependencies = [
  "bit_field",
  "critical-section",
@@ -885,9 +885,9 @@ dependencies = [
 
 [[package]]
 name = "qingke-rt"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ba184bd1b7dcf6bf79e66e89ae1fda01d23b948bbb07d0758f2aa6dc3d60c27"
+checksum = "b955c60adac70c6d40205b1dbe9f57e1151d06aa842069cdbaef7bc07ad283fd"
 dependencies = [
  "qingke",
  "qingke-rt-macros",
@@ -895,9 +895,9 @@ dependencies = [
 
 [[package]]
 name = "qingke-rt-macros"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0071d24b4839b7216b43e3f113354b910c9a25bf0a3d7393a4b06df9b6747c25"
+checksum = "5f2ed46d18953ea5765ab26a07d1f092dffac2da1b4830c4397e02c3cec08501"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -962,7 +962,7 @@ checksum = "8188909339ccc0c68cfb5a04648313f09621e8b87dc03095454f1a11f6c5d436"
 
 [[package]]
 name = "rmk"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bitfield-struct",
  "byteorder",
