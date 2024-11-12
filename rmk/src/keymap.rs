@@ -44,7 +44,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     pub(crate) async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        storage: Option<&mut Storage<F>>,
+        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER>>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
@@ -60,11 +60,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 reboot_keyboard();
             } else {
                 // Read macro cache
-                if storage
-                    .read_macro_cache::<ROW, COL, NUM_LAYER>(&mut macro_cache)
-                    .await
-                    .is_err()
-                {
+                if storage.read_macro_cache(&mut macro_cache).await.is_err() {
                     error!("Wrong macro cache, clearing the storage...");
                     sequential_storage::erase_all(
                         &mut storage.flash,
