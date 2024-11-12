@@ -48,7 +48,12 @@ capslock.low_active = false
 
 [ble]
 enabled = true
+# vddh has an internal voltage divider
 battery_adc_pin = "vddh"
+# Or
+# battery_adc_pin = "P0_04"
+# adc_divider_measured = 2000
+# adc_divider_total = 2806
 charge_state.pin = "P0_25"
 charge_state.low_active = false
 charge_led.pin = "P0_29"

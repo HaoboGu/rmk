@@ -314,8 +314,14 @@ start_addr = 16
 # Whether the ble is enabled
 enabled = true
 # BLE related pins, ignore any of them if you don't have
-# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 battery_adc_pin = "vddh"
+# If the voltage divider is used for adc, you can use the following two values to define a voltage divider.
+# For example, nice!nano has 2000/2806 according to its schematic: https://dos.nicekeyboards.com/#/nice!nano/pinout_schematic, which means that the voltage at adc pin is VBat * 2000/2806.
+# Measured resistance for input adc, it should be less than adc_divider_total
+adc_divider_measured = 2000
+# Total resistance of the full path for input adc
+adc_divider_total = 2806
+# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 charge_state = { pin = "PIN_1", low_active = true }
 # Output LED pin that blinks when the battery is low
