@@ -46,9 +46,22 @@ pub struct KeyboardInfo {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+#[allow(non_camel_case_types)]
+pub enum MatrixType {
+    #[default]
+    normal,
+    direct_pin,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
-    pub input_pins: Vec<String>,
-    pub output_pins: Vec<String>,
+    #[serde(default)]
+    pub matrix_type: MatrixType,
+    pub input_pins: Option<Vec<String>>,
+    pub output_pins: Option<Vec<String>>,
+    pub direct_pins: Option<Vec<Vec<String>>>,
+    #[serde(default = "default_true")]
+    pub direct_pin_low_active: bool,
 }
 
 /// Config for storage
@@ -69,6 +82,8 @@ pub struct BleConfig {
     pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
     pub charge_led: Option<PinConfig>,
+    pub adc_divider_measured: Option<u32>,
+    pub adc_divider_total: Option<u32>,
 }
 
 /// Config for lights

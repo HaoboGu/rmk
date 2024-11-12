@@ -25,8 +25,8 @@ keymap = [
         ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
     ],
     [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
+        ["TO(1)", "TT(1)", "TG(2)"],
+        ["DF(1)", "_", "_"],
         ["_", "_", "_"],
         ["_", "_", "_"]
     ],
@@ -48,7 +48,12 @@ capslock.low_active = false
 
 [ble]
 enabled = true
+# vddh has an internal voltage divider
 battery_adc_pin = "vddh"
+# Or
+# battery_adc_pin = "P0_04"
+# adc_divider_measured = 2000
+# adc_divider_total = 2806
 charge_state.pin = "P0_25"
 charge_state.low_active = false
 charge_led.pin = "P0_29"

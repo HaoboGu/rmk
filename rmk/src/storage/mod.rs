@@ -55,6 +55,8 @@ pub(crate) enum FlashOperationMessage {
         row: u8,
         action: KeyAction,
     },
+    // Current saved connection type
+    ConnectionType(u8),
 }
 
 #[repr(u32)]
@@ -66,6 +68,7 @@ pub(crate) enum StorageKeys {
     LayoutConfig,
     KeymapKeys,
     MacroData,
+    ConnectionType,
     #[cfg(feature = "_nrf_ble")]
     ActiveBleProfile = 0xEE,
     #[cfg(feature = "_nrf_ble")]
@@ -96,6 +99,7 @@ pub(crate) enum StorageData<const ROW: usize, const COL: usize, const NUM_LAYER:
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey<ROW, COL, NUM_LAYER>),
     MacroData([u8; MACRO_SPACE_SIZE]),
+    ConnectionType(u8),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
     #[cfg(feature = "_nrf_ble")]
@@ -159,6 +163,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                 buffer[0] = StorageKeys::MacroData as u8;
                 buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
                 Ok(MACRO_SPACE_SIZE + 1)
+            }
+            StorageData::ConnectionType(ty) => {
+                buffer[0] = StorageKeys::ConnectionType as u8;
+                buffer[1] = *ty;
+                Ok(2)
             }
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => {
@@ -238,6 +247,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> Value<'a>
                     buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
                     Ok(StorageData::MacroData(buf))
                 }
+                StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
                 #[cfg(feature = "_nrf_ble")]
                 StorageKeys::BleBondInfo => {
                     // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
@@ -267,6 +277,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> StorageData<ROW
                 get_keymap_key::<ROW, COL, NUM_LAYER>(kk.row, kk.col, kk.layer)
             }
             StorageData::MacroData(_) => StorageKeys::MacroData as u32,
+            StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             #[cfg(feature = "_nrf_ble")]
@@ -298,6 +309,21 @@ pub(crate) struct Storage<F: AsyncNorFlash> {
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],
 }
+
+/// Read storage config
+macro_rules! read_storage {
+    ($storage: ident, $key: expr, $buf: expr) => {
+        fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+            &mut $storage.flash,
+            $storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut $buf,
+            $key,
+        )
+        .await
+    };
+}
+pub(crate) use read_storage;
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
@@ -473,6 +499,17 @@ impl<F: AsyncNorFlash> Storage<F> {
                         &mut self.buffer,
                         &data.key(),
                         &data,
+                    )
+                    .await
+                }
+                FlashOperationMessage::ConnectionType(ty) => {
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &(StorageKeys::ConnectionType as u32),
+                        &StorageData::<ROW, COL, NUM_LAYER>::ConnectionType(ty),
                     )
                     .await
                 }

@@ -3,7 +3,10 @@
 use quote::quote;
 
 use crate::{
-    gpio_config::{convert_input_pins_to_initializers, convert_output_pins_to_initializers},
+    gpio_config::{
+        convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
+        convert_output_pins_to_initializers,
+    },
     keyboard_config::{BoardConfig, KeyboardConfig},
     ChipModel, ChipSeries,
 };
@@ -12,15 +15,63 @@ pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,
     async_matrix: bool,
 ) -> proc_macro2::TokenStream {
-    if let BoardConfig::Normal(matrix) = &keyboard_config.board {
-        expand_matrix_input_output_pins(
-            &keyboard_config.chip,
-            matrix.input_pins.clone(),
-            matrix.output_pins.clone(),
-            async_matrix,
-        )
-    } else {
-        quote! {}
+    let mut matrix_config = proc_macro2::TokenStream::new();
+    match &keyboard_config.board {
+        BoardConfig::Normal(matrix) => {
+            matrix_config.extend(expand_matrix_input_output_pins(
+                &keyboard_config.chip,
+                matrix.input_pins.clone().unwrap(),
+                matrix.output_pins.clone().unwrap(),
+                async_matrix,
+            ));
+        }
+        BoardConfig::DirectPin(matrix) => {
+            matrix_config.extend(expand_matrix_direct_pins(
+                &keyboard_config.chip,
+                matrix.direct_pins.clone().unwrap(),
+                async_matrix,
+                matrix.direct_pin_low_active,
+            ));
+            // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
+            // So we need to declaring them in advance.
+            let rows = keyboard_config.layout.rows as usize;
+            let cols = keyboard_config.layout.cols as usize;
+            let size  = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
+            let layers = keyboard_config.layout.layers as usize;
+            let low_active = matrix.direct_pin_low_active;
+            matrix_config.extend(quote! {
+                pub(crate) const ROW: usize = #rows;
+                pub(crate) const COL: usize = #cols;
+                pub(crate) const SIZE: usize = #size;
+                pub(crate) const LAYER_NUM: usize = #layers;
+                let low_active = #low_active;
+            });
+        }
+        _ => (),
+    };
+    matrix_config
+}
+
+pub(crate) fn expand_matrix_direct_pins(
+    chip: &ChipModel,
+    direct_pins: Vec<Vec<String>>,
+    async_matrix: bool,
+    low_active: bool,
+) -> proc_macro2::TokenStream {
+    let mut pin_initialization = proc_macro2::TokenStream::new();
+    // Initialize input pins
+    pin_initialization.extend(convert_direct_pins_to_initializers(
+        &chip,
+        direct_pins,
+        async_matrix,
+        low_active,
+    ));
+    // Generate a macro that does pin matrix config
+    quote! {
+        let direct_pins = {
+            #pin_initialization
+            direct_pins
+        };
     }
 }
 

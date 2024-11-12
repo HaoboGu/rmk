@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add voltage divider from toml
+- Add TO(n) and DF(n) support
+- Add DirectPinMatrix, Including entry, gpio config, matrix config, board type.
+- Support no_pin for `DirectPinMatrix`.
+
 ## [0.3.0] - 2024-10-28
 
 ### Added

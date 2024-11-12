@@ -75,7 +75,7 @@ fn expand_split_peripheral(
     // Check whether keyboard.toml contains split section
     let split_config = match &keyboard_config.board {
         BoardConfig::Split(split) => split,
-        BoardConfig::Normal(_) => {
+        _ => {
             return quote! {
                 compile_error!("No `split` field in `keyboard.toml`");
             }

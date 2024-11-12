@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add nRF52840 voltage divider configs
+- Add direct pin matrix configs
+
 ## [0.2.0] - 2024-10-28
 
 - Update toml config fields according to new `keyboard.toml` definition
