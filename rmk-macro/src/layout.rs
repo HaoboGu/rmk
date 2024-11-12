@@ -214,6 +214,18 @@ fn parse_key(key: String) -> TokenStream2 {
                 ::rmk::tg!(#layer)
             }
         }
+        "TO(" => {
+            let layer = get_layer(key, "TO(", ")");
+            quote! {
+                ::rmk::to!(#layer)
+            }
+        }
+        "DF(" => {
+            let layer = get_layer(key, "DF(", ")");
+            quote! {
+                ::rmk::df!(#layer)
+            }
+        }
         _ => {
             let ident = format_ident!("{}", key);
             quote! {::rmk::k!(#ident) }

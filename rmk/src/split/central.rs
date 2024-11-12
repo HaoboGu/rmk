@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use defmt::{error, warn};
+use defmt::error;
 use embassy_executor::Spawner;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
@@ -233,21 +233,18 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         LightService::from_config(keyboard_config.light_config),
     );
 
-    loop {
-        // Run all tasks, if one of them fails, wait 1 second and then restart
-        run_usb_keyboard(
-            &mut usb_device,
-            &mut keyboard,
-            &mut matrix,
-            &mut light_service,
-            &mut vial_service,
-            &keyboard_report_receiver,
-        )
-        .await;
-
-        warn!("Detected failure, restarting keyboard sevice after 1 second");
-        Timer::after_secs(1).await;
-    }
+    // Run usb keyboard
+    run_usb_keyboard(
+        &mut usb_device,
+        &mut keyboard,
+        &mut matrix,
+        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+        &mut storage,
+        &mut light_service,
+        &mut vial_service,
+        &keyboard_report_receiver,
+    )
+    .await
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
@@ -325,8 +322,8 @@ impl<
                             );
                             #[cfg(not(feature = "col2row"))]
                             let (row, col, key_state) = (
-                                out_idx + ROW_OFFSET as u8,
-                                in_idx + COL_OFFSET as u8,
+                                (out_idx + ROW_OFFSET) as u8,
+                                (in_idx + COL_OFFSET) as u8,
                                 self.key_states[out_idx][in_idx],
                             );
 
