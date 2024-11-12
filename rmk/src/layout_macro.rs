@@ -18,7 +18,10 @@ macro_rules! k {
 #[macro_export]
 macro_rules! wm {
     ($x: ident, $m: expr) => {
-        $crate::action::KeyAction::WithModifier($crate::action::Action::Key($crate::keycode::KeyCode::$x), $m)
+        $crate::action::KeyAction::WithModifier(
+            $crate::action::Action::Key($crate::keycode::KeyCode::$x),
+            $m,
+        )
     };
 }
 
@@ -65,6 +68,14 @@ macro_rules! osl {
     };
 }
 
+/// Create an oneshot modifier key in keymap
+#[macro_export]
+macro_rules! osm {
+    ($m: expr) => {
+        $crate::action::KeyAction::OneShot($crate::action::Action::Modifier($m))
+    };
+}
+
 /// Create a layer toggle action
 #[macro_export]
 macro_rules! tg {
@@ -78,5 +89,21 @@ macro_rules! tg {
 macro_rules! tt {
     ($x: literal) => {
         $crate::action::KeyAction::LayerTapHold($crate::action::Action::LayerToggle($x), $x)
+    };
+}
+
+/// Create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
+#[macro_export]
+macro_rules! to {
+    ($x: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::LayerToggleOnly($x))
+    };
+}
+
+/// create a switch default layer action, `n` is the layer number
+#[macro_export]
+macro_rules! df {
+    ($x: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::DefaultLayer($x))
     };
 }

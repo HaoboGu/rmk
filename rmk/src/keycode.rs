@@ -1,3 +1,5 @@
+use core::ops::BitOr;
+
 use bitfield_struct::bitfield;
 use defmt::Format;
 use num_enum::FromPrimitive;
@@ -36,6 +38,14 @@ impl Format for ModifierCombination {
             self.gui(),
             self.right()
         )
+    }
+}
+
+impl BitOr for ModifierCombination {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::from_bits(self.into_bits() | rhs.into_bits())
     }
 }
 
