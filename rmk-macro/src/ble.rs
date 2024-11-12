@@ -32,18 +32,45 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
         CommunicationConfig::Ble(ble) | CommunicationConfig::Both(_, ble) => {
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();
+                // Adc config
                 if let Some(adc_pin) = ble.battery_adc_pin.clone() {
-                    let adc_pin = if adc_pin == "vddh" {
+                    // Tokens for adc pin
+                    let adc_pin_def = if adc_pin == "vddh" {
                         quote! { ::embassy_nrf::saadc::VddhDiv5Input }
                     } else {
                         let adc_pin_ident = format_ident!("{}", adc_pin);
                         quote! {p.#adc_pin_ident.degrade_saadc()}
                     };
+
+                    // Adc divider
+                    if adc_pin == "vddh" {
+                        ble_config_tokens.extend(quote! {
+                            let adc_divider_measured = 1;
+                            let adc_divider_total = 5;
+                        });
+                    } else {
+                        match (ble.adc_divider_measured, ble.adc_divider_total) {
+                            (Some(measured), Some(total)) => {
+                                ble_config_tokens.extend(quote! {
+                                    let adc_divider_measured = #measured;
+                                    let adc_divider_total = #total;
+                                });
+                            }
+                            _ => {
+                                // If any of measured or total is not provided, we set both to 1, aka no divider.
+                                ble_config_tokens.extend(quote! {
+                                    let adc_divider_measured = 1;
+                                    let adc_divider_total = 1;
+                                });
+                            }
+                        }
+                    };
+
                     ble_config_tokens.extend(quote! {
                         use ::embassy_nrf::saadc::Input as _;
                         // Then we initialize the ADC. We are only using one channel in this example.
                         let config = ::embassy_nrf::saadc::Config::default();
-                        let channel_cfg = ::embassy_nrf::saadc::ChannelConfig::single_ended(#adc_pin);
+                        let channel_cfg = ::embassy_nrf::saadc::ChannelConfig::single_ended(#adc_pin_def);
                         ::embassy_nrf::interrupt::SAADC.set_priority(::embassy_nrf::interrupt::Priority::P3);
                         let saadc = ::embassy_nrf::saadc::Saadc::new(p.SAADC, Irqs, config, [channel_cfg]);
                         // Wait for ADC calibration.
@@ -53,6 +80,8 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                 } else {
                     ble_config_tokens.extend(quote! {
                         let saadc_option: ::core::option::Option<::embassy_nrf::saadc::Saadc<'_, 1>> = None;
+                        let adc_divider_measured = 1;
+                        let adc_divider_total = 1;
                     });
                 };
 
@@ -100,7 +129,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
 
                 ble_config_tokens.extend(
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option);
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option, adc_divider_measured, adc_divider_total);
                     }
                 );
 
