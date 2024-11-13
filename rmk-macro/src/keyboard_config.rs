@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::toml_config::{
     BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig, LightConfig,
-    MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+    MatrixConfig, MatrixType, SplitConfig, StorageConfig, TriLayerConfig,
 };
 use serde::Deserialize;
 use std::fs;
@@ -401,6 +401,22 @@ impl KeyboardConfig {
             );
         }
 
+        if let Some(ref tri_layer) = layout.tri_layer {
+            if tri_layer.upper >= layout.layers {
+                return rmk_compile_error!(
+                    "keyboard.toml: Tri layer upper is larger than [layout.layers]"
+                );
+            } else if tri_layer.lower >= layout.layers {
+                return rmk_compile_error!(
+                    "keyboard.toml: Tri layer lower is larger than [layout.layers]"
+                );
+            } else if tri_layer.adjust >= layout.layers {
+                return rmk_compile_error!(
+                    "keyboard.toml: Tri layer adjust is larger than [layout.layers]"
+                );
+            }
+        }
+
         Ok(layout)
     }
 
@@ -446,6 +462,31 @@ pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStr
             let msg = format!("Parse `keyboard.toml` error: {}", e.message());
             return rmk_compile_error!(msg);
         }
+    }
+}
+
+fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
+    match tri_layer {
+        Some(tri_layer) => {
+            let upper = tri_layer.upper;
+            let lower = tri_layer.lower;
+            let adjust = tri_layer.adjust;
+            quote! {::core::option::Option::Some([#upper, #lower, #adjust])}
+        }
+        None => quote! {::core::option::Option::None},
+    }
+}
+
+pub(crate) fn expand_kb_options_config(
+    keyboard_config: &KeyboardConfig,
+) -> proc_macro2::TokenStream {
+    let tri_layer = expand_tri_layer(&keyboard_config.layout.tri_layer);
+
+    // Generate a macro that does light config
+    quote! {
+        let keyboard_options_config = ::rmk::config::keyboard_config::KeyboardOptionsConfig {
+            tri_layer: #tri_layer,
+        };
     }
 }
 

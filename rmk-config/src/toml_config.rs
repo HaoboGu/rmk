@@ -122,6 +122,15 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+    pub tri_layer: Option<TriLayerConfig>,
+}
+
+/// Configurations for tri layer
+#[derive(Clone, Debug, Deserialize)]
+pub struct TriLayerConfig {
+    pub upper: u8,
+    pub lower: u8,
+    pub adjust: u8,
 }
 
 /// Configurations for split keyboards

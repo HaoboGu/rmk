@@ -13,7 +13,8 @@ use crate::{
     flash::expand_flash_init,
     import::expand_imports,
     keyboard_config::{
-        expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, KeyboardConfig,
+        expand_kb_options_config, expand_keyboard_info, expand_vial_config,
+        read_keyboard_toml_config, KeyboardConfig,
     },
     layout::expand_layout_init,
     light::expand_light_config,
@@ -115,6 +116,7 @@ fn expand_main(
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
+    let kb_options_config = expand_kb_options_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, async_matrix);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
@@ -151,6 +153,9 @@ fn expand_main(
             // Initialize light config as `light_config`
             #light_config
 
+            // Initialize keyboard options config as `keyboard_options_config`
+            #kb_options_config
+
             // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
 
@@ -162,6 +167,7 @@ fn expand_main(
                 vial_config: VIAL_CONFIG,
                 light_config,
                 storage_config,
+                keyboard_options_config,
                 #set_ble_config
                 ..Default::default()
             };
