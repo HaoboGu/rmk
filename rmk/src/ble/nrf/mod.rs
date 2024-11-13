@@ -140,7 +140,7 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
 /// Helper macro for reading storage config
 macro_rules! read_storage {
     ($storage: ident, $key: expr, $buf: expr) => {
-        fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+        fetch_item::<u32, StorageData, _>(
             &mut $storage.flash,
             $storage.storage_range.clone(),
             &mut NoCache::new(),
