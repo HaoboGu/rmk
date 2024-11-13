@@ -331,7 +331,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.process_action_keycode(key, key_event).await;
                 self.update_osm(key_event).await;
                 self.update_osl(key_event);
-            },
+            }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
