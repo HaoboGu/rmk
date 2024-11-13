@@ -7,9 +7,7 @@ RMK provides an easy and accessible way to set up the keyboard with a toml confi
 A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml` if you're unfamiliar with toml:
   - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
-[Here] is an example `keyboard.toml` for stm32 microcontroller, put your `keyboard.toml` at the root of your firmware project.
-
-RMK provides a proc-macro to load the `keyboard.toml`: `#[rmk_keyboard]`, add it to your `main.rs` like:
+RMK provides a proc-macro to load the `keyboard.toml` at your projects root: `#[rmk_keyboard]`, add it to your `main.rs` like:
 
 ```rust
 use rmk::macros::rmk_keyboard;
