@@ -7,13 +7,69 @@
         "rows": 5,
         "cols": 14
     },
+    "customKeycodes": [
+        {
+            "name": "BT0",
+            "title": "Bluetooth Channel 0",
+            "shortName": "BT0"
+        },
+        {
+            "name": "BT1",
+            "title": "Bluetooth Channel 1",
+            "shortName": "BT1"
+        },
+        {
+            "name": "BT2",
+            "title": "Bluetooth Channel 2",
+            "shortName": "BT2"
+        },
+        {
+            "name": "BT3",
+            "title": "Bluetooth Channel 3",
+            "shortName": "BT3"
+        },
+        {
+            "name": "BT4",
+            "title": "Bluetooth Channel 4",
+            "shortName": "BT4"
+        },
+        {
+            "name": "BT5",
+            "title": "Bluetooth Channel 5",
+            "shortName": "BT5"
+        },
+        {
+            "name": "BT6",
+            "title": "Bluetooth Channel 6",
+            "shortName": "BT6"
+        },
+        {
+            "name": "BT7",
+            "title": "Bluetooth Channel 7",
+            "shortName": "BT7"
+        },
+        {
+            "name": "NEXT_BT",
+            "title": "Switch to the next Bluetooth channel",
+            "shortName": "Next\nBT"
+        },
+        {
+            "name": "PREV_BT",
+            "title": "Switch to the previous Bluetooth channel",
+            "shortName": "Prev\nBT"
+        },
+        {
+            "name": "CLR_BT",
+            "title": "Clear bond info for current channel",
+            "shortName": "Clear\nBT"
+        },
+        {
+            "name": "SWITCH",
+            "title": "Switch default output mode between USB/BLE",
+            "shortName": "Switch\nOutput"
+        }
+    ],
     "layouts": {
-        "labels": [
-            [
-                "label",
-                "label2"
-            ]
-        ],
         "keymap": [
             [
                 "0,0",

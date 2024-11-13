@@ -11,7 +11,7 @@ mod vial_service;
 use self::server::BleServer;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
-use crate::storage::{read_storage, StorageKeys};
+use crate::storage::StorageKeys;
 use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
@@ -134,6 +134,21 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
         );
     };
     sd.run().await
+}
+
+
+/// Helper macro for reading storage config
+macro_rules! read_storage {
+    ($storage: ident, $key: expr, $buf: expr) => {
+        fetch_item::<u32, StorageData<ROW, COL, NUM_LAYER>, _>(
+            &mut $storage.flash,
+            $storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut $buf,
+            $key,
+        )
+        .await
+    };
 }
 
 /// Create default nrf ble config

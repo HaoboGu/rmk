@@ -312,20 +312,6 @@ pub(crate) struct Storage<
     buffer: [u8; get_buffer_size()],
 }
 
-/// Read storage config
-macro_rules! read_storage {
-    ($storage: ident, $key: expr, $buf: expr) => {
-        fetch_item::<u32, StorageData, _>(
-            &mut $storage.flash,
-            $storage.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut $buf,
-            $key,
-        )
-        .await
-    };
-}
-pub(crate) use read_storage;
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.

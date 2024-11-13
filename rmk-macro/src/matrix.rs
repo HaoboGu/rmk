@@ -36,7 +36,7 @@ pub(crate) fn expand_matrix_config(
             // So we need to declaring them in advance.
             let rows = keyboard_config.layout.rows as usize;
             let cols = keyboard_config.layout.cols as usize;
-            let size  = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
+            let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
             let layers = keyboard_config.layout.layers as usize;
             let low_active = matrix.direct_pin_low_active;
             matrix_config.extend(quote! {
