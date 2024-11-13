@@ -219,15 +219,14 @@ pub(crate) async fn initialize_ble_split_central_and_run<
 
     let mut buf: [u8; 128] = [0; 128];
     // Load current active profile
-    if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
-        fetch_item::<u32, StorageData<TOTAL_ROW, TOTAL_COL, NUM_LAYER>, _>(
-            &mut storage.flash,
-            storage.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut buf,
-            &(StorageKeys::ActiveBleProfile as u32),
-        )
-        .await
+    if let Ok(Some(StorageData::ActiveBleProfile(profile))) = fetch_item::<u32, StorageData, _>(
+        &mut storage.flash,
+        storage.storage_range.clone(),
+        &mut NoCache::new(),
+        &mut buf,
+        &(StorageKeys::ActiveBleProfile as u32),
+    )
+    .await
     {
         ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
     } else {
@@ -236,15 +235,14 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     };
 
     // Load current connection type
-    if let Ok(Some(StorageData::ConnectionType(conn_type))) =
-        fetch_item::<u32, StorageData<TOTAL_ROW, TOTAL_COL, NUM_LAYER>, _>(
-            &mut storage.flash,
-            storage.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut buf,
-            &(StorageKeys::ConnectionType as u32),
-        )
-        .await
+    if let Ok(Some(StorageData::ConnectionType(conn_type))) = fetch_item::<u32, StorageData, _>(
+        &mut storage.flash,
+        storage.storage_range.clone(),
+        &mut NoCache::new(),
+        &mut buf,
+        &(StorageKeys::ConnectionType as u32),
+    )
+    .await
     {
         CONNECTION_TYPE.store(conn_type, Ordering::Relaxed);
     } else {
@@ -258,15 +256,14 @@ pub(crate) async fn initialize_ble_split_central_and_run<
     // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
-        if let Ok(Some(StorageData::BondInfo(info))) =
-            fetch_item::<u32, StorageData<TOTAL_ROW, TOTAL_COL, NUM_LAYER>, _>(
-                &mut storage.flash,
-                storage.storage_range.clone(),
-                &mut NoCache::new(),
-                &mut buf,
-                &get_bond_info_key(key as u8),
-            )
-            .await
+        if let Ok(Some(StorageData::BondInfo(info))) = fetch_item::<u32, StorageData, _>(
+            &mut storage.flash,
+            storage.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut buf,
+            &get_bond_info_key(key as u8),
+        )
+        .await
         {
             bond_info.insert(key as u8, info).ok();
         }
