@@ -33,7 +33,7 @@ use rmk_config::StorageConfig;
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
+/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     M: MatrixTrait,
     Out: OutputPin,
