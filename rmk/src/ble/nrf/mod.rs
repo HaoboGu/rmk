@@ -136,7 +136,6 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
     sd.run().await
 }
 
-
 /// Helper macro for reading storage config
 macro_rules! read_storage {
     ($storage: ident, $key: expr, $buf: expr) => {
@@ -207,9 +206,9 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
+/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
+pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
@@ -221,6 +220,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     mut keyboard_config: RmkConfig<'static, Out>,
+    ble_addr: Option<[u8; 6]>,
     spawner: Spawner,
 ) -> ! {
     // Set ble config and start nrf-softdevice background task first
@@ -228,6 +228,11 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
+    if let Some(addr) = ble_addr {
+        // This is used mainly for split central
+        use nrf_softdevice::ble::{set_address, Address, AddressType};
+        set_address(sd, &Address::new(AddressType::RandomStatic, addr));
+    };
     {
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
@@ -237,10 +242,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
-    let mut storage = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
-    let keymap = RefCell::new(
-        KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
-    );
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
     let mut buf: [u8; 128] = [0; 128];
 
