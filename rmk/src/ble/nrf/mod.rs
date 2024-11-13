@@ -136,7 +136,6 @@ pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> 
     sd.run().await
 }
 
-
 /// Helper macro for reading storage config
 macro_rules! read_storage {
     ($storage: ident, $key: expr, $buf: expr) => {
@@ -237,10 +236,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_with_config_and_run<
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
-    let mut storage = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
-    let keymap = RefCell::new(
-        KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
-    );
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
     let mut buf: [u8; 128] = [0; 128];
 

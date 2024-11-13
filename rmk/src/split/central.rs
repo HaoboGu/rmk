@@ -196,7 +196,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     // For USB keyboard, the "external" storage means the storage initialized by the user.
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
-        let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
+        let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
         let keymap = RefCell::new(
             KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
                 default_keymap,

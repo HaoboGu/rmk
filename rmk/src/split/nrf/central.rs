@@ -208,7 +208,7 @@ pub(crate) async fn initialize_ble_split_central_and_run<
 
     // Flash and keymap configuration
     let flash = Flash::take(sd);
-    let mut storage = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
     let keymap = RefCell::new(
         KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
             default_keymap,

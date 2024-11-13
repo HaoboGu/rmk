@@ -238,10 +238,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     // For USB keyboard, the "external" storage means the storage initialized by the user.
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
-        let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(
-            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut s)).await,
-        );
+        let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]

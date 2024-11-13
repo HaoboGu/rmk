@@ -312,7 +312,6 @@ pub(crate) struct Storage<
     buffer: [u8; get_buffer_size()],
 }
 
-
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
 macro_rules! write_storage {
