@@ -14,7 +14,7 @@
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
+use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -187,12 +187,13 @@ pub async fn run_rmk_with_async_flash<
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_keyboard_with_config_and_run(
+    initialize_nrf_ble_keyboard_and_run(
         matrix,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
         keyboard_config,
+        None,
         spawner,
     )
     .await;
