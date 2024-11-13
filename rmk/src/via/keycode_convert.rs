@@ -173,6 +173,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7E00..=0x7E0F => {
+            // QK_KB_N, aka UserN
             let keycode = via_keycode & 0xFF | 0x840;
             KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }

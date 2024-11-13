@@ -7,9 +7,7 @@ RMK provides an easy and accessible way to set up the keyboard with a toml confi
 A `toml` file named `keyboard.toml` is used as a configuration file. The following is the spec of `toml` if you're unfamiliar with toml:
   - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
-[Here] is an example `keyboard.toml` for stm32 microcontroller, put your `keyboard.toml` at the root of your firmware project.
-
-RMK provides a proc-macro to load the `keyboard.toml`: `#[rmk_keyboard]`, add it to your `main.rs` like:
+RMK provides a proc-macro to load the `keyboard.toml` at your projects root: `#[rmk_keyboard]`, add it to your `main.rs` like:
 
 ```rust
 use rmk::macros::rmk_keyboard;
@@ -139,12 +137,13 @@ The key string should follow several rules:
 3. RMK supports many advanced layer operations:
     1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
     2. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
-    3. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`.
+    3. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
     4. Use `"LT(n, key)"` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
     5. Use `"OSL(n)"` to create a one-shot layer action, `n` is the layer number
-    6. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
-    7. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
-    8. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
+    6. Use `"OSM(modifier)"` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
+    7. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
+    8. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
+    9. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
     
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
@@ -314,8 +313,14 @@ start_addr = 16
 # Whether the ble is enabled
 enabled = true
 # BLE related pins, ignore any of them if you don't have
-# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 battery_adc_pin = "vddh"
+# If the voltage divider is used for adc, you can use the following two values to define a voltage divider.
+# For example, nice!nano has 2000/2806 according to its schematic: https://dos.nicekeyboards.com/#/nice!nano/pinout_schematic, which means that the voltage at adc pin is VBat * 2000/2806.
+# Measured resistance for input adc, it should be less than adc_divider_total
+adc_divider_measured = 2000
+# Total resistance of the full path for input adc
+adc_divider_total = 2806
+# Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 charge_state = { pin = "PIN_1", low_active = true }
 # Output LED pin that blinks when the battery is low

@@ -65,6 +65,8 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                     battery_adc_pin: Some(_adc_pin),
                     charge_state: _,
                     charge_led: _,
+                    adc_divider_measured: _,
+                    adc_divider_total: _,
                 }) = keyboard_config.communication.get_ble_config()
                 {
                     Some(quote! {
