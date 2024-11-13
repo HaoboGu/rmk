@@ -292,7 +292,11 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     let keyboard_report_receiver = keyboard_report_channel.receiver();
 
     // Keyboard services
-    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
+    let mut keyboard = Keyboard::new(
+        &keymap,
+        &keyboard_report_sender,
+        keyboard_config.keyboard_options_config,
+    );
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);

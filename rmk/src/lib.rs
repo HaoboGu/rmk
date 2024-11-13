@@ -251,7 +251,11 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(&keymap, &keyboard_report_sender),
+        Keyboard::new(
+            &keymap,
+            &keyboard_report_sender,
+            keyboard_config.keyboard_options_config,
+        ),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),

@@ -17,6 +17,7 @@ use embassy_sync::{
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
+use rmk_config::KeyboardOptionsConfig;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
@@ -131,6 +132,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
+    /// Options for configurable action behavior
+    options: KeyboardOptionsConfig,
+
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
@@ -163,11 +167,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+        options: KeyboardOptionsConfig,
     ) -> Self {
         Keyboard {
             keymap,
             sender,
             timer: [[None; ROW]; COL],
+            options,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
