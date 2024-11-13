@@ -122,6 +122,55 @@ fn parse_key(key: String) -> TokenStream2 {
                 ::rmk::osl!(#layer)
             }
         }
+        "OSM" => {
+            if let Some(internal) = key.trim_start_matches("OSM(").strip_suffix(")") {
+                // Get modifier combination, in types of mod1 | mod2 | ...
+                let mut right = false;
+                let mut gui = false;
+                let mut alt = false;
+                let mut shift = false;
+                let mut ctrl = false;
+                internal.split_terminator("|").for_each(|w| {
+                    let w = w.trim();
+                    match w {
+                        "LShift" => shift = true,
+                        "LCtrl" => ctrl = true,
+                        "LAlt" => alt = true,
+                        "Lgui" => gui = true,
+                        "RShift" => {
+                            right = true;
+                            shift = true;
+                        }
+                        "RCtrl" => {
+                            right = true;
+                            ctrl = true;
+                        }
+                        "RAlt" => {
+                            right = true;
+                            alt = true;
+                        }
+                        "Rgui" => {
+                            right = true;
+                            gui = true;
+                        }
+                        _ => (),
+                    }
+                });
+
+                if !(gui || alt || shift || ctrl) {
+                    return quote! {
+                        compile_error!("keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                quote! {
+                    ::rmk::osm!(::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                }
+            } else {
+                quote! {
+                    compile_error!("keyboard.toml: OSM(modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                }
+            }
+        }
         "LM(" => {
             if let Some(internal) = key.trim_start_matches("LM(").strip_suffix(")") {
                 let keys: Vec<&str> = internal
