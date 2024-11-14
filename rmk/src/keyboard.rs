@@ -300,6 +300,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     .await;
             }
         }
+
+        // Tri Layer
+        if let Some(ref tri_layer) = self.options.tri_layer {
+            self.keymap.borrow_mut().update_tri_layer(tri_layer);
+        }
     }
 
     async fn update_osm(&mut self, key_event: KeyEvent) {

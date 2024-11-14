@@ -253,6 +253,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         self.layer_cache[row][col] = layer_num;
     }
 
+    /// Update given Tri Layer state
+    pub(crate) fn update_tri_layer(&mut self, tri_layer: &[u8; 3]) {
+        self.layer_state[tri_layer[2] as usize] =
+            self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[0] as usize];
+    }
+
     /// Activate given layer
     pub(crate) fn activate_layer(&mut self, layer_num: u8) {
         if layer_num as usize >= NUM_LAYER {
