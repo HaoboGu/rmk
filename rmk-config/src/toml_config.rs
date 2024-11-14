@@ -128,6 +128,7 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitConfig {
     pub connection: String,
+    pub enable_hrm: Option<bool>,
     pub central: SplitBoardConfig,
     pub peripheral: Vec<SplitBoardConfig>,
 }

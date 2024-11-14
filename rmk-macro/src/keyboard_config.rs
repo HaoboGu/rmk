@@ -333,7 +333,13 @@ impl KeyboardConfig {
         split: Option<SplitConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
-            (None, Some(s)) => Ok(BoardConfig::Split(s)),
+            (None, Some(mut s)) => {
+                // Disable HRMs by default
+                if s.enable_hrm.is_none() {
+                    s.enable_hrm = Some(false);
+                }
+                Ok(BoardConfig::Split(s))
+            },
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
