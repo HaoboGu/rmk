@@ -23,3 +23,6 @@ default = []
 toml = ["serde", "serde_derive"]
 _esp_ble = []
 _nrf_ble = ["embassy-nrf"]
+
+[package.metadata.docs.rs]
+features = ["toml"]
