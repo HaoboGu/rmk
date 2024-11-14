@@ -147,6 +147,15 @@ The key string should follow several rules:
     
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
+#### Tri Layer
+You can enable Tri Layer by specifying the `upper`, `lower` and `adjust` layers in the `tri_layer` sub-table.
+
+```toml
+[layout]
+tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+```
+When both the `upper` and `lower` layers are active, the `adjust` layer will also be enabled.
+
 ### `[light]`
 
 `[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
