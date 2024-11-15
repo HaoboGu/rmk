@@ -1,3 +1,5 @@
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use defmt::{error, info};
 use embassy_futures::join::join;
 use embassy_sync::{
@@ -45,6 +47,9 @@ pub(crate) async fn run_ble_peripheral_monitor<
     join(peripheral.run(), run_ble_client).await;
 }
 
+// If the one peripheral client is connecting, don't try to connect again
+static CONNECTING_CLIENT: AtomicBool = AtomicBool::new(false);
+
 /// Run a single ble client, which receives split message from the ble peripheral.
 ///
 /// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
@@ -60,12 +65,24 @@ pub(crate) async fn run_ble_client(
         let addrs = &[&Address::new(AddressType::RandomStatic, addr)];
         let mut config: central::ConnectConfig<'_> = central::ConnectConfig::default();
         config.scan_config.whitelist = Some(addrs);
-        let conn = match central::connect(sd, &config).await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!("BLE peripheral connect error: {}", e);
-                continue;
+        let conn = loop {
+            if let Ok(_) =
+                CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            {
+                info!("Starting connect to {}", addrs);
+                let conn = match central::connect(sd, &config).await {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        error!("BLE peripheral connect error: {}", e);
+                        CONNECTING_CLIENT.store(false, Ordering::SeqCst);
+                        continue;
+                    }
+                };
+                CONNECTING_CLIENT.store(false, Ordering::SeqCst);
+                break conn;
             }
+            // Wait 200ms and check again
+            embassy_time::Timer::after_millis(200).await;
         };
 
         let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
