@@ -295,7 +295,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     let mut keyboard = Keyboard::new(
         &keymap,
         &keyboard_report_sender,
-        keyboard_config.keyboard_options_config,
+        keyboard_config.behavior_config,
     );
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
