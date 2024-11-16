@@ -147,14 +147,29 @@ The key string should follow several rules:
     
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-#### Tri Layer
-You can enable Tri Layer by specifying the `upper`, `lower` and `adjust` layers in the `tri_layer` sub-table.
+
+### `[behavior]`
+
+`[behavior]` section contains configuration for how different keyboard actions should behave:
 
 ```toml
-[layout]
+[behavior]
 tri_layer = { uppper = 1, lower = 2, adjust = 3 }
 ```
-When both the `upper` and `lower` layers are active, the `adjust` layer will also be enabled.
+
+#### Tri Layer
+
+`Tri Layer` works by enabling a layer (called `adjust`) when other two layers (`upper` and `lower`) are both enabled.
+
+You can enable Tri Layer by specifying the `upper`, `lower` and `adjust` layers in the `tri_layer` sub-table:
+
+```toml
+[behavior.tri_layer]
+uppper = 1
+lower = 2
+adjust = 3
+```
+In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
 ### `[light]`
 
@@ -298,6 +313,11 @@ keymap = [
         ["_", "_", "_"]
     ],
 ]
+
+# Behavior configuration, if you don't want to customize anything, just ignore this section.
+[behavior]
+# Tri Layer configuration.
+tri_layer = { uppper = 1, lower = 2, adjust = 3 }
 
 # Lighting configuration, if you don't have any light, just ignore this section.
 [light]
