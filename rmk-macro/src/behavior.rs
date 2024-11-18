@@ -20,10 +20,12 @@ fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStr
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
     let tri_layer = expand_tri_layer(&keyboard_config.behavior.tri_layer);
+    let hrm = keyboard_config.behavior.enable_hrm.unwrap_or(false);
 
     quote! {
         let behavior_config = ::rmk::config::keyboard_config::BehaviorConfig {
             tri_layer: #tri_layer,
+            enable_hrm: #hrm,
         };
     }
 }

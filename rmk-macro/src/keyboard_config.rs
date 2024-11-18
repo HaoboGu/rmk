@@ -71,7 +71,7 @@ pub(crate) struct KeyboardConfig {
     pub(crate) board: BoardConfig,
     // Layout config
     pub(crate) layout: LayoutConfig,
-    // Begavior Config
+    // Behavior Config
     pub(crate) behavior: BehaviorConfig,
     // Light config
     pub(crate) light: LightConfig,
@@ -339,11 +339,7 @@ impl KeyboardConfig {
         split: Option<SplitConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
-            (None, Some(mut s)) => {
-                // Disable HRMs by default
-                if s.enable_hrm.is_none() {
-                    s.enable_hrm = Some(false);
-                }
+            (None, Some(s)) => {
                 Ok(BoardConfig::Split(s))
             },
             (Some(m), None) => {
@@ -443,6 +439,8 @@ impl KeyboardConfig {
                     }
                     None => default.tri_layer,
                 };
+
+                behavior.enable_hrm = behavior.enable_hrm.or(default.enable_hrm);
 
                 Ok(behavior)
             }

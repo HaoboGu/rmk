@@ -130,6 +130,7 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
+    pub enable_hrm: Option<bool>,
 }
 
 /// Configurations for tri layer
@@ -144,7 +145,6 @@ pub struct TriLayerConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitConfig {
     pub connection: String,
-    pub enable_hrm: Option<bool>,
     pub central: SplitBoardConfig,
     pub peripheral: Vec<SplitBoardConfig>,
 }

@@ -32,6 +32,9 @@ keymap = [
 [ble]
 enabled = true
 
+[behavior]
+enable_hrm = true
+
 [split]
 connection = "ble"
 

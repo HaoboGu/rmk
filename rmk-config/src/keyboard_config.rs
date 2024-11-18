@@ -43,6 +43,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 #[derive(Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
+    pub enable_hrm: bool,
 }
 
 /// Config for storage

@@ -325,7 +325,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             // Record the last release event
             self.last_release = (key_event, is_mod, Some(Instant::now()));
         }
-        
+
         // Tri Layer
         if let Some(ref tri_layer) = self.behavior.tri_layer {
             self.keymap.borrow_mut().update_tri_layer(tri_layer);
@@ -486,18 +486,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         hold_action: Action,
         key_event: KeyEvent,
     ) {
-        // Check whether the key is in key streak
-        if let Some(last_release_time) = self.last_release.2 {
-            if key_event.pressed {
-                // TODO: make this prior-idle-time configurable
-                if last_release_time.elapsed().as_millis() < 120 {
-                    // The previous key is released within 50ms, it's in key streak
-                    debug!("Key streak detected, trigger tap action");
-                    self.process_key_action_tap(tap_action, key_event).await;
-                    return;
+        if self.behavior.enable_hrm {
+            // If HRM is enabled, check whether the key is in key streak
+            if let Some(last_release_time) = self.last_release.2 {
+                if key_event.pressed {
+                    // TODO: make this prior-idle-time configurable
+                    if last_release_time.elapsed().as_millis() < 120 {
+                        // The previous key is released within 50ms, it's in key streak
+                        debug!("Key streak detected, trigger tap action");
+                        self.process_key_action_tap(tap_action, key_event).await;
+                        return;
+                    }
                 }
             }
         }
+
         let row = key_event.row as usize;
         let col = key_event.col as usize;
         if key_event.pressed {
