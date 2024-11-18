@@ -17,6 +17,7 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub vial_config: VialConfig<'a>,
     pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
+    pub behavior_config: BehaviorConfig,
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
     #[cfg(feature = "_esp_ble")]
@@ -31,10 +32,17 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
             vial_config: VialConfig::default(),
             light_config: LightConfig::default(),
             storage_config: StorageConfig::default(),
+            behavior_config: BehaviorConfig::default(),
             #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
             ble_battery_config: BleBatteryConfig::default(),
         }
     }
+}
+
+/// Config for configurable action behavior
+#[derive(Default)]
+pub struct BehaviorConfig {
+    pub tri_layer: Option<[u8; 3]>,
 }
 
 /// Config for storage

@@ -6,6 +6,7 @@ use rmk_config::toml_config::{SerialConfig, SplitConfig};
 use syn::ItemMod;
 
 use crate::{
+    behavior::expand_behavior_config,
     bind_interrupt::expand_bind_interrupt,
     ble::expand_ble_config,
     chip_init::expand_chip_init,
@@ -74,6 +75,7 @@ fn expand_split_central(
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
+    let behavior_config = expand_behavior_config(keyboard_config);
 
     let matrix_config = expand_matrix_input_output_pins(
         &keyboard_config.chip,
@@ -118,6 +120,9 @@ fn expand_split_central(
             // Initialize light config as `light_config`
             #light_config
 
+            // Initialize behavior config config as `behavior_config`
+            #behavior_config
+
             // Initialize matrix config as `(input_pins, output_pins)`
             #matrix_config
 
@@ -130,6 +135,7 @@ fn expand_split_central(
                 vial_config: VIAL_CONFIG,
                 light_config,
                 storage_config,
+                behavior_config,
                 #set_ble_config
                 ..Default::default()
             };
