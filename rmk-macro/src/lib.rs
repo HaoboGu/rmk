@@ -1,3 +1,4 @@
+mod behavior;
 mod bind_interrupt;
 mod ble;
 mod chip_init;

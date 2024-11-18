@@ -10,6 +10,8 @@ pub struct KeyboardTomlConfig {
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
     pub layout: LayoutConfig,
+    /// Behavior config
+    pub behavior: Option<BehaviorConfig>,
     /// Light config
     pub light: Option<LightConfig>,
     /// Storage config
@@ -122,6 +124,20 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+}
+
+/// Configurations for actions behavior
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BehaviorConfig {
+    pub tri_layer: Option<TriLayerConfig>,
+}
+
+/// Configurations for tri layer
+#[derive(Clone, Debug, Deserialize)]
+pub struct TriLayerConfig {
+    pub upper: u8,
+    pub lower: u8,
+    pub adjust: u8,
 }
 
 /// Configurations for split keyboards

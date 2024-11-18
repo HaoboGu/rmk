@@ -17,6 +17,7 @@ use embassy_sync::{
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
+use rmk_config::BehaviorConfig;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
@@ -131,6 +132,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
+    /// Options for configurable action behavior
+    behavior: BehaviorConfig,
+
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
@@ -163,11 +167,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+        behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
             sender,
             timer: [[None; ROW]; COL],
+            behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
@@ -293,6 +299,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
                     .await;
             }
+        }
+
+        // Tri Layer
+        if let Some(ref tri_layer) = self.behavior.tri_layer {
+            self.keymap.borrow_mut().update_tri_layer(tri_layer);
         }
     }
 
