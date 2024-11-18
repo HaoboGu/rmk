@@ -4,6 +4,7 @@ use quote::quote;
 use syn::ItemMod;
 
 use crate::{
+    behavior::expand_behavior_config,
     bind_interrupt::expand_bind_interrupt,
     ble::expand_ble_config,
     chip_init::expand_chip_init,
@@ -115,6 +116,7 @@ fn expand_main(
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
+    let behavior_config = expand_behavior_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, async_matrix);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
@@ -151,6 +153,9 @@ fn expand_main(
             // Initialize light config as `light_config`
             #light_config
 
+            // Initialize behavior config config as `behavior_config`
+            #behavior_config
+
             // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
 
@@ -162,6 +167,7 @@ fn expand_main(
                 vial_config: VIAL_CONFIG,
                 light_config,
                 storage_config,
+                behavior_config,
                 #set_ble_config
                 ..Default::default()
             };
