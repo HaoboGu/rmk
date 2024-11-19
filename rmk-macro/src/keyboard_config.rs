@@ -438,6 +438,8 @@ impl KeyboardConfig {
                     None => default.tri_layer,
                 };
 
+                behavior.one_shot = behavior.one_shot.or(default.one_shot);
+
                 Ok(behavior)
             }
             None => Ok(default),

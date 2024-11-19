@@ -489,8 +489,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Process one shot action.
-    ///     
-    /// TODO: make timeout customizable
     async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
         match oneshot_action {
             Action::Modifier(m) => self.process_action_osm(m, key_event).await,
@@ -521,7 +519,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after_secs(1);
+                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
@@ -572,7 +570,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after_secs(1);
+                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer

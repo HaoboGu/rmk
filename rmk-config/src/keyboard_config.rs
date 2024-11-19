@@ -3,6 +3,7 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
+use embassy_time::Duration;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
@@ -43,6 +44,20 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 #[derive(Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
+    pub one_shot: OneShotConfig,
+}
+
+/// Config for one shot behavior
+pub struct OneShotConfig {
+    pub timeout: Duration,
+}
+
+impl Default for OneShotConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(1),
+        }
+    }
 }
 
 /// Config for storage
