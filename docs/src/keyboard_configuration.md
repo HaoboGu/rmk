@@ -155,6 +155,7 @@ The key string should follow several rules:
 ```toml
 [behavior]
 tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+one_shot = { timeout = "1s" }
 ```
 
 #### Tri Layer
@@ -170,6 +171,16 @@ lower = 2
 adjust = 3
 ```
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
+
+#### One Shot
+
+In the `one_shot` sub-table you can define how long OSM or OSL will wait before releasing the modifier/layer with the `timeout` option, default is one second.
+`timeout` is a string with a suffix of either "s" or "ms".
+
+```toml
+[behavior.one_shot]
+timeout = "5s"
+```
 
 ### `[light]`
 
@@ -314,10 +325,12 @@ keymap = [
     ],
 ]
 
-# Behavior configuration, if you don't want to customize anything, just ignore this section.
+# Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
-# Tri Layer configuration.
+# Tri Layer configuration
 tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+# One Shot configuration
+one_shot = { timeout = "1s" }
 
 # Lighting configuration, if you don't have any light, just ignore this section.
 [light]

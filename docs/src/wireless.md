@@ -3,7 +3,7 @@
 RMK has built-in wireless(BLE) support for nRF52 series and ESP32. To use the wireless feature, you need to enable ble feature gate in your `Cargo.toml`:
 
 ```toml
-rmk = { version = "0.3.1", features = [
+rmk = { version = "0.4", features = [
     "nrf52840_ble", # Enable BLE feature for nRF52840
 ] }
 ```
@@ -47,7 +47,7 @@ RMK supports at most 8 wireless profiles, profile 0 is activated by default. Via
 - `User10`: clear current profile bond info
 - `User11`: switch default output between USB/BLE
 
-Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User11` will be displayed as `BT0`, ..., `Switch\nOutput`.
+Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User11` will be displayed as `BT0`, ..., `Switch Output`.
 
 
 If you've connected a host for a profile, other devices would not be able to connect to this profile before doing manually clearing. 

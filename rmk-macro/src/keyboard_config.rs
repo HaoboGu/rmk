@@ -441,6 +441,7 @@ impl KeyboardConfig {
                 };
 
                 behavior.enable_hrm = behavior.enable_hrm.or(default.enable_hrm);
+                behavior.one_shot = behavior.one_shot.or(default.one_shot);
 
                 Ok(behavior)
             }
