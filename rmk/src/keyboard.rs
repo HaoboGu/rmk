@@ -478,21 +478,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// - When the next key is releasing
     /// - When current tap/hold key is releasing
     /// - When tap/hold key is expired
-    ///     
-    /// TODO: make tap/hold threshold customizable
     async fn process_key_action_tap_hold(
         &mut self,
         tap_action: Action,
         hold_action: Action,
         key_event: KeyEvent,
     ) {
-        if self.behavior.enable_hrm {
+        if self.behavior.tap_hold.enable_hrm {
             // If HRM is enabled, check whether the key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
                 if key_event.pressed {
-                    // TODO: make this prior-idle-time configurable
-                    if last_release_time.elapsed().as_millis() < 120 {
-                        // The previous key is released within 50ms, it's in key streak
+                    if last_release_time.elapsed() < self.behavior.tap_hold.prior_idle_time {
+                        // The previous key is released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
                         self.process_key_action_tap(tap_action, key_event).await;
                         return;
@@ -505,7 +502,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         let col = key_event.col as usize;
         if key_event.pressed {
             self.timer[col][row] = Some(Instant::now());
-            let hold_timeout = embassy_time::Timer::after_millis(200);
+
+            let hold_timeout =
+                embassy_time::Timer::after_millis(self.behavior.tap_hold.hold_timeout.as_millis());
             match select(hold_timeout, key_event_channel.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
@@ -514,7 +513,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 }
                 embassy_futures::select::Either::Second(e) => {
                     if e.row == key_event.row && e.col == key_event.col {
-                        // If it's same key event and releasing within 200ms, trigger tap
+                        // If it's same key event and releasing within `hold_timeout`, trigger tap
                         if !e.pressed {
                             let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
                             debug!("TAP action: {}, time elapsed: {}ms", tap_action, elapsed);
@@ -551,9 +550,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         } else {
             if let Some(_) = self.timer[col][row] {
-                // Release hold action, wait for another 50ms, then clear timer
+                // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
-                    "HOLD releasing: {}, {}, wait for 50ms for new releases",
+                    "HOLD releasing: {}, {}, wait for `post_wait_time` for new releases",
                     hold_action, key_event.pressed
                 );
                 let wait_release = async {
@@ -566,10 +565,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                     }
                 };
-                let hold_timeout = embassy_time::Timer::after_millis(50);
-                match select(hold_timeout, wait_release).await {
+
+                let wait_timeout = embassy_time::Timer::after_millis(
+                    self.behavior.tap_hold.post_wait_time.as_millis(),
+                );
+                match select(wait_timeout, wait_release).await {
                     embassy_futures::select::Either::First(_) => {
-                        // Timeout, add hold key
+                        // Wait timeout, release the hold key finally
                         self.process_key_action_normal(hold_action, key_event).await;
                     }
                     embassy_futures::select::Either::Second(next_press) => {
@@ -578,6 +580,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         self.unprocessed_events.push(next_press).ok();
                     }
                 };
+                // Clear timer
                 self.timer[col][row] = None;
             } else {
                 // The timer has been reset, fire hold release event

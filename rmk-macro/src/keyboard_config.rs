@@ -440,7 +440,7 @@ impl KeyboardConfig {
                     None => default.tri_layer,
                 };
 
-                behavior.enable_hrm = behavior.enable_hrm.or(default.enable_hrm);
+                behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
 
                 Ok(behavior)
