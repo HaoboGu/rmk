@@ -1250,7 +1250,7 @@ checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
 name = "rmk"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1287,7 +1287,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "embassy-nrf",
  "embedded-hal 1.0.0",
@@ -1297,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "cargo_toml",
  "darling 0.20.3",

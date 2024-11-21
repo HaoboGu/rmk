@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::toml_config::{
-    BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig, LightConfig,
-    MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
+    LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
 use serde::Deserialize;
 use std::fs;
@@ -71,6 +71,8 @@ pub(crate) struct KeyboardConfig {
     pub(crate) board: BoardConfig,
     // Layout config
     pub(crate) layout: LayoutConfig,
+    // Begavior Config
+    pub(crate) behavior: BehaviorConfig,
     // Light config
     pub(crate) light: LightConfig,
     // Storage config
@@ -163,6 +165,10 @@ impl KeyboardConfig {
 
         // Layout config
         config.layout = Self::get_layout_from_toml(toml_config.layout)?;
+
+        // Behavior config
+        config.behavior =
+            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -300,7 +306,8 @@ impl KeyboardConfig {
                 config.battery_adc_pin = config.battery_adc_pin.or(default.battery_adc_pin);
                 config.charge_state = config.charge_state.or(default.charge_state);
                 config.charge_led = config.charge_led.or(default.charge_led);
-                config.adc_divider_measured = config.adc_divider_measured.or(default.adc_divider_measured);
+                config.adc_divider_measured =
+                    config.adc_divider_measured.or(default.adc_divider_measured);
                 config.adc_divider_total = config.adc_divider_total.or(default.adc_divider_total);
                 Some(config)
             }
@@ -401,6 +408,42 @@ impl KeyboardConfig {
         }
 
         Ok(layout)
+    }
+
+    fn get_behavior_from_toml(
+        default: BehaviorConfig,
+        toml: Option<BehaviorConfig>,
+        layout: &LayoutConfig,
+    ) -> Result<BehaviorConfig, TokenStream2> {
+        match toml {
+            Some(mut behavior) => {
+                // Use default setting if the corresponding field is not set
+                behavior.tri_layer = match behavior.tri_layer {
+                    Some(tri_layer) => {
+                        if tri_layer.upper >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer upper is larger than [layout.layers]"
+                            );
+                        } else if tri_layer.lower >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer lower is larger than [layout.layers]"
+                            );
+                        } else if tri_layer.adjust >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer adjust is larger than [layout.layers]"
+                            );
+                        }
+                        Some(tri_layer)
+                    }
+                    None => default.tri_layer,
+                };
+
+                behavior.one_shot = behavior.one_shot.or(default.one_shot);
+
+                Ok(behavior)
+            }
+            None => Ok(default),
+        }
     }
 
     fn get_light_from_toml(default: LightConfig, toml: Option<LightConfig>) -> LightConfig {

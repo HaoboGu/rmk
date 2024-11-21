@@ -14,7 +14,7 @@
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_with_config_and_run;
+use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -187,12 +187,13 @@ pub async fn run_rmk_with_async_flash<
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_keyboard_with_config_and_run(
+    initialize_nrf_ble_keyboard_and_run(
         matrix,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
         keyboard_config,
+        None,
         spawner,
     )
     .await;
@@ -238,10 +239,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     // For USB keyboard, the "external" storage means the storage initialized by the user.
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
-        let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(
-            KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut s)).await,
-        );
+        let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
@@ -252,7 +251,11 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(&keymap, &keyboard_report_sender),
+        Keyboard::new(
+            &keymap,
+            &keyboard_report_sender,
+            keyboard_config.behavior_config,
+        ),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
@@ -290,6 +293,9 @@ pub(crate) async fn run_usb_keyboard<
     matrix: &mut M,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
         F,
+        ROW,
+        COL,
+        NUM_LAYER,
     >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
@@ -320,7 +326,7 @@ pub(crate) async fn run_usb_keyboard<
         pin_mut!(communication_fut);
 
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+        let storage_fut = storage.run();
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         pin_mut!(storage_fut);
 

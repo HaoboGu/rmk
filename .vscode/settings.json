@@ -21,8 +21,9 @@
         // "examples/use_rust/stm32f4/Cargo.toml",
         // "examples/use_config/stm32f4/Cargo.toml",
         // "examples/use_rust/stm32f1/Cargo.toml",
-        // "examples/use_rust/nrf52840/Cargo.toml",
-        "examples/use_rust/nrf52840_ble_trouble/Cargo.toml",
+        // "examples/use_rust/ch32v307/Cargo.toml",
+        "examples/use_rust/nrf52840_ble/Cargo.toml",
+        "examples/use_rust/nrf52840_ble_split/Cargo.toml",
         // "examples/use_rust/nrf52832_ble/Cargo.toml",
         // "examples/use_rust/rp2040/Cargo.toml"
         // "examples/use_rust/rp2040_split/Cargo.toml"

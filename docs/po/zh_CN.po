@@ -1635,7 +1635,7 @@ msgstr ""
 #: src\wireless.md:5
 msgid ""
 "```toml\n"
-"rmk = { version = \"0.3.1\", features = [\n"
+"rmk = { version = \"0.4\", features = [\n"
 "    \"nrf52840_ble\", # Enable BLE feature for nRF52840\n"
 "] }\n"
 "```"

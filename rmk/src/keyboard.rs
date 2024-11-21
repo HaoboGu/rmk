@@ -17,6 +17,7 @@ use embassy_sync::{
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
+use rmk_config::BehaviorConfig;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
@@ -78,6 +79,8 @@ pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWra
     keybooard_hid_writer: &mut W,
     other_hid_writer: &mut W2,
 ) {
+    // This delay is necessary otherwise this task will stuck at the first send when the USB is suspended
+    Timer::after_secs(2).await;
     loop {
         match receiver.receive().await {
             KeyboardReportMessage::KeyboardReport(report) => {
@@ -129,6 +132,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
+    /// Options for configurable action behavior
+    behavior: BehaviorConfig,
+
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
@@ -161,11 +167,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+        behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
             sender,
             timer: [[None; ROW]; COL],
+            behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
@@ -292,6 +300,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     .await;
             }
         }
+
+        // Tri Layer
+        if let Some(ref tri_layer) = self.behavior.tri_layer {
+            self.keymap.borrow_mut().update_tri_layer(tri_layer);
+        }
     }
 
     async fn update_osm(&mut self, key_event: KeyEvent) {
@@ -329,7 +342,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.process_action_keycode(key, key_event).await;
                 self.update_osm(key_event).await;
                 self.update_osl(key_event);
-            },
+            }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
@@ -476,8 +489,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Process one shot action.
-    ///     
-    /// TODO: make timeout customizable
     async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
         match oneshot_action {
             Action::Modifier(m) => self.process_action_osm(m, key_event).await,
@@ -508,7 +519,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after_secs(1);
+                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
@@ -559,7 +570,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after_secs(1);
+                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer
