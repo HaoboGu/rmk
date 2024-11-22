@@ -11,23 +11,25 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = [
-    "nrf52840_ble",
-    "col2row",
+    "_ble",
     "async_matrix",
 ] }
-
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
-    "nrf52840",
     "peripheral",
+    "nrf52840",
     "central",
 ] }
-nrf-mpsl = { version = "0.1.0", default-features = false, features = ["defmt"] }
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "7f8c904", features = [
+nrf-mpsl = { version = "0.1.0", default-features = false, features = [
+    "defmt",
+    "critical-section-impl",
+    "nrf52840",
+] }
+bt-hci = { version = "0.1.1", default-features = false, features = ["defmt"] }
+trouble-host = { path = "/Users/haobogu/Projects/keyboard/trouble/host", features = [
     "defmt",
     "gatt",
 ] }
-bt-hci = { version = "0.1" }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
@@ -53,17 +55,16 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 static_cell = "2"
 
 [patch.crates-io]
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "1cfd5370ac012814b7b386ba9ad8499529bdde4e" }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "3702af909d31cd81c62f15e1aa9d5f637ec935fa" }
-
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "942f209e79a7fc5f6c7e90a6d963fcbece3b00cd" }
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "942f209e79a7fc5f6c7e90a6d963fcbece3b00cd" }
 [build-dependencies]
 xz2 = "0.1.7"
 json = "0.12"

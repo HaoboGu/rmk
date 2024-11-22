@@ -35,38 +35,38 @@ pub(crate) enum BleCompositeReportType {
             };
         };
     },
-    (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = MOUSE) = {
-        (collection = PHYSICAL, usage = POINTER) = {
-            (report_id = 0x02,) = {
-                (usage_page = BUTTON, usage_min = BUTTON_1, usage_max = BUTTON_8) = {
-                    #[packed_bits 8] #[item_settings data,variable,absolute] buttons=input;
-                };
-                (usage_page = GENERIC_DESKTOP,) = {
-                    (usage = X,) = {
-                        #[item_settings data,variable,relative] x=input;
-                    };
-                    (usage = Y,) = {
-                        #[item_settings data,variable,relative] y=input;
-                    };
-                    (usage = WHEEL,) = {
-                        #[item_settings data,variable,relative] wheel=input;
-                    };
-                };
-                (usage_page = CONSUMER,) = {
-                    (usage = AC_PAN,) = {
-                        #[item_settings data,variable,relative] pan=input;
-                    };
-                };
-            };
-        };
-    },
-    (collection = APPLICATION, usage_page = CONSUMER, usage = CONSUMER_CONTROL) = {
-        (report_id = 0x03,) = {
-            (usage_page = CONSUMER, usage_min = 0x00, usage_max = 0x514) = {
-            #[item_settings data,array,absolute,not_null] media_usage_id=input;
-            }
-        };
-    },
+    // (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = MOUSE) = {
+    //     (collection = PHYSICAL, usage = POINTER) = {
+    //         (report_id = 0x02,) = {
+    //             (usage_page = BUTTON, usage_min = BUTTON_1, usage_max = BUTTON_8) = {
+    //                 #[packed_bits 8] #[item_settings data,variable,absolute] buttons=input;
+    //             };
+    //             (usage_page = GENERIC_DESKTOP,) = {
+    //                 (usage = X,) = {
+    //                     #[item_settings data,variable,relative] x=input;
+    //                 };
+    //                 (usage = Y,) = {
+    //                     #[item_settings data,variable,relative] y=input;
+    //                 };
+    //                 (usage = WHEEL,) = {
+    //                     #[item_settings data,variable,relative] wheel=input;
+    //                 };
+    //             };
+    //             (usage_page = CONSUMER,) = {
+    //                 (usage = AC_PAN,) = {
+    //                     #[item_settings data,variable,relative] pan=input;
+    //                 };
+    //             };
+    //         };
+    //     };
+    // },
+    // (collection = APPLICATION, usage_page = CONSUMER, usage = CONSUMER_CONTROL) = {
+    //     (report_id = 0x03,) = {
+    //         (usage_page = CONSUMER, usage_min = 0x00, usage_max = 0x514) = {
+    //         #[item_settings data,array,absolute,not_null] media_usage_id=input;
+    //         }
+    //     };
+    // },
     (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
         (report_id = 0x04,) = {
             (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
@@ -81,11 +81,11 @@ pub(crate) struct BleKeyboardReport {
     pub(crate) reserved: u8,
     pub(crate) leds: u8,
     pub(crate) keycodes: [u8; 6],
-    pub(crate) buttons: u8,
-    pub(crate) x: i8,
-    pub(crate) y: i8,
-    pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units
-    pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
-    pub(crate) media_usage_id: u16,
+    // pub(crate) buttons: u8,
+    // pub(crate) x: i8,
+    // pub(crate) y: i8,
+    // pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units
+    // pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
+    // pub(crate) media_usage_id: u16,
     pub(crate) system_usage_id: u8,
 }

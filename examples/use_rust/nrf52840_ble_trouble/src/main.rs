@@ -4,7 +4,7 @@
 use defmt::unwrap;
 use embassy_executor::Spawner;
 use embassy_nrf::peripherals::RNG;
-use embassy_nrf::{bind_interrupts, pac, rng};
+use embassy_nrf::{bind_interrupts, rng};
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rmk::ble::trouble::run_ble_task;
@@ -41,18 +41,8 @@ fn build_sdc<'d, const N: usize>(
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
-    let pac_p = pac::Peripherals::take().unwrap();
-
-    let mpsl_p = mpsl::Peripherals::new(
-        pac_p.CLOCK,
-        pac_p.RADIO,
-        p.RTC0,
-        p.TIMER0,
-        p.TEMP,
-        p.PPI_CH19,
-        p.PPI_CH30,
-        p.PPI_CH31,
-    );
+    let mpsl_p =
+        mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
         source: mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
         rc_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_CTIV as u8,
@@ -67,8 +57,8 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(mpsl_task(&*mpsl));
 
     let sdc_p = sdc::Peripherals::new(
-        pac_p.ECB, pac_p.AAR, p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22,
-        p.PPI_CH23, p.PPI_CH24, p.PPI_CH25, p.PPI_CH26, p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
+        p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22, p.PPI_CH23, p.PPI_CH24,
+        p.PPI_CH25, p.PPI_CH26, p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
 
     let mut rng = rng::Rng::new(p.RNG, Irqs);
