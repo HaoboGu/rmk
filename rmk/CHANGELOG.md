@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- One-shot layer/modifier support
+- Tri-layer support
+- Discord release hook
+
 ### Fixed
 
 - Fix connection error when there're multiple peripherals
+- Fix keycode converter error
 
 ## [0.4.2] - 2024-11-13
 
