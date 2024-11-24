@@ -1264,6 +1264,7 @@ name = "rmk-config"
 version = "0.2.1"
 dependencies = [
  "embassy-nrf",
+ "embassy-time",
  "embedded-hal 1.0.0",
  "serde",
  "serde_derive",
