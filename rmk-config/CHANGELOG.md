@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2024-11-25
+
+- Add behavior config
+- Add tri-layer and one-shot config
+
 ## [0.2.1] - 2024-11-13
 
 - Add nRF52840 voltage divider configs

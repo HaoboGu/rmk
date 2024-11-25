@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -976,7 +976,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "embassy-time",
  "embedded-hal 1.0.0",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "cargo_toml",
  "darling",
