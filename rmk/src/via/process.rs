@@ -1,6 +1,6 @@
 use super::{protocol::*, vial::process_vial};
-use crate::config::VialConfig;
 use crate::{
+    config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,

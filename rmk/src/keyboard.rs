@@ -18,8 +18,6 @@ use embassy_sync::{
 };
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
-use postcard::experimental::max_size::MaxSize;
-use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
 pub const EVENT_CHANNEL_SIZE: usize = 32;
@@ -336,7 +334,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         if !key_event.pressed {
             // Check key release only
             let mut is_mod = false;
-            if let KeyAction::Single(Action::Key(k)) = action {
+            if let KeyAction::Single(Action::Key(k)) = key_action {
                 if k.is_modifier() {
                     is_mod = true;
                 }
@@ -388,7 +386,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.combo_actions_buffer.clear();
             } else {
                 let timeout = embassy_time::Timer::after_millis(50);
-                match select(timeout, key_event_channel.receive()).await {
+                match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                     embassy_futures::select::Either::First(_) => self.dispatch_combos().await,
                     embassy_futures::select::Either::Second(event) => {
                         self.unprocessed_events.push(event).unwrap()
