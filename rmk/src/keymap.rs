@@ -102,6 +102,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
+        let mut combos = [(); COMBO_MAX_NUM].map(|_| Combo::empty());
         if let Some(storage) = storage {
             // Read keymap to `action_map`
             if storage.read_keymap(action_map).await.is_err() {
@@ -124,6 +125,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     .ok();
 
                     reboot_keyboard();
+                } else {
+                    if storage.read_combos(&mut combos).await.is_err() {
+                        error!("Wrong combo cache, clearing the storage...");
+                        sequential_storage::erase_all(
+                            &mut storage.flash,
+                            storage.storage_range.clone(),
+                        )
+                        .await
+                        .ok();
+
+                        reboot_keyboard();
+                    }
                 }
             }
         }
@@ -134,7 +147,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache,
-            combos: [(); COMBO_MAX_NUM].map(|_| Combo::empty()),
+            combos,
         }
     }
 

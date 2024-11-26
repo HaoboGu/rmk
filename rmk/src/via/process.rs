@@ -8,7 +8,7 @@ use crate::{
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::{KeyMap, COMBO_MAX_NUM},
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
+    storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::{
         keycode_convert::{from_via_keycode, to_via_keycode},
@@ -403,15 +403,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         let combo_idx = report.output_data[3] as usize;
                         if let Some(combo) = self.keymap.borrow().combos.get(combo_idx) {
                             for i in 0..4 {
-                                let keycode =
-                                    to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No));
                                 LittleEndian::write_u16(
                                     &mut report.input_data[1 + i * 2..3 + i * 2],
-                                    keycode,
+                                    to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
                                 );
                             }
-                            let keycode = to_via_keycode(combo.output);
-                            LittleEndian::write_u16(&mut report.input_data[9..11], keycode);
+                            LittleEndian::write_u16(
+                                &mut report.input_data[9..11],
+                                to_via_keycode(combo.output),
+                            );
                         } else {
                             report.input_data[1..11].fill(0);
                         }
@@ -440,6 +440,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         let combo = &mut self.keymap.borrow_mut().combos[combo_idx];
                         combo.actions = actions;
                         combo.output = output;
+
+                        let mut actions = [KeyAction::No; 4];
+                        for (i, &action) in combo.actions.iter().enumerate() {
+                            actions[i] = action;
+                        }
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::WriteCombo(ComboData {
+                                idx: combo_idx as u8,
+                                actions,
+                                output,
+                            }))
+                            .await;
                     }
                     VialDynamic::DynamicVialKeyOverrideGet => {
                         warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
