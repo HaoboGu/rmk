@@ -1,12 +1,9 @@
-use byteorder::{ByteOrder, LittleEndian};
-use defmt::debug;
 use num_enum::FromPrimitive;
 
-use crate::usb::descriptor::ViaReport;
-
+/// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
-enum VialCommand {
+pub(crate) enum VialCommand {
     GetKeyboardId = 0x00,
     GetSize = 0x01,
     GetKeyboardDef = 0x02,
@@ -25,65 +22,20 @@ enum VialCommand {
     Unhandled = 0xFF,
 }
 
-const VIAL_PROTOCOL_VERSION: u32 = 6;
-const VIAL_EP_SIZE: usize = 32;
-///
-/// Note: vial uses litte endian, while via uses big endian
-pub(crate) fn process_vial(
-    report: &mut ViaReport,
-    vial_keyboard_Id: &[u8],
-    vial_keyboard_def: &[u8],
-) {
-    // report.output_data[0] == 0xFE -> vial commands
-    let vial_command = VialCommand::from_primitive(report.output_data[1]);
-    match vial_command {
-        VialCommand::GetKeyboardId => {
-            debug!("Received Vial - GetKeyboardId");
-            // Returns vial protocol version + vial keyboard id
-            LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
-            report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
-        }
-        VialCommand::GetSize => {
-            debug!("Received Vial - GetSize");
-            LittleEndian::write_u32(&mut report.input_data[0..4], vial_keyboard_def.len() as u32);
-        }
-        VialCommand::GetKeyboardDef => {
-            debug!("Received Vial - GetKeyboardDefinition");
-            let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
-            let start = page * VIAL_EP_SIZE;
-            let mut end = start + VIAL_EP_SIZE;
-            if end < start || start >= vial_keyboard_def.len() {
-                return;
-            }
-            if end > vial_keyboard_def.len() {
-                end = vial_keyboard_def.len();
-            }
-            vial_keyboard_def[start..end]
-                .iter()
-                .enumerate()
-                .for_each(|(i, v)| {
-                    report.input_data[i] = *v;
-                });
-            debug!(
-                "Vial return: page:{} start:{} end: {}, data: {:?}",
-                page, start, end, report.input_data
-            );
-        }
-        VialCommand::GetUnlockStatus => {
-            debug!("Received Vial - GetUnlockStatus");
-            // Reset all data to 0xFF(it's required!)
-            report.input_data.fill(0xFF);
-            // Unlocked
-            report.input_data[0] = 1;
-            // Unlock in progress
-            report.input_data[1] = 0;
-        }
-        VialCommand::QmkSettingsQuery => {
-            report.input_data.fill(0xFF);
-        }
-        VialCommand::DynamicEntryOp => {
-            report.input_data.fill(0x00);
-        }
-        _ => (),
-    }
+/// Vial dynamic commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L53)
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[repr(u8)]
+pub(crate) enum VialDynamic {
+    DynamicVialGetNumberOfEntries = 0x00,
+    DynamicVialTapDanceGet = 0x01,
+    DynamicVialTapDanceSet = 0x02,
+    DynamicVialComboGet = 0x03,
+    DynamicVialComboSet = 0x04,
+    DynamicVialKeyOverrideGet = 0x05,
+    DynamicVialKeyOverrideSet = 0x06,
+    #[num_enum(default)]
+    Unhandled = 0xFF,
 }
+
+pub(crate) const VIAL_PROTOCOL_VERSION: u32 = 6;
+pub(crate) const VIAL_EP_SIZE: usize = 32;
