@@ -313,12 +313,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             ViaCommand::DynamicKeymapSetEncoder => {
                 warn!("Keymap set encoder -- not supported");
             }
-            ViaCommand::Vial => process_vial(
-                report,
-                self.vial_config.vial_keyboard_id,
-                self.vial_config.vial_keyboard_def,
-                keymap,
-            ),
+            ViaCommand::Vial => {
+                process_vial(
+                    report,
+                    self.vial_config.vial_keyboard_id,
+                    self.vial_config.vial_keyboard_def,
+                    keymap,
+                )
+                .await
+            }
             ViaCommand::Unhandled => {
                 info!("Unknown cmd: {}", report.output_data);
                 report.input_data[0] = ViaCommand::Unhandled as u8

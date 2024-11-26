@@ -6,6 +6,7 @@ use num_enum::FromPrimitive;
 use crate::{
     action::KeyAction,
     keymap::{KeyMap, COMBO_MAX_NUM},
+    storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
@@ -52,7 +53,7 @@ const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
 
 /// Note: vial uses litte endian, while via uses big endian
-pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     report: &mut ViaReport,
     vial_keyboard_Id: &[u8],
     vial_keyboard_def: &[u8],
@@ -131,15 +132,15 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
                     let combo_idx = report.output_data[3] as usize;
                     if let Some(combo) = keymap.borrow().combos.get(combo_idx) {
                         for i in 0..4 {
-                            let keycode =
-                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No));
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
-                                keycode,
+                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
                             );
                         }
-                        let keycode = to_via_keycode(combo.output);
-                        LittleEndian::write_u16(&mut report.input_data[9..11], keycode);
+                        LittleEndian::write_u16(
+                            &mut report.input_data[9..11],
+                            to_via_keycode(combo.output),
+                        );
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -168,6 +169,18 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
                     let combo = &mut keymap.borrow_mut().combos[combo_idx];
                     combo.actions = actions;
                     combo.output = output;
+
+                    let mut actions = [KeyAction::No; 4];
+                    for (i, &action) in combo.actions.iter().enumerate() {
+                        actions[i] = action;
+                    }
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::WriteCombo(ComboData {
+                            idx: combo_idx as u8,
+                            actions,
+                            output,
+                        }))
+                        .await;
                 }
                 VialDynamic::DynamicVialKeyOverrideGet => {
                     warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
