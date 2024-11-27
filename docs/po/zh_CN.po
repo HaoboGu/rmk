@@ -2229,8 +2229,7 @@ msgstr ""
 
 #: src\binary_size_optimization.md:77
 msgid ""
-"According to [embassy's doc](https://embassy.dev/book/dev/faq."
-"html#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the "
+"According to [embassy's doc](https://embassy.dev/book/#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the "
 "following in your `.cargo/config.toml`"
 msgstr ""
 
