@@ -17,7 +17,7 @@ embassy-nrf = { version = "0.2.0", features = [
     "unstable-pac",
     "time",
 ], optional = true }
-embassy-time = { version = "0.3", features = ["defmt"] }
+embassy-time = { version = "0.3" }
 
 [features]
 default = []
