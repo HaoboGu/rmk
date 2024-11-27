@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2024-11-27
+
+### Fixed
+
+- Fix link error on Windows
+
 ## [0.4.3] - 2024-11-25
 
 ### Added
