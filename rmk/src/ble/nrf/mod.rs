@@ -46,7 +46,7 @@ use nrf_softdevice::{
     raw, Config, Flash, Softdevice,
 };
 use profile::update_profile;
-use rmk_config::BleBatteryConfig;
+use crate::config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 use vial_service::VialReaderWriter;

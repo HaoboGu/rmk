@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::{
+use crate::config::{
     BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
     LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
@@ -506,7 +506,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
-        static KEYBOARD_USB_CONFIG: ::rmk::config::keyboard_config::KeyboardUsbConfig = ::rmk::config::keyboard_config::KeyboardUsbConfig {
+        static KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,
             manufacturer: #manufacturer,
@@ -519,7 +519,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
 pub(crate) fn expand_vial_config() -> proc_macro2::TokenStream {
     quote! {
         include!(concat!(env!("OUT_DIR"), "/config_generated.rs"));
-        static VIAL_CONFIG: ::rmk::config::keyboard_config::VialConfig = ::rmk::config::keyboard_config::VialConfig {
+        static VIAL_CONFIG: ::rmk::config::VialConfig = ::rmk::config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
         };

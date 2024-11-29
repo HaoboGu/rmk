@@ -20,7 +20,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
-use rmk_config::StorageConfig;
+use crate::config::StorageConfig;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.

@@ -1,4 +1,4 @@
-use rmk_config::toml_config::{BleConfig, StorageConfig};
+use crate::config::{BleConfig, StorageConfig};
 
 use crate::{
     keyboard_config::{CommunicationConfig, KeyboardConfig},

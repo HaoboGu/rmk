@@ -2,7 +2,6 @@ $initialDir = Get-Location
 
 $dirs = @(
     "rmk",
-    "rmk-config",
     "rmk-macro",
     "examples/use_rust/esp32c3_ble",
     "examples/use_rust/esp32c6_ble",

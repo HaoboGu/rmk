@@ -9,7 +9,7 @@ use embassy_usb::{
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
-use rmk_config::KeyboardUsbConfig;
+use crate::config::KeyboardUsbConfig;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
