@@ -1,7 +1,7 @@
 //! Initialize light config boilerplate of RMK, including USB or BLE
 //!
 use quote::quote;
-use rmk_config::toml_config::PinConfig;
+use crate::config::PinConfig;
 
 use crate::{
     gpio_config::convert_gpio_str_to_output_pin, keyboard_config::KeyboardConfig, ChipModel,
@@ -16,7 +16,7 @@ pub(crate) fn build_light_config(
             let p = convert_gpio_str_to_output_pin(chip, c.pin.clone(), c.low_active);
             let low_active = c.low_active;
             quote! {
-                Some(::rmk::config::keyboard_config::LightPinConfig {
+                Some(::rmk::config::LightPinConfig {
                     pin: #p,
                     low_active: #low_active,
                 })
@@ -33,7 +33,7 @@ pub(crate) fn expand_light_config(keyboard_config: &KeyboardConfig) -> proc_macr
 
     // Generate a macro that does light config
     quote! {
-        let light_config = ::rmk::config::keyboard_config::LightConfig {
+        let light_config = ::rmk::config::LightConfig {
             capslock: #capslock,
             numslock: #numslock,
             scrolllock: #scrolllock,

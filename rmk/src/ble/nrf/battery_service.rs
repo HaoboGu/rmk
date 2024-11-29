@@ -1,7 +1,7 @@
 use defmt::{error, info};
 use embassy_time::Timer;
 use nrf_softdevice::ble::Connection;
-use rmk_config::BleBatteryConfig;
+use crate::config::BleBatteryConfig;
 
 use super::server::BleServer;
 

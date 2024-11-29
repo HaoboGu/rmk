@@ -7,7 +7,7 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use rmk_config::RmkConfig;
+use crate::config::RmkConfig;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
