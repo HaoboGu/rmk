@@ -40,7 +40,7 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
 }
 
 fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream {
-    let default = quote! {::rmk::config::keyboard_config::TapHoldConfig::default()};
+    let default = quote! {::rmk::config::TapHoldConfig::default()};
     match tap_hold {
         Some(tap_hold) => {
             let enable_hrm = tap_hold.enable_hrm.unwrap_or_default();
@@ -58,7 +58,7 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
             };
 
             quote! {
-                ::rmk::config::keyboard_config::TapHoldConfig {
+                ::rmk::config::TapHoldConfig {
                     enable_hrm: #enable_hrm,
                     prior_idle_time: ::embassy_time::Duration::from_millis(#prior_idle_time),
                     post_wait_time: ::embassy_time::Duration::from_millis(#post_wait_time),
