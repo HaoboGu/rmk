@@ -74,7 +74,7 @@ In this case, you have to implement an empty defmt logger.
 
 ## Enable unstable feature
 
-According to [embassy's doc](https://embassy.dev/book/dev/faq.html#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the following in your `.cargo/config.toml`
+According to [embassy's doc](https://embassy.dev/book/#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the following in your `.cargo/config.toml`
 
 ```toml
 [unstable]

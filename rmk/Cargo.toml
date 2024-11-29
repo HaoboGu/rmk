@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.4.2"
+version = "0.4.4"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,8 +11,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-config = { version = "0.2.1", path = "../rmk-config" }
-rmk-macro = { version = "0.3.1", path = "../rmk-macro" }
+rmk-macro = { version = "=0.3.3", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal-async = { version = "1.0.0", features = [
     "defmt-03",
@@ -148,14 +147,12 @@ esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
     "_ble",
     "_no_usb",             # ESP doesn't have USB support right now
-    "rmk-config/_esp_ble",
     "ssmarshal/std",
     "dep:esp32-nimble",
     "dep:esp-idf-svc",
 ]
 _nrf_ble = [
     "_ble",
-    "rmk-config/_nrf_ble",
     "dep:nrf-softdevice",
     "dep:embassy-nrf",
     "dep:once_cell",

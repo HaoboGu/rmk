@@ -3,12 +3,12 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
-use embassy_time::Duration;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
+use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 
 /// Internal configurations for RMK keyboard.

@@ -3,6 +3,7 @@ mod bind_interrupt;
 mod ble;
 mod chip_init;
 mod comm;
+mod config;
 mod default_config;
 mod entry;
 mod feature;

@@ -9,7 +9,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use rmk_config::StorageConfig;
+use crate::config::StorageConfig;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, SerializationError, Value},

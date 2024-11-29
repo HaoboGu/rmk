@@ -1,5 +1,4 @@
 cd rmk && cargo fmt && cd ..
-cd rmk-config && cargo fmt && cd ..
 cd rmk-macro && cargo fmt && cd ..
 cd examples/use_rust/esp32c3_ble && cargo fmt && cd ../../..
 cd examples/use_rust/esp32c6_ble && cargo fmt && cd ../../..
