@@ -1,3 +1,4 @@
+use serde::de;
 use serde_derive::Deserialize;
 
 /// Configurations for RMK keyboard.
@@ -10,6 +11,8 @@ pub struct KeyboardTomlConfig {
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
     pub layout: LayoutConfig,
+    /// Behavior config
+    pub behavior: Option<BehaviorConfig>,
     /// Light config
     pub light: Option<LightConfig>,
     /// Storage config
@@ -82,6 +85,8 @@ pub struct BleConfig {
     pub battery_adc_pin: Option<String>,
     pub charge_state: Option<PinConfig>,
     pub charge_led: Option<PinConfig>,
+    pub adc_divider_measured: Option<u32>,
+    pub adc_divider_total: Option<u32>,
 }
 
 /// Config for lights
@@ -120,6 +125,27 @@ pub struct LayoutConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Vec<Vec<Vec<String>>>,
+}
+
+/// Configurations for actions behavior
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct BehaviorConfig {
+    pub tri_layer: Option<TriLayerConfig>,
+    pub one_shot: Option<OneShotConfig>,
+}
+
+/// Configurations for tri layer
+#[derive(Clone, Debug, Deserialize)]
+pub struct TriLayerConfig {
+    pub upper: u8,
+    pub lower: u8,
+    pub adjust: u8,
+}
+
+/// Configurations for one shot
+#[derive(Clone, Debug, Deserialize)]
+pub struct OneShotConfig {
+    pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for split keyboards
@@ -161,6 +187,27 @@ pub struct SerialConfig {
     pub rx_pin: String,
 }
 
+/// Duration in milliseconds
+#[derive(Clone, Debug, Deserialize)]
+pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
+
 fn default_true() -> bool {
     true
+}
+
+fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+    let input: String = de::Deserialize::deserialize(deserializer)?;
+    let num = input.trim_end_matches(|c: char| !c.is_numeric());
+    let unit = &input[num.len()..];
+    let num: u64 = num.parse().map_err(|_| {
+        de::Error::custom(format!(
+            "Invalid number \"{num}\" in [one_shot.timeout]: number part must be a u64"
+        ))
+    })?;
+
+    match unit {
+        "s" => Ok(num*1000),
+        "ms" => Ok(num),
+        other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
+    }
 }

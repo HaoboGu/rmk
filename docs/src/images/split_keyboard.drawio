@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="o6yyYHxXsEDgrrS67M8B" name="第 1 页">
-        <mxGraphModel dx="3036" dy="936" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+        <mxGraphModel dx="2580" dy="646" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -88,54 +88,37 @@
                 <mxCell id="130" value="SplitPeripheral" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Verdana;fontSize=14;" parent="1" vertex="1">
                     <mxGeometry x="-974.3" y="290.28999999999996" width="292.15" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="147" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Verdana;fontSize=14;" parent="1" source="131" target="143" edge="1">
+                <mxCell id="170" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" source="131" target="152" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="150" value="sync" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontFamily=Verdana;" parent="147" vertex="1" connectable="0">
-                    <mxGeometry x="-0.3752" relative="1" as="geometry">
-                        <mxPoint x="-1" as="offset"/>
+                <mxCell id="173" value="key event&amp;nbsp;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;fontFamily=Verdana;" parent="170" vertex="1" connectable="0">
+                    <mxGeometry x="-0.1006" y="1" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="131" value="PeripheralMatrixMonitor" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Verdana;fontSize=14;" parent="1" vertex="1">
                     <mxGeometry x="-969.02" y="830" width="292.15" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="139" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
-                    <mxGeometry x="-1357.94" y="930" width="1070" height="120" as="geometry"/>
+                    <mxGeometry x="-1140" y="930" width="620" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="151" value="" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;fontFamily=Verdana;fontSize=14;" parent="1" source="140" target="141" edge="1">
+                <mxCell id="169" value="&lt;font face=&quot;Verdana&quot; style=&quot;font-size: 12px;&quot;&gt;key event&lt;/font&gt;" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" source="140" target="152" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="140" value="&lt;font face=&quot;Verdana&quot;&gt;scan central matrix&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" vertex="1">
-                    <mxGeometry x="-1180" y="960" width="120" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="146" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.25;entryY=1;entryDx=0;entryDy=0;fontFamily=Verdana;fontSize=14;" parent="1" source="141" target="131" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="148" value="signal" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=14;fontFamily=Verdana;" parent="146" vertex="1" connectable="0">
-                    <mxGeometry x="0.1677" relative="1" as="geometry">
-                        <mxPoint x="3" y="-12" as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="141" value="&lt;font face=&quot;Verdana&quot;&gt;scan peripheral matrix&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" vertex="1">
-                    <mxGeometry x="-1020" y="960" width="120" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="156" value="" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;fontFamily=Verdana;fontSize=14;" parent="1" source="143" target="152" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="143" value="&lt;font face=&quot;Verdana&quot;&gt;synced peripheral matrix&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" vertex="1">
-                    <mxGeometry x="-755" y="960" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="-1100" y="960" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="157" value="" style="edgeStyle=none;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;html=1;fontFamily=Verdana;fontSize=14;" parent="1" source="152" target="153" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="152" value="&lt;font face=&quot;Verdana&quot;&gt;process key&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" vertex="1">
-                    <mxGeometry x="-602" y="960" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="-887" y="960" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="153" value="&lt;font face=&quot;Verdana&quot;&gt;send report&lt;br&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Architects Daughter;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArchitects%2BDaughter;fontSize=16;" parent="1" vertex="1">
-                    <mxGeometry x="-453" y="960" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="-676.87" y="960" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="161" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;main keyboard thread&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Verdana;fontSize=14;" parent="1" vertex="1">
-                    <mxGeometry x="-1350" y="975" width="150" height="30" as="geometry"/>
+                    <mxGeometry x="-1300" y="975" width="150" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="164" value="central" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;sketch=1;hachureGap=4;jiggle=2;curveFitting=1;fontFamily=Verdana;fontSize=24;" parent="1" vertex="1">
                     <mxGeometry x="-1305" y="598.7099999999998" width="60" height="40.29" as="geometry"/>

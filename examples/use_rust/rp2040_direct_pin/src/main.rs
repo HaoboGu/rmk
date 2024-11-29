@@ -18,13 +18,13 @@ use embassy_rp::{
     usb::{Driver, InterruptHandler},
 };
 // use embassy_rp::flash::Blocking;
+use keymap::{COL, NUM_LAYER, ROW, SIZE};
 use panic_probe as _;
 use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     direct_pin::run_rmk_direct_pin_with_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use keymap::{ROW, COL, SIZE, NUM_LAYER};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;

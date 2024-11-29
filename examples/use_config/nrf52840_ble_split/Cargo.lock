@@ -1225,7 +1225,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rmk"
-version = "0.4.0"
+version = "0.4.4"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1250,7 +1250,6 @@ dependencies = [
  "num_enum",
  "once_cell",
  "postcard",
- "rmk-config",
  "rmk-macro",
  "sequential-storage",
  "serde",
@@ -1260,18 +1259,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-config"
-version = "0.2.0"
-dependencies = [
- "embassy-nrf",
- "embedded-hal 1.0.0",
- "serde",
- "serde_derive",
-]
-
-[[package]]
 name = "rmk-macro"
-version = "0.3.0"
+version = "0.3.3"
 dependencies = [
  "cargo_toml",
  "darling 0.20.3",
@@ -1279,7 +1268,6 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "rmk-config",
  "serde",
  "serde_derive",
  "syn 2.0.48",

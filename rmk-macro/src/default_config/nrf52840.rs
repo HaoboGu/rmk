@@ -1,4 +1,4 @@
-use rmk_config::toml_config::{BleConfig, StorageConfig};
+use crate::config::{BleConfig, StorageConfig};
 
 use crate::{
     keyboard_config::{CommunicationConfig, KeyboardConfig},
@@ -14,6 +14,9 @@ pub(crate) fn default_nrf52840(chip: ChipModel) -> KeyboardConfig {
             get_usb_info("nrf52840").unwrap(),
             BleConfig {
                 enabled: true,
+                // Use nice!nano's default divider config
+                adc_divider_measured: Some(2000),
+                adc_divider_total: Some(2806),
                 ..Default::default()
             },
         ),

@@ -135,7 +135,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x52A0..=0x52BF => {
             // One-shot modifier
-            let m = ModifierCombination::from_bits(via_keycode as u8);
+            let m = ModifierCombination::from_bits((via_keycode & 0x1F) as u8);
             KeyAction::OneShot(Action::Modifier(m))
         }
         0x52C0..=0x52DF => {
@@ -173,6 +173,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7E00..=0x7E0F => {
+            // QK_KB_N, aka UserN
             let keycode = via_keycode & 0xFF | 0x840;
             KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }

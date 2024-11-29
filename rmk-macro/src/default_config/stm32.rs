@@ -1,4 +1,4 @@
-use rmk_config::toml_config::StorageConfig;
+use crate::config::StorageConfig;
 
 use crate::{
     keyboard_config::{CommunicationConfig, KeyboardConfig},

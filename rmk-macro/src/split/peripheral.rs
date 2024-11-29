@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::SplitBoardConfig;
+use crate::config::SplitBoardConfig;
 use syn::ItemMod;
 
 use crate::{

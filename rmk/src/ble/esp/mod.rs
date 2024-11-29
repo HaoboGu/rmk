@@ -20,7 +20,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
-use rmk_config::StorageConfig;
+use crate::config::StorageConfig;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
@@ -33,7 +33,7 @@ use rmk_config::StorageConfig;
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
+/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     M: MatrixTrait,
     Out: OutputPin,
@@ -57,14 +57,16 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     )
     .await;
 
-    let keymap = RefCell::new(
-        KeyMap::<ROW, COL, NUM_LAYER>::new_from_storage(default_keymap, Some(&mut storage)).await,
-    );
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
 
-    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
+    let mut keyboard = Keyboard::new(
+        &keymap,
+        &keyboard_report_sender,
+        keyboard_config.behavior_config,
+    );
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
@@ -112,7 +114,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
         let matrix_fut = matrix.scan();
-        let storage_fut = storage.run::<ROW, COL, NUM_LAYER>();
+        let storage_fut = storage.run();
         pin_mut!(storage_fut);
         pin_mut!(via_fut);
         pin_mut!(keyboard_fut);

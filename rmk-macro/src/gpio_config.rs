@@ -70,7 +70,7 @@ pub(crate) fn convert_direct_pins_to_initializers(
                     } else {
                         // Use None for "_" pins
                         quote! { None }
-                    }
+                    },
                 )
             })
             .map(|(p, ts)| {

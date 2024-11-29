@@ -7,9 +7,11 @@ use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use rmk_config::RmkConfig;
+use crate::config::RmkConfig;
 
 use crate::action::KeyAction;
+#[cfg(feature = "_nrf_ble")]
+use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -20,8 +22,6 @@ use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
 use crate::run_usb_keyboard;
-#[cfg(feature = "_nrf_ble")]
-use crate::split::nrf::central::initialize_ble_split_central_and_run;
 use crate::usb::KeyboardUsbDevice;
 use crate::via::process::VialService;
 
@@ -102,41 +102,24 @@ pub async fn run_rmk_split_central<
     >::new(input_pins, output_pins, debouncer);
 
     #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_ble_split_central_and_run::<
-        _,
-        _,
-        D,
-        TOTAL_ROW,
-        TOTAL_COL,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        NUM_LAYER,
-    >(
+    let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
         matrix,
         usb_driver,
         default_keymap,
         keyboard_config,
-        central_addr,
+        Some(central_addr),
         spawner,
     )
     .await;
 
     #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_split_central_and_run::<
-        _,
-        _,
-        D,
-        F,
-        TOTAL_ROW,
-        TOTAL_COL,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        NUM_LAYER,
-    >(matrix, usb_driver, flash, default_keymap, keyboard_config)
+    let fut = initialize_usb_split_central_and_run::<_, _, D, F, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
+        matrix,
+        usb_driver,
+        flash,
+        default_keymap,
+        keyboard_config,
+    )
     .await;
 
     fut
@@ -180,10 +163,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: NorFlash,
     const TOTAL_ROW: usize,
     const TOTAL_COL: usize,
-    const CENTRAL_ROW: usize,
-    const CENTRAL_COL: usize,
-    const CENTRAL_ROW_OFFSET: usize,
-    const CENTRAL_COL_OFFSET: usize,
     const NUM_LAYER: usize,
 >(
     mut matrix: M,
@@ -196,7 +175,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     // For USB keyboard, the "external" storage means the storage initialized by the user.
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
-        let mut s = Storage::new(flash, &default_keymap, keyboard_config.storage_config).await;
+        let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
         let keymap = RefCell::new(
             KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
                 default_keymap,
@@ -215,7 +194,11 @@ pub(crate) async fn initialize_usb_split_central_and_run<
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(&keymap, &keyboard_report_sender),
+        Keyboard::new(
+            &keymap,
+            &keyboard_report_sender,
+            keyboard_config.behavior_config,
+        ),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),

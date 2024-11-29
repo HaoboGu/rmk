@@ -7,9 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Remove `rmk-config`
+
+## [0.4.4] - 2024-11-27
+
+### Fixed
+
+- Fix link error on Windows
+
+## [0.4.3] - 2024-11-25
+
 ### Added
 
-- Add layout macro to! and df!
+- One-shot layer/modifier support
+- Tri-layer support
+
+### Fixed
+
+- Fix connection error when there're multiple peripherals
+- Fix keycode converter error
+
+## [0.4.2] - 2024-11-13
+
+### Added
+
+- Layout macro to! and df!
+- One-shot layer and one-shot modifier
+- Make nRF52840 voltage divider configurable
+- ch32v307 example
 
 ### Changed
 
@@ -18,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fix nRF52840 linker scripts for nice!nano
+- Fix broken documentation links
 
 ## [0.4.1] - 2024-10-31
 

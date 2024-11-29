@@ -6,7 +6,6 @@ use crate::debounce::DebouncerTrait;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
 use crate::matrix::MatrixTrait;
-use defmt::info;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -94,7 +93,7 @@ pub async fn run_rmk_split_peripheral<
 ///
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
-/// * `spwaner` - embassy task spwaner, used to spawn nrf_softdevice background task
+/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 #[cfg(feature = "_nrf_ble")]
 pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
     M: MatrixTrait,

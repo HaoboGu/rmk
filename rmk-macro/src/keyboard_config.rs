@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::{
-    BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig, LightConfig,
-    MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+use crate::config::{
+    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
+    LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
 use serde::Deserialize;
 use std::fs;
@@ -71,6 +71,8 @@ pub(crate) struct KeyboardConfig {
     pub(crate) board: BoardConfig,
     // Layout config
     pub(crate) layout: LayoutConfig,
+    // Begavior Config
+    pub(crate) behavior: BehaviorConfig,
     // Light config
     pub(crate) light: LightConfig,
     // Storage config
@@ -163,6 +165,10 @@ impl KeyboardConfig {
 
         // Layout config
         config.layout = Self::get_layout_from_toml(toml_config.layout)?;
+
+        // Behavior config
+        config.behavior =
+            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -300,6 +306,9 @@ impl KeyboardConfig {
                 config.battery_adc_pin = config.battery_adc_pin.or(default.battery_adc_pin);
                 config.charge_state = config.charge_state.or(default.charge_state);
                 config.charge_led = config.charge_led.or(default.charge_led);
+                config.adc_divider_measured =
+                    config.adc_divider_measured.or(default.adc_divider_measured);
+                config.adc_divider_total = config.adc_divider_total.or(default.adc_divider_total);
                 Some(config)
             }
             (_, c) => c,
@@ -401,6 +410,42 @@ impl KeyboardConfig {
         Ok(layout)
     }
 
+    fn get_behavior_from_toml(
+        default: BehaviorConfig,
+        toml: Option<BehaviorConfig>,
+        layout: &LayoutConfig,
+    ) -> Result<BehaviorConfig, TokenStream2> {
+        match toml {
+            Some(mut behavior) => {
+                // Use default setting if the corresponding field is not set
+                behavior.tri_layer = match behavior.tri_layer {
+                    Some(tri_layer) => {
+                        if tri_layer.upper >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer upper is larger than [layout.layers]"
+                            );
+                        } else if tri_layer.lower >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer lower is larger than [layout.layers]"
+                            );
+                        } else if tri_layer.adjust >= layout.layers {
+                            return rmk_compile_error!(
+                                "keyboard.toml: Tri layer adjust is larger than [layout.layers]"
+                            );
+                        }
+                        Some(tri_layer)
+                    }
+                    None => default.tri_layer,
+                };
+
+                behavior.one_shot = behavior.one_shot.or(default.one_shot);
+
+                Ok(behavior)
+            }
+            None => Ok(default),
+        }
+    }
+
     fn get_light_from_toml(default: LightConfig, toml: Option<LightConfig>) -> LightConfig {
         match toml {
             Some(mut light_config) => {
@@ -461,7 +506,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
-        static KEYBOARD_USB_CONFIG: ::rmk::config::keyboard_config::KeyboardUsbConfig = ::rmk::config::keyboard_config::KeyboardUsbConfig {
+        static KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,
             manufacturer: #manufacturer,
@@ -474,7 +519,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
 pub(crate) fn expand_vial_config() -> proc_macro2::TokenStream {
     quote! {
         include!(concat!(env!("OUT_DIR"), "/config_generated.rs"));
-        static VIAL_CONFIG: ::rmk::config::keyboard_config::VialConfig = ::rmk::config::keyboard_config::VialConfig {
+        static VIAL_CONFIG: ::rmk::config::VialConfig = ::rmk::config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
         };

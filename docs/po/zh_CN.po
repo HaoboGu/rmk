@@ -800,8 +800,8 @@ msgstr ""
 msgid ""
 "If you have more sectors available in your internal flash, you can increase "
 "`num_sectors` in `[storage]` section of your `keyboard.toml`, or change "
-"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/"
-"rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API."
+"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/"
+"rmk/config/struct.RmkConfig.html) if you're using Rust API."
 msgstr ""
 
 #: src\faq.md:90
@@ -857,8 +857,8 @@ msgid ""
 "By default RMK uses last 2 sectors as the storage. If your bootloader is "
 "placed there too, RMK will erase it. To avoid it, you can change "
 "`start_addr` in `[storage]` section of your `keyboard.toml`, or change "
-"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/"
-"rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API."
+"`storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/"
+"rmk/config/struct.RmkConfig.html) if you're using Rust API."
 msgstr ""
 
 #: src\real_world_examples.md:3
@@ -1635,7 +1635,7 @@ msgstr ""
 #: src\wireless.md:5
 msgid ""
 "```toml\n"
-"rmk = { version = \"0.3.1\", features = [\n"
+"rmk = { version = \"0.4\", features = [\n"
 "    \"nrf52840_ble\", # Enable BLE feature for nRF52840\n"
 "] }\n"
 "```"
@@ -2229,8 +2229,7 @@ msgstr ""
 
 #: src\binary_size_optimization.md:77
 msgid ""
-"According to [embassy's doc](https://embassy.dev/book/dev/faq."
-"html#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the "
+"According to [embassy's doc](https://embassy.dev/book/#_my_binary_is_still_big_filled_with_stdfmt_stuff), you can set the "
 "following in your `.cargo/config.toml`"
 msgstr ""
 
@@ -2485,25 +2484,17 @@ msgstr ""
 
 #: src\how_to_contribute.md:19
 msgid ""
-"There're three crates in RMK project, `rmk`, `rmk-config` and `rmk-macro`."
+"There're two crates in RMK project, `rmk` and `rmk-macro`."
 msgstr ""
 
 #: src\how_to_contribute.md:21
 msgid ""
-"`rmk-config` crate is the dependency of both `rmk` and `rmk-macro`, it "
-"includes both toml configs used in `keyboard.toml` and normal config used in "
-"RMK core. `rmk-macro` is a proc-macro helper of RMK, it reads `keyboard."
-"toml` config file and converts toml config to RMK config, generates the "
-"boilerplate code. The core of RMK stays in `rmk` crate."
+"`rmk-macro` is a proc-macro helper of RMK, it reads `keyboard.toml` config file and converts toml config to RMK config, generates the boilerplate code. The core of RMK stays in `rmk` crate."
 msgstr ""
 
 #: src\how_to_contribute.md:28
 msgid ""
-"So, if you want to contribute new features of RMK, just look into `rmk` core "
-"crate. If you want to add new chip support, `rmk` and `rmk-macro` should be "
-"updated, so that users could use `keyboard.toml` to config keyboard with "
-"your new chip. And, if you want to add new configurations, look into `rmk-"
-"config`."
+"So, if you want to contribute new features of RMK, just look into `rmk` core crate. If you want to add new chip support, `rmk` and `rmk-macro` should be updated, so that users could use `keyboard.toml` to config keyboard with your new chip. And, if you want to add new configurations, look into both `rmk-macro/config` and `rmk/config`."
 msgstr ""
 
 #: src\how_to_contribute.md:30

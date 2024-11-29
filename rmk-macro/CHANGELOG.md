@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2024-11-27
+
+### Changed
+
+- Remove `rmk-config`
+
+## [0.3.3] - 2024-11-27
+
+### Fixed
+
+- Fix link error on Windows
+
+## [0.3.2] - 2024-11-25
+
+### Added
+
+- Add behavior config
+- Add tri-layer and one-shot config
+
+## [0.3.1] - 2024-11-13
+
+### Added
+
+- Add voltage divider from toml
 - Add TO(n) and DF(n) support
 - Add DirectPinMatrix, Including entry, gpio config, matrix config, board type.
 - Support no_pin for `DirectPinMatrix`.
