@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::BleConfig;
+use crate::config::BleConfig;
 use syn::ItemMod;
 
 use crate::keyboard_config::KeyboardConfig;

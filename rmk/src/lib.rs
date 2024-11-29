@@ -50,8 +50,7 @@ use keyboard::{
 };
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
-pub use rmk_config as config;
-use rmk_config::RmkConfig;
+use crate::config::RmkConfig;
 pub use rmk_macro as macros;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
@@ -61,6 +60,7 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+pub mod config;
 mod debounce;
 pub mod direct_pin;
 mod flash;

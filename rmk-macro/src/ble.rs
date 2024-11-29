@@ -7,7 +7,7 @@ use crate::{
 };
 
 // Default implementations of ble configuration.
-// Because ble configuration in `rmk_config` is enabled by a feature gate, so this function returns two TokenStreams.
+// Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
 pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStream2, TokenStream2) {
     if !keyboard_config.communication.ble_enabled() {

@@ -2,7 +2,6 @@ $initialDir = Get-Location
 
 # Release to crates-io
 $releaseDirs = @(
-    "rmk-config",
     "rmk-macro",
     "rmk"
 )

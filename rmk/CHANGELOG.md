@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Remove `rmk-config`
+
+## [0.4.4] - 2024-11-27
+
+### Fixed
+
+- Fix link error on Windows
+
+## [0.4.3] - 2024-11-25
+
+### Added
+
+- One-shot layer/modifier support
+- Tri-layer support
+
 ### Fixed
 
 - Fix connection error when there're multiple peripherals
+- Fix keycode converter error
 
 ## [0.4.2] - 2024-11-13
 

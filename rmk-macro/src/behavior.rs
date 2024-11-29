@@ -2,7 +2,7 @@
 //!
 
 use quote::quote;
-use rmk_config::toml_config::{OneShotConfig, TriLayerConfig};
+use crate::config::{OneShotConfig, TriLayerConfig};
 
 use crate::keyboard_config::KeyboardConfig;
 
@@ -19,7 +19,7 @@ fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStr
 }
 
 fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream {
-    let default = quote! {::rmk::config::keyboard_config::OneShotConfig::default()};
+    let default = quote! {::rmk::config::OneShotConfig::default()};
     match one_shot {
         Some(one_shot) => {
             let millis = match &one_shot.timeout {
@@ -30,7 +30,7 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
             let timeout = quote! {::embassy_time::Duration::from_millis(#millis)};
 
             quote! {
-                ::rmk::config::keyboard_config::OneShotConfig {
+                ::rmk::config::OneShotConfig {
                     timeout: #timeout,
                 }
             }
@@ -44,7 +44,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_m
     let one_shot = expand_one_shot(&keyboard_config.behavior.one_shot);
 
     quote! {
-        let behavior_config = ::rmk::config::keyboard_config::BehaviorConfig {
+        let behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
         };

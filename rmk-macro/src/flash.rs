@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::StorageConfig;
+use crate::config::StorageConfig;
 
 use crate::{keyboard_config::KeyboardConfig, ChipSeries};
 
