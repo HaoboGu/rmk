@@ -50,7 +50,7 @@ async fn main(spawner: Spawner) {
     nrf_config.gpiote_interrupt_priority = Priority::P3;
     nrf_config.time_interrupt_priority = Priority::P3;
     interrupt::USBD.set_priority(interrupt::Priority::P2);
-    interrupt::POWER_CLOCK.set_priority(interrupt::Priority::P2);
+    interrupt::CLOCK_POWER.set_priority(interrupt::Priority::P2);
     let p = embassy_nrf::init(nrf_config);
     // Disable external HF clock by default, reduce power consumption
     // let clock: embassy_nrf::pac::CLOCK = unsafe { core::mem::transmute(()) };

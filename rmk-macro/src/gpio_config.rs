@@ -161,6 +161,9 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 quote! {
                     ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down)
                 }
+            }
+        },
+        ChipSeries::Nrf52 => {
             quote! {
                 ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Pull::#default_pull_ident)
             }

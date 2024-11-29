@@ -7,8 +7,8 @@ use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {
-    defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
-    heapless::Vec,
+    core::pin::pin, defmt::info, embassy_futures::select::select_slice,
+    embedded_hal_async::digital::Wait, heapless::Vec,
 };
 
 /// MatrixTrait is the trait for keyboard matrix.
@@ -156,7 +156,7 @@ impl<
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-        let _ = select_slice(futs.as_mut_slice()).await;
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
