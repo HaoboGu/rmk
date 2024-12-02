@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `clear_storage` option
+
 ## [0.3.4] - 2024-11-27
 
 ### Changed

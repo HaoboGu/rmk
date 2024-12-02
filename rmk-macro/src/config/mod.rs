@@ -77,6 +77,8 @@ pub struct StorageConfig {
     pub num_sectors: Option<u8>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    // Clear on the storage at reboot, set this to true if you want to reset the keymap
+    pub clear_storage: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

@@ -17,6 +17,7 @@ pub(crate) fn default_esp32(chip: ChipModel) -> KeyboardConfig {
             start_addr: Some(0),
             num_sectors: Some(32),
             enabled: true,
+            ..Default::default()
         },
         ..Default::default()
     }
