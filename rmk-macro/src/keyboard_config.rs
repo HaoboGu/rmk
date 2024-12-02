@@ -464,6 +464,7 @@ impl KeyboardConfig {
             // Use default setting if the corresponding field is not set
             storage.start_addr = storage.start_addr.or(default.start_addr);
             storage.num_sectors = storage.num_sectors.or(default.num_sectors);
+            storage.clear_storage = storage.clear_storage.or(default.clear_storage);
             storage
         } else {
             default

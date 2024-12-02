@@ -1,6 +1,7 @@
 mod eeconfig;
 pub mod nor_flash;
 
+use crate::config::StorageConfig;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
@@ -9,7 +10,6 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use crate::config::StorageConfig;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, SerializationError, Value},
@@ -387,6 +387,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             storage_range,
             buffer: [0; get_buffer_size()],
         };
+
+        if config.clear_storage {
+            // Clear storage
+            let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
+        }
 
         // Check whether keymap and configs have been storaged in flash
         if !storage.check_enable().await {

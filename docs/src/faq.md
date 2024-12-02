@@ -38,6 +38,18 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   
   This script requires you have `python` command available in your commandline. Some platforms have `python3` command only, you can change `python` in `Makefile.toml` to `python3` in this case.
 
+### I changed keymap in `keyboard.toml`, but the keyboard is not updated
+
+RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
+
+```toml
+[storage]
+# Set `clear_storage` to true to clear all the stored info when the keyboard boots
+clear_storage = true
+```
+
+Note that the storage will be clear EVERYTIME you reboot the keyboard.
+
 ### I can see a `RMK Start` log, but nothing else
 
 First you need to check the RCC config of your board, make sure that the USB's clock is enabled and set to 48MHZ. For example, if you're using stm32f1, you can set the RCC as the following:

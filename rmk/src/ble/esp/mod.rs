@@ -53,6 +53,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         StorageConfig {
             start_addr: 0,
             num_sectors,
+            ..Default::default()
         },
     )
     .await;
