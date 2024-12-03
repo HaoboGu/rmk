@@ -10,9 +10,13 @@ See `examples/use_rust/nrf52840_ble_split` for the wireless split keyboard examp
 
 See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040.
 
+See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040 and a direct pin matrix.
+
 See `examples/use_config/nrf52840_ble_split` for the `keyboard.toml` + wireless split keyboard example using nRF52840.
 
-**NOTE:** for `nrf52840_ble_split`, add 
+See `examples/use_config/nrf52840_ble_split` for the `keyboard.toml` + wireless split keyboard example using nRF52840 and a direct pin matrix.
+
+**NOTE:** for `nrf52840_ble_split`, add
 
 ```toml
 [patch.crates-io]
@@ -98,11 +102,15 @@ rows = 2
 cols = 2
 row_offset = 0
 col_offset = 0
-# Central's matrix pins 
+# Central's ble addr
+
+ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
+
+# Central's matrix pins
+[split.central.matrix]
+matrix_type = "normal"
 input_pins = ["P0_12", "P0_13"]
 output_pins = ["P0_14", "P0_15"]
-# Central's ble addr
-ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
 # Note there're TWO brackets, since the peripheral is a list
 # Peripheral 0
@@ -112,10 +120,13 @@ rows = 2
 cols = 1
 row_offset = 2
 col_offset = 2
-input_pins = ["P1_11", "P1_10"]
-output_pins = ["P0_30"]
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x11, 0xe3]
+
+[split.peripheral.matrix]
+matrix_type = "normal"
+input_pins = ["P1_11", "P1_10"]
+output_pins = ["P0_30"]
 
 # Peripheral 1
 [[split.peripheral]]
@@ -124,13 +135,16 @@ rows = 2
 cols = 1
 row_offset = 2
 col_offset = 2
-input_pins = ["P1_11", "P1_10"]
-output_pins = ["P0_30"]
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x71, 0x91, 0x11, 0xe3]
+
+[split.peripheral.matrix]
+matrix_type = "normal"
+input_pins = ["P1_11", "P1_10"]
+output_pins = ["P0_30"]
 ```
 
-When using split, the input/output pins defined in `[matrix]` section is not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central]` and `[[split.peripheral]]`. The rows/cols in `[matrix]` section is the total number of rows/cols of the whole keyboard.
+When using split, the input/output pins defined in `[matrix]` section is not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central.matrix]` and `[split.peripheral.matrix]`. The contents of the split matrix configuration is the same as for `[matrix]`. This means each peripheral and central keyboard also supports `direct_pin`. The rows/cols in `[matrix]` section is the total number of rows/cols of the whole keyboard.
 
 If you're using BLE, `ble_addr` is required for both central and peripheral. Each device needs a `ble_addr`.
 
@@ -166,9 +180,9 @@ serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 
 ## Communication
 
-RMK supports both wired and wireless communication. 
+RMK supports both wired and wireless communication.
 
-Currently, the communication type indicates that how split central communicates with split peripherals. How the central talks with the host depends only on the central. 
+Currently, the communication type indicates that how split central communicates with split peripherals. How the central talks with the host depends only on the central.
 
 - For communication over BLE: the central talks with the host via BLE or USB, depends on whether the USB cable is connected
 - For communication over serial: the central can only use USB to talk with the host
