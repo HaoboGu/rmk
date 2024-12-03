@@ -16,7 +16,7 @@ direct_pin_low_active = true
 direct_pins = [
     ["PIN_0", "PIN_1", "PIN_2"],
     ["PIN_3", "PIN_4", "PIN_5"],
-    ["PIN_6", "_", "PIN_8"],
+    ["PIN_6", "_", "_"],
     ["PIN_9", "PIN_10", "_"],
 ]
 
@@ -28,7 +28,7 @@ keymap = [
     [
         ["A", "B", "C"],
         ["Kc1", "Kc2", "Kc3"],
-        ["LCtrl", "_", "LShift"],
+        ["LCtrl", "_", "_"],
         ["OSL(1)", "LT(2, Kc9)", "_"]
     ],
     [
