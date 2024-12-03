@@ -1,3 +1,4 @@
+use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -17,7 +18,6 @@ use embassy_sync::{
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
-use crate::config::BehaviorConfig;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
@@ -485,9 +485,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         key_event: KeyEvent,
     ) {
         if self.behavior.tap_hold.enable_hrm {
-            // If HRM is enabled, check whether the key is in key streak
+            // If HRM is enabled, check whether it's a different key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
-                if key_event.pressed {
+                if key_event.pressed
+                    && !(key_event.row == self.last_release.0.row
+                        && key_event.col == self.last_release.0.col)
+                {
                     if last_release_time.elapsed() < self.behavior.tap_hold.prior_idle_time {
                         // The previous key is released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
