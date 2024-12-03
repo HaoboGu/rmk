@@ -61,22 +61,15 @@ pub(crate) fn convert_direct_pins_to_initializers(
         let pin_initializers = row_pins
             .into_iter()
             .map(|p| {
-                (
-                    p.clone(),
-                    if p != "_" {
-                        // Convert pin to Some(pin) when it's not "_"
-                        let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active);
-                        quote! { Some(#pin) }
-                    } else {
-                        // Use None for "_" pins
-                        quote! { None }
-                    },
-                )
-            })
-            .map(|(p, ts)| {
-                let ident_name = format_ident!("{}_{}", p.to_lowercase(), row_idx);
+                let ident_name = format_ident!("{}_{}_{}", p.to_lowercase(), row_idx, col_idents.len());
                 col_idents.push(ident_name.clone());
-                quote! { let #ident_name = #ts; }
+                if p != "_" {
+                    // Convert pin to Some(pin) when it's not "_"
+                    let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active);
+                    quote! { let #ident_name = Some(#pin); }
+                } else {
+                    quote! { let #ident_name = None; }
+                }
             });
         // Extend initializers with current row's pin initializations
         initializers.extend(pin_initializers);
