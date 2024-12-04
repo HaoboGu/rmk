@@ -23,7 +23,7 @@ pub(crate) enum BleCompositeReportType {
             (usage_page = KEYBOARD, usage_min = 0xE0, usage_max = 0xE7) = {
                 #[packed_bits 8] #[item_settings data,variable,absolute] modifier=input;
             };
-            (usage_min = 0x00, usage_max = 0xFF) = {
+            (logical_min = 0,) = {
                 #[item_settings constant,variable,absolute] reserved=input;
             };
             (usage_page = LEDS, usage_min = 0x01, usage_max = 0x05) = {
