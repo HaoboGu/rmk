@@ -9,7 +9,7 @@ use crate::{
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, warn, Format};
+use defmt::{debug, error, info, warn, Format};
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -132,8 +132,11 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
-    /// Record the timestamp of last release
+    /// Record the timestamp of last release, (event, is_modifier, timestamp)
     last_release: (KeyEvent, bool, Option<Instant>),
+
+    /// Record whether the keyboard is in hold-after-tap state
+    hold_after_tap: (KeyEvent, bool),
 
     /// Options for configurable action behavior
     behavior: BehaviorConfig,
@@ -184,6 +187,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 },
                 false,
                 None,
+            ),
+            hold_after_tap: (
+                KeyEvent {
+                    row: 0,
+                    col: 0,
+                    pressed: false,
+                },
+                false,
             ),
             behavior,
             osm_state: OneShotState::default(),
@@ -267,9 +278,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     break;
                 }
                 // Process unprocessed events
-                if let Some(e) = self.unprocessed_events.pop() {
-                    self.process_key_change(e).await;
-                }
+                let e = self.unprocessed_events.remove(0);
+                self.process_key_change(e).await;
             }
         }
     }
@@ -487,14 +497,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         if self.behavior.tap_hold.enable_hrm {
             // If HRM is enabled, check whether it's a different key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
-                if key_event.pressed
-                    && !(key_event.row == self.last_release.0.row
-                        && key_event.col == self.last_release.0.col)
-                {
-                    if last_release_time.elapsed() < self.behavior.tap_hold.prior_idle_time {
-                        // The previous key is released within `prior_idle_time`, it's in key streak
+                if key_event.pressed {
+                    if last_release_time.elapsed() < self.behavior.tap_hold.prior_idle_time
+                        && !(key_event.row == self.last_release.0.row
+                            && key_event.col == self.last_release.0.col)
+                    {
+                        // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
                         self.process_key_action_tap(tap_action, key_event).await;
+                        self.hold_after_tap = (key_event, false);
+                        return;
+                    } else if last_release_time.elapsed() < self.behavior.tap_hold.hold_timeout
+                        && key_event.row == self.last_release.0.row
+                        && key_event.col == self.last_release.0.col
+                    {
+                        // Pressed a same key after tapped it within `hold_timeout`
+                        // Trigger the tap action just as it's pressed
+                        self.process_key_action_normal(tap_action, key_event).await;
+                        self.hold_after_tap = (key_event, true);
                         return;
                     }
                 }
@@ -504,6 +524,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         let row = key_event.row as usize;
         let col = key_event.col as usize;
         if key_event.pressed {
+            // Press
             self.timer[col][row] = Some(Instant::now());
 
             let hold_timeout =
@@ -552,6 +573,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 }
             }
         } else {
+            // Release
+            if self.hold_after_tap.1 {
+                // Releasing a key in hold after tap state, check position
+                if key_event.row == self.hold_after_tap.0.row
+                    && key_event.col == self.hold_after_tap.0.col
+                {
+                    // Release the hold after tap key
+                    info!("Hold after tap, hold the tap: {} {}", tap_action, key_event);
+                    self.process_key_action_normal(tap_action, key_event).await;
+                    self.hold_after_tap = (key_event, false);
+                    return;
+                }
+            }
             if let Some(_) = self.timer[col][row] {
                 // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
