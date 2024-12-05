@@ -6,10 +6,7 @@ use defmt::{error, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
-use {
-    defmt::info, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
-    heapless::Vec,
-};
+use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 /// MatrixTrait is the trait for keyboard matrix.
 ///
@@ -150,7 +147,6 @@ impl<
             out.set_high().ok();
         }
         Timer::after_micros(1).await;
-        info!("Waiting for high");
         let mut futs: Vec<_, INPUT_PIN_NUM> = self
             .input_pins
             .iter_mut()

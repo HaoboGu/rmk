@@ -133,7 +133,17 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
+    pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
+}
+
+/// Configurations for tap hold
+#[derive(Clone, Debug, Deserialize)]
+pub struct TapHoldConfig {
+    pub enable_hrm: Option<bool>,
+    pub prior_idle_time: Option<DurationMillis>,
+    pub post_wait_time: Option<DurationMillis>,
+    pub hold_timeout: Option<DurationMillis>,
 }
 
 /// Configurations for tri layer
