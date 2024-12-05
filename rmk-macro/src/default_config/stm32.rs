@@ -15,6 +15,7 @@ pub(crate) fn default_stm32(chip: ChipModel) -> KeyboardConfig {
             start_addr: Some(0),
             num_sectors: Some(2),
             enabled: true,
+            ..Default::default()
         },
         ..Default::default()
     }

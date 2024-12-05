@@ -225,13 +225,17 @@ There are several more configs for reading battery level and charging state, now
 enabled = true
 # nRF52840's saadc pin for reading battery level, you can use a pin number or "vddh"
 battery_adc_pin = "vddh"
+# The voltage divider setting for saadc. 
+# For example, nice!nano have 806 + 2M resistors, the saadc measures voltage on 2M resistor, so the two values should be set to 2000 and 2806
+adc_divider_measured = 2000
+adc_divider_total = 2806
 # Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 charge_state = { pin = "PIN_1", low_active = true }
 # Output LED pin that blinks when the battery is low
 charge_led= { pin = "PIN_2", low_active = true }
 ```
 
-## More customization
+<!-- ## More customization
 
 `#[rmk_keyboard]` macro also provides some flexibilities of customizing the keyboard's behavior. For example, the clock config:
 
@@ -253,7 +257,7 @@ mod MyKeyboard {
 }
 ```
 
-RMK should use the config from the user defined function to initialize the singleton of chip peripheral, for stm32, you can assume that it's initialized using `let p = embassy_stm32::init(config);`.
+RMK should use the config from the user defined function to initialize the singleton of chip peripheral, for stm32, you can assume that it's initialized using `let p = embassy_stm32::init(config);`. -->
 
 
 ## Appendix
@@ -357,7 +361,7 @@ enabled = true
 # BLE related pins, ignore any of them if you don't have
 battery_adc_pin = "vddh"
 # If the voltage divider is used for adc, you can use the following two values to define a voltage divider.
-# For example, nice!nano has 2000/2806 according to its schematic: https://dos.nicekeyboards.com/#/nice!nano/pinout_schematic, which means that the voltage at adc pin is VBat * 2000/2806.
+# For example, nice!nano have 806 + 2M resistors, the saadc measures voltage on 2M resistor, so the two values should be set to 2000 and 2806
 # Measured resistance for input adc, it should be less than adc_divider_total
 adc_divider_measured = 2000
 # Total resistance of the full path for input adc
@@ -396,6 +400,8 @@ serial = [
 # This address should be a valid BLE random static address, see: https://academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/lesson-2-bluetooth-le-advertising/topic/bluetooth-address/
 ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
+[split.central.matrix]
+matrix_type = "normal"
 # Matrix IO definition on central board
 input_pins = ["PIN_9", "PIN_11"]
 output_pins = ["PIN_10", "PIN_12"]
@@ -416,6 +422,9 @@ col_offset = 2
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 # The BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
+
+[split.peripheral.matrix]
+matrix_type = "normal"
 # Matrix IO definition on peripheral board
 input_pins = ["PIN_9", "PIN_11"]
 output_pins = ["PIN_10"]

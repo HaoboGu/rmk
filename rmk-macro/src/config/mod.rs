@@ -77,6 +77,8 @@ pub struct StorageConfig {
     pub num_sectors: Option<u8>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    // Clear on the storage at reboot, set this to true if you want to reset the keymap
+    pub clear_storage: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
@@ -173,10 +175,7 @@ pub struct SplitBoardConfig {
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
-    /// Input pin config
-    pub input_pins: Vec<String>,
-    /// Output pin config
-    pub output_pins: Vec<String>,
+    pub matrix: MatrixConfig,
 }
 
 /// Serial port config

@@ -19,7 +19,7 @@ cols = 3
 layers = 2
 keymap = [
     [
-        ["A", "B", "C"],
+        ["A", "A", "A"],
         ["Kc1", "Kc2", "Kc3"],
         ["LCtrl", "MO(1)", "LShift"],
         ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
@@ -45,6 +45,7 @@ capslock.low_active = false
 [storage]
 # Storage feature is enabled by default
 # enabled = false
+clear_storage = true
 
 [ble]
 enabled = true

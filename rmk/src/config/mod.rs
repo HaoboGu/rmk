@@ -68,6 +68,7 @@ pub struct StorageConfig {
     pub start_addr: usize,
     // Number of sectors used for storage, >= 2.
     pub num_sectors: u8,
+    pub clear_storage: bool,
 }
 
 impl Default for StorageConfig {
@@ -75,6 +76,7 @@ impl Default for StorageConfig {
         Self {
             start_addr: 0,
             num_sectors: 2,
+            clear_storage: false,
         }
     }
 }
