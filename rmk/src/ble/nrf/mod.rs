@@ -41,6 +41,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
+use nrf_softdevice::ble::TxPower;
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
@@ -309,6 +310,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
         let mut config = peripheral::Config::default();
         // Interval: 500ms
         config.interval = 800;
+        config.tx_power = TxPower::Plus4dBm;
         let adv = ConnectableAdvertisement::ScannableUndirected {
             adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
@@ -347,7 +349,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     // USB is connected, but connection type is BLE, try BLE while running USB keyboard
                     info!("Running USB keyboard, while advertising");
                     let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-                    // TODO: Test power consumption in this case
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
                         Either3::First(Ok(conn)) => {
                             info!("Connected to BLE");
