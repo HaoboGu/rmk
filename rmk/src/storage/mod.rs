@@ -390,7 +390,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         if config.clear_storage {
             // Clear storage
-            let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
+            let _ =
+                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
+                    .await;
         }
 
         // Check whether keymap and configs have been storaged in flash

@@ -1,11 +1,10 @@
 //! Initialize flash boilerplate of RMK, including USB or BLE
 //!
 
+use crate::config::StorageConfig;
+use crate::{keyboard_config::KeyboardConfig, ChipSeries};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use crate::config::StorageConfig;
-
-use crate::{keyboard_config::KeyboardConfig, ChipSeries};
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     if !keyboard_config.storage.enabled {

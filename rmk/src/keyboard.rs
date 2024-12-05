@@ -1,3 +1,4 @@
+use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -17,7 +18,6 @@ use embassy_sync::{
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
-use crate::config::BehaviorConfig;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 

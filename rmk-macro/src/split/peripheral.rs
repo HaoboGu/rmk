@@ -1,12 +1,10 @@
-use std::rc::Weak;
-
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use crate::config::{MatrixType, SplitBoardConfig};
 use syn::ItemMod;
 
 use crate::{
     chip_init::expand_chip_init,
+    config::{MatrixType, SplitBoardConfig},
     feature::{get_rmk_features, is_feature_enabled},
     import::expand_imports,
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},

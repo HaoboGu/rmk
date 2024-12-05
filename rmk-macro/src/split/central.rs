@@ -2,7 +2,6 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use crate::config::{MatrixType, SerialConfig, SplitConfig};
 use syn::ItemMod;
 
 use crate::{
@@ -11,6 +10,7 @@ use crate::{
     ble::expand_ble_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
+    config::{MatrixType, SerialConfig, SplitConfig},
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,

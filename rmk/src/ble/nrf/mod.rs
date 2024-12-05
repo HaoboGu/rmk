@@ -9,6 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
@@ -46,7 +47,6 @@ use nrf_softdevice::{
     raw, Config, Flash, Softdevice,
 };
 use profile::update_profile;
-use crate::config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 use vial_service::VialReaderWriter;

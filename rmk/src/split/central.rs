@@ -9,11 +9,11 @@ use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use heapless::Vec;
-use crate::config::RmkConfig;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
+use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]

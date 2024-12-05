@@ -1,4 +1,5 @@
 use super::{protocol::*, vial::process_vial};
+use crate::config::VialConfig;
 use crate::{
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
@@ -12,7 +13,6 @@ use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use num_enum::{FromPrimitive, TryFromPrimitive};
-use crate::config::VialConfig;
 
 pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     // VialService holds a reference of keymap, for updating
