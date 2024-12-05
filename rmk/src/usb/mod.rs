@@ -9,11 +9,11 @@ use embassy_usb::{
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
-use crate::config::KeyboardUsbConfig;
 use static_cell::StaticCell;
-use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
+use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::{
+    config::KeyboardUsbConfig,
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
 };
@@ -121,7 +121,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         // Initialize two hid interfaces: keyboard & via
         static keyboard_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let keyboard_hid_config = Config {
-            report_descriptor: KeyboardReport::desc(),
+            report_descriptor: crate::usb::descriptor::KeyboardReport::desc(),
             request_handler: Some(keyboard_request_handler.init(UsbRequestHandler {})),
             poll_ms: 1,
             max_packet_size: 64,

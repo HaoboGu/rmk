@@ -21,6 +21,10 @@ enabled = true
 start_addr = 0x00000000
 # How many sectors are used for storage, the default value is 2
 num_sectors = 2
+# Clear storage at keyboard boot. 
+# Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
+# This option is useful when testing the firmware.
+clear_storage = false
 ```
 
 You can also edit `storage_config` field in `RmkConfig` if you're using Rust API:
@@ -31,6 +35,7 @@ You can also edit `storage_config` field in `RmkConfig` if you're using Rust API
 let storage_config = StorageConfig {
     start_addr: 0x70000,
     num_sectors: 2,
+    ..Default::default()
 };
 let keyboard_config = RmkConfig {
     usb_config: keyboard_usb_config,

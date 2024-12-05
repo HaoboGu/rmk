@@ -15,6 +15,7 @@ pub(crate) fn default_rp2040(chip: ChipModel) -> KeyboardConfig {
             start_addr: Some(0),
             num_sectors: Some(16),
             enabled: true,
+            ..Default::default()
         },
         ..Default::default()
     }

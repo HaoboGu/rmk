@@ -47,10 +47,12 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream
 fn get_storage_config(storage_config: &StorageConfig) -> TokenStream2 {
     let num_sectors = storage_config.num_sectors.unwrap_or(2);
     let start_addr = storage_config.start_addr.unwrap_or(0);
+    let clear_storage = storage_config.clear_storage.unwrap_or(false);
     quote! {
         let storage_config = ::rmk::config::StorageConfig {
             num_sectors: #num_sectors,
-            start_addr: #start_addr
+            start_addr: #start_addr,
+            clear_storage: #clear_storage
         };
     }
 }

@@ -24,6 +24,7 @@ use super::{
     driver::{SplitReader, SplitWriter},
     SplitMessage,
 };
+use crate::direct_pin::DirectPinMatrix;
 
 #[cfg(not(feature = "_nrf_ble"))]
 use {
@@ -73,6 +74,62 @@ pub async fn run_rmk_split_peripheral<
     let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
+
+    #[cfg(not(feature = "_nrf_ble"))]
+    initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
+
+    #[cfg(feature = "_nrf_ble")]
+    initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
+        matrix,
+        central_addr,
+        peripheral_addr,
+        spawner,
+    )
+    .await;
+}
+
+/// Run the split peripheral service with direct pin matrix.
+///
+/// # Arguments
+///
+/// * `direct_pins` - direct gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
+/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `low_active`: pin active level
+/// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+pub async fn run_rmk_split_peripheral_direct_pin<
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    Out: OutputPin,
+    #[cfg(not(feature = "_nrf_ble"))] S: Write + Read,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+>(
+    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
+    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
+    low_active: bool,
+    #[cfg(not(feature = "_nrf_ble"))] serial: S,
+    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+) {
+    // Create the debouncer, use COL2ROW by default
+    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+
+    // Keyboard matrix
+    #[cfg(feature = "col2row")]
+    let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
+    #[cfg(not(feature = "col2row"))]
+    let matrix = DirectPinMatrix::<_, _, COL, ROW, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(not(feature = "_nrf_ble"))]
     initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
