@@ -25,65 +25,6 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
 
 to your `Cargo.toml` if there's compilation error in `nrf-softdevice` dependency.
 
-## Define central and peripherals via Rust
-
-In RMK, split keyboard's matrix are defined with row/col number and their offsets in the whole matrix.
-
-### Central
-
-Running split central is quite similar with the general keyboard, the only difference is for split central, total row/col number, central matrix's row/col number, and central matrix's offsets should be passed to `run_rmk_split_central`:
-
-```rust
-// nRF52840 split central, arguments might be different for other microcontrollers, check the API docs for the detail.
-run_rmk_split_central::<
-            Input<'_>,
-            Output<'_>,
-            Driver<'_, USBD, &SoftwareVbusDetect>,
-            ROW, // TOTAL_ROW
-            COL, // TOTAL_COL
-            2, // CENTRAL_ROW
-            2, // CENTRAL_COL
-            0, // CENTRAL_ROW_OFFSET
-            0, // CENTRAL_COL_OFFSET
-            NUM_LAYER,
-        >(
-            input_pins,
-            output_pins,
-            driver,
-            &mut get_default_keymap(),
-            keyboard_config,
-            central_addr,
-            spawner,
-        )
-```
-
-In peripheral central, you should also run the peripheral monitor for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
-
-```rust
-run_peripheral_monitor<
-    2, // PERIPHERAL_ROW
-    1, // PERIPHERAL_COL
-    2, // PERIPHERAL_ROW_OFFSET
-    2, // PERIPHERAL_COL_OFFSET
-  >(peripheral_id, peripheral_addr)
-```
-
-### Peripheral
-
-Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
-
-```rust
-run_rmk_split_peripheral::<Input<'_>, Output<'_>, 2, 2>(
-    input_pins,
-    output_pins,
-    central_addr,
-    peripheral_addr,
-    spawner,
-)
-```
-
-where `2,2` are the size of peripheral's matrix.
-
 ## Define central and peripherals via `keyboard.toml`
 
 You can also use the [`keyboard.toml`](./keyboard_configuration.md) to define a split keyboard.
@@ -176,6 +117,65 @@ serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 ```
 
+
+## Define central and peripherals via Rust
+
+In RMK, split keyboard's matrix are defined with row/col number and their offsets in the whole matrix.
+
+### Central
+
+Running split central is quite similar with the general keyboard, the only difference is for split central, total row/col number, central matrix's row/col number, and central matrix's offsets should be passed to `run_rmk_split_central`:
+
+```rust
+// nRF52840 split central, arguments might be different for other microcontrollers, check the API docs for the detail.
+run_rmk_split_central::<
+            Input<'_>,
+            Output<'_>,
+            Driver<'_, USBD, &SoftwareVbusDetect>,
+            ROW, // TOTAL_ROW
+            COL, // TOTAL_COL
+            2, // CENTRAL_ROW
+            2, // CENTRAL_COL
+            0, // CENTRAL_ROW_OFFSET
+            0, // CENTRAL_COL_OFFSET
+            NUM_LAYER,
+        >(
+            input_pins,
+            output_pins,
+            driver,
+            &mut get_default_keymap(),
+            keyboard_config,
+            central_addr,
+            spawner,
+        )
+```
+
+In peripheral central, you should also run the peripheral monitor for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
+
+```rust
+run_peripheral_monitor<
+    2, // PERIPHERAL_ROW
+    1, // PERIPHERAL_COL
+    2, // PERIPHERAL_ROW_OFFSET
+    2, // PERIPHERAL_COL_OFFSET
+  >(peripheral_id, peripheral_addr)
+```
+
+### Peripheral
+
+Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
+
+```rust
+run_rmk_split_peripheral::<Input<'_>, Output<'_>, 2, 2>(
+    input_pins,
+    output_pins,
+    central_addr,
+    peripheral_addr,
+    spawner,
+)
+```
+
+where `2,2` are the size of peripheral's matrix.
 
 
 ## Communication
