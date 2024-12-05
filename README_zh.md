@@ -16,9 +16,11 @@
   </p>
 </p>
 
-[English](https://github.com/HaoboGu/rmk/blob/main/README.md)
+👉 QQ讨论群：196944384
 
 -----
+[English](https://github.com/HaoboGu/rmk/blob/main/README.md)
+
 
 ## 特性
 

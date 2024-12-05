@@ -252,7 +252,7 @@ impl<
     ) -> Self {
         DirectPinMatrix {
             direct_pins,
-            debouncer: debouncer,
+            debouncer,
             key_states: [[KeyState::new(); COL]; ROW],
             scan_start: None,
             low_active,

@@ -9,6 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
@@ -46,7 +47,6 @@ use nrf_softdevice::{
     raw, Config, Flash, Softdevice,
 };
 use profile::update_profile;
-use crate::config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 use vial_service::VialReaderWriter;
@@ -381,6 +381,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                 Either3::Second(_) => info!("Detected USB configured, quit BLE"),
                                 Either3::Third(_) => info!("Switch profile"),
                             }
+                            bonder.save_sys_attrs(&conn);
                         }
                         _ => {
                             // Wait 10ms
@@ -432,6 +433,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                             Either3::Second(_) => info!("Detected USB configured, quit BLE"),
                             Either3::Third(_) => info!("Switch profile"),
                         }
+                        bonder.save_sys_attrs(&conn);
                     }
                     _ => {
                         // Wait 10ms for usb resuming/switching profile/advertising error
@@ -460,6 +462,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     update_profile(bonder),
                 )
                 .await;
+                bonder.save_sys_attrs(&conn);
             }
             Err(e) => error!("Advertise error: {}", e),
         }

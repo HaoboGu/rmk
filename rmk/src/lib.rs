@@ -15,6 +15,7 @@
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
+use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -50,7 +51,6 @@ use keyboard::{
 };
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
-use crate::config::RmkConfig;
 pub use rmk_macro as macros;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;

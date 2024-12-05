@@ -47,6 +47,7 @@ async fn main(spawner: Spawner) {
     let storage_config = StorageConfig {
         start_addr: 0x70000,
         num_sectors: 2,
+        ..Default::default()
     };
     let keyboard_config = RmkConfig {
         usb_config: keyboard_usb_config,

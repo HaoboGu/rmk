@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed invalid BLE state after reconnection on Windows
+- Fixed ghosting key on macOS
+
+### Added
+
+- Support `direct_pin` type matrix for split configurations
+- Add `clear_storage` option
+
 ### Changed
 
 - Remove `rmk-config`
@@ -51,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix lagging for split peripheral 
+- Fix lagging for split peripheral
 
 ### Added
 
@@ -74,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- BREAKING: use reference of keymap in `run_rmk` 
+- BREAKING: use reference of keymap in `run_rmk`
 - BREAKING: refactor the whole macro crate, update `keyboard.toml` config, old `keyboard.toml` config may raise compilation error
 - Decouple the matrix(input device) and keyboard implementation
 - Stop scanning matrix after releasing all keys
@@ -99,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Automate uf2 firmware generation via `cargo-make`
 - Storage and vial support for ESP series
-- Vial over BLE support for Windows 
+- Vial over BLE support for Windows
 - `TO` and `DF` action support
 
 ### Changed
@@ -164,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support led status update from ble 
+- Support led status update from ble
 - Support more nRF chips: nRF52833, nRF52810, nRF52811
 
 ## [0.1.21] - 2024-06-08
@@ -183,12 +193,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed doc display error on docs.rs 
+- Fixed doc display error on docs.rs
 
 ## [0.1.16] - 2024-06-01
 
 ### Added
 
 - Add new CHANGELOG.md
-
-
