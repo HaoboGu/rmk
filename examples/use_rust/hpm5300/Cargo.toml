@@ -19,10 +19,10 @@ hpm-hal = { git = "https://github.com/hpmicro/hpm-hal", rev = "756236cd28de53209
     "defmt",
     "usb-pin-reuse-hpm5300",
 ] }
-embassy-time = { version = "0.3", features = ["tick-hz-1_000_000", "defmt"] }
+embassy-time = { version = "0.3", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = ["tick-hz-1_000_000", "defmt"] }
 riscv-rt = "0.12.2"
 riscv = { version = "0.11.1", features = ["critical-section-single-hart"] }
-embassy-executor = { version = "0.6", features = [
+embassy-executor = { version = "0.6", git = "https://github.com/embassy-rs/embassy", rev = "1ff1f00", features = [
     "defmt",
     "nightly",
     "task-arena-size-32768",

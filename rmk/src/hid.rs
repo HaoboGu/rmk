@@ -5,6 +5,7 @@ use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
     driver::Driver,
 };
+
 use usbd_hid::descriptor::AsInputReport;
 
 #[derive(PartialEq, Debug, Format)]

@@ -217,7 +217,7 @@ fn expand_split_central_entry(
                     ::rmk::split::central::run_rmk_split_central::<
                         ::embassy_stm32::gpio::Input<'_>,
                         ::embassy_stm32::gpio::Output<'_>,
-                        ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                        ::embassy_stm32::usb::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
                         ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
                         ROW,
                         COL,
@@ -226,7 +226,7 @@ fn expand_split_central_entry(
                         #central_row_offset,
                         #central_col_offset,
                         NUM_LAYER,
-                    >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, , spawner)
+                    >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
                 },
                 MatrixType::direct_pin => quote! {
                     ::rmk::split::central::run_rmk_split_central_direct_pin::<

@@ -35,7 +35,10 @@ use embedded_storage::nor_flash::NorFlash;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 #[cfg(feature = "async_matrix")]
-use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+use {
+    core::pin::pin, embassy_futures::select::select_slice, embedded_hal_async::digital::Wait,
+    heapless::Vec,
+};
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -291,7 +294,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
@@ -301,7 +304,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         }
         self.scan_start = Some(Instant::now());
     }
