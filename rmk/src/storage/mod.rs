@@ -1,7 +1,7 @@
 mod eeconfig;
 pub mod nor_flash;
 
-use crate::config::StorageConfig;
+use crate::{combo::Combo, config::StorageConfig};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
@@ -18,11 +18,11 @@ use sequential_storage::{
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::{
     action::KeyAction,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
-use crate::{keyboard_macro::MACRO_SPACE_SIZE, keymap::Combo};
 
 use self::eeconfig::EeKeymapConfig;
 

@@ -5,7 +5,8 @@ use num_enum::FromPrimitive;
 
 use crate::{
     action::KeyAction,
-    keymap::{KeyMap, COMBO_MAX_NUM},
+    combo::COMBO_MAX_NUM,
+    keymap::KeyMap,
     storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},

@@ -1,3 +1,4 @@
+use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::event::{Event, KeyEvent};
 use crate::CONNECTION_STATE;
@@ -6,7 +7,7 @@ use crate::{
     hid::{ConnectionType, HidWriterWrapper},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
-    keymap::{Combo, KeyMap, COMBO_MAX_LENGTH},
+    keymap::KeyMap,
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
     KEYBOARD_STATE,
 };

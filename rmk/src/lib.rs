@@ -60,6 +60,7 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+mod combo;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;
