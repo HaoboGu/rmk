@@ -3,11 +3,12 @@ use super::{
     vial::{VialCommand, VialDynamic},
 };
 use crate::{
-    config::VialConfig,
     action::KeyAction,
+    combo::COMBO_MAX_NUM,
+    config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
-    keymap::{KeyMap, COMBO_MAX_NUM},
+    keymap::KeyMap,
     storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
     via::{

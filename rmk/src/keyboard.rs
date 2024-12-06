@@ -1,10 +1,11 @@
+use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
-    keymap::{Combo, KeyMap, COMBO_MAX_LENGTH},
+    keymap::KeyMap,
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
     KEYBOARD_STATE,
 };
