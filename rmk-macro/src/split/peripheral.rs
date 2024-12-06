@@ -96,15 +96,27 @@ fn expand_split_peripheral(
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
                 &keyboard_config.chip,
-                peripheral_config.matrix.input_pins.clone().unwrap(),
-                peripheral_config.matrix.output_pins.clone().unwrap(),
+                peripheral_config
+                    .matrix
+                    .input_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.input_pins is required"),
+                peripheral_config
+                    .matrix
+                    .output_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.output_pins is required"),
                 async_matrix,
             ));
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
                 &keyboard_config.chip,
-                peripheral_config.matrix.direct_pins.clone().unwrap(),
+                peripheral_config
+                    .matrix
+                    .direct_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.direct_pins is required"),
                 async_matrix,
                 peripheral_config.matrix.direct_pin_low_active,
             ));
