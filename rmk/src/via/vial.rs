@@ -177,7 +177,7 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     }
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteCombo(ComboData {
-                            idx: combo_idx as u8,
+                            idx: combo_idx,
                             actions,
                             output,
                         }))

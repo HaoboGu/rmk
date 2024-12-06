@@ -1,7 +1,10 @@
 mod eeconfig;
 pub mod nor_flash;
 
-use crate::{combo::Combo, config::StorageConfig};
+use crate::{
+    combo::{Combo, COMBO_MAX_LENGTH},
+    config::StorageConfig,
+};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
@@ -122,6 +125,10 @@ pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER
     layer: usize,
 ) -> u32 {
     (0x1000 + layer * COL * ROW + row * COL + col) as u32
+}
+
+pub(crate) fn get_combo_key(idx: usize) -> u32 {
+    (0x3000 + idx) as u32
 }
 
 impl Value<'_> for StorageData {
@@ -310,7 +317,9 @@ impl StorageData {
                 panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
             }
             StorageData::MacroData(_) => StorageKeys::MacroData as u32,
-            StorageData::ComboData(_) => StorageKeys::ComboData as u32,
+            StorageData::ComboData(_) => {
+                panic!("To get combo key for ComboData, use `get_combo_key` instead");
+            }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
@@ -344,8 +353,8 @@ pub(crate) struct KeymapKey {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct ComboData {
-    pub(crate) idx: u8,
-    pub(crate) actions: [KeyAction; 4],
+    pub(crate) idx: usize,
+    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
     pub(crate) output: KeyAction,
 }
 
@@ -543,12 +552,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     .await
                 }
                 FlashOperationMessage::WriteCombo(combo) => {
+                    let key = get_combo_key(combo.idx);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
-                        &(0x2000 + combo.idx as u32),
+                        &key,
                         &StorageData::ComboData(combo),
                     )
                     .await
@@ -671,12 +681,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
         for i in 0..combos.len() {
+            let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
                 &mut NoCache::new(),
                 &mut self.buffer,
-                &(0x2000 + i as u32),
+                &key,
             )
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
