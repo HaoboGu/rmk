@@ -448,7 +448,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                         FLASH_CHANNEL
                             .send(FlashOperationMessage::WriteCombo(ComboData {
-                                idx: combo_idx as u8,
+                                idx: combo_idx,
                                 actions,
                                 output,
                             }))
