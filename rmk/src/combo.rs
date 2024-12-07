@@ -1,6 +1,6 @@
 use heapless::Vec;
 
-use crate::action::KeyAction;
+use crate::{action::KeyAction, keyboard::KeyEvent};
 
 // Default number of macros
 pub(crate) const COMBO_MAX_NUM: usize = 8;
@@ -26,15 +26,18 @@ impl Combo {
         Self::new(Vec::new(), KeyAction::No)
     }
 
-    pub fn update(&mut self, key_action: KeyAction) -> bool {
+    pub fn update(&mut self, key_action: KeyAction, key_event: KeyEvent) -> bool {
+        if !key_event.pressed || key_action == KeyAction::No {
+            return false;
+        }
+
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
-            true
         } else {
             self.reset();
-            false
         }
+        action_idx.is_some()
     }
 
     pub fn done(&self) -> bool {
