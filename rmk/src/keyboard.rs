@@ -355,27 +355,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         key_action: KeyAction,
         key_event: KeyEvent,
     ) -> Option<KeyAction> {
-        for combo in self.keymap.borrow_mut().combos.iter_mut() {
-            if !key_event.pressed && combo.done() && combo.actions.contains(&key_action) {
-                combo.reset();
-                return Some(combo.output);
-            }
-        }
-
-        if self
-            .combo_actions_buffer
-            .push_back((key_action, key_event))
-            .is_err()
-        {
-            error!("Combo actions buffer overflowed! This is a bug and should not happen!");
-        }
-
         let mut is_combo_action = false;
         for combo in self.keymap.borrow_mut().combos.iter_mut() {
-            is_combo_action |= combo.update(key_action);
+            is_combo_action |= combo.update(key_action, key_event);
         }
 
-        if is_combo_action && key_event.pressed {
+        if key_event.pressed && is_combo_action {
+            if self
+                .combo_actions_buffer
+                .push_back((key_action, key_event))
+                .is_err()
+            {
+                error!("Combo actions buffer overflowed! This is a bug and should not happen!");
+            }
+
             let next_action = self
                 .keymap
                 .borrow_mut()
@@ -396,8 +389,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
             next_action
         } else {
+            if !key_event.pressed {
+                for combo in self.keymap.borrow_mut().combos.iter_mut() {
+                    if combo.done() && combo.actions.contains(&key_action) {
+                        combo.reset();
+                        return Some(combo.output);
+                    }
+                }
+            }
+
             self.dispatch_combos().await;
-            None
+            Some(key_action)
         }
     }
 
@@ -409,7 +411,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             .borrow_mut()
             .combos
             .iter_mut()
-            .filter(|c| !c.done())
             .for_each(Combo::reset);
     }
 
