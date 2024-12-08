@@ -5,7 +5,7 @@ use num_enum::FromPrimitive;
 
 use crate::{
     action::KeyAction,
-    combo::COMBO_MAX_NUM,
+    combo::{Combo, COMBO_MAX_NUM},
     keymap::KeyMap,
     storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
@@ -52,6 +52,7 @@ pub(crate) enum VialDynamic {
 
 const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
+const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
 /// Note: vial uses litte endian, while via uses big endian
 pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
@@ -130,8 +131,10 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                 VialDynamic::DynamicVialComboGet => {
                     debug!("DynamicEntryOp - DynamicVialComboGet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
+
                     let combo_idx = report.output_data[3] as usize;
-                    if let Some(combo) = keymap.borrow().combos.get(combo_idx) {
+                    let combos = &keymap.borrow().combos;
+                    if let Some((_, combo)) = vial_combo(combos, combo_idx) {
                         for i in 0..4 {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
@@ -151,9 +154,10 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let combo_idx = report.output_data[3] as usize;
-                    if combo_idx >= COMBO_MAX_NUM {
+                    let combos = &mut keymap.borrow_mut().combos;
+                    let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
                         return;
-                    }
+                    };
 
                     let mut actions = heapless::Vec::new();
                     for i in 0..4 {
@@ -167,7 +171,6 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     let output =
                         from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
 
-                    let combo = &mut keymap.borrow_mut().combos[combo_idx];
                     combo.actions = actions;
                     combo.output = output;
 
@@ -177,7 +180,7 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     }
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteCombo(ComboData {
-                            idx: combo_idx,
+                            idx: real_idx,
                             actions,
                             output,
                         }))
@@ -249,4 +252,22 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
         }
         _ => (),
     }
+}
+
+fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Combo)> {
+    combos
+        .iter()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
+}
+
+fn vial_combo_mut(combos: &mut [Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &mut Combo)> {
+    combos
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
 }

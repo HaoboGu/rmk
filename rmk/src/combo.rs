@@ -1,6 +1,6 @@
 use heapless::Vec;
 
-use crate::{action::KeyAction, keyboard::KeyEvent};
+use crate::{action::KeyAction, event::KeyEvent};
 
 // Default number of macros
 pub(crate) const COMBO_MAX_NUM: usize = 8;
