@@ -39,3 +39,5 @@ pub(crate) enum VialDynamic {
 
 pub(crate) const VIAL_PROTOCOL_VERSION: u32 = 6;
 pub(crate) const VIAL_EP_SIZE: usize = 32;
+
+pub(crate) const VIAL_COMBO_MAX_LENGTH: usize = 4;

@@ -1,10 +1,10 @@
 use super::{
     protocol::*,
-    vial::{VialCommand, VialDynamic},
+    vial::{VialCommand, VialDynamic, VIAL_COMBO_MAX_LENGTH},
 };
 use crate::{
     action::KeyAction,
-    combo::COMBO_MAX_NUM,
+    combo::{Combo, COMBO_MAX_NUM},
     config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
@@ -401,8 +401,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     VialDynamic::DynamicVialComboGet => {
                         debug!("DynamicEntryOp - DynamicVialComboGet");
                         report.input_data[0] = 0; // Index 0 is the return code, 0 means success
+
                         let combo_idx = report.output_data[3] as usize;
-                        if let Some(combo) = self.keymap.borrow().combos.get(combo_idx) {
+                        let combos = &self.keymap.borrow().combos;
+                        if let Some((_, combo)) = vial_combo(combos, combo_idx) {
                             for i in 0..4 {
                                 LittleEndian::write_u16(
                                     &mut report.input_data[1 + i * 2..3 + i * 2],
@@ -422,9 +424,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                         let combo_idx = report.output_data[3] as usize;
-                        if combo_idx >= COMBO_MAX_NUM {
+                        let combos = &mut self.keymap.borrow_mut().combos;
+                        let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
                             return;
-                        }
+                        };
 
                         let mut actions = Vec::new();
                         for i in 0..4 {
@@ -438,7 +441,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         let output =
                             from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
 
-                        let combo = &mut self.keymap.borrow_mut().combos[combo_idx];
                         combo.actions = actions;
                         combo.output = output;
 
@@ -448,7 +450,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                         FLASH_CHANNEL
                             .send(FlashOperationMessage::WriteCombo(ComboData {
-                                idx: combo_idx,
+                                idx: real_idx,
                                 actions,
                                 output,
                             }))
@@ -471,6 +473,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             _ => (),
         }
     }
+}
+
+fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Combo)> {
+    combos
+        .iter()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
+}
+
+fn vial_combo_mut(combos: &mut [Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &mut Combo)> {
+    combos
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
 fn get_position_from_offset(
