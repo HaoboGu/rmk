@@ -62,8 +62,7 @@ pub async fn run_rmk_direct_pin<
     const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -156,8 +155,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -165,17 +163,14 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
-    // Create the debouncer, use COL2ROW by default
+    // Create the debouncer
     #[cfg(feature = "rapid_debouncer")]
     let debouncer = RapidDebouncer::<COL, ROW>::new();
     #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix
-    #[cfg(feature = "col2row")]
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = DirectPinMatrix::<_, _, COL, ROW, SIZE>::new(direct_pins, debouncer, low_active);
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
