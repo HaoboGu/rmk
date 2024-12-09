@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support `direct_pin` type matrix for split configurations
 - Add `clear_storage` option
+- Enable USB remote wakeup
 
 ### Changed
 
