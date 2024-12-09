@@ -305,8 +305,8 @@ impl<
     async fn scan(&mut self) {
         info!("Matrix scanning");
         loop {
-            // #[cfg(feature = "async_matrix")]
-            // self.wait_for_key().await;
+            #[cfg(feature = "async_matrix")]
+            self.wait_for_key().await;
 
             // Scan matrix and send report
             for (row_idx, pins_row) in self.direct_pins.iter_mut().enumerate() {
