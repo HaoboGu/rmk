@@ -20,6 +20,7 @@ $buildDirs = @(
     "examples/use_rust/hpm5300",
     "examples/use_rust/rp2040_split",
     "examples/use_rust/nrf52840_ble_split",
+    "examples/use_rust/py32f07x",
     "examples/use_config/nrf52832_ble",
     "examples/use_config/nrf52840_ble",
     "examples/use_config/nrf52840_usb",
