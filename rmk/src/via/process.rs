@@ -1,17 +1,26 @@
-use super::{protocol::*, vial::process_vial};
-use crate::config::VialConfig;
+use super::{
+    protocol::*,
+    vial::{VialCommand, VialDynamic, VIAL_COMBO_MAX_LENGTH},
+};
 use crate::{
+    action::KeyAction,
+    combo::{Combo, COMBO_MAX_NUM},
+    config::VialConfig,
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
+    storage::{ComboData, FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
+    via::{
+        keycode_convert::{from_via_keycode, to_via_keycode},
+        vial::{VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION},
+    },
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
+use heapless::Vec;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
@@ -313,14 +322,175 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             ViaCommand::DynamicKeymapSetEncoder => {
                 warn!("Keymap get encoder -- not supported");
             }
-            ViaCommand::Vial => process_vial(
-                report,
-                self.vial_config.vial_keyboard_id,
-                self.vial_config.vial_keyboard_def,
-            ),
+            ViaCommand::Vial => self.process_vial(report).await,
             ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
         }
     }
+
+    // Note: vial uses litte endian, while via uses big endian
+    async fn process_vial(&self, report: &mut ViaReport) {
+        // report.output_data[0] == 0xFE -> vial commands
+        let vial_command = VialCommand::from_primitive(report.output_data[1]);
+        match vial_command {
+            VialCommand::GetKeyboardId => {
+                debug!("Received Vial - GetKeyboardId");
+                // Returns vial protocol version + vial keyboard id
+                LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
+                report.input_data[4..12].clone_from_slice(self.vial_config.vial_keyboard_id);
+            }
+            VialCommand::GetSize => {
+                debug!("Received Vial - GetSize");
+                LittleEndian::write_u32(
+                    &mut report.input_data[0..4],
+                    self.vial_config.vial_keyboard_def.len() as u32,
+                );
+            }
+            VialCommand::GetKeyboardDef => {
+                debug!("Received Vial - GetKeyboardDefinition");
+                let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
+                let start = page * VIAL_EP_SIZE;
+                let mut end = start + VIAL_EP_SIZE;
+                if end < start || start >= self.vial_config.vial_keyboard_def.len() {
+                    return;
+                }
+                if end > self.vial_config.vial_keyboard_def.len() {
+                    end = self.vial_config.vial_keyboard_def.len();
+                }
+                self.vial_config.vial_keyboard_def[start..end]
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, v)| {
+                        report.input_data[i] = *v;
+                    });
+                debug!(
+                    "Vial return: page:{} start:{} end: {}, data: {:?}",
+                    page, start, end, report.input_data
+                );
+            }
+            VialCommand::GetUnlockStatus => {
+                debug!("Received Vial - GetUnlockStatus");
+                // Reset all data to 0xFF(it's required!)
+                report.input_data.fill(0xFF);
+                // Unlocked
+                report.input_data[0] = 1;
+                // Unlock in progress
+                report.input_data[1] = 0;
+            }
+            VialCommand::QmkSettingsQuery => {
+                report.input_data.fill(0xFF);
+            }
+            VialCommand::DynamicEntryOp => {
+                let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
+                match vial_dynamic {
+                    VialDynamic::DynamicVialGetNumberOfEntries => {
+                        debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
+                        // TODO: Support dynamic tap dance
+                        report.input_data[0] = 0; // Tap dance entries
+                        report.input_data[1] = 8; // Combo entries
+                                                  // TODO: Support dynamic key override
+                        report.input_data[2] = 0; // Key override entries
+                    }
+                    VialDynamic::DynamicVialTapDanceGet => {
+                        warn!("DynamicEntryOp - DynamicVialTapDanceGet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialTapDanceSet => {
+                        warn!("DynamicEntryOp - DynamicVialTapDanceSet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialComboGet => {
+                        debug!("DynamicEntryOp - DynamicVialComboGet");
+                        report.input_data[0] = 0; // Index 0 is the return code, 0 means success
+
+                        let combo_idx = report.output_data[3] as usize;
+                        let combos = &self.keymap.borrow().combos;
+                        if let Some((_, combo)) = vial_combo(combos, combo_idx) {
+                            for i in 0..4 {
+                                LittleEndian::write_u16(
+                                    &mut report.input_data[1 + i * 2..3 + i * 2],
+                                    to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
+                                );
+                            }
+                            LittleEndian::write_u16(
+                                &mut report.input_data[9..11],
+                                to_via_keycode(combo.output),
+                            );
+                        } else {
+                            report.input_data[1..11].fill(0);
+                        }
+                    }
+                    VialDynamic::DynamicVialComboSet => {
+                        debug!("DynamicEntryOp - DynamicVialComboSet");
+                        report.input_data[0] = 0; // Index 0 is the return code, 0 means success
+
+                        let combo_idx = report.output_data[3] as usize;
+                        let combos = &mut self.keymap.borrow_mut().combos;
+                        let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
+                            return;
+                        };
+
+                        let mut actions = Vec::new();
+                        for i in 0..4 {
+                            let action = from_via_keycode(LittleEndian::read_u16(
+                                &report.output_data[4 + i * 2..6 + i * 2],
+                            ));
+                            if action != KeyAction::No {
+                                let _ = actions.push(action);
+                            }
+                        }
+                        let output =
+                            from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
+
+                        combo.actions = actions;
+                        combo.output = output;
+
+                        let mut actions = [KeyAction::No; 4];
+                        for (i, &action) in combo.actions.iter().enumerate() {
+                            actions[i] = action;
+                        }
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::WriteCombo(ComboData {
+                                idx: real_idx,
+                                actions,
+                                output,
+                            }))
+                            .await;
+                    }
+                    VialDynamic::DynamicVialKeyOverrideGet => {
+                        warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialKeyOverrideSet => {
+                        warn!("DynamicEntryOp - DynamicVialKeyOverrideSet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::Unhandled => {
+                        warn!("DynamicEntryOp - Unhandled -- subcommand not recognized");
+                        report.input_data.fill(0x00);
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Combo)> {
+    combos
+        .iter()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
+}
+
+fn vial_combo_mut(combos: &mut [Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &mut Combo)> {
+    combos
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, combo)| combo.actions.len() <= VIAL_COMBO_MAX_LENGTH)
+        .enumerate()
+        .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
 fn get_position_from_offset(
