@@ -17,7 +17,7 @@ use embassy_stm32::{
     gpio::{Input, Output},
     peripherals::USB_OTG_HS,
     time::Hertz,
-    usb_otg::{Driver, InterruptHandler},
+    usb::{Driver, InterruptHandler},
     Config,
 };
 use panic_probe as _;
@@ -72,7 +72,7 @@ async fn main(spawner: Spawner) {
 
     // Usb config
     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    let mut usb_config = embassy_stm32::usb_otg::Config::default();
+    let mut usb_config = embassy_stm32::usb::Config::default();
     usb_config.vbus_detection = false;
     let driver = Driver::new_fs(
         p.USB_OTG_HS,

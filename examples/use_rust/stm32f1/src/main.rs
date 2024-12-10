@@ -22,6 +22,7 @@ use rmk::{
     run_rmk,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+// use defmt_rtt as _;
 
 #[defmt::global_logger]
 struct Logger;

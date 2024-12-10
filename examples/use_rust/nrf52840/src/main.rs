@@ -26,7 +26,7 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<peripherals::USBD>;
-    POWER_CLOCK => usb::vbus_detect::InterruptHandler;
+    CLOCK_POWER => usb::vbus_detect::InterruptHandler;
 });
 
 #[embassy_executor::main]
@@ -37,12 +37,11 @@ async fn main(spawner: Spawner) {
     config.gpiote_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
     config.time_interrupt_priority = ::embassy_nrf::interrupt::Priority::P3;
     ::embassy_nrf::interrupt::USBD.set_priority(::embassy_nrf::interrupt::Priority::P2);
-    ::embassy_nrf::interrupt::POWER_CLOCK.set_priority(::embassy_nrf::interrupt::Priority::P2);
+    ::embassy_nrf::interrupt::CLOCK_POWER.set_priority(::embassy_nrf::interrupt::Priority::P2);
     let p = ::embassy_nrf::init(config);
-    let clock: ::embassy_nrf::pac::CLOCK = unsafe { ::core::mem::transmute(()) };
     info!("Enabling ext hfosc...");
-    clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
-    while clock.events_hfclkstarted.read().bits() != 1 {}
+    ::embassy_nrf::pac::CLOCK.tasks_hfclkstart().write_value(1);
+    while ::embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
     // Usb config
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
