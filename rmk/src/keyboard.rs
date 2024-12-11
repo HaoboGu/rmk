@@ -1,3 +1,4 @@
+use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
@@ -16,7 +17,7 @@ use embassy_sync::{
     channel::{Channel, Receiver, Sender},
 };
 use embassy_time::{Instant, Timer};
-use heapless::{FnvIndexMap, Vec};
+use heapless::{Deque, FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
@@ -165,6 +166,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// The current distance of mouse key moving
     mouse_key_move_delta: i8,
     mouse_wheel_move_delta: i8,
+
+    /// Buffer for pressed `KeyAction` and `KeyEvents` in combos
+    combo_actions_buffer: Deque<(KeyAction, KeyEvent), COMBO_MAX_LENGTH>,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
@@ -214,6 +218,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             last_mouse_tick: FnvIndexMap::new(),
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
+            combo_actions_buffer: Deque::new(),
         }
     }
 
@@ -292,11 +297,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
 
         // Process key
-        let action = self
+        let key_action = self
             .keymap
             .borrow_mut()
             .get_action_with_layer_cache(key_event);
-        match action {
+
+        if let Some(key_action) = self.process_combo(key_action, key_event).await {
+            self.process_key_action(key_action, key_event).await;
+        }
+    }
+
+    async fn process_key_action(&mut self, key_action: KeyAction, key_event: KeyEvent) {
+        match key_action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_event).await,
             KeyAction::WithModifier(a, m) => {
@@ -340,6 +352,70 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         if let Some(ref tri_layer) = self.behavior.tri_layer {
             self.keymap.borrow_mut().update_tri_layer(tri_layer);
         }
+    }
+
+    async fn process_combo(
+        &mut self,
+        key_action: KeyAction,
+        key_event: KeyEvent,
+    ) -> Option<KeyAction> {
+        let mut is_combo_action = false;
+        for combo in self.keymap.borrow_mut().combos.iter_mut() {
+            is_combo_action |= combo.update(key_action, key_event);
+        }
+
+        if key_event.pressed && is_combo_action {
+            if self
+                .combo_actions_buffer
+                .push_back((key_action, key_event))
+                .is_err()
+            {
+                error!("Combo actions buffer overflowed! This is a bug and should not happen!");
+            }
+
+            let next_action = self
+                .keymap
+                .borrow_mut()
+                .combos
+                .iter()
+                .find_map(|combo| combo.done().then_some(combo.output));
+
+            if next_action.is_some() {
+                self.combo_actions_buffer.clear();
+            } else {
+                let timeout = embassy_time::Timer::after_millis(50);
+                match select(timeout, key_event_channel.receive()).await {
+                    embassy_futures::select::Either::First(_) => self.dispatch_combos().await,
+                    embassy_futures::select::Either::Second(event) => {
+                        self.unprocessed_events.push(event).unwrap()
+                    }
+                }
+            }
+            next_action
+        } else {
+            if !key_event.pressed {
+                for combo in self.keymap.borrow_mut().combos.iter_mut() {
+                    if combo.done() && combo.actions.contains(&key_action) {
+                        combo.reset();
+                        return Some(combo.output);
+                    }
+                }
+            }
+
+            self.dispatch_combos().await;
+            Some(key_action)
+        }
+    }
+
+    async fn dispatch_combos(&mut self) {
+        while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
+            self.process_key_action(action, event).await;
+        }
+        self.keymap
+            .borrow_mut()
+            .combos
+            .iter_mut()
+            .for_each(Combo::reset);
     }
 
     async fn update_osm(&mut self, key_event: KeyEvent) {
