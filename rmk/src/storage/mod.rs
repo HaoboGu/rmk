@@ -380,7 +380,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             );
             start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
-        info!("storage range {}", storage_range);
 
         let mut storage = Self {
             flash,
