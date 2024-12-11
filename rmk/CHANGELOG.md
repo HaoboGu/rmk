@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support `direct_pin` type matrix for split configurations
+- Support home row mod(HRM) mode with improved tap hold processing
+- BREAKING: Support `direct_pin` type matrix for split configurations, move pin config to [split.central/peripheral.matrix]
 - Add `clear_storage` option
 
 ### Changed
