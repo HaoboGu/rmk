@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed ghosting key on macOS
+- Fix invalid BLE state after reconnection on Windows
+- Fix ghosting key on macOS
+- Fix direct pin debouncer size error
 
 ### Added
 

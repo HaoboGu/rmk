@@ -1,6 +1,7 @@
 pub(crate) mod server;
 
 use self::server::{BleServer, VialReaderWriter};
+use crate::config::StorageConfig;
 use crate::keyboard::keyboard_report_channel;
 use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
@@ -20,7 +21,6 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;
 use futures::pin_mut;
-use crate::config::StorageConfig;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.

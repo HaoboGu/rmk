@@ -9,11 +9,11 @@ use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use heapless::Vec;
-use crate::config::RmkConfig;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
+use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -156,8 +156,7 @@ pub async fn run_rmk_split_central_direct_pin<
     const NUM_LAYER: usize,
     const SIZE: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; CENTRAL_COL]; CENTRAL_ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; CENTRAL_ROW]; CENTRAL_COL],
+    direct_pins: [[Option<In>; CENTRAL_COL]; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
@@ -166,35 +165,21 @@ pub async fn run_rmk_split_central_direct_pin<
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Debouncer");
     // Create the debouncer, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    #[cfg(feature = "rapid_debouncer")]
     let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
 
     // Keyboard matrix, use COL2ROW by default
-    #[cfg(feature = "col2row")]
     let matrix = CentralDirectPinMatrix::<
-        In,
+        _,
         _,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_ROW,
         CENTRAL_COL,
-        SIZE,
-    >::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = CentralDirectPinMatrix::<
-        In,
-        _,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_COL,
-        CENTRAL_ROW,
         SIZE,
     >::new(direct_pins, debouncer, low_active);
 

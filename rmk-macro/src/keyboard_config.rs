@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use serde::Deserialize;
+use std::fs;
+
 use crate::config::{
     BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
     LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
-use serde::Deserialize;
-use std::fs;
-
 use crate::{
     default_config::{
         esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,

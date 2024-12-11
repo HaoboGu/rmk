@@ -2,7 +2,6 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use crate::config::{MatrixType, SerialConfig, SplitConfig};
 use syn::ItemMod;
 
 use crate::{
@@ -11,6 +10,7 @@ use crate::{
     ble::expand_ble_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
+    config::{MatrixType, SerialConfig, SplitConfig},
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
@@ -82,15 +82,30 @@ fn expand_split_central(
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
                 &keyboard_config.chip,
-                split_config.central.matrix.input_pins.clone().unwrap(),
-                split_config.central.matrix.output_pins.clone().unwrap(),
+                split_config
+                    .central
+                    .matrix
+                    .input_pins
+                    .clone()
+                    .expect("split.central.matrix.input_pins is required"),
+                split_config
+                    .central
+                    .matrix
+                    .output_pins
+                    .clone()
+                    .expect("split.central.matrix.output_pins is required"),
                 async_matrix,
             ));
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
                 &keyboard_config.chip,
-                split_config.central.matrix.direct_pins.clone().unwrap(),
+                split_config
+                    .central
+                    .matrix
+                    .direct_pins
+                    .clone()
+                    .expect("split.central.matrix.direct_pins is required"),
                 async_matrix,
                 split_config.central.matrix.direct_pin_low_active,
             ));
@@ -186,7 +201,10 @@ fn expand_split_central_entry(
     let central_col_offset = split_config.central.col_offset;
     match keyboard_config.chip.series {
         ChipSeries::Stm32 => {
-            let usb_info = keyboard_config.communication.get_usb_info().unwrap();
+            let usb_info = keyboard_config
+                .communication
+                .get_usb_info()
+                .expect("get_usb_info returned None");
             let usb_name = format_ident!("{}", usb_info.peripheral_name);
             let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
                 format_ident!("{}", "usb_otg")
@@ -378,7 +396,10 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
     match &split_config.connection[..] {
         "ble" => {
             // We need to create addrs for BLE
-            let central_addr = split_config.central.ble_addr.unwrap();
+            let central_addr = split_config
+                .central
+                .ble_addr
+                .expect("central.ble_addr is required");
             let mut peripheral_addrs = proc_macro2::TokenStream::new();
             split_config
                 .peripheral
@@ -397,7 +418,11 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
         }
         "serial" => {
             // We need to initialize serial instance for serial
-            let serial_config: Vec<SerialConfig> = split_config.central.serial.clone().unwrap();
+            let serial_config: Vec<SerialConfig> = split_config
+                .central
+                .serial
+                .clone()
+                .expect("central.serial is required");
             expand_serial_init(chip, serial_config)
         }
         _ => panic!("Invalid connection type for split"),
