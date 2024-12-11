@@ -1,11 +1,9 @@
 //! Initialize behavior config boilerplate of RMK
 //!
 
-use quote::quote;
 use crate::config::{OneShotConfig, TapHoldConfig, TriLayerConfig};
-
-use crate::config::{OneShotConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
+use quote::quote;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
