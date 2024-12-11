@@ -149,7 +149,7 @@ impl<
         for out in self.output_pins.iter_mut() {
             out.set_high().ok();
         }
-        Timer::after_micros(1).await;
+        Timer::after_micros(5).await;
         info!("Waiting for high");
         let mut futs: Vec<_, INPUT_PIN_NUM> = self
             .input_pins
@@ -177,7 +177,7 @@ impl<
             for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
                 // Pull up output pin, wait 1us ensuring the change comes into effect
                 out_pin.set_high().ok();
-                Timer::after_micros(1).await;
+                Timer::after_micros(5).await;
                 for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(

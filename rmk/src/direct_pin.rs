@@ -279,7 +279,7 @@ impl<
                 self.scan_start = None;
             }
         }
-        Timer::after_micros(1).await;
+        Timer::after_micros(5).await;
         info!("Waiting for active level");
 
         if self.low_active {
