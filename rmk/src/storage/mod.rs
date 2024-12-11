@@ -12,7 +12,7 @@ use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, store_item, SerializationError, Value},
+    map::{fetch_item, get_item_iter, store_item, SerializationError, Value},
     Error as SSError,
 };
 #[cfg(feature = "_nrf_ble")]
@@ -562,44 +562,22 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
-        for (layer, layer_data) in keymap.iter_mut().enumerate() {
-            for (row, row_data) in layer_data.iter_mut().enumerate() {
-                for (col, value) in row_data.iter_mut().enumerate() {
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
-                    let item = match fetch_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut NoCache::new(),
-                        &mut self.buffer,
-                        &key,
-                    )
-                    .await
-                    {
-                        Ok(Some(StorageData::KeymapKey(k))) => k.action,
-                        Ok(None) => {
-                            error!("Got none when reading keymap from storage at (layer,col,row)=({},{},{})", layer, col, row);
-                            return Err(());
-                        }
-                        Err(e) => {
-                            print_storage_error::<F>(e);
-                            error!(
-                                "Load keymap key from storage error: (layer,col,row)=({},{},{})",
-                                layer, col, row
-                            );
-                            return Err(());
-                        }
-                        _ => {
-                            error!(
-                                "Load keymap key from storage error: (layer,col,row)=({},{},{})",
-                                layer, col, row
-                            );
-                            return Err(());
-                        }
-                    };
-                    *value = item;
+        let mut key_iterator = get_item_iter(&mut self.flash, self.storage_range.clone());
+        loop {
+            let key = if let Ok(Some((_key, item))) = key_iterator
+                .next::<u32, StorageData>(&mut self.buffer)
+                .await
+            {
+                match item {
+                    StorageData::KeymapKey(k) => k,
+                    _ => continue,
                 }
-            }
+            } else {
+                break;
+            };
+            keymap[key.layer][key.row][key.col] = key.action;
         }
+
         Ok(())
     }
 
