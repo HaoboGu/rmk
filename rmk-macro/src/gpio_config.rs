@@ -166,7 +166,11 @@ pub(crate) fn convert_gpio_str_to_input_pin(
         }
         ChipSeries::Esp32 => {
             quote! {
-                ::esp_idf_svc::hal::gpio::PinDriver::input(p.pins.#gpio_ident.downgrade_input()).unwrap()
+                {
+                    let mut pin = ::esp_idf_svc::hal::gpio::PinDriver::input(p.pins.#gpio_ident.downgrade()).unwrap();
+                    pin.set_pull(::esp_idf_svc::hal::gpio::Pull::#default_pull_ident).unwrap();
+                    pin
+                }
             }
         }
     }
