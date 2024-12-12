@@ -58,16 +58,19 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     )
     .await;
 
-    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            default_keymap,
+            Some(&mut storage),
+            keyboard_config.behavior_config,
+        )
+        .await,
+    );
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
 
-    let mut keyboard = Keyboard::new(
-        &keymap,
-        &keyboard_report_sender,
-        keyboard_config.behavior_config,
-    );
+    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 

@@ -1,5 +1,4 @@
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
-use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -133,9 +132,6 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
-    /// Options for configurable action behavior
-    behavior: BehaviorConfig,
-
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
@@ -171,13 +167,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
-        behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
             sender,
             timer: [[None; ROW]; COL],
-            behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
@@ -311,11 +305,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
                     .await;
             }
-        }
-
-        // Tri Layer
-        if let Some(ref tri_layer) = self.behavior.tri_layer {
-            self.keymap.borrow_mut().update_tri_layer(tri_layer);
         }
     }
 
@@ -595,7 +584,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
+                    let timeout =
+                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
@@ -646,7 +636,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
+                    let timeout =
+                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, key_event_channel.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer
