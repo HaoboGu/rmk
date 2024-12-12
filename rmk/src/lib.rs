@@ -292,22 +292,27 @@ pub async fn initialize_usb_keyboard_and_run<
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
+        let keymap = RefCell::new(
+            KeyMap::new_from_storage(
+                default_keymap,
+                Some(&mut s),
+                keyboard_config.behavior_config,
+            )
+            .await,
+        );
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap = RefCell::new(
+        KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap, keyboard_config.behavior_config).await,
+    );
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(
-            &keymap,
-            &keyboard_report_sender,
-            keyboard_config.behavior_config,
-        ),
+        Keyboard::new(&keymap, &keyboard_report_sender),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),

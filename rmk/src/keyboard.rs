@@ -1,5 +1,4 @@
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
-use crate::config::BehaviorConfig;
 use crate::event::{Event, KeyEvent};
 use crate::CONNECTION_STATE;
 use crate::{
@@ -137,9 +136,6 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
 
-    /// Options for configurable action behavior
-    behavior: BehaviorConfig,
-
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
@@ -178,7 +174,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
-        behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
@@ -194,7 +189,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 None,
             ),
             hold_after_tap: Default::default(),
-            behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
@@ -342,11 +336,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
             // Record the last release event
             self.last_release = (key_event, is_mod, Some(Instant::now()));
-        }
-
-        // Tri Layer
-        if let Some(ref tri_layer) = self.behavior.tri_layer {
-            self.keymap.borrow_mut().update_tri_layer(tri_layer);
         }
     }
 
@@ -566,11 +555,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         hold_action: Action,
         key_event: KeyEvent,
     ) {
-        if self.behavior.tap_hold.enable_hrm {
+        if self.keymap.borrow().behavior.tap_hold.enable_hrm {
             // If HRM is enabled, check whether it's a different key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
                 if key_event.pressed {
-                    if last_release_time.elapsed() < self.behavior.tap_hold.prior_idle_time
+                    if last_release_time.elapsed()
+                        < self.keymap.borrow().behavior.tap_hold.prior_idle_time
                         && !(key_event.row == self.last_release.0.row
                             && key_event.col == self.last_release.0.col)
                     {
@@ -578,7 +568,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         debug!("Key streak detected, trigger tap action");
                         self.process_key_action_tap(tap_action, key_event).await;
                         return;
-                    } else if last_release_time.elapsed() < self.behavior.tap_hold.hold_timeout
+                    } else if last_release_time.elapsed()
+                        < self.keymap.borrow().behavior.tap_hold.hold_timeout
                         && key_event.row == self.last_release.0.row
                         && key_event.col == self.last_release.0.col
                     {
@@ -600,8 +591,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             // Press
             self.timer[col][row] = Some(Instant::now());
 
-            let hold_timeout =
-                embassy_time::Timer::after_millis(self.behavior.tap_hold.hold_timeout.as_millis());
+            let hold_timeout = embassy_time::Timer::after_millis(
+                self.keymap
+                    .borrow()
+                    .behavior
+                    .tap_hold
+                    .hold_timeout
+                    .as_millis(),
+            );
             match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
@@ -679,7 +676,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 };
 
                 let wait_timeout = embassy_time::Timer::after_millis(
-                    self.behavior.tap_hold.post_wait_time.as_millis(),
+                    self.keymap
+                        .borrow()
+                        .behavior
+                        .tap_hold
+                        .post_wait_time
+                        .as_millis(),
                 );
                 match select(wait_timeout, wait_release).await {
                     embassy_futures::select::Either::First(_) => {
@@ -733,7 +735,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
+                    let timeout =
+                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
@@ -784,7 +787,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
+                    let timeout =
+                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer

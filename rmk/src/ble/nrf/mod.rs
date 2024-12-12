@@ -252,7 +252,14 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     // Flash and keymap configuration
     let flash = Flash::take(sd);
     let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            default_keymap,
+            Some(&mut storage),
+            keyboard_config.behavior_config,
+        )
+        .await,
+    );
 
     let mut buf: [u8; 128] = [0; 128];
 
@@ -304,11 +311,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Keyboard services
-    let mut keyboard = Keyboard::new(
-        &keymap,
-        &keyboard_report_sender,
-        keyboard_config.behavior_config,
-    );
+    let mut keyboard = Keyboard::new(&keymap, &keyboard_report_sender);
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
