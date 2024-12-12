@@ -12,7 +12,7 @@ use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, get_item_iter, store_item, SerializationError, Value},
+    map::{fetch_item, fetch_item_stream, store_item, SerializationError, Value},
     Error as SSError,
 };
 #[cfg(feature = "_nrf_ble")]
@@ -561,21 +561,30 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
-        let mut key_iterator = get_item_iter(&mut self.flash, self.storage_range.clone());
-        loop {
-            let key = if let Ok(Some((_key, item))) = key_iterator
+        let mut storage_cache = NoCache::new();
+        if let Ok(mut key_iterator) = fetch_item_stream(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut storage_cache,
+        )
+        .await
+        {
+            // Iterator the storage, read all keymap keys
+            while let Ok(Some((_key, item))) = key_iterator
                 .next::<u32, StorageData>(&mut self.buffer)
                 .await
             {
                 match item {
-                    StorageData::KeymapKey(k) => k,
+                    StorageData::KeymapKey(key) => {
+                        assert!(key.layer < NUM_LAYER);
+                        assert!(key.row < ROW);
+                        assert!(key.col < COL);
+                        keymap[key.layer][key.row][key.col] = key.action;
+                    }
                     _ => continue,
                 }
-            } else {
-                break;
-            };
-            keymap[key.layer][key.row][key.col] = key.action;
-        }
+            }
+        };
 
         Ok(())
     }
