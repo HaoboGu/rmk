@@ -107,8 +107,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     const COL: usize,
     const SIZE: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     low_active: bool,
@@ -116,20 +115,13 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     #[cfg(feature = "_nrf_ble")] spawner: Spawner,
 ) {
     // Create the debouncer, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
+    #[cfg(feature = "rapid_debouncer")]
     let debouncer = RapidDebouncer::<COL, ROW>::new();
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<COL, ROW>::new();
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<COL, ROW>::new();
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix
-    #[cfg(feature = "col2row")]
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = DirectPinMatrix::<_, _, COL, ROW, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(not(feature = "_nrf_ble"))]
     initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;

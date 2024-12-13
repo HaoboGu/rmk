@@ -490,7 +490,7 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
             );
             debug!("Set conn params result: {:?}", re);
 
-            embassy_time::Timer::after_millis(50).await;
+            embassy_time::Timer::after_millis(5000).await;
 
             // Setting the conn param the second time ensures that we have best performance on all platforms
             let re = sd_ble_gap_conn_param_update(

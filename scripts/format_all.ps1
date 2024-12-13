@@ -17,6 +17,7 @@ $dirs = @(
     "examples/use_rust/stm32f1",
     "examples/use_rust/stm32f4",
     "examples/use_rust/stm32h7",
+    "examples/use_rust/py32f07x",
     "examples/use_rust/stm32h7_async",
     "examples/use_config/esp32c3_ble",
     "examples/use_config/esp32c6_ble",
