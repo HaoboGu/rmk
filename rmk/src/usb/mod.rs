@@ -88,6 +88,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.product = Some(keyboard_config.product_name);
         usb_config.serial_number = Some(keyboard_config.serial_number);
         usb_config.max_power = 450;
+        usb_config.supports_remote_wakeup = true;
 
         // Required for windows compatibility.
         usb_config.max_packet_size_0 = 64;
