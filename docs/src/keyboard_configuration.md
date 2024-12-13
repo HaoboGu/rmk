@@ -72,6 +72,13 @@ If your keys are directly connected to the microcontroller pins, set `matrix_typ
 
 If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
 
+Currently, col2row is used as the default matrix type. If you want to use row2col matrix, you should edit your `Cargo.toml`, disable the default feature as the following:
+
+```toml
+# Cargo.toml
+rmk = { version = "0.4", default-features = false, features = ["nrf52840_ble"] }
+```
+
 Here is an example for rp2040.
 ```toml
 matrix_type = "direct_pin"
