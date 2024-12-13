@@ -7,21 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Fix invalid BLE state after reconnection on Windows
-- Fix ghosting key on macOS
-- Fix direct pin debouncer size error
-
 ### Added
 
 - Support home row mod(HRM) mode with improved tap hold processing
-- BREAKING: Support `direct_pin` type matrix for split configurations, move pin config to [split.central/peripheral.matrix]
+- BREAKING: Support `direct_pin` type matrix for split configurations, split pin config is moved to [split.central/peripheral.matrix]
 - Add `clear_storage` option
+- py32f07x use_rust example. py32f07x is a super cheap($0.2) cortex-m0 chip from Puya
 
 ### Changed
 
 - Remove `rmk-config`
+
+### Fixed
+
+- Fix slightly lag on peripheral side
+- Fix invalid BLE state after reconnection on Windows
+- Fix ghosting key on macOS
+- Fix direct pin debouncer size error
+- Fix esp32 input pin pull configuration
 
 ## [0.4.4] - 2024-11-27
 
