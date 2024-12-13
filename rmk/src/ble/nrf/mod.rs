@@ -63,6 +63,9 @@ use {
     once_cell::sync::OnceCell,
 };
 
+use embassy_sync::channel::Channel;
+pub static BLE_BATTERY_CHANNEL: Channel<CriticalSectionRawMutex, [i16; 1], 4> = Channel::new();
+
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);

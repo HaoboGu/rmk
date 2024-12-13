@@ -18,6 +18,7 @@ use crate::{
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     light::expand_light_config,
     matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
+    analog::expand_analog,
     ChipModel, ChipSeries,
 };
 
@@ -128,9 +129,10 @@ fn expand_split_central(
 
     let split_communication_config =
         expand_split_communication_config(&keyboard_config.chip, split_config);
-    let run_rmk = expand_split_central_entry(keyboard_config, split_config);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
-
+    let (analog_config, analog_task) = expand_analog(keyboard_config);
+    let run_rmk = expand_split_central_entry(keyboard_config, split_config, vec!(analog_task));
+    
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
             use ::esp_idf_svc::hal::gpio::*;
@@ -148,7 +150,7 @@ fn expand_split_central(
         #imports
 
         #bind_interrupt
-
+        
         #main_function_sig {
             ::defmt::info!("RMK start!");
             // Initialize peripherals as `p`
@@ -172,6 +174,8 @@ fn expand_split_central(
             // Initialize split central ble config
             #ble_config
 
+            #analog_config
+
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
@@ -194,6 +198,7 @@ fn expand_split_central(
 fn expand_split_central_entry(
     keyboard_config: &KeyboardConfig,
     split_config: &SplitConfig,
+    other_tasks: Vec<TokenStream2>
 ) -> TokenStream2 {
     let central_row = split_config.central.rows;
     let central_col = split_config.central.cols;
@@ -323,6 +328,7 @@ fn expand_split_central_entry(
                     )
                 });
             });
+            other_tasks.into_iter().for_each(|t|{ tasks.push(t); });
             join_all_tasks(tasks)
         }
         ChipSeries::Rp2040 => {
