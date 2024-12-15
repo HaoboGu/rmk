@@ -43,13 +43,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         behavior: BehaviorConfig,
     ) -> Self {
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in behavior.combos.iter().enumerate() {
+            combos[i] = combo.clone();
+        }
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache: [0; MACRO_SPACE_SIZE],
-            combos: [(); COMBO_MAX_NUM].map(|_| Combo::empty()),
+            combos,
             behavior,
         }
     }
@@ -61,7 +65,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
-        let mut combos = [(); COMBO_MAX_NUM].map(|_| Combo::empty());
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in behavior.combos.iter().enumerate() {
+            combos[i] = combo.clone();
+        }
         if let Some(storage) = storage {
             if {
                 Ok(())

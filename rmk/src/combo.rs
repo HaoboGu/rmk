@@ -2,31 +2,38 @@ use heapless::Vec;
 
 use crate::{action::KeyAction, event::KeyEvent};
 
-// Default number of macros
+// Max number of macros
 pub(crate) const COMBO_MAX_NUM: usize = 8;
-// Default size of macros
+// Max size of macros
 pub(crate) const COMBO_MAX_LENGTH: usize = 4;
 
-pub(crate) struct Combo {
+#[derive(Clone)]
+pub struct Combo {
     pub(crate) actions: Vec<KeyAction, COMBO_MAX_LENGTH>,
     pub(crate) output: KeyAction,
     state: u8,
 }
 
+impl Default for Combo {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl Combo {
-    pub fn new(actions: Vec<KeyAction, COMBO_MAX_LENGTH>, output: KeyAction) -> Self {
+    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction) -> Self {
         Self {
-            actions,
+            actions: Vec::from_iter(actions),
             output,
             state: 0,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::new(), KeyAction::No)
+        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No)
     }
 
-    pub fn update(&mut self, key_action: KeyAction, key_event: KeyEvent) -> bool {
+    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent) -> bool {
         if !key_event.pressed || key_action == KeyAction::No {
             return false;
         }
@@ -40,19 +47,19 @@ impl Combo {
         action_idx.is_some()
     }
 
-    pub fn done(&self) -> bool {
+    pub(crate) fn done(&self) -> bool {
         self.started() && self.keys_pressed() == self.actions.len() as u32
     }
 
-    pub fn started(&self) -> bool {
+    pub(crate) fn started(&self) -> bool {
         self.state != 0
     }
 
-    pub fn keys_pressed(&self) -> u32 {
+    pub(crate) fn keys_pressed(&self) -> u32 {
         self.state.count_ones()
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.state = 0;
     }
 }

@@ -3,6 +3,7 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
+use ::heapless::Vec;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
@@ -10,6 +11,8 @@ pub use nrf_config::BleBatteryConfig;
 
 use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
+
+use crate::combo::{Combo, COMBO_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
 pub struct RmkConfig<'a, O: OutputPin> {
@@ -46,6 +49,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
 }
 
 /// Configurations for tap hold behavior
