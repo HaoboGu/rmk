@@ -2,7 +2,7 @@ use super::{protocol::*, vial::process_vial};
 use crate::config::VialConfig;
 use crate::{
     hid::{HidError, HidReaderWriterWrapper},
-    keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
+    keyboard_macro::{MacroSpaceSize, NumMacro},
     keymap::KeyMap,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
@@ -12,21 +12,33 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
+use generic_array::sequence::GenericSequence;
+use generic_array::{ArrayLength, GenericArray};
 use num_enum::{FromPrimitive, TryFromPrimitive};
+use typenum::{NonZero, Unsigned};
 
-pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct VialService<
+    'a,
+    Row: NonZero + ArrayLength,
+    Col: NonZero + ArrayLength,
+    NumLayers: NonZero + ArrayLength,
+> {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, Row, Col, NumLayers>>,
 
     // Vial config
     vial_config: VialConfig<'a>,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    VialService<'a, ROW, COL, NUM_LAYER>
+impl<
+        'a,
+        Row: NonZero + ArrayLength,
+        Col: NonZero + ArrayLength,
+        NumLayers: NonZero + ArrayLength,
+    > VialService<'a, Row, Col, NumLayers>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, Row, Col, NumLayers>>,
         vial_config: VialConfig<'a>,
     ) -> Self {
         Self {
@@ -71,7 +83,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &RefCell<KeyMap<'a, Row, Col, NumLayers>>,
     ) {
         let command_id = report.output_data[0];
 
@@ -194,8 +206,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 warn!("Macro get count -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBufferSize => {
-                report.input_data[1] = (MACRO_SPACE_SIZE as u16 >> 8) as u8;
-                report.input_data[2] = (MACRO_SPACE_SIZE & 0xFF) as u8;
+                report.input_data[1] = (MacroSpaceSize::U16 >> 8) as u8;
+                report.input_data[2] = MacroSpaceSize::U8;
                 warn!("Macro get buffer size -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBuffer => {
@@ -223,7 +235,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                 // The first sequence, reset the macro cache
                 if offset == 0 {
-                    self.keymap.borrow_mut().macro_cache = [0; MACRO_SPACE_SIZE];
+                    self.keymap.borrow_mut().macro_cache = GenericArray::generate(|_| 0);
                 }
 
                 // Update macro cache
@@ -235,7 +247,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
                 // Then flush macros to storage
                 let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
-                if size < 28 || num_zero >= NUM_MACRO {
+                if size < 28 || num_zero >= NumMacro {
                     let buf = self.keymap.borrow_mut().macro_cache;
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteMacro(buf))
@@ -246,9 +258,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             ViaCommand::DynamicKeymapMacroReset => {
                 warn!("Macro reset -- to be implemented")
             }
-            ViaCommand::DynamicKeymapGetLayerCount => {
-                report.input_data[1] = NUM_LAYER as u8;
-            }
+            ViaCommand::DynamicKeymapGetLayerCount => report.input_data[1] = NumLayers::U8,
             ViaCommand::DynamicKeymapGetBuffer => {
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
                 // size <= 28

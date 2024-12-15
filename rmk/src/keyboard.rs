@@ -2,7 +2,7 @@ use crate::config::BehaviorConfig;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
-    keyboard_macro::{MacroOperation, NUM_MACRO},
+    keyboard_macro::{MacroOperation, NumMacro},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
@@ -16,9 +16,12 @@ use embassy_sync::{
     channel::{Channel, Receiver, Sender},
 };
 use embassy_time::{Instant, Timer};
+use generic_array::sequence::GenericSequence;
+use generic_array::{ArrayLength, GenericArray};
 use heapless::{FnvIndexMap, Vec};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
+use typenum::NonZero;
 use usbd_hid::descriptor::KeyboardReport;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
@@ -118,9 +121,14 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
     }
 }
 
-pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct Keyboard<
+    'a,
+    Row: NonZero + ArrayLength,
+    Col: NonZero + ArrayLength,
+    NumLayers: NonZero + ArrayLength,
+> {
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<'a, Row, Col, NumLayers>>,
 
     /// Report Sender
     pub(crate) sender:
@@ -130,7 +138,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     unprocessed_events: Vec<KeyEvent, 16>,
 
     /// Timer which records the timestamp of key changes
-    pub(crate) timer: [[Option<Instant>; ROW]; COL],
+    pub(crate) timer: GenericArray<GenericArray<Option<Instant>, Row>, Col>,
 
     /// Record the timestamp of last release, (event, is_modifier, timestamp)
     last_release: (KeyEvent, bool, Option<Instant>),
@@ -167,18 +175,22 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     mouse_wheel_move_delta: i8,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<
+        'a,
+        Row: NonZero + ArrayLength,
+        Col: NonZero + ArrayLength,
+        NumLayers: NonZero + ArrayLength,
+    > Keyboard<'a, Row, Col, NumLayers>
 {
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, Row, Col, NumLayers>>,
         sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
         behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
             sender,
-            timer: [[None; ROW]; COL],
+            timer: GenericArray::generate(|_| GenericArray::generate(|_| None)),
             last_release: (
                 KeyEvent {
                     row: 0,
@@ -397,7 +409,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 if key_event.pressed {
                     // Disable all layers except the default layer
                     let default_layer = self.keymap.borrow().get_default_layer();
-                    for i in 0..NUM_LAYER as u8 {
+                    for i in 0..NumLayers::U8 {
                         if i != default_layer {
                             self.keymap.borrow_mut().deactivate_layer(i);
                         }
@@ -936,7 +948,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
         // Get macro index
         if let Some(macro_idx) = key.as_macro_index() {
-            if macro_idx as usize >= NUM_MACRO {
+            if macro_idx as usize >= NumMacro {
                 error!("Macro idx invalid: {}", macro_idx);
                 return;
             }

@@ -34,6 +34,10 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use generic_array::sequence::GenericSequence;
+use generic_array::ArrayLength;
+use generic_array::GenericArray;
+use typenum::NonZero;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
@@ -54,18 +58,14 @@ pub async fn run_rmk_direct_pin<
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
-    // generic parameters may not be used in const operations.
-    // Maybe we can use nightly only feature `generic_const_exprs`
-    const SIZE: usize,
-    const NUM_LAYER: usize,
+    Row: ArrayLength + NonZero,
+    Col: ArrayLength + NonZero,
+    NumLayers: ArrayLength + NonZero,
 >(
-    direct_pins: [[Option<In>; COL]; ROW],
+    direct_pins: GenericArray<GenericArray<Option<In>, Col>, Row>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -76,7 +76,7 @@ pub async fn run_rmk_direct_pin<
 
     #[cfg(all(feature = "_no_usb", feature = "_no_external_storage"))]
     {
-        run_rmk_direct_pin_with_async_flash::<_, _, ROW, COL, SIZE, NUM_LAYER>(
+        run_rmk_direct_pin_with_async_flash::<_, _, Row, Col, NumLayers>(
             direct_pins,
             default_keymap,
             keyboard_config,
@@ -89,7 +89,7 @@ pub async fn run_rmk_direct_pin<
 
     #[cfg(all(not(feature = "_no_usb"), feature = "_no_external_storage"))]
     {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
+        run_rmk_direct_pin_with_async_flash::<_, _, _, Row, Col, NumLayers>(
             direct_pins,
             usb_driver,
             default_keymap,
@@ -103,7 +103,7 @@ pub async fn run_rmk_direct_pin<
 
     #[cfg(all(feature = "_no_usb", not(feature = "_no_external_storage")))]
     {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
+        run_rmk_direct_pin_with_async_flash::<_, _, _, Row, Col, NumLayers>(
             direct_pins,
             async_flash,
             default_keymap,
@@ -117,7 +117,7 @@ pub async fn run_rmk_direct_pin<
 
     #[cfg(all(not(feature = "_no_usb"), not(feature = "_no_external_storage")))]
     {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, _, ROW, COL, SIZE, NUM_LAYER>(
+        run_rmk_direct_pin_with_async_flash::<_, _, _, _, Row, Col, NumLayers>(
             direct_pins,
             usb_driver,
             async_flash,
@@ -150,27 +150,26 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const SIZE: usize,
-    const NUM_LAYER: usize,
+    Row: NonZero + ArrayLength,
+    Col: NonZero + ArrayLength,
+    NumLayers: NonZero + ArrayLength,
 >(
-    direct_pins: [[Option<In>; COL]; ROW],
+    direct_pins: GenericArray<GenericArray<Option<In>, Col>, Row>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     // Create the debouncer
     #[cfg(feature = "rapid_debouncer")]
-    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    let debouncer = RapidDebouncer::<Col, Row>::new();
     #[cfg(not(feature = "rapid_debouncer"))]
-    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+    let debouncer = DefaultDebouncer::<Col, Row>::new();
 
     // Keyboard matrix
-    let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
+    let matrix = DirectPinMatrix::<_, _, Row, Col>::new(direct_pins, debouncer, low_active);
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
@@ -211,16 +210,15 @@ pub(crate) struct DirectPinMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     D: DebouncerTrait,
-    const ROW: usize,
-    const COL: usize,
-    const SIZE: usize,
+    Row: ArrayLength + NonZero,
+    Col: ArrayLength + NonZero,
 > {
     /// Input pins of the pcb matrix
-    direct_pins: [[Option<In>; COL]; ROW],
+    direct_pins: GenericArray<GenericArray<Option<In>, Col>, Row>,
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    key_states: [[KeyState; COL]; ROW],
+    key_states: GenericArray<GenericArray<KeyState, Col>, Row>,
     /// Start scanning
     scan_start: Option<Instant>,
     /// Pin active level
@@ -231,21 +229,20 @@ impl<
         #[cfg(not(feature = "async_matrix"))] In: InputPin,
         #[cfg(feature = "async_matrix")] In: Wait + InputPin,
         D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > DirectPinMatrix<In, D, ROW, COL, SIZE>
+        Row: ArrayLength + NonZero,
+        Col: ArrayLength + NonZero,
+    > DirectPinMatrix<In, D, Row, Col>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(
-        direct_pins: [[Option<In>; COL]; ROW],
+        direct_pins: GenericArray<GenericArray<Option<In>, Col>, Row>,
         debouncer: D,
         low_active: bool,
     ) -> Self {
         DirectPinMatrix {
             direct_pins,
             debouncer,
-            key_states: [[KeyState::new(); COL]; ROW],
+            key_states: GenericArray::generate(|_| GenericArray::generate(|_| KeyState::new())),
             scan_start: None,
             low_active,
         }
@@ -256,14 +253,12 @@ impl<
         #[cfg(not(feature = "async_matrix"))] In: InputPin,
         #[cfg(feature = "async_matrix")] In: Wait + InputPin,
         D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
+        Row: ArrayLength + NonZero,
+        Col: ArrayLength + NonZero,
+    > MatrixTrait for DirectPinMatrix<In, D, Row, Col>
 {
-    const ROW: usize = ROW;
-    const COL: usize = COL;
-
+    type Row = Row;
+    type Col = Col;
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
         if let Some(start_time) = self.scan_start {

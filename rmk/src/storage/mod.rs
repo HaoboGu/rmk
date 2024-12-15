@@ -4,21 +4,24 @@ pub mod nor_flash;
 use crate::config::StorageConfig;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
+use core::marker::PhantomData;
 use core::ops::Range;
 use defmt::{debug, error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use generic_array::{ArrayLength, GenericArray};
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
+use typenum::{NonZero, Unsigned};
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};
 
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
+use crate::keyboard_macro::MacroSpaceSize;
 use crate::{
     action::KeyAction,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
@@ -31,7 +34,7 @@ pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperation
     Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
@@ -48,7 +51,7 @@ pub(crate) enum FlashOperationMessage {
     // Default layer number
     DefaultLayer(u8),
     // Write macro
-    WriteMacro([u8; MACRO_SPACE_SIZE]),
+    WriteMacro(GenericArray<u8, MacroSpaceSize>),
     KeymapKey {
         layer: u8,
         col: u8,
@@ -98,7 +101,7 @@ pub(crate) enum StorageData {
     LayoutConfig(LayoutConfig),
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey),
-    MacroData([u8; MACRO_SPACE_SIZE]),
+    MacroData(GenericArray<u8, MacroSpaceSize>),
     ConnectionType(u8),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
@@ -110,12 +113,12 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
     0x2000 + slot_num as u32
 }
 
-pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub(crate) fn get_keymap_key<Row: Unsigned, Col: Unsigned, NumLayers: Unsigned>(
     row: usize,
     col: usize,
     layer: usize,
 ) -> u32 {
-    (0x1000 + layer * COL * ROW + row * COL + col) as u32
+    (0x1000 + layer * Col::USIZE * Row::USIZE + row * Col::USIZE + col) as u32
 }
 
 impl Value<'_> for StorageData {
@@ -155,12 +158,12 @@ impl Value<'_> for StorageData {
                 Ok(6)
             }
             StorageData::MacroData(d) => {
-                if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                if buffer.len() < MacroSpaceSize::USIZE + 1 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::MacroData as u8;
-                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
-                Ok(MACRO_SPACE_SIZE + 1)
+                buffer[1..MacroSpaceSize::USIZE + 1].copy_from_slice(d);
+                Ok(MacroSpaceSize::USIZE + 1)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -238,12 +241,12 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::MacroData => {
-                    if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                    if buffer.len() < MacroSpaceSize::USIZE + 1 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
-                    Ok(StorageData::MacroData(buf))
+                    let mut buf = [0_u8; MacroSpaceSize::USIZE];
+                    buf.copy_from_slice(&buffer[1..MacroSpaceSize::USIZE + 1]);
+                    Ok(StorageData::MacroData(buf.into()))
                 }
                 StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
                 #[cfg(feature = "_nrf_ble")]
@@ -303,13 +306,16 @@ pub(crate) struct KeymapKey {
 
 pub(crate) struct Storage<
     F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
+    Row: ArrayLength + NonZero,
+    Col: ArrayLength + NonZero,
+    NumLayers: ArrayLength + NonZero,
 > {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],
+    _row: PhantomData<Row>,
+    _col: PhantomData<Col>,
+    _layers: PhantomData<NumLayers>,
 }
 
 /// Read out storage config, update and then save back.
@@ -336,12 +342,16 @@ macro_rules! write_storage {
     };
 }
 
-impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Storage<F, ROW, COL, NUM_LAYER>
+impl<
+        F: AsyncNorFlash,
+        Row: NonZero + ArrayLength,
+        Col: NonZero + ArrayLength,
+        NumLayers: NonZero + ArrayLength,
+    > Storage<F, Row, Col, NumLayers>
 {
     pub(crate) async fn new(
         flash: F,
-        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+        keymap: &GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
         config: StorageConfig,
     ) -> Self {
         // Check storage setting
@@ -386,6 +396,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             flash,
             storage_range,
             buffer: [0; get_buffer_size()],
+            _row: PhantomData,
+            _col: PhantomData,
+            _layers: PhantomData,
         };
 
         if config.clear_storage {
@@ -480,7 +493,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         layer: layer as usize,
                         action,
                     });
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(
+                    let key = get_keymap_key::<Row, Col, NumLayers>(
                         row as usize,
                         col as usize,
                         layer as usize,
@@ -560,12 +573,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_keymap(
         &mut self,
-        keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     ) -> Result<(), ()> {
         for (layer, layer_data) in keymap.iter_mut().enumerate() {
             for (row, row_data) in layer_data.iter_mut().enumerate() {
                 for (col, value) in row_data.iter_mut().enumerate() {
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
+                    let key = get_keymap_key::<Row, Col, NumLayers>(row, col, layer);
                     let item = match fetch_item::<u32, StorageData, _>(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -625,7 +638,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     async fn initialize_storage_with_config(
         &mut self,
-        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+        keymap: &GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
@@ -667,7 +680,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         action: *action,
                     });
 
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
+                    let key = get_keymap_key::<Row, Col, NumLayers>(row, col, layer);
 
                     store_item(
                         &mut self.flash,
@@ -715,14 +728,15 @@ fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
     }
 }
 
+// This could be done entirely within the type system, but this is easier to understand
 const fn get_buffer_size() -> usize {
     // The buffer size needed = size_of(StorageData) = MACRO_SPACE_SIZE + 8(generally)
     // According to doc of `sequential-storage`, for some flashes it should be aligned in 32 bytes
     // To make sure the buffer works, do this alignment always
-    let buffer_size = if MACRO_SPACE_SIZE < 248 {
+    let buffer_size = if MacroSpaceSize::USIZE < 248 {
         256
     } else {
-        MACRO_SPACE_SIZE + 8
+        MacroSpaceSize::USIZE + 8
     };
 
     let remainder = buffer_size % 32;
