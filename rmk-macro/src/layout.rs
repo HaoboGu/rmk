@@ -38,7 +38,7 @@ fn expand_row(row: Vec<String>) -> TokenStream2 {
 }
 
 /// Parse the key string at a single position
-fn parse_key(key: String) -> TokenStream2 {
+pub(crate) fn parse_key(key: String) -> TokenStream2 {
     if key.len() < 5 {
         return if key.len() > 0 && key.trim_start_matches("_").len() == 0 {
             quote! { ::rmk::a!(No) }

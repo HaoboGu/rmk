@@ -3,8 +3,9 @@
 
 use quote::quote;
 
-use crate::config::{OneShotConfig, TriLayerConfig};
+use crate::config::{CombosConfig, OneShotConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
+use crate::layout::parse_key;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -39,14 +40,32 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
     }
 }
 
+fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
+    let default = quote! {::core::default::Default::default()};
+    match combos {
+        Some(combos) => {
+            let combos = combos.combos.iter().map(|combo| {
+                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned()));
+                let output = parse_key(combo.output.to_owned());
+                quote! { ::rmk::combo::Combo::new([#(#actions),*], #output) }
+            });
+
+            quote! { ::heapless::Vec::from_iter([#(#combos),*]) }
+        }
+        None => default,
+    }
+}
+
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
     let tri_layer = expand_tri_layer(&keyboard_config.behavior.tri_layer);
     let one_shot = expand_one_shot(&keyboard_config.behavior.one_shot);
+    let combos = expand_combos(&keyboard_config.behavior.combo);
 
     quote! {
         let behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
+            combos: #combos,
         };
     }
 }
