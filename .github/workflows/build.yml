@@ -217,7 +217,6 @@ jobs:
       actions: read
       pull-requests: write
     steps:
-      - uses: dtolnay/rust-toolchain@nightly
       - uses: actions/cache@v3
         id: cache-cargo
         with:
