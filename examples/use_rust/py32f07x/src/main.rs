@@ -13,8 +13,8 @@ use embassy_executor::Spawner;
 use py32_hal::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
+    rcc::{Pll, PllMul, PllSource, Sysclk},
     time::Hertz,
-    rcc::{Pll, PllSource, Sysclk, PllMul},
     usb::{Driver, InterruptHandler},
 };
 // use py32_hal::flash::Blocking;

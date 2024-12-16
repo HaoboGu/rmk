@@ -20,64 +20,205 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_rmk:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-make
-        run: cargo install --force cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
       - name: Build rmk
         working-directory: ./rmk
         run: cargo build --release 
+  build rp2040:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi
       - name: Build rp2040
         working-directory: ./examples/use_rust/rp2040
         run: cargo make uf2 --release
+  build_rp2040_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi
       - name: Build rp2040 with config
         working-directory: ./examples/use_config/rp2040
         run: cargo make uf2 --release
+  build_stm32h7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build stm32h7
         working-directory: ./examples/use_rust/stm32h7
         run: cargo make uf2 --release
+  build_stm32h7_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build stm32h7 with config
         working-directory: ./examples/use_config/stm32h7
         run: cargo make uf2 --release
+  build_stm32f1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabi      
       - name: Build stm32f1
         working-directory: ./examples/use_rust/stm32f1
         run: cargo make uf2 --release
+  build_stm32f1_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabi     
       - name: Build stm32f1 with config
         working-directory: ./examples/use_config/stm32f1
         run: cargo make uf2 --release
+  build_stm32f4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build stm32f4
         working-directory: ./examples/use_rust/stm32f4
         run: cargo make uf2 --release
+  build_stm32f4_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build stm32f4 with config
         working-directory: ./examples/use_config/stm32f4
         run: cargo make uf2 --release
+  build_nrf52840_ble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build nrf52840_ble
         working-directory: ./examples/use_rust/nrf52840_ble
         run: cargo make uf2 --release
+  build_nrf52832_ble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build nrf52832_ble
         working-directory: ./examples/use_rust/nrf52832_ble
         run: cargo make uf2 --release
+  build_nrf52840_ble_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build nrf52840_ble with config
         working-directory: ./examples/use_config/nrf52840_ble
         run: cargo make uf2 --release
+  build_nrf52832_ble_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build nrf52832_ble with config
         working-directory: ./examples/use_config/nrf52832_ble
         run: cargo make uf2 --release
+  build_rp2040_split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi
       - name: Build rp2040 split
         working-directory: ./examples/use_rust/rp2040_split
         run: cargo make uf2 --release
+  build_rp2040_split_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi
       - name: Build rp2040 split with config
         working-directory: ./examples/use_config/rp2040_split
         run: cargo make uf2 --release
+  build_nrf52840:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
       - name: Build nrf52840 split
         working-directory: ./examples/use_rust/nrf52840_ble_split
         run: cargo make uf2 --release
-      - name: Build rp2040 split with config
+  build_nrf52840_split_with_config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-make
+        run: cargo binstall cargo-make -y
+      - uses: actions/checkout@v3
+      - name: Install target
+        run: rustup target add thumbv7em-none-eabihf
+      - name: Build nrf52840 split with config
         working-directory: ./examples/use_config/nrf52840_ble_split
         run: cargo make uf2 --release
-        
