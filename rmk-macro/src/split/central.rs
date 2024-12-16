@@ -14,12 +14,13 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
+    analog::expand_analog,
+    joystick::expand_joystick,
     keyboard::gen_imports,
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     light::expand_light_config,
     matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
-    analog::expand_analog,
-    ChipModel, ChipSeries,
+    ChipModel, ChipSeries
 };
 
 /// Parse split central mod and generate a valid RMK main function with all needed code
@@ -129,10 +130,31 @@ fn expand_split_central(
 
     let split_communication_config =
         expand_split_communication_config(&keyboard_config.chip, split_config);
+
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
-    let (analog_config, analog_task) = expand_analog(keyboard_config);
-    let run_rmk = expand_split_central_entry(keyboard_config, split_config, vec!(analog_task));
+
+    let mut other_tasks = vec!();
     
+    // (joystick_config, joystick_channel, joystick_task)
+    let joystick = if let Some(joystick_conf) = split_config.central.joystick.clone() {
+        expand_joystick(&keyboard_config.chip, joystick_conf)
+    } else {
+        vec!()
+    };
+
+    let mut analog_channel = vec!();
+    let mut joystick_config = vec!();
+    joystick.into_iter().for_each(|(config, channel, task)| {
+        joystick_config.push(config);
+        analog_channel.push(channel);
+        other_tasks.push(task);
+    });
+    
+    let (analog_config, analog_task) = expand_analog(keyboard_config, analog_channel);
+    other_tasks.push(analog_task);
+    
+    let run_rmk = expand_split_central_entry(keyboard_config, split_config, other_tasks);
+
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
             use ::esp_idf_svc::hal::gpio::*;
@@ -150,7 +172,7 @@ fn expand_split_central(
         #imports
 
         #bind_interrupt
-        
+
         #main_function_sig {
             ::defmt::info!("RMK start!");
             // Initialize peripherals as `p`
@@ -171,10 +193,12 @@ fn expand_split_central(
             // Initialize matrix config as `(input_pins, output_pins)`
             #matrix_config
 
+            #(#joystick_config); *
+            
+            #analog_config
+            
             // Initialize split central ble config
             #ble_config
-
-            #analog_config
 
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
@@ -275,6 +299,7 @@ fn expand_split_central_entry(
                     });
                 });
 
+            other_tasks.into_iter().for_each(|t| { tasks.push(t); });
             join_all_tasks(tasks)
         }
         ChipSeries::Nrf52 => {
@@ -328,7 +353,7 @@ fn expand_split_central_entry(
                     )
                 });
             });
-            other_tasks.into_iter().for_each(|t|{ tasks.push(t); });
+            other_tasks.into_iter().for_each(|t| { tasks.push(t); });
             join_all_tasks(tasks)
         }
         ChipSeries::Rp2040 => {

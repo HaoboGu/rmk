@@ -47,7 +47,7 @@ impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
             error!("Send ble report error: {}", e);
             match e {
                 gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
-                gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
+                gatt_server::NotifyValueError::Raw(_) => {HidError::BleRawError},
             }
         })
     }

@@ -74,6 +74,8 @@ mod light;
 mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
+#[cfg(feature = "joystick")]
+pub mod joystick;
 mod storage;
 mod usb;
 mod via;

@@ -16,6 +16,7 @@ mod layout;
 mod light;
 mod matrix;
 mod split;
+mod joystick;
 mod analog;
 #[rustfmt::skip]
 mod usb_interrupt_map;
