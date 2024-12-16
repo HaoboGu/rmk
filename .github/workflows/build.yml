@@ -25,6 +25,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./example/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install target
         run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
       - name: Install cargo-make
