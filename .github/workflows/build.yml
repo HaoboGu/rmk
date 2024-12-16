@@ -217,6 +217,7 @@ jobs:
       actions: read
       pull-requests: write
     steps:
+      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/cache@v3
         id: cache-cargo
         with:
@@ -227,6 +228,8 @@ jobs:
             ~/.cargo/git/db/
             ./example/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install flip-link
+        run: cargo binstall flip-link -y
       - run: rustup target add thumbv7em-none-eabihf
       - run: rustup component add rust-src llvm-tools
       - if: steps.cache-cargo.outputs.cache-hit != 'true'
@@ -239,7 +242,7 @@ jobs:
         working-directory: ./examples/use_config/nrf52840_ble
         run: |
           echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
-          cargo build --release >> $GITHUB_OUTPUT
+          cargo size --release >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
         id: new-size
       - name: Save binary
