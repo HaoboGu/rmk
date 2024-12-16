@@ -20,9 +20,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build esp32c3_ble:
+  build_esp32c3_ble:
     runs-on: ubuntu-22.04
-
     steps:
       - uses: actions/checkout@v3
       - name: Install ldproxy
@@ -41,7 +40,7 @@ jobs:
         run: |
           cargo +esp build --release 
           cargo clean
-  build esp32c6_ble:
+  build_esp32c6_ble:
     runs-on: ubuntu-22.04
 
     steps:
@@ -63,7 +62,7 @@ jobs:
           cargo +esp build --release 
           cargo clean
 
-  build esp32s3_ble:
+  build_esp32s3_ble:
     runs-on: ubuntu-22.04
 
     steps:
