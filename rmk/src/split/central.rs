@@ -2,13 +2,11 @@ use core::cell::RefCell;
 
 use defmt::{error, info};
 use embassy_executor::Spawner;
-use embassy_futures::select::select_slice;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use heapless::Vec;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
@@ -543,6 +541,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use heapless::Vec;
+        use embassy_futures::select::select_slice;
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
             if start_time.elapsed().as_millis() <= 1 {
