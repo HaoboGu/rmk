@@ -82,8 +82,21 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./examples/use_rust/esp32s3_ble/target/
+            ./examples/use_rust/esp32s3_ble/.embuild/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install ldproxy and espup
         run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32s3_ble
         working-directory: ./examples/use_rust/esp32s3_ble
         run: |
@@ -94,8 +107,21 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./examples/use_rust/esp32s3_ble/target/
+            ./examples/use_rust/esp32s3_ble/.embuild/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install ldproxy and espup
         run: cargo binstall ldproxy espup -y     
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32s3_ble with config
         working-directory: ./examples/use_config/esp32s3_ble
         run: |
