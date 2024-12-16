@@ -30,7 +30,7 @@ jobs:
       - name: Build rmk
         working-directory: ./rmk
         run: cargo build --release 
-  build rp2040:
+  build_rp2040:
     runs-on: ubuntu-latest
     steps:
       - uses: cargo-bins/cargo-binstall@main
