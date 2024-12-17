@@ -1,9 +1,9 @@
 ///! The abstracted driver layer of the split keyboard.
 ///!
-use crate::keyboard::{key_event_channel, KeyEvent};
-
 use super::SplitMessage;
-use defmt::{debug, error};
+use crate::keyboard::{key_event_channel, KeyEvent};
+use crate::CONNECTION_STATE;
+use defmt::{debug, error, warn};
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -70,13 +70,19 @@ impl<
                             error!("Invalid peripheral row/col: {} {}", e.row, e.col);
                             continue;
                         }
-                        key_event_channel
-                            .send(KeyEvent {
-                                row: e.row + ROW_OFFSET as u8,
-                                col: e.col + COL_OFFSET as u8,
-                                pressed: e.pressed,
-                            })
-                            .await;
+
+                        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                            // Only when the connection is established, send the key event.
+                            key_event_channel
+                                .send(KeyEvent {
+                                    row: e.row + ROW_OFFSET as u8,
+                                    col: e.col + COL_OFFSET as u8,
+                                    pressed: e.pressed,
+                                })
+                                .await;
+                        } else {
+                            warn!("Key event from peripheral is ignored because the connection is not established.");
+                        }
                     }
                 }
                 Err(e) => error!("Peripheral message read error: {:?}", e),

@@ -13,7 +13,7 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::KEYBOARD_STATE;
+use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use crate::{
     ble::{
         ble_communication_task,
@@ -531,10 +531,11 @@ pub(crate) async fn run_dummy_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
-    let matrix_fut = matrix.scan();
+    let matrix_fut = matrix.run();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
     let dummy_communication = async {
+        CONNECTION_STATE.store(true, Ordering::Release);
         loop {
             keyboard_report_receiver.receive().await;
             warn!("Dummy service receives")
@@ -587,6 +588,7 @@ pub(crate) async fn run_ble_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
@@ -601,7 +603,7 @@ pub(crate) async fn run_ble_keyboard<
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
     let led_fut = led_service_task(light_service);
-    let matrix_fut = matrix.scan();
+    let matrix_fut = matrix.run();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard.run();
