@@ -1,31 +1,17 @@
+use super::driver::{SplitReader, SplitWriter};
+use super::SplitMessage;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
+use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
-use crate::matrix::MatrixTrait;
+use embassy_executor::Spawner;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-#[cfg(feature = "_nrf_ble")]
-use {
-    crate::ble::nrf::softdevice_task,
-    core::mem,
-    embassy_executor::Spawner,
-    nrf_softdevice::ble::gatt_server::set_sys_attrs,
-    nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement},
-    nrf_softdevice::ble::{set_address, Address, AddressType},
-    nrf_softdevice::{raw, Config, Softdevice},
-};
-
-use super::{
-    driver::{SplitReader, SplitWriter},
-    SplitMessage,
-};
-use crate::direct_pin::DirectPinMatrix;
-
 #[cfg(not(feature = "_nrf_ble"))]
 use {
     super::serial::SerialSplitDriver,
@@ -79,7 +65,7 @@ pub async fn run_rmk_split_peripheral<
     initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
 
     #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
+    crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
         matrix,
         central_addr,
         peripheral_addr,
@@ -127,153 +113,13 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
 
     #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
+    crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
         matrix,
         central_addr,
         peripheral_addr,
         spawner,
     )
     .await;
-}
-
-/// Initialize and run the nRF peripheral keyboard service via BLE.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-#[cfg(feature = "_nrf_ble")]
-pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
-    M: MatrixTrait,
-    const ROW: usize,
-    const COL: usize,
->(
-    mut matrix: M,
-    central_addr: [u8; 6],
-    peripheral_addr: [u8; 6],
-    spawner: Spawner,
-) -> ! {
-    use defmt::info;
-    use embassy_futures::select::select3;
-    use nrf_softdevice::ble::gatt_server;
-
-    use crate::split::nrf::peripheral::{
-        BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
-        SplitBleServiceEvent,
-    };
-
-    let ble_config = Config {
-        clock: Some(raw::nrf_clock_lf_cfg_t {
-            source: raw::NRF_CLOCK_LF_SRC_RC as u8,
-            rc_ctiv: 16,
-            rc_temp_ctiv: 2,
-            accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
-            // External osc
-            // source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
-            // rc_ctiv: 0,
-            // rc_temp_ctiv: 0,
-            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_20_PPM as u8,
-        }),
-        conn_gap: Some(raw::ble_gap_conn_cfg_t {
-            conn_count: 6,
-            event_length: 24,
-        }),
-        conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 256 }),
-        gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
-            attr_tab_size: raw::BLE_GATTS_ATTR_TAB_SIZE_DEFAULT,
-        }),
-        gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
-            adv_set_count: 1,
-            periph_role_count: 4,
-            central_role_count: 4,
-            central_sec_count: 4,
-            _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
-        }),
-        gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: "rmk_peripheral_board".as_ptr() as _,
-            current_len: "rmk_peripheral_board".len() as u16,
-            max_len: "rmk_peripheral_board".len() as u16,
-            write_perm: unsafe { mem::zeroed() },
-            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
-                raw::BLE_GATTS_VLOC_STACK as u8,
-            ),
-        }),
-        ..Default::default()
-    };
-
-    let sd = Softdevice::enable(&ble_config);
-    set_address(
-        sd,
-        &Address::new(AddressType::RandomStatic, peripheral_addr),
-    );
-
-    {
-        // Use the immutable ref of `Softdevice` to run the softdevice_task
-        // The mumtable ref is used for configuring Flash and BleServer
-        let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        defmt::unwrap!(spawner.spawn(softdevice_task(sdv)))
-    };
-
-    let server = defmt::unwrap!(BleSplitPeripheralServer::new(sd));
-
-    loop {
-        let advertisement = ConnectableAdvertisement::NonscannableDirected {
-            peer: Address::new(AddressType::RandomStatic, central_addr),
-        };
-        let conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
-            Ok(conn) => conn,
-            Err(e) => {
-                defmt::error!("Split peripheral advertise error: {}", e);
-                continue;
-            }
-        };
-
-        // Set sys attr of peripheral
-        set_sys_attrs(&conn, None).unwrap();
-
-        let server_fut = gatt_server::run(&conn, &server, |event| match event {
-            BleSplitPeripheralServerEvent::Service(split_event) => match split_event {
-                SplitBleServiceEvent::MessageToCentralCccdWrite { notifications } => {
-                    info!("Split value CCCD updated: {}", notifications)
-                }
-                SplitBleServiceEvent::MessageToPeripheralWrite(message) => {
-                    // TODO: Handle message from central to peripheral
-                    info!("Message from central: {:?}", message);
-                }
-            },
-        });
-
-        let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
-        let peripheral_fut = peripheral.run();
-        let matrix_fut = matrix.scan();
-        select3(matrix_fut, server_fut, peripheral_fut).await;
-    }
-}
-
-/// Initialize and run the peripheral keyboard service via serial.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `serial` - serial port to send key events to central board
-#[cfg(not(feature = "_nrf_ble"))]
-pub(crate) async fn initialize_serial_split_peripheral_and_run<
-    M: MatrixTrait,
-    S: Write + Read,
-    const ROW: usize,
-    const COL: usize,
->(
-    mut matrix: M,
-    serial: S,
-) -> ! {
-    use embassy_futures::select::select;
-
-    let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
-    loop {
-        select(matrix.scan(), peripheral.run()).await;
-    }
 }
 
 /// The split peripheral instance.
