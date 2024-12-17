@@ -13,7 +13,6 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use crate::{
     ble::{
         ble_communication_task,
@@ -28,6 +27,7 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
+use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -531,11 +531,12 @@ pub(crate) async fn run_dummy_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
-    let matrix_fut = matrix.run();
+    CONNECTION_STATE.store(false, Ordering::Release);
+    // Don't need to wait for connection, just do scanning to detect if there's a profile update
+    let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
     let dummy_communication = async {
-        CONNECTION_STATE.store(true, Ordering::Release);
         loop {
             keyboard_report_receiver.receive().await;
             warn!("Dummy service receives")
