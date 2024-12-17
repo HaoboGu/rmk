@@ -1,4 +1,6 @@
 use embassy_time::Instant;
+use generic_array::{sequence::GenericSequence, ArrayLength, GenericArray};
+use typenum::NonZero;
 
 use crate::matrix::KeyState;
 
@@ -28,18 +30,21 @@ impl DebounceCounter {
 }
 
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/19613128b901723f7b78c136792d72e6ca7cf4fc/app/module/lib/zmk_debounce/debounce.c)
-pub(crate) struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
+pub(crate) struct DefaultDebouncer<
+    InputPinNum: ArrayLength + NonZero,
+    OutputPinNum: ArrayLength + NonZero,
+> {
     last_ms: u32,
-    counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    counters: GenericArray<GenericArray<DebounceCounter, InputPinNum>, OutputPinNum>,
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
-    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<InputPinNum: ArrayLength + NonZero, OutputPinNum: ArrayLength + NonZero> DebouncerTrait
+    for DefaultDebouncer<InputPinNum, OutputPinNum>
 {
     /// Create a default debouncer
     fn new() -> Self {
         DefaultDebouncer {
-            counters: [[DebounceCounter(0); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            counters: GenericArray::generate(|_| GenericArray::generate(|_| DebounceCounter(0))),
             last_ms: 0,
         }
     }

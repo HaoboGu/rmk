@@ -45,6 +45,7 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
+use generic_array::{ArrayLength, GenericArray};
 use keyboard::{
     communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
     REPORT_CHANNEL_SIZE,
@@ -52,6 +53,7 @@ use keyboard::{
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_macro as macros;
+use typenum::{NonZero, Unsigned};
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
 #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
@@ -103,17 +105,17 @@ pub async fn run_rmk<
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
+    Row: Unsigned + NonZero + ArrayLength,
+    Col: Unsigned + NonZero + ArrayLength,
+    NumLayers: Unsigned + NonZero + ArrayLength,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: GenericArray<In, Row>,
+    #[cfg(not(feature = "col2row"))] input_pins: GenericArray<In, Row>,
+    #[cfg(feature = "col2row")] output_pins: GenericArray<Out, Row>,
+    #[cfg(not(feature = "col2row"))] output_pins: GenericArray<Out, Row>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Row>, Row>, NumLayers>,
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -155,35 +157,35 @@ pub async fn run_rmk_with_async_flash<
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
+    Row: NonZero + ArrayLength,
+    Col: NonZero + ArrayLength,
+    NumLayers: NonZero + ArrayLength,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
+    #[cfg(feature = "col2row")] input_pins: GenericArray<In, Row>,
+    #[cfg(not(feature = "col2row"))] input_pins: GenericArray<In, Col>,
+    #[cfg(feature = "col2row")] output_pins: GenericArray<Out, Col>,
+    #[cfg(not(feature = "col2row"))] output_pins: GenericArray<Out, Row>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<ROW, COL>::new();
+    let debouncer = RapidDebouncer::<Row, Col>::new();
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let debouncer = DefaultDebouncer::<Row, Col>::new();
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<COL, ROW>::new();
+    let debouncer = RapidDebouncer::<Col, Row>::new();
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+    let debouncer = DefaultDebouncer::<Col, Row>::new();
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(feature = "col2row")]
-    let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let matrix = Matrix::<_, _, _, Row, Col>::new(input_pins, output_pins, debouncer);
     #[cfg(not(feature = "col2row"))]
-    let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
+    let matrix = Matrix::<_, _, _, Col, Row>::new(input_pins, output_pins, debouncer);
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
@@ -225,14 +227,14 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     D: Driver<'static>,
     M: MatrixTrait,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
+    Row: Unsigned + NonZero + ArrayLength,
+    Col: Unsigned + NonZero + ArrayLength,
+    NumLayers: Unsigned + NonZero + ArrayLength,
 >(
     mut matrix: M,
     usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -244,7 +246,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap = RefCell::new(KeyMap::<Row, Col, NumLayers>::new(default_keymap).await);
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
@@ -284,21 +286,21 @@ pub(crate) async fn run_usb_keyboard<
     M: MatrixTrait,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
     Out: OutputPin,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
+    Row: ArrayLength + NonZero,
+    Col: ArrayLength + NonZero,
+    NumLayers: ArrayLength + NonZero,
 >(
     usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
+    keyboard: &mut Keyboard<'b, Row, Col, NumLayers>,
     matrix: &mut M,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
         F,
-        ROW,
-        COL,
-        NUM_LAYER,
+        Row,
+        Col,
+        NumLayers,
     >,
     light_service: &mut LightService<Out>,
-    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
+    vial_service: &mut VialService<'b, Row, Col, NumLayers>,
     keyboard_report_receiver: &Receiver<
         'b,
         CriticalSectionRawMutex,

@@ -1,14 +1,16 @@
 use crate::{
     action::KeyAction,
     keyboard::KeyEvent,
-    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
+    keyboard_macro::{MacroOperation, MacroSpaceSize},
     keycode::KeyCode,
     reboot_keyboard,
     storage::Storage,
 };
 use defmt::{error, warn};
 use embedded_storage_async::nor_flash::NorFlash;
+use generic_array::{sequence::GenericSequence, ArrayLength, GenericArray};
 use num_enum::FromPrimitive;
+use typenum::NonZero;
 
 /// Keymap represents the stack of layers.
 ///
@@ -16,38 +18,56 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct KeyMap<
+    'a,
+    Row: NonZero + ArrayLength,
+    Col: NonZero + ArrayLength,
+    NumLayers: NonZero + ArrayLength,
+> {
     /// Layers
-    pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    pub(crate) layers:
+        &'a mut GenericArray<GenericArray<GenericArray<KeyAction, Col>, Row>, NumLayers>,
     /// Current state of each layer
-    layer_state: [bool; NUM_LAYER],
+    layer_state: GenericArray<bool, NumLayers>,
     /// Default layer number, max: 32
     default_layer: u8,
     /// Layer cache
-    layer_cache: [[u8; COL]; ROW],
+    layer_cache: GenericArray<GenericArray<u8, Col>, Row>,
     /// Macro cache
-    pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
+    pub(crate) macro_cache: GenericArray<u8, MacroSpaceSize>,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    KeyMap<'a, ROW, COL, NUM_LAYER>
+impl<
+        'a,
+        Row: NonZero + ArrayLength,
+        Col: NonZero + ArrayLength,
+        NumLayers: NonZero + ArrayLength,
+    > KeyMap<'a, Row, Col, NumLayers>
 {
-    pub(crate) async fn new(action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+    pub(crate) async fn new(
+        action_map: &'a mut GenericArray<
+            GenericArray<GenericArray<KeyAction, Col>, Row>,
+            NumLayers,
+        >,
+    ) -> Self {
         KeyMap {
             layers: action_map,
-            layer_state: [false; NUM_LAYER],
+            layer_state: GenericArray::generate(|_| false),
             default_layer: 0,
-            layer_cache: [[0; COL]; ROW],
-            macro_cache: [0; MACRO_SPACE_SIZE],
+            layer_cache: GenericArray::generate(|_| GenericArray::generate(|_| 0)),
+            macro_cache: GenericArray::generate(|_| 0),
         }
     }
 
     pub(crate) async fn new_from_storage<F: NorFlash>(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER>>,
+        action_map: &'a mut GenericArray<
+            GenericArray<GenericArray<KeyAction, Col>, Row>,
+            NumLayers,
+        >,
+        storage: Option<&mut Storage<F, Row, Col, NumLayers>>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
-        let mut macro_cache = [0; MACRO_SPACE_SIZE];
+        let mut macro_cache = GenericArray::generate(|_| 0);
         if let Some(storage) = storage {
             // Read keymap to `action_map`
             if storage.read_keymap(action_map).await.is_err() {
@@ -76,15 +96,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
         KeyMap {
             layers: action_map,
-            layer_state: [false; NUM_LAYER],
+            layer_state: GenericArray::generate(|_| false),
             default_layer: 0,
-            layer_cache: [[0; COL]; ROW],
+            layer_cache: GenericArray::generate(|_| GenericArray::generate(|_| 0)),
             macro_cache,
         }
     }
 
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
-        (ROW, COL, NUM_LAYER)
+        (Row::USIZE, Col::USIZE, NumLayers::USIZE)
     }
 
     /// Get the default layer number
@@ -261,10 +281,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Activate given layer
     pub(crate) fn activate_layer(&mut self, layer_num: u8) {
-        if layer_num as usize >= NUM_LAYER {
+        if layer_num >= NumLayers::U8 {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
-                layer_num, NUM_LAYER
+                layer_num,
+                NumLayers::U8
             );
             return;
         }
@@ -273,10 +294,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Deactivate given layer
     pub(crate) fn deactivate_layer(&mut self, layer_num: u8) {
-        if layer_num as usize >= NUM_LAYER {
+        if layer_num >= NumLayers::U8 {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
-                layer_num, NUM_LAYER
+                layer_num,
+                NumLayers::U8
             );
             return;
         }
@@ -285,10 +307,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Toggle given layer
     pub(crate) fn toggle_layer(&mut self, layer_num: u8) {
-        if layer_num as usize >= NUM_LAYER {
+        if layer_num >= NumLayers::U8 {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
-                layer_num, NUM_LAYER
+                layer_num,
+                NumLayers::U8
             );
             return;
         }

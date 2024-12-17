@@ -5,6 +5,8 @@ use crate::{
 use defmt::{error, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
+use generic_array::{sequence::GenericSequence, ArrayLength, GenericArray};
+use typenum::{NonZero, Unsigned};
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
@@ -14,8 +16,8 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
 pub(crate) trait MatrixTrait {
     // Matrix size
-    const ROW: usize;
-    const COL: usize;
+    type Row: Unsigned + NonZero;
+    type Col: Unsigned + NonZero;
 
     // Do matrix scanning, save the result in matrix's key_state field.
     async fn scan(&mut self);
@@ -23,14 +25,6 @@ pub(crate) trait MatrixTrait {
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
     // Update key state at position (row, col)
     fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState));
-    // Get matrix row num
-    fn get_row_num(&self) -> usize {
-        Self::ROW
-    }
-    // Get matrix col num
-    fn get_col_num(&self) -> usize {
-        Self::COL
-    }
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self);
 }
@@ -74,17 +68,17 @@ pub(crate) struct Matrix<
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
     D: DebouncerTrait,
-    const INPUT_PIN_NUM: usize,
-    const OUTPUT_PIN_NUM: usize,
+    InputPinNum: ArrayLength + NonZero,
+    OutputPinNum: ArrayLength + NonZero,
 > {
     /// Input pins of the pcb matrix
-    input_pins: [In; INPUT_PIN_NUM],
+    input_pins: GenericArray<In, InputPinNum>,
     /// Output pins of the pcb matrix
-    output_pins: [Out; OUTPUT_PIN_NUM],
+    output_pins: GenericArray<Out, OutputPinNum>,
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    key_states: GenericArray<GenericArray<KeyState, InputPinNum>, OutputPinNum>,
     /// Start scanning
     scan_start: Option<Instant>,
 }
@@ -94,21 +88,21 @@ impl<
         #[cfg(feature = "async_matrix")] In: Wait + InputPin,
         Out: OutputPin,
         D: DebouncerTrait,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+        InputPinNum: ArrayLength + NonZero,
+        OutputPinNum: ArrayLength + NonZero,
+    > Matrix<In, Out, D, InputPinNum, OutputPinNum>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(
-        input_pins: [In; INPUT_PIN_NUM],
-        output_pins: [Out; OUTPUT_PIN_NUM],
+        input_pins: GenericArray<In, InputPinNum>,
+        output_pins: GenericArray<Out, OutputPinNum>,
         debouncer: D,
     ) -> Self {
         Matrix {
             input_pins,
             output_pins,
             debouncer,
-            key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+            key_states: GenericArray::generate(|_| GenericArray::generate(|_| KeyState::new())),
             scan_start: None,
         }
     }
@@ -119,18 +113,18 @@ impl<
         #[cfg(feature = "async_matrix")] In: Wait + InputPin,
         Out: OutputPin,
         D: DebouncerTrait,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+        InputPinNum: ArrayLength + NonZero,
+        OutputPinNum: ArrayLength + NonZero,
+    > MatrixTrait for Matrix<In, Out, D, InputPinNum, OutputPinNum>
 {
     #[cfg(feature = "col2row")]
-    const ROW: usize = INPUT_PIN_NUM;
+    type Row = InputPinNum;
     #[cfg(feature = "col2row")]
-    const COL: usize = OUTPUT_PIN_NUM;
+    type Col = OutputPinNum;
     #[cfg(not(feature = "col2row"))]
-    const ROW: usize = OUTPUT_PIN_NUM;
+    type Row = OutputPinNum;
     #[cfg(not(feature = "col2row"))]
-    const COL: usize = INPUT_PIN_NUM;
+    type Col = InputPinNum;
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
@@ -147,7 +141,7 @@ impl<
             out.set_high().ok();
         }
         Timer::after_micros(1).await;
-        let mut futs: Vec<_, INPUT_PIN_NUM> = self
+        let mut futs: Vec<_, InputPinNum> = self
             .input_pins
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
@@ -170,7 +164,7 @@ impl<
             self.wait_for_key().await;
 
             // Scan matrix and send report
-            for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
+            for (out_idx, out_pin) in self.output_pins.as_mut_slice().iter_mut().enumerate() {
                 // Pull up output pin, wait 1us ensuring the change comes into effect
                 out_pin.set_high().ok();
                 Timer::after_micros(1).await;
