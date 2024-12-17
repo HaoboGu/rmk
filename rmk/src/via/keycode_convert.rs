@@ -328,6 +328,13 @@ mod test {
             ),
             from_via_keycode(via_keycode)
         );
+
+        // ComboOff
+        let via_keycode = 0x7C51;
+        assert_eq!(
+            KeyAction::Single(Action::Key(KeyCode::ComboOff)),
+            from_via_keycode(via_keycode)
+        );
     }
 
     #[test]
@@ -417,5 +424,9 @@ mod test {
             ModifierCombination::new_from(false, false, true, true, true),
         );
         assert_eq!(0x2704, to_via_keycode(a));
+
+        // ComboOff
+        let a = KeyAction::Single(Action::Key(KeyCode::ComboOff));
+        assert_eq!(0x7C51, to_via_keycode(a));
     }
 }
