@@ -64,6 +64,12 @@ pub(crate) async fn run_ble_client(
     loop {
         let addrs = &[&Address::new(AddressType::RandomStatic, addr)];
         let mut config: central::ConnectConfig<'_> = central::ConnectConfig::default();
+        config.conn_params = nrf_softdevice::raw::ble_gap_conn_params_t {
+            min_conn_interval: 6,
+            max_conn_interval: 6,
+            slave_latency: 99,
+            conn_sup_timeout: 500, // timeout: 5s
+        };
         config.scan_config.whitelist = Some(addrs);
         let conn = loop {
             if let Ok(_) =
