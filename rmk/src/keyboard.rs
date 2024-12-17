@@ -166,6 +166,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 
     /// Buffer for pressed `KeyAction` and `KeyEvents` in combos
     combo_actions_buffer: Deque<(KeyAction, KeyEvent), COMBO_MAX_LENGTH>,
+
+    /// Used for temporarily disabling combos
+    combo_on: bool,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
@@ -208,6 +211,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
+            combo_on: true,
         }
     }
 
@@ -292,7 +296,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             .borrow_mut()
             .get_action_with_layer_cache(key_event);
 
-        if let Some(key_action) = self.process_combo(key_action, key_event).await {
+        if self.combo_on {
+            if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                self.process_key_action(key_action, key_event).await;
+            }
+        } else {
             self.process_key_action(key_action, key_event).await;
         }
     }
@@ -865,6 +873,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_event).await;
+        } else if key.is_combo() {
+            self.process_action_combo(key, key_event).await;
         } else {
             warn!("Unsupported key: {:?}", key);
         }
@@ -877,6 +887,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.keymap.borrow_mut().activate_layer(layer_num);
         } else {
             self.keymap.borrow_mut().deactivate_layer(layer_num);
+        }
+    }
+
+    /// Process combo action.
+    async fn process_action_combo(&mut self, key: KeyCode, key_event: KeyEvent) {
+        if key_event.pressed {
+            match key {
+                KeyCode::ComboOn => self.combo_on = true,
+                KeyCode::ComboOff => self.combo_on = false,
+                KeyCode::ComboToggle => self.combo_on = !self.combo_on,
+                _ => (),
+            }
         }
     }
 
