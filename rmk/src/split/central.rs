@@ -544,7 +544,7 @@ impl<
         use heapless::Vec;
         use embassy_futures::select::select_slice;
         if let Some(start_time) = self.scan_start {
-            // If no key press over 1ms, stop scanning and wait for interupt
+            // If no key press over 1ms, stop scanning and wait for interrupt
             if start_time.elapsed().as_millis() <= 1 {
                 return;
             } else {
