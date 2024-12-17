@@ -77,4 +77,31 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
             .await
             .map_err(|_e| SplitDriverError::SerialError)
     }
+
+    // TODO: Add a sync signal to indicate that the central is ready to receive the split message
+}
+
+/// Initialize and run the peripheral keyboard service via serial.
+///
+/// # Arguments
+///
+/// * `input_pins` - input gpio pins
+/// * `output_pins` - output gpio pins
+/// * `serial` - serial port to send key events to central board
+#[cfg(not(feature = "_nrf_ble"))]
+pub(crate) async fn initialize_serial_split_peripheral_and_run<
+    M: MatrixTrait,
+    S: Write + Read,
+    const ROW: usize,
+    const COL: usize,
+>(
+    mut matrix: M,
+    serial: S,
+) -> ! {
+    use embassy_futures::select::select;
+
+    let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
+    loop {
+        select(matrix.run(), peripheral.run()).await;
+    }
 }

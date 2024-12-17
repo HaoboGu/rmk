@@ -62,7 +62,7 @@ pub async fn run_rmk_split_peripheral<
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     #[cfg(not(feature = "_nrf_ble"))]
-    initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
+    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
 
     #[cfg(feature = "_nrf_ble")]
     crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
@@ -110,7 +110,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(not(feature = "_nrf_ble"))]
-    initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
+    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
 
     #[cfg(feature = "_nrf_ble")]
     crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
