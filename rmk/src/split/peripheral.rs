@@ -8,15 +8,16 @@ use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
+use crate::CONNECTION_STATE;
+use defmt::error;
+#[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
+use embassy_futures::select::select;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_nrf_ble"))]
-use {
-    super::serial::SerialSplitDriver,
-    embedded_io_async::{Read, Write},
-};
+use embedded_io_async::{Read, Write};
 
 /// Run the split peripheral service.
 ///
@@ -62,7 +63,10 @@ pub async fn run_rmk_split_peripheral<
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     #[cfg(not(feature = "_nrf_ble"))]
-    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
+    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(
+        matrix, serial,
+    )
+    .await;
 
     #[cfg(feature = "_nrf_ble")]
     crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
@@ -110,7 +114,10 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(not(feature = "_nrf_ble"))]
-    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;
+    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(
+        matrix, serial,
+    )
+    .await;
 
     #[cfg(feature = "_nrf_ble")]
     crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
@@ -138,12 +145,26 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) -> ! {
         loop {
-            let e = key_event_channel.receive().await;
-
-            self.split_driver.write(&SplitMessage::Key(e)).await.ok();
-
-            // 10KHZ scan rate
-            embassy_time::Timer::after_micros(10).await;
+            match select(self.split_driver.read(), key_event_channel.receive()).await {
+                embassy_futures::select::Either::First(m) => match m {
+                    // Currently only handle the central state message
+                    Ok(split_message) => match split_message {
+                        SplitMessage::ConnectionState(state) => {
+                            CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                        }
+                        _ => (),
+                    },
+                    Err(e) => {
+                        error!("Split message read error: {:?}", e);
+                    }
+                },
+                embassy_futures::select::Either::Second(e) => {
+                    // Only send the key event if the connection is established
+                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                        self.split_driver.write(&SplitMessage::Key(e)).await.ok();
+                    }
+                }
+            }
         }
     }
 }

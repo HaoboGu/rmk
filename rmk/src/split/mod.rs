@@ -24,6 +24,6 @@ pub(crate) enum SplitMessage {
     /// Led state, on/off, from central to peripheral
     LedState(bool),
     /// The central connection state, true if central has been connected to host.
-    /// This message is sent from central to peripheral
-    CentralState(bool),
+    /// This message is sync from central to peripheral
+    ConnectionState(bool),
 }

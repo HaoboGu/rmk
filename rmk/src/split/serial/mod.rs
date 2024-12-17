@@ -1,10 +1,9 @@
 use defmt::{error, info};
 use embedded_io_async::{Read, Write};
 
-use crate::split::{
-    driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter},
-    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
-};
+use crate::{matrix::MatrixTrait, split::{
+    driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter}, peripheral::SplitPeripheral, SplitMessage, SPLIT_MESSAGE_MAX_SIZE
+}};
 
 use super::driver::SplitDriverError;
 
@@ -77,8 +76,6 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
             .await
             .map_err(|_e| SplitDriverError::SerialError)
     }
-
-    // TODO: Add a sync signal to indicate that the central is ready to receive the split message
 }
 
 /// Initialize and run the peripheral keyboard service via serial.
@@ -88,7 +85,6 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `serial` - serial port to send key events to central board
-#[cfg(not(feature = "_nrf_ble"))]
 pub(crate) async fn initialize_serial_split_peripheral_and_run<
     M: MatrixTrait,
     S: Write + Read,

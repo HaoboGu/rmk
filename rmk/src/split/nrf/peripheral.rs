@@ -6,6 +6,9 @@ use crate::MatrixTrait;
 use core::mem;
 use defmt::error;
 use embassy_executor::Spawner;
+use embassy_futures::block_on;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
 use nrf_softdevice::ble::{gatt_server, Connection};
@@ -32,33 +35,26 @@ pub(crate) struct BleSplitPeripheralServer {
 pub(crate) struct BleSplitPeripheralDriver<'a> {
     server: &'a BleSplitPeripheralServer,
     conn: &'a Connection,
+    receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 4>,
 }
 
 impl<'a> BleSplitPeripheralDriver<'a> {
-    pub(crate) fn new(server: &'a BleSplitPeripheralServer, conn: &'a Connection) -> Self {
-        Self { server, conn }
+    pub(crate) fn new(
+        server: &'a BleSplitPeripheralServer,
+        conn: &'a Connection,
+        receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 4>,
+    ) -> Self {
+        Self {
+            server,
+            conn,
+            receiver,
+        }
     }
 }
 
 impl<'a> SplitReader for BleSplitPeripheralDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
-        let message = self
-            .server
-            .service
-            .message_to_peripheral_get()
-            .map_err(|e| {
-                error!("BLE read error: {:?}", e);
-                SplitDriverError::BleError(1)
-            })?;
-        defmt::info!(
-            "Got read from central in BleSplitPeripheralDriver read: {:?}",
-            message
-        );
-        let message: SplitMessage = postcard::from_bytes(&message).map_err(|e| {
-            error!("Postcard deserialize split message error: {}", e);
-            SplitDriverError::DeserializeError
-        })?;
-        Ok(message)
+        Ok(self.receiver.receive().await)
     }
 }
 
@@ -179,6 +175,11 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
             }
         };
 
+        // Channel used for receiving messages from central
+        let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 4> = Channel::new();
+        let receiver = receive_channel.receiver();
+        let sender = receive_channel.sender();
+
         // Set sys attr of peripheral
         set_sys_attrs(&conn, None).ok();
 
@@ -191,13 +192,19 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
                     match postcard::from_bytes::<SplitMessage>(&message) {
                         Ok(message) => {
                             info!("Message from central: {:?}", message);
-                            match message {
-                                SplitMessage::CentralState(state) => {
-                                    CONNECTION_STATE
-                                        .store(state, core::sync::atomic::Ordering::Release);
-                                    info!("Received server state");
+                            // Retry 3 times
+                            let mut success = false;
+                            for _i in 0..3 {
+                                if let Err(e) = sender.try_send(message) {
+                                    error!("Send split message to reader error: {}", e);
+                                    continue;
                                 }
-                                _ => (),
+                                success = true;
+                                break;
+                            }
+                            // Should we block on it?
+                            if !success {
+                                block_on(sender.send(message));
                             }
                         }
                         Err(e) => defmt::error!("Postcard deserialize split message error: {}", e),
@@ -206,7 +213,8 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
             },
         });
 
-        let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
+        let mut peripheral =
+            SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn, receiver));
         let peripheral_fut = peripheral.run();
         let matrix_fut = matrix.run();
         select3(matrix_fut, server_fut, peripheral_fut).await;
