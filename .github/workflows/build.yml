@@ -128,7 +128,7 @@ jobs:
         run: rustup target add thumbv7m-none-eabi      
       - name: Build stm32f1
         working-directory: ./examples/use_rust/stm32f1
-        run: cargo build --release
+        run: cargo make uf2 --release
   build_stm32f1_with_config:
     needs: determine-runner
     runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
