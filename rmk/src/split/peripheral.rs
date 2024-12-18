@@ -9,7 +9,7 @@ use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
 use crate::CONNECTION_STATE;
-use defmt::error;
+use defmt::{error, info};
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select;
@@ -161,6 +161,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                 embassy_futures::select::Either::Second(e) => {
                     // Only send the key event if the connection is established
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                        info!("Writing split message to central");
                         self.split_driver.write(&SplitMessage::Key(e)).await.ok();
                     }
                 }

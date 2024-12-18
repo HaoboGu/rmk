@@ -8,12 +8,9 @@ use embassy_sync::{
 };
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
-use crate::{
-    split::{
-        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
-        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
-    },
-    CONNECTION_STATE,
+use crate::split::{
+    driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
+    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals
@@ -35,13 +32,21 @@ pub(crate) async fn run_ble_peripheral_monitor<
     id: usize,
     addr: [u8; 6],
 ) {
-    let channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    // Channel is used to receive messages from peripheral
+    let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    // Channel is used to notify messages to peripheral
+    let notify_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
 
-    let sender = channel.sender();
-    let run_ble_client = run_ble_client(sender, addr);
+    let receive_sender = receive_channel.sender();
+    let receive_receiver = receive_channel.receiver();
+    let notify_sender = notify_channel.sender();
+    let notify_receiver = notify_channel.receiver();
+    let run_ble_client = run_ble_client(receive_sender, notify_receiver, addr);
 
-    let receiver = channel.receiver();
-    let split_ble_driver = BleSplitCentralDriver { receiver };
+    let split_ble_driver = BleSplitCentralDriver {
+        receiver: receive_receiver,
+        sender: notify_sender,
+    };
 
     let peripheral =
         PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
@@ -58,7 +63,8 @@ static CONNECTING_CLIENT: AtomicBool = AtomicBool::new(false);
 /// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
 /// Split driver will take `SplitBleCentralDriver` as the reader, process the message in matrix scanning.
 pub(crate) async fn run_ble_client(
-    sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    receive_sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    notify_receiver: Receiver<'_, CriticalSectionRawMutex, SplitMessage, 8>,
     addr: [u8; 6],
 ) -> ! {
     // Wait 1s, ensure that the softdevice is ready
@@ -113,7 +119,7 @@ pub(crate) async fn run_ble_client(
             BleSplitCentralClientEvent::MessageToCentralNotification(message) => {
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
-                        if let Err(e) = sender.try_send(split_message) {
+                        if let Err(e) = receive_sender.try_send(split_message) {
                             error!("BLE_SYNC_CHANNEL send message error: {}", e);
                         }
                     }
@@ -126,35 +132,17 @@ pub(crate) async fn run_ble_client(
 
         // Notify messages to peripheral
         let notify_peripheral = async {
-            let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-            // Send once on start
-            let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-            match postcard::to_slice(&SplitMessage::ConnectionState(conn_state), &mut buf) {
-                Ok(_bytes) => {
-                    if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
-                        error!("BLE message_to_peripheral_write error: {}", e);
-                    }
-                }
-                Err(e) => error!("Postcard serialize split message error: {}", e),
-            };
             loop {
-                // Check the central state every 200ms
-                embassy_time::Timer::after_millis(200).await;
-                // Current, only ConnectionState will be notified to peripheral
-                let current_conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                if conn_state != current_conn_state {
-                    // ConnectionState changed, notify peripheral
-                    conn_state = current_conn_state;
-                    let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-                    match postcard::to_slice(&SplitMessage::ConnectionState(conn_state), &mut buf) {
-                        Ok(_bytes) => {
-                            if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
-                                error!("BLE message_to_peripheral_write error: {}", e);
-                            }
+                let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
+                let message = notify_receiver.receive().await;
+                match postcard::to_slice(&message, &mut buf) {
+                    Ok(_bytes) => {
+                        if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
+                            error!("BLE message_to_peripheral_write error: {}", e);
                         }
-                        Err(e) => error!("Postcard serialize split message error: {}", e),
-                    };
-                }
+                    }
+                    Err(e) => error!("Postcard serialize split message error: {}", e),
+                };
             }
         };
 
@@ -170,18 +158,28 @@ pub(crate) async fn run_ble_client(
     }
 }
 
-/// Ble central driver which reads the split message.
+/// Ble central driver which reads and writes the split message.
 ///
-/// Different from serial, BLE split message is received and processed in a separate service.
-/// The BLE service should keep running, it sends out the split message to the channel in the callback.
-/// It's impossible to implement `SplitReader` for BLE service,
-/// so we need this thin wrapper that receives the message from the channel.
+/// Different from serial, BLE split message is processed in a separate service.
+/// The BLE service should keep running, it processes the split message in the callback, which is not async.
+/// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
+/// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a> {
+    // Receiver that receives message from peripheral
     pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    // Sender that send message to peripherals
+    pub(crate) sender: Sender<'a, CriticalSectionRawMutex, SplitMessage, 8>,
 }
 
 impl<'a> SplitReader for BleSplitCentralDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         Ok(self.receiver.receive().await)
+    }
+}
+
+impl SplitWriter for BleSplitCentralDriver<'_> {
+    async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
+        self.sender.send(message.clone()).await;
+        Ok(SPLIT_MESSAGE_MAX_SIZE)
     }
 }

@@ -1,9 +1,14 @@
 use defmt::{error, info};
 use embedded_io_async::{Read, Write};
 
-use crate::{matrix::MatrixTrait, split::{
-    driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter}, peripheral::SplitPeripheral, SplitMessage, SPLIT_MESSAGE_MAX_SIZE
-}};
+use crate::{
+    matrix::MatrixTrait,
+    split::{
+        driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter},
+        peripheral::SplitPeripheral,
+        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+    },
+};
 
 use super::driver::SplitDriverError;
 

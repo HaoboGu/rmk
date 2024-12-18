@@ -184,7 +184,6 @@ fn expand_split_peripheral_entry(
                     }
                 }
                 MatrixType::normal => {
-                    let size = row + col;
                     quote! {
                         ::rmk::split::peripheral::run_rmk_split_peripheral::<
                             ::embassy_nrf::gpio::Input<'_>,

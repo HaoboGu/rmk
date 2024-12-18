@@ -15,7 +15,8 @@ use usbd_hid::descriptor::SerializedDescriptor;
 use crate::{
     config::KeyboardUsbConfig,
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
-    usb::descriptor::{CompositeReport, ViaReport}, CONNECTION_STATE,
+    usb::descriptor::{CompositeReport, ViaReport},
+    CONNECTION_STATE,
 };
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
