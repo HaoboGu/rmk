@@ -453,6 +453,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                                 idx: real_idx,
                                 actions,
                                 output,
+                                layer: combos[real_idx].layer,
                             }))
                             .await;
                     }

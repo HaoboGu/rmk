@@ -162,6 +162,7 @@ pub struct CombosConfig {
 pub struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
+    pub layer: Option<u8>,
 }
 
 /// Configurations for split keyboards

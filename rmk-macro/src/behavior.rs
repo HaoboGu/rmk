@@ -47,7 +47,11 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
             let combos = combos.combos.iter().map(|combo| {
                 let actions = combo.actions.iter().map(|a| parse_key(a.to_owned()));
                 let output = parse_key(combo.output.to_owned());
-                quote! { ::rmk::combo::Combo::new([#(#actions),*], #output) }
+                let layer = match combo.layer {
+                    Some(layer) => quote! { ::core::option::Option::Some(#layer) },
+                    None => quote! { ::core::option::Option::None },
+                };
+                quote! { ::rmk::combo::Combo::new([#(#actions),*], #output, #layer) }
             });
 
             quote! { ::heapless::Vec::from_iter([#(#combos),*]) }
