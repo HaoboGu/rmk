@@ -216,15 +216,13 @@ impl<
                             let (row, col, key_state) =
                                 (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-                            // `try_send` is used here because we don't want to block scanning if the channel is full
-                            let send_re = key_event_channel.try_send(KeyEvent {
-                                row: row as u8,
-                                col: col as u8,
-                                pressed: key_state.pressed,
-                            });
-                            if send_re.is_err() {
-                                error!("Failed to send key event: key event channel full");
-                            }
+                            key_event_channel
+                                .send(KeyEvent {
+                                    row: row as u8,
+                                    col: col as u8,
+                                    pressed: key_state.pressed,
+                                })
+                                .await;
                         }
                         _ => (),
                     }
