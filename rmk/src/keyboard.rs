@@ -353,8 +353,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         key_event: KeyEvent,
     ) -> Option<KeyAction> {
         let mut is_combo_action = false;
+        let current_layer = self.keymap.borrow().get_activated_layer();
         for combo in self.keymap.borrow_mut().combos.iter_mut() {
-            is_combo_action |= combo.update(key_action, key_event);
+            is_combo_action |= combo.update(key_action, key_event, current_layer);
         }
 
         if key_event.pressed && is_combo_action {

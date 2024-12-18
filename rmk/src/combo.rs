@@ -11,6 +11,7 @@ pub(crate) const COMBO_MAX_LENGTH: usize = 4;
 pub struct Combo {
     pub(crate) actions: Vec<KeyAction, COMBO_MAX_LENGTH>,
     pub(crate) output: KeyAction,
+    pub(crate) layer: Option<u8>,
     state: u8,
 }
 
@@ -21,21 +22,41 @@ impl Default for Combo {
 }
 
 impl Combo {
-    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction) -> Self {
+    pub fn new<I: IntoIterator<Item = KeyAction>>(
+        actions: I,
+        output: KeyAction,
+        layer: Option<u8>,
+    ) -> Self {
         Self {
             actions: Vec::from_iter(actions),
             output,
+            layer,
             state: 0,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No)
+        Self::new(
+            Vec::<KeyAction, COMBO_MAX_LENGTH>::new(),
+            KeyAction::No,
+            None,
+        )
     }
 
-    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent) -> bool {
+    pub(crate) fn update(
+        &mut self,
+        key_action: KeyAction,
+        key_event: KeyEvent,
+        active_layer: u8,
+    ) -> bool {
         if !key_event.pressed || key_action == KeyAction::No {
             return false;
+        }
+
+        if let Some(layer) = self.layer {
+            if layer != active_layer {
+                return false;
+            }
         }
 
         let action_idx = self.actions.iter().position(|&a| a == key_action);

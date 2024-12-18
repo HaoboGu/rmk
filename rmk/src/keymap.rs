@@ -246,7 +246,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         KeyAction::No
     }
 
-    fn get_activated_layer(&self) -> u8 {
+    pub(crate) fn get_activated_layer(&self) -> u8 {
         for (layer_idx, _) in self.layers.iter().enumerate().rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                 return layer_idx as u8;

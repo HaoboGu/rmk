@@ -458,6 +458,12 @@ impl KeyboardConfig {
                         if c.actions.len() > COMBO_MAX_LENGTH {
                             return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
                         }
+
+                        if let Some(layer) = c.layer {
+                            if layer >= layout.layers {
+                                return rmk_compile_error!(format!("keyboard.toml: layer in combo #{i} is greater than [layout.layers]"));
+                            }
+                        }
                     }
                 }
 
