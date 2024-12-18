@@ -8,8 +8,8 @@ use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
 use crate::via::process::VialService;
 use crate::via::vial_task;
-use crate::KEYBOARD_STATE;
 use crate::CONNECTION_STATE;
+use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
     keymap::KeyMap,

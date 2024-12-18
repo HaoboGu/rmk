@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use defmt::{error, info};
+use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;

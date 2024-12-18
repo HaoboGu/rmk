@@ -1,9 +1,12 @@
+use core::sync::atomic::Ordering;
+
 ///! The abstracted driver layer of the split keyboard.
 ///!
 use super::SplitMessage;
 use crate::keyboard::{key_event_channel, KeyEvent};
 use crate::CONNECTION_STATE;
 use defmt::{debug, error, warn};
+use embassy_futures::select::select;
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -36,7 +39,7 @@ pub(crate) struct PeripheralMatrixMonitor<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    R: SplitReader,
+    R: SplitReader + SplitWriter,
 > {
     /// Receiver
     receiver: R,
@@ -49,7 +52,7 @@ impl<
         const COL: usize,
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
-        R: SplitReader,
+        R: SplitReader + SplitWriter,
     > PeripheralMatrixMonitor<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
@@ -60,32 +63,59 @@ impl<
     ///
     /// The monitor receives from the peripheral and forward the message to key_event_channel.
     pub(crate) async fn run(mut self) -> ! {
+        let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+        // Send once on start
+        if let Err(e) = self
+            .receiver
+            .write(&SplitMessage::ConnectionState(conn_state))
+            .await
+        {
+            error!("SplitDriver write error: {}", e);
+        }
         loop {
-            match self.receiver.read().await {
-                Ok(received_message) => {
-                    debug!("Received peripheral message: {}", received_message);
-                    if let SplitMessage::Key(e) = received_message {
-                        // Check row/col
-                        if e.row as usize > ROW || e.col as usize > COL {
-                            error!("Invalid peripheral row/col: {} {}", e.row, e.col);
-                            continue;
-                        }
+            match select(self.receiver.read(), embassy_time::Timer::after_millis(200)).await {
+                embassy_futures::select::Either::First(read_result) => match read_result {
+                    Ok(received_message) => {
+                        debug!("Received peripheral message: {}", received_message);
+                        if let SplitMessage::Key(e) = received_message {
+                            // Check row/col
+                            if e.row as usize > ROW || e.col as usize > COL {
+                                error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                                continue;
+                            }
 
-                        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                            // Only when the connection is established, send the key event.
-                            key_event_channel
-                                .send(KeyEvent {
-                                    row: e.row + ROW_OFFSET as u8,
-                                    col: e.col + COL_OFFSET as u8,
-                                    pressed: e.pressed,
-                                })
-                                .await;
-                        } else {
-                            warn!("Key event from peripheral is ignored because the connection is not established.");
+                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                // Only when the connection is established, send the key event.
+                                key_event_channel
+                                    .send(KeyEvent {
+                                        row: e.row + ROW_OFFSET as u8,
+                                        col: e.col + COL_OFFSET as u8,
+                                        pressed: e.pressed,
+                                    })
+                                    .await;
+                            } else {
+                                warn!("Key event from peripheral is ignored because the connection is not established.");
+                            }
                         }
                     }
+                    Err(e) => error!("Peripheral message read error: {:?}", e),
+                },
+                embassy_futures::select::Either::Second(_) => {
+                    // Check ConnectionState every 200ms
+                    // Current, only ConnectionState will be notified to peripheral
+                    let current_conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    if conn_state != current_conn_state {
+                        // ConnectionState changed, notify peripheral
+                        conn_state = current_conn_state;
+                        if let Err(e) = self
+                            .receiver
+                            .write(&SplitMessage::ConnectionState(conn_state))
+                            .await
+                        {
+                            error!("SplitDriver write error: {}", e);
+                        };
+                    }
                 }
-                Err(e) => error!("Peripheral message read error: {:?}", e),
             }
         }
     }
