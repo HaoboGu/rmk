@@ -13,7 +13,6 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
@@ -28,6 +27,7 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
+use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -531,6 +531,8 @@ pub(crate) async fn run_dummy_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
+    // Don't need to wait for connection, just do scanning to detect if there's a profile update
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
@@ -587,6 +589,7 @@ pub(crate) async fn run_ble_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
@@ -601,7 +604,7 @@ pub(crate) async fn run_ble_keyboard<
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
     let led_fut = led_service_task(light_service);
-    let matrix_fut = matrix.scan();
+    let matrix_fut = matrix.run();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard.run();

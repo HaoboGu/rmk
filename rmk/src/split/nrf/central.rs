@@ -1,16 +1,19 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use defmt::{error, info};
-use embassy_futures::join::join;
+use embassy_futures::{join::join, select::select};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
 };
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
-use crate::split::{
-    driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
-    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+use crate::{
+    split::{
+        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
+        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+    },
+    CONNECTION_STATE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals
@@ -106,7 +109,7 @@ pub(crate) async fn run_ble_client(
         }
 
         // Receive peripheral's notifications
-        let disconnect_error = gatt_client::run(&conn, &ble_client, |event| match event {
+        let receive_peripheral = gatt_client::run(&conn, &ble_client, |event| match event {
             BleSplitCentralClientEvent::MessageToCentralNotification(message) => {
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
@@ -119,10 +122,49 @@ pub(crate) async fn run_ble_client(
                     }
                 };
             }
-        })
-        .await;
+        });
 
-        error!("BLE peripheral disconnect error: {:?}", disconnect_error);
+        // Notify messages to peripheral
+        let notify_peripheral = async {
+            let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+            // Send once on start
+            let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
+            match postcard::to_slice(&SplitMessage::ConnectionState(conn_state), &mut buf) {
+                Ok(_bytes) => {
+                    if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
+                        error!("BLE message_to_peripheral_write error: {}", e);
+                    }
+                }
+                Err(e) => error!("Postcard serialize split message error: {}", e),
+            };
+            loop {
+                // Check the central state every 200ms
+                embassy_time::Timer::after_millis(200).await;
+                // Current, only ConnectionState will be notified to peripheral
+                let current_conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                if conn_state != current_conn_state {
+                    // ConnectionState changed, notify peripheral
+                    conn_state = current_conn_state;
+                    let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
+                    match postcard::to_slice(&SplitMessage::ConnectionState(conn_state), &mut buf) {
+                        Ok(_bytes) => {
+                            if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
+                                error!("BLE message_to_peripheral_write error: {}", e);
+                            }
+                        }
+                        Err(e) => error!("Postcard serialize split message error: {}", e),
+                    };
+                }
+            }
+        };
+
+        match select(receive_peripheral, notify_peripheral).await {
+            embassy_futures::select::Either::First(e) => {
+                error!("BLE peripheral disconnect error: {:?}", e);
+            }
+            embassy_futures::select::Either::Second(_) => (),
+        }
+
         // Wait for 1s before trying to connect (again)
         embassy_time::Timer::after_secs(1).await;
     }

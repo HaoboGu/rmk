@@ -1,4 +1,5 @@
 use crate::config::BehaviorConfig;
+use crate::CONNECTION_STATE;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
@@ -82,15 +83,19 @@ pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWra
     // This delay is necessary otherwise this task will stuck at the first send when the USB is suspended
     Timer::after_secs(2).await;
     loop {
-        match receiver.receive().await {
-            KeyboardReportMessage::KeyboardReport(report) => {
-                match keybooard_hid_writer.write_serialize(&report).await {
-                    Ok(()) => {}
-                    Err(e) => error!("Send keyboard report error: {}", e),
-                };
-            }
-            KeyboardReportMessage::CompositeReport(report, report_type) => {
-                write_other_report_to_host(report, report_type, other_hid_writer).await;
+        let report = receiver.receive().await;
+        // Only send the report after the connection is established.
+        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            match report {
+                KeyboardReportMessage::KeyboardReport(report) => {
+                    match keybooard_hid_writer.write_serialize(&report).await {
+                        Ok(()) => {}
+                        Err(e) => error!("Send keyboard report error: {}", e),
+                    };
+                }
+                KeyboardReportMessage::CompositeReport(report, report_type) => {
+                    write_other_report_to_host(report, report_type, other_hid_writer).await;
+                }
             }
         }
     }

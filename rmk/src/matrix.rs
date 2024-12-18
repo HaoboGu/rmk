@@ -1,8 +1,9 @@
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
     keyboard::{key_event_channel, KeyEvent},
+    CONNECTION_STATE,
 };
-use defmt::Format;
+use defmt::{error, info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -17,20 +18,42 @@ pub(crate) trait MatrixTrait {
     const ROW: usize;
     const COL: usize;
 
+    // Wait for USB or BLE really connected
+    async fn wait_for_connected(&self) {
+        while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            embassy_time::Timer::after_millis(100).await;
+        }
+        info!("Connected, start scanning matrix");
+    }
+
+    // Run the matrix
+    async fn run(&mut self) {
+        // We don't check disconnected state because disconnection means the task will be dropped 
+        loop {
+            self.wait_for_connected().await;
+            self.scan().await;
+        }
+    }
+
     // Do matrix scanning, save the result in matrix's key_state field.
     async fn scan(&mut self);
+
     // Read key state at position (row, col)
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
+
     // Update key state at position (row, col)
     fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState));
+
     // Get matrix row num
     fn get_row_num(&self) -> usize {
         Self::ROW
     }
+
     // Get matrix col num
     fn get_col_num(&self) -> usize {
         Self::COL
     }
+
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self);
 }

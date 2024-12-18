@@ -9,6 +9,7 @@ use crate::storage::Storage;
 use crate::via::process::VialService;
 use crate::via::vial_task;
 use crate::KEYBOARD_STATE;
+use crate::CONNECTION_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
     keymap::KeyMap,
@@ -75,6 +76,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
+        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
         ble_server.output_keyboard.lock().on_write(|args| {
@@ -86,6 +88,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         ble_server.wait_for_connection().await;
 
         info!("BLE connected!");
+        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
 
         // Create BLE HID writers
         let mut keyboard_writer = ble_server.input_keyboard;
@@ -114,7 +117,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             hid_writer: ble_server.input_vial,
         };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
-        let matrix_fut = matrix.scan();
+        let matrix_fut = matrix.run();
         let storage_fut = storage.run();
         pin_mut!(storage_fut);
         pin_mut!(via_fut);
