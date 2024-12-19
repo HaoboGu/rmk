@@ -186,6 +186,8 @@ pub struct SplitBoardConfig {
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
     pub matrix: MatrixConfig,
+    /// Joystick
+    pub joystick: Option<Vec<JoystickConfig>>,
 }
 
 /// Serial port config
@@ -194,6 +196,14 @@ pub struct SerialConfig {
     pub instance: String,
     pub tx_pin: String,
     pub rx_pin: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct JoystickConfig {
+    pub instance: String,
+    pub axis: [String; 2],
+    pub dead: Option<[u8; 2]>,
+    pub transform: Option<[[i8; 2]; 2]>
 }
 
 /// Duration in milliseconds

@@ -1,4 +1,4 @@
-use crate::config::BleBatteryConfig;
+use crate::{ config::BleBatteryConfig, ble::nrf::BLE_BATTERY_CHANNEL };
 use defmt::{error, info};
 use embassy_time::Timer;
 use nrf_softdevice::ble::Connection;
@@ -47,40 +47,33 @@ impl<'a> BatteryService {
         BatteryService::check_charging_state(battery_config);
 
         loop {
-            if let Some(ref mut saadc) = battery_config.saadc {
-                let mut buf = [0i16; 1];
-                saadc.sample(&mut buf).await;
-                // We only sampled one ADC channel.
-                let val: u8 = self.get_battery_percent(buf[0], battery_config);
-                match self.battery_level_notify(conn, &val) {
-                    Ok(_) => info!("Battery value: {}", val),
-                    Err(e) => match self.battery_level_set(&val) {
-                        Ok(_) => info!("Battery value set: {}", val),
-                        Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
-                    },
-                }
-                if val < 10 {
-                    // The battery is low, blink the led!
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        charge_led.toggle();
-                    }
-                    Timer::after_millis(200).await;
-                    continue;
-                } else {
-                    // Turn off the led
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        if battery_config.charge_led_low_active {
-                            charge_led.set_high();
-                        } else {
-                            charge_led.set_low();
-                        }
-                    }
-                }
-            } else {
-                // No SAADC, skip battery check
-                Timer::after_secs(u32::MAX as u64).await;
+            let val = BLE_BATTERY_CHANNEL.receive().await;
+            let val: u8 = self.get_battery_percent(val[0], battery_config);
+            match self.battery_level_notify(conn, &val) {
+                Ok(_) => info!("Battery value: {}", val),
+                Err(e) => match self.battery_level_set(&val) {
+                    Ok(_) => info!("Battery value set: {}", val),
+                    Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+                },
             }
-
+            if val < 10 {
+                // The battery is low, blink the led!
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    charge_led.toggle();
+                }
+                Timer::after_millis(200).await;
+                continue;
+            } else {
+                // Turn off the led
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    if battery_config.charge_led_low_active {
+                        charge_led.set_high();
+                    } else {
+                        charge_led.set_low();
+                    }
+                }
+            }
+        
             // Check charging state
             BatteryService::check_charging_state(battery_config);
 
