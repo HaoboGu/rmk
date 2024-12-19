@@ -12,7 +12,7 @@ use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, fetch_item_stream, store_item, SerializationError, Value},
+    map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
 #[cfg(feature = "_nrf_ble")]
@@ -562,10 +562,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
         let mut storage_cache = NoCache::new();
-        if let Ok(mut key_iterator) = fetch_item_stream(
+        if let Ok(mut key_iterator) = fetch_all_items::<u32, _, _>(
             &mut self.flash,
             self.storage_range.clone(),
             &mut storage_cache,
+            &mut self.buffer,
         )
         .await
         {
