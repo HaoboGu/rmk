@@ -6,7 +6,7 @@ use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
 };
-use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
+use nrf_softdevice::ble::{central, gatt_client, Address, AddressType, PhySet, PhyUpdateError};
 
 use crate::split::{
     driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
@@ -80,7 +80,7 @@ pub(crate) async fn run_ble_client(
             conn_sup_timeout: 500, // timeout: 5s
         };
         config.scan_config.whitelist = Some(addrs);
-        let conn = loop {
+        let mut conn = loop {
             if let Ok(_) =
                 CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             {
@@ -99,6 +99,14 @@ pub(crate) async fn run_ble_client(
             // Wait 200ms and check again
             embassy_time::Timer::after_millis(200).await;
         };
+
+        // Set PHY used
+        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+            error!("Failed to update PHY");
+            if let PhyUpdateError::Raw(re) = e {
+                error!("Raw error code: {:?}", re);
+            }
+        }
 
         let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
             Ok(client) => client,
