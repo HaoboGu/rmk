@@ -41,7 +41,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
-use nrf_softdevice::ble::TxPower;
+use nrf_softdevice::ble::{PhySet, PhyUpdateError, TxPower};
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
@@ -350,7 +350,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     info!("Running USB keyboard, while advertising");
                     let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
-                        Either3::First(Ok(conn)) => {
+                        Either3::First(Ok(mut conn)) => {
                             info!("Connected to BLE");
                             // Check whether the peer address is matched with current profile
                             if !bonder.check_connection(&conn) {
@@ -360,6 +360,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                 continue;
                             }
                             bonder.load_sys_attrs(&conn);
+                            if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                                error!("Failed to update PHY");
+                                if let PhyUpdateError::Raw(re) = e {
+                                    error!("Raw error code: {:?}", re);
+                                }
+                            }
                             // Run the ble keyboard, wait for disconnection or USB connect
                             match select3(
                                 run_ble_keyboard(
@@ -404,7 +410,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                 info!("BLE advertising");
                 // Wait for BLE or USB connection
                 match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
-                    Either3::First(Ok(conn)) => {
+                    Either3::First(Ok(mut conn)) => {
                         info!("Connected to BLE");
                         // Check whether the peer address is matched with current profile
                         if !bonder.check_connection(&conn) {
@@ -412,6 +418,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                             continue;
                         }
                         bonder.load_sys_attrs(&conn);
+                        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                            error!("Failed to update PHY");
+                            if let PhyUpdateError::Raw(re) = e {
+                                error!("Raw error code: {:?}", re);
+                            }
+                        }
                         // Run the ble keyboard, wait for disconnection
                         match select3(
                             run_ble_keyboard(
@@ -446,8 +458,14 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
 
         #[cfg(feature = "_no_usb")]
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
-            Ok(conn) => {
+            Ok(mut conn) => {
                 bonder.load_sys_attrs(&conn);
+                if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                    error!("Failed to update PHY");
+                    if let PhyUpdateError::Raw(re) = e {
+                        error!("Raw error code: {:?}", re);
+                    }
+                }
                 select(
                     run_ble_keyboard(
                         &conn,
