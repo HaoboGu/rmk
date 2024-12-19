@@ -65,6 +65,7 @@ mod debounce;
 pub mod direct_pin;
 mod flash;
 mod hid;
+mod input_device;
 mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
