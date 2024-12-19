@@ -46,14 +46,15 @@
 ## Usage
 
 ### Option 1: Initialize from template
-You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
+
+You can use [rmkit](https://github.com/HaoboGu/rmkit) to initialize your project from RMK [project template](https://github.com/HaoboGu/rmk-template/tree/feat/rework).
 
 ```shell
-cargo install cargo-generate flip-link
-cargo generate --git https://github.com/HaoboGu/rmk-template
+cargo install rmkit flip-link
+rmkit init
 ```
 
-Then follow the steps in generated `README.md`. Check RMK's [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) for details.
+Check RMK's [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) for details.
 
 ### Option 2: Try built-in examples
 
