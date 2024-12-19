@@ -330,7 +330,7 @@ jobs:
           mv ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/rmk-nrf52840 ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/original.elf
       - name: If it's a PR checkout the base commit
         if: ${{ github.event.pull_request }}
-        run: git checkout ${{ github.event.pull_request.base.sha }}
+        run: git checkout -f ${{ github.event.pull_request.base.sha }}
       - name: Rebuild with the base commit
         if: ${{ github.event.pull_request }}
         working-directory: ./examples/use_config/nrf52840_ble
