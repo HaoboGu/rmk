@@ -3,7 +3,7 @@ use crate::{
     keyboard::{key_event_channel, KeyEvent},
     CONNECTION_STATE,
 };
-use defmt::{error, info, Format};
+use defmt::{info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]

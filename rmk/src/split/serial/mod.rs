@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use defmt::{error, info};
 use embedded_io_async::{Read, Write};
 
@@ -8,6 +10,7 @@ use crate::{
         peripheral::SplitPeripheral,
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
+    CONNECTION_STATE,
 };
 
 use super::driver::SplitDriverError;
