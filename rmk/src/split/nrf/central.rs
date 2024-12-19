@@ -8,9 +8,12 @@ use embassy_sync::{
 };
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
-use crate::split::{
-    driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
-    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+use crate::{
+    split::{
+        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
+        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+    },
+    CONNECTION_STATE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals
@@ -46,6 +49,7 @@ pub(crate) async fn run_ble_peripheral_monitor<
     let split_ble_driver = BleSplitCentralDriver {
         receiver: receive_receiver,
         sender: notify_sender,
+        connection_state: CONNECTION_STATE.load(Ordering::Acquire),
     };
 
     let peripheral =
@@ -169,6 +173,8 @@ pub(crate) struct BleSplitCentralDriver<'a> {
     pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
     // Sender that send message to peripherals
     pub(crate) sender: Sender<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    // Cached connection state
+    connection_state: bool,
 }
 
 impl<'a> SplitReader for BleSplitCentralDriver<'a> {
@@ -179,6 +185,14 @@ impl<'a> SplitReader for BleSplitCentralDriver<'a> {
 
 impl SplitWriter for BleSplitCentralDriver<'_> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
+        if let SplitMessage::ConnectionState(state) = message {
+            // Check if the connection state is changed
+            if self.connection_state == *state {
+                return Ok(SPLIT_MESSAGE_MAX_SIZE);
+            }
+            // ConnectionState changed, update cached state and notify peripheral
+            self.connection_state = *state;
+        }
         self.sender.send(message.clone()).await;
         Ok(SPLIT_MESSAGE_MAX_SIZE)
     }
