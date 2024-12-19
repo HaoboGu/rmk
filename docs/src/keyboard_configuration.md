@@ -72,6 +72,13 @@ If your keys are directly connected to the microcontroller pins, set `matrix_typ
 
 If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
 
+Currently, col2row is used as the default matrix type. If you want to use row2col matrix, you should edit your `Cargo.toml`, disable the default feature as the following:
+
+```toml
+# Cargo.toml
+rmk = { version = "0.4", default-features = false, features = ["nrf52840_ble"] }
+```
+
 Here is an example for rp2040.
 ```toml
 matrix_type = "direct_pin"
@@ -171,6 +178,25 @@ lower = 2
 adjust = 3
 ```
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
+
+#### Tap Hold
+
+In the `tap_hold` sub-table, you can configure the following parameters:
+
+- `enable_hrm`: Enables or disables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
+- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
+- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
+- `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
+
+The following are the typical configurations:
+
+```toml
+[behavior]
+# Enable HRM 
+tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
+# Disable HRM, you can safely ignore any fields if you don't want to change them
+tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
+```
 
 #### One Shot
 

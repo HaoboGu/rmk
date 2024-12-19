@@ -13,7 +13,6 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
@@ -28,6 +27,7 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
+use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -41,6 +41,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
+use nrf_softdevice::ble::TxPower;
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
@@ -309,6 +310,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
         let mut config = peripheral::Config::default();
         // Interval: 500ms
         config.interval = 800;
+        config.tx_power = TxPower::Plus4dBm;
         let adv = ConnectableAdvertisement::ScannableUndirected {
             adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
@@ -347,7 +349,6 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     // USB is connected, but connection type is BLE, try BLE while running USB keyboard
                     info!("Running USB keyboard, while advertising");
                     let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-                    // TODO: Test power consumption in this case
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
                         Either3::First(Ok(conn)) => {
                             info!("Connected to BLE");
@@ -490,7 +491,7 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
             );
             debug!("Set conn params result: {:?}", re);
 
-            embassy_time::Timer::after_millis(50).await;
+            embassy_time::Timer::after_millis(5000).await;
 
             // Setting the conn param the second time ensures that we have best performance on all platforms
             let re = sd_ble_gap_conn_param_update(
@@ -530,6 +531,8 @@ pub(crate) async fn run_dummy_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
+    // Don't need to wait for connection, just do scanning to detect if there's a profile update
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
@@ -586,6 +589,7 @@ pub(crate) async fn run_ble_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
@@ -600,7 +604,7 @@ pub(crate) async fn run_ble_keyboard<
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
     let led_fut = led_service_task(light_service);
-    let matrix_fut = matrix.scan();
+    let matrix_fut = matrix.run();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard.run();

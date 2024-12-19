@@ -2,6 +2,7 @@ use super::BONDED_DEVICE_NUM;
 use crate::{
     ble::nrf::ACTIVE_PROFILE,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
+    CONNECTION_STATE,
 };
 use core::{cell::RefCell, sync::atomic::Ordering};
 use defmt::{debug, error, info, warn, Format};
@@ -112,6 +113,8 @@ impl SecurityHandler for MultiBonder {
 
     fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
         info!("on_security_update, new security mode: {}", security_mode);
+        // Security updated, indicating that the connection is established?
+        CONNECTION_STATE.store(true, Ordering::Release);
     }
 
     fn on_bonded(
@@ -158,11 +161,12 @@ impl SecurityHandler for MultiBonder {
         }
     }
 
-    fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+    fn get_key(&self, conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
         debug!("Getting bond for {}", master_id);
 
-        self.bond_info
+        let info = self
+            .bond_info
             .borrow()
             .iter()
             .find(|(_, info)| {
@@ -172,7 +176,10 @@ impl SecurityHandler for MultiBonder {
                     && info.peer.master_id == master_id
                     && info.removed == false
             })
-            .and_then(|(_, d)| Some(d.peer.key))
+            .and_then(|(_, d)| Some(d.peer.key));
+
+        self.load_sys_attrs(conn);
+        info
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {
@@ -341,15 +348,18 @@ impl SecurityHandler for Bonder {
         }
     }
 
-    fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+    fn get_key(&self, conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
         debug!("Getting bond for {}", master_id);
 
-        self.bond_info
+        let info = self
+            .bond_info
             .borrow()
             .iter()
             .find(|(_, info)| info.peer.master_id == master_id && info.removed == false)
-            .and_then(|(_, d)| Some(d.peer.key))
+            .and_then(|(_, d)| Some(d.peer.key));
+        self.load_sys_attrs(conn);
+        info
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {

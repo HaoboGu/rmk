@@ -20,15 +20,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_esp32c3_ble:
     runs-on: ubuntu-22.04
-
     steps:
+      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
-      - name: Install ldproxy
-        run: cargo install ldproxy
-      - name: Install espup
-        run: cargo install espup
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
       - name: Install esp toolchain
         run: espup install
       - name: Build esp32c3_ble
@@ -36,26 +34,94 @@ jobs:
         run: |
           cargo +esp build --release 
           cargo clean
+  build_esp32c3_ble_with_config:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32c3_ble with config
         working-directory: ./examples/use_config/esp32c3_ble
         run: |
           cargo +esp build --release 
           cargo clean
+  build_esp32c6_ble:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32c6_ble
         working-directory: ./examples/use_rust/esp32c6_ble
         run: |
           cargo +esp build --release 
           cargo clean
+  build_esp32c6_ble_with_config:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32c6_ble with config
         working-directory: ./examples/use_config/esp32c6_ble
         run: |
           cargo +esp build --release 
           cargo clean
+
+  build_esp32s3_ble:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./examples/use_rust/esp32s3_ble/target/
+            ./examples/use_rust/esp32s3_ble/.embuild/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32s3_ble
         working-directory: ./examples/use_rust/esp32s3_ble
         run: |
           cargo +esp build --release 
           cargo clean
+  build_esp32s3_ble_with_config:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./examples/use_rust/esp32s3_ble/target/
+            ./examples/use_rust/esp32s3_ble/.embuild/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y     
+      - name: Install esp toolchain
+        run: espup install
       - name: Build esp32s3_ble with config
         working-directory: ./examples/use_config/esp32s3_ble
         run: |

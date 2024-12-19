@@ -71,7 +71,7 @@ pub(crate) struct KeyboardConfig {
     pub(crate) board: BoardConfig,
     // Layout config
     pub(crate) layout: LayoutConfig,
-    // Begavior Config
+    // Behavior Config
     pub(crate) behavior: BehaviorConfig,
     // Light config
     pub(crate) light: LightConfig,
@@ -339,7 +339,9 @@ impl KeyboardConfig {
         split: Option<SplitConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
-            (None, Some(s)) => Ok(BoardConfig::Split(s)),
+            (None, Some(s)) => {
+                Ok(BoardConfig::Split(s))
+            },
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
@@ -438,6 +440,7 @@ impl KeyboardConfig {
                     None => default.tri_layer,
                 };
 
+                behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
 
                 Ok(behavior)
