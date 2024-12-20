@@ -10,7 +10,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
-use nrf_softdevice::ble::{gatt_server, Connection};
+use nrf_softdevice::ble::{gatt_server, Connection, PhySet, PhyUpdateError};
 use nrf_softdevice::ble::{set_address, Address, AddressType};
 use nrf_softdevice::{raw, Config, Softdevice};
 
@@ -168,7 +168,7 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
             ConnectableAdvertisement::NonscannableDirected {
                 peer: Address::new(AddressType::RandomStatic, central_addr),
             };
-        let conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
+        let mut conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
             Ok(conn) => conn,
             Err(e) => {
                 error!("Split peripheral advertise error: {:?}", e);
@@ -183,6 +183,14 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
 
         // Set sys attr of peripheral
         set_sys_attrs(&conn, None).ok();
+
+        // Set PHY used
+        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+            error!("Failed to update PHY");
+            if let PhyUpdateError::Raw(re) = e {
+                error!("Raw error code: {:?}", re);
+            }
+        }
 
         let server_fut = gatt_server::run(&conn, &server, |event| match event {
             BleSplitPeripheralServerEvent::Service(split_event) => match split_event {
