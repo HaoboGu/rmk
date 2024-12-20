@@ -179,7 +179,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_role_count: 4,
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
-            central_sec_count: 0,
+            central_sec_count: 2,
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
@@ -191,6 +191,12 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
                 raw::BLE_GATTS_VLOC_STACK as u8,
             ),
+        }),
+        conn_gattc: Some(raw::ble_gattc_conn_cfg_t {
+            write_cmd_tx_queue_size: 4,
+        }),
+        conn_gatts: Some(raw::ble_gatts_conn_cfg_t {
+            hvn_tx_queue_size: 4,
         }),
         ..Default::default()
     }

@@ -161,12 +161,11 @@ impl SecurityHandler for MultiBonder {
         }
     }
 
-    fn get_key(&self, conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+    fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
         debug!("Getting bond for {}", master_id);
 
-        let info = self
-            .bond_info
+        self.bond_info
             .borrow()
             .iter()
             .find(|(_, info)| {
@@ -176,10 +175,7 @@ impl SecurityHandler for MultiBonder {
                     && info.peer.master_id == master_id
                     && info.removed == false
             })
-            .and_then(|(_, d)| Some(d.peer.key));
-
-        self.load_sys_attrs(conn);
-        info
+            .and_then(|(_, d)| Some(d.peer.key))
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {
@@ -348,18 +344,15 @@ impl SecurityHandler for Bonder {
         }
     }
 
-    fn get_key(&self, conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
+    fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
         debug!("Getting bond for {}", master_id);
 
-        let info = self
-            .bond_info
+        self.bond_info
             .borrow()
             .iter()
             .find(|(_, info)| info.peer.master_id == master_id && info.removed == false)
-            .and_then(|(_, d)| Some(d.peer.key));
-        self.load_sys_attrs(conn);
-        info
+            .and_then(|(_, d)| Some(d.peer.key))
     }
 
     fn save_sys_attrs(&self, conn: &Connection) {
