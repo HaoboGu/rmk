@@ -1,5 +1,4 @@
 use crate::config::BleBatteryConfig;
-use defmt::{error, info};
 use embassy_time::Timer;
 use nrf_softdevice::ble::Connection;
 
@@ -56,7 +55,9 @@ impl<'a> BatteryService {
                     Ok(_) => info!("Battery value: {}", val),
                     Err(e) => match self.battery_level_set(&val) {
                         Ok(_) => info!("Battery value set: {}", val),
-                        Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+                        Err(e2) => {
+                            error!("Battery value notify error: {:?}, set error: {:?}", e, e2)
+                        }
                     },
                 }
                 if val < 10 {
@@ -64,7 +65,7 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_millis(200).await;
+                    Timer::after_secs(200).await;
                     continue;
                 } else {
                     // Turn off the led
@@ -91,7 +92,7 @@ impl<'a> BatteryService {
 
     // TODO: Make battery calculation user customizable
     fn get_battery_percent(&self, val: i16, battery_config: &BleBatteryConfig<'a>) -> u8 {
-        info!("Detected adc value: {=i16}", val);
+        info!("Detected adc value: {:?}", val);
         // Avoid overflow
         let val = val as i32;
 
@@ -133,7 +134,7 @@ impl BleServer {
             Ok(_) => info!("Battery value: {}", val),
             Err(e) => match self.bas.battery_level_set(val) {
                 Ok(_) => info!("Battery value set: {}", val),
-                Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+                Err(e2) => error!("Battery value notify error: {:?}, set error: {:?}", e, e2),
             },
         }
     }

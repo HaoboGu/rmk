@@ -3,7 +3,6 @@
 
 use core::sync::atomic::Ordering;
 
-use defmt::info;
 use embassy_futures::yield_now;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 

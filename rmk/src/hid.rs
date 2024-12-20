@@ -1,13 +1,13 @@
 //! A thin hid wrapper layer which supports writing/reading HID reports via USB and BLE
 
-use defmt::Format;
 use embassy_usb::{
     class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
     driver::Driver,
 };
 use usbd_hid::descriptor::AsInputReport;
 
-#[derive(PartialEq, Debug, Format)]
+#[derive(PartialEq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum HidError {
     UsbDisabled,
     UsbPartialRead,

@@ -6,7 +6,6 @@ use crate::{
     reboot_keyboard,
     storage::Storage,
 };
-use defmt::{error, warn};
 use embedded_storage_async::nor_flash::NorFlash;
 use num_enum::FromPrimitive;
 

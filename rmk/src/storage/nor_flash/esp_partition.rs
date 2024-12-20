@@ -4,7 +4,6 @@ use core::{
     ops::Deref,
 };
 
-use defmt::{info, warn};
 use embassy_time::Timer;
 use embedded_storage_async::nor_flash::{
     ErrorType, MultiwriteNorFlash, NorFlash, NorFlashError, NorFlashErrorKind, ReadNorFlash,

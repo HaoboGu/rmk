@@ -56,7 +56,6 @@ pub(crate) fn parse_split_peripheral_mod(
     quote! {
         use defmt_rtt as _;
         use panic_probe as _;
-        use defmt::*;
 
         #main_function_sig {
             ::defmt::info!("RMK start!");

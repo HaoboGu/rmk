@@ -1,5 +1,4 @@
 use byteorder::{ByteOrder, LittleEndian};
-use defmt::debug;
 use num_enum::FromPrimitive;
 
 use crate::usb::descriptor::ViaReport;
