@@ -10,7 +10,6 @@ use crate::{
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn, Format};
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -22,7 +21,8 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeyEvent {
     pub(crate) row: u8,
     pub(crate) col: u8,
@@ -90,7 +90,7 @@ pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWra
                 KeyboardReportMessage::KeyboardReport(report) => {
                     match keybooard_hid_writer.write_serialize(&report).await {
                         Ok(()) => {}
-                        Err(e) => error!("Send keyboard report error: {}", e),
+                        Err(e) => error!("Send keyboard report error: {:?}", e),
                     };
                 }
                 KeyboardReportMessage::CompositeReport(report, report_type) => {
@@ -111,12 +111,13 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
     buf[0] = report_type as u8;
     match report.serialize(&mut buf[1..], report_type) {
         Ok(s) => {
+            #[cfg(feature = "defmt")]
             debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
             if let Err(e) = match other_hid_writer.get_conn_type() {
                 ConnectionType::Usb => other_hid_writer.write(&buf[0..s + 1]).await,
                 ConnectionType::Ble => other_hid_writer.write(&buf[1..s + 1]).await,
             } {
-                error!("Send other report error: {}", e);
+                error!("Send other report error: {:?}", e);
             }
         }
         Err(_) => error!("Serialize other report error"),
@@ -537,7 +538,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             match select(hold_timeout, key_event_channel.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
-                    debug!("Hold timeout, got HOLD: {}, {}", hold_action, key_event);
+                    debug!("Hold timeout, got HOLD: {:?}, {:?}", hold_action, key_event);
                     self.process_key_action_normal(hold_action, key_event).await;
                 }
                 embassy_futures::select::Either::Second(e) => {
@@ -545,7 +546,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         // If it's same key event and releasing within `hold_timeout`, trigger tap
                         if !e.pressed {
                             let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
-                            debug!("TAP action: {}, time elapsed: {}ms", tap_action, elapsed);
+                            debug!("TAP action: {:?}, time elapsed: {}ms", tap_action, elapsed);
                             self.process_key_action_tap(tap_action, key_event).await;
 
                             // Clear timer
@@ -585,7 +586,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     && key_event.col == self.hold_after_tap.0.col
                 {
                     // Release the hold after tap key
-                    info!("Hold after tap, hold the tap: {} {}", tap_action, key_event);
+                    info!(
+                        "Hold after tap, hold the tap: {:?} {:?}",
+                        tap_action, key_event
+                    );
                     self.process_key_action_normal(tap_action, key_event).await;
                     self.hold_after_tap = (key_event, false);
                     return;
@@ -594,7 +598,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             if let Some(_) = self.timer[col][row] {
                 // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
-                    "HOLD releasing: {}, {}, wait for `post_wait_time` for new releases",
+                    "HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
                     hold_action, key_event.pressed
                 );
                 let wait_release = async {
@@ -626,7 +630,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.timer[col][row] = None;
             } else {
                 // The timer has been reset, fire hold release event
-                debug!("HOLD releasing: {}, {}", hold_action, key_event.pressed);
+                debug!("HOLD releasing: {:?}, {}", hold_action, key_event.pressed);
                 self.process_key_action_normal(hold_action, key_event).await;
             }
         }

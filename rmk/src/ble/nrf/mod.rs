@@ -13,6 +13,8 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
+#[cfg(feature = "log")]
+use crate::USB_LOGGER;
 use crate::{
     ble::{
         ble_communication_task,
@@ -31,7 +33,6 @@ use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
-use defmt::{debug, error, info, unwrap, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
@@ -238,7 +239,9 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
         let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        unwrap!(spawner.spawn(softdevice_task(sdv)))
+        spawner
+            .spawn(softdevice_task(sdv))
+            .expect("Failed to start softdevice task")
     };
 
     // Flash and keymap configuration
@@ -271,6 +274,9 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     #[cfg(feature = "_no_usb")]
     CONNECTION_TYPE.store(0, Ordering::Relaxed);
 
+    // FIXME: test usem remove
+    CONNECTION_TYPE.store(1, Ordering::Relaxed);
+
     // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
@@ -287,7 +293,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     static BONDER: StaticCell<MultiBonder> = StaticCell::new();
     let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
 
-    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
+    let ble_server =
+        BleServer::new(sd, keyboard_config.usb_config, bonder).expect("Failed to start ble server");
 
     let keyboard_report_sender = keyboard_report_channel.sender();
     let keyboard_report_receiver = keyboard_report_channel.receiver();
@@ -359,7 +366,16 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                 );
                                 continue;
                             }
-                            bonder.load_sys_attrs(&conn);
+                            // bonder.load_sys_attrs(&conn);
+                            #[cfg(feature = "log")]
+                            let logger_fut = {
+                                let log_sender = &mut usb_device.usb_logger_sender;
+                                let log_receiver = &mut usb_device.usb_logger_receiver;
+
+                                USB_LOGGER.run_logger_class(log_sender, log_receiver)
+                            };
+                            #[cfg(feature = "log")]
+                            futures::pin_mut!(logger_fut);
                             // Run the ble keyboard, wait for disconnection or USB connect
                             match select3(
                                 run_ble_keyboard(
@@ -373,6 +389,10 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                     &mut keyboard_config.ble_battery_config,
                                     &keyboard_report_receiver,
                                 ),
+                                // wait_for_usb_enabled(),
+                                #[cfg(feature = "log")]
+                                join(usb_device.device.run(), logger_fut),
+                                #[cfg(not(feature = "log"))]
                                 wait_for_usb_enabled(),
                                 update_profile(bonder),
                             )
@@ -411,7 +431,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                             error!("Bonded peer address doesn't match active profile, disconnect");
                             continue;
                         }
-                        bonder.load_sys_attrs(&conn);
+                        // bonder.load_sys_attrs(&conn);
                         // Run the ble keyboard, wait for disconnection
                         match select3(
                             run_ble_keyboard(
@@ -447,7 +467,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
         #[cfg(feature = "_no_usb")]
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(conn) => {
-                bonder.load_sys_attrs(&conn);
+                // bonder.load_sys_attrs(&conn);
                 select(
                     run_ble_keyboard(
                         &conn,

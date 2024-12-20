@@ -1,4 +1,3 @@
-use defmt::{error, info};
 use embedded_io_async::{Read, Write};
 
 use crate::{

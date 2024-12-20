@@ -1,4 +1,3 @@
-use defmt::warn;
 use num_enum::FromPrimitive;
 
 use crate::{
@@ -74,7 +73,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         }
         KeyAction::TapHold(tap, hold) => {
             warn!(
-                "Tap hold action is not supported: tap: {}, hold: {}",
+                "Tap hold action is not supported: tap: {:?}, hold: {:?}",
                 tap, hold
             );
             0

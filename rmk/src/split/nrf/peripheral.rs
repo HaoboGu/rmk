@@ -4,7 +4,6 @@ use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::MatrixTrait;
 use core::mem;
-use defmt::error;
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -95,7 +94,6 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
     peripheral_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
-    use defmt::info;
     use embassy_futures::select::select3;
     use nrf_softdevice::ble::gatt_server;
 
@@ -156,10 +154,13 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
         let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        defmt::unwrap!(spawner.spawn(softdevice_task(sdv)))
+        spawner
+            .spawn(softdevice_task(sdv))
+            .expect("Failed to start softdevice task");
     };
 
-    let server = defmt::unwrap!(BleSplitPeripheralServer::new(sd));
+    let server =
+        BleSplitPeripheralServer::new(sd).expect("Failed to start BLE split peripheral server");
 
     loop {
         CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -170,7 +171,7 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
         let conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
             Ok(conn) => conn,
             Err(e) => {
-                defmt::error!("Split peripheral advertise error: {}", e);
+                error!("Split peripheral advertise error: {:?}", e);
                 continue;
             }
         };
@@ -196,7 +197,7 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
                             let mut success = false;
                             for _i in 0..3 {
                                 if let Err(e) = sender.try_send(message) {
-                                    error!("Send split message to reader error: {}", e);
+                                    error!("Send split message to reader error: {:?}", e);
                                     continue;
                                 }
                                 success = true;
@@ -207,7 +208,7 @@ pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
                                 block_on(sender.send(message));
                             }
                         }
-                        Err(e) => defmt::error!("Postcard deserialize split message error: {}", e),
+                        Err(e) => error!("Postcard deserialize split message error: {}", e),
                     }
                 }
             },

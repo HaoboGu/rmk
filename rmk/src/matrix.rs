@@ -3,7 +3,6 @@ use crate::{
     keyboard::{key_event_channel, KeyEvent},
     CONNECTION_STATE,
 };
-use defmt::{error, info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -28,7 +27,7 @@ pub(crate) trait MatrixTrait {
 
     // Run the matrix
     async fn run(&mut self) {
-        // We don't check disconnected state because disconnection means the task will be dropped 
+        // We don't check disconnected state because disconnection means the task will be dropped
         loop {
             self.wait_for_connected().await;
             self.scan().await;
@@ -59,7 +58,8 @@ pub(crate) trait MatrixTrait {
 }
 
 /// KeyState represents the state of a key.
-#[derive(Copy, Clone, Debug, Format)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeyState {
     // True if the key is pressed
     pub(crate) pressed: bool,
@@ -187,7 +187,7 @@ impl<
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
     async fn scan(&mut self) {
-        defmt::info!("Matrix scanning");
+        info!("Matrix scanning");
         loop {
             #[cfg(feature = "async_matrix")]
             self.wait_for_key().await;

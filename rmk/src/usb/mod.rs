@@ -1,7 +1,6 @@
 pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicU8, Ordering};
-use defmt::info;
 use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
@@ -17,6 +16,12 @@ use crate::{
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
     CONNECTION_STATE,
+};
+
+#[cfg(feature = "log")]
+use {
+    crate::logger::usb_logger::{LoggerState, MAX_PACKET_SIZE},
+    embassy_usb::class::cdc_acm::{CdcAcmClass, Receiver, Sender},
 };
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
@@ -79,6 +84,10 @@ pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>> {
     pub(crate) keyboard_hid_reader: UsbHidReader<'d, D, 1>,
     pub(crate) other_hid_writer: UsbHidWriter<'d, D, 9>,
     pub(crate) via_hid: UsbHidReaderWriter<'d, D, 32, 32>,
+    #[cfg(feature = "log")]
+    pub(crate) usb_logger_sender: Sender<'d, D>,
+    #[cfg(feature = "log")]
+    pub(crate) usb_logger_receiver: Receiver<'d, D>,
 }
 
 impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
@@ -160,6 +169,23 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         let via_hid: HidReaderWriter<'_, D, 32, 32> =
             HidReaderWriter::new(&mut builder, VIA_STATE.init(State::new()), via_config);
 
+        #[cfg(feature = "log")]
+        let (sender, receiver) = {
+            static LOGGER_STATE: StaticCell<LoggerState<'_>> = StaticCell::new();
+            let usb_logger: CdcAcmClass<'_, D> = CdcAcmClass::new(
+                &mut builder,
+                &mut LOGGER_STATE.init(LoggerState::new()).state,
+                MAX_PACKET_SIZE as u16,
+            );
+
+            // This should be only run once
+            unsafe {
+                let _ = log::set_logger_racy(&crate::USB_LOGGER)
+                    .map(|()| log::set_max_level_racy(log::LevelFilter::Trace));
+            }
+            usb_logger.split()
+        };
+
         // Build usb device
         let usb = builder.build();
         let (reader, writer) = keyboard_hid.split();
@@ -169,6 +195,10 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
             keyboard_hid_writer: UsbHidWriter::new(writer),
             other_hid_writer: UsbHidWriter::new(other_hid),
             via_hid: UsbHidReaderWriter::new(via_hid),
+            #[cfg(feature = "log")]
+            usb_logger_sender: sender,
+            #[cfg(feature = "log")]
+            usb_logger_receiver: receiver,
         }
     }
 }
@@ -177,7 +207,7 @@ struct UsbRequestHandler {}
 
 impl RequestHandler for UsbRequestHandler {
     fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
-        info!("Set report for {}: {}", id, data);
+        info!("Set report for {:?}: {:?}", id, data);
         OutResponse::Accepted
     }
 }

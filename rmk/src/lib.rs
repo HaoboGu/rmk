@@ -20,6 +20,8 @@ use crate::config::RmkConfig;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
+#[cfg(feature = "log")]
+use crate::logger::usb_logger::{DummyHandler, UsbLogger};
 use crate::{
     light::{led_hid_task, LightService},
     via::vial_task,
@@ -30,7 +32,6 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU8},
 };
 use debounce::DebouncerTrait;
-use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
@@ -57,6 +58,9 @@ use via::process::VialService;
 #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
+// This mod MUST go first, so that the others see its macros.
+pub(crate) mod logger;
+
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -77,6 +81,10 @@ pub mod split;
 mod storage;
 mod usb;
 mod via;
+
+#[cfg(feature = "log")]
+// Global logger over USB serial
+pub(crate) static USB_LOGGER: UsbLogger<1024, DummyHandler> = UsbLogger::new();
 
 /// Keyboard state, true for started, false for stopped
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
@@ -220,7 +228,7 @@ pub async fn run_rmk_with_async_flash<
 
     // The fut should never return.
     // If there's no fut, the feature flags must not be correct.
-    defmt::panic!("The run_rmk should never return");
+    panic!("The run_rmk should never return");
 }
 
 pub(crate) async fn initialize_usb_keyboard_and_run<
@@ -334,6 +342,16 @@ pub(crate) async fn run_usb_keyboard<
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         pin_mut!(storage_fut);
 
+        #[cfg(feature = "log")]
+        let logger_fut = {
+            let log_sender = &mut usb_device.usb_logger_sender;
+            let log_receiver = &mut usb_device.usb_logger_receiver;
+
+            USB_LOGGER.run_logger_class(log_sender, log_receiver)
+        };
+        #[cfg(feature = "log")]
+        pin_mut!(logger_fut);
+
         match select4(
             select(usb_fut, keyboard_fut),
             #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
@@ -341,6 +359,9 @@ pub(crate) async fn run_usb_keyboard<
             #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
             #[cfg(feature = "_no_external_storage")]
             via_fut,
+            #[cfg(feature = "log")]
+            select(logger_fut, led_fut),
+            #[cfg(not(feature = "log"))]
             led_fut,
             select(matrix_fut, communication_fut),
         )
@@ -348,7 +369,7 @@ pub(crate) async fn run_usb_keyboard<
         {
             Either4::First(_) => error!("Usb or keyboard task has died"),
             Either4::Second(_) => error!("Storage or vial task has died"),
-            Either4::Third(_) => error!("Led task has died"),
+            Either4::Third(_) => error!("Logger or led task has died"),
             Either4::Fourth(_) => error!("Communication task has died"),
         }
 

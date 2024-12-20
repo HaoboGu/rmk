@@ -95,7 +95,6 @@ pub(crate) fn gen_imports(config: &KeyboardConfig) -> TokenStream2 {
 
     // TODO: remove static var?
     quote! {
-        use defmt::*;
         #imports
 
         #keyboard_info_static_var

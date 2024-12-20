@@ -15,7 +15,6 @@ use crate::{
     keymap::KeyMap,
 };
 use core::cell::RefCell;
-use defmt::{debug, info, warn};
 use embassy_futures::select::{select, select4};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::OutputPin;
