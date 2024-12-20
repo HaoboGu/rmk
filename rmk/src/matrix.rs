@@ -28,7 +28,7 @@ pub(crate) trait MatrixTrait {
 
     // Run the matrix
     async fn run(&mut self) {
-        // We don't check disconnected state because disconnection means the task will be dropped 
+        // We don't check disconnected state because disconnection means the task will be dropped
         loop {
             self.wait_for_connected().await;
             self.scan().await;
