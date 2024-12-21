@@ -21,7 +21,7 @@ use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 ))]
 use crate::initialize_usb_keyboard_and_run;
 
-use defmt::{error, info};
+use defmt::info;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -330,15 +330,13 @@ impl<
                                 self.key_states[row_idx][col_idx].toggle_pressed();
                                 let key_state = self.key_states[row_idx][col_idx];
 
-                                // `try_send` is used here because we don't want to block scanning if the channel is full
-                                let send_re = key_event_channel.try_send(KeyEvent {
-                                    row: row_idx as u8,
-                                    col: col_idx as u8,
-                                    pressed: key_state.pressed,
-                                });
-                                if send_re.is_err() {
-                                    error!("Failed to send key event: key event channel full");
-                                }
+                                key_event_channel
+                                    .send(KeyEvent {
+                                        row: row_idx as u8,
+                                        col: col_idx as u8,
+                                        pressed: key_state.pressed,
+                                    })
+                                    .await;
                             }
                             _ => (),
                         }

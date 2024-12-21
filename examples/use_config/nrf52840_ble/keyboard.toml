@@ -45,7 +45,7 @@ capslock.low_active = false
 [storage]
 # Storage feature is enabled by default
 # enabled = false
-clear_storage = true
+# clear_storage = true
 
 [ble]
 enabled = true

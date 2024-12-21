@@ -86,6 +86,9 @@ pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
+/// Whethe the connection is ready.
+/// After the connection is ready, the matrix starts scanning
+pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -308,9 +311,10 @@ pub(crate) async fn run_usb_keyboard<
     >,
 ) -> ! {
     loop {
+        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
         let usb_fut = usb_device.device.run();
         let keyboard_fut = keyboard.run();
-        let matrix_fut = matrix.scan();
+        let matrix_fut = matrix.run();
         let communication_fut = communication_task(
             keyboard_report_receiver,
             &mut usb_device.keyboard_hid_writer,
