@@ -1,7 +1,6 @@
 use crate::config::{LightConfig, LightPinConfig};
 use crate::hid::HidReaderWrapper;
 use bitfield_struct::bitfield;
-use defmt::{debug, error, warn, Format};
 use embassy_futures::select::select;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::{Error, OutputPin, PinState};
@@ -38,7 +37,7 @@ pub(crate) async fn hid_read_led<R: HidReaderWrapper>(keyboard_hid_reader: &mut 
                 LED_CHANNEL.send(indicator).await;
             }
             Err(e) => {
-                error!("Read keyboard state error: {}", e);
+                error!("Read keyboard state error: {:?}", e);
                 embassy_time::Timer::after_secs(1).await;
             }
         }
@@ -63,7 +62,8 @@ pub(crate) async fn led_hid_task<R: HidReaderWrapper, Out: OutputPin>(
 }
 
 #[bitfield(u8)]
-#[derive(Format, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LedIndicator {
     #[bits(1)]
     numslock: bool,

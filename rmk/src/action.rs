@@ -1,5 +1,4 @@
 use crate::keycode::{KeyCode, ModifierCombination};
-use defmt::{error, Format};
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
@@ -13,7 +12,8 @@ use defmt::{error, Format};
 /// The `BasicAction` represents only a single key action of keycodes defined in HID spec. The `Action` represents all actions defined in the following `Action` enum, including modifier combination and layer switch.
 ///
 /// The KeyActionType bits varies between different types of a KeyAction, see docs of each enum variant.
-#[derive(Format, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.
     No,
@@ -81,7 +81,8 @@ impl KeyAction {
 
 /// A single basic action that a keyboard can execute.
 /// An Action can be represented in 12 bits, aka 0x000 ~ 0xFFF
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Action {
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
     ///

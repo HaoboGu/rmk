@@ -9,7 +9,6 @@ use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::key_event_channel;
 use crate::matrix::Matrix;
 use crate::CONNECTION_STATE;
-use defmt::{error, info};
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select;
