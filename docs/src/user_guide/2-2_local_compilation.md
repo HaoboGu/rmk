@@ -1,24 +1,24 @@
 # Local compilation
 
-This sections describles all you need to compile RMK firmware on your local machine.
+This sections describes everything you need to compile RMK firmware on your local machine.
 
 ## Setup RMK environment
 
-First, you'll setup the Rust development environment, install all needed components for compiling and flashing RMK.
+First, you have to setup the Rust development environment and install all the needed components for compiling and flashing RMK.
 
 ### 1. Install Rust
 
-RMK is written in Rust, so first you have to install Rust to your host. Installing Rust is easy, checkout [https://rustup.rs](https://rustup.rs) and follow the instructions.
+Installing Rust is easy, checkout [https://rustup.rs](https://rustup.rs) and follow the instructions.
 
 [Here](https://doc.rust-lang.org/book/ch01-01-installation.html) is a more detailed guide for installing Rust.
 
 ### 2. Choose your hardware and install the target
 
-RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choose one of the supported microcontroller makes your journey of RMK much easier. In RMK repo, there are many examples, microcontrollers in examples are safe options. If you're using other microcontrollers, make sure your microcontroller supports [Embassy](https://github.com/embassy-rs/embassy).
+RMK firmware runs on microcontrollers. By using [Embassy](https://github.com/embassy-rs/embassy) as the runtime, RMK supports many series of microcontrollers, such as stm32, nrf52 and rp2040. Choosing one of the supported microcontrollers makes your journey of RMK much easier. In the [RMK repo](https://github.com/HaoboGu/rmk/tree/main/examples), there are many examples. The microcontrollers in the examples are safe options. If you're using other microcontrollers, make sure your microcontroller supports [Embassy](https://github.com/embassy-rs/embassy).
 
-The next step is to add Rust's compilation target of your chosen microcontroller. Rust's default installation include only your host's compilation target, so you have to install the compilation target of your microcontroller manually.
+The next step is to add Rust's compilation target of your chosen microcontroller. Rust's default installation includes only your host's compilation target, so you have to install the compilation target of your microcontroller manually.
 
-Different microcontrollers with different architectures may have different compilation targets, if you're using ARM Cortex-M microcontrollers, [here](https://docs.rust-embedded.org/book/intro/install.html#rust-toolchain) is a simple target list.
+Different microcontrollers with different architectures may have different compilation targets. In case you're using ARM Cortex-M microcontrollers, [here](https://docs.rust-embedded.org/book/intro/install.html#rust-toolchain) is a simple target list.
 
 For example, rp2040 is a Cortex-M0+ microcontroller, it's compilation target is `thumbv6m-none-eabi`. Use `rustup target add` command to install it:
 
@@ -70,7 +70,7 @@ You can use `rmkit` to create the firmware project:
 rmkit init
 ```
 
-This command would ask you to fill some basic info of your project, then a project will be created from RMK's templates: 
+This command will ask you to give some basic info about your project and then create a project from RMK's templates:
 
 ```shell
 $ rmkit init                                                                
@@ -85,23 +85,23 @@ Now RMK has project templates for many microcontrollers, such as nRF52840, rp204
 
 ## Update firmware project
 
-The generated project uses `keyboard.toml` to config the keyboard. There're steps you have to do to customize your own firmware:
+The generated project uses the `keyboard.toml` file to config the keyboard. These steps you have to do to customize your own firmware:
 
 ### Edit `keyboard.toml`
 
 The generated `keyboard.toml` should have some fields configured from `rmkit init`. But there are still some fields that you want to fill, such as the pin matrix, default keymap, led config, etc.
 
-The [Keyboard Configuration](../keyboard_configuration.md) section has full instructions of how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
+The [Keyboard Configuration](../keyboard_configuration.md) section has full instructions on how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
 
 ### Update `memory.x`
 
-`memory.x` is the linker script of Rust embedded project, it's used to define the memory layout of the microcontroller. RMK enables `memory-x` feature for `embassy-stm32`, so if you're using stm32, you can just ignore this step.
+`memory.x` is the linker script of the Rust embedded project, it's used to define the memory layout of the microcontroller. RMK enables the `memory-x` feature for `embassy-stm32`, so if you're using stm32, you can just ignore this step.
 
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM to your microcontroller.
 
 If you're using **nRF52840**, generally you have to change start address in `memory.x` to 0x27000 or 0x26000, according to your softdevice version. For example, softdevice v6.1.x should use 0x00026000 and v7.3.0 should be 0x00027000
 
-You can either checkout your microcontroller's datasheet or existing Rust project of your microcontroller for it.
+You can either checkout your microcontroller's datasheet or an existing Rust project of your microcontroller for it.
 
 ### Add your own layout(vial.json)
 
@@ -113,7 +113,7 @@ imported to the firmware project.
 
 Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and
 convert it to `vial.json` following **[vial's doc here](https://get.vial.today/docs/porting-to-via.html)**, and place it
-at the root of the firmware project, replacing the default one. RMK would do all the rest things for you.
+at the root of the firmware project, replacing the default one. RMK will do all the rest for you.
 
 ### (Optional) Update compilation target
 
@@ -135,7 +135,7 @@ It's also welcome to submit and share your project template, please open an [iss
 
 ## Compile the firmware
 
-To compile the firmware is easy, just run
+Compiling the firmware is easy, just run
 
 ```shell
 cargo build --release
@@ -155,7 +155,7 @@ RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate the
 
 Then you should make sure the chip family argument(aka argument after --family) in `Makefile.toml` is correct. You can get your chip's family [here](https://git.sr.ht/~fenris/hex-to-uf2/tree/main/item/hex_to_uf2/src/families.rs#L7).
 
-That's all you need to set. The final step is to run
+That's all you need to set up. The final step is to run
 
 ```shell
 cargo make uf2 --release
