@@ -583,7 +583,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 return false;
             }) {
                 // Release the hold after tap key
-                info!("Releasing hold after tap: {} {}", tap_action, key_event);
+                info!("Releasing hold after tap: {:?} {:?}", tap_action, key_event);
                 self.process_key_action_normal(tap_action, key_event).await;
                 self.hold_after_tap[index] = None;
                 return;
