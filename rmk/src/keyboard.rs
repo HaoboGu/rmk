@@ -142,7 +142,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     last_release: (KeyEvent, bool, Option<Instant>),
 
     /// Record whether the keyboard is in hold-after-tap state
-    hold_after_tap: (KeyEvent, bool),
+    hold_after_tap: [Option<KeyEvent>; 6],
 
     /// Options for configurable action behavior
     behavior: BehaviorConfig,
@@ -194,14 +194,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 false,
                 None,
             ),
-            hold_after_tap: (
-                KeyEvent {
-                    row: 0,
-                    col: 0,
-                    pressed: false,
-                },
-                false,
-            ),
+            hold_after_tap: Default::default(),
             behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
@@ -511,7 +504,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
                         self.process_key_action_tap(tap_action, key_event).await;
-                        self.hold_after_tap = (key_event, false);
                         return;
                     } else if last_release_time.elapsed() < self.behavior.tap_hold.hold_timeout
                         && key_event.row == self.last_release.0.row
@@ -520,7 +512,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         // Pressed a same key after tapped it within `hold_timeout`
                         // Trigger the tap action just as it's pressed
                         self.process_key_action_normal(tap_action, key_event).await;
-                        self.hold_after_tap = (key_event, true);
+                        if let Some(index) = self.hold_after_tap.iter().position(|&k| k.is_none()) {
+                            self.hold_after_tap[index] = Some(key_event);
+                        }
                         return;
                     }
                 }
@@ -580,20 +574,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         } else {
             // Release
-            if self.hold_after_tap.1 {
-                // Releasing a key in hold after tap state, check position
-                if key_event.row == self.hold_after_tap.0.row
-                    && key_event.col == self.hold_after_tap.0.col
-                {
-                    // Release the hold after tap key
-                    info!(
-                        "Hold after tap, hold the tap: {:?} {:?}",
-                        tap_action, key_event
-                    );
-                    self.process_key_action_normal(tap_action, key_event).await;
-                    self.hold_after_tap = (key_event, false);
-                    return;
+
+            // find holding_after_tap key_event
+            if let Some(index) = self.hold_after_tap.iter().position(|&k| {
+                if let Some(ke) = k {
+                    return ke.row == key_event.row && ke.col == key_event.col;
                 }
+                return false;
+            }) {
+                // Release the hold after tap key
+                info!("Releasing hold after tap: {} {}", tap_action, key_event);
+                self.process_key_action_normal(tap_action, key_event).await;
+                self.hold_after_tap[index] = None;
+                return;
             }
             if let Some(_) = self.timer[col][row] {
                 // Release hold action, wait for `post_wait_time`, then clear timer
