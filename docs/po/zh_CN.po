@@ -640,9 +640,9 @@ msgstr ""
 
 #: src\user_guide/4_compile_and_flash.md:36
 msgid ""
-"Then, update the chip family argument(aka argument after -f) in `Makefile."
-"toml` in your project. You can get your chip's family ID in `scripts/uf2conv."
-"py`."
+"Then, update the chip family argument(aka argument after --family) in `Makefile."
+"toml` in your project. You can get your chip's family ID [here](https://git.sr.ht"
+"/~fenris/hex-to-uf2/tree/main/item/hex_to_uf2/src/families.rs#L7)"
 msgstr ""
 
 #: src\user_guide/4_compile_and_flash.md:38
@@ -728,13 +728,6 @@ msgid ""
 "config for all examples to generate `uf2` file automatically. Check "
 "`Makefile.toml` files in the example folders. The following command can be "
 "used to generate uf2 firmware:"
-msgstr ""
-
-#: src\faq.md:39
-msgid ""
-"This script requires you have `python` command available in your "
-"commandline. Some platforms have `python3` command only, you can change "
-"`python` in `Makefile.toml` to `python3` in this case."
 msgstr ""
 
 #: src\faq.md:41
