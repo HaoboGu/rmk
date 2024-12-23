@@ -175,7 +175,6 @@ impl gatt_server::Server for BleServer {
                 }
             }
         }
-
         if let Some(event) = self.vial.on_write(handle, data) {
             match event {
                 VialServiceEvent::InputVialKeyCccdWrite => {

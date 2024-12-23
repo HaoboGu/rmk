@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use defmt::{error, info};
+use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
@@ -378,15 +378,13 @@ impl<
                                 self.key_states[out_idx][in_idx],
                             );
 
-                            // `try_send` is used here because we don't want to block scanning if the channel is full
-                            let send_re = key_event_channel.try_send(KeyEvent {
-                                row,
-                                col,
-                                pressed: key_state.pressed,
-                            });
-                            if send_re.is_err() {
-                                error!("Failed to send key event: key event channel full");
-                            }
+                            key_event_channel
+                                .send(KeyEvent {
+                                    row,
+                                    col,
+                                    pressed: key_state.pressed,
+                                })
+                                .await;
                         }
                         _ => (),
                     }
@@ -541,10 +539,10 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        use heapless::Vec;
         use embassy_futures::select::select_slice;
+        use heapless::Vec;
         if let Some(start_time) = self.scan_start {
-            // If no key press over 1ms, stop scanning and wait for interupt
+            // If no key press over 1ms, stop scanning and wait for interrupt
             if start_time.elapsed().as_millis() <= 1 {
                 return;
             } else {
@@ -611,15 +609,13 @@ impl<
                                     self.key_states[row_idx][col_idx],
                                 );
 
-                                // `try_send` is used here because we don't want to block scanning if the channel is full
-                                let send_re = key_event_channel.try_send(KeyEvent {
-                                    row,
-                                    col,
-                                    pressed: key_state.pressed,
-                                });
-                                if send_re.is_err() {
-                                    error!("Failed to send key event: key event channel full");
-                                }
+                                key_event_channel
+                                    .send(KeyEvent {
+                                        row,
+                                        col,
+                                        pressed: key_state.pressed,
+                                    })
+                                    .await;
                             }
                             _ => (),
                         }

@@ -16,6 +16,7 @@ use crate::{
     hid::HidWriterWrapper,
     keyboard::{write_other_report_to_host, KeyboardReportMessage, REPORT_CHANNEL_SIZE},
     usb::descriptor::CompositeReportType,
+    CONNECTION_STATE,
 };
 
 /// BLE communication task, send reports to host via BLE.
@@ -41,31 +42,39 @@ pub(crate) async fn ble_communication_task<
     // Wait 1 seconds, ensure that gatt server has been started
     Timer::after_secs(1).await;
     loop {
-        match keyboard_report_receiver.receive().await {
-            KeyboardReportMessage::KeyboardReport(report) => {
-                debug!(
-                    "Send keyboard report via BLE: {=[u8]:#X}, modifier: {:b}",
-                    report.keycodes, report.modifier
-                );
-                match ble_keyboard_writer.write_serialize(&report).await {
-                    Ok(()) => {}
-                    Err(e) => error!("Send keyboard report error: {}", e),
-                };
-            }
-            KeyboardReportMessage::CompositeReport(report, report_type) => {
-                match report_type {
-                    CompositeReportType::Media => {
-                        write_other_report_to_host(report, report_type, ble_media_writer).await
-                    }
-                    CompositeReportType::Mouse => {
-                        write_other_report_to_host(report, report_type, ble_mouse_writer).await
-                    }
-                    CompositeReportType::System => {
-                        write_other_report_to_host(report, report_type, ble_system_control_writer)
+        let report = keyboard_report_receiver.receive().await;
+        // Only send the report after the connection is established.
+        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            match report {
+                KeyboardReportMessage::KeyboardReport(report) => {
+                    debug!(
+                        "Send keyboard report via BLE: {=[u8]:#X}, modifier: {:b}",
+                        report.keycodes, report.modifier
+                    );
+                    match ble_keyboard_writer.write_serialize(&report).await {
+                        Ok(()) => {}
+                        Err(e) => error!("Send keyboard report error: {}", e),
+                    };
+                }
+                KeyboardReportMessage::CompositeReport(report, report_type) => {
+                    match report_type {
+                        CompositeReportType::Media => {
+                            write_other_report_to_host(report, report_type, ble_media_writer).await
+                        }
+                        CompositeReportType::Mouse => {
+                            write_other_report_to_host(report, report_type, ble_mouse_writer).await
+                        }
+                        CompositeReportType::System => {
+                            write_other_report_to_host(
+                                report,
+                                report_type,
+                                ble_system_control_writer,
+                            )
                             .await
-                    }
-                    CompositeReportType::None => (),
-                };
+                        }
+                        CompositeReportType::None => (),
+                    };
+                }
             }
         }
     }

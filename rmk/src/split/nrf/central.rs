@@ -1,16 +1,19 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use defmt::{error, info};
-use embassy_futures::join::join;
+use embassy_futures::{join::join, select::select};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Channel, Receiver, Sender},
 };
-use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
+use nrf_softdevice::ble::{central, gatt_client, Address, AddressType, PhySet, PhyUpdateError};
 
-use crate::split::{
-    driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader},
-    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+use crate::{
+    split::{
+        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
+        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
+    },
+    CONNECTION_STATE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals
@@ -32,13 +35,22 @@ pub(crate) async fn run_ble_peripheral_monitor<
     id: usize,
     addr: [u8; 6],
 ) {
-    let channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    // Channel is used to receive messages from peripheral
+    let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    // Channel is used to notify messages to peripheral
+    let notify_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
 
-    let sender = channel.sender();
-    let run_ble_client = run_ble_client(sender, addr);
+    let receive_sender = receive_channel.sender();
+    let receive_receiver = receive_channel.receiver();
+    let notify_sender = notify_channel.sender();
+    let notify_receiver = notify_channel.receiver();
+    let run_ble_client = run_ble_client(receive_sender, notify_receiver, addr);
 
-    let receiver = channel.receiver();
-    let split_ble_driver = BleSplitCentralDriver { receiver };
+    let split_ble_driver = BleSplitCentralDriver {
+        receiver: receive_receiver,
+        sender: notify_sender,
+        connection_state: CONNECTION_STATE.load(Ordering::Acquire),
+    };
 
     let peripheral =
         PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
@@ -55,7 +67,8 @@ static CONNECTING_CLIENT: AtomicBool = AtomicBool::new(false);
 /// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
 /// Split driver will take `SplitBleCentralDriver` as the reader, process the message in matrix scanning.
 pub(crate) async fn run_ble_client(
-    sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    receive_sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    notify_receiver: Receiver<'_, CriticalSectionRawMutex, SplitMessage, 8>,
     addr: [u8; 6],
 ) -> ! {
     // Wait 1s, ensure that the softdevice is ready
@@ -64,8 +77,14 @@ pub(crate) async fn run_ble_client(
     loop {
         let addrs = &[&Address::new(AddressType::RandomStatic, addr)];
         let mut config: central::ConnectConfig<'_> = central::ConnectConfig::default();
+        config.conn_params = nrf_softdevice::raw::ble_gap_conn_params_t {
+            min_conn_interval: 6,
+            max_conn_interval: 6,
+            slave_latency: 99,
+            conn_sup_timeout: 500, // timeout: 5s
+        };
         config.scan_config.whitelist = Some(addrs);
-        let conn = loop {
+        let mut conn = loop {
             if let Ok(_) =
                 CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             {
@@ -85,6 +104,14 @@ pub(crate) async fn run_ble_client(
             embassy_time::Timer::after_millis(200).await;
         };
 
+        // Set PHY used
+        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+            error!("Failed to update PHY");
+            if let PhyUpdateError::Raw(re) = e {
+                error!("Raw error code: {:?}", re);
+            }
+        }
+
         let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
             Ok(client) => client,
             Err(e) => {
@@ -100,11 +127,11 @@ pub(crate) async fn run_ble_client(
         }
 
         // Receive peripheral's notifications
-        let disconnect_error = gatt_client::run(&conn, &ble_client, |event| match event {
+        let receive_peripheral = gatt_client::run(&conn, &ble_client, |event| match event {
             BleSplitCentralClientEvent::MessageToCentralNotification(message) => {
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
-                        if let Err(e) = sender.try_send(split_message) {
+                        if let Err(e) = receive_sender.try_send(split_message) {
                             error!("BLE_SYNC_CHANNEL send message error: {}", e);
                         }
                     }
@@ -113,27 +140,68 @@ pub(crate) async fn run_ble_client(
                     }
                 };
             }
-        })
-        .await;
+        });
 
-        error!("BLE peripheral disconnect error: {:?}", disconnect_error);
+        // Notify messages to peripheral
+        let notify_peripheral = async {
+            loop {
+                let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
+                let message = notify_receiver.receive().await;
+                match postcard::to_slice(&message, &mut buf) {
+                    Ok(_bytes) => {
+                        if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
+                            error!("BLE message_to_peripheral_write error: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Postcard serialize split message error: {}", e),
+                };
+            }
+        };
+
+        match select(receive_peripheral, notify_peripheral).await {
+            embassy_futures::select::Either::First(e) => {
+                error!("BLE peripheral disconnect error: {:?}", e);
+            }
+            embassy_futures::select::Either::Second(_) => (),
+        }
+
         // Wait for 1s before trying to connect (again)
         embassy_time::Timer::after_secs(1).await;
     }
 }
 
-/// Ble central driver which reads the split message.
+/// Ble central driver which reads and writes the split message.
 ///
-/// Different from serial, BLE split message is received and processed in a separate service.
-/// The BLE service should keep running, it sends out the split message to the channel in the callback.
-/// It's impossible to implement `SplitReader` for BLE service,
-/// so we need this thin wrapper that receives the message from the channel.
+/// Different from serial, BLE split message is processed in a separate service.
+/// The BLE service should keep running, it processes the split message in the callback, which is not async.
+/// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
+/// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a> {
+    // Receiver that receives message from peripheral
     pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    // Sender that send message to peripherals
+    pub(crate) sender: Sender<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    // Cached connection state
+    connection_state: bool,
 }
 
 impl<'a> SplitReader for BleSplitCentralDriver<'a> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         Ok(self.receiver.receive().await)
+    }
+}
+
+impl SplitWriter for BleSplitCentralDriver<'_> {
+    async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
+        if let SplitMessage::ConnectionState(state) = message {
+            // Check if the connection state is changed
+            if self.connection_state == *state {
+                return Ok(SPLIT_MESSAGE_MAX_SIZE);
+            }
+            // ConnectionState changed, update cached state and notify peripheral
+            self.connection_state = *state;
+        }
+        self.sender.send(message.clone()).await;
+        Ok(SPLIT_MESSAGE_MAX_SIZE)
     }
 }
