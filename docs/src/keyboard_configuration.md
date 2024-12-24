@@ -46,7 +46,7 @@ usb_enable = true
 `[matrix]` section defines the key matrix information of the keyboard, aka input/output pins. 
 
 <div class="warning">
-For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[spilt]` section.
+For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[split]` section.
 </div>
 
 IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:

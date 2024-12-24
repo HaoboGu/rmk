@@ -34,6 +34,7 @@ pub(crate) trait SplitWriter {
 ///
 /// The `ROW` and `COL` are the number of rows and columns of the corresponding peripheral's keyboard matrix.
 /// The `ROW_OFFSET` and `COL_OFFSET` are the offset of the peripheral's matrix in the keyboard's matrix.
+/// TODO: Rename `PeripheralMatrixMonitor`
 pub(crate) struct PeripheralMatrixMonitor<
     const ROW: usize,
     const COL: usize,
@@ -73,7 +74,7 @@ impl<
             error!("SplitDriver write error: {}", e);
         }
         loop {
-            match select(self.receiver.read(), embassy_time::Timer::after_millis(200)).await {
+            match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_message) => {
                         debug!("Received peripheral message: {}", received_message);
@@ -101,20 +102,15 @@ impl<
                     Err(e) => error!("Peripheral message read error: {:?}", e),
                 },
                 embassy_futures::select::Either::Second(_) => {
-                    // Check ConnectionState every 200ms
-                    // Current, only ConnectionState will be notified to peripheral
-                    let current_conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                    if conn_state != current_conn_state {
-                        // ConnectionState changed, notify peripheral
-                        conn_state = current_conn_state;
-                        if let Err(e) = self
-                            .receiver
-                            .write(&SplitMessage::ConnectionState(conn_state))
-                            .await
-                        {
-                            error!("SplitDriver write error: {}", e);
-                        };
-                    }
+                    // Sync ConnectionState every 500ms
+                    conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    if let Err(e) = self
+                        .receiver
+                        .write(&SplitMessage::ConnectionState(conn_state))
+                        .await
+                    {
+                        error!("SplitDriver write error: {}", e);
+                    };
                 }
             }
         }
