@@ -21,6 +21,11 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    impl_input_device,
+    input_device::{
+        rotary_encoder::{rotary_encoder_task, RotaryEncoder},
+        InputDevice,
+    },
     run_rmk,
 };
 
@@ -106,6 +111,11 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
+    let encoder = RotaryEncoder {};
+    spawner.spawn(rotary_encoder_task(encoder)).unwrap();
+    let my_device = MyDevice {};
+    spawner.spawn(my_device_task(my_device)).unwrap();
+
     run_rmk(
         input_pins,
         output_pins,
@@ -116,3 +126,14 @@ async fn main(spawner: Spawner) {
     )
     .await;
 }
+
+struct MyDevice {}
+impl InputDevice for MyDevice {
+    async fn run(&mut self) {
+        loop {
+            info!("Hi my device");
+            embassy_time::Timer::after_secs(1).await;
+        }
+    }
+}
+impl_input_device!(MyDevice, my_device_task);
