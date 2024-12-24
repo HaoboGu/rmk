@@ -40,7 +40,7 @@ num_enum = { version = "0.7", default-features = false }
 bitfield-struct = "0.9"
 byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "3.0.1", git = "https://github.com/HaoboGu/sequential-storage", branch = "feat/map_iterator", features = ["defmt-03"] }
+sequential-storage = { version = "3.0.1", git = "https://github.com/tweedegolf/sequential-storage", features = ["defmt-03"] }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
