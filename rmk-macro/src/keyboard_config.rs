@@ -186,7 +186,7 @@ impl KeyboardConfig {
     ///
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
-        if config.keyboard.board.is_none() ^ config.keyboard.board.is_none() {
+        if config.keyboard.board.is_none() ^ config.keyboard.chip.is_none() {
             let message = format!(
                 "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both"
             );
