@@ -25,7 +25,6 @@ jobs:
         run: cargo binstall rmkit -y
       - name: Get chip name
         id: capture
-        working-directory: ./rmk
         run: |
           # Run rmkit command to get the chip name
           OUTPUT=$(rmkit get-chip --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
