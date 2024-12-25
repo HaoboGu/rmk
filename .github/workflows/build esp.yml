@@ -26,9 +26,9 @@ jobs:
     strategy:
       matrix:
         chip:
-          - esp32c3_ble
-          - esp32c6_ble
-          - esp32s3_ble
+          - esp32c3
+          - esp32c6
+          - esp32s3
         example_type:
           - use_rust
           - use_config
