@@ -21,7 +21,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_esp_example:
+  build_esp:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
