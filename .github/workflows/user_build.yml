@@ -98,12 +98,23 @@ jobs:
           fi
           # Save the arch as a GitHub Actions output variable
           echo "arch=$ARCH" >> $GITHUB_OUTPUT
+      - name: get project name
+        id: project_name
+        run: |
+          # Run rmkit command to get the chip name
+          OUTPUT=$(rmkit get-project-name --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
+
+          # Print the output to confirm
+          echo "Command output: $OUTPUT"
+
+          # Save the output as a GitHub Actions output variable
+          echo "project_name=$OUTPUT" >> $GITHUB_OUTPUT
       - name: echo project name
         working-directory: ./rmk
         run: ls target/${{ steps.arch.outputs.arch }}/release
       - name: convert firmware to bin
         working-directory: ./rmk
-        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/rmk-${{ needs.get_chip_name.outputs.chip_name }} ./rmk.bin
+        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/${{ steps.project_name.outputs.project_name }} ./rmk.bin
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
