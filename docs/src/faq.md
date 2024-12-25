@@ -36,8 +36,6 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   cargo make uf2 --release
   ```
   
-  This script requires you have `python` command available in your commandline. Some platforms have `python3` command only, you can change `python` in `Makefile.toml` to `python3` in this case.
-
 ### I changed keymap in `keyboard.toml`, but the keyboard is not updated
 
 RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.

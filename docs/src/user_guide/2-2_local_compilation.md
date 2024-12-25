@@ -62,8 +62,6 @@ You can use the following commands to install them:
   irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.ps1 | iex
   ```
 
-Generating uf2 firmware also requires you have `python` command available. [Here](https://wiki.python.org/moin/BeginnersGuide/Download) is a guide for installing python.
-
 ## Create firmware project
 
 You can use `rmkit` to create the firmware project:
@@ -153,9 +151,9 @@ If you encountered any problems when compiling the firmware, please report it [h
 
 By default, Rust firmware is an ELF file, so we have to do some extra steps converting it to uf2 format.
 
-RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate the uf2 firmware generation. Generating uf2 firmware also requires you have `python` command available.
+RMK uses [cargo-make](https://github.com/sagiegurari/cargo-make) to automate the uf2 firmware generation.
 
-Then you should make sure the chip family argument(aka argument after -f) in `Makefile.toml` is correct. You can get your chip's family ID in `scripts/uf2conv.py`.
+Then you should make sure the chip family argument(aka argument after --family) in `Makefile.toml` is correct. You can get your chip's family [here](https://github.com/fhanrath/hex-to-uf2/blob/main/hex_to_uf2/src/families.rs#L7).
 
 That's all you need to set up. The final step is to run
 
