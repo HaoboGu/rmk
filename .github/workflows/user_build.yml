@@ -34,7 +34,7 @@ jobs:
           echo "Command output: $OUTPUT"
 
           # Save the output as a GitHub Actions output variable
-          echo "chip=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "chip_name=$OUTPUT" >> $GITHUB_OUTPUT
 
   build:
     runs-on: ubuntu-latest
