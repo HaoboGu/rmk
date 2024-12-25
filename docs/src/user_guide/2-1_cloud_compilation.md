@@ -4,7 +4,7 @@ RMK provides a [project-template](https://github.com/HaoboGu/rmk-project-templat
 
 ## Steps
 
-1. To get started, click `Use this template` button and choose `Create a new repository`:
+1. To get started, open [project-template](https://github.com/HaoboGu/rmk-project-template), click `Use this template` button and choose `Create a new repository`:
 
 ![use_template](../images/use_template.png)
 

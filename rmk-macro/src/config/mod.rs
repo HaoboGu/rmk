@@ -56,6 +56,7 @@ pub enum MatrixType {
     direct_pin,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
     #[serde(default)]
@@ -65,6 +66,8 @@ pub struct MatrixConfig {
     pub direct_pins: Option<Vec<Vec<String>>>,
     #[serde(default = "default_true")]
     pub direct_pin_low_active: bool,
+    #[serde(default = "default_false")]
+    pub row2col: bool,
 }
 
 /// Config for storage
@@ -200,8 +203,12 @@ pub struct SerialConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
+}
+
+const fn default_false() -> bool {
+    false
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
