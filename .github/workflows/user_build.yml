@@ -15,8 +15,33 @@ on:
         type: string
 
 jobs:
+  get_chip_name:
+    runs-on: ubuntu-latest
+    outputs:
+      chip_name: ${{ steps.capture.outputs.chip_name }}
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install rmkit 
+        run: cargo binstall rmkit -y
+      - name: Get chip name
+        id: capture
+        working-directory: ./rmk
+        run: |
+          # Run rmkit command to get the chip name
+          OUTPUT=$(rmkit get-chip --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
+
+          # Print the output to confirm
+          echo "Command output: $OUTPUT"
+
+          # Save the output as a GitHub Actions output variable
+          echo "chip=$OUTPUT" >> $GITHUB_ENV
+
+          # Set chip_name output
+          echo "::set-output name=chip_name::$OUTPUT"
   build:
     runs-on: ubuntu-latest
+    needs: get_chip_name
+    if: needs.get_chip_name.outputs.chip_name != 'esp32c3' && needs.get_chip_name.outputs.chip_name != 'esp32s3' && needs.get_chip_name.outputs.chip_name != 'esp32c6'
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - name: Install rmkit and cargo-make
@@ -40,3 +65,43 @@ jobs:
         with:
           name: firmware_hex
           path: rmk/*.hex
+  build_esp:
+    runs-on: ubuntu-latest
+    needs: get_chip_name
+    if: needs.get_chip_name.outputs.chip_name == 'esp32c3' || needs.get_chip_name.outputs.chip_name == 'esp32s3' || needs.get_chip_name.outputs.chip_name == 'esp32c6'
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install rmkit and espflash
+        run: cargo binstall rmkit espflash -y
+      - uses: actions/checkout@v3
+      - name: Install libssl
+        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      - name: Prepare esp environment
+        run: |
+          cargo binstall ldproxy espup -y
+          espup install
+      - name: Build firmware for esp32
+        working-directory: ./rmk
+        run: cargo +esp build --release
+      - name: Get target arch
+        id: arch
+        run: |
+          if [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c3" ]; then
+            ARCH="riscv32imc-esp-espidf"
+          elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32s3" ]; then
+            ARCH="riscv32imac-esp-espidf"
+          elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c6" ]; then
+            ARCH="xtensa-esp32s3-espidf"
+          else
+            ARCH=""
+          fi
+          echo "::set-output name=arch::$ARCH"
+      - name: convert firmware to bin
+        working-directory: ./rmk
+        run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/rmk-${{ needs.get_chip_name.outputs.chip_name }} ./rmk.bin
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_bin
+          path: rmk/*.bin
+
