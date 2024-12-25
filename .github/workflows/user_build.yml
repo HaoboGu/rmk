@@ -96,7 +96,11 @@ jobs:
           else
             ARCH=""
           fi
-          echo "::set-output name=arch::$ARCH"
+          # Save the arch as a GitHub Actions output variable
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+      - name: echo project name
+        working-directory: ./rmk
+        run: ls target/${{ steps.arch.outputs.arch }}/release
       - name: convert firmware to bin
         working-directory: ./rmk
         run: espflash save-image --chip ${{ needs.get_chip_name.outputs.chip_name }} target/${{ steps.arch.outputs.arch }}/release/rmk-${{ needs.get_chip_name.outputs.chip_name }} ./rmk.bin
