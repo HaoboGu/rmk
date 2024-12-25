@@ -62,7 +62,7 @@ Here is an example toml of `[matrix]` section for stm32:
 # Input and output pins are mandatory
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 ```
 
@@ -316,7 +316,7 @@ matrix_type = "normal"
 # Input and output pins
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 
 # Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
 matrix_type = "direct_pin"

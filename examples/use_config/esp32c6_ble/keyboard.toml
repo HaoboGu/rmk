@@ -12,7 +12,7 @@ usb_enable = false
 input_pins = ["gpio6", "gpio7", "gpio20", "gpio21"]
 output_pins = ["gpio3", "gpio4", "gpio5"]
 
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
 [layout]
