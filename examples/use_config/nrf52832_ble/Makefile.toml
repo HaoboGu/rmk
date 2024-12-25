@@ -26,6 +26,6 @@ args = [
     "--output-path",
     "rmk.uf2",
     "--family",
-    "nrf52832xxaa",
+    "nrf52832xx-aa",
 ]
 dependencies = ["objcopy"]

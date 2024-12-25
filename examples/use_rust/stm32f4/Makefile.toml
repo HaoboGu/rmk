@@ -26,6 +26,6 @@ args = [
     "--family",
     "rmk.uf2",
     "--family",
-    "stm32f411xe",
+    "stm32f4",
 ]
 dependencies = ["objcopy"]
