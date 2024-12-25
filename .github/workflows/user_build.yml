@@ -1,0 +1,42 @@
+name: Build firmware according to user config file
+
+on:
+  workflow_call:
+    inputs:
+      keyboard_toml_path:
+        description: "Path to the keyboard.toml"
+        default: "keyboard.toml"
+        required: false
+        type: string
+      vial_json_path:
+        description: "Path to the vial.json"
+        default: "vial.json"
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - name: Install rmkit and cargo-make
+        run: cargo binstall cargo-make rmkit -y
+      - uses: actions/checkout@v3
+      - name: Install libssl
+        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      - name: Create firmware project
+        working-directory: .
+        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
+      - name: Build firmware
+        working-directory: ./rmk
+        run: cargo make uf2 --release
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_uf2
+          path: rmk/*.uf2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_hex
+          path: rmk/*.hex
