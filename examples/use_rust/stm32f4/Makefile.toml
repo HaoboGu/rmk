@@ -23,7 +23,7 @@ args = [
     "hex-to-uf2",
     "--input-path",
     "rmk.hex",
-    "--family",
+    "--output-path",
     "rmk.uf2",
     "--family",
     "stm32f4",
