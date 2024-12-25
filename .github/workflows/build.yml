@@ -70,7 +70,7 @@ jobs:
             ./example/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install flip-link
-        run: cargo install flip-link
+        run: cargo install flip-link --force
       - run: rustup target add thumbv7em-none-eabihf
       - run: rustup component add rust-src llvm-tools
       - if: steps.cache-cargo.outputs.cache-hit != 'true'
