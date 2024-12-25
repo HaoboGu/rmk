@@ -48,7 +48,7 @@ jobs:
         run: cargo binstall cargo-make
       - name: Install target
         run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
-      - name: Build rp2040
+      - name: Build example
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
   binary-size:
