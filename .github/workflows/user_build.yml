@@ -34,10 +34,8 @@ jobs:
           echo "Command output: $OUTPUT"
 
           # Save the output as a GitHub Actions output variable
-          echo "chip=$OUTPUT" >> $GITHUB_ENV
+          echo "chip=$OUTPUT" >> $GITHUB_OUTPUT
 
-          # Set chip_name output
-          echo "::set-output name=chip_name::$OUTPUT"
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
@@ -80,6 +78,9 @@ jobs:
         run: |
           cargo binstall ldproxy espup -y
           espup install
+      - name: Create firmware project
+        working-directory: .
+        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
       - name: Build firmware for esp32
         working-directory: ./rmk
         run: cargo +esp build --release
