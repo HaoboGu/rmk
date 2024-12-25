@@ -21,6 +21,7 @@ jobs:
       chip_name: ${{ steps.capture.outputs.chip_name }}
     steps:
       - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
       - name: Install rmkit 
         run: cargo binstall rmkit -y
       - name: Get chip name
