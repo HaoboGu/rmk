@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
       - name: Install cargo-make
@@ -78,7 +78,7 @@ jobs:
       - name: Check out the repo with the full git history
         uses: actions/checkout@v3
         with:
-          fetch-depth: '0'
+          fetch-depth: "0"
       - name: Build new binary
         working-directory: ./examples/use_config/nrf52840_ble
         run: |
@@ -114,4 +114,4 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `## PR build size\n \`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n ### Diff\n\`\`\`\n${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}\`\`\`\n`
-            })    
+            })
