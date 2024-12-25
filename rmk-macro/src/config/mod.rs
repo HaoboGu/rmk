@@ -208,7 +208,7 @@ const fn default_true() -> bool {
 }
 
 const fn default_false() -> bool {
-    true
+    false
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
