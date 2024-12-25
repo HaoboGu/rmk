@@ -19,281 +19,41 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # By default, RUSTFLAGS with “-D warnings” turns warnings into errors.
-  RUSTFLAGS:
 
 jobs:
-  determine-runner:
+  build_examples:
     runs-on: ubuntu-latest
-    outputs:
-      runner: ${{ steps.set-runner.outputs.use-runner }}
-    steps:
-      - name: Determine which runner to use
-        id: set-runner
-        uses: jimmygchen/runner-fallback-action@v1
-        with:
-          primary-runner: "self-hosted"
-          fallback-runner: "ubuntu-latest"
-          github-token: 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
-
-  build_rmk:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Build rmk
-        working-directory: ./rmk
-        run: cargo build --release 
-  build_rp2040:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
+    strategy:
+      matrix:
+        example:
+          - nrf52832_ble
+          - nrf52840_ble
+          - nrf52840_ble_split
+          - rp2040
+          - rp2040_split
+          - rp2040_direct_pin
+          - stm32f1
+          - stm32f4
+          - stm32h7
+        example_type:
+          - use_rust
+          - use_config
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
+      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
+      - name: Install cargo-make
+        run: cargo binstall cargo-make
       - name: Install target
-        run: rustup target add thumbv6m-none-eabi
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
       - name: Build rp2040
-        working-directory: ./examples/use_rust/rp2040
-        run: cargo make uf2 --release
-  build_rp2040_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv6m-none-eabi
-      - name: Build rp2040 with config
-        working-directory: ./examples/use_config/rp2040
-        run: cargo make uf2 --release
-  build_stm32h7:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build stm32h7
-        working-directory: ./examples/use_rust/stm32h7
-        run: cargo make uf2 --release
-  build_stm32h7_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build stm32h7 with config
-        working-directory: ./examples/use_config/stm32h7
-        run: cargo make uf2 --release
-  build_stm32f1:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7m-none-eabi      
-      - name: Build stm32f1
-        working-directory: ./examples/use_rust/stm32f1
-        run: cargo make uf2 --release
-  build_stm32f1_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7m-none-eabi     
-      - name: Build stm32f1 with config
-        working-directory: ./examples/use_config/stm32f1
-        run: cargo make uf2 --release
-  build_stm32f4:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build stm32f4
-        working-directory: ./examples/use_rust/stm32f4
-        run: cargo make uf2 --release
-  build_stm32f4_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build stm32f4 with config
-        working-directory: ./examples/use_config/stm32f4
-        run: cargo make uf2 --release
-  build_nrf52840_ble:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build nrf52840_ble
-        working-directory: ./examples/use_rust/nrf52840_ble
-        run: cargo make uf2 --release
-  build_nrf52832_ble:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build nrf52832_ble
-        working-directory: ./examples/use_rust/nrf52832_ble
-        run: cargo make uf2 --release
-  build_nrf52832_ble_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build nrf52832_ble with config
-        working-directory: ./examples/use_config/nrf52832_ble
-        run: cargo make uf2 --release
-  build_rp2040_split:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv6m-none-eabi
-      - name: Build rp2040 split
-        working-directory: ./examples/use_rust/rp2040_split
-        run: cargo make uf2 --release
-  build_rp2040_split_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv6m-none-eabi
-      - name: Build rp2040 split with config
-        working-directory: ./examples/use_config/rp2040_split
-        run: cargo make uf2 --release
-  build_nrf52840:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build nrf52840 split
-        working-directory: ./examples/use_rust/nrf52840_ble_split
-        run: cargo make uf2 --release
-  build_nrf52840_split_with_config:
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install cargo-make
-        run: cargo install cargo-make
-      - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build nrf52840 split with config
-        working-directory: ./examples/use_config/nrf52840_ble_split
+        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
   binary-size:
     # Copied from sequential-storage: https://github.com/tweedegolf/sequential-storage/blob/master/.github/workflows/ci.yaml
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.runner) }}
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       pull-requests: write
