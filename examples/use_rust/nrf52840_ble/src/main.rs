@@ -21,12 +21,8 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    impl_input_device,
-    input_device::{
-        rotary_encoder::{rotary_encoder_task, RotaryEncoder},
-        InputDevice,
-    },
-    run_rmk,
+    input_device::{rotary_encoder::RotaryEncoder, InputDevice},
+    run_devices, run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -111,18 +107,21 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let encoder = RotaryEncoder {};
-    spawner.spawn(rotary_encoder_task(encoder)).unwrap();
-    let my_device = MyDevice {};
-    spawner.spawn(my_device_task(my_device)).unwrap();
+    let mut my_device = MyDevice {};
+    let pin_a = Input::new(AnyPin::from(p.P0_06), embassy_nrf::gpio::Pull::Up);
+    let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
+    let mut encoder = RotaryEncoder::new(pin_a, pin_b);
 
-    run_rmk(
-        input_pins,
-        output_pins,
-        driver,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+    embassy_futures::join::join(
+        run_rmk(
+            input_pins,
+            output_pins,
+            driver,
+            &mut keymap::get_default_keymap(),
+            keyboard_config,
+            spawner,
+        ),
+        run_devices!(my_device, encoder),
     )
     .await;
 }
@@ -136,4 +135,3 @@ impl InputDevice for MyDevice {
         }
     }
 }
-impl_input_device!(MyDevice, my_device_task);
