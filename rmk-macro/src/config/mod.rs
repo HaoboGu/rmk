@@ -23,6 +23,8 @@ pub struct KeyboardTomlConfig {
     pub dependency: Option<DependencyConfig>,
     /// Split config
     pub split: Option<SplitConfig>,
+    /// Input device config
+    pub input_device: Option<InputDeviceConfig>,
 }
 
 /// Configurations for keyboard info
@@ -185,7 +187,10 @@ pub struct SplitBoardConfig {
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
+    /// Matrix config for the split
     pub matrix: MatrixConfig,
+    /// Input device config for the split
+    pub input_device: InputDeviceConfig,
 }
 
 /// Serial port config
@@ -219,4 +224,22 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
         "ms" => Ok(num),
         other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
     }
+}
+
+/// Configurations for input devices
+///
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct InputDeviceConfig {
+    pub encoder: Option<Vec<EncoderConfig>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EncoderConfig {
+    pub pin_a: String,
+    pub pin_b: String,
+    pub pin_btn: Option<String>,
+    pub resolution: Option<u8>,
+    pub clockwise_pos: (u8, u8),
+    pub counter_clockwise_pos: (u8, u8),
+    pub press_pos: Option<(u8, u8)>,
 }
