@@ -1,21 +1,26 @@
 //! The rotary encoder implementation is from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 //!
 
-use defmt::info;
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 
-use super::InputDevice;
+use crate::keyboard::KeyEvent;
+
+use super::{key_event_channel, InputDevice};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 // #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoder<A, B, P> {
     pin_a: A,
     pin_b: B,
     state: u8,
     phase: P,
+    /// (row, col) position in the keymap
+    clockwise_pos: (u8, u8),
+    /// (row, col) position in the keymap
+    counter_clockwise_pos: (u8, u8),
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
@@ -58,25 +63,44 @@ where
     A: InputPin,
     B: InputPin,
 {
-    /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`
-    pub fn new(pin_a: A, pin_b: B) -> Self {
+    /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`.
+    ///
+    /// `clockwise_pos` and `counter_clockwise_pos` are the (row, col) positions in the keymap.
+    pub fn new(
+        pin_a: A,
+        pin_b: B,
+        clockwise_pos: (u8, u8),
+        counter_clockwise_pos: (u8, u8),
+    ) -> Self {
         Self {
             pin_a,
             pin_b,
             state: 0u8,
             phase: DefaultPhase,
+            clockwise_pos,
+            counter_clockwise_pos,
         }
     }
 }
 
 impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`, while using `phase` to determine the direction.
-    pub fn with_phase(pin_a: A, pin_b: B, phase: P) -> Self {
+    ///
+    /// `clockwise_pos` and `counter_clockwise_pos` are the (row, col) positions in the keymap.
+    pub fn with_phase(
+        pin_a: A,
+        pin_b: B,
+        phase: P,
+        clockwise_pos: (u8, u8),
+        counter_clockwise_pos: (u8, u8),
+    ) -> Self {
         Self {
             pin_a,
             pin_b,
             state: 0u8,
             phase,
+            clockwise_pos,
+            counter_clockwise_pos,
         }
     }
 
@@ -148,12 +172,31 @@ impl<
             #[cfg(not(feature = "async_matrix"))]
             embassy_time::Timer::after_millis(20).await;
             let direction = self.update();
-            // TODO: Process directions
-            match direction {
-                Direction::Clockwise => info!("Clockwise"),
-                Direction::CounterClockwise => info!("CounterClockwise"),
-                Direction::None => {}
-            }
+            // TODO: Resolution
+            let (row, col) = match direction {
+                Direction::Clockwise => (self.clockwise_pos.0, self.clockwise_pos.1),
+                Direction::CounterClockwise => {
+                    (self.counter_clockwise_pos.0, self.counter_clockwise_pos.1)
+                }
+                Direction::None => continue,
+            };
+
+            // Send the key event, process it like a tap
+            key_event_channel
+                .send(KeyEvent {
+                    row,
+                    col,
+                    pressed: true,
+                })
+                .await;
+            embassy_time::Timer::after_millis(10).await;
+            key_event_channel
+                .send(KeyEvent {
+                    row,
+                    col,
+                    pressed: false,
+                })
+                .await;
         }
     }
 }

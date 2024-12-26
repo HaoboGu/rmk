@@ -3,9 +3,11 @@
 //! This module defines the `InputDevice` trait and the `run_devices` macro, enabling the simultaneous execution of multiple input devices.
 //! The `InputDevice` trait provides the interface for individual input devices, and the `run_devices` macro facilitates their concurrent execution.
 //!
-//! Note: The `InputDevice` trait must be used in conjunction with the `run_devices` macro to ensure correct execution of all input devices. 
+//! Note: The `InputDevice` trait must be used in conjunction with the `run_devices` macro to ensure correct execution of all input devices.
 
 use core::future::Future;
+
+use crate::keyboard::key_event_channel;
 
 pub mod rotary_encoder;
 
@@ -13,22 +15,22 @@ pub mod rotary_encoder;
 ///
 /// This trait defines the interface for input devices in RMK.
 /// The `run_devices` macro is required to run tasks associated with input devices concurrently.
-/// 
+///
 /// # Example
 /// ```rust
 /// // Define an input device
 /// struct MyInputDevice;
-/// 
+///
 /// impl InputDevice for MyInputDevice {
 ///     async fn run(&mut self) {
 ///         // Input device implementation
 ///     }
 /// }
-/// 
+///
 /// // Use the input device
 /// let d1 = MyInputDevice{};
 /// let d2 = MyInputDevice{};
-/// 
+///
 /// // Run all devices simultaneously with RMK
 /// embassy_futures::join::join(
 ///     run_devices!(d1, d2),
@@ -60,7 +62,7 @@ pub trait InputDevice {
 /// // `MyInputDevice` should implement `InputDevice` trait
 /// let d1 = MyInputDevice{};
 /// let d2 = MyInputDevice{};
-/// 
+///
 /// // Run all input devices concurrently
 /// run_devices!(d1, d2).await;
 /// ```
