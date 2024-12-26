@@ -10,7 +10,7 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::config::BleBatteryConfig;
-use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
+use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 use crate::{
@@ -295,8 +295,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Keyboard services
     let mut keyboard = Keyboard::new(

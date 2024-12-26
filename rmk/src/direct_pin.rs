@@ -5,7 +5,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
-use crate::keyboard::key_event_channel;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::keyboard::KeyEvent;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
@@ -330,7 +330,7 @@ impl<
                                 self.key_states[row_idx][col_idx].toggle_pressed();
                                 let key_state = self.key_states[row_idx][col_idx];
 
-                                key_event_channel
+                                KEY_EVENT_CHANNEL
                                     .send(KeyEvent {
                                         row: row_idx as u8,
                                         col: col_idx as u8,

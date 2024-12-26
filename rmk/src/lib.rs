@@ -46,7 +46,7 @@ use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
 use keyboard::{
-    communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
+    communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL,
     REPORT_CHANNEL_SIZE,
 };
 use keymap::KeyMap;
@@ -66,7 +66,7 @@ pub mod direct_pin;
 mod flash;
 mod hid;
 pub mod input_device;
-mod keyboard;
+pub mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
 mod keymap;
@@ -250,8 +250,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (

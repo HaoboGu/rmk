@@ -2,7 +2,7 @@ pub(crate) mod server;
 
 use self::server::{BleServer, VialReaderWriter};
 use crate::config::StorageConfig;
-use crate::keyboard::keyboard_report_channel;
+use crate::keyboard::KEYBOARD_REPORT_CHANNEL;
 use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
@@ -61,8 +61,8 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     let mut keyboard = Keyboard::new(
         &keymap,

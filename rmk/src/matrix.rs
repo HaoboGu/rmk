@@ -1,6 +1,6 @@
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
-    keyboard::{key_event_channel, KeyEvent},
+    keyboard::{KEY_EVENT_CHANNEL, KeyEvent},
     CONNECTION_STATE,
 };
 use defmt::{info, Format};
@@ -216,7 +216,7 @@ impl<
                             let (row, col, key_state) =
                                 (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-                            key_event_channel
+                            KEY_EVENT_CHANNEL
                                 .send(KeyEvent {
                                     row: row as u8,
                                     col: col as u8,

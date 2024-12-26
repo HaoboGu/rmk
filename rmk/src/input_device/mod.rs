@@ -7,8 +7,6 @@
 
 use core::future::Future;
 
-use crate::keyboard::key_event_channel;
-
 pub mod rotary_encoder;
 
 /// The trait for input devices.

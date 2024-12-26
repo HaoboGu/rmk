@@ -3,7 +3,7 @@ use core::sync::atomic::Ordering;
 ///! The abstracted driver layer of the split keyboard.
 ///!
 use super::SplitMessage;
-use crate::keyboard::{key_event_channel, KeyEvent};
+use crate::keyboard::{KEY_EVENT_CHANNEL, KeyEvent};
 use crate::CONNECTION_STATE;
 use defmt::{debug, error, warn};
 use embassy_futures::select::select;
@@ -62,7 +62,7 @@ impl<
 
     /// Run the monitor.
     ///
-    /// The monitor receives from the peripheral and forward the message to key_event_channel.
+    /// The monitor receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     pub(crate) async fn run(mut self) -> ! {
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send once on start
@@ -87,7 +87,7 @@ impl<
 
                             if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                                 // Only when the connection is established, send the key event.
-                                key_event_channel
+                                KEY_EVENT_CHANNEL
                                     .send(KeyEvent {
                                         row: e.row + ROW_OFFSET as u8,
                                         col: e.col + COL_OFFSET as u8,

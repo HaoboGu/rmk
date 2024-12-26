@@ -5,9 +5,9 @@ use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 
-use crate::keyboard::KeyEvent;
+use crate::keyboard::{KeyEvent, KEY_EVENT_CHANNEL};
 
-use super::{key_event_channel, InputDevice};
+use super::InputDevice;
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -182,7 +182,7 @@ impl<
             };
 
             // Send the key event, process it like a tap
-            key_event_channel
+            KEY_EVENT_CHANNEL
                 .send(KeyEvent {
                     row,
                     col,
@@ -190,7 +190,7 @@ impl<
                 })
                 .await;
             embassy_time::Timer::after_millis(10).await;
-            key_event_channel
+            KEY_EVENT_CHANNEL
                 .send(KeyEvent {
                     row,
                     col,

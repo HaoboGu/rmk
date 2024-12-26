@@ -22,21 +22,22 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
-pub(crate) struct KeyEvent {
-    pub(crate) row: u8,
-    pub(crate) col: u8,
-    pub(crate) pressed: bool,
+pub struct KeyEvent {
+    pub row: u8,
+    pub col: u8,
+    pub pressed: bool,
 }
 pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
-pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
-
-pub(crate) static key_event_channel: Channel<
+pub static KEY_EVENT_CHANNEL: Channel<
     CriticalSectionRawMutex,
     KeyEvent,
     EVENT_CHANNEL_SIZE,
 > = Channel::new();
-pub(crate) static keyboard_report_channel: Channel<
+
+pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
+pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
     CriticalSectionRawMutex,
     KeyboardReportMessage,
     REPORT_CHANNEL_SIZE,
@@ -260,11 +261,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Main keyboard task, it receives input devices result, processes keys.
-    /// The report is sent to communication task via keyboard_report_channel, and finally sent to the host
+    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
     pub(crate) async fn run(&mut self) {
         KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {
-            let key_event = key_event_channel.receive().await;
+            let key_event = KEY_EVENT_CHANNEL.receive().await;
 
             // Process the key change
             self.process_key_change(key_event).await;
@@ -528,7 +529,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
             let hold_timeout =
                 embassy_time::Timer::after_millis(self.behavior.tap_hold.hold_timeout.as_millis());
-            match select(hold_timeout, key_event_channel.receive()).await {
+            match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
                     debug!("Hold timeout, got HOLD: {}, {}", hold_action, key_event);
@@ -557,7 +558,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                         // Wait for key release, record all pressed keys during this
                         loop {
-                            let next_key_event = key_event_channel.receive().await;
+                            let next_key_event = KEY_EVENT_CHANNEL.receive().await;
                             self.unprocessed_events.push(next_key_event).ok();
                             if !next_key_event.pressed {
                                 break;
@@ -595,7 +596,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 );
                 let wait_release = async {
                     loop {
-                        let next_key_event = key_event_channel.receive().await;
+                        let next_key_event = KEY_EVENT_CHANNEL.receive().await;
                         if !next_key_event.pressed {
                             self.unprocessed_events.push(next_key_event).ok();
                         } else {
@@ -660,7 +661,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     self.osm_state = OneShotState::Single(m);
 
                     let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
-                    match select(timeout, key_event_channel.receive()).await {
+                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
                             self.process_key_action_normal(Action::Modifier(modifier), key_event)
@@ -711,7 +712,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     self.osl_state = OneShotState::Single(l);
 
                     let timeout = embassy_time::Timer::after(self.behavior.one_shot.timeout);
-                    match select(timeout, key_event_channel.receive()).await {
+                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer
                             self.keymap.borrow_mut().deactivate_layer(layer_num);
@@ -924,7 +925,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // So now we just block for 20ms for mouse keys.
                 // In the future, we're going to use esp-hal once it have good support for BLE
                 embassy_time::Timer::after_millis(20).await;
-                key_event_channel.try_send(key_event).ok();
+                KEY_EVENT_CHANNEL.try_send(key_event).ok();
             }
         }
     }
