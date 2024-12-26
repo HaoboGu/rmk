@@ -37,6 +37,43 @@ fn expand_row(row: Vec<String>) -> TokenStream2 {
     quote! { [#(#keys), *] }
 }
 
+/// Get modifier combination, in types of mod1 | mod2 | ...
+fn parse_modifiers(modifiers_str: &str) -> (bool, bool, bool, bool, bool){
+    let mut right = false;
+    let mut gui = false;
+    let mut alt = false;
+    let mut shift = false;
+    let mut ctrl = false;
+    let tokens = modifiers_str.split_terminator("|");
+    tokens.for_each(|w| {
+        let w = w.trim();
+        match w {
+            "LShift" => shift = true,
+            "LCtrl" => ctrl = true,
+            "LAlt" => alt = true,
+            "Lgui" => gui = true,
+            "RShift" => {
+                right = true;
+                shift = true;
+            }
+            "RCtrl" => {
+                right = true;
+                ctrl = true;
+            }
+            "RAlt" => {
+                right = true;
+                alt = true;
+            }
+            "Rgui" => {
+                right = true;
+                gui = true;
+            }
+            _ => (),
+        }
+    });
+    return (right, gui, alt, shift, ctrl);
+}
+
 /// Parse the key string at a single position
 fn parse_key(key: String) -> TokenStream2 {
     if key.len() < 5 {
@@ -63,38 +100,7 @@ fn parse_key(key: String) -> TokenStream2 {
 
                 let ident = format_ident!("{}", keys[0].to_string());
 
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                keys[1].split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let (right, gui, alt, shift, ctrl) = parse_modifiers(keys[1]);
 
                 if (gui || alt || shift || ctrl) == false {
                     return quote! {
@@ -124,38 +130,7 @@ fn parse_key(key: String) -> TokenStream2 {
         }
         "OSM" => {
             if let Some(internal) = key.trim_start_matches("OSM(").strip_suffix(")") {
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                internal.split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let (right, gui, alt, shift, ctrl) = parse_modifiers(internal);
 
                 if !(gui || alt || shift || ctrl) {
                     return quote! {
@@ -185,38 +160,7 @@ fn parse_key(key: String) -> TokenStream2 {
                 }
                 let layer = keys[0].parse::<u8>().unwrap();
 
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                keys[1].split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let (right, gui, alt, shift, ctrl) = parse_modifiers(keys[1]);
 
                 if (gui || alt || shift || ctrl) == false {
                     return quote! {
