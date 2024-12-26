@@ -6,7 +6,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
 use crate::keyboard::KEY_EVENT_CHANNEL;
-use crate::keyboard::KeyEvent;
+use crate::event::KeyEvent;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
 use crate::RmkConfig;

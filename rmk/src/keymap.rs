@@ -1,6 +1,6 @@
 use crate::{
     action::KeyAction,
-    keyboard::KeyEvent,
+    event::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
     reboot_keyboard,

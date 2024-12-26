@@ -5,7 +5,8 @@ use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 
-use crate::keyboard::{KeyEvent, KEY_EVENT_CHANNEL};
+use crate::event::KeyEvent;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 
 use super::InputDevice;
 

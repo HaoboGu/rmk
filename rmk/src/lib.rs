@@ -63,6 +63,7 @@ pub mod ble;
 pub mod config;
 mod debounce;
 pub mod direct_pin;
+pub mod event;
 mod flash;
 mod hid;
 pub mod input_device;

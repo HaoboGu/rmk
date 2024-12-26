@@ -1,4 +1,5 @@
 use crate::config::BehaviorConfig;
+use crate::event::KeyEvent;
 use crate::CONNECTION_STATE;
 use crate::{
     action::{Action, KeyAction},
@@ -10,7 +11,7 @@ use crate::{
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn, Format};
+use defmt::{debug, error, info, warn};
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -18,23 +19,11 @@ use embassy_sync::{
 };
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
-use postcard::experimental::max_size::MaxSize;
-use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
-pub struct KeyEvent {
-    pub row: u8,
-    pub col: u8,
-    pub pressed: bool,
-}
 pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
-pub static KEY_EVENT_CHANNEL: Channel<
-    CriticalSectionRawMutex,
-    KeyEvent,
-    EVENT_CHANNEL_SIZE,
-> = Channel::new();
+pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
+    Channel::new();
 
 pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
 pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
