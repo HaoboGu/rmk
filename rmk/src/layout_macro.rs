@@ -65,8 +65,8 @@ macro_rules! lt {
 macro_rules! mth {
     ($k: ident, $m: expr) => {
         $crate::action::KeyAction::ModifierTapHold(
-            $m,
             $crate::action::Action::Key($crate::keycode::KeyCode::$k),
+            $m,
         )
     };
 }
@@ -76,8 +76,8 @@ macro_rules! mth {
 macro_rules! th {
     ($t: ident, $h: ident) => {
         $crate::action::KeyAction::TapHold(
-            $t,
-            $h,
+            $crate::action::Action::Key($crate::keycode::KeyCode::$t),
+            $crate::action::Action::Key($crate::keycode::KeyCode::$h),
         )
     };
 }

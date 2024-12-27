@@ -51,7 +51,7 @@ fn parse_modifiers(modifiers_str: &str) -> (bool, bool, bool, bool, bool){
             "LShift" => shift = true,
             "LCtrl" => ctrl = true,
             "LAlt" => alt = true,
-            "Lgui" => gui = true,
+            "LGui" => gui = true,
             "RShift" => {
                 right = true;
                 shift = true;
@@ -219,51 +219,57 @@ fn parse_key(key: String) -> TokenStream2 {
                 ::rmk::df!(#layer)
             }
         }
-        "MTH(" => {
-            let keys: Vec<&str> = key
-                .trim_start_matches("MTH(")
-                .trim_end_matches(")")
-                .split_terminator(",")
-                .map(|w| w.trim())
-                .filter(|w| w.len() > 0)
-                .collect();
-            if keys.len() != 2 {
+        "MTH" => {
+            if let Some(internal) = key.trim_start_matches("MTH(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: MTH(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                let ident = format_ident!("{}", keys[0].to_string());
+                let (right, gui, alt, shift, ctrl) = parse_modifiers(keys[1]);
+
+                if (gui || alt || shift || ctrl) == false {
+                    return quote! {
+                        compile_error!("keyboard.toml: modifier in MTH(key, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                quote! {
+                    ::rmk::mth!(#ident, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                }
+            } else {
                 return quote! {
-                    compile_error!("keyboard.toml: MTH(modifiers, key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    compile_error!("keyboard.toml: MTH(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 };
             }
-            let ident = format_ident!("{}", keys[0].to_string());
-
-            let (right, gui, alt, shift, ctrl) = parse_modifiers(keys[1]);
-
-            if (gui || alt || shift || ctrl) == false {
-                return quote! {
-                    compile_error!("keyboard.toml: modifier in MTH(modifier, key) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
-            }
-            quote! {
-                ::rmk::mth!(#ident, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
-            }
-
         }
         "TH(" => {
-            let keys: Vec<&str> = key
-                .trim_start_matches("TH(")
-                .trim_end_matches(")")
-                .split_terminator(",")
-                .map(|w| w.trim())
-                .filter(|w| w.len() > 0)
-                .collect();
-            if keys.len() != 2 {
-                return quote! {
-                    compile_error!("keyboard.toml: TH(modifiers, key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
-            }
-            let ident1 = format_ident!("{}", keys[0].to_string());
-            let ident2 = format_ident!("{}", keys[1].to_string());
+            if let Some(internal) = key.trim_start_matches("TH(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                let ident1 = format_ident!("{}", keys[0].to_string());
+                let ident2 = format_ident!("{}", keys[1].to_string());
 
-            quote! {
-                ::rmk::th!(#ident1, #ident2)
+                quote! {
+                    ::rmk::th!(#ident1, #ident2)
+                }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
             }
 
         }

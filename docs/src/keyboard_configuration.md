@@ -154,7 +154,7 @@ The key string should follow several rules:
 
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-4. For modifier-tap-hold, use `MTH(key, modifier)` where the modifier can be a chain like explained on point 1
+4. For modifier-tap-hold, use `MTH(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MTH(F,LShift)`
 
 5. For generic key tap-hold, use `TH(key-tap, key-hold)`.
 
