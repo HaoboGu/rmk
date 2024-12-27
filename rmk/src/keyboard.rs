@@ -405,10 +405,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
             self.process_key_action(action, event).await;
         }
+
         self.keymap
             .borrow_mut()
             .combos
             .iter_mut()
+            .filter(|combo| !combo.done())
             .for_each(Combo::reset);
     }
 

@@ -62,7 +62,7 @@ impl Combo {
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
-        } else {
+        } else if !self.done() {
             self.reset();
         }
         action_idx.is_some()
