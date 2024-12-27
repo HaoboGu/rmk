@@ -187,11 +187,7 @@ impl Value<'_> for StorageData {
                     );
                 }
                 BigEndian::write_u16(&mut buffer[9..11], to_via_keycode(combo.output));
-                buffer[11] = match combo.layer {
-                    Some(layer) => layer.to_be(),
-                    None => u8::MAX,
-                };
-                Ok(12)
+                Ok(11)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -277,7 +273,7 @@ impl Value<'_> for StorageData {
                     Ok(StorageData::MacroData(buf))
                 }
                 StorageKeys::ComboData => {
-                    if buffer.len() < 12 {
+                    if buffer.len() < 11 {
                         return Err(SerializationError::InvalidData);
                     }
                     let mut actions = [KeyAction::No; 4];
@@ -286,12 +282,10 @@ impl Value<'_> for StorageData {
                             from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
                     }
                     let output = from_via_keycode(BigEndian::read_u16(&buffer[9..11]));
-                    let layer = u8::from_be(buffer[11]);
                     Ok(StorageData::ComboData(ComboData {
                         idx: 0,
                         actions,
                         output,
-                        layer: (layer != u8::MAX).then_some(layer),
                     }))
                 }
                 StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
@@ -362,7 +356,6 @@ pub(crate) struct ComboData {
     pub(crate) idx: usize,
     pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
     pub(crate) output: KeyAction,
-    pub(crate) layer: Option<u8>,
 }
 
 pub(crate) struct Storage<
@@ -704,7 +697,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }
-                combos[i] = Combo::new(actions, combo.output, combo.layer);
+                combos[i] = Combo::new(actions, combo.output, combos[i].layer);
             }
         }
 

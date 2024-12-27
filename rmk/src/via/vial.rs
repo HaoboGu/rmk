@@ -183,7 +183,6 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                             idx: real_idx,
                             actions,
                             output,
-                            layer: combos[real_idx].layer,
                         }))
                         .await;
                 }
