@@ -346,7 +346,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             if next_action.is_some() {
                 self.combo_actions_buffer.clear();
             } else {
-                let timeout = embassy_time::Timer::after_millis(50);
+                let timeout =
+                    embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
                 match select(timeout, key_event_channel.receive()).await {
                     embassy_futures::select::Either::First(_) => self.dispatch_combos().await,
                     embassy_futures::select::Either::Second(event) => {

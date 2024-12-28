@@ -41,10 +41,10 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
 }
 
 fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
-    let default = quote! {::core::default::Default::default()};
+    let default = quote! { ::core::default::Default::default() };
     match combos {
         Some(combos) => {
-            let combos = combos.combos.iter().map(|combo| {
+            let combos_def = combos.combos.iter().map(|combo| {
                 let actions = combo.actions.iter().map(|a| parse_key(a.to_owned()));
                 let output = parse_key(combo.output.to_owned());
                 let layer = match combo.layer {
@@ -54,7 +54,21 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
                 quote! { ::rmk::combo::Combo::new([#(#actions),*], #output, #layer) }
             });
 
-            quote! { ::heapless::Vec::from_iter([#(#combos),*]) }
+            let timeout = match &combos.timeout {
+                Some(t) => {
+                    let millis = t.0;
+                    quote! { timeout: ::embassy_time::Duration::from_millis(#millis), }
+                }
+                None => quote! {},
+            };
+
+            quote! {
+                ::rmk::config::CombosConfig {
+                    combos: ::rmk::heapless::Vec::from_iter([#(#combos_def),*]),
+                    #timeout
+                    ..Default::default()
+                }
+            }
         }
         None => default,
     }
@@ -69,7 +83,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_m
         let behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             one_shot: #one_shot,
-            combos: #combos,
+            combo: #combos,
         };
     }
 }

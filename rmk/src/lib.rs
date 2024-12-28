@@ -45,6 +45,7 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
+pub use heapless;
 use keyboard::{
     communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
     REPORT_CHANNEL_SIZE,

@@ -155,6 +155,7 @@ pub struct OneShotConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct CombosConfig {
     pub combos: Vec<ComboConfig>,
+    pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for combo
@@ -220,8 +221,10 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     })?;
 
     match unit {
-        "s" => Ok(num*1000),
+        "s" => Ok(num * 1000),
         "ms" => Ok(num),
-        other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
+        other => Err(de::Error::custom(format!(
+            "Invalid unit \"{other}\" for duration: unit part must be either \"s\" or \"ms\""
+        ))),
     }
 }

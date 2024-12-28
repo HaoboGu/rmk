@@ -43,7 +43,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         behavior: BehaviorConfig,
     ) -> Self {
         let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
-        for (i, combo) in behavior.combos.iter().enumerate() {
+        for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
         KeyMap {
@@ -65,7 +65,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
         let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
-        for (i, combo) in behavior.combos.iter().enumerate() {
+        for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
         if let Some(storage) = storage {

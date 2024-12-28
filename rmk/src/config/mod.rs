@@ -48,7 +48,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub one_shot: OneShotConfig,
-    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub combo: CombosConfig,
 }
 
 /// Config for one shot behavior
@@ -60,6 +60,21 @@ impl Default for OneShotConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(1),
+        }
+    }
+}
+
+/// Config for combo behavior
+pub struct CombosConfig {
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub timeout: Duration,
+}
+
+impl Default for CombosConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_millis(50),
+            combos: Vec::new(),
         }
     }
 }
