@@ -22,9 +22,9 @@ macro_rules! rmk_compile_error {
     };
 }
 
-// Max number of macros
+// Max number of combos
 pub const COMBO_MAX_NUM: usize = 8;
-// Max size of macros
+// Max size of combos
 pub const COMBO_MAX_LENGTH: usize = 4;
 
 /// Keyboard's basic info

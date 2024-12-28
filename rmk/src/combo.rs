@@ -2,9 +2,9 @@ use heapless::Vec;
 
 use crate::{action::KeyAction, event::KeyEvent};
 
-// Max number of macros
+// Max number of combos
 pub(crate) const COMBO_MAX_NUM: usize = 8;
-// Max size of macros
+// Max size of combos
 pub(crate) const COMBO_MAX_LENGTH: usize = 4;
 
 #[derive(Clone)]

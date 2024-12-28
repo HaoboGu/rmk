@@ -49,7 +49,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
-    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub combo: CombosConfig,
 }
 
 /// Configurations for tap hold behavior
@@ -80,6 +80,21 @@ impl Default for OneShotConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(1),
+        }
+    }
+}
+
+/// Config for combo behavior
+pub struct CombosConfig {
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub timeout: Duration,
+}
+
+impl Default for CombosConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_millis(50),
+            combos: Vec::new(),
         }
     }
 }

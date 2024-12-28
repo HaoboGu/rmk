@@ -170,6 +170,7 @@ pub struct OneShotConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct CombosConfig {
     pub combos: Vec<ComboConfig>,
+    pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for combo
