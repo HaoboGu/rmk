@@ -151,9 +151,12 @@ The key string should follow several rules:
     7. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
     8. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
     9. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
-    
+
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
+4. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
+
+5. For generic key tap-hold, use `TH(key-tap, key-hold)`.
 
 ### `[behavior]`
 
