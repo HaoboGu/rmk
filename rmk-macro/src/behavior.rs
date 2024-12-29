@@ -42,26 +42,39 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
     let default = quote! {::rmk::config::TapHoldConfig::default()};
     match tap_hold {
         Some(tap_hold) => {
-            let enable_hrm = tap_hold.enable_hrm.unwrap_or_default();
+            let enable_hrm = match tap_hold.enable_hrm {
+                Some(enable) => quote! { enable_hrm: #enable, },
+                None => quote! {},
+            };
             let prior_idle_time = match &tap_hold.prior_idle_time {
-                Some(t) => t.0,
-                None => 120,
+                Some(t) => {
+                    let timeout = t.0;
+                    quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#timeout), }
+                }
+                None => quote! {},
             };
             let post_wait_time = match &tap_hold.post_wait_time {
-                Some(t) => t.0,
-                None => 50,
+                Some(t) => {
+                    let timeout = t.0;
+                    quote! { post_wait_time: ::embassy_time::Duration::from_millis(#timeout), }
+                }
+                None => quote! {},
             };
             let hold_timeout = match &tap_hold.hold_timeout {
-                Some(t) => t.0,
-                None => 250,
+                Some(t) => {
+                    let timeout = t.0;
+                    quote! { hold_timeout: ::embassy_time::Duration::from_millis(#timeout), }
+                }
+                None => quote! {},
             };
 
             quote! {
                 ::rmk::config::TapHoldConfig {
-                    enable_hrm: #enable_hrm,
-                    prior_idle_time: ::embassy_time::Duration::from_millis(#prior_idle_time),
-                    post_wait_time: ::embassy_time::Duration::from_millis(#post_wait_time),
-                    hold_timeout: ::embassy_time::Duration::from_millis(#hold_timeout),
+                    #enable_hrm
+                    #prior_idle_time
+                    #post_wait_time
+                    #hold_timeout
+                    ..Default::default()
                 }
             }
         }

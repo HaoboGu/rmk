@@ -222,8 +222,10 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     })?;
 
     match unit {
-        "s" => Ok(num*1000),
+        "s" => Ok(num * 1000),
         "ms" => Ok(num),
-        other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
+        other => Err(de::Error::custom(format!(
+            "Invalid duration unit \"{other}\": unit part must be either \"s\" or \"ms\""
+        ))),
     }
 }
