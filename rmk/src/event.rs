@@ -16,6 +16,12 @@ pub enum Event {
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
     Joystick([AxisEvent; 3]),
+    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Eos`] event.
+    AxisEventStream(AxisEvent),
+    /// End of the event sequence
+    ///
+    /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
+    Eos,
 }
 
 /// Event for multi-touch touchpad
@@ -34,7 +40,7 @@ pub struct AxisEvent {
     /// The axis name
     pub axis: Axis,
     /// Value of the axis event
-    pub value: i8,
+    pub value: i16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Copy, Format, MaxSize)]

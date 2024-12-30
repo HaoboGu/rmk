@@ -7,6 +7,13 @@
 
 use core::future::Future;
 
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+
+use crate::{
+    event::Event,
+    keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
+};
+
 pub mod rotary_encoder;
 
 /// The trait for input devices.
@@ -44,6 +51,43 @@ pub trait InputDevice {
     /// This asynchronous method should contain the main logic for the input device.
     /// It will be executed concurrently with other input devices using the `run_devices` macro.
     fn run(&mut self) -> impl Future<Output = ()>;
+}
+
+/// The trait for input processors.
+///
+/// The input processor processes the [`Event`] from the input devices and converts it to the final HID report.
+/// Take the normal keyboard as the example:
+///
+/// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
+pub trait InputProcessor {
+    /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
+    /// then send the report to the USB/BLE.
+    ///
+    /// Note there might be mulitple HID reports are generated for one event,
+    /// so the "sending report" operation should be done in the `process` method.
+    /// The input processor implementor should be aware of this.  
+    fn process(&mut self, event: Event) -> impl Future<Output = ()>;
+
+    /// Get the input event channel for the input processor.
+    ///
+    /// The input processor receives events from this channel, processes the event,
+    /// then sends to the report channel.
+    fn get_event_channel(&self) -> &Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> {
+        &EVENT_CHANNEL
+    }
+
+    /// Default implementation of the input processor. It wait for a new event from the event channel,
+    /// then process the event.
+    /// 
+    /// The report is sent to the USB/BLE in the `process` method.
+    fn run(&mut self) -> impl Future<Output = ()> {
+        async {
+            loop {
+                let event = self.get_event_channel().receive().await;
+                self.process(event).await;
+            }
+        }
+    }
 }
 
 /// Macro to run multiple input devices concurrently.

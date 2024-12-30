@@ -1,5 +1,5 @@
 use crate::config::BehaviorConfig;
-use crate::event::KeyEvent;
+use crate::event::{Event, KeyEvent};
 use crate::CONNECTION_STATE;
 use crate::{
     action::{Action, KeyAction},
@@ -23,6 +23,9 @@ use usbd_hid::descriptor::KeyboardReport;
 
 pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
 pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
+    Channel::new();
+
+pub static EVENT_CHANNEL: Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> =
     Channel::new();
 
 pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
