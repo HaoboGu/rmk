@@ -110,7 +110,7 @@ async fn main(spawner: Spawner) {
     let mut my_device = MyDevice {};
     let pin_a = Input::new(AnyPin::from(p.P0_06), embassy_nrf::gpio::Pull::Up);
     let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
-    let mut encoder = RotaryEncoder::new(pin_a, pin_b, (0, 0), (0, 1));
+    let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 
     embassy_futures::join::join(
         run_rmk(

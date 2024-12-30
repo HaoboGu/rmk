@@ -2,6 +2,8 @@ use defmt::Format;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
+use crate::input_device::rotary_encoder::Direction;
+
 /// Raw events from input devices and keyboards
 ///
 /// This should be as close to the raw output of the devices as possible.
@@ -12,6 +14,8 @@ use serde::{Deserialize, Serialize};
 pub enum Event {
     /// Keyboard event
     Key(KeyEvent),
+    /// Rotary encoder, ec11 compatible models
+    RotaryEncoder(RotaryEncoderEvent),
     /// Multi-touch touchpad
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
@@ -22,6 +26,15 @@ pub enum Event {
     ///
     /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
     Eos,
+}
+
+/// Event for rotary encoder
+#[derive(Serialize, Deserialize, Clone, Debug, Format, MaxSize)]
+pub struct RotaryEncoderEvent {
+    /// The id of the rotary encoder
+    pub id: u8,
+    /// The direction of the rotary encoder
+    pub direction: Direction,
 }
 
 /// Event for multi-touch touchpad

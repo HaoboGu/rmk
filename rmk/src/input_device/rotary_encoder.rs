@@ -1,12 +1,14 @@
-//! The rotary encoder implementation is from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
-//!
+//! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
+use defmt::Format;
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
+use postcard::experimental::max_size::MaxSize;
+use serde::{Deserialize, Serialize};
 
-use crate::event::KeyEvent;
-use crate::keyboard::KEY_EVENT_CHANNEL;
+use crate::event::{Event, RotaryEncoderEvent};
+use crate::keyboard::EVENT_CHANNEL;
 
 use super::InputDevice;
 
@@ -18,15 +20,12 @@ pub struct RotaryEncoder<A, B, P> {
     pin_b: B,
     state: u8,
     phase: P,
-    /// (row, col) position in the keymap
-    clockwise_pos: (u8, u8),
-    /// (row, col) position in the keymap
-    counter_clockwise_pos: (u8, u8),
+    /// The index of the rotary encoder
+    id: u8,
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-// #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Serialize, Deserialize, Clone, Debug, Format, MaxSize)]
 pub enum Direction {
     /// A clockwise turn
     Clockwise,
@@ -65,43 +64,26 @@ where
     B: InputPin,
 {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`.
-    ///
-    /// `clockwise_pos` and `counter_clockwise_pos` are the (row, col) positions in the keymap.
-    pub fn new(
-        pin_a: A,
-        pin_b: B,
-        clockwise_pos: (u8, u8),
-        counter_clockwise_pos: (u8, u8),
-    ) -> Self {
+    pub fn new(pin_a: A, pin_b: B, id: u8) -> Self {
         Self {
             pin_a,
             pin_b,
             state: 0u8,
             phase: DefaultPhase,
-            clockwise_pos,
-            counter_clockwise_pos,
+            id,
         }
     }
 }
 
 impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`, while using `phase` to determine the direction.
-    ///
-    /// `clockwise_pos` and `counter_clockwise_pos` are the (row, col) positions in the keymap.
-    pub fn with_phase(
-        pin_a: A,
-        pin_b: B,
-        phase: P,
-        clockwise_pos: (u8, u8),
-        counter_clockwise_pos: (u8, u8),
-    ) -> Self {
+    pub fn with_phase(pin_a: A, pin_b: B, phase: P, id: u8) -> Self {
         Self {
             pin_a,
             pin_b,
             state: 0u8,
             phase,
-            clockwise_pos,
-            counter_clockwise_pos,
+            id,
         }
     }
 
@@ -160,6 +142,10 @@ impl<
 {
     async fn run(&mut self) {
         loop {
+            // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
+            #[cfg(not(feature = "async_matrix"))]
+            embassy_time::Timer::after_millis(20).await;
+
             #[cfg(feature = "async_matrix")]
             {
                 let (pin_a, pin_b) = self.pins();
@@ -169,34 +155,15 @@ impl<
                 )
                 .await;
             }
-            // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
-            #[cfg(not(feature = "async_matrix"))]
-            embassy_time::Timer::after_millis(20).await;
-            let direction = self.update();
-            // TODO: Resolution
-            let (row, col) = match direction {
-                Direction::Clockwise => (self.clockwise_pos.0, self.clockwise_pos.1),
-                Direction::CounterClockwise => {
-                    (self.counter_clockwise_pos.0, self.counter_clockwise_pos.1)
-                }
-                Direction::None => continue,
-            };
 
-            // Send the key event, process it like a tap
-            KEY_EVENT_CHANNEL
-                .send(KeyEvent {
-                    row,
-                    col,
-                    pressed: true,
-                })
-                .await;
-            embassy_time::Timer::after_millis(10).await;
-            KEY_EVENT_CHANNEL
-                .send(KeyEvent {
-                    row,
-                    col,
-                    pressed: false,
-                })
+            let direction = self.update();
+
+            // TODO: Channel customization
+            EVENT_CHANNEL
+                .send(Event::RotaryEncoder(RotaryEncoderEvent {
+                    id: self.id,
+                    direction,
+                }))
                 .await;
         }
     }
