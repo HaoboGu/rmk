@@ -1,6 +1,8 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
 use defmt::Format;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -10,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::keyboard::EVENT_CHANNEL;
 
-use super::InputDevice;
+use super::{InputDevice, EVENT_CHANNEL_SIZE};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -140,6 +142,8 @@ impl<
         P: Phase,
     > InputDevice for RotaryEncoder<A, B, P>
 {
+    type EventType = Event;
+
     async fn run(&mut self) {
         loop {
             // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
@@ -158,13 +162,18 @@ impl<
 
             let direction = self.update();
 
-            // TODO: Channel customization
-            EVENT_CHANNEL
+            self.get_channel()
                 .send(Event::RotaryEncoder(RotaryEncoderEvent {
                     id: self.id,
                     direction,
                 }))
                 .await;
         }
+    }
+
+    fn get_channel(
+        &self,
+    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        &EVENT_CHANNEL
     }
 }

@@ -46,11 +46,20 @@ pub mod rotary_encoder;
 /// .await;
 /// ```
 pub trait InputDevice {
+    /// Event type that input device will send 
+    type EventType;
+
+    /// The number of required channel size
+    const EVENT_CHANNEL_SIZE: usize = 32;
+
     /// Starts the input device task.
     ///
     /// This asynchronous method should contain the main logic for the input device.
     /// It will be executed concurrently with other input devices using the `run_devices` macro.
     fn run(&mut self) -> impl Future<Output = ()>;
+
+    /// Get the event channel for the input device. All events should be send by this channel.
+    fn get_channel(&self) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
