@@ -2,9 +2,11 @@
 
 RMK provides a [project-template](https://github.com/HaoboGu/rmk-project-template) that you can use to create your firmware easily. The following is a step-by-step tutorial for compiling RMK firmware using Github Actions.
 
+Note: There are some limitations currently for cloud compilation. For example, you cannot edit cargo features in the generated project. If you have any problems when compiling RMK using cloud, please [open an issue](https://github.com/HaoboGu/rmk/issues/new)!
+
 ## Steps
 
-1. To get started, click `Use this template` button and choose `Create a new repository`:
+1. To get started, open [project-template](https://github.com/HaoboGu/rmk-project-template), click `Use this template` button and choose `Create a new repository`:
 
 ![use_template](../images/use_template.png)
 
@@ -28,4 +30,4 @@ RMK provides a [project-template](https://github.com/HaoboGu/rmk-project-templat
 
    ![artifacts](../images/artifacts.png)
 
-5. Now you get your RMK firmware! RMK provides `hex` and `uf2` firmware that you can use. The final step is to flash the firmware to your microcontroller. You can follow [instructions here](4_compile_and_flash.md#flash-the-firmware) if you don't know how to flash the firmware to your keyboard.
+5. Now you get your RMK firmware! RMK provides `hex` and `uf2` firmware that you can use. The final step is to flash the firmware to your microcontroller. Follow the instructions in [Flash the firmware](3_flash_firmware.md) section.

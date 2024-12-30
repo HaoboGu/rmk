@@ -72,7 +72,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo build
+   cargo build --release
    ```
 
 3. Flash using debug probe
@@ -81,7 +81,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo run
+   cargo run --release
    ```
 
 4. (Optional) Flash using USB
@@ -98,7 +98,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
    4. Flash
       ```shell
       cd examples/use_rust/rp2040
-      cargo run
+      cargo run --release
       ```
       Then, you will see logs like if everything goes right:
       ```shell

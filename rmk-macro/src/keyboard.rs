@@ -40,6 +40,12 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         Err(e) => return e,
     };
 
+    if let Some(m) = toml_config.clone().matrix {
+        if m.row2col {
+            eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
+        }
+    }
+
     let keyboard_config = match KeyboardConfig::new(toml_config) {
         Ok(c) => c,
         Err(e) => return e,

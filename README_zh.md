@@ -67,7 +67,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo build
+   cargo build --release
    ```
 
 3. 烧录固件
@@ -76,7 +76,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo run
+   cargo run --release
    ```
 
 4. 通过USB烧录
@@ -93,7 +93,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
    4. 执行下面的命令烧录
       ```shell
       cd examples/use_rust/rp2040
-      cargo run
+      cargo run --release
       ```
       如果你看到下面这样的日志，那说明烧录成功了
       ```shell

@@ -58,6 +58,7 @@ pub enum MatrixType {
     direct_pin,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
     #[serde(default)]
@@ -67,6 +68,8 @@ pub struct MatrixConfig {
     pub direct_pins: Option<Vec<Vec<String>>>,
     #[serde(default = "default_true")]
     pub direct_pin_low_active: bool,
+    #[serde(default = "default_false")]
+    pub row2col: bool,
 }
 
 /// Config for storage
@@ -205,8 +208,12 @@ pub struct SerialConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
+}
+
+const fn default_false() -> bool {
+    false
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
@@ -220,9 +227,11 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     })?;
 
     match unit {
-        "s" => Ok(num*1000),
+        "s" => Ok(num * 1000),
         "ms" => Ok(num),
-        other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
+        other => Err(de::Error::custom(format!(
+            "Invalid duration unit \"{other}\": unit part must be either \"s\" or \"ms\""
+        ))),
     }
 }
 

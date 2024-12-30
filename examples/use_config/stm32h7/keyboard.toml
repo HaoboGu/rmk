@@ -10,7 +10,7 @@ chip = "stm32h7b0vb"
 # Input and output pins are mandatory
 input_pins = ["PD9", "PD8", "PB13", "PB12"]
 output_pins = ["PE13", "PE14", "PE15"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
 [layout]

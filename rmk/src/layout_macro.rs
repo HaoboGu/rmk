@@ -60,6 +60,28 @@ macro_rules! lt {
     };
 }
 
+/// Create a modifier-tap-hold action
+#[macro_export]
+macro_rules! mth {
+    ($k: ident, $m: expr) => {
+        $crate::action::KeyAction::ModifierTapHold(
+            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
+            $m,
+        )
+    };
+}
+
+/// Create a tap-hold action
+#[macro_export]
+macro_rules! th {
+    ($t: ident, $h: ident) => {
+        $crate::action::KeyAction::TapHold(
+            $crate::action::Action::Key($crate::keycode::KeyCode::$t),
+            $crate::action::Action::Key($crate::keycode::KeyCode::$h),
+        )
+    };
+}
+
 /// Create an oneshot layer key in keymap
 #[macro_export]
 macro_rules! osl {

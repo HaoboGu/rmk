@@ -37,6 +37,75 @@ fn expand_row(row: Vec<String>) -> TokenStream2 {
     quote! { [#(#keys), *] }
 }
 
+struct ModifierCombinationMacro {
+    right: bool,
+    gui: bool,
+    alt: bool,
+    shift: bool,
+    ctrl: bool,
+}
+impl ModifierCombinationMacro {
+    fn new() -> Self {
+        Self {
+            right: false,
+            gui: false,
+            alt: false,
+            shift: false,
+            ctrl: false,
+        }
+    }
+    fn is_empty(&self) -> bool {
+        !(self.gui || self.alt || self.shift || self.ctrl)
+    }
+}
+// Allows to use `#modifiers` in the quote
+impl quote::ToTokens for ModifierCombinationMacro {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let right = self.right;
+        let gui   = self.gui;
+        let alt   = self.alt;
+        let shift = self.shift;
+        let ctrl  = self.ctrl;
+
+        tokens.extend(quote! {
+            ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
+        });
+    }
+}
+
+/// Get modifier combination, in types of mod1 | mod2 | ...
+fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
+    let mut combination = ModifierCombinationMacro::new();
+    let tokens = modifiers_str.split_terminator("|");
+    tokens.for_each(|w| {
+        let w = w.trim();
+        match w {
+            "LShift" => combination.shift = true,
+            "LCtrl" => combination.ctrl = true,
+            "LAlt" => combination.alt = true,
+            "LGui" => combination.gui = true,
+            "RShift" => {
+                combination.right = true;
+                combination.shift = true;
+            }
+            "RCtrl" => {
+                combination.right = true;
+                combination.ctrl = true;
+            }
+            "RAlt" => {
+                combination.right = true;
+                combination.alt = true;
+            }
+            "Rgui" => {
+                combination.right = true;
+                combination.gui = true;
+            }
+            _ => (),
+        }
+    });
+    combination
+}
+
 /// Parse the key string at a single position
 fn parse_key(key: String) -> TokenStream2 {
     if key.len() < 5 {
@@ -63,46 +132,15 @@ fn parse_key(key: String) -> TokenStream2 {
 
                 let ident = format_ident!("{}", keys[0].to_string());
 
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                keys[1].split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let modifiers = parse_modifiers(keys[1]);
 
-                if (gui || alt || shift || ctrl) == false {
+                if modifiers.is_empty() {
                     return quote! {
                         compile_error!("keyboard.toml: modifier in WM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 quote! {
-                    ::rmk::wm!(#ident, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                    ::rmk::wm!(#ident, #modifiers)
                 }
             } else {
                 return quote! {
@@ -124,46 +162,15 @@ fn parse_key(key: String) -> TokenStream2 {
         }
         "OSM" => {
             if let Some(internal) = key.trim_start_matches("OSM(").strip_suffix(")") {
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                internal.split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let modifiers = parse_modifiers(internal);
 
-                if !(gui || alt || shift || ctrl) {
+                if modifiers.is_empty() {
                     return quote! {
                         compile_error!("keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 quote! {
-                    ::rmk::osm!(::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                    ::rmk::osm!(#modifiers)
                 }
             } else {
                 quote! {
@@ -185,46 +192,15 @@ fn parse_key(key: String) -> TokenStream2 {
                 }
                 let layer = keys[0].parse::<u8>().unwrap();
 
-                // Get modifier combination, in types of mod1 | mod2 | ...
-                let mut right = false;
-                let mut gui = false;
-                let mut alt = false;
-                let mut shift = false;
-                let mut ctrl = false;
-                keys[1].split_terminator("|").for_each(|w| {
-                    let w = w.trim();
-                    match w {
-                        "LShift" => shift = true,
-                        "LCtrl" => ctrl = true,
-                        "LAlt" => alt = true,
-                        "Lgui" => gui = true,
-                        "RShift" => {
-                            right = true;
-                            shift = true;
-                        }
-                        "RCtrl" => {
-                            right = true;
-                            ctrl = true;
-                        }
-                        "RAlt" => {
-                            right = true;
-                            alt = true;
-                        }
-                        "Rgui" => {
-                            right = true;
-                            gui = true;
-                        }
-                        _ => (),
-                    }
-                });
+                let modifiers = parse_modifiers(keys[1]);
 
-                if (gui || alt || shift || ctrl) == false {
+                if modifiers.is_empty() {
                     return quote! {
                         compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
                 quote! {
-                    ::rmk::lm!(#layer, ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl))
+                    ::rmk::lm!(#layer, #modifiers)
                 }
             } else {
                 return quote! {
@@ -274,6 +250,60 @@ fn parse_key(key: String) -> TokenStream2 {
             quote! {
                 ::rmk::df!(#layer)
             }
+        }
+        "MT(" => {
+            if let Some(internal) = key.trim_start_matches("MT(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                let ident = format_ident!("{}", keys[0].to_string());
+                let modifiers = parse_modifiers(keys[1]);
+
+                if modifiers.is_empty() {
+                    return quote! {
+                        compile_error!("keyboard.toml: modifier in MT(key, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                quote! {
+                    ::rmk::mth!(#ident, #modifiers)
+                }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
+            }
+        }
+        "TH(" => {
+            if let Some(internal) = key.trim_start_matches("TH(").strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| w.len() > 0)
+                    .collect();
+                if keys.len() != 2 {
+                    return quote! {
+                        compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                let ident1 = format_ident!("{}", keys[0].to_string());
+                let ident2 = format_ident!("{}", keys[1].to_string());
+
+                quote! {
+                    ::rmk::th!(#ident1, #ident2)
+                }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
+            }
+
         }
         _ => {
             let ident = format_ident!("{}", key);
