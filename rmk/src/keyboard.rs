@@ -60,7 +60,7 @@ impl<T> OneShotState<T> {
 }
 
 /// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
-pub(crate) enum KeyboardReportMessage {
+pub enum KeyboardReportMessage {
     /// Normal keyboard hid report
     KeyboardReport(KeyboardReport),
     /// Other types of keyboard reports: mouse + media(consumer) + system control

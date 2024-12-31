@@ -9,9 +9,8 @@ use core::future::Future;
 
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 
-use crate::{
-    event::Event,
-    keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
+use crate::keyboard::{
+    KeyboardReportMessage, EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE,
 };
 
 pub mod rotary_encoder;
@@ -46,11 +45,17 @@ pub mod rotary_encoder;
 /// .await;
 /// ```
 pub trait InputDevice {
-    /// Event type that input device will send 
+    /// Event type that input device will send
     type EventType;
 
     /// The number of required channel size
-    const EVENT_CHANNEL_SIZE: usize = 32;
+    // FIXME: it's not possible in stable to define an associated const and use it as the channel size:
+    // `fn get_channel(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, Self::EVENT_CHANNEL_SIZE >;`
+    //
+    // It requires #[feature(generic_const_exprs)] and adding `{}` to the const:
+    // `fn get_channel(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
+    //
+    // const EVENT_CHANNEL_SIZE: usize = 32;
 
     /// Starts the input device task.
     ///
@@ -59,7 +64,8 @@ pub trait InputDevice {
     fn run(&mut self) -> impl Future<Output = ()>;
 
     /// Get the event channel for the input device. All events should be send by this channel.
-    fn get_channel(&self) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn get_channel(&self)
+        -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
@@ -69,25 +75,36 @@ pub trait InputDevice {
 ///
 /// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
 pub trait InputProcessor {
+    type EventType;
+
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
     ///
     /// Note there might be mulitple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
     /// The input processor implementor should be aware of this.  
-    fn process(&mut self, event: Event) -> impl Future<Output = ()>;
+    fn process(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
 
     /// Get the input event channel for the input processor.
     ///
     /// The input processor receives events from this channel, processes the event,
     /// then sends to the report channel.
-    fn get_event_channel(&self) -> &Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> {
-        &EVENT_CHANNEL
+    fn get_event_channel(
+        &self,
+    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+
+    /// Get the output report channel for the input processor.
+    ///
+    /// The input processor sends keyboard reports to this channel.
+    fn get_report_channel(
+        &self,
+    ) -> &Channel<CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE> {
+        &KEYBOARD_REPORT_CHANNEL
     }
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.
-    /// 
+    ///
     /// The report is sent to the USB/BLE in the `process` method.
     fn run(&mut self) -> impl Future<Output = ()> {
         async {
