@@ -9,8 +9,6 @@ RMK’s input device framework is designed to provide a simple yet extensible wa
 
 ![input_device_framework](../images/input_device_framework.svg)
 
-Looks simple, great. In this documentation we'll only cover the left half of the pic, aka `InputDevice`s and `InputProcessors`. Actually, there're lots of detail/complexity underlying, for example:
-
 At first glance, the framework looks simple. However, as we delve into the implementation, intricacies emerge. In this documentation, we will focus on the left half of the diagram: `InputDevices` and `InputProcessors`. Key areas of complexity include:
 
 This design document outlines the current implementation, which aims to make RMK’s input device system clear, easy to use, and extensible.
