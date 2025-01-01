@@ -13,7 +13,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
-pub(crate) trait MatrixTrait {
+pub trait MatrixTrait {
     // Matrix size
     const ROW: usize;
     const COL: usize;
@@ -60,11 +60,11 @@ pub(crate) trait MatrixTrait {
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
-pub(crate) struct KeyState {
+pub struct KeyState {
     // True if the key is pressed
-    pub(crate) pressed: bool,
+    pub pressed: bool,
     // True if the key's state is just changed
-    // pub(crate) changed: bool,
+    // pub changed: bool,
 }
 
 impl Default for KeyState {
@@ -74,25 +74,25 @@ impl Default for KeyState {
 }
 
 impl KeyState {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         KeyState { pressed: false }
     }
 
-    pub(crate) fn toggle_pressed(&mut self) {
+    pub fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
     }
 
-    pub(crate) fn is_releasing(&self) -> bool {
+    pub fn is_releasing(&self) -> bool {
         !self.pressed
     }
 
-    pub(crate) fn is_pressing(&self) -> bool {
+    pub fn is_pressing(&self) -> bool {
         self.pressed
     }
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-pub(crate) struct Matrix<
+pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -122,7 +122,7 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(
+    pub fn new(
         input_pins: [In; INPUT_PIN_NUM],
         output_pins: [Out; OUTPUT_PIN_NUM],
         debouncer: D,

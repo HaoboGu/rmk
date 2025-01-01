@@ -23,15 +23,15 @@ use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::KeyboardReport;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
-pub(crate) struct KeyEvent {
-    pub(crate) row: u8,
-    pub(crate) col: u8,
-    pub(crate) pressed: bool,
+pub struct KeyEvent {
+    pub row: u8,
+    pub col: u8,
+    pub pressed: bool,
 }
 pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
 pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
 
-pub(crate) static key_event_channel: Channel<
+pub static key_event_channel: Channel<
     CriticalSectionRawMutex,
     KeyEvent,
     EVENT_CHANNEL_SIZE,
