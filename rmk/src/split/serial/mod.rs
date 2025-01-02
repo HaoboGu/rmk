@@ -7,6 +7,7 @@ use crate::split::{
 };
 
 use super::driver::SplitDriverError;
+use heapless::Vec;
 
 // Receive split message from peripheral via serial and process it
 ///
@@ -38,43 +39,97 @@ pub(crate) async fn run_serial_peripheral_monitor<
 /// Serial driver for BOTH split central and peripheral
 pub(crate) struct SerialSplitDriver<S: Read + Write> {
     serial: S,
+    buffer: [u8; SPLIT_MESSAGE_MAX_SIZE],
+    n_bytes_part: usize,
 }
 
 impl<S: Read + Write> SerialSplitDriver<S> {
     pub(crate) fn new(serial: S) -> Self {
-        Self { serial }
+        Self {
+            serial,
+            buffer: [0_u8; SPLIT_MESSAGE_MAX_SIZE],
+            n_bytes_part: 0,
+        }
     }
 }
 
 impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
-    async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
-        let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-        let n_bytes = self
-            .serial
-            .read(&mut buf)
-            .await
-            .map_err(|_e| SplitDriverError::SerialError)?;
-        if n_bytes == 0 {
-            return Err(SplitDriverError::EmptyMessage);
+    async fn read(&mut self) -> Result<Vec<SplitMessage, 2>, SplitDriverError> {
+        const SENTINEL: u8 = 0x00;
+        let mut messages = Vec::new();
+        let mut n_bytes_sum = self.n_bytes_part;
+        while n_bytes_sum < self.buffer.len() {
+            let n_bytes = self
+                .serial
+                .read(&mut self.buffer[n_bytes_sum..])
+                .await
+                .map_err(|_e| SplitDriverError::SerialError)?;
+            if n_bytes == 0 {
+                return Err(SplitDriverError::EmptyMessage);
+            }
+
+            n_bytes_sum += n_bytes;
+            if self.buffer[..n_bytes_sum].contains(&SENTINEL) {
+                break;
+            }
         }
-        let message: SplitMessage = postcard::from_bytes(&buf).map_err(|e| {
-            error!("Postcard deserialize split message error: {}", e);
-            SplitDriverError::DeserializeError
-        })?;
-        Ok(message)
+
+        let mut start_byte = 0;
+        let mut end_byte = start_byte;
+        let mut partial_message = false;
+        while start_byte < n_bytes_sum {
+            let value = self.buffer[end_byte];
+            if value == SENTINEL {
+                postcard::from_bytes_cobs(&mut self.buffer[start_byte..=end_byte]).map_or_else(
+                    |e| error!("Postcard deserialize split message error: {}", e),
+                    |message| {
+                        messages
+                            .push(message)
+                            .unwrap_or_else(|_m| error!("Split message vector full"));
+                    },
+                );
+                start_byte = end_byte + 1;
+                end_byte = start_byte;
+                continue;
+            } else if end_byte + value as usize >= n_bytes_sum {
+                partial_message = true;
+                break;
+            }
+            // Next Zero Data Byte
+            end_byte += value as usize;
+        }
+
+        if partial_message {
+            // Store Partial Message for Next Read
+            self.n_bytes_part = n_bytes_sum - start_byte;
+            self.buffer.copy_within(start_byte..n_bytes_sum, 0);
+            self.buffer[self.n_bytes_part..].fill(0);
+        } else {
+            // Reset Buffer
+            self.n_bytes_part = 0;
+            self.buffer.fill(0);
+        }
+
+        Ok(messages)
     }
 }
 
 impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-        let bytes = postcard::to_slice(message, &mut buf).map_err(|e| {
+        let bytes = postcard::to_slice_cobs(message, &mut buf).map_err(|e| {
             error!("Postcard serialize split message error: {}", e);
             SplitDriverError::SerializeError
         })?;
-        self.serial
-            .write(bytes)
-            .await
-            .map_err(|_e| SplitDriverError::SerialError)
+        let mut remaining_bytes = bytes.len();
+        while remaining_bytes > 0 {
+            let sent_bytes = self
+                .serial
+                .write(&bytes[bytes.len() - remaining_bytes..])
+                .await
+                .map_err(|_e| SplitDriverError::SerialError)?;
+            remaining_bytes -= sent_bytes;
+        }
+        Ok(bytes.len())
     }
 }

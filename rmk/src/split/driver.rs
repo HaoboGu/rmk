@@ -4,6 +4,7 @@ use crate::keyboard::{key_event_channel, KeyEvent};
 
 use super::SplitMessage;
 use defmt::{debug, error};
+use heapless::Vec;
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -16,7 +17,7 @@ pub(crate) enum SplitDriverError {
 
 /// Split message reader from other split devices
 pub(crate) trait SplitReader {
-    async fn read(&mut self) -> Result<SplitMessage, SplitDriverError>;
+    async fn read(&mut self) -> Result<Vec<SplitMessage, 2>, SplitDriverError>;
 }
 
 /// Split message writer to other split devices
@@ -62,21 +63,23 @@ impl<
     pub(crate) async fn run(mut self) -> ! {
         loop {
             match self.receiver.read().await {
-                Ok(received_message) => {
-                    debug!("Received peripheral message: {}", received_message);
-                    if let SplitMessage::Key(e) = received_message {
-                        // Check row/col
-                        if e.row as usize > ROW || e.col as usize > COL {
-                            error!("Invalid peripheral row/col: {} {}", e.row, e.col);
-                            continue;
+                Ok(received_messages) => {
+                    for received_message in received_messages {
+                        debug!("Received peripheral message: {}", received_message);
+                        if let SplitMessage::Key(e) = received_message {
+                            // Check row/col
+                            if e.row as usize > ROW || e.col as usize > COL {
+                                error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                                continue;
+                            }
+                            key_event_channel
+                                .send(KeyEvent {
+                                    row: e.row + ROW_OFFSET as u8,
+                                    col: e.col + COL_OFFSET as u8,
+                                    pressed: e.pressed,
+                                })
+                                .await;
                         }
-                        key_event_channel
-                            .send(KeyEvent {
-                                row: e.row + ROW_OFFSET as u8,
-                                col: e.col + COL_OFFSET as u8,
-                                pressed: e.pressed,
-                            })
-                            .await;
                     }
                 }
                 Err(e) => error!("Peripheral message read error: {:?}", e),
