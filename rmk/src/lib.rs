@@ -34,7 +34,10 @@ use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
+pub use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex,
+    channel::{Channel, Receiver},
+};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
@@ -45,10 +48,8 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{
-    communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL,
-    REPORT_CHANNEL_SIZE,
-};
+use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
+pub use keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, EVENT_CHANNEL};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_macro as macros;

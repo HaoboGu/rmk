@@ -9,9 +9,7 @@ use core::future::Future;
 
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 
-use crate::keyboard::{
-    KeyboardReportMessage, EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE,
-};
+use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 
 pub mod rotary_encoder;
 
@@ -75,7 +73,11 @@ pub trait InputDevice {
 ///
 /// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
 pub trait InputProcessor {
+    /// The event type that the input processor receives.
     type EventType;
+
+    /// The report type that the input processor sends.
+    type ReportType;
 
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
@@ -98,9 +100,7 @@ pub trait InputProcessor {
     /// The input processor sends keyboard reports to this channel.
     fn get_report_channel(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE> {
-        &KEYBOARD_REPORT_CHANNEL
-    }
+    ) -> &Channel<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.

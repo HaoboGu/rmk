@@ -21,8 +21,9 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    run_devices, run_rmk,
+    run_devices, run_rmk, Channel, CriticalSectionRawMutex, EVENT_CHANNEL, EVENT_CHANNEL_SIZE,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -133,5 +134,13 @@ impl InputDevice for MyDevice {
             info!("Hi my device");
             embassy_time::Timer::after_secs(1).await;
         }
+    }
+
+    type EventType = Event;
+
+    fn get_channel(
+        &self,
+    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        &EVENT_CHANNEL
     }
 }

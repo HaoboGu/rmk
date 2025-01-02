@@ -21,14 +21,14 @@ use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use usbd_hid::descriptor::KeyboardReport;
 
-pub(crate) const EVENT_CHANNEL_SIZE: usize = 32;
+pub const EVENT_CHANNEL_SIZE: usize = 32;
 pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
     Channel::new();
 
 pub static EVENT_CHANNEL: Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> =
     Channel::new();
 
-pub(crate) const REPORT_CHANNEL_SIZE: usize = 32;
+pub const REPORT_CHANNEL_SIZE: usize = 32;
 pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
     CriticalSectionRawMutex,
     KeyboardReportMessage,
