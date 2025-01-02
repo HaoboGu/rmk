@@ -223,7 +223,7 @@ pub async fn run_rmk_with_async_flash<
     defmt::panic!("The run_rmk should never return");
 }
 
-pub(crate) async fn initialize_usb_keyboard_and_run<
+pub async fn initialize_usb_keyboard_and_run<
     Out: OutputPin,
     D: Driver<'static>,
     M: MatrixTrait,

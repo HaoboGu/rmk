@@ -236,7 +236,7 @@ pub async fn run_peripheral_monitor<
 }
 
 /// Split central is connected to host via usb
-pub(crate) async fn initialize_usb_split_central_and_run<
+pub async fn initialize_usb_split_central_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     D: Driver<'static>,

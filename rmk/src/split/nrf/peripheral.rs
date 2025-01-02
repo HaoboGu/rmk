@@ -85,7 +85,7 @@ impl<'a> SplitWriter for BleSplitPeripheralDriver<'a> {
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub(crate) async fn initialize_nrf_ble_split_peripheral_and_run<
+pub async fn initialize_nrf_ble_split_peripheral_and_run<
     M: MatrixTrait,
     const ROW: usize,
     const COL: usize,

@@ -215,7 +215,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
+pub async fn initialize_nrf_ble_keyboard_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
