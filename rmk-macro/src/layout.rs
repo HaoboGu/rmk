@@ -96,7 +96,7 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
                 combination.right = true;
                 combination.alt = true;
             }
-            "Rgui" => {
+            "RGui" => {
                 combination.right = true;
                 combination.gui = true;
             }
