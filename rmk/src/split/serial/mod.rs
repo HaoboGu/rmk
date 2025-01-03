@@ -62,6 +62,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
                 .serial
                 .read(&mut self.buffer[self.n_bytes_part..])
                 .await
+                .inspect_err(|_e| self.n_bytes_part = 0)
                 .map_err(|_e| SplitDriverError::SerialError)?;
             if n_bytes == 0 {
                 return Err(SplitDriverError::EmptyMessage);
