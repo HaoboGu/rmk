@@ -10,7 +10,7 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::config::BleBatteryConfig;
-use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
+use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 use crate::{
@@ -215,7 +215,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
+pub async fn initialize_nrf_ble_keyboard_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
@@ -226,6 +226,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     mut keyboard_config: RmkConfig<'static, Out>,
     ble_addr: Option<[u8; 6]>,
     spawner: Spawner,
@@ -295,8 +296,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
 
     let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Keyboard services
     let mut keyboard = Keyboard::new(

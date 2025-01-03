@@ -2531,7 +2531,7 @@ msgstr ""
 
 #: src\how_to_contribute.md:41
 msgid ""
-"`key_event_channel`: a multi-sender, single-receiver channel. The sender can "
+"`KEY_EVENT_CHANNEL`: a multi-sender, single-receiver channel. The sender can "
 "be a matrix task which scans the key matrix or a split peripheral monitor "
 "which receives key event from split peripheral. The receiver, i.e. keyboard "
 "task, receives the key event and processes the key"
@@ -2539,7 +2539,7 @@ msgstr ""
 
 #: src\how_to_contribute.md:42
 msgid ""
-"`keyboard_report_channel`: a single-sender, single-receiver channel, "
+"`KEYBOARD_REPORT_CHANNEL`: a single-sender, single-receiver channel, "
 "keyboard task sends keyboard report to channel after the key event is "
 "processed, and USB/BLE task receives the keyboard report and sends the key "
 "to the host."

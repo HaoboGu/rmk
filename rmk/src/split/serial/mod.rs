@@ -143,7 +143,7 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `serial` - serial port to send key events to central board
-pub(crate) async fn initialize_serial_split_peripheral_and_run<
+pub async fn initialize_serial_split_peripheral_and_run<
     M: MatrixTrait,
     S: Write + Read,
     const ROW: usize,

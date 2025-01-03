@@ -253,7 +253,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
                 // size <= 28
                 let size = report.output_data[3];
-                info!("Getting keymap buffer, offset: {}, size: {}", offset, size);
+                debug!("Getting keymap buffer, offset: {}, size: {}", offset, size);
                 let mut idx = 4;
                 keymap
                     .borrow()
@@ -311,14 +311,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 warn!("Keymap get encoder -- not supported");
             }
             ViaCommand::DynamicKeymapSetEncoder => {
-                warn!("Keymap get encoder -- not supported");
+                warn!("Keymap set encoder -- not supported");
             }
             ViaCommand::Vial => process_vial(
                 report,
                 self.vial_config.vial_keyboard_id,
                 self.vial_config.vial_keyboard_def,
+                keymap,
             ),
-            ViaCommand::Unhandled => report.input_data[0] = ViaCommand::Unhandled as u8,
+            ViaCommand::Unhandled => {
+                info!("Unknown cmd: {}", report.output_data);
+                report.input_data[0] = ViaCommand::Unhandled as u8
+            }
         }
     }
 }

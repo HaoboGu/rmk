@@ -6,7 +6,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
-use crate::keyboard::key_event_channel;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::Matrix;
 use crate::CONNECTION_STATE;
 use defmt::{error, info};
@@ -145,7 +145,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) -> ! {
         loop {
-            match select(self.split_driver.read(), key_event_channel.receive()).await {
+            match select(self.split_driver.read(), KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(m) => match m {
                     Ok(split_messages) => {
                         for split_message in split_messages {

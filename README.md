@@ -28,7 +28,7 @@
 - **Real-time keymap editing**: RMK has built-in [Vial](https://get.vial.today) support, the keymap can be changed on-the-fly. You can even use Vial to edit keymap over BLE directly
 - **Advanced keyboard features**: Many advanced keyboard features are available by default in RMK, such as layer switch, media control, system control, mouse control, etc
 - **Wireless**: BLE wireless support with auto-reconnection/multiple devices feature for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3 and esp32s3
-- **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using RMK
+- **Easy configuration**: RMK provides a simple way to build your keyboard: a `keyboard.toml` is all you need! For experienced Rust user, you can still customize your firmware easily using Rust code
 - **Low latency and low-power ready**: RMK has a typical 2 ms latency in wired mode and 10 ms latency in wireless mode. By enabling `async_matrix` feature, RMK has very low power consumption, with a 2000mah battery, RMK can provide several months battery life
 
 ## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)

@@ -1,8 +1,10 @@
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
-    keyboard::{key_event_channel, KeyEvent},
+    event::KeyEvent,
+    keyboard::KEY_EVENT_CHANNEL,
     CONNECTION_STATE,
 };
+use core::future::Future;
 use defmt::{info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -13,30 +15,34 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
-pub(crate) trait MatrixTrait {
+pub trait MatrixTrait {
     // Matrix size
     const ROW: usize;
     const COL: usize;
 
     // Wait for USB or BLE really connected
-    async fn wait_for_connected(&self) {
-        while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-            embassy_time::Timer::after_millis(100).await;
+    fn wait_for_connected(&self) -> impl Future<Output = ()> {
+        async {
+            while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                embassy_time::Timer::after_millis(100).await;
+            }
+            info!("Connected, start scanning matrix");
         }
-        info!("Connected, start scanning matrix");
     }
 
     // Run the matrix
-    async fn run(&mut self) {
-        // We don't check disconnected state because disconnection means the task will be dropped
-        loop {
-            self.wait_for_connected().await;
-            self.scan().await;
+    fn run(&mut self) -> impl Future<Output = ()> {
+        async {
+            // We don't check disconnected state because disconnection means the task will be dropped
+            loop {
+                self.wait_for_connected().await;
+                self.scan().await;
+            }
         }
     }
 
     // Do matrix scanning, save the result in matrix's key_state field.
-    async fn scan(&mut self);
+    fn scan(&mut self) -> impl Future<Output = ()>;
 
     // Read key state at position (row, col)
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
@@ -55,16 +61,16 @@ pub(crate) trait MatrixTrait {
     }
 
     #[cfg(feature = "async_matrix")]
-    async fn wait_for_key(&mut self);
+    fn wait_for_key(&mut self) -> impl Future<Output = ()>;
 }
 
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug, Format)]
-pub(crate) struct KeyState {
+pub struct KeyState {
     // True if the key is pressed
-    pub(crate) pressed: bool,
+    pub pressed: bool,
     // True if the key's state is just changed
-    // pub(crate) changed: bool,
+    // pub changed: bool,
 }
 
 impl Default for KeyState {
@@ -74,25 +80,25 @@ impl Default for KeyState {
 }
 
 impl KeyState {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         KeyState { pressed: false }
     }
 
-    pub(crate) fn toggle_pressed(&mut self) {
+    pub fn toggle_pressed(&mut self) {
         self.pressed = !self.pressed;
     }
 
-    pub(crate) fn is_releasing(&self) -> bool {
+    pub fn is_releasing(&self) -> bool {
         !self.pressed
     }
 
-    pub(crate) fn is_pressing(&self) -> bool {
+    pub fn is_pressing(&self) -> bool {
         self.pressed
     }
 }
 
 /// Matrix is the physical pcb layout of the keyboard matrix.
-pub(crate) struct Matrix<
+pub struct Matrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     Out: OutputPin,
@@ -122,7 +128,7 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(
+    pub fn new(
         input_pins: [In; INPUT_PIN_NUM],
         output_pins: [Out; OUTPUT_PIN_NUM],
         debouncer: D,
@@ -216,7 +222,7 @@ impl<
                             let (row, col, key_state) =
                                 (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-                            key_event_channel
+                            KEY_EVENT_CHANNEL
                                 .send(KeyEvent {
                                     row: row as u8,
                                     col: col as u8,
