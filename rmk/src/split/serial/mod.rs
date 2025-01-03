@@ -57,19 +57,18 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
     async fn read(&mut self) -> Result<Vec<SplitMessage, 2>, SplitDriverError> {
         const SENTINEL: u8 = 0x00;
         let mut messages = Vec::new();
-        let mut n_bytes_sum = self.n_bytes_part;
-        while n_bytes_sum < self.buffer.len() {
+        while self.n_bytes_part < self.buffer.len() {
             let n_bytes = self
                 .serial
-                .read(&mut self.buffer[n_bytes_sum..])
+                .read(&mut self.buffer[self.n_bytes_part..])
                 .await
                 .map_err(|_e| SplitDriverError::SerialError)?;
             if n_bytes == 0 {
                 return Err(SplitDriverError::EmptyMessage);
             }
 
-            n_bytes_sum += n_bytes;
-            if self.buffer[..n_bytes_sum].contains(&SENTINEL) {
+            self.n_bytes_part += n_bytes;
+            if self.buffer[..self.n_bytes_part].contains(&SENTINEL) {
                 break;
             }
         }
@@ -77,7 +76,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
         let mut start_byte = 0;
         let mut end_byte = start_byte;
         let mut partial_message = false;
-        while start_byte < n_bytes_sum {
+        while start_byte < self.n_bytes_part {
             let value = self.buffer[end_byte];
             if value == SENTINEL {
                 postcard::from_bytes_cobs(&mut self.buffer[start_byte..=end_byte]).map_or_else(
@@ -91,7 +90,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
                 start_byte = end_byte + 1;
                 end_byte = start_byte;
                 continue;
-            } else if end_byte + value as usize >= n_bytes_sum {
+            } else if end_byte + value as usize >= self.n_bytes_part {
                 partial_message = true;
                 break;
             }
@@ -101,8 +100,8 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
 
         if partial_message {
             // Store Partial Message for Next Read
-            self.n_bytes_part = n_bytes_sum - start_byte;
-            self.buffer.copy_within(start_byte..n_bytes_sum, 0);
+            self.buffer.copy_within(start_byte..self.n_bytes_part, 0);
+            self.n_bytes_part = self.n_bytes_part - start_byte;
             self.buffer[self.n_bytes_part..].fill(0);
         } else {
             // Reset Buffer
