@@ -96,7 +96,7 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
                 combination.right = true;
                 combination.alt = true;
             }
-            "Rgui" => {
+            "RGui" => {
                 combination.right = true;
                 combination.gui = true;
             }
@@ -272,7 +272,7 @@ fn parse_key(key: String) -> TokenStream2 {
                     };
                 }
                 quote! {
-                    ::rmk::mth!(#ident, #modifiers)
+                    ::rmk::mt!(#ident, #modifiers)
                 }
             } else {
                 return quote! {

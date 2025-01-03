@@ -62,7 +62,7 @@ macro_rules! lt {
 
 /// Create a modifier-tap-hold action
 #[macro_export]
-macro_rules! mth {
+macro_rules! mt {
     ($k: ident, $m: expr) => {
         $crate::action::KeyAction::ModifierTapHold(
             $crate::action::Action::Key($crate::keycode::KeyCode::$k),
