@@ -119,7 +119,6 @@ async fn main(spawner: Spawner) {
             output_pins,
             driver,
             &mut keymap::get_default_keymap(),
-            Some(&mut keymap::get_default_encoder_map()),
             keyboard_config,
             spawner,
         ),

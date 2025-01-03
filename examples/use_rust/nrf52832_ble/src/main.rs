@@ -60,7 +60,6 @@ async fn main(spawner: Spawner) {
         input_pins,
         output_pins,
         &mut keymap::get_default_keymap(),
-        None,
         keyboard_config,
         spawner,
     )

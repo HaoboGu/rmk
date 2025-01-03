@@ -1,13 +1,12 @@
 use core::cell::RefCell;
 
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian};
 use defmt::{debug, info};
 use num_enum::FromPrimitive;
 
 use crate::{
     keymap::KeyMap,
     usb::descriptor::ViaReport,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 
 #[derive(Debug, Copy, Clone, defmt::Format, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
@@ -33,13 +32,13 @@ enum VialCommand {
 
 const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
-///
+
 /// Note: vial uses litte endian, while via uses big endian
 pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     report: &mut ViaReport,
     vial_keyboard_Id: &[u8],
     vial_keyboard_def: &[u8],
-    keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    _keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
@@ -95,19 +94,19 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
         VialCommand::GetEncoder => {
             let layer = report.output_data[2];
             let index = report.output_data[3];
-            debug!("Received Vial - GetEncoder, data: {}", report.output_data);
+            debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
             // Get encoder value
-            if let Some(encoders) = &keymap.borrow().encoders {
-                if let Some(encoder_layer) = encoders.get(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get(index as usize) {
-                        let clockwise = to_via_keycode(encoder.0);
-                        BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
-                        let counter_clockwise = to_via_keycode(encoder.1);
-                        BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
-                        return;
-                    }
-                }
-            }
+            // if let Some(encoders) = &keymap.borrow().encoders {
+            //     if let Some(encoder_layer) = encoders.get(layer as usize) {
+            //         if let Some(encoder) = encoder_layer.get(index as usize) {
+            //             let clockwise = to_via_keycode(encoder.0);
+            //             BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
+            //             let counter_clockwise = to_via_keycode(encoder.1);
+            //             BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
+            //             return;
+            //         }
+            //     }
+            // }
 
             // Clear returned value, aka `KeyAction::No`
             report.input_data.fill(0x0);
@@ -116,23 +115,24 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
             let layer = report.output_data[2];
             let index = report.output_data[3];
             let clockwise = report.output_data[4];
-            if let Some(&mut mut encoders) = keymap.borrow_mut().encoders {
-                if let Some(&mut mut encoder_layer) = encoders.get_mut(layer as usize) {
-                    if let Some(&mut mut encoder) = encoder_layer.get_mut(index as usize) {
-                        if clockwise == 1 {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting clockwise action: {}", action);
-                            encoder.0 = action
-                        } else {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting counter-clockwise action: {}", action);
-                            encoder.1 = action
-                        }
-                    }
-                }
-            }
+            debug!("Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}", index, clockwise, layer);
+            // if let Some(&mut mut encoders) = keymap.borrow_mut().encoders {
+            //     if let Some(&mut mut encoder_layer) = encoders.get_mut(layer as usize) {
+            //         if let Some(&mut mut encoder) = encoder_layer.get_mut(index as usize) {
+            //             if clockwise == 1 {
+            //                 let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+            //                 let action = from_via_keycode(keycode);
+            //                 info!("Setting clockwise action: {}", action);
+            //                 encoder.0 = action
+            //             } else {
+            //                 let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+            //                 let action = from_via_keycode(keycode);
+            //                 info!("Setting counter-clockwise action: {}", action);
+            //                 encoder.1 = action
+            //             }
+            //         }
+            //     }
+            // }
             debug!("Received Vial - SetEncoder, data: {}", report.output_data);
         }
         _ => (),

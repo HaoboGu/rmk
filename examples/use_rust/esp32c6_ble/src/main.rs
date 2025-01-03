@@ -40,7 +40,6 @@ fn main() {
         input_pins,
         output_pins,
         &mut keymap::get_default_keymap(),
-        None,
         keyboard_config,
     ));
 }

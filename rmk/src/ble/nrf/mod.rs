@@ -226,7 +226,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
+    
     mut keyboard_config: RmkConfig<'static, Out>,
     ble_addr: Option<[u8; 6]>,
     spawner: Spawner,
@@ -252,7 +252,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     let flash = Flash::take(sd);
     let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
     let keymap = RefCell::new(
-        KeyMap::new_from_storage(default_keymap, encoder_map, Some(&mut storage)).await,
+        KeyMap::new_from_storage(default_keymap,  Some(&mut storage)).await,
     );
 
     let mut buf: [u8; 128] = [0; 128];

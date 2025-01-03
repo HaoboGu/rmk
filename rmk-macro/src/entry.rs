@@ -62,7 +62,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                     driver,
                     f,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     low_active,
                     spawner,
@@ -78,7 +77,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                         driver,
                         f,
                         &mut get_default_keymap(),
-                        None,
                         keyboard_config,
                         low_active,
                         spawner
@@ -91,7 +89,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                     direct_pins,
                     driver,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     low_active,
                     spawner,
@@ -102,7 +99,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                 ::rmk::direct_pin::run_rmk_direct_pin::<_, ::embassy_nrf::gpio::Output, ROW, COL, SIZE, NUM_LAYER>(
                     direct_pins,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     low_active,
                     spawner,
@@ -117,7 +113,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
                 driver,
                 flash,
                 &mut get_default_keymap(),
-                None,
                 keyboard_config,
                 low_active,
                 spawner,
@@ -128,7 +123,6 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
             ::esp_idf_svc::hal::task::block_on(::rmk::direct_pin::run_rmk_direct_pin::<_, ::esp_idf_svc::hal::gpio::Output, ROW, COL, SIZE, NUM_LAYER>(
                 direct_pins,
                 &mut get_default_keymap(),
-                None,
                 keyboard_config,
                 low_active,
             ));
@@ -146,7 +140,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     driver,
                     f,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     spawner,
                 )
@@ -162,7 +155,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                         driver,
                         f,
                         &mut get_default_keymap(),
-                        None,
                         keyboard_config,
                         spawner
                     )
@@ -175,7 +167,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     output_pins,
                     driver,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     spawner,
                 )
@@ -186,7 +177,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     input_pins,
                     output_pins,
                     &mut get_default_keymap(),
-                    None,
                     keyboard_config,
                     spawner,
                 )
@@ -201,7 +191,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 driver,
                 flash,
                 &mut get_default_keymap(),
-                None,
                 keyboard_config,
                 spawner,
             )
@@ -212,7 +201,6 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 input_pins,
                 output_pins,
                 &mut get_default_keymap(),
-                None,
                 keyboard_config,
             ));
         },

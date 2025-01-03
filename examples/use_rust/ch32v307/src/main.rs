@@ -96,7 +96,6 @@ async fn main(spawner: Spawner) -> ! {
         driver,
         // rmk::EmptyFlashWrapper::new(),
         &mut default_keymap,
-        None,
         keyboard_config,
         spawner,
     )

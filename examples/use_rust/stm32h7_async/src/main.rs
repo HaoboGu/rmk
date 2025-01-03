@@ -110,7 +110,6 @@ async fn main(spawner: Spawner) {
         driver,
         f,
         &mut keymap::get_default_keymap(),
-        None,
         keyboard_config,
         spawner,
     )
