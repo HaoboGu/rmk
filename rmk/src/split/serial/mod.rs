@@ -102,11 +102,9 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
             // Store Partial Message for Next Read
             self.buffer.copy_within(start_byte..self.n_bytes_part, 0);
             self.n_bytes_part = self.n_bytes_part - start_byte;
-            self.buffer[self.n_bytes_part..].fill(0);
         } else {
             // Reset Buffer
             self.n_bytes_part = 0;
-            self.buffer.fill(0);
         }
 
         Ok(messages)
