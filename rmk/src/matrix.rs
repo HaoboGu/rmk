@@ -4,6 +4,7 @@ use crate::{
     keyboard::KEY_EVENT_CHANNEL,
     CONNECTION_STATE,
 };
+use core::future::Future;
 use defmt::{info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -20,24 +21,28 @@ pub trait MatrixTrait {
     const COL: usize;
 
     // Wait for USB or BLE really connected
-    async fn wait_for_connected(&self) {
-        while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-            embassy_time::Timer::after_millis(100).await;
+    fn wait_for_connected(&self) -> impl Future<Output = ()> {
+        async {
+            while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                embassy_time::Timer::after_millis(100).await;
+            }
+            info!("Connected, start scanning matrix");
         }
-        info!("Connected, start scanning matrix");
     }
 
     // Run the matrix
-    async fn run(&mut self) {
-        // We don't check disconnected state because disconnection means the task will be dropped
-        loop {
-            self.wait_for_connected().await;
-            self.scan().await;
+    fn run(&mut self) -> impl Future<Output = ()> {
+        async {
+            // We don't check disconnected state because disconnection means the task will be dropped
+            loop {
+                self.wait_for_connected().await;
+                self.scan().await;
+            }
         }
     }
 
     // Do matrix scanning, save the result in matrix's key_state field.
-    async fn scan(&mut self);
+    fn scan(&mut self) -> impl Future<Output = ()>;
 
     // Read key state at position (row, col)
     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
@@ -56,7 +61,7 @@ pub trait MatrixTrait {
     }
 
     #[cfg(feature = "async_matrix")]
-    async fn wait_for_key(&mut self);
+    fn wait_for_key(&mut self) -> impl Future<Output = ()>;
 }
 
 /// KeyState represents the state of a key.
