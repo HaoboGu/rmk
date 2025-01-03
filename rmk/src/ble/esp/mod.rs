@@ -35,7 +35,7 @@ use futures::pin_mut;
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
+pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     const ROW: usize,

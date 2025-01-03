@@ -7,10 +7,10 @@ pub mod central;
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
 #[cfg(feature = "_nrf_ble")]
-pub(crate) mod nrf;
+pub mod nrf;
 pub mod peripheral;
 #[cfg(not(feature = "_nrf_ble"))]
-pub(crate) mod serial;
+pub mod serial;
 
 /// Maximum size of a split message
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
