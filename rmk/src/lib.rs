@@ -117,7 +117,7 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -133,7 +133,6 @@ pub async fn run_rmk<
         #[cfg(not(feature = "_no_external_storage"))]
         async_flash,
         default_keymap,
-        
         keyboard_config,
         #[cfg(not(feature = "_esp_ble"))]
         spawner,
@@ -171,7 +170,7 @@ pub async fn run_rmk_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -198,7 +197,6 @@ pub async fn run_rmk_with_async_flash<
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
-        
         keyboard_config,
         None,
         spawner,
@@ -206,7 +204,7 @@ pub async fn run_rmk_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap,  keyboard_config).await;
+    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
 
     #[cfg(all(
         not(feature = "_no_usb"),
@@ -218,7 +216,6 @@ pub async fn run_rmk_with_async_flash<
         #[cfg(not(feature = "_no_external_storage"))]
         flash,
         default_keymap,
-        
         keyboard_config,
     )
     .await;
@@ -241,7 +238,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -249,13 +246,11 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-        let keymap =
-            RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
+        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap =
-        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();

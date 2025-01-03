@@ -66,7 +66,7 @@ pub async fn run_rmk_split_central<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -108,7 +108,6 @@ pub async fn run_rmk_split_central<
         matrix,
         usb_driver,
         default_keymap,
-        
         keyboard_config,
         Some(central_addr),
         spawner,
@@ -121,7 +120,6 @@ pub async fn run_rmk_split_central<
         usb_driver,
         flash,
         default_keymap,
-        
         keyboard_config,
     )
     .await;
@@ -162,7 +160,7 @@ pub async fn run_rmk_split_central_direct_pin<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
@@ -191,7 +189,6 @@ pub async fn run_rmk_split_central_direct_pin<
         matrix,
         usb_driver,
         default_keymap,
-        
         keyboard_config,
         Some(central_addr),
         spawner,
@@ -204,7 +201,6 @@ pub async fn run_rmk_split_central_direct_pin<
         usb_driver,
         flash,
         default_keymap,
-        
         keyboard_config,
     )
     .await;
@@ -256,7 +252,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -267,7 +263,6 @@ pub(crate) async fn initialize_usb_split_central_and_run<
         let keymap = RefCell::new(
             KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
                 default_keymap,
-                
                 Some(&mut s),
             )
             .await,

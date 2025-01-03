@@ -34,9 +34,7 @@ pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     KeyMap<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(
-        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    ) -> Self {
+    pub(crate) async fn new(action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],

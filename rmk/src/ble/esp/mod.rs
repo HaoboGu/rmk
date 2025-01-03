@@ -44,7 +44,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 >(
     mut matrix: M,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     let f = Partition::new(PartitionType::Custom, Some(c"rmk"));
@@ -60,9 +60,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     )
     .await;
 
-    let keymap = RefCell::new(
-        KeyMap::new_from_storage(default_keymap,  Some(&mut storage)).await,
-    );
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();

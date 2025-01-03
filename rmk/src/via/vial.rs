@@ -4,10 +4,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use defmt::{debug, info};
 use num_enum::FromPrimitive;
 
-use crate::{
-    keymap::KeyMap,
-    usb::descriptor::ViaReport,
-};
+use crate::{keymap::KeyMap, usb::descriptor::ViaReport};
 
 #[derive(Debug, Copy, Clone, defmt::Format, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
@@ -94,7 +91,10 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
         VialCommand::GetEncoder => {
             let layer = report.output_data[2];
             let index = report.output_data[3];
-            debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
+            debug!(
+                "Received Vial - GetEncoder, encoder idx: {} at layer: {}",
+                index, layer
+            );
             // Get encoder value
             // if let Some(encoders) = &keymap.borrow().encoders {
             //     if let Some(encoder_layer) = encoders.get(layer as usize) {
@@ -115,7 +115,10 @@ pub(crate) fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAY
             let layer = report.output_data[2];
             let index = report.output_data[3];
             let clockwise = report.output_data[4];
-            debug!("Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}", index, clockwise, layer);
+            debug!(
+                "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
+                index, clockwise, layer
+            );
             // if let Some(&mut mut encoders) = keymap.borrow_mut().encoders {
             //     if let Some(&mut mut encoder_layer) = encoders.get_mut(layer as usize) {
             //         if let Some(&mut mut encoder) = encoder_layer.get_mut(index as usize) {
