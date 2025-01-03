@@ -3,8 +3,8 @@ use core::sync::atomic::Ordering;
 ///! The abstracted driver layer of the split keyboard.
 ///!
 use super::SplitMessage;
-use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
 use crate::CONNECTION_STATE;
+use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
 use defmt::{debug, error, warn};
 use embassy_futures::select::select;
 

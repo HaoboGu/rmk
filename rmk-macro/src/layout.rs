@@ -62,10 +62,10 @@ impl ModifierCombinationMacro {
 impl quote::ToTokens for ModifierCombinationMacro {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let right = self.right;
-        let gui   = self.gui;
-        let alt   = self.alt;
+        let gui = self.gui;
+        let alt = self.alt;
         let shift = self.shift;
-        let ctrl  = self.ctrl;
+        let ctrl = self.ctrl;
 
         tokens.extend(quote! {
             ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
@@ -303,7 +303,6 @@ fn parse_key(key: String) -> TokenStream2 {
                     compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 };
             }
-
         }
         _ => {
             let ident = format_ident!("{}", key);

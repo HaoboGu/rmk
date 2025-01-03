@@ -254,6 +254,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Main keyboard task, it receives input devices result, processes keys.
     /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
+    /// TODO: make keyboard an `InputProcessor`
     pub(crate) async fn run(&mut self) {
         KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {

@@ -127,7 +127,3 @@ pub trait InputProcessor {
 ```
 
 The `process` method is responsible for processing input events and sending HID report to the report channel, which is available by `get_report_channel`.
-
-## TODO
-
--  Sometimes, we need different `InputProcessor`s for SAME `Event` from different `InputDevice`s. How to realize it?

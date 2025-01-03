@@ -1,5 +1,8 @@
 use crate::{
-    debounce::{DebounceState, DebouncerTrait}, event::KeyEvent, keyboard::KEY_EVENT_CHANNEL, CONNECTION_STATE
+    debounce::{DebounceState, DebouncerTrait},
+    event::KeyEvent,
+    keyboard::KEY_EVENT_CHANNEL,
+    CONNECTION_STATE,
 };
 use defmt::{info, Format};
 use embassy_time::{Instant, Timer};

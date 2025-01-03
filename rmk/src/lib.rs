@@ -34,10 +34,7 @@ use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-pub use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver},
-};
+pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
@@ -49,7 +46,7 @@ use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
 use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
-pub use keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, EVENT_CHANNEL};
+pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_macro as macros;
@@ -120,6 +117,7 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -135,6 +133,7 @@ pub async fn run_rmk<
         #[cfg(not(feature = "_no_external_storage"))]
         async_flash,
         default_keymap,
+        encoder_map,
         keyboard_config,
         #[cfg(not(feature = "_esp_ble"))]
         spawner,
@@ -172,6 +171,7 @@ pub async fn run_rmk_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -198,6 +198,7 @@ pub async fn run_rmk_with_async_flash<
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
+        encoder_map,
         keyboard_config,
         None,
         spawner,
@@ -217,6 +218,7 @@ pub async fn run_rmk_with_async_flash<
         #[cfg(not(feature = "_no_external_storage"))]
         flash,
         default_keymap,
+        encoder_map,
         keyboard_config,
     )
     .await;
@@ -239,6 +241,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -246,7 +249,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
+        let keymap =
+            RefCell::new(KeyMap::new_from_storage(default_keymap, encoder_map, Some(&mut s)).await);
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]

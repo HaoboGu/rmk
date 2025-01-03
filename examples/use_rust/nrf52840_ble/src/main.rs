@@ -23,7 +23,7 @@ use rmk::{
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    run_devices, run_rmk, Channel, CriticalSectionRawMutex, EVENT_CHANNEL, EVENT_CHANNEL_SIZE,
+    run_devices, run_rmk, CriticalSectionRawMutex, Sender, EVENT_CHANNEL, EVENT_CHANNEL_SIZE,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -119,6 +119,7 @@ async fn main(spawner: Spawner) {
             output_pins,
             driver,
             &mut keymap::get_default_keymap(),
+            Some(&mut keymap::get_default_encoder_map()),
             keyboard_config,
             spawner,
         ),
@@ -138,9 +139,7 @@ impl InputDevice for MyDevice {
 
     type EventType = Event;
 
-    fn get_channel(
-        &self,
-    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        &EVENT_CHANNEL
+    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        EVENT_CHANNEL.sender()
     }
 }

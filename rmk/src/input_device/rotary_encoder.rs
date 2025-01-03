@@ -1,8 +1,8 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
-use defmt::Format;
+use defmt::{debug, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_sync::channel::{Receiver, Sender};
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -10,9 +10,10 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, RotaryEncoderEvent};
-use crate::keyboard::EVENT_CHANNEL;
+use crate::keyboard::{KeyboardReportMessage, EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::REPORT_CHANNEL_SIZE;
 
-use super::{InputDevice, EVENT_CHANNEL_SIZE};
+use super::{InputDevice, InputProcessor, EVENT_CHANNEL_SIZE};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -171,9 +172,42 @@ impl<
         }
     }
 
-    fn get_channel(
+    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        EVENT_CHANNEL.sender()
+    }
+}
+
+pub struct RotaryEncoderProcessor {}
+
+impl InputProcessor for RotaryEncoderProcessor {
+    type EventType = Event;
+
+    type ReportType = KeyboardReportMessage;
+
+    async fn process(&mut self, event: Self::EventType) {
+        match event {
+            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => match direction {
+                Direction::Clockwise => {
+                    debug!("Encoder {} - Clockwise", id);
+                }
+                Direction::CounterClockwise => {
+                    debug!("Encoder {} - CounterClockwise", id);
+                }
+                Direction::None => (),
+            },
+            _ => {}
+        }
+    }
+
+    fn get_event_channel(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        &EVENT_CHANNEL
+    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        EVENT_CHANNEL.receiver()
+    }
+
+    fn get_report_channel(
+        &self,
+    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
+        KEYBOARD_REPORT_CHANNEL.sender()
     }
 }

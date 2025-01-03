@@ -7,7 +7,10 @@
 
 use core::future::Future;
 
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{
+    blocking_mutex::raw::CriticalSectionRawMutex,
+    channel::{Receiver, Sender},
+};
 
 use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 
@@ -47,12 +50,11 @@ pub trait InputDevice {
     type EventType;
 
     /// The number of required channel size
-    // FIXME: it's not possible in stable to define an associated const and use it as the channel size:
-    // `fn get_channel(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, Self::EVENT_CHANNEL_SIZE >;`
+    // FIXME: it's not possible in stable to define an associated const and use it as the channel size in stable Rust.
+    // It requires #[feature(generic_const_exprs)]:
     //
-    // It requires #[feature(generic_const_exprs)] and adding `{}` to the const:
     // `fn get_channel(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
-    //
+    // So this size is commented out
     // const EVENT_CHANNEL_SIZE: usize = 32;
 
     /// Starts the input device task.
@@ -62,8 +64,7 @@ pub trait InputDevice {
     fn run(&mut self) -> impl Future<Output = ()>;
 
     /// Get the event channel for the input device. All events should be send by this channel.
-    fn get_channel(&self)
-        -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
@@ -93,14 +94,14 @@ pub trait InputProcessor {
     /// then sends to the report channel.
     fn get_event_channel(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
     /// Get the output report channel for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
     fn get_report_channel(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.
@@ -143,5 +144,35 @@ macro_rules! run_devices {
     // Multiple devices case
     ($first:expr, $second:expr $(, $rest:expr)*) => {
         ::embassy_futures::join::join($first.run(), run_devices!($second $(, $rest)*))
+    };
+}
+
+/// Macro to run multiple input processors concurrently.
+///
+/// The `run_processors` macro is specifically designed to work with the `InputProcessor` trait. It takes one or more instances of
+/// input processors and combines their `run` methods into a single future. All futures are executed concurrently, enabling
+/// efficient multitasking for multiple input processors.
+///
+/// # Note
+/// This macro must be used with input processors that implement the `InputProcessor` trait.
+///
+/// # Example
+/// ```rust
+/// // `RotaryEncoderProcessor` and `TouchpadProcessor` should implement `InputProcessor` trait
+/// let d1 = RotaryEncoderProcessor{};
+/// let d2 = TouchpadProcessor{};
+///
+/// // Run all input devices concurrently
+/// run_processors!(d1, d2).await;
+/// ```
+#[macro_export]
+macro_rules! run_processors {
+    // Single device case
+    ($single:expr) => {
+        $single.run()
+    };
+    // Multiple devices case
+    ($first:expr, $second:expr $(, $rest:expr)*) => {
+        ::embassy_futures::join::join($first.run(), run_processors!($second $(, $rest)*))
     };
 }

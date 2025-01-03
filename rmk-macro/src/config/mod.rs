@@ -3,6 +3,7 @@ use serde_derive::Deserialize;
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
     pub keyboard: KeyboardInfo,
@@ -251,7 +252,7 @@ pub struct EncoderConfig {
     pub pin_a: String,
     // Pin b of the encoder
     pub pin_b: String,
-    // Press button position in the keyboard matrix 
+    // Press button position in the keyboard matrix
     // TODO: direct pin support?
     pub btn_pos: Option<(u8, u8)>,
     // Resolution
@@ -259,7 +260,6 @@ pub struct EncoderConfig {
     pub clockwise_pos: (u8, u8),
     pub counter_clockwise_pos: (u8, u8),
 }
-
 
 /// Pointing device config
 #[derive(Clone, Debug, Default, Deserialize)]

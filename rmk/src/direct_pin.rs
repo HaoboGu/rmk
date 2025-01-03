@@ -5,8 +5,8 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
-use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::event::KeyEvent;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
 use crate::RmkConfig;
@@ -66,6 +66,7 @@ pub async fn run_rmk_direct_pin<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -79,6 +80,7 @@ pub async fn run_rmk_direct_pin<
         run_rmk_direct_pin_with_async_flash::<_, _, ROW, COL, SIZE, NUM_LAYER>(
             direct_pins,
             default_keymap,
+            encoder_map,
             keyboard_config,
             low_active,
             #[cfg(not(feature = "_esp_ble"))]
@@ -93,6 +95,7 @@ pub async fn run_rmk_direct_pin<
             direct_pins,
             usb_driver,
             default_keymap,
+            encoder_map,
             keyboard_config,
             low_active,
             #[cfg(not(feature = "_esp_ble"))]
@@ -107,6 +110,7 @@ pub async fn run_rmk_direct_pin<
             direct_pins,
             async_flash,
             default_keymap,
+            encoder_map,
             keyboard_config,
             low_active,
             #[cfg(not(feature = "_esp_ble"))]
@@ -122,6 +126,7 @@ pub async fn run_rmk_direct_pin<
             usb_driver,
             async_flash,
             default_keymap,
+            encoder_map,
             keyboard_config,
             low_active,
             #[cfg(not(feature = "_esp_ble"))]
@@ -159,6 +164,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: Option<&mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -179,6 +185,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         default_keymap,
+        encoder_map,
         keyboard_config,
         None,
         spawner,
@@ -198,6 +205,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
         #[cfg(not(feature = "_no_external_storage"))]
         flash,
         default_keymap,
+        encoder_map,
         keyboard_config,
     )
     .await;
