@@ -1,7 +1,7 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::keyboard::KeyEvent;
+use crate::event::KeyEvent;
 
 pub mod central;
 /// Common abstraction layer of split driver

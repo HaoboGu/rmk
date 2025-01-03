@@ -5,8 +5,8 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
-use crate::keyboard::key_event_channel;
-use crate::keyboard::KeyEvent;
+use crate::event::KeyEvent;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
 use crate::RmkConfig;
@@ -159,6 +159,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -330,7 +331,7 @@ impl<
                                 self.key_states[row_idx][col_idx].toggle_pressed();
                                 let key_state = self.key_states[row_idx][col_idx];
 
-                                key_event_channel
+                                KEY_EVENT_CHANNEL
                                     .send(KeyEvent {
                                         row: row_idx as u8,
                                         col: col_idx as u8,

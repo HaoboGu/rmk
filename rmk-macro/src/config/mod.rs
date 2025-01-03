@@ -3,6 +3,7 @@ use serde_derive::Deserialize;
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
     pub keyboard: KeyboardInfo,
@@ -23,6 +24,8 @@ pub struct KeyboardTomlConfig {
     pub dependency: Option<DependencyConfig>,
     /// Split config
     pub split: Option<SplitConfig>,
+    /// Input device config
+    pub input_device: Option<InputDeviceConfig>,
 }
 
 /// Configurations for keyboard info
@@ -56,7 +59,6 @@ pub enum MatrixType {
     direct_pin,
 }
 
-#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
     #[serde(default)]
@@ -174,6 +176,7 @@ pub struct SplitConfig {
 /// Configurations for each split board
 ///
 /// Either ble_addr or serial must be set, but not both.
+#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitBoardConfig {
     /// Row number of the split board
@@ -188,7 +191,10 @@ pub struct SplitBoardConfig {
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
+    /// Matrix config for the split
     pub matrix: MatrixConfig,
+    /// Input device config for the split
+    pub input_device: Option<InputDeviceConfig>,
 }
 
 /// Serial port config
@@ -228,4 +234,65 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
             "Invalid duration unit \"{other}\": unit part must be either \"s\" or \"ms\""
         ))),
     }
+}
+
+/// Configurations for input devices
+///
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub struct InputDeviceConfig {
+    pub encoder: Option<Vec<EncoderConfig>>,
+    pub pointing: Option<Vec<PointingDeviceConfig>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub struct EncoderConfig {
+    // Pin a of the encoder
+    pub pin_a: String,
+    // Pin b of the encoder
+    pub pin_b: String,
+    // Press button position in the keyboard matrix
+    // TODO: direct pin support?
+    pub btn_pos: Option<(u8, u8)>,
+    // Resolution
+    pub resolution: Option<u8>,
+    pub clockwise_pos: (u8, u8),
+    pub counter_clockwise_pos: (u8, u8),
+}
+
+/// Pointing device config
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub struct PointingDeviceConfig {
+    pub interface: Option<CommunicationProtocol>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+pub enum CommunicationProtocol {
+    I2C(I2cConfig),
+    SPI(SpiConfig),
+}
+
+/// SPI config
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub struct SpiConfig {
+    pub instance: String,
+    pub sck: String,
+    pub mosi: String,
+    pub miso: String,
+    pub cs: Option<String>,
+    pub cpi: Option<u32>,
+}
+
+/// I2C config
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+pub struct I2cConfig {
+    pub instance: String,
+    pub sda: String,
+    pub scl: String,
+    pub address: u8,
 }

@@ -51,7 +51,7 @@ pub(crate) struct ViaReport {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 
-pub(crate) enum CompositeReportType {
+pub enum CompositeReportType {
     None = 0x00,
     Mouse = 0x01,
     Media = 0x02,
@@ -113,7 +113,7 @@ impl CompositeReportType {
     }
 )]
 #[derive(Default)]
-pub(crate) struct CompositeReport {
+pub struct CompositeReport {
     pub(crate) buttons: u8,
     pub(crate) x: i8,
     pub(crate) y: i8,
