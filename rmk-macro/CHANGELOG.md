@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-01-02
+
+### Added
+
+- Add `MT` and `TH` in layout section
+
+### Fixed
+
+- Fix wrong default `TapHoldConfig` settings
+- Fix Chip/board checking error in rmk-macro
+- Fix L/Rgui typo in macro -> L/RGui
+
 ## [0.4.0] - 2024-12-16
 
 ### Added
