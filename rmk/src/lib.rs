@@ -15,6 +15,7 @@
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
+use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -50,8 +51,6 @@ use keyboard::{
 };
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
-pub use rmk_config as config;
-use rmk_config::RmkConfig;
 pub use rmk_macro as macros;
 use usb::KeyboardUsbDevice;
 use via::process::VialService;
@@ -61,6 +60,7 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+pub mod config;
 mod debounce;
 pub mod direct_pin;
 mod flash;
@@ -85,6 +85,9 @@ pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
+/// Whethe the connection is ready.
+/// After the connection is ready, the matrix starts scanning
+pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -307,9 +310,10 @@ pub(crate) async fn run_usb_keyboard<
     >,
 ) -> ! {
     loop {
+        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
         let usb_fut = usb_device.device.run();
         let keyboard_fut = keyboard.run();
-        let matrix_fut = matrix.scan();
+        let matrix_fut = matrix.run();
         let communication_fut = communication_task(
             keyboard_report_receiver,
             &mut usb_device.keyboard_hid_writer,

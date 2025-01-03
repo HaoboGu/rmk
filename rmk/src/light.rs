@@ -1,10 +1,10 @@
+use crate::config::{LightConfig, LightPinConfig};
 use crate::hid::HidReaderWrapper;
 use bitfield_struct::bitfield;
 use defmt::{debug, error, warn, Format};
 use embassy_futures::select::select;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use embedded_hal::digital::{Error, OutputPin, PinState};
-use rmk_config::{LightConfig, LightPinConfig};
 
 pub(crate) static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 8> = Channel::new();
 

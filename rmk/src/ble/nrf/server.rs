@@ -4,6 +4,7 @@ use super::{
     hid_service::{HidService, HidServiceEvent},
     vial_service::{BleVialService, VialServiceEvent},
 };
+use crate::config::KeyboardUsbConfig;
 use crate::{
     ble::device_info::{DeviceInformation, PnPID, VidSource},
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
@@ -17,7 +18,6 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
-use rmk_config::KeyboardUsbConfig;
 use usbd_hid::descriptor::AsInputReport;
 
 /// Wrapper struct for writing via BLE
@@ -175,7 +175,6 @@ impl gatt_server::Server for BleServer {
                 }
             }
         }
-
         if let Some(event) = self.vial.on_write(handle, data) {
             match event {
                 VialServiceEvent::InputVialKeyCccdWrite => {

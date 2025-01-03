@@ -22,6 +22,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] Direct pin
   - [ ] 🔴 RGB
   - [ ] 🟢 encoder
+  - [ ] 🔵 Input device
   - [ ] 🔵 display support
 
 #### Wireless
@@ -37,8 +38,10 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 #### User experience
   - [x] vial support
   - [x] easy keyboard configuration with good default, support different MCUs
+  - [ ] Versioned documentation site, better documentation
+  - [ ] CLI and GUI tool for project generation, firmware compilation, etc
   - [ ] making vial and default keymap consistent automatically
-  - [ ] 🔴🔵 GUI configurator which supports windows/macos/linux/web
+  - [ ] 🔴🔵 GUI keymap configurator which supports windows/macos/linux/web
   - [ ] default bootloader
   - [ ] USB DFU/OTA
 

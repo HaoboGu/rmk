@@ -1,5 +1,26 @@
 # FAQ
 
+### My matrix is row2col, the matrix doesn't work
+
+RMK enables `col2row` as the default feature. To use the row2col matrix, you have to change your `Cargo.toml`, adds `default-features = false` to RMK crate, disabling the `col2row` feature.
+
+```toml
+# Cargo.toml
+rmk = { version = "0.5", default-features = false, features = ["nrf52840_ble", "async_matrix"] }
+```
+
+If you're using the cloud compilation, you have to update your `keyboard.toml`, add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
+
+```toml
+# keyboard.toml
+[matrix]
+row2col = true
+
+# Or
+[split.central.matrix]
+row2col = true
+```
+
 ### Where is my built firmware?
 
 By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./user_guide/2_setup_environment.md/#3-install-your-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
@@ -36,7 +57,17 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   cargo make uf2 --release
   ```
   
-  This script requires you have `python` command available in your commandline. Some platforms have `python3` command only, you can change `python` in `Makefile.toml` to `python3` in this case.
+### I changed keymap in `keyboard.toml`, but the keyboard is not updated
+
+RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
+
+```toml
+[storage]
+# Set `clear_storage` to true to clear all the stored info when the keyboard boots
+clear_storage = true
+```
+
+Note that the storage will be clear EVERYTIME you reboot the keyboard.
 
 ### I can see a `RMK Start` log, but nothing else
 
@@ -85,7 +116,7 @@ ERROR Keymap reading aborted!
 └─ rmk::keymap::{impl#0}::new_from_storage::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/keymap.rs:38  
 ```
 
-If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
+If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
 ### panicked at embassy-executor: task arena is full.
 
@@ -122,5 +153,5 @@ If you're comfortable with nightly Rust, you can enable `nightly` feature of emb
 
 ### RMK breaks my bootloader
 
-By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk-config/latest/rmk_config/keyboard_config/struct.RmkConfig.html) if you're using Rust API.
+By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 

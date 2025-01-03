@@ -1,6 +1,7 @@
 mod eeconfig;
 pub mod nor_flash;
 
+use crate::config::StorageConfig;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
@@ -9,10 +10,9 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use rmk_config::StorageConfig;
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, store_item, SerializationError, Value},
+    map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
 #[cfg(feature = "_nrf_ble")]
@@ -380,13 +380,19 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             );
             start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
-        info!("storage range {}", storage_range);
 
         let mut storage = Self {
             flash,
             storage_range,
             buffer: [0; get_buffer_size()],
         };
+
+        if config.clear_storage {
+            // Clear storage
+            let _ =
+                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
+                    .await;
+        }
 
         // Check whether keymap and configs have been storaged in flash
         if !storage.check_enable().await {
@@ -555,44 +561,32 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
-        for (layer, layer_data) in keymap.iter_mut().enumerate() {
-            for (row, row_data) in layer_data.iter_mut().enumerate() {
-                for (col, value) in row_data.iter_mut().enumerate() {
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
-                    let item = match fetch_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut NoCache::new(),
-                        &mut self.buffer,
-                        &key,
-                    )
-                    .await
-                    {
-                        Ok(Some(StorageData::KeymapKey(k))) => k.action,
-                        Ok(None) => {
-                            error!("Got none when reading keymap from storage at (layer,col,row)=({},{},{})", layer, col, row);
-                            return Err(());
-                        }
-                        Err(e) => {
-                            print_storage_error::<F>(e);
-                            error!(
-                                "Load keymap key from storage error: (layer,col,row)=({},{},{})",
-                                layer, col, row
-                            );
-                            return Err(());
-                        }
-                        _ => {
-                            error!(
-                                "Load keymap key from storage error: (layer,col,row)=({},{},{})",
-                                layer, col, row
-                            );
-                            return Err(());
-                        }
-                    };
-                    *value = item;
+        let mut storage_cache = NoCache::new();
+        if let Ok(mut key_iterator) = fetch_all_items::<u32, _, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut storage_cache,
+            &mut self.buffer,
+        )
+        .await
+        {
+            // Iterator the storage, read all keymap keys
+            while let Ok(Some((_key, item))) = key_iterator
+                .next::<u32, StorageData>(&mut self.buffer)
+                .await
+            {
+                match item {
+                    StorageData::KeymapKey(key) => {
+                        assert!(key.layer < NUM_LAYER);
+                        assert!(key.row < ROW);
+                        assert!(key.col < COL);
+                        keymap[key.layer][key.row][key.col] = key.action;
+                    }
+                    _ => continue,
                 }
             }
-        }
+        };
+
         Ok(())
     }
 

@@ -3,7 +3,7 @@
 # runner = "qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic -semihosting-config enable=on,target=native -kernel"
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-# Have to use simmsb's elf2uf2 fork to flash https://github.com/simmsb/elf2uf2-rs 
+# Have to use simmsb's elf2uf2 fork to flash https://github.com/simmsb/elf2uf2-rs
 # runner = "elf2uf2-rs -d"
 runner = "probe-rs run --chip nRF52840_xxAA"
 linker = "flip-link"

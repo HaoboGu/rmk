@@ -3,10 +3,11 @@ name: Build
 on:
   push:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-config/**", "rmk-macro/**"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**"]
   pull_request:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-config/**", "rmk-macro/**"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**"]
+  workflow_dispatch:
 
 # Cancel any currently running workflows from the same PR, branch, or
 # tag when a new workflow is triggered.
@@ -20,64 +21,97 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_examples:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        example:
+          - nrf52832_ble
+          - nrf52840_ble
+          - nrf52840_ble_split
+          - rp2040
+          - rp2040_split
+          - rp2040_direct_pin
+          - stm32f1
+          - stm32f4
+          - stm32h7
+        example_type:
+          - use_rust
+          - use_config
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf thumbv6m-none-eabi thumbv7em-none-eabi
       - name: Install cargo-make
-        run: cargo install --force cargo-make
-      - name: Build rmk
-        working-directory: ./rmk
-        run: cargo build --release 
-      - name: Build rp2040
-        working-directory: ./examples/use_rust/rp2040
+        run: cargo binstall cargo-make
+      - name: Install target
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
+      - name: Build example
+        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
-      - name: Build rp2040 with config
-        working-directory: ./examples/use_config/rp2040
-        run: cargo make uf2 --release
-      - name: Build stm32h7
-        working-directory: ./examples/use_rust/stm32h7
-        run: cargo make uf2 --release
-      - name: Build stm32h7 with config
-        working-directory: ./examples/use_config/stm32h7
-        run: cargo make uf2 --release
-      - name: Build stm32f1
-        working-directory: ./examples/use_rust/stm32f1
-        run: cargo make uf2 --release
-      - name: Build stm32f1 with config
-        working-directory: ./examples/use_config/stm32f1
-        run: cargo make uf2 --release
-      - name: Build stm32f4
-        working-directory: ./examples/use_rust/stm32f4
-        run: cargo make uf2 --release
-      - name: Build stm32f4 with config
-        working-directory: ./examples/use_config/stm32f4
-        run: cargo make uf2 --release
-      - name: Build nrf52840_ble
-        working-directory: ./examples/use_rust/nrf52840_ble
-        run: cargo make uf2 --release
-      - name: Build nrf52832_ble
-        working-directory: ./examples/use_rust/nrf52832_ble
-        run: cargo make uf2 --release
-      - name: Build nrf52840_ble with config
+  binary-size:
+    # Copied from sequential-storage: https://github.com/tweedegolf/sequential-storage/blob/master/.github/workflows/ci.yaml
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/cache@v3
+        id: cache-cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./example/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install flip-link
+        run: cargo install flip-link --force
+      - run: rustup target add thumbv7em-none-eabihf
+      - run: rustup component add rust-src llvm-tools
+      - if: steps.cache-cargo.outputs.cache-hit != 'true'
+        run: cargo install cargo-binutils
+      - name: Check out the repo with the full git history
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: "0"
+      - name: Build new binary
         working-directory: ./examples/use_config/nrf52840_ble
-        run: cargo make uf2 --release
-      - name: Build nrf52832_ble with config
-        working-directory: ./examples/use_config/nrf52832_ble
-        run: cargo make uf2 --release
-      - name: Build rp2040 split
-        working-directory: ./examples/use_rust/rp2040_split
-        run: cargo make uf2 --release
-      - name: Build rp2040 split with config
-        working-directory: ./examples/use_config/rp2040_split
-        run: cargo make uf2 --release
-      - name: Build nrf52840 split
-        working-directory: ./examples/use_rust/nrf52840_ble_split
-        run: cargo make uf2 --release
-      - name: Build rp2040 split with config
-        working-directory: ./examples/use_config/nrf52840_ble_split
-        run: cargo make uf2 --release
-        
+        run: |
+          echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
+          cargo size --release >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+        id: new-size
+      - name: Save binary
+        run: |
+          mv ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/rmk-nrf52840 ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/original.elf
+      - name: If it's a PR checkout the base commit
+        if: ${{ github.event.pull_request }}
+        run: git checkout -f ${{ github.event.pull_request.base.sha }}
+      - name: Rebuild with the base commit
+        if: ${{ github.event.pull_request }}
+        working-directory: ./examples/use_config/nrf52840_ble
+        run: cargo build --release
+      - name: Run Bloaty to compare both output files
+        if: ${{ github.event.pull_request }}
+        id: bloaty-comparison
+        uses: carlosperate/bloaty-action@v1
+        with:
+          bloaty-args: ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/original.elf -- ./examples/use_config/nrf52840_ble/target/thumbv7em-none-eabihf/release/rmk-nrf52840
+          output-to-summary: true
+      - name: Add a PR comment with the bloaty diff
+        if: ${{ github.event.pull_request }}
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## PR build size\n \`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n ### Diff\n\`\`\`\n${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}\`\`\`\n`
+            })

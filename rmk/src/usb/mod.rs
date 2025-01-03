@@ -9,13 +9,14 @@ use embassy_usb::{
     driver::Driver,
     Builder, Handler, UsbDevice,
 };
-use rmk_config::KeyboardUsbConfig;
 use static_cell::StaticCell;
-use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
+use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::{
+    config::KeyboardUsbConfig,
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
+    CONNECTION_STATE,
 };
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
@@ -88,6 +89,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.product = Some(keyboard_config.product_name);
         usb_config.serial_number = Some(keyboard_config.serial_number);
         usb_config.max_power = 450;
+        usb_config.supports_remote_wakeup = true;
 
         // Required for windows compatibility.
         usb_config.max_packet_size_0 = 64;
@@ -121,7 +123,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         // Initialize two hid interfaces: keyboard & via
         static keyboard_request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
         let keyboard_hid_config = Config {
-            report_descriptor: KeyboardReport::desc(),
+            report_descriptor: crate::usb::descriptor::KeyboardReport::desc(),
             request_handler: Some(keyboard_request_handler.init(UsbRequestHandler {})),
             poll_ms: 1,
             max_packet_size: 64,
@@ -212,6 +214,7 @@ impl Handler for UsbDeviceHandler {
     fn configured(&mut self, configured: bool) {
         if configured {
             USB_STATE.store(UsbState::Configured as u8, Ordering::Relaxed);
+            CONNECTION_STATE.store(true, Ordering::Release);
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);

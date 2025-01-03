@@ -14,14 +14,18 @@ args = ["objcopy", "--release", "--", "-O", "ihex", "rmk.hex"]
 dependencies = ["install-llvm-tools", "flip-link"]
 
 [tasks.uf2]
-command = "python"
+install_crate = { crate_name = "cargo-hex-to-uf2", binary = "cargo", test_arg = [
+    "hex-to-uf2",
+    "--help",
+] }
+command = "cargo"
 args = [
-    "../../../scripts/uf2conv.py",
+    "hex-to-uf2",
+    "--input-path",
     "rmk.hex",
-    "-c",
-    "-f",
-    "0x2dc309c5",                  # Use your chip family ID in the uf2conv.py file as -f argument
-    "-o",
+    "--output-path",
     "rmk.uf2",
+    "--family",
+    "stm32f4",
 ]
 dependencies = ["objcopy"]

@@ -46,14 +46,15 @@
 ## Usage
 
 ### Option 1: Initialize from template
-You can use [rmk-template](https://github.com/HaoboGu/rmk-template) to initialize your project.
+
+You can use [rmkit](https://github.com/HaoboGu/rmkit) to initialize your project from RMK [project template](https://github.com/HaoboGu/rmk-template/tree/feat/rework).
 
 ```shell
-cargo install cargo-generate flip-link
-cargo generate --git https://github.com/HaoboGu/rmk-template
+cargo install rmkit flip-link
+rmkit init
 ```
 
-Then follow the steps in generated `README.md`. Check RMK's [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) for details.
+Check RMK's [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) for details.
 
 ### Option 2: Try built-in examples
 
@@ -71,7 +72,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo build
+   cargo build --release
    ```
 
 3. Flash using debug probe
@@ -80,7 +81,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo run
+   cargo run --release
    ```
 
 4. (Optional) Flash using USB
@@ -97,7 +98,7 @@ Example can be found at [`examples`](https://github.com/HaoboGu/rmk/blob/main/ex
    4. Flash
       ```shell
       cd examples/use_rust/rp2040
-      cargo run
+      cargo run --release
       ```
       Then, you will see logs like if everything goes right:
       ```shell

@@ -2,7 +2,6 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::toml_config::{SerialConfig, SplitConfig};
 use syn::ItemMod;
 
 use crate::{
@@ -11,13 +10,14 @@ use crate::{
     ble::expand_ble_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
+    config::{MatrixType, SerialConfig, SplitConfig},
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
     keyboard::gen_imports,
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     light::expand_light_config,
-    matrix::expand_matrix_input_output_pins,
+    matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
     ChipModel, ChipSeries,
 };
 
@@ -77,12 +77,55 @@ fn expand_split_central(
     let light_config = expand_light_config(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
 
-    let matrix_config = expand_matrix_input_output_pins(
-        &keyboard_config.chip,
-        split_config.central.input_pins.clone(),
-        split_config.central.output_pins.clone(),
-        async_matrix,
-    );
+    let mut matrix_config = proc_macro2::TokenStream::new();
+    match &split_config.central.matrix.matrix_type {
+        MatrixType::normal => {
+            matrix_config.extend(expand_matrix_input_output_pins(
+                &keyboard_config.chip,
+                split_config
+                    .central
+                    .matrix
+                    .input_pins
+                    .clone()
+                    .expect("split.central.matrix.input_pins is required"),
+                split_config
+                    .central
+                    .matrix
+                    .output_pins
+                    .clone()
+                    .expect("split.central.matrix.output_pins is required"),
+                async_matrix,
+            ));
+        }
+        MatrixType::direct_pin => {
+            matrix_config.extend(expand_matrix_direct_pins(
+                &keyboard_config.chip,
+                split_config
+                    .central
+                    .matrix
+                    .direct_pins
+                    .clone()
+                    .expect("split.central.matrix.direct_pins is required"),
+                async_matrix,
+                split_config.central.matrix.direct_pin_low_active,
+            ));
+            // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
+            // So we need to declaring them in advance.
+            let rows = keyboard_config.layout.rows as usize;
+            let cols = keyboard_config.layout.cols as usize;
+            let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
+            let layers = keyboard_config.layout.layers as usize;
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+            matrix_config.extend(quote! {
+                pub(crate) const ROW: usize = #rows;
+                pub(crate) const COL: usize = #cols;
+                pub(crate) const SIZE: usize = #size;
+                pub(crate) const LAYER_NUM: usize = #layers;
+                let low_active = #low_active;
+            });
+        }
+    }
+
     let split_communication_config =
         expand_split_communication_config(&keyboard_config.chip, split_config);
     let run_rmk = expand_split_central_entry(keyboard_config, split_config);
@@ -158,27 +201,49 @@ fn expand_split_central_entry(
     let central_col_offset = split_config.central.col_offset;
     match keyboard_config.chip.series {
         ChipSeries::Stm32 => {
-            let usb_info = keyboard_config.communication.get_usb_info().unwrap();
+            let usb_info = keyboard_config
+                .communication
+                .get_usb_info()
+                .expect("get_usb_info returned None");
             let usb_name = format_ident!("{}", usb_info.peripheral_name);
             let usb_mod_path = if usb_info.peripheral_name.contains("OTG") {
                 format_ident!("{}", "usb_otg")
             } else {
                 format_ident!("{}", "usb")
             };
-            let central_task = quote! {
-                ::rmk::split::central::run_rmk_split_central::<
-                    ::embassy_stm32::gpio::Input<'_>,
-                    ::embassy_stm32::gpio::Output<'_>,
-                    ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
-                    ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
-                    ROW,
-                    COL,
-                    #central_row,
-                    #central_col,
-                    #central_row_offset,
-                    #central_col_offset,
-                    NUM_LAYER,
-                >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    ::rmk::split::central::run_rmk_split_central::<
+                        ::embassy_stm32::gpio::Input<'_>,
+                        ::embassy_stm32::gpio::Output<'_>,
+                        ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                        ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                    >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, , spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_stm32::gpio::Input<'_>,
+                        ::embassy_stm32::gpio::Output<'_>,
+                        ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                        ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, flash, &mut get_default_keymap(), keyboard_config, #low_active, spawner)
+                },
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config
@@ -212,19 +277,37 @@ fn expand_split_central_entry(
                 .central
                 .ble_addr
                 .expect("No ble_addr defined for central");
-            let central_task = quote! {
-                ::rmk::split::central::run_rmk_split_central::<
-                    ::embassy_nrf::gpio::Input<'_>,
-                    ::embassy_nrf::gpio::Output<'_>,
-                    ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
-                    ROW,
-                    COL,
-                    #central_row,
-                    #central_col,
-                    #central_row_offset,
-                    #central_col_offset,
-                    NUM_LAYER,
-                >(input_pins, output_pins, driver, &mut get_default_keymap(), keyboard_config, [#(#central_addr), *], spawner)
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    ::rmk::split::central::run_rmk_split_central::<
+                        ::embassy_nrf::gpio::Input<'_>,
+                        ::embassy_nrf::gpio::Output<'_>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                    >(input_pins, output_pins, driver, &mut get_default_keymap(), keyboard_config, [#(#central_addr), *], spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_nrf::gpio::Input<'_>,
+                        ::embassy_nrf::gpio::Output<'_>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, &mut get_default_keymap(), keyboard_config, #low_active, [#(#central_addr), *], spawner)
+                },
             };
             let mut tasks = vec![central_task];
             split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
@@ -243,7 +326,10 @@ fn expand_split_central_entry(
             join_all_tasks(tasks)
         }
         ChipSeries::Rp2040 => {
-            let central_task = quote! {
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
                 ::rmk::split::central::run_rmk_split_central::<
                     ::embassy_rp::gpio::Input<'_>,
                     ::embassy_rp::gpio::Output<'_>,
@@ -257,6 +343,23 @@ fn expand_split_central_entry(
                     #central_col_offset,
                     NUM_LAYER,
                 >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_rp::gpio::Input<'_>,
+                        ::embassy_rp::gpio::Output<'_>,
+                        ::embassy_rp::usb::Driver<'_, ::embassy_rp::peripherals::USB>,
+                        ::embassy_rp::flash::Flash<::embassy_rp::peripherals::FLASH, ::embassy_rp::flash::Async, FLASH_SIZE>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, flash, &mut get_default_keymap(), keyboard_config, #low_active, spawner)
+                },
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config
@@ -293,7 +396,10 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
     match &split_config.connection[..] {
         "ble" => {
             // We need to create addrs for BLE
-            let central_addr = split_config.central.ble_addr.unwrap();
+            let central_addr = split_config
+                .central
+                .ble_addr
+                .expect("central.ble_addr is required");
             let mut peripheral_addrs = proc_macro2::TokenStream::new();
             split_config
                 .peripheral
@@ -312,7 +418,11 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
         }
         "serial" => {
             // We need to initialize serial instance for serial
-            let serial_config: Vec<SerialConfig> = split_config.central.serial.clone().unwrap();
+            let serial_config: Vec<SerialConfig> = split_config
+                .central
+                .serial
+                .clone()
+                .expect("central.serial is required");
             expand_serial_init(chip, serial_config)
         }
         _ => panic!("Invalid connection type for split"),

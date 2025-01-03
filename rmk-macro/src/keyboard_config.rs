@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::{
-    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
-    LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
-};
 use serde::Deserialize;
 use std::fs;
 
+use crate::config::{
+    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
+    LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+};
 use crate::{
     default_config::{
         esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,
@@ -71,7 +71,7 @@ pub(crate) struct KeyboardConfig {
     pub(crate) board: BoardConfig,
     // Layout config
     pub(crate) layout: LayoutConfig,
-    // Begavior Config
+    // Behavior Config
     pub(crate) behavior: BehaviorConfig,
     // Light config
     pub(crate) light: LightConfig,
@@ -186,7 +186,7 @@ impl KeyboardConfig {
     ///
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
-        if config.keyboard.board.is_none() ^ config.keyboard.board.is_none() {
+        if config.keyboard.board.is_none() == config.keyboard.chip.is_none() {
             let message = format!(
                 "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both"
             );
@@ -339,7 +339,9 @@ impl KeyboardConfig {
         split: Option<SplitConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
-            (None, Some(s)) => Ok(BoardConfig::Split(s)),
+            (None, Some(s)) => {
+                Ok(BoardConfig::Split(s))
+            },
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
@@ -438,6 +440,7 @@ impl KeyboardConfig {
                     None => default.tri_layer,
                 };
 
+                behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
 
                 Ok(behavior)
@@ -464,6 +467,7 @@ impl KeyboardConfig {
             // Use default setting if the corresponding field is not set
             storage.start_addr = storage.start_addr.or(default.start_addr);
             storage.num_sectors = storage.num_sectors.or(default.num_sectors);
+            storage.clear_storage = storage.clear_storage.or(default.clear_storage);
             storage
         } else {
             default
@@ -506,7 +510,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
-        static KEYBOARD_USB_CONFIG: ::rmk::config::keyboard_config::KeyboardUsbConfig = ::rmk::config::keyboard_config::KeyboardUsbConfig {
+        static KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,
             manufacturer: #manufacturer,
@@ -519,7 +523,7 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
 pub(crate) fn expand_vial_config() -> proc_macro2::TokenStream {
     quote! {
         include!(concat!(env!("OUT_DIR"), "/config_generated.rs"));
-        static VIAL_CONFIG: ::rmk::config::keyboard_config::VialConfig = ::rmk::config::keyboard_config::VialConfig {
+        static VIAL_CONFIG: ::rmk::config::VialConfig = ::rmk::config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
         };

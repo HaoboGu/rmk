@@ -66,23 +66,6 @@ impl ModifierCombination {
         let mut i = 0;
         if self.right() {
             if self.ctrl() {
-                keycodes[i] = KeyCode::LCtrl;
-                i += 1;
-            }
-            if self.shift() {
-                keycodes[i] = KeyCode::LShift;
-                i += 1;
-            }
-            if self.alt() {
-                keycodes[i] = KeyCode::LAlt;
-                i += 1;
-            }
-            if self.gui() {
-                keycodes[i] = KeyCode::LGui;
-                i += 1;
-            }
-        } else {
-            if self.ctrl() {
                 keycodes[i] = KeyCode::RCtrl;
                 i += 1;
             }
@@ -96,6 +79,23 @@ impl ModifierCombination {
             }
             if self.gui() {
                 keycodes[i] = KeyCode::RGui;
+                i += 1;
+            }
+        } else {
+            if self.ctrl() {
+                keycodes[i] = KeyCode::LCtrl;
+                i += 1;
+            }
+            if self.shift() {
+                keycodes[i] = KeyCode::LShift;
+                i += 1;
+            }
+            if self.alt() {
+                keycodes[i] = KeyCode::LAlt;
+                i += 1;
+            }
+            if self.gui() {
+                keycodes[i] = KeyCode::LGui;
                 i += 1;
             }
         }

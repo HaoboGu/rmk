@@ -3,12 +3,12 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
-use embassy_time::Duration;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
+use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 
 /// Internal configurations for RMK keyboard.
@@ -44,7 +44,27 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 #[derive(Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
+    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+}
+
+/// Configurations for tap hold behavior
+pub struct TapHoldConfig {
+    pub enable_hrm: bool,
+    pub prior_idle_time: Duration,
+    pub post_wait_time: Duration,
+    pub hold_timeout: Duration,
+}
+
+impl Default for TapHoldConfig {
+    fn default() -> Self {
+        Self {
+            enable_hrm: false,
+            prior_idle_time: Duration::from_millis(120),
+            post_wait_time: Duration::from_millis(50),
+            hold_timeout: Duration::from_millis(250),
+        }
+    }
 }
 
 /// Config for one shot behavior
@@ -68,6 +88,7 @@ pub struct StorageConfig {
     pub start_addr: usize,
     // Number of sectors used for storage, >= 2.
     pub num_sectors: u8,
+    pub clear_storage: bool,
 }
 
 impl Default for StorageConfig {
@@ -75,6 +96,7 @@ impl Default for StorageConfig {
         Self {
             start_addr: 0,
             num_sectors: 2,
+            clear_storage: false,
         }
     }
 }

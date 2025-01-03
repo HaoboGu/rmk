@@ -56,6 +56,7 @@ pub enum MatrixType {
     direct_pin,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct MatrixConfig {
     #[serde(default)]
@@ -65,6 +66,8 @@ pub struct MatrixConfig {
     pub direct_pins: Option<Vec<Vec<String>>>,
     #[serde(default = "default_true")]
     pub direct_pin_low_active: bool,
+    #[serde(default = "default_false")]
+    pub row2col: bool,
 }
 
 /// Config for storage
@@ -77,6 +80,8 @@ pub struct StorageConfig {
     pub num_sectors: Option<u8>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    // Clear on the storage at reboot, set this to true if you want to reset the keymap
+    pub clear_storage: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
@@ -131,7 +136,17 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
+    pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
+}
+
+/// Configurations for tap hold
+#[derive(Clone, Debug, Deserialize)]
+pub struct TapHoldConfig {
+    pub enable_hrm: Option<bool>,
+    pub prior_idle_time: Option<DurationMillis>,
+    pub post_wait_time: Option<DurationMillis>,
+    pub hold_timeout: Option<DurationMillis>,
 }
 
 /// Configurations for tri layer
@@ -173,10 +188,7 @@ pub struct SplitBoardConfig {
     pub ble_addr: Option<[u8; 6]>,
     /// Serial config, the vector length should be 1 for peripheral
     pub serial: Option<Vec<SerialConfig>>,
-    /// Input pin config
-    pub input_pins: Vec<String>,
-    /// Output pin config
-    pub output_pins: Vec<String>,
+    pub matrix: MatrixConfig,
 }
 
 /// Serial port config
@@ -191,8 +203,12 @@ pub struct SerialConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
+}
+
+const fn default_false() -> bool {
+    false
 }
 
 fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
@@ -206,8 +222,10 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     })?;
 
     match unit {
-        "s" => Ok(num*1000),
+        "s" => Ok(num * 1000),
         "ms" => Ok(num),
-        other => Err(de::Error::custom(format!("Invalid unit \"{other}\" in [one_shot.timeout]: unit part must be either \"s\" or \"ms\""))),
+        other => Err(de::Error::custom(format!(
+            "Invalid duration unit \"{other}\": unit part must be either \"s\" or \"ms\""
+        ))),
     }
 }

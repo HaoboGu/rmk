@@ -9,10 +9,10 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::config::BleBatteryConfig;
 use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-use crate::KEYBOARD_STATE;
 use crate::{
     ble::{
         ble_communication_task,
@@ -27,6 +27,7 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
+use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -40,13 +41,13 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
+use nrf_softdevice::ble::{PhySet, PhyUpdateError, TxPower};
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
     ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
     raw, Config, Flash, Softdevice,
 };
 use profile::update_profile;
-use rmk_config::BleBatteryConfig;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
 use vial_service::VialReaderWriter;
@@ -178,7 +179,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             central_role_count: 4,
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
-            central_sec_count: 0,
+            central_sec_count: 2,
             #[cfg(not(any(feature = "nrf52810_ble", feature = "nrf52811_ble")))]
             _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
         }),
@@ -190,6 +191,12 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
                 raw::BLE_GATTS_VLOC_STACK as u8,
             ),
+        }),
+        conn_gattc: Some(raw::ble_gattc_conn_cfg_t {
+            write_cmd_tx_queue_size: 4,
+        }),
+        conn_gatts: Some(raw::ble_gatts_conn_cfg_t {
+            hvn_tx_queue_size: 4,
         }),
         ..Default::default()
     }
@@ -309,6 +316,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
         let mut config = peripheral::Config::default();
         // Interval: 500ms
         config.interval = 800;
+        config.tx_power = TxPower::Plus4dBm;
         let adv = ConnectableAdvertisement::ScannableUndirected {
             adv_data: &create_advertisement_data(keyboard_name),
             scan_data: &SCAN_DATA,
@@ -347,9 +355,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     // USB is connected, but connection type is BLE, try BLE while running USB keyboard
                     info!("Running USB keyboard, while advertising");
                     let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-                    // TODO: Test power consumption in this case
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
-                        Either3::First(Ok(conn)) => {
+                        Either3::First(Ok(mut conn)) => {
                             info!("Connected to BLE");
                             // Check whether the peer address is matched with current profile
                             if !bonder.check_connection(&conn) {
@@ -359,6 +366,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                 continue;
                             }
                             bonder.load_sys_attrs(&conn);
+                            if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                                error!("Failed to update PHY");
+                                if let PhyUpdateError::Raw(re) = e {
+                                    error!("Raw error code: {:?}", re);
+                                }
+                            }
                             // Run the ble keyboard, wait for disconnection or USB connect
                             match select3(
                                 run_ble_keyboard(
@@ -381,6 +394,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                                 Either3::Second(_) => info!("Detected USB configured, quit BLE"),
                                 Either3::Third(_) => info!("Switch profile"),
                             }
+                            bonder.save_sys_attrs(&conn);
                         }
                         _ => {
                             // Wait 10ms
@@ -402,7 +416,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                 info!("BLE advertising");
                 // Wait for BLE or USB connection
                 match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
-                    Either3::First(Ok(conn)) => {
+                    Either3::First(Ok(mut conn)) => {
                         info!("Connected to BLE");
                         // Check whether the peer address is matched with current profile
                         if !bonder.check_connection(&conn) {
@@ -410,6 +424,12 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                             continue;
                         }
                         bonder.load_sys_attrs(&conn);
+                        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                            error!("Failed to update PHY");
+                            if let PhyUpdateError::Raw(re) = e {
+                                error!("Raw error code: {:?}", re);
+                            }
+                        }
                         // Run the ble keyboard, wait for disconnection
                         match select3(
                             run_ble_keyboard(
@@ -432,6 +452,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                             Either3::Second(_) => info!("Detected USB configured, quit BLE"),
                             Either3::Third(_) => info!("Switch profile"),
                         }
+                        bonder.save_sys_attrs(&conn);
                     }
                     _ => {
                         // Wait 10ms for usb resuming/switching profile/advertising error
@@ -443,8 +464,14 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
 
         #[cfg(feature = "_no_usb")]
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
-            Ok(conn) => {
+            Ok(mut conn) => {
                 bonder.load_sys_attrs(&conn);
+                if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+                    error!("Failed to update PHY");
+                    if let PhyUpdateError::Raw(re) = e {
+                        error!("Raw error code: {:?}", re);
+                    }
+                }
                 select(
                     run_ble_keyboard(
                         &conn,
@@ -460,6 +487,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
                     update_profile(bonder),
                 )
                 .await;
+                bonder.save_sys_attrs(&conn);
             }
             Err(e) => error!("Advertise error: {}", e),
         }
@@ -487,7 +515,7 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
             );
             debug!("Set conn params result: {:?}", re);
 
-            embassy_time::Timer::after_millis(50).await;
+            embassy_time::Timer::after_millis(5000).await;
 
             // Setting the conn param the second time ensures that we have best performance on all platforms
             let re = sd_ble_gap_conn_param_update(
@@ -527,6 +555,8 @@ pub(crate) async fn run_dummy_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
+    // Don't need to wait for connection, just do scanning to detect if there's a profile update
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
@@ -583,6 +613,7 @@ pub(crate) async fn run_ble_keyboard<
         REPORT_CHANNEL_SIZE,
     >,
 ) {
+    CONNECTION_STATE.store(false, Ordering::Release);
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
     let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
@@ -597,7 +628,7 @@ pub(crate) async fn run_ble_keyboard<
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
     let led_fut = led_service_task(light_service);
-    let matrix_fut = matrix.scan();
+    let matrix_fut = matrix.run();
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard.run();

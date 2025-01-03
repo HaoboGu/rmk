@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2024-12-16
+
+### Added
+
+- Add `split.central.matrix` and `split.peripheral.matrix` for split matrix configurations
+- Add `clear_storage` option
+
+### Removed
+
+- BREAKING: Removed `split.central.input_pins` and `split.central.output_pins`
+- BREAKING: Removed `split.peripheral.input_pins` and `split.peripheral.output_pins`
+
+## [0.3.4] - 2024-11-27
+
+### Changed
+
+- Remove `rmk-config`
+
 ## [0.3.3] - 2024-11-27
+
+### Fixed
 
 - Fix link error on Windows
 
@@ -32,12 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add default config for chips
-- Implemented `keyboard.toml` parsing for the new `WM(key, modifier)` "With Modifier" macro 
+- Implemented `keyboard.toml` parsing for the new `WM(key, modifier)` "With Modifier" macro
 
 ### Changed
 
 - BREAKING: refactor the whole macro crate, update `keyboard.toml` fields
-- Use reference of keymap in `run_rmk` 
+- Use reference of keymap in `run_rmk`
 
 ### Fixed
 
@@ -65,11 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix broken link in error message
 
-## [0.1.8] - 2024-08-06 
+## [0.1.8] - 2024-08-06
 
 - Update `embassy-nrf` and `embassy-rp` version
 
-## [0.1.7] - 2024-07-25 
+## [0.1.7] - 2024-07-25
 
 - Fix keymap doesn't update issue [#41](https://github.com/HaoboGu/rmk/issues/41)
 
