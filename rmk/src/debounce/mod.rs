@@ -6,7 +6,7 @@ pub mod fast_debouncer;
 /// Default DEBOUNCE_THRESHOLD in ms.
 static DEBOUNCE_THRESHOLD: u16 = 10;
 
-pub(crate) trait DebouncerTrait {
+pub trait DebouncerTrait {
     fn new() -> Self;
 
     /// The `in_idx` `out_idx` can be used as two normal dimensions.
@@ -20,7 +20,7 @@ pub(crate) trait DebouncerTrait {
 }
 
 /// Debounce state
-pub(crate) enum DebounceState {
+pub enum DebounceState {
     Debounced,
     InProgress,
     Ignored,

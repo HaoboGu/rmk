@@ -59,7 +59,7 @@ pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 pub mod config;
-mod debounce;
+pub mod debounce;
 pub mod direct_pin;
 pub mod event;
 mod flash;
@@ -71,7 +71,7 @@ pub mod keycode;
 mod keymap;
 mod layout_macro;
 mod light;
-mod matrix;
+pub mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
 mod storage;
@@ -225,7 +225,7 @@ pub async fn run_rmk_with_async_flash<
     defmt::panic!("The run_rmk should never return");
 }
 
-pub(crate) async fn initialize_usb_keyboard_and_run<
+pub async fn initialize_usb_keyboard_and_run<
     Out: OutputPin,
     D: Driver<'static>,
     M: MatrixTrait,
