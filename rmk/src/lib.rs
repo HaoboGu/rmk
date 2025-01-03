@@ -206,7 +206,7 @@ pub async fn run_rmk_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
+    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, encoder_map, keyboard_config).await;
 
     #[cfg(all(
         not(feature = "_no_usb"),
@@ -254,7 +254,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap =
+        RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap, encoder_map).await);
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();

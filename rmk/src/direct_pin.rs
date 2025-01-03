@@ -193,7 +193,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     .await;
 
     #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
+    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, encoder_map, keyboard_config).await;
 
     #[cfg(all(
         not(feature = "_no_usb"),

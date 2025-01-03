@@ -83,6 +83,7 @@ mod my_keyboard {
             driver,
             f,
             &mut get_default_keymap(),
+            None,
             keyboard_config,
             spawner,
         )

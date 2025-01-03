@@ -121,6 +121,7 @@ pub async fn run_rmk_split_central<
         usb_driver,
         flash,
         default_keymap,
+        encoder_map,
         keyboard_config,
     )
     .await;
@@ -203,6 +204,7 @@ pub async fn run_rmk_split_central_direct_pin<
         usb_driver,
         flash,
         default_keymap,
+        encoder_map,
         keyboard_config,
     )
     .await;

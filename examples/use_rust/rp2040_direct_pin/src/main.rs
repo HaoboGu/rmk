@@ -81,6 +81,7 @@ async fn main(spawner: Spawner) {
         driver,
         flash,
         &mut keymap::get_default_keymap(),
+        None,
         keyboard_config,
         true,
         spawner,

@@ -131,6 +131,7 @@ async fn main(spawner: Spawner) {
             output_pins,
             driver,
             &mut keymap::get_default_keymap(),
+            None,
             keyboard_config,
             central_addr,
             spawner,
