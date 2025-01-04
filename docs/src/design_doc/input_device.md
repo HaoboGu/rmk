@@ -19,7 +19,7 @@ The input devices can be key matrix or sensors, which read the physical devices,
 
 ```rust
 pub trait InputDevice {
-    /// Event type that input device will send 
+    /// Event type that input device will send
     type EventType;
 
     /// Starts the input device task.
@@ -28,8 +28,8 @@ pub trait InputDevice {
     /// It will be executed concurrently with other input devices using the `run_devices` macro.
     fn run(&mut self) -> impl Future<Output = ()>;
 
-    /// Get the event channel for the input device. All events should be send by this channel.
-    fn get_channel(&self) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    /// Get the event sender for the input device. All events should be send by this channel.
+    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 ```
 
@@ -83,8 +83,11 @@ The input processors receive the event from input devices, process them and conv
 
 ```rust
 pub trait InputProcessor {
-  /// Event type that the input processor receives.
+    /// The event type that the input processor receives.
     type EventType;
+
+    /// The report type that the input processor sends.
+    type ReportType;
 
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
@@ -94,22 +97,20 @@ pub trait InputProcessor {
     /// The input processor implementor should be aware of this.  
     fn process(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
 
-    /// Get the input event channel for the input processor.
+    /// Get the input event channel receiver for the input processor.
     ///
     /// The input processor receives events from this channel, processes the event,
     /// then sends to the report channel.
-    fn get_event_channel(
+    fn event_receiver(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
-    /// Get the output report channel for the input processor.
+    /// Get the output report sender for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
-    fn get_report_channel(
+    fn report_sender(
         &self,
-    ) -> &Channel<CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE> {
-        &KEYBOARD_REPORT_CHANNEL
-    }
+    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.
@@ -118,7 +119,7 @@ pub trait InputProcessor {
     fn run(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
-                let event = self.get_event_channel().receive().await;
+                let event = self.event_receiver().receive().await;
                 self.process(event).await;
             }
         }
