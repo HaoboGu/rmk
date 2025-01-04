@@ -53,7 +53,7 @@ pub trait InputDevice {
     // FIXME: it's not possible in stable to define an associated const and use it as the channel size in stable Rust.
     // It requires #[feature(generic_const_exprs)]:
     //
-    // `fn get_channel(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
+    // `fn event_sender(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
     // So this size is commented out
     // const EVENT_CHANNEL_SIZE: usize = 32;
 
@@ -63,8 +63,8 @@ pub trait InputDevice {
     /// It will be executed concurrently with other input devices using the `run_devices` macro.
     fn run(&mut self) -> impl Future<Output = ()>;
 
-    /// Get the event channel for the input device. All events should be send by this channel.
-    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    /// Get the event sender for the input device. All events should be send by this channel.
+    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
@@ -88,18 +88,18 @@ pub trait InputProcessor {
     /// The input processor implementor should be aware of this.  
     fn process(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
 
-    /// Get the input event channel for the input processor.
+    /// Get the input event channel  receiver for the input processor.
     ///
     /// The input processor receives events from this channel, processes the event,
     /// then sends to the report channel.
-    fn get_event_channel(
+    fn event_receiver(
         &self,
     ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
-    /// Get the output report channel for the input processor.
+    /// Get the output report sender for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
-    fn get_report_channel(
+    fn report_sender(
         &self,
     ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
@@ -110,7 +110,7 @@ pub trait InputProcessor {
     fn run(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
-                let event = self.get_event_channel().receive().await;
+                let event = self.event_receiver().receive().await;
                 self.process(event).await;
             }
         }

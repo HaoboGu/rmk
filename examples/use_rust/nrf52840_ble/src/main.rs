@@ -138,7 +138,7 @@ impl InputDevice for MyDevice {
 
     type EventType = Event;
 
-    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.sender()
     }
 }

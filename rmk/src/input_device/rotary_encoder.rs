@@ -163,7 +163,7 @@ impl<
 
             let direction = self.update();
 
-            self.get_channel()
+            self.event_sender()
                 .send(Event::RotaryEncoder(RotaryEncoderEvent {
                     id: self.id,
                     direction,
@@ -172,7 +172,7 @@ impl<
         }
     }
 
-    fn get_channel(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.sender()
     }
 }
@@ -199,13 +199,13 @@ impl InputProcessor for RotaryEncoderProcessor {
         }
     }
 
-    fn get_event_channel(
+    fn event_receiver(
         &self,
     ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.receiver()
     }
 
-    fn get_report_channel(
+    fn report_sender(
         &self,
     ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
         KEYBOARD_REPORT_CHANNEL.sender()
