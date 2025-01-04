@@ -75,6 +75,7 @@ impl<
             error!("SplitDriver write error: {}", e);
         }
         loop {
+            defmt::info!("test");
             match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_messages) => {
@@ -86,16 +87,16 @@ impl<
                                     error!("Invalid peripheral row/col: {} {}", e.row, e.col);
                                     continue;
                                 }
-                            
+
                                 if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                                // Only when the connection is established, send the key event.
-                                KEY_EVENT_CHANNEL
-                                    .send(KeyEvent {
-                                        row: e.row + ROW_OFFSET as u8,
-                                        col: e.col + COL_OFFSET as u8,
-                                        pressed: e.pressed,
-                                    })
-                                    .await;
+                                    // Only when the connection is established, send the key event.
+                                    KEY_EVENT_CHANNEL
+                                        .send(KeyEvent {
+                                            row: e.row + ROW_OFFSET as u8,
+                                            col: e.col + COL_OFFSET as u8,
+                                            pressed: e.pressed,
+                                        })
+                                        .await;
                                 }
                             } else {
                                 warn!("Key event from peripheral is ignored because the connection is not established.");
