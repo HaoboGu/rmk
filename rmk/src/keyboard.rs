@@ -148,6 +148,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
+    /// Registered key position
+    registered_keys: [Option<(u8, u8)>; 6],
+
     /// Internal composite report: mouse + media(consumer) + system control
     other_report: CompositeReport,
 
@@ -197,6 +200,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 leds: 0,
                 keycodes: [0; 6],
             },
+            registered_keys: Default::default(),
             other_report: CompositeReport::default(),
             via_report: ViaReport {
                 input_data: [0; 32],
@@ -772,9 +776,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         } else if key.is_basic() {
             if key_event.pressed {
-                self.register_key(key);
+                self.register_key(key, key_event);
             } else {
-                self.unregister_key(key);
+                self.unregister_key(key, key_event);
             }
             self.send_keyboard_report().await;
         } else if key.is_macro() {
@@ -948,16 +952,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     // Execute the operation
                     match operation {
                         MacroOperation::Press(k) => {
-                            self.register_key(k);
+                            self.register_key(k, key_event);
                         }
                         MacroOperation::Release(k) => {
-                            self.unregister_key(k);
+                            self.unregister_key(k, key_event);
                         }
                         MacroOperation::Tap(k) => {
-                            self.register_key(k);
+                            self.register_key(k, key_event);
                             self.send_keyboard_report().await;
                             embassy_time::Timer::after_millis(2).await;
-                            self.unregister_key(k);
+                            self.unregister_key(k, key_event);
                         }
                         MacroOperation::Text(k, is_cap) => {
                             if is_cap {
@@ -965,10 +969,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                                 self.register_modifier(KeyCode::LShift.as_modifier_bit());
                                 self.send_keyboard_report().await;
                             }
-                            self.register_keycode(k);
+                            self.register_keycode(k, key_event);
                             self.send_keyboard_report().await;
 
-                            self.unregister_keycode(k);
+                            self.unregister_keycode(k, key_event);
                             if is_cap {
                                 self.send_keyboard_report().await;
                                 self.unregister_modifier(KeyCode::LShift.as_modifier_bit());
@@ -998,34 +1002,70 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Register a key, the key can be a basic keycode or a modifier.
-    fn register_key(&mut self, key: KeyCode) {
+    fn register_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
             self.register_modifier(key.as_modifier_bit());
         } else if key.is_basic() {
-            self.register_keycode(key);
+            self.register_keycode(key, key_event);
         }
     }
 
     /// Unregister a key, the key can be a basic keycode or a modifier.
-    fn unregister_key(&mut self, key: KeyCode) {
+    fn unregister_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
             self.unregister_modifier(key.as_modifier_bit());
         } else if key.is_basic() {
-            self.unregister_keycode(key);
+            self.unregister_keycode(key, key_event);
         }
     }
 
     /// Register a key to be sent in hid report.
-    fn register_keycode(&mut self, key: KeyCode) {
-        if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+    fn register_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // First, find the key event slot according to the position
+        let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
+            if let Some((row, col)) = k {
+                if key_event.row == *row && key_event.col == *col {
+                    return Some(i);
+                }
+            }
+            return None;
+        });
+
+        // If the slot is found, update the key in the slot
+        if let Some(index) = slot {
             self.report.keycodes[index] = key as u8;
+            self.registered_keys[index] = Some((key_event.row, key_event.col));
+        } else {
+            // Otherwise, find the first free slot
+            if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+                self.report.keycodes[index] = key as u8;
+                self.registered_keys[index] = Some((key_event.row, key_event.col));
+            }
         }
     }
 
     /// Unregister a key from hid report.
-    fn unregister_keycode(&mut self, key: KeyCode) {
-        if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+    fn unregister_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // First, find the key event slot according to the position
+        let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
+            if let Some((row, col)) = k {
+                if key_event.row == *row && key_event.col == *col {
+                    return Some(i);
+                }
+            }
+            return None;
+        });
+
+        // If the slot is found, update the key in the slot
+        if let Some(index) = slot {
             self.report.keycodes[index] = 0;
+            self.registered_keys[index] = None;
+        } else {
+            // Otherwise, release the first same key
+            if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+                self.report.keycodes[index] = 0;
+                self.registered_keys[index] = None;
+            }
         }
     }
 
