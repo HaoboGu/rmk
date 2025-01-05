@@ -259,9 +259,11 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
         read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
     {
+        debug!("Loaded active profile: {}", profile);
         ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
     } else {
         // If no saved active profile, use 0 as default
+        debug!("Loaded default active profile",);
         ACTIVE_PROFILE.store(0, Ordering::SeqCst);
     };
 
@@ -567,7 +569,9 @@ pub(crate) async fn run_dummy_keyboard<
             warn!("Dummy service receives")
         }
     };
-
+    // Even for dummy service, we need to set the connection state to true.
+    // So that we can receive the matrix scan result from split, which might be used for profile switching
+    CONNECTION_STATE.store(true, Ordering::Release);
     match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
         Either4::First(_) => (),
         Either4::Second(_) => (),

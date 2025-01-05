@@ -748,6 +748,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Get user key id
                 let id = key as u8 - KeyCode::User0 as u8;
                 if id < 8 {
+                    info!("Switch to profile: {}", id);
                     // User0~7: Swtich to the specific profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::SwitchProfile(id))

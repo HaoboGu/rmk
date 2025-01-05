@@ -150,6 +150,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
+                            info!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
                         }
                         _ => (),

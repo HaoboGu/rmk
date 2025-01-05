@@ -85,7 +85,7 @@ pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
-/// Whethe the connection is ready.
+/// Whether the connection is ready.
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
