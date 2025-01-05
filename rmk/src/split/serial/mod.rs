@@ -80,8 +80,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
 
         let mut start_byte = 0;
         let mut end_byte = start_byte;
-        let mut partial_message = false;
-        while start_byte < self.n_bytes_part {
+        while end_byte < self.n_bytes_part {
             let value = self.buffer[end_byte];
             if value == SENTINEL {
                 postcard::from_bytes_cobs(&mut self.buffer[start_byte..=end_byte]).map_or_else(
@@ -93,17 +92,12 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
                     },
                 );
                 start_byte = end_byte + 1;
-                end_byte = start_byte;
-                continue;
-            } else if end_byte + value as usize >= self.n_bytes_part {
-                partial_message = true;
-                break;
             }
-            // Next Zero Data Byte
-            end_byte += value as usize;
+
+            end_byte += 1;
         }
 
-        if partial_message {
+        if start_byte != self.n_bytes_part {
             // Store Partial Message for Next Read
             self.buffer.copy_within(start_byte..self.n_bytes_part, 0);
             self.n_bytes_part = self.n_bytes_part - start_byte;
