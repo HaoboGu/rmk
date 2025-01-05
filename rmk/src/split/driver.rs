@@ -75,7 +75,6 @@ impl<
             error!("SplitDriver write error: {}", e);
         }
         loop {
-            defmt::info!("test");
             match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_messages) => {
