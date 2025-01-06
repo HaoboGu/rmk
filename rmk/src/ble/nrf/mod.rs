@@ -371,6 +371,8 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                 continue;
                             }
 
+                            bonder.load_sys_attrs(&conn);
+
                             if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                                 error!("Failed to update PHY");
                                 if let PhyUpdateError::Raw(re) = e {
@@ -428,6 +430,8 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                             error!("Bonded peer address doesn't match active profile, disconnect");
                             continue;
                         }
+
+                        bonder.load_sys_attrs(&conn);
                         if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                             error!("Failed to update PHY");
                             if let PhyUpdateError::Raw(re) = e {
@@ -469,6 +473,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
         #[cfg(feature = "_no_usb")]
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
             Ok(mut conn) => {
+                bonder.load_sys_attrs(&conn);
                 if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                     error!("Failed to update PHY");
                     if let PhyUpdateError::Raw(re) = e {
