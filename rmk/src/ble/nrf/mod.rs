@@ -281,9 +281,6 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     #[cfg(feature = "_no_usb")]
     CONNECTION_TYPE.store(0, Ordering::Relaxed);
 
-    // FIXME: test usem remove
-    CONNECTION_TYPE.store(1, Ordering::Relaxed);
-
     // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {

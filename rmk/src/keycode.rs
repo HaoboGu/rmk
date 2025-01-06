@@ -27,21 +27,6 @@ pub struct ModifierCombination {
     _reserved: u8,
 }
 
-// #[cfg(feature = "defmt")]
-// impl defmt::Format for ModifierCombination {
-//     fn format(&self, fmt: defmt::Formatter) {
-//         defmt::write!(
-//             fmt,
-//             "ModifierCombination {{ ctrl: {=bool}, shift: {=bool}, alt: {=bool}, gui: {=bool}, right: {=bool} }}",
-//             self.ctrl(),
-//             self.shift(),
-//             self.alt(),
-//             self.gui(),
-//             self.right()
-//         )
-//     }
-// }
-
 impl BitOr for ModifierCombination {
     type Output = Self;
 
