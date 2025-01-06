@@ -13,9 +13,7 @@ resolver = "2"
 [dependencies]
 rmk-macro = { version = "=0.4.1", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0" }
-embedded-hal-async = { version = "1.0.0", features = [
-    "defmt-03",
-], optional = true }
+embedded-hal-async = { version = "1.0.0", optional = true }
 embedded-io-async = { version = "0.6" }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
