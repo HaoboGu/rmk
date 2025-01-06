@@ -16,7 +16,8 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::keyboard::{key_event_channel, keyboard_report_channel, KeyEvent, Keyboard};
+use crate::event::KeyEvent;
+use crate::keyboard::{Keyboard, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
@@ -64,6 +65,7 @@ pub async fn run_rmk_split_central<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -157,6 +159,7 @@ pub async fn run_rmk_split_central_direct_pin<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
@@ -235,7 +238,7 @@ pub async fn run_peripheral_monitor<
 }
 
 /// Split central is connected to host via usb
-pub(crate) async fn initialize_usb_split_central_and_run<
+pub async fn initialize_usb_split_central_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     D: Driver<'static>,
@@ -248,6 +251,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -268,8 +272,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
@@ -377,7 +381,7 @@ impl<
                                 self.key_states[out_idx][in_idx],
                             );
 
-                            key_event_channel
+                            KEY_EVENT_CHANNEL
                                 .send(KeyEvent {
                                     row,
                                     col,
@@ -607,7 +611,7 @@ impl<
                                     self.key_states[row_idx][col_idx],
                                 );
 
-                                key_event_channel
+                                KEY_EVENT_CHANNEL
                                     .send(KeyEvent {
                                         row,
                                         col,

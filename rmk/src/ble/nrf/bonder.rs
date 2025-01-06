@@ -93,6 +93,10 @@ impl MultiBonder {
 
         if let Some(slot_num) = saved_slot_num_for_conn {
             if slot_num != current_profile {
+                debug!(
+                    "Bonded device {} is not on active profile {}",
+                    addr, current_profile
+                );
                 return false;
             }
         }

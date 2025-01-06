@@ -33,8 +33,8 @@ So, if you want to contribute new features of RMK, just look into `rmk` core cra
 Generally, there are 4-5 running tasks in the meanwhile, according to the user's config. Communication between tasks is done by channels.There are several built-in channels: 
 
 - `FLASH_CHANNEL`: a multi-sender, single-receiver channel. There are many tasks send the `FlashOperationMessage`, such as BLE task(which saves bond info), vial task(which saves key), etc.
-- `key_event_channel`: a multi-sender, single-receiver channel. The sender can be a matrix task which scans the key matrix or a split peripheral monitor which receives key event from split peripheral. The receiver, i.e. keyboard task, receives the key event and processes the key
-- `keyboard_report_channel`: a single-sender, single-receiver channel, keyboard task sends keyboard report to channel after the key event is processed, and USB/BLE task receives the keyboard report and sends the key to the host.
+- `KEY_EVENT_CHANNEL`: a multi-sender, single-receiver channel. The sender can be a matrix task which scans the key matrix or a split peripheral monitor which receives key event from split peripheral. The receiver, i.e. keyboard task, receives the key event and processes the key
+- `KEYBOARD_REPORT_CHANNEL`: a single-sender, single-receiver channel, keyboard task sends keyboard report to channel after the key event is processed, and USB/BLE task receives the keyboard report and sends the key to the host.
 
 ### Matrix scanning & key processing
 

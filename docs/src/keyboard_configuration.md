@@ -62,7 +62,7 @@ Here is an example toml of `[matrix]` section for stm32:
 # Input and output pins are mandatory
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 ```
 
@@ -151,9 +151,12 @@ The key string should follow several rules:
     7. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
     8. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
     9. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
-    
+
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
+4. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
+
+5. For generic key tap-hold, use `TH(key-tap, key-hold)`.
 
 ### `[behavior]`
 
@@ -316,7 +319,7 @@ matrix_type = "normal"
 # Input and output pins
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 
 # Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
 matrix_type = "direct_pin"

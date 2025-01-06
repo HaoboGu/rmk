@@ -35,7 +35,7 @@ use debounce::DebouncerTrait;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
+pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 pub use embedded_hal;
@@ -46,10 +46,8 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{
-    communication_task, keyboard_report_channel, Keyboard, KeyboardReportMessage,
-    REPORT_CHANNEL_SIZE,
-};
+use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
+pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_macro as macros;
@@ -65,17 +63,19 @@ pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 pub mod config;
-mod debounce;
+pub mod debounce;
 pub mod direct_pin;
+pub mod event;
 mod flash;
 mod hid;
-mod keyboard;
+pub mod input_device;
+pub mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
 mod keymap;
 mod layout_macro;
 mod light;
-mod matrix;
+pub mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
 mod storage;
@@ -93,7 +93,7 @@ pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
-/// Whethe the connection is ready.
+/// Whether the connection is ready.
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
@@ -125,6 +125,7 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -177,6 +178,7 @@ pub async fn run_rmk_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -231,7 +233,7 @@ pub async fn run_rmk_with_async_flash<
     panic!("The run_rmk should never return");
 }
 
-pub(crate) async fn initialize_usb_keyboard_and_run<
+pub async fn initialize_usb_keyboard_and_run<
     Out: OutputPin,
     D: Driver<'static>,
     M: MatrixTrait,
@@ -244,6 +246,7 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -257,8 +260,8 @@ pub(crate) async fn initialize_usb_keyboard_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (

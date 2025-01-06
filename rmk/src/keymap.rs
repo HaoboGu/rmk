@@ -1,6 +1,6 @@
 use crate::{
     action::KeyAction,
-    keyboard::KeyEvent,
+    event::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
     reboot_keyboard,
@@ -18,6 +18,8 @@ use num_enum::FromPrimitive;
 pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    // TODO: Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
+    // pub(crate) encoders: Option<&'a mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32

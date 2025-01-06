@@ -10,7 +10,7 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::config::BleBatteryConfig;
-use crate::keyboard::{keyboard_report_channel, REPORT_CHANNEL_SIZE};
+use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
 #[cfg(feature = "log")]
@@ -216,7 +216,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 /// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
+pub async fn initialize_nrf_ble_keyboard_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
@@ -227,6 +227,7 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     mut keyboard_config: RmkConfig<'static, Out>,
     ble_addr: Option<[u8; 6]>,
     spawner: Spawner,
@@ -261,9 +262,11 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
         read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
     {
+        debug!("Loaded active profile: {}", profile);
         ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
     } else {
         // If no saved active profile, use 0 as default
+        debug!("Loaded default active profile",);
         ACTIVE_PROFILE.store(0, Ordering::SeqCst);
     };
 
@@ -302,8 +305,8 @@ pub(crate) async fn initialize_nrf_ble_keyboard_and_run<
     let ble_server =
         BleServer::new(sd, keyboard_config.usb_config, bonder).expect("Failed to start ble server");
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Keyboard services
     let mut keyboard = Keyboard::new(
@@ -585,7 +588,9 @@ pub(crate) async fn run_dummy_keyboard<
             warn!("Dummy service receives")
         }
     };
-
+    // Even for dummy service, we need to set the connection state to true.
+    // So that we can receive the matrix scan result from split, which might be used for profile switching
+    CONNECTION_STATE.store(true, Ordering::Release);
     match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
         Either4::First(_) => (),
         Either4::Second(_) => (),
