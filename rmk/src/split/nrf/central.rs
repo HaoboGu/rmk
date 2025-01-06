@@ -124,6 +124,7 @@ pub(crate) async fn run_ble_client(
             BleSplitCentralClientEvent::MessageToCentralNotification(message) => {
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
+                        info!("Received split message from peripheral: {}", split_message);
                         if let Err(e) = receive_sender.try_send(split_message) {
                             error!("BLE_SYNC_CHANNEL send message error: {:?}", e);
                         }
@@ -187,13 +188,12 @@ impl<'a> SplitReader for BleSplitCentralDriver<'a> {
 impl SplitWriter for BleSplitCentralDriver<'_> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         if let SplitMessage::ConnectionState(state) = message {
-            // Check if the connection state is changed
-            if self.connection_state == *state {
-                return Ok(SPLIT_MESSAGE_MAX_SIZE);
-            }
             // ConnectionState changed, update cached state and notify peripheral
-            self.connection_state = *state;
+            if self.connection_state != *state {
+                self.connection_state = *state;
+            }
         }
+        // Always sync the connection state to peripheral since central doesn't know the CONNECTION_STATE of the peripheral.
         self.sender.send(message.clone()).await;
         Ok(SPLIT_MESSAGE_MAX_SIZE)
     }
