@@ -104,6 +104,8 @@ pub(crate) async fn run_ble_client(
             embassy_time::Timer::after_millis(200).await;
         };
 
+        info!("Connected to peripheral");
+
         let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
             Ok(client) => client,
             Err(e) => {
