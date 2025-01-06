@@ -44,7 +44,7 @@ impl<T: HidReaderWrapper + HidWriterWrapper> HidReaderWriterWrapper for T {}
 
 /// Wrapper struct for writing via USB
 pub(crate) struct UsbHidWriter<'d, D: Driver<'d>, const N: usize> {
-    usb_writer: HidWriter<'d, D, N>,
+    pub(crate) usb_writer: HidWriter<'d, D, N>,
 }
 
 impl<'d, D: Driver<'d>, const N: usize> ConnectionTypeWrapper for UsbHidWriter<'d, D, N> {
@@ -134,6 +134,32 @@ impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidReaderWrap
             ReadError::BufferOverflow => HidError::BufferOverflow,
             ReadError::Disabled => HidError::UsbDisabled,
             ReadError::Sync(_) => HidError::UsbPartialRead,
+        })
+    }
+}
+
+impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> ConnectionTypeWrapper
+    for HidReaderWriter<'d, D, READ_N, WRITE_N>
+{
+    fn get_conn_type(&self) -> ConnectionType {
+        ConnectionType::Usb
+    }
+}
+
+impl<'d, D: Driver<'d>, const READ_N: usize, const WRITE_N: usize> HidWriterWrapper
+    for HidReaderWriter<'d, D, READ_N, WRITE_N>
+{
+    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+        self.write_serialize(r).await.map_err(|e| match e {
+            embassy_usb::driver::EndpointError::BufferOverflow => HidError::BufferOverflow,
+            embassy_usb::driver::EndpointError::Disabled => HidError::UsbDisabled,
+        })
+    }
+
+    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+        self.write(report).await.map_err(|e| match e {
+            embassy_usb::driver::EndpointError::BufferOverflow => HidError::BufferOverflow,
+            embassy_usb::driver::EndpointError::Disabled => HidError::UsbDisabled,
         })
     }
 }

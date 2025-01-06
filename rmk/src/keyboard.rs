@@ -1,5 +1,7 @@
 use crate::config::BehaviorConfig;
 use crate::event::{Event, KeyEvent};
+use crate::input_device::InputProcessor;
+use crate::usb::descriptor::KeyboardReport;
 use crate::CONNECTION_STATE;
 use crate::{
     action::{Action, KeyAction},
@@ -19,7 +21,7 @@ use embassy_sync::{
 };
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
-use usbd_hid::descriptor::KeyboardReport;
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 pub const EVENT_CHANNEL_SIZE: usize = 32;
 pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
@@ -32,6 +34,12 @@ pub const REPORT_CHANNEL_SIZE: usize = 32;
 pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
     CriticalSectionRawMutex,
     KeyboardReportMessage,
+    REPORT_CHANNEL_SIZE,
+> = Channel::new();
+
+pub(crate) static KEY_REPORT_CHANNEL: Channel<
+    CriticalSectionRawMutex,
+    KeyboardReport,
     REPORT_CHANNEL_SIZE,
 > = Channel::new();
 
@@ -116,168 +124,15 @@ pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
     }
 }
 
-pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
-    /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-
-    /// Report Sender
-    pub(crate) sender:
-        &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
-
-    /// Unprocessed events
-    unprocessed_events: Vec<KeyEvent, 16>,
-
-    /// Timer which records the timestamp of key changes
-    pub(crate) timer: [[Option<Instant>; ROW]; COL],
-
-    /// Record the timestamp of last release, (event, is_modifier, timestamp)
-    last_release: (KeyEvent, bool, Option<Instant>),
-
-    /// Record whether the keyboard is in hold-after-tap state
-    hold_after_tap: [Option<KeyEvent>; 6],
-
-    /// Options for configurable action behavior
-    behavior: BehaviorConfig,
-
-    /// One shot modifier state
-    osm_state: OneShotState<ModifierCombination>,
-
-    /// One shot layer state
-    osl_state: OneShotState<u8>,
-
-    /// Keyboard internal hid report buf
-    report: KeyboardReport,
-
-    /// Internal composite report: mouse + media(consumer) + system control
-    other_report: CompositeReport,
-
-    /// Via report
-    via_report: ViaReport,
-
-    /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
-    /// `last_mouse_tick` tracks at most 8 mouse keys, with its recent state.
-    /// It can be used to control the mouse report rate and release mouse key properly.
-    /// The key is mouse keycode, the value is the last action and its timestamp.
-    last_mouse_tick: FnvIndexMap<KeyCode, (bool, Instant), 4>,
-
-    /// The current distance of mouse key moving
-    mouse_key_move_delta: i8,
-    mouse_wheel_move_delta: i8,
-}
-
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
+    for Keyboard<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
-        behavior: BehaviorConfig,
-    ) -> Self {
-        Keyboard {
-            keymap,
-            sender,
-            timer: [[None; ROW]; COL],
-            last_release: (
-                KeyEvent {
-                    row: 0,
-                    col: 0,
-                    pressed: false,
-                },
-                false,
-                None,
-            ),
-            hold_after_tap: Default::default(),
-            behavior,
-            osm_state: OneShotState::default(),
-            osl_state: OneShotState::default(),
-            unprocessed_events: Vec::new(),
-            report: KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0; 6],
-            },
-            other_report: CompositeReport::default(),
-            via_report: ViaReport {
-                input_data: [0; 32],
-                output_data: [0; 32],
-            },
-            last_mouse_tick: FnvIndexMap::new(),
-            mouse_key_move_delta: 8,
-            mouse_wheel_move_delta: 1,
-        }
-    }
+    type EventType = KeyEvent;
 
-    pub(crate) async fn send_keyboard_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::KeyboardReport(self.report))
-            .await;
-        // Yield once after sending the report to channel
-        yield_now().await;
-    }
-
-    /// Send system control report if needed
-    pub(crate) async fn send_system_control_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::System,
-            ))
-            .await;
-        self.other_report.system_usage_id = 0;
-        yield_now().await;
-    }
-
-    /// Send media report if needed
-    pub(crate) async fn send_media_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::Media,
-            ))
-            .await;
-        self.other_report.media_usage_id = 0;
-        yield_now().await;
-    }
-
-    /// Send mouse report if needed
-    pub(crate) async fn send_mouse_report(&mut self) {
-        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::Mouse,
-            ))
-            .await;
-        yield_now().await;
-    }
-
-    /// Main keyboard task, it receives input devices result, processes keys.
-    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
-    /// TODO: make keyboard an `InputProcessor`
-    pub(crate) async fn run(&mut self) {
-        KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
-        loop {
-            let key_event = KEY_EVENT_CHANNEL.receive().await;
-
-            // Process the key change
-            self.process_key_change(key_event).await;
-
-            // After processing the key change, check if there are unprocessed events
-            // This will happen if there's recursion in key processing
-            loop {
-                if self.unprocessed_events.is_empty() {
-                    break;
-                }
-                // Process unprocessed events
-                let e = self.unprocessed_events.remove(0);
-                self.process_key_change(e).await;
-            }
-        }
-    }
+    type ReportType = KeyboardReportMessage;
 
     /// Process key changes at (row, col)
-    async fn process_key_change(&mut self, key_event: KeyEvent) {
+    async fn process(&mut self, key_event: Self::EventType) {
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_event.pressed {
             self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
@@ -332,6 +187,175 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         if let Some(ref tri_layer) = self.behavior.tri_layer {
             self.keymap.borrow_mut().update_tri_layer(tri_layer);
         }
+    }
+
+    /// Main keyboard task, it receives input devices result, processes keys.
+    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
+    async fn run(&mut self) -> () {
+        KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
+        loop {
+            let key_event = self.event_receiver().receive().await;
+
+            // Process the key change
+            self.process(key_event).await;
+
+            // After processing the key change, check if there are unprocessed events
+            // This will happen if there's recursion in key processing
+            loop {
+                if self.unprocessed_events.is_empty() {
+                    break;
+                }
+                // Process unprocessed events
+                let e = self.unprocessed_events.remove(0);
+                self.process(e).await;
+            }
+        }
+    }
+
+    fn event_receiver(
+        &self,
+    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        KEY_EVENT_CHANNEL.receiver()
+    }
+
+    fn report_sender(
+        &self,
+    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
+        KEYBOARD_REPORT_CHANNEL.sender()
+    }
+}
+
+pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+    /// Keymap
+    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+
+    // /// Report Sender
+    // pub(crate) sender:
+    //     &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+    /// Unprocessed events
+    unprocessed_events: Vec<KeyEvent, 16>,
+
+    /// Timer which records the timestamp of key changes
+    pub(crate) timer: [[Option<Instant>; ROW]; COL],
+
+    /// Record the timestamp of last release, (event, is_modifier, timestamp)
+    last_release: (KeyEvent, bool, Option<Instant>),
+
+    /// Record whether the keyboard is in hold-after-tap state
+    hold_after_tap: [Option<KeyEvent>; 6],
+
+    /// Options for configurable action behavior
+    behavior: BehaviorConfig,
+
+    /// One shot modifier state
+    osm_state: OneShotState<ModifierCombination>,
+
+    /// One shot layer state
+    osl_state: OneShotState<u8>,
+
+    /// Keyboard internal hid report buf
+    report: KeyboardReport,
+
+    /// Internal composite report: mouse + media(consumer) + system control
+    other_report: CompositeReport,
+
+    /// Via report
+    via_report: ViaReport,
+
+    /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
+    /// `last_mouse_tick` tracks at most 8 mouse keys, with its recent state.
+    /// It can be used to control the mouse report rate and release mouse key properly.
+    /// The key is mouse keycode, the value is the last action and its timestamp.
+    last_mouse_tick: FnvIndexMap<KeyCode, (bool, Instant), 4>,
+
+    /// The current distance of mouse key moving
+    mouse_key_move_delta: i8,
+    mouse_wheel_move_delta: i8,
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    Keyboard<'a, ROW, COL, NUM_LAYER>
+{
+    pub(crate) fn new(
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        behavior: BehaviorConfig,
+    ) -> Self {
+        Keyboard {
+            keymap,
+            timer: [[None; ROW]; COL],
+            last_release: (
+                KeyEvent {
+                    row: 0,
+                    col: 0,
+                    pressed: false,
+                },
+                false,
+                None,
+            ),
+            hold_after_tap: Default::default(),
+            behavior,
+            osm_state: OneShotState::default(),
+            osl_state: OneShotState::default(),
+            unprocessed_events: Vec::new(),
+            report: KeyboardReport {
+                modifier: 0,
+                reserved: 0,
+                leds: 0,
+                keycodes: [0; 6],
+            },
+            other_report: CompositeReport::default(),
+            via_report: ViaReport {
+                input_data: [0; 32],
+                output_data: [0; 32],
+            },
+            last_mouse_tick: FnvIndexMap::new(),
+            mouse_key_move_delta: 8,
+            mouse_wheel_move_delta: 1,
+        }
+    }
+
+    pub(crate) async fn send_keyboard_report(&mut self) {
+        self.report_sender()
+            .send(KeyboardReportMessage::KeyboardReport(self.report))
+            .await;
+        // Yield once after sending the report to channel
+        yield_now().await;
+    }
+
+    /// Send system control report if needed
+    pub(crate) async fn send_system_control_report(&mut self) {
+        self.report_sender()
+            .send(KeyboardReportMessage::CompositeReport(
+                self.other_report,
+                CompositeReportType::System,
+            ))
+            .await;
+        self.other_report.system_usage_id = 0;
+        yield_now().await;
+    }
+
+    /// Send media report if needed
+    pub(crate) async fn send_media_report(&mut self) {
+        self.report_sender()
+            .send(KeyboardReportMessage::CompositeReport(
+                self.other_report,
+                CompositeReportType::Media,
+            ))
+            .await;
+        self.other_report.media_usage_id = 0;
+        yield_now().await;
+    }
+
+    /// Send mouse report if needed
+    pub(crate) async fn send_mouse_report(&mut self) {
+        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
+        self.report_sender()
+            .send(KeyboardReportMessage::CompositeReport(
+                self.other_report,
+                CompositeReportType::Mouse,
+            ))
+            .await;
+        yield_now().await;
     }
 
     async fn update_osm(&mut self, key_event: KeyEvent) {

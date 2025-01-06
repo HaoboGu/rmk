@@ -11,8 +11,9 @@ use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Receiver, Sender},
 };
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
-use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use crate::{keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE}, usb::descriptor::{CompositeReport, KeyboardReport}};
 
 pub mod rotary_encoder;
 

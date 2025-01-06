@@ -112,8 +112,10 @@ impl CompositeReportType {
         };
     }
 )]
+
 #[derive(Default)]
 pub struct CompositeReport {
+    pub(crate) report_type: CompositeReportType, 
     pub(crate) buttons: u8,
     pub(crate) x: i8,
     pub(crate) y: i8,
