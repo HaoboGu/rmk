@@ -5,7 +5,8 @@ use num_enum::FromPrimitive;
 
 use crate::{keymap::KeyMap, usb::descriptor::ViaReport};
 
-#[derive(Debug, Copy, Clone, defmt::Format, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 enum VialCommand {
     GetKeyboardId = 0x00,

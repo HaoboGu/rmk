@@ -13,8 +13,6 @@ use crate::config::BleBatteryConfig;
 use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
 use crate::matrix::MatrixTrait;
 use crate::storage::StorageKeys;
-#[cfg(feature = "log")]
-use crate::USB_LOGGER;
 use crate::{
     ble::{
         ble_communication_task,
@@ -376,16 +374,6 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                 continue;
                             }
 
-                            #[cfg(feature = "log")]
-                            let logger_fut = {
-                                let log_sender = &mut usb_device.usb_logger_sender;
-                                let log_receiver = &mut usb_device.usb_logger_receiver;
-
-                                USB_LOGGER.run_logger_class(log_sender, log_receiver)
-                            };
-                            #[cfg(feature = "log")]
-                            futures::pin_mut!(logger_fut);
-
                             if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                                 error!("Failed to update PHY");
                                 if let PhyUpdateError::Raw(re) = e {
@@ -405,10 +393,6 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                     &mut keyboard_config.ble_battery_config,
                                     &keyboard_report_receiver,
                                 ),
-                                // wait_for_usb_enabled(),
-                                #[cfg(feature = "log")]
-                                join(usb_device.device.run(), logger_fut),
-                                #[cfg(not(feature = "log"))]
                                 wait_for_usb_enabled(),
                                 update_profile(bonder),
                             )

@@ -11,6 +11,9 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// This mod MUST go first, so that the others see its macros.
+pub(crate) mod fmt;
+
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
@@ -20,8 +23,6 @@ use crate::config::RmkConfig;
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
-#[cfg(feature = "log")]
-use crate::logger::usb_logger::{DummyHandler, UsbLogger};
 use crate::{
     light::{led_hid_task, LightService},
     via::vial_task,
@@ -56,9 +57,6 @@ use via::process::VialService;
 #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
-// This mod MUST go first, so that the others see its macros.
-pub(crate) mod logger;
-
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
@@ -81,10 +79,6 @@ pub mod split;
 mod storage;
 mod usb;
 mod via;
-
-#[cfg(feature = "log")]
-// Global logger over USB serial
-pub(crate) static USB_LOGGER: UsbLogger<1024, DummyHandler> = UsbLogger::new();
 
 /// Keyboard state, true for started, false for stopped
 pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
@@ -345,16 +339,6 @@ pub(crate) async fn run_usb_keyboard<
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         pin_mut!(storage_fut);
 
-        #[cfg(feature = "log")]
-        let logger_fut = {
-            let log_sender = &mut usb_device.usb_logger_sender;
-            let log_receiver = &mut usb_device.usb_logger_receiver;
-
-            USB_LOGGER.run_logger_class(log_sender, log_receiver)
-        };
-        #[cfg(feature = "log")]
-        pin_mut!(logger_fut);
-
         match select4(
             select(usb_fut, keyboard_fut),
             #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
@@ -362,9 +346,6 @@ pub(crate) async fn run_usb_keyboard<
             #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
             #[cfg(feature = "_no_external_storage")]
             via_fut,
-            #[cfg(feature = "log")]
-            select(logger_fut, led_fut),
-            #[cfg(not(feature = "log"))]
             led_fut,
             select(matrix_fut, communication_fut),
         )

@@ -101,8 +101,6 @@ defmt = [
     "postcard/use-defmt",
 ]
 
-log = ["dep:log"]
-
 ## Enable async matrix scan
 async_matrix = ["dep:embedded-hal-async"]
 
