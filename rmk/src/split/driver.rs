@@ -5,10 +5,10 @@ use core::sync::atomic::Ordering;
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
 use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
-use defmt::{debug, error, warn};
 use embassy_futures::select::select;
 
-#[derive(Debug, Clone, Copy, defmt::Format)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum SplitDriverError {
     SerialError,
     EmptyMessage,
@@ -71,13 +71,13 @@ impl<
             .write(&SplitMessage::ConnectionState(conn_state))
             .await
         {
-            error!("SplitDriver write error: {}", e);
+            error!("SplitDriver write error: {:?}", e);
         }
         loop {
             match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_message) => {
-                        debug!("Received peripheral message: {}", received_message);
+                        debug!("Received peripheral message: {:?}", received_message);
                         if let SplitMessage::Key(e) = received_message {
                             // Check row/col
                             if e.row as usize > ROW || e.col as usize > COL {

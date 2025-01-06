@@ -21,7 +21,6 @@ use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 ))]
 use crate::initialize_usb_keyboard_and_run;
 
-use defmt::info;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -204,7 +203,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     .await;
     // The fut should never return.
     // If there's no fut, the feature flags must not be correct.
-    defmt::panic!("The run_rmk should never return");
+    panic!("The run_rmk should never return");
 }
 
 /// DirectPinMartex only has input pins.

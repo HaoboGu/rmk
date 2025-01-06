@@ -1,6 +1,5 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use defmt::{error, info};
 use embassy_futures::{join::join, select::select};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -88,11 +87,11 @@ pub(crate) async fn run_ble_client(
             if let Ok(_) =
                 CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             {
-                info!("Starting connect to {}", addrs);
+                info!("Starting connect to {:?}", addrs);
                 let conn = match central::connect(sd, &config).await {
                     Ok(conn) => conn,
                     Err(e) => {
-                        error!("BLE peripheral connect error: {}", e);
+                        error!("BLE peripheral connect error: {:?}", e);
                         CONNECTING_CLIENT.store(false, Ordering::SeqCst);
                         continue;
                     }
@@ -109,14 +108,14 @@ pub(crate) async fn run_ble_client(
         let ble_client: BleSplitCentralClient = match gatt_client::discover(&conn).await {
             Ok(client) => client,
             Err(e) => {
-                error!("BLE discover error: {}", e);
+                error!("BLE discover error: {:?}", e);
                 continue;
             }
         };
 
         // Enable notifications from the peripherals
         if let Err(e) = ble_client.message_to_central_cccd_write(true).await {
-            error!("BLE message_to_central_cccd_write error: {}", e);
+            error!("BLE message_to_central_cccd_write error: {:?}", e);
             continue;
         }
 
@@ -126,7 +125,7 @@ pub(crate) async fn run_ble_client(
                 match postcard::from_bytes(&message) {
                     Ok(split_message) => {
                         if let Err(e) = receive_sender.try_send(split_message) {
-                            error!("BLE_SYNC_CHANNEL send message error: {}", e);
+                            error!("BLE_SYNC_CHANNEL send message error: {:?}", e);
                         }
                     }
                     Err(e) => {
@@ -144,7 +143,7 @@ pub(crate) async fn run_ble_client(
                 match postcard::to_slice(&message, &mut buf) {
                     Ok(_bytes) => {
                         if let Err(e) = ble_client.message_to_peripheral_write(&buf).await {
-                            error!("BLE message_to_peripheral_write error: {}", e);
+                            error!("BLE message_to_peripheral_write error: {:?}", e);
                         }
                     }
                     Err(e) => error!("Postcard serialize split message error: {}", e),

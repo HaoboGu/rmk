@@ -1,7 +1,6 @@
 pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicU8, Ordering};
-use defmt::info;
 use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
@@ -177,7 +176,7 @@ struct UsbRequestHandler {}
 
 impl RequestHandler for UsbRequestHandler {
     fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
-        info!("Set report for {}: {}", id, data);
+        info!("Set report for {:?}: {:?}", id, data);
         OutResponse::Accepted
     }
 }

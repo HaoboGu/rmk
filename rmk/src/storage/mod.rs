@@ -5,7 +5,6 @@ use crate::config::StorageConfig;
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use defmt::{debug, error, info, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
@@ -31,7 +30,8 @@ pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperation
     Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
@@ -282,18 +282,21 @@ impl StorageData {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeymapKey {
     row: usize,
     col: usize,
@@ -537,7 +540,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::BondInfo(b) => {
-                    info!("Saving bond info: {}", b);
+                    info!("Saving bond info: {:?}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,

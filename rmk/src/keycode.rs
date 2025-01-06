@@ -1,7 +1,6 @@
 use core::ops::BitOr;
 
 use bitfield_struct::bitfield;
-use defmt::Format;
 use num_enum::FromPrimitive;
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
@@ -12,6 +11,7 @@ use num_enum::FromPrimitive;
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[bitfield(u8, order = Lsb)]
 #[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ModifierCombination {
     #[bits(1)]
     pub(crate) ctrl: bool,
@@ -25,20 +25,6 @@ pub struct ModifierCombination {
     pub(crate) right: bool,
     #[bits(3)]
     _reserved: u8,
-}
-
-impl Format for ModifierCombination {
-    fn format(&self, fmt: defmt::Formatter) {
-        defmt::write!(
-            fmt,
-            "ModifierCombination {{ ctrl: {=bool}, shift: {=bool}, alt: {=bool}, gui: {=bool}, right: {=bool} }}",
-            self.ctrl(),
-            self.shift(),
-            self.alt(),
-            self.gui(),
-            self.right()
-        )
-    }
 }
 
 impl BitOr for ModifierCombination {
@@ -118,8 +104,9 @@ impl ModifierCombination {
 /// Keys in consumer page
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConsumerKey {
     #[num_enum(default)]
     Zero = 0x00,
@@ -185,8 +172,9 @@ pub enum ConsumerKey {
 /// Keys in `Generic Desktop Page`, generally used for system control
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SystemControlKey {
     #[num_enum(default)]
     Zero = 0x00,
@@ -198,8 +186,9 @@ pub enum SystemControlKey {
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, Hash)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyCode {
     /// Reserved, no-key.
     #[num_enum(default)]

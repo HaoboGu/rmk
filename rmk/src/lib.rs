@@ -11,6 +11,9 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// This mod MUST go first, so that the others see its macros.
+pub(crate) mod fmt;
+
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
@@ -30,7 +33,6 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU8},
 };
 use debounce::DebouncerTrait;
-use defmt::{error, warn};
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
@@ -222,7 +224,7 @@ pub async fn run_rmk_with_async_flash<
 
     // The fut should never return.
     // If there's no fut, the feature flags must not be correct.
-    defmt::panic!("The run_rmk should never return");
+    panic!("The run_rmk should never return");
 }
 
 pub async fn initialize_usb_keyboard_and_run<

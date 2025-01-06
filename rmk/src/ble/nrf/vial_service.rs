@@ -1,4 +1,3 @@
-use defmt::{debug, error, Format};
 use embassy_futures::block_on;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
@@ -119,7 +118,7 @@ impl BleVialService {
 
     pub(crate) fn send_ble_vial_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_vial, data)
-            .map_err(|e| error!("send vial report error: {}", e))
+            .map_err(|e| error!("send vial report error: {:?}", e))
             .ok();
     }
 }
@@ -193,7 +192,8 @@ impl<'a> HidWriterWrapper for VialReaderWriter<'a> {
     }
 }
 
-#[derive(Debug, Format)]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum VialServiceEvent {
     InputVialKeyCccdWrite,
     OutputVial,

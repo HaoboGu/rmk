@@ -1,6 +1,5 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
-use defmt::{debug, Format};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Receiver, Sender};
 use embedded_hal::digital::InputPin;
@@ -17,7 +16,7 @@ use super::{InputDevice, InputProcessor, EVENT_CHANNEL_SIZE};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
-// #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoder<A, B, P> {
     pin_a: A,
     pin_b: B,
@@ -28,7 +27,8 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn
     Clockwise,

@@ -9,7 +9,6 @@ use crate::{
     ble::device_info::{DeviceInformation, PnPID, VidSource},
     hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
 };
-use defmt::{error, info};
 use nrf_softdevice::{
     ble::{
         gatt_server::{self, RegisterError, Service, WriteOp},
@@ -44,7 +43,7 @@ impl<'a, const N: usize> HidWriterWrapper for BleHidWriter<'a, N> {
 
     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
         gatt_server::notify_value(self.conn, self.handle, report).map_err(|e| {
-            error!("Send ble report error: {}", e);
+            error!("Send ble report error: {:?}", e);
             match e {
                 gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
                 gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
@@ -77,7 +76,7 @@ impl<'a, const N: usize> HidReaderWrapper for BleHidReader<'a, N> {
         let mut buffer = [0u8; 16];
         gatt_server::get_value(self.sd, self.handle, &mut buffer)
             .map_err(|e| {
-                error!("Read value from ble error: {}", e);
+                error!("Read value from ble error: {:?}", e);
                 HidError::BleRawError
             })
             .map(|s| {
@@ -158,7 +157,7 @@ impl gatt_server::Server for BleServer {
                 | HidServiceEvent::InputMediaKeyCccdWrite
                 | HidServiceEvent::InputMouseKeyCccdWrite
                 | HidServiceEvent::InputSystemKeyCccdWrite => {
-                    info!("{}, handle: {}, data: {}", event, handle, data);
+                    info!("{:?}, handle: {}, data: {:?}", event, handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 HidServiceEvent::OutputKeyboard => (),
@@ -168,7 +167,7 @@ impl gatt_server::Server for BleServer {
             match event {
                 BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
                     info!(
-                        "BatteryLevelCccdWrite, handle: {}, data: {}, notif: {}",
+                        "BatteryLevelCccdWrite, handle: {}, data: {:?}, notif: {}",
                         handle, data, notifications
                     );
                     self.bonder.save_sys_attrs(conn)
@@ -178,7 +177,7 @@ impl gatt_server::Server for BleServer {
         if let Some(event) = self.vial.on_write(handle, data) {
             match event {
                 VialServiceEvent::InputVialKeyCccdWrite => {
-                    info!("InputVialCccdWrite, handle: {}, data: {}", handle, data);
+                    info!("InputVialCccdWrite, handle: {}, data: {:?}", handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 VialServiceEvent::OutputVial => (),

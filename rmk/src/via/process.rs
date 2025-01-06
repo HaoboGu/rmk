@@ -10,7 +10,6 @@ use crate::{
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
@@ -51,7 +50,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 match hid_interface.write_serialize(&via_report).await {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        error!("Send via report error: {}", e);
+                        error!("Send via report error: {:?}", e);
                         // Printed error message, ignore the error type
                         Err(())
                     }
@@ -60,7 +59,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             Err(e) => {
                 if e != HidError::UsbDisabled && e != HidError::BleDisconnected {
                     // Don't print message if the USB endpoint is disabled(aka not connected)
-                    error!("Read via report error: {}", e);
+                    error!("Read via report error: {:?}", e);
                 }
                 // Printed error message, ignore the error type
                 Err(())
@@ -148,7 +147,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 let keycode = BigEndian::read_u16(&report.output_data[4..6]);
                 let action = from_via_keycode(keycode);
                 info!(
-                    "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
+                    "Setting keycode: 0x{:X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
                 keymap.borrow_mut().set_action_at(
@@ -205,7 +204,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     report.input_data[4..4 + size]
                         .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
                     debug!(
-                        "Get macro buffer: offset: {}, data: {:02X}",
+                        "Get macro buffer: offset: {}, data: {:?}",
                         offset, report.input_data
                     );
                 } else {
@@ -228,6 +227,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
+                #[cfg(feature = "defmt")]
                 info!("Data: {=[u8]:x}", report.output_data[4..]);
                 self.keymap.borrow_mut().macro_cache[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
