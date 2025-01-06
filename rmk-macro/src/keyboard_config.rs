@@ -442,6 +442,7 @@ impl KeyboardConfig {
 
                 behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
+                behavior.macros = behavior.macros.or(default.macros);
 
                 Ok(behavior)
             }

@@ -276,6 +276,7 @@ pub async fn initialize_usb_split_central_and_run<
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
+    let macros_count = keyboard_config.behavior_config.macros.count;
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
         Keyboard::new(
             &keymap,
@@ -283,7 +284,7 @@ pub async fn initialize_usb_split_central_and_run<
             keyboard_config.behavior_config,
         ),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
+        VialService::new(&keymap, keyboard_config.vial_config, macros_count),
         LightService::from_config(keyboard_config.light_config),
     );
 

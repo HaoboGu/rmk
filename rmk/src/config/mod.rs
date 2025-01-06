@@ -41,13 +41,23 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 }
 
 /// Config for configurable action behavior
-#[derive(Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+    pub macros: MacrosConfig,
 }
 
+impl Default for BehaviorConfig {
+    fn default() -> Self {
+        Self {
+            tri_layer: None,
+            tap_hold: TapHoldConfig::default(),
+            one_shot: OneShotConfig::default(),
+            macros: MacrosConfig::default(),
+        }
+    }
+}
 /// Configurations for tap hold behavior
 pub struct TapHoldConfig {
     pub enable_hrm: bool,
@@ -77,6 +87,17 @@ impl Default for OneShotConfig {
         Self {
             timeout: Duration::from_secs(1),
         }
+    }
+}
+
+/// Configurations for keyboard macros
+pub struct MacrosConfig {
+    pub count: usize,
+}
+
+impl Default for MacrosConfig {
+    fn default() -> Self {
+        Self { count: 8 }
     }
 }
 

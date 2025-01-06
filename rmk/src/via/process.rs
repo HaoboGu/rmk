@@ -2,7 +2,7 @@ use super::{protocol::*, vial::process_vial};
 use crate::config::VialConfig;
 use crate::{
     hid::{HidError, HidReaderWriterWrapper},
-    keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
+    keyboard_macro::MACRO_SPACE_SIZE,
     keymap::KeyMap,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
     usb::descriptor::ViaReport,
@@ -19,6 +19,9 @@ pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_
 
     // Vial config
     vial_config: VialConfig<'a>,
+
+    // Number of macros
+    macros_count: usize,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
@@ -27,10 +30,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         vial_config: VialConfig<'a>,
+        macros_count: usize,
     ) -> Self {
         Self {
             keymap,
             vial_config,
+            macros_count,
         }
     }
 
@@ -44,7 +49,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         };
         match hid_interface.read(&mut via_report.output_data).await {
             Ok(_) => {
-                self.process_via_packet(&mut via_report, self.keymap).await;
+                self.process_via_packet(&mut via_report, self.keymap, self.macros_count)
+                    .await;
 
                 // Send via report back after processing
                 match hid_interface.write_serialize(&via_report).await {
@@ -71,6 +77,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         &self,
         report: &mut ViaReport,
         keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        macros_count: usize,
     ) {
         let command_id = report.output_data[0];
 
@@ -235,7 +242,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
                 // Then flush macros to storage
                 let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
-                if size < 28 || num_zero >= NUM_MACRO {
+                if size < 28 || num_zero >= macros_count {
                     let buf = self.keymap.borrow_mut().macro_cache;
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteMacro(buf))

@@ -4,7 +4,7 @@ use crate::CONNECTION_STATE;
 use crate::{
     action::{Action, KeyAction},
     hid::{ConnectionType, HidWriterWrapper},
-    keyboard_macro::{MacroOperation, NUM_MACRO},
+    keyboard_macro::MacroOperation,
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
@@ -936,7 +936,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
         // Get macro index
         if let Some(macro_idx) = key.as_macro_index() {
-            if macro_idx as usize >= NUM_MACRO {
+            if macro_idx as usize >= self.behavior.macros.count {
                 error!("Macro idx invalid: {}", macro_idx);
                 return;
             }

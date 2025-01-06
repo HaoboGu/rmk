@@ -1,7 +1,7 @@
 //! Initialize behavior config boilerplate of RMK
 //!
 
-use crate::config::{OneShotConfig, TapHoldConfig, TriLayerConfig};
+use crate::config::{OneShotConfig, TapHoldConfig, TriLayerConfig, MacrosConfig};
 use crate::keyboard_config::KeyboardConfig;
 use quote::quote;
 
@@ -82,16 +82,38 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
     }
 }
 
+fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
+    let default = quote! {::rmk::config::MacrosConfig::default()};
+    match macros {
+        Some(macros) => {
+            let count = match &macros.count {
+                Some(c) => c,
+                None => return default,
+            };
+
+            quote! {
+                ::rmk::config::MacrosConfig {
+                    count: #count,
+                }
+            }
+        }
+        None => default,
+    }
+}
+
+
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
     let tri_layer = expand_tri_layer(&keyboard_config.behavior.tri_layer);
     let tap_hold = expand_tap_hold(&keyboard_config.behavior.tap_hold);
     let one_shot = expand_one_shot(&keyboard_config.behavior.one_shot);
+    let macros_config = expand_macros(&keyboard_config.behavior.macros);
 
     quote! {
         let behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             tap_hold: #tap_hold,
             one_shot: #one_shot,
+            macros: #macros_config,
         };
     }
 }

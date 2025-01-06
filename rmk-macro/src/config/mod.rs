@@ -140,6 +140,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
+    pub macros: Option<MacrosConfig>,
 }
 
 /// Configurations for tap hold
@@ -165,6 +166,11 @@ pub struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
 }
 
+/// Configurations for keyboard macros
+#[derive(Clone, Debug, Deserialize)]
+pub struct MacrosConfig {
+    pub count: Option<usize>,
+}
 /// Configurations for split keyboards
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct SplitConfig {
