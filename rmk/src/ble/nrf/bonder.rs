@@ -2,6 +2,7 @@ use super::BONDED_DEVICE_NUM;
 use crate::{
     ble::nrf::ACTIVE_PROFILE,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
+    CONNECTION_STATE,
 };
 use core::{cell::RefCell, sync::atomic::Ordering};
 use defmt::{debug, error, info, warn, Format};
@@ -90,6 +91,10 @@ impl MultiBonder {
 
         if let Some(slot_num) = saved_slot_num_for_conn {
             if slot_num != current_profile {
+                debug!(
+                    "Bonded device {} is not on active profile {}",
+                    addr, current_profile
+                );
                 return false;
             }
         }
@@ -112,6 +117,8 @@ impl SecurityHandler for MultiBonder {
 
     fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
         info!("on_security_update, new security mode: {}", security_mode);
+        // Security updated, indicating that the connection is established?
+        CONNECTION_STATE.store(true, Ordering::Release);
     }
 
     fn on_bonded(

@@ -21,7 +21,9 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    run_rmk,
+    event::Event,
+    input_device::{rotary_encoder::RotaryEncoder, InputDevice},
+    run_devices, run_rmk, CriticalSectionRawMutex, Sender, EVENT_CHANNEL, EVENT_CHANNEL_SIZE,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -106,13 +108,37 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    run_rmk(
-        input_pins,
-        output_pins,
-        driver,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+    let mut my_device = MyDevice {};
+    let pin_a = Input::new(AnyPin::from(p.P0_06), embassy_nrf::gpio::Pull::Up);
+    let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
+    let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
+
+    embassy_futures::join::join(
+        run_rmk(
+            input_pins,
+            output_pins,
+            driver,
+            &mut keymap::get_default_keymap(),
+            keyboard_config,
+            spawner,
+        ),
+        run_devices!(my_device, encoder),
     )
     .await;
+}
+
+struct MyDevice {}
+impl InputDevice for MyDevice {
+    async fn run(&mut self) {
+        loop {
+            info!("Hi my device");
+            embassy_time::Timer::after_secs(1).await;
+        }
+    }
+
+    type EventType = Event;
+
+    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+        EVENT_CHANNEL.sender()
+    }
 }

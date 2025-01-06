@@ -28,7 +28,7 @@ impl DebounceCounter {
 }
 
 /// Default per-key debouncer. The debouncing algorithm is same as ZMK's [default debouncer](https://github.com/zmkfirmware/zmk/blob/19613128b901723f7b78c136792d72e6ca7cf4fc/app/module/lib/zmk_debounce/debounce.c)
-pub(crate) struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
+pub struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_ms: u32,
     counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }

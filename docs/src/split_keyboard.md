@@ -20,7 +20,7 @@ See `examples/use_config/nrf52840_ble_split` for the `keyboard.toml` + wireless 
 
 ```toml
 [patch.crates-io]
-nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "d5f023b"}
+nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "b53991e"}
 ```
 
 to your `Cargo.toml` if there's compilation error in `nrf-softdevice` dependency.
@@ -85,7 +85,23 @@ input_pins = ["P1_11", "P1_10"]
 output_pins = ["P0_30"]
 ```
 
-When using split, the input/output pins defined in `[matrix]` section is not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central.matrix]` and `[split.peripheral.matrix]`. The contents of the split matrix configuration is the same as for `[matrix]`. This means each peripheral and central keyboard also supports `direct_pin`. The rows/cols in `[matrix]` section is the total number of rows/cols of the whole keyboard.
+When using split, the input/output pins defined in `[matrix]` section is not valid anymore. Instead, the input/output pins of split boards are defined in `[split.central.matrix]` and `[split.peripheral.matrix]`. The contents of the split matrix configuration is the same as for `[matrix]`. This means each peripheral and central keyboard also supports `direct_pin`.
+
+The rows/cols in `[layout]` section is the total number of rows/cols of the whole keyboard. For each split(central and peripherals), rows/cols/row_offset/col_offset should be defined to indicate the current split's position in the whole keyboard's layout. Suppose we have a 2-row + 5-col split, the left(central) is 2\*2, and the right(peripheral) is 2\*3, the positions should be defined as:
+
+```toml
+[split.central]
+rows = 2 # The number of rows in central
+cols = 2 # The number of cols in central
+row_offset = 0 # The row offset, for central(left) it's 0
+col_offset = 0 # The col offset, for central(left) it's 0
+
+[[split.peripheral]]
+rows = 2 # The number of rows in the peripheral
+cols = 3 # The number of cols in the peripheral
+row_offset = 0 # The row offset of the peripheral, peripheral starts from row 0, so the offset is 0
+col_offset = 2 # The col offset of the peripheral. Central has 2 cols, so the col_offset should be 2 for the peripheral
+```
 
 If you're using BLE, `ble_addr` is required for both central and peripheral. Each device needs a `ble_addr`.
 

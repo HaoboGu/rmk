@@ -7,15 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-01-02
+
 ### Added
 
-- Add 'split.central.matrix` and `split.peripheral.matrix` for split matrix configurations
+- Add `MT` and `TH` in layout section
+
+### Fixed
+
+- Fix wrong default `TapHoldConfig` settings
+- Fix Chip/board checking error in rmk-macro
+- Fix L/Rgui typo in macro -> L/RGui
+
+## [0.4.0] - 2024-12-16
+
+### Added
+
+- Add `split.central.matrix` and `split.peripheral.matrix` for split matrix configurations
 - Add `clear_storage` option
 
 ### Removed
 
-- Removed `split.central.input_pins` and `split.central.output_pins`
-- Removed `split.peripheral.input_pins` and `split.peripheral.output_pins`
+- BREAKING: Removed `split.central.input_pins` and `split.central.output_pins`
+- BREAKING: Removed `split.peripheral.input_pins` and `split.peripheral.output_pins`
 
 ## [0.3.4] - 2024-11-27
 

@@ -96,15 +96,27 @@ fn expand_split_peripheral(
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
                 &keyboard_config.chip,
-                peripheral_config.matrix.input_pins.clone().unwrap(),
-                peripheral_config.matrix.output_pins.clone().unwrap(),
+                peripheral_config
+                    .matrix
+                    .input_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.input_pins is required"),
+                peripheral_config
+                    .matrix
+                    .output_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.output_pins is required"),
                 async_matrix,
             ));
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
                 &keyboard_config.chip,
-                peripheral_config.matrix.direct_pins.clone().unwrap(),
+                peripheral_config
+                    .matrix
+                    .direct_pins
+                    .clone()
+                    .expect("split.peripheral.matrix.direct_pins is required"),
                 async_matrix,
                 peripheral_config.matrix.direct_pin_low_active,
             ));
@@ -148,13 +160,13 @@ fn expand_split_peripheral_entry(
                 .expect("Missing central ble address");
             let row = peripheral_config.rows;
             let col = peripheral_config.cols;
-            let size = row + col;
             let peripheral_addr = peripheral_config.ble_addr.expect(
                 "Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`",
             );
             let low_active = peripheral_config.matrix.direct_pin_low_active;
             match peripheral_config.matrix.matrix_type {
                 MatrixType::direct_pin => {
+                    let size = row * col;
                     quote! {
                         ::rmk::split::peripheral::run_rmk_split_peripheral_direct_pin::<
                             ::embassy_nrf::gpio::Input<'_>,

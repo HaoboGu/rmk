@@ -10,7 +10,7 @@ chip = "nrf52840"
 # Input and output pins are mandatory
 input_pins = ["P1_00", "P1_01", "P1_02", "P1_07"]
 output_pins = ["P1_05", "P1_06", "P1_03"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
 [layout]
@@ -45,7 +45,7 @@ capslock.low_active = false
 [storage]
 # Storage feature is enabled by default
 # enabled = false
-clear_storage = true
+# clear_storage = true
 
 [ble]
 enabled = true

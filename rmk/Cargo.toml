@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.4.4"
+version = "0.5.1"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-macro = { version = "=0.3.3", path = "../rmk-macro" }
+rmk-macro = { version = "=0.4.1", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal-async = { version = "1.0.0", features = [
     "defmt-03",
@@ -40,7 +40,7 @@ num_enum = { version = "0.7", default-features = false }
 bitfield-struct = "0.9"
 byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "3.0.0", features = ["defmt-03"] }
+sequential-storage = { version = "4.0.0", features = ["defmt-03"] }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
@@ -50,7 +50,7 @@ postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
 once_cell = { version = "1.19", features = [
     "atomic-polyfill",
 ], default-features = false, optional = true }
-nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "d5f023b", features = [
+nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "b53991e", features = [
     "defmt",
     "ble-peripheral",
     "critical-section-impl",

@@ -42,14 +42,14 @@
 ## 使用 RMK
 
 ### 选项 1：从模板初始化
-你可以使用RMK提供的模板仓库 [rmk-template](https://github.com/HaoboGu/rmk-template) 来初始化你的固件工程
+你可以使用[rmkit](https://github.com/HaoboGu/rmkit) 来从RMK的项目模版初始化你的固件工程
 
 ```shell
-cargo install cargo-generate
-cargo generate --git https://github.com/HaoboGu/rmk-template
+cargo install rmkit flip-link
+rmkit init
 ```
 
-生成固件工程之后，按照`README.md`中的步骤进行操作。有关详细信息，请查看 RMK 的 [用户指南](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html)。
+详细步骤介绍，请查看 RMK 的 [用户指南](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html)。
 
 ### 选项 2：尝试内置的例子
 
@@ -67,7 +67,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo build
+   cargo build --release
    ```
 
 3. 烧录固件
@@ -76,7 +76,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
 
    ```shell
    cd examples/use_rust/rp2040
-   cargo run
+   cargo run --release
    ```
 
 4. 通过USB烧录
@@ -93,7 +93,7 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
    4. 执行下面的命令烧录
       ```shell
       cd examples/use_rust/rp2040
-      cargo run
+      cargo run --release
       ```
       如果你看到下面这样的日志，那说明烧录成功了
       ```shell

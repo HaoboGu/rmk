@@ -46,7 +46,7 @@ usb_enable = true
 `[matrix]` section defines the key matrix information of the keyboard, aka input/output pins. 
 
 <div class="warning">
-For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[spilt]` section.
+For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[split]` section.
 </div>
 
 IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:
@@ -62,7 +62,7 @@ Here is an example toml of `[matrix]` section for stm32:
 # Input and output pins are mandatory
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 ```
 
@@ -71,6 +71,13 @@ If your keys are directly connected to the microcontroller pins, set `matrix_typ
 `direct_pins` is a two-dimensional array that represents the physical layout of your keys.
 
 If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
+
+Currently, col2row is used as the default matrix type. If you want to use row2col matrix, you should edit your `Cargo.toml`, disable the default feature as the following:
+
+```toml
+# Cargo.toml
+rmk = { version = "0.4", default-features = false, features = ["nrf52840_ble"] }
+```
 
 Here is an example for rp2040.
 ```toml
@@ -144,9 +151,12 @@ The key string should follow several rules:
     7. Use `"TT(n)"` to create a layer activate or tap toggle action, `n` is the layer number
     8. Use `"TG(n)"` to create a layer toggle action, `n` is the layer number
     9. Use `"TO(n)"` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
-    
+
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
+4. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
+
+5. For generic key tap-hold, use `TH(key-tap, key-hold)`.
 
 ### `[behavior]`
 
@@ -171,6 +181,25 @@ lower = 2
 adjust = 3
 ```
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
+
+#### Tap Hold
+
+In the `tap_hold` sub-table, you can configure the following parameters:
+
+- `enable_hrm`: Enables or disables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
+- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
+- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
+- `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
+
+The following are the typical configurations:
+
+```toml
+[behavior]
+# Enable HRM 
+tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
+# Disable HRM, you can safely ignore any fields if you don't want to change them
+tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
+```
 
 #### One Shot
 
@@ -290,7 +319,7 @@ matrix_type = "normal"
 # Input and output pins
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 
 # Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
 matrix_type = "direct_pin"

@@ -7,8 +7,6 @@ manufacturer = "haobo"
 chip = "nrf52840"
 
 [layout]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
-# row2col = true
 rows = 4
 cols = 3
 layers = 2
@@ -32,6 +30,9 @@ keymap = [
 [ble]
 enabled = true
 
+[behavior]
+tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
+
 [split]
 connection = "ble"
 
@@ -44,6 +45,8 @@ ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
 [split.central.matrix]
 matrix_type = "normal"
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# row2col = true
 input_pins = ["P0_12", "P0_13"]
 output_pins = ["P0_14", "P0_15"]
 

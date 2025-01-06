@@ -1,14 +1,12 @@
 use core::cell::RefCell;
 
-use defmt::{error, info};
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_futures::select::select_slice;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-use heapless::Vec;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
@@ -19,7 +17,8 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::keyboard::{key_event_channel, keyboard_report_channel, KeyEvent, Keyboard};
+use crate::event::KeyEvent;
+use crate::keyboard::{Keyboard, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
@@ -67,6 +66,7 @@ pub async fn run_rmk_split_central<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
@@ -156,45 +156,31 @@ pub async fn run_rmk_split_central_direct_pin<
     const NUM_LAYER: usize,
     const SIZE: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; CENTRAL_COL]; CENTRAL_ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; CENTRAL_ROW]; CENTRAL_COL],
+    direct_pins: [[Option<In>; CENTRAL_COL]; CENTRAL_ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    info!("Debouncer");
     // Create the debouncer, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
+    #[cfg(feature = "rapid_debouncer")]
     let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer: DefaultDebouncer<CENTRAL_ROW, CENTRAL_COL> = DefaultDebouncer::new();
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
+    #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer: DefaultDebouncer<CENTRAL_COL, CENTRAL_ROW> = DefaultDebouncer::new();
 
     // Keyboard matrix, use COL2ROW by default
-    #[cfg(feature = "col2row")]
     let matrix = CentralDirectPinMatrix::<
-        In,
+        _,
         _,
         CENTRAL_ROW_OFFSET,
         CENTRAL_COL_OFFSET,
         CENTRAL_ROW,
         CENTRAL_COL,
-        SIZE,
-    >::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = CentralDirectPinMatrix::<
-        In,
-        _,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        CENTRAL_COL,
-        CENTRAL_ROW,
         SIZE,
     >::new(direct_pins, debouncer, low_active);
 
@@ -253,7 +239,7 @@ pub async fn run_peripheral_monitor<
 }
 
 /// Split central is connected to host via usb
-pub(crate) async fn initialize_usb_split_central_and_run<
+pub async fn initialize_usb_split_central_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     D: Driver<'static>,
@@ -266,6 +252,7 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     // Initialize storage and keymap
@@ -286,8 +273,8 @@ pub(crate) async fn initialize_usb_split_central_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
@@ -395,15 +382,13 @@ impl<
                                 self.key_states[out_idx][in_idx],
                             );
 
-                            // `try_send` is used here because we don't want to block scanning if the channel is full
-                            let send_re = key_event_channel.try_send(KeyEvent {
-                                row,
-                                col,
-                                pressed: key_state.pressed,
-                            });
-                            if send_re.is_err() {
-                                error!("Failed to send key event: key event channel full");
-                            }
+                            KEY_EVENT_CHANNEL
+                                .send(KeyEvent {
+                                    row,
+                                    col,
+                                    pressed: key_state.pressed,
+                                })
+                                .await;
                         }
                         _ => (),
                     }
@@ -558,8 +543,10 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use embassy_futures::select::select_slice;
+        use heapless::Vec;
         if let Some(start_time) = self.scan_start {
-            // If no key press over 1ms, stop scanning and wait for interupt
+            // If no key press over 1ms, stop scanning and wait for interrupt
             if start_time.elapsed().as_millis() <= 1 {
                 return;
             } else {
@@ -626,15 +613,13 @@ impl<
                                     self.key_states[row_idx][col_idx],
                                 );
 
-                                // `try_send` is used here because we don't want to block scanning if the channel is full
-                                let send_re = key_event_channel.try_send(KeyEvent {
-                                    row,
-                                    col,
-                                    pressed: key_state.pressed,
-                                });
-                                if send_re.is_err() {
-                                    error!("Failed to send key event: key event channel full");
-                                }
+                                KEY_EVENT_CHANNEL
+                                    .send(KeyEvent {
+                                        row,
+                                        col,
+                                        pressed: key_state.pressed,
+                                    })
+                                    .await;
                             }
                             _ => (),
                         }

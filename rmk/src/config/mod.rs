@@ -44,7 +44,27 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 #[derive(Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
+    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+}
+
+/// Configurations for tap hold behavior
+pub struct TapHoldConfig {
+    pub enable_hrm: bool,
+    pub prior_idle_time: Duration,
+    pub post_wait_time: Duration,
+    pub hold_timeout: Duration,
+}
+
+impl Default for TapHoldConfig {
+    fn default() -> Self {
+        Self {
+            enable_hrm: false,
+            prior_idle_time: Duration::from_millis(120),
+            post_wait_time: Duration::from_millis(50),
+            hold_timeout: Duration::from_millis(250),
+        }
+    }
 }
 
 /// Config for one shot behavior

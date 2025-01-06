@@ -2,12 +2,13 @@ pub(crate) mod server;
 
 use self::server::{BleServer, VialReaderWriter};
 use crate::config::StorageConfig;
-use crate::keyboard::keyboard_report_channel;
+use crate::keyboard::KEYBOARD_REPORT_CHANNEL;
 use crate::matrix::MatrixTrait;
 use crate::storage::nor_flash::esp_partition::{Partition, PartitionType};
 use crate::storage::Storage;
 use crate::via::process::VialService;
 use crate::via::vial_task;
+use crate::CONNECTION_STATE;
 use crate::KEYBOARD_STATE;
 use crate::{
     action::KeyAction, ble::ble_communication_task, config::RmkConfig, keyboard::Keyboard,
@@ -34,7 +35,7 @@ use futures::pin_mut;
 /// * `output_pins` - output gpio pins
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
+pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     M: MatrixTrait,
     Out: OutputPin,
     const ROW: usize,
@@ -43,6 +44,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 >(
     mut matrix: M,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
 ) -> ! {
     let f = Partition::new(PartitionType::Custom, Some(c"rmk"));
@@ -60,8 +62,8 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
 
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
 
-    let keyboard_report_sender = keyboard_report_channel.sender();
-    let keyboard_report_receiver = keyboard_report_channel.receiver();
+    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
+    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     let mut keyboard = Keyboard::new(
         &keymap,
@@ -75,6 +77,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
+        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(keyboard_config.usb_config);
         ble_server.output_keyboard.lock().on_write(|args| {
@@ -86,6 +89,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
         ble_server.wait_for_connection().await;
 
         info!("BLE connected!");
+        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
 
         // Create BLE HID writers
         let mut keyboard_writer = ble_server.input_keyboard;
@@ -114,7 +118,7 @@ pub(crate) async fn initialize_esp_ble_keyboard_with_config_and_run<
             hid_writer: ble_server.input_vial,
         };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);
-        let matrix_fut = matrix.scan();
+        let matrix_fut = matrix.run();
         let storage_fut = storage.run();
         pin_mut!(storage_fut);
         pin_mut!(via_fut);

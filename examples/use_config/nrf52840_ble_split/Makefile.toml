@@ -41,28 +41,36 @@ args = [
 dependencies = ["install-llvm-tools", "flip-link"]
 
 [tasks.uf2-central]
-command = "python"
+install_crate = { crate_name = "cargo-hex-to-uf2", binary = "cargo", test_arg = [
+    "hex-to-uf2",
+    "--help",
+] }
+command = "cargo"
 args = [
-    "../../../scripts/uf2conv.py",
+    "hex-to-uf2",
+    "--input-path",
     "rmk-central.hex",
-    "-c",
-    "-f",
-    "0xADA52840",                  # Use your chip family ID in the uf2conv.py file as -f argument
-    "-o",
+    "--output-path",
     "rmk-central.uf2",
+    "--family",
+    "nrf52840",
 ]
 dependencies = ["objcopy-central"]
 
 [tasks.uf2-peripheral]
-command = "python"
+install_crate = { crate_name = "cargo-hex-to-uf2", binary = "cargo", test_arg = [
+    "hex-to-uf2",
+    "--help",
+] }
+command = "cargo"
 args = [
-    "../../../scripts/uf2conv.py",
+    "hex-to-uf2",
+    "--input-path",
     "rmk-peripheral.hex",
-    "-c",
-    "-f",
-    "0xADA52840",                  # Use your chip family ID in the uf2conv.py file as -f argument
-    "-o",
+    "--output-path",
     "rmk-peripheral.uf2",
+    "--family",
+    "nrf52840",
 ]
 dependencies = ["objcopy-peripheral"]
 

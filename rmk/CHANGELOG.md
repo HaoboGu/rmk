@@ -7,19 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Fixed invalid BLE state after reconnection on Windows
-- Fixed ghosting key on macOS
+## [0.5.1] - 2025-01-02
 
 ### Added
 
-- Support `direct_pin` type matrix for split configurations
+- Add new [cloud-based project template](https://github.com/haobogu/rmk-project-template)
+- Connection state sync between central and peripheral
+- Use 2M PHY by default
+- `mt!` for modifier tap-hold and `th!` for tap-hold action
+
+### Changed
+
+- Use [`rmkit`](https://github.com/HaoboGu/rmkit) as the default project generator
+- Update `sequential-storage` to v4.0.0
+- Improve CI speed
+- Use `cargo-hex-to-uf2` instead of python script for uf2 firmware generation
+
+### Fixed
+
+- Fix hold-after-tap key loss by allowing multi hold-after-tap keys
+- Exchange left and right modifier
+- Fix wrong number of waited futs of direct-pin matrix
+- Fix wrong peripheral conn param by setting conn param from central, not peripheral
+
+## [0.5.0] - 2024-12-16
+
+### Added
+
+- BREAKING: Support `direct_pin` type matrix for split configurations, split pin config is moved to [split.central/peripheral.matrix]
+- Support home row mod(HRM) mode with improved tap hold processing
 - Add `clear_storage` option
+- Enable USB remote wakeup
+- py32f07x use_rust example. py32f07x is a super cheap($0.2) cortex-m0 chip from Puya
 
 ### Changed
 
 - Remove `rmk-config`
+
+### Fixed
+
+- Fix slightly lag on peripheral side
+- Fix invalid BLE state after reconnection on Windows
+- Fix ghosting key on macOS
+- Fix direct pin debouncer size error
+- Fix esp32 input pin pull configuration
+- Fix BLE peripheral lag
 
 ## [0.4.4] - 2024-11-27
 

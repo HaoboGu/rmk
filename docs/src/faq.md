@@ -1,5 +1,26 @@
 # FAQ
 
+### My matrix is row2col, the matrix doesn't work
+
+RMK enables `col2row` as the default feature. To use the row2col matrix, you have to change your `Cargo.toml`, adds `default-features = false` to RMK crate, disabling the `col2row` feature.
+
+```toml
+# Cargo.toml
+rmk = { version = "0.5", default-features = false, features = ["nrf52840_ble", "async_matrix"] }
+```
+
+If you're using the cloud compilation, you have to update your `keyboard.toml`, add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
+
+```toml
+# keyboard.toml
+[matrix]
+row2col = true
+
+# Or
+[split.central.matrix]
+row2col = true
+```
+
 ### Where is my built firmware?
 
 By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./user_guide/2_setup_environment.md/#3-install-your-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
@@ -36,8 +57,6 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   cargo make uf2 --release
   ```
   
-  This script requires you have `python` command available in your commandline. Some platforms have `python3` command only, you can change `python` in `Makefile.toml` to `python3` in this case.
-
 ### I changed keymap in `keyboard.toml`, but the keyboard is not updated
 
 RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.

@@ -16,6 +16,7 @@ use crate::{
     config::KeyboardUsbConfig,
     hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
     usb::descriptor::{CompositeReport, ViaReport},
+    CONNECTION_STATE,
 };
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
@@ -88,6 +89,7 @@ impl<D: Driver<'static>> KeyboardUsbDevice<'static, D> {
         usb_config.product = Some(keyboard_config.product_name);
         usb_config.serial_number = Some(keyboard_config.serial_number);
         usb_config.max_power = 450;
+        usb_config.supports_remote_wakeup = true;
 
         // Required for windows compatibility.
         usb_config.max_packet_size_0 = 64;
@@ -212,6 +214,7 @@ impl Handler for UsbDeviceHandler {
     fn configured(&mut self, configured: bool) {
         if configured {
             USB_STATE.store(UsbState::Configured as u8, Ordering::Relaxed);
+            CONNECTION_STATE.store(true, Ordering::Release);
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);

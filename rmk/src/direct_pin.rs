@@ -5,8 +5,8 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
-use crate::keyboard::key_event_channel;
-use crate::keyboard::KeyEvent;
+use crate::event::KeyEvent;
+use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
 use crate::RmkConfig;
@@ -21,7 +21,7 @@ use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
 ))]
 use crate::initialize_usb_keyboard_and_run;
 
-use defmt::{error, info};
+use defmt::info;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -62,8 +62,7 @@ pub async fn run_rmk_direct_pin<
     const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
@@ -156,26 +155,23 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     const SIZE: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
+    direct_pins: [[Option<In>; COL]; ROW],
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
-    // Create the debouncer, use COL2ROW by default
+    // Create the debouncer
     #[cfg(feature = "rapid_debouncer")]
     let debouncer = RapidDebouncer::<COL, ROW>::new();
     #[cfg(not(feature = "rapid_debouncer"))]
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix
-    #[cfg(feature = "col2row")]
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = DirectPinMatrix::<_, _, COL, ROW, SIZE>::new(direct_pins, debouncer, low_active);
 
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
@@ -337,15 +333,13 @@ impl<
                                 self.key_states[row_idx][col_idx].toggle_pressed();
                                 let key_state = self.key_states[row_idx][col_idx];
 
-                                // `try_send` is used here because we don't want to block scanning if the channel is full
-                                let send_re = key_event_channel.try_send(KeyEvent {
-                                    row: row_idx as u8,
-                                    col: col_idx as u8,
-                                    pressed: key_state.pressed,
-                                });
-                                if send_re.is_err() {
-                                    error!("Failed to send key event: key event channel full");
-                                }
+                                KEY_EVENT_CHANNEL
+                                    .send(KeyEvent {
+                                        row: row_idx as u8,
+                                        col: col_idx as u8,
+                                        pressed: key_state.pressed,
+                                    })
+                                    .await;
                             }
                             _ => (),
                         }

@@ -10,7 +10,7 @@ chip = "rp2040"
 # Input and output pins are mandatory
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
-# WARNING: Currently row2col/col2row is set in RMK's feature gate, configs here do nothing actually
+# WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
 [layout]
