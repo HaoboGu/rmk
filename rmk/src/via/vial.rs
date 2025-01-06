@@ -1,7 +1,6 @@
 use core::cell::RefCell;
 
 use byteorder::{ByteOrder, LittleEndian};
-use defmt::{debug, info};
 use num_enum::FromPrimitive;
 
 use crate::{keymap::KeyMap, usb::descriptor::ViaReport};

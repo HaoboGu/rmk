@@ -11,7 +11,6 @@ use crate::{
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn};
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,

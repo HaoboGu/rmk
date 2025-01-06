@@ -66,7 +66,7 @@ pub trait MatrixTrait {
 /// KeyState represents the state of a key.
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct KeyState {
+pub struct KeyState {
     // True if the key is pressed
     pub pressed: bool,
     // True if the key's state is just changed
