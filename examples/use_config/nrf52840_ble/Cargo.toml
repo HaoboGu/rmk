@@ -10,11 +10,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = [
+rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
     "async_matrix",
-    # "defmt"
+    "defmt",
 ] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
