@@ -38,6 +38,7 @@ use embassy_futures::select::{select, select4, Either4};
 pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
+use embassy_usb::UsbDevice;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -46,12 +47,14 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
-use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
+use keyboard::{Keyboard, KEYBOARD_REPORT_CHANNEL};
 pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 use keymap::KeyMap;
 use matrix::{Matrix, MatrixTrait};
+use reporter::{HidReporter as _, UsbKeyboardReporter};
 pub use rmk_macro as macros;
-use usb::KeyboardUsbDevice;
+use usb::descriptor::{CompositeReport, KeyboardReport, ViaReport};
+use usb::{new_usb_builder, register_usb_reader_writer, register_usb_writer};
 use via::process::VialService;
 #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
 use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
@@ -77,6 +80,7 @@ pub mod reporter;
 #[cfg(feature = "split")]
 pub mod split;
 mod storage;
+#[macro_use]
 mod usb;
 mod via;
 
@@ -254,15 +258,25 @@ pub async fn initialize_usb_keyboard_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
-
     // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
+    let (mut keyboard, mut vial_service, mut light_service) = (
         Keyboard::new(&keymap, keyboard_config.behavior_config),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
     );
+
+    let mut usb_builder = new_usb_builder(usb_driver, keyboard_config.usb_config);
+    let keyboard_reader_writer =
+        register_usb_reader_writer::<_, KeyboardReport, 1, 8>(&mut usb_builder);
+    let other_writer = register_usb_writer::<_, CompositeReport, 9>(&mut usb_builder);
+    let via_reader_writer = register_usb_reader_writer::<_, ViaReport, 32, 32>(&mut usb_builder);
+    let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
+    let mut usb_reporter = UsbKeyboardReporter {
+        keyboard_writer,
+        other_writer,
+    };
+
+    let mut usb_device = usb_builder.build();
 
     KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
     // Run all tasks, if one of them fails, wait 1 second and then restart
@@ -274,7 +288,7 @@ pub async fn initialize_usb_keyboard_and_run<
         &mut storage,
         &mut light_service,
         &mut vial_service,
-        &keyboard_report_receiver,
+        &mut usb_reporter,
     )
     .await
 }
@@ -291,7 +305,7 @@ pub(crate) async fn run_usb_keyboard<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    usb_device: &mut KeyboardUsbDevice<'a, D>,
+    usb_device: &mut UsbDevice<'a, D>,
     keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
@@ -302,32 +316,24 @@ pub(crate) async fn run_usb_keyboard<
     >,
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<
-        'b,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
+    usb_reporter: &mut UsbKeyboardReporter<'a, D>,
 ) -> ! {
     loop {
         CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-        let usb_fut = usb_device.device.run();
+        let usb_fut = usb_device.run();
         let keyboard_fut = keyboard.run();
         let matrix_fut = matrix.run();
-        let communication_fut = communication_task(
-            keyboard_report_receiver,
-            &mut usb_device.keyboard_hid_writer,
-            &mut usb_device.other_hid_writer,
-        );
-        let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
-        let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
+        let reporter_fut = usb_reporter.run();
+        // FIXME: add led and vial back
+        // let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
+        // let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
 
         pin_mut!(usb_fut);
         pin_mut!(keyboard_fut);
         pin_mut!(matrix_fut);
-        pin_mut!(led_fut);
-        pin_mut!(via_fut);
-        pin_mut!(communication_fut);
+        // pin_mut!(led_fut);
+        // pin_mut!(via_fut);
+        pin_mut!(reporter_fut);
 
         #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
         let storage_fut = storage.run();
@@ -337,12 +343,12 @@ pub(crate) async fn run_usb_keyboard<
         match select4(
             select(usb_fut, keyboard_fut),
             #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-            select(storage_fut, via_fut),
-            #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-            #[cfg(feature = "_no_external_storage")]
-            via_fut,
-            led_fut,
-            select(matrix_fut, communication_fut),
+            storage_fut,
+            // #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
+            // via_fut,
+            // led_fut,
+            matrix_fut,
+            reporter_fut,
         )
         .await
         {

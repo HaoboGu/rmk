@@ -29,8 +29,8 @@ pub enum Report {
 
 impl AsInputReport for Report {}
 
-/// Reporter trait is used for reporting HID messages to the host, via USB, BLE, etc.
-pub trait Reporter {
+/// HidReporter trait is used for reporting HID messages to the host, via USB, BLE, etc.
+pub trait HidReporter {
     /// The report type that the reporter receives from input processors.
     type ReportType: AsInputReport;
 
@@ -56,14 +56,19 @@ pub trait Reporter {
     fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = ()>;
 }
 
+/// HidListener trait is used for listening to HID messages from the host, via USB, BLE, etc.
+pub trait HidListener {
+
+}
+
 /// USB reporter
 /// TODO: Move to usb mod?
 pub struct UsbKeyboardReporter<'d, D: Driver<'d>> {
-    pub(crate) hid_writer: HidWriter<'d, D, 8>,
+    pub(crate) keyboard_writer: HidWriter<'d, D, 8>,
     pub(crate) other_writer: HidWriter<'d, D, 9>,
 }
 
-impl<'d, D: Driver<'d>> Reporter for UsbKeyboardReporter<'d, D> {
+impl<'d, D: Driver<'d>> HidReporter for UsbKeyboardReporter<'d, D> {
     type ReportType = Report;
 
     fn report_receiver(
@@ -76,7 +81,7 @@ impl<'d, D: Driver<'d>> Reporter for UsbKeyboardReporter<'d, D> {
         // Write report to USB
         match report {
             Report::KeyboardReport(keyboard_report) => {
-                self.hid_writer.write_serialize(&keyboard_report).await;
+                self.keyboard_writer.write_serialize(&keyboard_report).await;
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf: [u8; 9] = [0; 9];
@@ -114,7 +119,7 @@ impl<'d, D: Driver<'d>> Reporter for UsbKeyboardReporter<'d, D> {
 
 pub struct DummyReporter {}
 
-impl Reporter for DummyReporter {
+impl HidReporter for DummyReporter {
     type ReportType = Report;
 
     fn report_receiver(

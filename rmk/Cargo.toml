@@ -45,6 +45,10 @@ sequential-storage = { version = "4.0.0", features = ["defmt-03"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
 
+# Used in macro
+paste = "1"
+
+
 # Optional dependencies
 # nRF dependencies
 once_cell = { version = "1.19", features = [

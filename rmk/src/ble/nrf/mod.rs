@@ -9,33 +9,32 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::ble::BleKeyboardReporter;
 use crate::config::BleBatteryConfig;
-use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
+use crate::input_device::InputProcessor as _;
+use crate::keyboard::KEYBOARD_REPORT_CHANNEL;
 use crate::matrix::MatrixTrait;
+use crate::reporter::{DummyReporter, Reporter as _, UsbKeyboardReporter};
 use crate::storage::StorageKeys;
+use crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport};
 use crate::{
-    ble::{
-        ble_communication_task,
-        nrf::{
-            advertise::{create_advertisement_data, SCAN_DATA},
-            bonder::BondInfo,
-            server::BleHidWriter,
-        },
+    ble::nrf::{
+        advertise::{create_advertisement_data, SCAN_DATA},
+        bonder::BondInfo,
     },
-    keyboard::{Keyboard, KeyboardReportMessage},
+    keyboard::Keyboard,
     light::led_service_task,
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
-use crate::{CONNECTION_STATE, KEYBOARD_STATE};
+use crate::{add_usb_reader_writer, CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
-use defmt::{debug, error, info, unwrap, warn};
+use defmt::{debug, error, info, unwrap};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -54,9 +53,11 @@ use vial_service::VialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::{
-        run_usb_keyboard,
-        usb::{wait_for_usb_enabled, wait_for_usb_suspend, UsbState, USB_STATE},
-        KeyboardUsbDevice,
+        new_usb_builder, run_usb_keyboard,
+        usb::{
+            register_usb_reader_writer, register_usb_writer, wait_for_usb_enabled,
+            wait_for_usb_suspend, UsbState, USB_STATE,
+        },
     },
     embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
@@ -300,13 +301,26 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Keyboard services
-    let mut keyboard = Keyboard::new(
-        &keymap,
-        &keyboard_report_sender,
-        keyboard_config.behavior_config,
-    );
+    let mut keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
     #[cfg(not(feature = "_no_usb"))]
-    let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
+    let (mut usb_device, mut usb_reporter) = {
+        let mut usb_builder = new_usb_builder(usb_driver, keyboard_config.usb_config);
+        let keyboard_reader_writer =
+            add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
+        // register_usb_reader_writer::<_, KeyboardReport, 1, 8>(&mut usb_builder);
+        let other_writer = register_usb_writer::<_, CompositeReport, 9>(&mut usb_builder);
+        let via_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        // register_usb_reader_writer::<_, ViaReport, 32, 32>(&mut usb_builder);
+        let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
+        let usb_reporter = UsbKeyboardReporter {
+            keyboard_writer,
+            other_writer,
+        };
+
+        let usb_device = usb_builder.build();
+        (usb_device, usb_reporter)
+    };
+    // let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);
 
@@ -340,7 +354,8 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                     &mut storage,
                     &mut light_service,
                     &mut vial_service,
-                    &keyboard_report_receiver,
+                    &mut usb_reporter,
+                    // &keyboard_report_receiver,
                 );
                 if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
                     info!("Running USB keyboard");
@@ -384,7 +399,6 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                     &mut light_service,
                                     &mut vial_service,
                                     &mut keyboard_config.ble_battery_config,
-                                    &keyboard_report_receiver,
                                 ),
                                 wait_for_usb_enabled(),
                                 update_profile(bonder),
@@ -406,12 +420,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                 }
             } else {
                 // USB isn't connected, wait for any of BLE/USB connection
-                let dummy_task = run_dummy_keyboard(
-                    &mut keyboard,
-                    &mut matrix,
-                    &mut storage,
-                    &keyboard_report_receiver,
-                );
+                let dummy_task = run_dummy_keyboard(&mut keyboard, &mut matrix, &mut storage);
                 let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
 
                 info!("BLE advertising");
@@ -442,7 +451,6 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                 &mut light_service,
                                 &mut vial_service,
                                 &mut keyboard_config.ble_battery_config,
-                                &keyboard_report_receiver,
                             ),
                             wait_for_usb_enabled(),
                             update_profile(bonder),
@@ -549,26 +557,15 @@ pub(crate) async fn run_dummy_keyboard<
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<
-        'a,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
     // Don't need to wait for connection, just do scanning to detect if there's a profile update
     let matrix_fut = matrix.scan();
     let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
-    let dummy_communication = async {
-        loop {
-            keyboard_report_receiver.receive().await;
-            warn!("Dummy service receives")
-        }
-    };
+    let mut dummy_reporter = DummyReporter {};
 
-    match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
+    match select4(matrix_fut, keyboard_fut, storage_fut, dummy_reporter.run()).await {
         Either4::First(_) => (),
         Either4::Second(_) => (),
         Either4::Third(_) => (),
@@ -607,24 +604,20 @@ pub(crate) async fn run_ble_keyboard<
     light_service: &mut LightService<Out>,
     vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
     battery_config: &mut BleBatteryConfig<'b>,
-    keyboard_report_receiver: &Receiver<
-        'a,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
     info!("Starting GATT server 20 ms later");
     Timer::after_millis(20).await;
-    let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
-    let mut ble_media_writer = BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
-    let mut ble_system_control_writer =
-        BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
-    let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
     let mut bas = ble_server.bas;
     let mut vial_rw = VialReaderWriter::new(ble_server.vial, &conn);
     let vial_task = vial_task(&mut vial_rw, vial_service);
+    let mut ble_keyboard_reporter = BleKeyboardReporter::new(
+        conn,
+        ble_server.hid.input_keyboard,
+        ble_server.hid.input_media_keys,
+        ble_server.hid.input_system_keys,
+        ble_server.hid.input_mouse_keys,
+    );
 
     // Tasks
     let battery_fut = bas.run(battery_config, &conn);
@@ -633,20 +626,13 @@ pub(crate) async fn run_ble_keyboard<
     // Run the GATT server on the connection. This returns when the connection gets disconnected.
     let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
     let keyboard_fut = keyboard.run();
-    let ble_communication_task = ble_communication_task(
-        keyboard_report_receiver,
-        &mut ble_keyboard_writer,
-        &mut ble_media_writer,
-        &mut ble_system_control_writer,
-        &mut ble_mouse_writer,
-    );
     let storage_fut = storage.run();
     let set_conn_param = set_conn_params(&conn);
 
     // Exit if anyone of those futures exits
     match select4(
         select(matrix_fut, join(ble_fut, set_conn_param)),
-        select(ble_communication_task, keyboard_fut),
+        select(ble_keyboard_reporter.run(), keyboard_fut),
         select(battery_fut, led_fut),
         select(vial_task, storage_fut),
     )

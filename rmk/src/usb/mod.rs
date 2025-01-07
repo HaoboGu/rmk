@@ -2,24 +2,17 @@ pub(crate) mod descriptor;
 
 use core::sync::atomic::{AtomicU8, Ordering};
 use defmt::info;
-use descriptor::KeyboardReport;
 use embassy_time::Timer;
 use embassy_usb::{
-    class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
+    class::hid::{Config, HidReader, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
-    Builder, Handler, UsbDevice,
+    Builder, Handler,
 };
 use static_cell::StaticCell;
 use usbd_hid::descriptor::SerializedDescriptor;
 
-use crate::{
-    config::KeyboardUsbConfig,
-    hid::{UsbHidReader, UsbHidReaderWriter, UsbHidWriter},
-    reporter::UsbReporterTrait,
-    usb::descriptor::{CompositeReport, ViaReport},
-    CONNECTION_STATE,
-};
+use crate::{config::KeyboardUsbConfig, CONNECTION_STATE};
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
 
@@ -111,13 +104,6 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     builder
 }
 
-#[export_macro]
-macro_rules! usb_device! {
-    () => {
-        
-    };
-}
-
 // In this case, report id should be used.
 // The keyboard usb device should have 3 hid instances:
 // 1. Boot keyboard: 1 endpoint in
@@ -131,7 +117,6 @@ macro_rules! usb_device! {
 //     // pub(crate) other_hid_writer: UsbHidWriter<'d, D, 9>,
 //     pub(crate) via_hid: UsbHidReaderWriter<'d, D, 32, 32>,
 // }
-
 
 // impl<D: Driver<'static>, R: UsbReporterTrait<'static, D>> KeyboardUsbDevice<'static, D, R> {
 //     pub(crate) fn new(driver: D, keyboard_config: KeyboardUsbConfig<'static>) -> Self {
@@ -158,7 +143,7 @@ macro_rules! usb_device! {
 //     }
 // }
 
-pub(crate) fn build_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, const N: usize>(
+pub(crate) fn register_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, const N: usize>(
     usb_builder: &mut Builder<'static, D>,
 ) -> HidWriter<'static, D, N> {
     // Initialize hid interfaces
@@ -173,7 +158,32 @@ pub(crate) fn build_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, con
     HidWriter::new(usb_builder, STATE.init(State::new()), hid_config)
 }
 
-pub(crate) fn build_usb_reader_writer<
+#[macro_export]
+macro_rules! add_usb_reader_writer {
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
+        // 静态变量名基于类型名称生成
+        use usbd_hid::descriptor::SerializedDescriptor;
+        paste::paste! {
+            static [<$descriptor:snake:upper _STATE>]: StaticCell<::embassy_usb::class::hid::State> = StaticCell::new();
+            static [<$descriptor:snake:upper _HANDLER>]: StaticCell<$crate::usb::UsbRequestHandler> = StaticCell::new();
+        }
+
+        let state = paste::paste! { [<$descriptor:snake:upper _STATE>].init(::embassy_usb::class::hid::State::new()) };
+        let request_handler = paste::paste! { [<$descriptor:snake:upper _HANDLER>].init($crate::usb::UsbRequestHandler {}) };
+
+        let hid_config = ::embassy_usb::class::hid::Config {
+            report_descriptor: <$descriptor>::desc(),
+            request_handler: Some(request_handler),
+            poll_ms: 1,
+            max_packet_size: 64,
+        };
+
+        let rw: ::embassy_usb::class::hid::HidReaderWriter<_, $read_n, $write_n> = ::embassy_usb::class::hid::HidReaderWriter::new($usb_builder, state, hid_config);
+        rw
+    }};
+}
+
+pub(crate) fn register_usb_reader_writer<
     D: Driver<'static>,
     SD: SerializedDescriptor,
     const READ_N: usize,

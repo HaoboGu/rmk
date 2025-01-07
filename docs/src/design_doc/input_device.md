@@ -128,3 +128,5 @@ pub trait InputProcessor {
 ```
 
 The `process` method is responsible for processing input events and sending HID report to the report channel, which is available by `get_report_channel`.
+
+All the processors should share one keymap state: `&'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>`,

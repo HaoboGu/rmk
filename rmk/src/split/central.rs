@@ -22,8 +22,10 @@ use crate::keyboard::{Keyboard, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::keymap::KeyMap;
 use crate::light::LightService;
 use crate::matrix::{KeyState, MatrixTrait};
+use crate::reporter::UsbKeyboardReporter;
 use crate::run_usb_keyboard;
-use crate::usb::KeyboardUsbDevice;
+use crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport};
+use crate::usb::{new_usb_builder, register_usb_reader_writer, register_usb_writer};
 use crate::via::process::VialService;
 
 #[cfg(not(feature = "_nrf_ble"))]
@@ -273,20 +275,29 @@ pub async fn initialize_usb_split_central_and_run<
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
 
-    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
-    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
-
     // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(
-            &keymap,
-            &keyboard_report_sender,
-            keyboard_config.behavior_config,
-        ),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
+    let (mut keyboard, mut vial_service, mut light_service) = (
+        Keyboard::new(&keymap, keyboard_config.behavior_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),
     );
+
+    let (mut usb_device, mut usb_reporter) = {
+        let mut usb_builder = new_usb_builder(usb_driver, keyboard_config.usb_config);
+        let keyboard_reader_writer =
+            register_usb_reader_writer::<_, KeyboardReport, 1, 8>(&mut usb_builder);
+        let other_writer = register_usb_writer::<_, CompositeReport, 9>(&mut usb_builder);
+        let via_reader_writer =
+            register_usb_reader_writer::<_, ViaReport, 32, 32>(&mut usb_builder);
+        let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
+        let usb_reporter = UsbKeyboardReporter {
+            keyboard_writer,
+            other_writer,
+        };
+
+        let usb_device = usb_builder.build();
+        (usb_device, usb_reporter)
+    };
 
     // Run usb keyboard
     run_usb_keyboard(
@@ -297,7 +308,7 @@ pub async fn initialize_usb_split_central_and_run<
         &mut storage,
         &mut light_service,
         &mut vial_service,
-        &keyboard_report_receiver,
+        &mut usb_reporter,
     )
     .await
 }
