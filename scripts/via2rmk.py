@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''Convert a Vial layout to RKM configuration.'''
+'''Convert a Vial layout to RMK keymap configuration.'''
 
 import json
 import re
@@ -360,9 +360,9 @@ class Converter:
         rmk_key = self.get_rmk_keycode(key)
         if self.output_rust:
             if rmk_key == 'No':
-                return f'!a({rmk_key})'
+                return f'a!({rmk_key})'
             else:
-                return f'!k({rmk_key})'
+                return f'k!({rmk_key})'
         else:
             if rmk_key == 'No':
                 return '"__"'
