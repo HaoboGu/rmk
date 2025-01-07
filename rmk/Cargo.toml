@@ -17,8 +17,8 @@ embedded-hal-async = { version = "1.0.0", optional = true }
 embedded-io-async = { version = "0.6" }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-embassy-embedded-hal = { version = "0.2" }
-embassy-time = { version = "0.3" }
+embassy-embedded-hal = { version = "0.3" }
+embassy-time = { version = "0.4" }
 embassy-usb = { version = "0.3", features = [
     "usbd-hid",
     "max-interface-count-8",
@@ -27,7 +27,7 @@ embassy-usb = { version = "0.3", features = [
 heapless = "0.8.0"
 embassy-sync = { version = "0.6" }
 embassy-futures = { version = "0.1" }
-embassy-executor = { version = "0.6" }
+embassy-executor = { version = "0.7" }
 
 usbd-hid = { version = "0.8.2" }
 ssmarshal = { version = "1.0", default-features = false }
@@ -35,7 +35,7 @@ defmt = { version = "0.3", optional = true }
 log = { version = "0.4", optional = true }
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
-bitfield-struct = "0.9"
+bitfield-struct = "0.10"
 byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
 sequential-storage = { version = "4.0.0" }
@@ -56,14 +56,14 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-client",
     "ble-sec",
 ], optional = true }
-embassy-nrf = { version = "0.2.0", features = [
+embassy-nrf = { version = "0.3.0", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
 # Espressif dependencies
-esp32-nimble = { version = "0.8", optional = true }
-esp-idf-svc = { version = "0.49", default-features = false, optional = true }
+esp32-nimble = { version = "0.9", optional = true }
+esp-idf-svc = { version = "0.50", default-features = false, optional = true }
 
 # Document feature
 document-features = "0.2"

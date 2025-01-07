@@ -37,13 +37,12 @@ async fn main(spawner: Spawner) {
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.gpiote_interrupt_priority = Priority::P3;
     nrf_config.time_interrupt_priority = Priority::P3;
-    interrupt::POWER_CLOCK.set_priority(interrupt::Priority::P2);
+    interrupt::CLOCK_POWER.set_priority(interrupt::Priority::P2);
     let p = embassy_nrf::init(nrf_config);
     // Disable external HF clock by default, reduce power consumption
-    // let clock: embassy_nrf::pac::CLOCK = unsafe { core::mem::transmute(()) };
     // info!("Enabling ext hfosc...");
-    // clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
-    // while clock.events_hfclkstarted.read().bits() != 1 {}
+    // ::embassy_nrf::pac::CLOCK.tasks_hfclkstart().write_value(1);
+    // while ::embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_04.degrade_saadc();
