@@ -10,7 +10,8 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, RotaryEncoderEvent};
-use crate::keyboard::{KeyboardReportMessage, EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::keyboard::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::reporter::Report;
 use crate::REPORT_CHANNEL_SIZE;
 
 use super::{InputDevice, InputProcessor, EVENT_CHANNEL_SIZE};
@@ -182,7 +183,7 @@ pub struct RotaryEncoderProcessor {}
 impl InputProcessor for RotaryEncoderProcessor {
     type EventType = Event;
 
-    type ReportType = KeyboardReportMessage;
+    type ReportType = Report;
 
     async fn process(&mut self, event: Self::EventType) {
         match event {

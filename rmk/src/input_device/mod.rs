@@ -11,9 +11,9 @@ use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
     channel::{Receiver, Sender},
 };
-use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use usbd_hid::descriptor::AsInputReport;
 
-use crate::{keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE}, usb::descriptor::{CompositeReport, KeyboardReport}};
+use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 
 pub mod rotary_encoder;
 
@@ -79,7 +79,7 @@ pub trait InputProcessor {
     type EventType;
 
     /// The report type that the input processor sends.
-    type ReportType;
+    type ReportType: AsInputReport;
 
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
