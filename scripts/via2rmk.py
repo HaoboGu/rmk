@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''Convert a Vial layout to RMK configuration.'''
+'''Convert a Vial layout to RMK keymap configuration.'''
 
 import json
 import re
