@@ -13,8 +13,6 @@ use embassy_sync::{
 };
 use usbd_hid::descriptor::AsInputReport;
 
-use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
-
 pub mod rotary_encoder;
 
 /// The trait for input devices.
@@ -46,7 +44,7 @@ pub mod rotary_encoder;
 /// )
 /// .await;
 /// ```
-pub trait InputDevice {
+pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 32> {
     /// Event type that input device will send
     type EventType;
 
@@ -74,7 +72,11 @@ pub trait InputDevice {
 /// Take the normal keyboard as the example:
 ///
 /// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
-pub trait InputProcessor {
+pub trait InputProcessor<
+    const EVENT_CHANNEL_SIZE: usize = 32,
+    const REPORT_CHANNEL_SIZE: usize = 32,
+>
+{
     /// The event type that the input processor receives.
     type EventType;
 

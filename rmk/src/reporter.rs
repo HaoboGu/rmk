@@ -29,18 +29,22 @@ pub enum Report {
 
 impl AsInputReport for Report {}
 
+/// Runnable trait defines `run` function for running the task
+pub trait Runnable {
+    /// Run function
+    async fn run(&mut self);
+}
+
 /// HidReporter trait is used for reporting HID messages to the host, via USB, BLE, etc.
-pub trait HidReporter {
+pub trait HidReporter<const CHANNEL_SIZE: usize = 32> {
     /// The report type that the reporter receives from input processors.
     type ReportType: AsInputReport;
 
     /// Get the report receiver for the reporter.
-    fn report_receiver(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    fn report_receiver(&self) -> Receiver<CriticalSectionRawMutex, Self::ReportType, CHANNEL_SIZE>;
 
     /// Run the reporter task.
-    fn run(&mut self) -> impl Future<Output = ()> {
+    fn run_reporter(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
                 let report = self.report_receiver().receive().await;
@@ -57,9 +61,29 @@ pub trait HidReporter {
 }
 
 /// HidListener trait is used for listening to HID messages from the host, via USB, BLE, etc.
-pub trait HidListener {
+///
+/// HidListener only receives `[u8; READ_N]`, the raw HID report from the host.
+/// Then processes the received message, forward to other tasks
+pub trait HidListener<const READ_N: usize> {
+    /// The report size from the host
 
+    /// Read HID report from the host
+    fn read_report(&mut self) -> impl Future<Output = [u8; READ_N]>;
+
+    /// Process the received HID report.
+    fn process_report(&mut self, report: [u8; READ_N]) -> impl Future<Output = ()>;
+
+    /// Run the listener
+    fn run_listener(&mut self) -> impl Future<Output = ()> {
+        async {
+            loop {
+                let report = self.read_report().await;
+                self.process_report(report).await;
+            }
+        }
+    }
 }
+
 
 /// USB reporter
 /// TODO: Move to usb mod?
