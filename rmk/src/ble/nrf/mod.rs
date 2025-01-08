@@ -14,9 +14,10 @@ use crate::config::BleBatteryConfig;
 use crate::input_device::InputProcessor as _;
 use crate::keyboard::KEYBOARD_REPORT_CHANNEL;
 use crate::matrix::MatrixTrait;
-use crate::reporter::{DummyReporter, Reporter as _, UsbKeyboardReporter};
+use crate::reporter::{DummyReporter, Runnable as _, UsbKeyboardReporter};
 use crate::storage::StorageKeys;
 use crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport};
+use crate::{add_usb_reader_writer, CONNECTION_STATE, KEYBOARD_STATE};
 use crate::{
     ble::nrf::{
         advertise::{create_advertisement_data, SCAN_DATA},
@@ -27,7 +28,6 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
 };
-use crate::{add_usb_reader_writer, CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -305,8 +305,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     #[cfg(not(feature = "_no_usb"))]
     let (mut usb_device, mut usb_reporter) = {
         let mut usb_builder = new_usb_builder(usb_driver, keyboard_config.usb_config);
-        let keyboard_reader_writer =
-            add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
+        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         // register_usb_reader_writer::<_, KeyboardReport, 1, 8>(&mut usb_builder);
         let other_writer = register_usb_writer::<_, CompositeReport, 9>(&mut usb_builder);
         let via_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -320,6 +319,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
         let usb_device = usb_builder.build();
         (usb_device, usb_reporter)
     };
+
     // let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     let mut light_service = LightService::from_config(keyboard_config.light_config);

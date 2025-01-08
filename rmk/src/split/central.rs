@@ -276,6 +276,7 @@ pub async fn initialize_usb_split_central_and_run<
     let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
 
     // Create keyboard services and devices
+
     let (mut keyboard, mut vial_service, mut light_service) = (
         Keyboard::new(&keymap, keyboard_config.behavior_config),
         VialService::new(&keymap, keyboard_config.vial_config),

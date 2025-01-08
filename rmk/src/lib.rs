@@ -26,6 +26,7 @@ use crate::{
     via::vial_task,
 };
 use action::KeyAction;
+use core::future::Future;
 use core::{
     cell::RefCell,
     sync::atomic::{AtomicBool, AtomicU8},
@@ -259,6 +260,8 @@ pub async fn initialize_usb_keyboard_and_run<
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
     // Create keyboard services and devices
+
+
     let (mut keyboard, mut vial_service, mut light_service) = (
         Keyboard::new(&keymap, keyboard_config.behavior_config),
         VialService::new(&keymap, keyboard_config.vial_config),
@@ -323,7 +326,7 @@ pub(crate) async fn run_usb_keyboard<
         let usb_fut = usb_device.run();
         let keyboard_fut = keyboard.run();
         let matrix_fut = matrix.run();
-        let reporter_fut = usb_reporter.run();
+        let reporter_fut = usb_reporter.run_reporter();
         // FIXME: add led and vial back
         // let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
         // let via_fut = vial_task(&mut usb_device.via_hid, vial_service);

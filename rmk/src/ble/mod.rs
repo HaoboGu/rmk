@@ -16,7 +16,7 @@ use ssmarshal::serialize;
 use crate::{
     hid::HidError,
     keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE},
-    reporter::{Report, Reporter},
+    reporter::{HidReporter, Report},
 };
 
 pub(crate) struct BleKeyboardReporter<'a> {
@@ -54,7 +54,7 @@ impl<'a> BleKeyboardReporter<'a> {
     }
 }
 
-impl Reporter for BleKeyboardReporter<'_> {
+impl HidReporter for BleKeyboardReporter<'_> {
     type ReportType = Report;
 
     fn report_receiver(

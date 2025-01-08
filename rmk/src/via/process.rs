@@ -1,5 +1,7 @@
 use super::{protocol::*, vial::process_vial};
 use crate::config::VialConfig;
+use crate::hid::UsbHidReaderWriter;
+use crate::reporter::{HidListener, HidReporter};
 use crate::{
     hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
@@ -11,60 +13,88 @@ use crate::{
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 use embassy_time::Instant;
+use embassy_usb::class::hid::HidReaderWriter;
+use embassy_usb::driver::Driver;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
-pub(crate) struct VialService<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub(crate) struct VialService<
+    'a,
+    RW: HidReporter + HidListener<32>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> {
     // VialService holds a reference of keymap, for updating
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     // Vial config
     vial_config: VialConfig<'a>,
+
+    // TODO: use a zerocopy SPSC channel to improve performance
+    pub(crate) vial_channel: Channel<CriticalSectionRawMutex, ViaReport, 4>,
+
+    // Usb vial reader writer
+    pub(crate) reader_writer: RW,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    VialService<'a, ROW, COL, NUM_LAYER>
+impl<
+        'a,
+        RW: HidReporter + HidListener<32>,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+    > VialService<'a, RW, ROW, COL, NUM_LAYER>
 {
+    // VialService::new() should be called only once.
+    // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         vial_config: VialConfig<'a>,
+        reader_writer: RW,
     ) -> Self {
         Self {
             keymap,
             vial_config,
+            vial_channel: Channel::new(),
+            reader_writer,
         }
     }
 
     pub(crate) async fn process_via_report<Hid: HidReaderWriterWrapper>(
         &mut self,
-        hid_interface: &mut Hid,
+        // hid_interface: &mut Hid,
     ) -> Result<(), ()> {
         let mut via_report = ViaReport {
             input_data: [0; 32],
             output_data: [0; 32],
         };
-        match hid_interface.read(&mut via_report.output_data).await {
-            Ok(_) => {
-                self.process_via_packet(&mut via_report, self.keymap).await;
+        via_report.input_data = self.reader_writer.read_report();
+        
+        // match .await {
+        //     Ok(_) => {
+        //         self.process_via_packet(&mut via_report, self.keymap).await;
 
-                // Send via report back after processing
-                match hid_interface.write_serialize(&via_report).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        error!("Send via report error: {}", e);
-                        // Printed error message, ignore the error type
-                        Err(())
-                    }
-                }
-            }
-            Err(e) => {
-                if e != HidError::UsbDisabled && e != HidError::BleDisconnected {
-                    // Don't print message if the USB endpoint is disabled(aka not connected)
-                    error!("Read via report error: {}", e);
-                }
-                // Printed error message, ignore the error type
-                Err(())
-            }
+        //         // Send via report back after processing
+        //         match hid_interface.write_serialize(&via_report).await {
+        //             Ok(_) => Ok(()),
+        //             Err(e) => {
+        //                 error!("Send via report error: {}", e);
+        //                 // Printed error message, ignore the error type
+        //                 Err(())
+        //             }
+        //         }
+        //     }
+        //     Err(e) => {
+        //         if e != HidError::UsbDisabled && e != HidError::BleDisconnected {
+        //             // Don't print message if the USB endpoint is disabled(aka not connected)
+        //             error!("Read via report error: {}", e);
+        //         }
+        //         // Printed error message, ignore the error type
+        //         Err(())
+        //     }
         }
     }
 
