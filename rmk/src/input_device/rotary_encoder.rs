@@ -10,11 +10,11 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, RotaryEncoderEvent};
+use crate::hid::Report;
 use crate::keyboard::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use crate::reporter::Report;
-use crate::REPORT_CHANNEL_SIZE;
+use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 
-use super::{InputDevice, InputProcessor, EVENT_CHANNEL_SIZE};
+use super::{InputDevice, InputProcessor};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]

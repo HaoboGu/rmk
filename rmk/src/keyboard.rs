@@ -1,7 +1,7 @@
 use crate::config::BehaviorConfig;
 use crate::event::{Event, KeyEvent};
+use crate::hid::Report;
 use crate::input_device::InputProcessor;
-use crate::reporter::Report;
 use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},

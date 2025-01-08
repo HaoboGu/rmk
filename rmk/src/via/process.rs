@@ -1,9 +1,8 @@
+use super::HidError;
 use super::{protocol::*, vial::process_vial};
 use crate::config::VialConfig;
-use crate::hid::UsbHidReaderWriter;
-use crate::reporter::{HidListener, HidReporter};
+use crate::hid::{HidListener, HidReporter};
 use crate::{
-    hid::{HidError, HidReaderWriterWrapper},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,
     storage::{FlashOperationMessage, FLASH_CHANNEL},
@@ -13,16 +12,12 @@ use crate::{
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use defmt::{debug, error, info, warn};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
 use embassy_time::Instant;
-use embassy_usb::class::hid::HidReaderWriter;
-use embassy_usb::driver::Driver;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub(crate) struct VialService<
     'a,
-    RW: HidReporter + HidListener<32>,
+    RW: HidReporter<ReportType = ViaReport> + HidListener<32, ReportType = ViaReport>,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -33,16 +28,13 @@ pub(crate) struct VialService<
     // Vial config
     vial_config: VialConfig<'a>,
 
-    // TODO: use a zerocopy SPSC channel to improve performance
-    pub(crate) vial_channel: Channel<CriticalSectionRawMutex, ViaReport, 4>,
-
-    // Usb vial reader writer
+    // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
 }
 
 impl<
         'a,
-        RW: HidReporter + HidListener<32>,
+        RW: HidReporter<ReportType = ViaReport> + HidListener<32, ReportType = ViaReport>,
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
@@ -58,21 +50,24 @@ impl<
         Self {
             keymap,
             vial_config,
-            vial_channel: Channel::new(),
             reader_writer,
         }
     }
 
-    pub(crate) async fn process_via_report<Hid: HidReaderWriterWrapper>(
+    pub(crate) async fn process_via_report(
         &mut self,
         // hid_interface: &mut Hid,
-    ) -> Result<(), ()> {
+    ) -> Result<(), HidError> {
         let mut via_report = ViaReport {
             input_data: [0; 32],
             output_data: [0; 32],
         };
-        via_report.input_data = self.reader_writer.read_report();
-        
+        via_report.input_data = self.reader_writer.read_report().await?;
+
+        self.process_via_packet(&mut via_report, self.keymap).await;
+
+        self.reader_writer.write_report(via_report).await?;
+
         // match .await {
         //     Ok(_) => {
         //         self.process_via_packet(&mut via_report, self.keymap).await;
@@ -95,7 +90,8 @@ impl<
         //         // Printed error message, ignore the error type
         //         Err(())
         //     }
-        }
+        // }
+        Ok(())
     }
 
     async fn process_via_packet(
