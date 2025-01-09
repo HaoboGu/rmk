@@ -147,16 +147,12 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
         loop {
             match select(self.split_driver.read(), KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(m) => match m {
-                    Ok(split_messages) => {
-                        for split_message in split_messages {
-                            // Currently only handle the central state message
-                            match split_message {
-                                SplitMessage::ConnectionState(state) => {
-                                    CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
-                                }
-                                _ => (),
-                            }
+                    // Currently only handle the central state message
+                    Ok(split_message) => match split_message {
+                        SplitMessage::ConnectionState(state) => {
+                            CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
                         }
+                        _ => (),
                     },
                     Err(e) => {
                         error!("Split message read error: {:?}", e);

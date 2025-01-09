@@ -7,7 +7,6 @@ use crate::CONNECTION_STATE;
 use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
 use defmt::{debug, error, warn};
 use embassy_futures::select::select;
-use heapless::Vec;
 
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) enum SplitDriverError {
@@ -20,7 +19,7 @@ pub(crate) enum SplitDriverError {
 
 /// Split message reader from other split devices
 pub(crate) trait SplitReader {
-    async fn read(&mut self) -> Result<Vec<SplitMessage, 2>, SplitDriverError>;
+    async fn read(&mut self) -> Result<SplitMessage, SplitDriverError>;
 }
 
 /// Split message writer to other split devices
@@ -77,26 +76,24 @@ impl<
         loop {
             match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
-                    Ok(received_messages) => {
-                        for received_message in received_messages {
-                            debug!("Received peripheral message: {}", received_message);
-                            if let SplitMessage::Key(e) = received_message {
-                                // Check row/col
-                                if e.row as usize > ROW || e.col as usize > COL {
-                                    error!("Invalid peripheral row/col: {} {}", e.row, e.col);
-                                    continue;
-                                }
+                    Ok(received_message) => {
+                        debug!("Received peripheral message: {}", received_message);
+                        if let SplitMessage::Key(e) = received_message {
+                            // Check row/col
+                            if e.row as usize > ROW || e.col as usize > COL {
+                                error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                                continue;
+                            }
 
-                                if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                                    // Only when the connection is established, send the key event.
-                                    KEY_EVENT_CHANNEL
-                                        .send(KeyEvent {
-                                            row: e.row + ROW_OFFSET as u8,
-                                            col: e.col + COL_OFFSET as u8,
-                                            pressed: e.pressed,
-                                        })
-                                        .await;
-                                }
+                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                // Only when the connection is established, send the key event.
+                                KEY_EVENT_CHANNEL
+                                    .send(KeyEvent {
+                                        row: e.row + ROW_OFFSET as u8,
+                                        col: e.col + COL_OFFSET as u8,
+                                        pressed: e.pressed,
+                                    })
+                                    .await;
                             } else {
                                 warn!("Key event from peripheral is ignored because the connection is not established.");
                             }

@@ -13,7 +13,7 @@ pub mod peripheral;
 pub mod serial;
 
 /// Maximum size of a split message
-pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 6;
+pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 
 /// Message used from central & peripheral communication
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]
