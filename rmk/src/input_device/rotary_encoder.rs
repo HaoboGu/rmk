@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
-use crate::keyboard::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use crate::keyboard::{
+    EVENT_CHANNEL, EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE,
+};
 
 use super::{InputDevice, InputProcessor};
 
@@ -173,7 +174,9 @@ impl<
         }
     }
 
-    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_sender(
+        &self,
+    ) -> Sender<CriticalSectionRawMutex, Self::EventType, { EVENT_CHANNEL_SIZE }> {
         EVENT_CHANNEL.sender()
     }
 }
@@ -208,7 +211,7 @@ impl InputProcessor for RotaryEncoderProcessor {
 
     fn report_sender(
         &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
+    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }

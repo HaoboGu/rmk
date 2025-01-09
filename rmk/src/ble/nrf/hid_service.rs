@@ -1,9 +1,14 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::{
-    ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
-    light::{LedIndicator, LED_CHANNEL},
+    ble::{
+        descriptor::{BleCompositeReportType, BleKeyboardReport},
+        HidError,
+    },
+    hid::HidReaderTrait,
+    light::LedIndicator,
 };
 use defmt::{error, info, warn, Format};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -18,8 +23,10 @@ use nrf_softdevice::{
 };
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
+static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 4> = Channel::new();
+
 #[allow(dead_code)]
-#[derive(Debug, defmt::Format)]
+#[derive(Debug, Clone, Copy, defmt::Format)]
 pub(crate) struct HidService {
     hid_info: u16,
     report_map: u16,
@@ -207,4 +214,14 @@ pub(crate) enum HidServiceEvent {
     InputMouseKeyCccdWrite,
     InputSystemKeyCccdWrite,
     OutputKeyboard,
+}
+
+pub(crate) struct BleLedReader {}
+
+impl HidReaderTrait for BleLedReader {
+    type ReportType = LedIndicator;
+
+    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
+        Ok(LED_CHANNEL.receive().await)
+    }
 }

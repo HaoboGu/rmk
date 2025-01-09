@@ -23,7 +23,8 @@ use rmk::{
     config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    run_devices, run_rmk, CriticalSectionRawMutex, Sender, EVENT_CHANNEL, EVENT_CHANNEL_SIZE,
+    keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
+    run_devices, run_rmk, CriticalSectionRawMutex, Sender,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};

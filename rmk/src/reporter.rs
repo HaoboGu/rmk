@@ -1,10 +1,10 @@
-use core::u64;
+use core::{future::Future, u64};
 
 use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use ssmarshal::serialize;
 
 use crate::{
-    hid::{HidError, HidReporter, Report},
+    hid::{HidError, HidWriterTrait, Report},
     keyboard::KEYBOARD_REPORT_CHANNEL,
     usb::descriptor::CompositeReportType,
 };
@@ -12,23 +12,34 @@ use crate::{
 /// Runnable trait defines `run` function for running the task
 pub trait Runnable {
     /// Run function
-    async fn run(&mut self);
+    fn run(&mut self) -> impl Future<Output = ()>;
 }
 
-/// USB reporter
+/// USB keyboard writer
 /// TODO: Move to usb mod?
-pub struct UsbKeyboardReporter<'d, D: Driver<'d>> {
-    pub(crate) keyboard_writer: HidWriter<'d, D, 8>,
-    pub(crate) other_writer: HidWriter<'d, D, 9>,
+pub struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
+    pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
+    pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
+}
+impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
+    pub(crate) fn new(
+        keyboard_writer: &'a mut HidWriter<'d, D, 8>,
+        other_writer: &'a mut HidWriter<'d, D, 9>,
+    ) -> Self {
+        Self {
+            keyboard_writer,
+            other_writer,
+        }
+    }
 }
 
-impl<'d, D: Driver<'d>> Runnable for UsbKeyboardReporter<'d, D> {
+impl<'a, 'd, D: Driver<'d>> Runnable for UsbKeyboardWriter<'a, 'd, D> {
     async fn run(&mut self) {
         self.run_reporter().await;
     }
 }
 
-impl<'d, D: Driver<'d>> HidReporter for UsbKeyboardReporter<'d, D> {
+impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
     type ReportType = Report;
 
     async fn get_report(&mut self) -> Self::ReportType {
@@ -43,44 +54,42 @@ impl<'d, D: Driver<'d>> HidReporter for UsbKeyboardReporter<'d, D> {
                     .write_serialize(&keyboard_report)
                     .await
                     .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(8)
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Mouse as u8;
-                match serialize(&mut buf[1..], &mouse_report) {
-                    Ok(s) => {
-                        self.other_writer
-                            .write(&mut buf[0..s + 1])
-                            .await
-                            .map_err(|e| HidError::UsbEndpointError(e))?;
-                    }
-                    Err(_) => return Err(HidError::SerializeError),
-                }
+                let n = serialize(&mut buf[1..], &mouse_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Media as u8;
-                match serialize(&mut buf[1..], &media_keyboard_report) {
-                    Ok(s) => {
-                        self.other_writer.write(&mut buf[0..s + 1]).await;
-                    }
-                    Err(_) => return Err(HidError::SerializeError),
-                }
+                let n = serialize(&mut buf[1..], &media_keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
             }
             Report::SystemControlReport(system_control_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::System as u8;
-                match serialize(&mut buf[1..], &system_control_report) {
-                    Ok(s) => {
-                        self.other_writer
-                            .write(&mut buf[0..s + 1])
-                            .await
-                            .map_err(|e| HidError::UsbEndpointError(e))?;
-                    }
-                    Err(_) => return Err(HidError::SerializeError),
-                }
+                let n = serialize(&mut buf[1..], &system_control_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
             }
-        };
+        }
     }
 }
 
@@ -91,7 +100,7 @@ impl Runnable for DummyReporter {
         self.run_reporter().await;
     }
 }
-impl HidReporter for DummyReporter {
+impl HidWriterTrait for DummyReporter {
     type ReportType = Report;
 
     async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {

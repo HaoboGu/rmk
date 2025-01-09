@@ -13,33 +13,33 @@ pub(crate) struct BatteryService {
 }
 
 impl<'a> BatteryService {
-    fn check_charging_state(battery_config: &mut BleBatteryConfig<'a>) {
-        if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
-            if is_charging_pin.is_low() == battery_config.charge_state_low_active {
-                info!("Charging!");
-                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                    if battery_config.charge_led_low_active {
-                        charge_led.set_low()
-                    } else {
-                        charge_led.set_high()
-                    }
-                }
-            } else {
-                info!("Not charging!");
-                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                    if battery_config.charge_led_low_active {
-                        charge_led.set_high()
-                    } else {
-                        charge_led.set_low()
-                    }
-                }
-            }
-        }
+    fn check_charging_state(battery_config: &BleBatteryConfig<'a>) {
+        // if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
+        //     if is_charging_pin.is_low() == battery_config.charge_state_low_active {
+        //         info!("Charging!");
+        //         if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+        //             if battery_config.charge_led_low_active {
+        //                 charge_led.set_low()
+        //             } else {
+        //                 charge_led.set_high()
+        //             }
+        //         }
+        //     } else {
+        //         info!("Not charging!");
+        //         if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+        //             if battery_config.charge_led_low_active {
+        //                 charge_led.set_high()
+        //             } else {
+        //                 charge_led.set_low()
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     pub(crate) async fn run(
         &mut self,
-        battery_config: &mut BleBatteryConfig<'a>,
+        battery_config: &BleBatteryConfig<'a>,
         conn: &Connection,
     ) {
         // Wait 1 seconds, ensure that gatt server has been started
@@ -47,39 +47,39 @@ impl<'a> BatteryService {
         BatteryService::check_charging_state(battery_config);
 
         loop {
-            if let Some(ref mut saadc) = battery_config.saadc {
-                let mut buf = [0i16; 1];
-                saadc.sample(&mut buf).await;
-                // We only sampled one ADC channel.
-                let val: u8 = self.get_battery_percent(buf[0], battery_config);
-                match self.battery_level_notify(conn, &val) {
-                    Ok(_) => info!("Battery value: {}", val),
-                    Err(e) => match self.battery_level_set(&val) {
-                        Ok(_) => info!("Battery value set: {}", val),
-                        Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
-                    },
-                }
-                if val < 10 {
-                    // The battery is low, blink the led!
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        charge_led.toggle();
-                    }
-                    Timer::after_millis(200).await;
-                    continue;
-                } else {
-                    // Turn off the led
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        if battery_config.charge_led_low_active {
-                            charge_led.set_high();
-                        } else {
-                            charge_led.set_low();
-                        }
-                    }
-                }
-            } else {
-                // No SAADC, skip battery check
-                Timer::after_secs(u32::MAX as u64).await;
-            }
+            // if let Some(ref mut saadc) = battery_config.saadc {
+            //     let mut buf = [0i16; 1];
+            //     saadc.sample(&mut buf).await;
+            //     // We only sampled one ADC channel.
+            //     let val: u8 = self.get_battery_percent(buf[0], battery_config);
+            //     match self.battery_level_notify(conn, &val) {
+            //         Ok(_) => info!("Battery value: {}", val),
+            //         Err(e) => match self.battery_level_set(&val) {
+            //             Ok(_) => info!("Battery value set: {}", val),
+            //             Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+            //         },
+            //     }
+            //     if val < 10 {
+            //         // The battery is low, blink the led!
+            //         if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+            //             charge_led.toggle();
+            //         }
+            //         Timer::after_millis(200).await;
+            //         continue;
+            //     } else {
+            //         // Turn off the led
+            //         if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+            //             if battery_config.charge_led_low_active {
+            //                 charge_led.set_high();
+            //             } else {
+            //                 charge_led.set_low();
+            //             }
+            //         }
+            //     }
+            // } else {
+            //     // No SAADC, skip battery check
+            //     Timer::after_secs(u32::MAX as u64).await;
+            // }
 
             // Check charging state
             BatteryService::check_charging_state(battery_config);

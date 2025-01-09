@@ -7,19 +7,17 @@ pub mod esp;
 pub mod nrf;
 
 use defmt::error;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 pub use nrf::SOFTWARE_VBUS;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use ssmarshal::serialize;
 
 use crate::{
-    hid::HidError,
-    keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE},
-    reporter::{HidReporter, Report},
+    hid::{HidError, HidWriterTrait, Report},
+    keyboard::KEYBOARD_REPORT_CHANNEL,
 };
 
-pub(crate) struct BleKeyboardReporter<'a> {
+pub(crate) struct BleKeyboardWriter<'a> {
     conn: &'a Connection,
     keyboard_handle: u16,
     media_handle: u16,
@@ -27,7 +25,7 @@ pub(crate) struct BleKeyboardReporter<'a> {
     mouse_handle: u16,
 }
 
-impl<'a> BleKeyboardReporter<'a> {
+impl<'a> BleKeyboardWriter<'a> {
     pub(crate) fn new(
         conn: &'a Connection,
         keyboard_handle: u16,
@@ -54,46 +52,44 @@ impl<'a> BleKeyboardReporter<'a> {
     }
 }
 
-impl HidReporter for BleKeyboardReporter<'_> {
+impl HidWriterTrait for BleKeyboardWriter<'_> {
     type ReportType = Report;
 
-    fn report_receiver(
-        &self,
-    ) -> Receiver<'_, CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
-        KEYBOARD_REPORT_CHANNEL.receiver()
+    async fn get_report(&mut self) -> Self::ReportType {
+        KEYBOARD_REPORT_CHANNEL.receive().await
     }
 
-    async fn write_report(&mut self, report: Self::ReportType) {
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
                 let mut buf = [0u8; 8];
-                match serialize(&mut buf, &keyboard_report) {
-                    Ok(_) => self.write(self.keyboard_handle, &buf).await,
-                    Err(_) => Err(HidError::ReportSerializeError),
-                }
+                let n = serialize(&mut buf, &keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.keyboard_handle, &buf).await?;
+                Ok(n)
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf = [0u8; 5];
-                match serialize(&mut buf, &mouse_report) {
-                    Ok(_) => self.write(self.mouse_handle, &buf).await,
-                    Err(_) => Err(HidError::ReportSerializeError),
-                }
+                let n = serialize(&mut buf, &mouse_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.mouse_handle, &buf).await?;
+                Ok(n)
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf = [0u8; 2];
-                match serialize(&mut buf, &media_keyboard_report) {
-                    Ok(_) => self.write(self.media_handle, &buf).await,
-                    Err(_) => Err(HidError::ReportSerializeError),
-                }
+                let n = serialize(&mut buf, &media_keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.media_handle, &buf).await?;
+                Ok(n)
             }
             Report::SystemControlReport(system_control_report) => {
-                let mut buf = [0u8; 1];
-                match serialize(&mut buf, &system_control_report) {
-                    Ok(_) => self.write(self.system_control_handle, &buf).await,
-                    Err(_) => Err(HidError::ReportSerializeError),
-                }
+                let mut buf = [0u8; 2];
+                let n = serialize(&mut buf, &system_control_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.system_control_handle, &buf).await?;
+                Ok(n)
             }
-        };
+        }
     }
 }
 

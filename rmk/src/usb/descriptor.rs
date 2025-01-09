@@ -40,7 +40,7 @@ pub struct KeyboardReport {
     }
 )]
 #[derive(Default)]
-pub(crate) struct ViaReport {
+pub struct ViaReport {
     pub(crate) input_data: [u8; 32],
     pub(crate) output_data: [u8; 32],
 }

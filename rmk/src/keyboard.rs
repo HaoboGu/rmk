@@ -29,7 +29,7 @@ pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_C
 pub static EVENT_CHANNEL: Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> =
     Channel::new();
 
-pub const REPORT_CHANNEL_SIZE: usize = 16;
+pub const REPORT_CHANNEL_SIZE: usize = 32;
 pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
     CriticalSectionRawMutex,
     Report,

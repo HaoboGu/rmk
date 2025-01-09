@@ -16,7 +16,7 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
-    pub light_config: LightConfig<O>,
+    pub light_config: LightConfig<'a, O>,
     pub storage_config: StorageConfig,
     pub behavior_config: BehaviorConfig,
     #[cfg(feature = "_nrf_ble")]
@@ -41,7 +41,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 }
 
 /// Config for configurable action behavior
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
@@ -49,6 +49,7 @@ pub struct BehaviorConfig {
 }
 
 /// Configurations for tap hold behavior
+#[derive(Clone, Copy, Debug)]
 pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
@@ -68,6 +69,7 @@ impl Default for TapHoldConfig {
 }
 
 /// Config for one shot behavior
+#[derive(Clone, Copy, Debug)]
 pub struct OneShotConfig {
     pub timeout: Duration,
 }
@@ -102,20 +104,18 @@ impl Default for StorageConfig {
 }
 
 /// Config for lights
-#[derive(Clone, Copy, Debug)]
-pub struct LightConfig<O: OutputPin> {
-    pub capslock: Option<LightPinConfig<O>>,
-    pub scrolllock: Option<LightPinConfig<O>>,
-    pub numslock: Option<LightPinConfig<O>>,
+pub struct LightConfig<'d, O: OutputPin> {
+    pub capslock: Option<LightPinConfig<'d, O>>,
+    pub scrolllock: Option<LightPinConfig<'d, O>>,
+    pub numslock: Option<LightPinConfig<'d, O>>,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
-pub struct LightPinConfig<O: OutputPin> {
-    pub pin: O,
+pub struct LightPinConfig<'d, O: OutputPin> {
+    pub pin: &'d mut O,
     pub low_active: bool,
 }
 
-impl<O: OutputPin> Default for LightConfig<O> {
+impl<'d, O: OutputPin> Default for LightConfig<'d, O> {
     fn default() -> Self {
         Self {
             capslock: None,
