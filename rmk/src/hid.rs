@@ -2,11 +2,7 @@
 use core::future::Future;
 
 use crate::{usb::descriptor::KeyboardReport, CONNECTION_STATE};
-use defmt::{error, Format};
-use embassy_usb::{
-    class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
-    driver::{Driver, EndpointError},
-};
+use embassy_usb::{class::hid::ReadError, driver::EndpointError};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 

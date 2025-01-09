@@ -132,7 +132,6 @@ struct MyDevice {}
 impl InputDevice for MyDevice {
     async fn run(&mut self) {
         loop {
-            info!("Hi my device");
             embassy_time::Timer::after_secs(1).await;
         }
     }

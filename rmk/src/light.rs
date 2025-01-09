@@ -172,6 +172,7 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
                     }
                     Err(e) => error!("Hid read error: {}", e),
                 };
+                embassy_time::Timer::after_millis(500).await;
             }
         }
     }

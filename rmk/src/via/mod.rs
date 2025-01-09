@@ -11,7 +11,6 @@ use crate::{
 };
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn};
 use embassy_time::Instant;
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};

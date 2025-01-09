@@ -194,6 +194,9 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// One shot layer state
     osl_state: OneShotState<u8>,
 
+    /// Registered key position
+    registered_keys: [Option<(u8, u8)>; 6],
+
     /// Keyboard internal hid report buf
     report: KeyboardReport,
 
@@ -244,6 +247,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
+            registered_keys: [None; 6],
             report: KeyboardReport::default(),
             mouse_report: MouseReport {
                 buttons: 0,
