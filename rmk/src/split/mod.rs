@@ -16,8 +16,9 @@ pub mod serial;
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 
 /// Message used from central & peripheral communication
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize, defmt::Format)]
 #[repr(u8)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum SplitMessage {
     /// Key event from peripheral to central
     Key(KeyEvent),

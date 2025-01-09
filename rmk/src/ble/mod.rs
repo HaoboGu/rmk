@@ -6,7 +6,6 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
-use defmt::error;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 pub use nrf::SOFTWARE_VBUS;
 use nrf_softdevice::ble::{gatt_server, Connection};

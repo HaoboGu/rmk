@@ -6,7 +6,6 @@ use super::{
 };
 use crate::ble::device_info::{DeviceInformation, PnPID, VidSource};
 use crate::config::KeyboardUsbConfig;
-use defmt::info;
 use nrf_softdevice::{
     ble::{
         gatt_server::{self, RegisterError, Service, WriteOp},
@@ -86,7 +85,7 @@ impl gatt_server::Server for BleServer {
                 | HidServiceEvent::InputMediaKeyCccdWrite
                 | HidServiceEvent::InputMouseKeyCccdWrite
                 | HidServiceEvent::InputSystemKeyCccdWrite => {
-                    info!("{}, handle: {}, data: {}", event, handle, data);
+                    info!("{:?}, handle: {}, data: {:?}", event, handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 HidServiceEvent::OutputKeyboard => (),
@@ -96,7 +95,7 @@ impl gatt_server::Server for BleServer {
             match event {
                 BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
                     info!(
-                        "BatteryLevelCccdWrite, handle: {}, data: {}, notif: {}",
+                        "BatteryLevelCccdWrite, handle: {}, data: {:?}, notif: {}",
                         handle, data, notifications
                     );
                     self.bonder.save_sys_attrs(conn)
@@ -106,7 +105,7 @@ impl gatt_server::Server for BleServer {
         if let Some(event) = self.vial.on_write(handle, data) {
             match event {
                 VialServiceEvent::InputVialKeyCccdWrite => {
-                    info!("InputVialCccdWrite, handle: {}, data: {}", handle, data);
+                    info!("InputVialCccdWrite, handle: {}, data: {:?}", handle, data);
                     self.bonder.save_sys_attrs(conn)
                 }
                 VialServiceEvent::OutputVial => (),

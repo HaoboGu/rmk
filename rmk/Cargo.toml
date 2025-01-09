@@ -12,38 +12,36 @@ resolver = "2"
 
 [dependencies]
 rmk-macro = { version = "=0.4.1", path = "../rmk-macro" }
-embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
-embedded-hal-async = { version = "1.0.0", features = [
-    "defmt-03",
-], optional = true }
-embedded-io-async = { version = "0.6", features = ["defmt-03"] }
+embedded-hal = { version = "1.0.0" }
+embedded-hal-async = { version = "1.0.0", optional = true }
+embedded-io-async = { version = "0.6" }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
 embassy-embedded-hal = { version = "0.2" }
-embassy-time = { version = "0.3", features = ["defmt"] }
+embassy-time = { version = "0.3" }
 embassy-usb = { version = "0.3", features = [
-    "defmt",
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
 heapless = "0.8.0"
-embassy-sync = { version = "0.6", features = ["defmt"] }
-embassy-futures = { version = "0.1", features = ["defmt"] }
-embassy-executor = { version = "0.6", features = ["defmt"] }
+embassy-sync = { version = "0.6" }
+embassy-futures = { version = "0.1" }
+embassy-executor = { version = "0.6" }
 
-usbd-hid = { version = "0.8.2", features = ["defmt"] }
+usbd-hid = { version = "0.8.2" }
 ssmarshal = { version = "1.0", default-features = false }
-defmt = "0.3"
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", optional = true }
 static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 bitfield-struct = "0.9"
 byteorder = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "4.0.0", features = ["defmt-03"] }
+sequential-storage = { version = "4.0.0" }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
-postcard = { version = "1", features = ["experimental-derive", "use-defmt"] }
+postcard = { version = "1", features = ["experimental-derive"] }
 
 # Used in macro
 paste = "1"
@@ -63,7 +61,6 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-sec",
 ], optional = true }
 embassy-nrf = { version = "0.2.0", features = [
-    "defmt",
     "unstable-pac",
     "time",
 ], optional = true }
@@ -83,9 +80,28 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row"]
+default = ["col2row", "defmt"]
+
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
 col2row = []
+
+## Enable defmt feature
+defmt = [
+    "dep:defmt",
+    "embedded-hal/defmt-03",
+    "embedded-hal-async?/defmt-03",
+    "embedded-io-async/defmt-03",
+    "embassy-time/defmt",
+    "embassy-usb/defmt",
+    "embassy-sync/defmt",
+    "embassy-futures/defmt",
+    "embassy-executor/defmt",
+    "usbd-hid/defmt",
+    "sequential-storage/defmt-03",
+    "embassy-nrf?/defmt",
+    "nrf-softdevice?/defmt",
+    "postcard/use-defmt",
+]
 
 ## Enable async matrix scan
 async_matrix = ["dep:embedded-hal-async"]
@@ -150,15 +166,10 @@ esp32c6_ble = ["_esp_ble"]
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
     "_ble",
-    "_no_usb",             # ESP doesn't have USB support right now
+    "_no_usb",          # ESP doesn't have USB support right now
     "ssmarshal/std",
     "dep:esp32-nimble",
     "dep:esp-idf-svc",
 ]
-_nrf_ble = [
-    "_ble",
-    "dep:nrf-softdevice",
-    "dep:embassy-nrf",
-    "dep:once_cell",
-]
+_nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]

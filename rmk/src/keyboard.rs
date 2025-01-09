@@ -12,7 +12,6 @@ use crate::{
     KEYBOARD_STATE,
 };
 use core::cell::RefCell;
-use defmt::{debug, error, info, warn};
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
     blocking_mutex::raw::CriticalSectionRawMutex,
@@ -491,7 +490,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
-                    debug!("Hold timeout, got HOLD: {}, {}", hold_action, key_event);
+                    debug!("Hold timeout, got HOLD: {:?}, {:?}", hold_action, key_event);
                     self.process_key_action_normal(hold_action, key_event).await;
                 }
                 embassy_futures::select::Either::Second(e) => {
@@ -499,7 +498,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         // If it's same key event and releasing within `hold_timeout`, trigger tap
                         if !e.pressed {
                             let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
-                            debug!("TAP action: {}, time elapsed: {}ms", tap_action, elapsed);
+                            debug!("TAP action: {:?}, time elapsed: {}ms", tap_action, elapsed);
                             self.process_key_action_tap(tap_action, key_event).await;
 
                             // Clear timer
@@ -542,7 +541,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 return false;
             }) {
                 // Release the hold after tap key
-                info!("Releasing hold after tap: {} {}", tap_action, key_event);
+                info!("Releasing hold after tap: {:?} {:?}", tap_action, key_event);
                 self.process_key_action_normal(tap_action, key_event).await;
                 self.hold_after_tap[index] = None;
                 return;
@@ -550,7 +549,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             if let Some(_) = self.timer[col][row] {
                 // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
-                    "HOLD releasing: {}, {}, wait for `post_wait_time` for new releases",
+                    "HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
                     hold_action, key_event.pressed
                 );
                 let wait_release = async {
@@ -582,7 +581,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.timer[col][row] = None;
             } else {
                 // The timer has been reset, fire hold release event
-                debug!("HOLD releasing: {}, {}", hold_action, key_event.pressed);
+                debug!("HOLD releasing: {:?}, {}", hold_action, key_event.pressed);
                 self.process_key_action_normal(hold_action, key_event).await;
             }
         }
@@ -710,6 +709,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Get user key id
                 let id = key as u8 - KeyCode::User0 as u8;
                 if id < 8 {
+                    info!("Switch to profile: {}", id);
                     // User0~7: Swtich to the specific profile
                     BLE_PROFILE_CHANNEL
                         .send(BleProfileAction::SwitchProfile(id))
@@ -738,9 +738,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         } else if key.is_basic() {
             if key_event.pressed {
-                self.register_key(key);
+                self.register_key(key, key_event);
             } else {
-                self.unregister_key(key);
+                self.unregister_key(key, key_event);
             }
             self.send_keyboard_report().await;
         } else if key.is_macro() {
@@ -914,16 +914,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     // Execute the operation
                     match operation {
                         MacroOperation::Press(k) => {
-                            self.register_key(k);
+                            self.register_key(k, key_event);
                         }
                         MacroOperation::Release(k) => {
-                            self.unregister_key(k);
+                            self.unregister_key(k, key_event);
                         }
                         MacroOperation::Tap(k) => {
-                            self.register_key(k);
+                            self.register_key(k, key_event);
                             self.send_keyboard_report().await;
                             embassy_time::Timer::after_millis(2).await;
-                            self.unregister_key(k);
+                            self.unregister_key(k, key_event);
                         }
                         MacroOperation::Text(k, is_cap) => {
                             if is_cap {
@@ -931,10 +931,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                                 self.register_modifier(KeyCode::LShift.as_modifier_bit());
                                 self.send_keyboard_report().await;
                             }
-                            self.register_keycode(k);
+                            self.register_keycode(k, key_event);
                             self.send_keyboard_report().await;
 
-                            self.unregister_keycode(k);
+                            self.unregister_keycode(k, key_event);
                             if is_cap {
                                 self.send_keyboard_report().await;
                                 self.unregister_modifier(KeyCode::LShift.as_modifier_bit());
@@ -964,34 +964,70 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Register a key, the key can be a basic keycode or a modifier.
-    fn register_key(&mut self, key: KeyCode) {
+    fn register_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
             self.register_modifier(key.as_modifier_bit());
         } else if key.is_basic() {
-            self.register_keycode(key);
+            self.register_keycode(key, key_event);
         }
     }
 
     /// Unregister a key, the key can be a basic keycode or a modifier.
-    fn unregister_key(&mut self, key: KeyCode) {
+    fn unregister_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
             self.unregister_modifier(key.as_modifier_bit());
         } else if key.is_basic() {
-            self.unregister_keycode(key);
+            self.unregister_keycode(key, key_event);
         }
     }
 
     /// Register a key to be sent in hid report.
-    fn register_keycode(&mut self, key: KeyCode) {
-        if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+    fn register_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // First, find the key event slot according to the position
+        let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
+            if let Some((row, col)) = k {
+                if key_event.row == *row && key_event.col == *col {
+                    return Some(i);
+                }
+            }
+            return None;
+        });
+
+        // If the slot is found, update the key in the slot
+        if let Some(index) = slot {
             self.report.keycodes[index] = key as u8;
+            self.registered_keys[index] = Some((key_event.row, key_event.col));
+        } else {
+            // Otherwise, find the first free slot
+            if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
+                self.report.keycodes[index] = key as u8;
+                self.registered_keys[index] = Some((key_event.row, key_event.col));
+            }
         }
     }
 
     /// Unregister a key from hid report.
-    fn unregister_keycode(&mut self, key: KeyCode) {
-        if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+    fn unregister_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // First, find the key event slot according to the position
+        let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
+            if let Some((row, col)) = k {
+                if key_event.row == *row && key_event.col == *col {
+                    return Some(i);
+                }
+            }
+            return None;
+        });
+
+        // If the slot is found, update the key in the slot
+        if let Some(index) = slot {
             self.report.keycodes[index] = 0;
+            self.registered_keys[index] = None;
+        } else {
+            // Otherwise, release the first same key
+            if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
+                self.report.keycodes[index] = 0;
+                self.registered_keys[index] = None;
+            }
         }
     }
 

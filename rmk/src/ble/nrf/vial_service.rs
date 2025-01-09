@@ -1,4 +1,3 @@
-use defmt::{debug, error, Format};
 use embassy_futures::block_on;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
@@ -122,7 +121,7 @@ impl BleVialService {
         data: &[u8],
     ) -> Result<(), HidError> {
         gatt_server::notify_value(conn, self.input_vial, data).map_err(|e| {
-            error!("Send ble report error: {}", e);
+            error!("Send ble report error: {:?}", e);
             match e {
                 gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
                 gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
@@ -195,7 +194,8 @@ impl HidReaderTrait for BleVialReaderWriter<'_> {
     }
 }
 
-#[derive(Debug, Format)]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum VialServiceEvent {
     InputVialKeyCccdWrite,
     OutputVial,

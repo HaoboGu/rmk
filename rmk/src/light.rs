@@ -3,13 +3,13 @@ use crate::{
     hid::{HidError, HidReaderTrait},
 };
 use bitfield_struct::bitfield;
-use defmt::{debug, error, Format};
 use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{OutputPin, PinState};
 use serde::{Deserialize, Serialize};
 
 #[bitfield(u8)]
-#[derive(Format, Eq, PartialEq, Serialize, Deserialize)]
+#[derive( Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LedIndicator {
     #[bits(1)]
     numslock: bool,

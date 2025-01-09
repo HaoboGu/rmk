@@ -1,12 +1,14 @@
 /// Traits and types for HID message reporting and listening.
 use core::future::Future;
 
+use crate::{usb::descriptor::KeyboardReport, CONNECTION_STATE};
 use defmt::{error, Format};
-use embassy_usb::{class::hid::ReadError, driver::EndpointError};
+use embassy_usb::{
+    class::hid::{HidReader, HidReaderWriter, HidWriter, ReadError},
+    driver::{Driver, EndpointError},
+};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
-
-use crate::{usb::descriptor::KeyboardReport, CONNECTION_STATE};
 
 #[derive(Serialize)]
 pub enum Report {
@@ -22,7 +24,8 @@ pub enum Report {
 
 impl AsInputReport for Report {}
 
-#[derive(PartialEq, Debug, Format)]
+#[derive(PartialEq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum HidError {
     UsbReadError(ReadError),
     UsbEndpointError(EndpointError),

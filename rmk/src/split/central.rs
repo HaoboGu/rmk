@@ -1,6 +1,5 @@
 use core::cell::RefCell;
 
-use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::{Instant, Timer};
 use embassy_usb::driver::Driver;
@@ -359,7 +358,7 @@ impl<
     const COL: usize = INPUT_PIN_NUM;
 
     async fn scan(&mut self) {
-        defmt::info!("Central matrix scanning");
+        info!("Central matrix scanning");
         loop {
             #[cfg(feature = "async_matrix")]
             self.wait_for_key().await;
@@ -428,7 +427,6 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
-        use defmt::info;
         use embassy_futures::select::select_slice;
         use heapless::Vec;
 

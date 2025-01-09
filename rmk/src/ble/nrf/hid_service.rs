@@ -7,7 +7,6 @@ use crate::{
     hid::HidReaderTrait,
     light::LedIndicator,
 };
-use defmt::{error, info, warn, Format};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
@@ -26,7 +25,8 @@ use usbd_hid::descriptor::SerializedDescriptor as _;
 static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 4> = Channel::new();
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, defmt::Format)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct HidService {
     hid_info: u16,
     report_map: u16,
@@ -165,13 +165,13 @@ impl HidService {
 
     pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
-            .map_err(|e| error!("send keyboard report error: {}", e))
+            .map_err(|e| error!("send keyboard report error: {:?}", e))
             .ok();
     }
 
     pub(crate) fn send_ble_media_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_media_keys, data)
-            .map_err(|e| error!("send keyboard report error: {}", e))
+            .map_err(|e| error!("send keyboard report error: {:?}", e))
             .ok();
     }
 }
@@ -191,7 +191,7 @@ impl gatt_server::Service for HidService {
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             let led_indicator = LedIndicator::from_bits(data[0]);
-            info!("HID output keyboard: {}", led_indicator);
+            info!("HID output keyboard: {:?}", led_indicator);
             // Retry 3 times in case the channel is full(which is really rare)
             for _i in 0..3 {
                 match LED_CHANNEL.try_send(led_indicator) {
@@ -207,7 +207,8 @@ impl gatt_server::Service for HidService {
 }
 
 #[allow(unused)]
-#[derive(Debug, Format)]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum HidServiceEvent {
     InputKeyboardCccdWrite,
     InputMediaKeyCccdWrite,

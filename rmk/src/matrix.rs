@@ -5,7 +5,6 @@ use crate::{
     CONNECTION_STATE,
 };
 use core::future::Future;
-use defmt::{info, Format};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -65,7 +64,8 @@ pub trait MatrixTrait {
 }
 
 /// KeyState represents the state of a key.
-#[derive(Copy, Clone, Debug, Format)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyState {
     // True if the key is pressed
     pub pressed: bool,
@@ -193,7 +193,7 @@ impl<
 
     /// Do matrix scanning, the result is stored in matrix's key_state field.
     async fn scan(&mut self) {
-        defmt::info!("Matrix scanning");
+        info!("Matrix scanning");
         loop {
             // KEY_EVENT_CHANNEL
             //     .send(KeyEvent {
