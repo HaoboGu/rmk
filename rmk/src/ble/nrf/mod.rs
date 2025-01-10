@@ -31,7 +31,6 @@ use crate::{CONNECTION_STATE, KEYBOARD_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
-use defmt::{debug, error, info, unwrap, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
@@ -245,7 +244,9 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
         // Use the immutable ref of `Softdevice` to run the softdevice_task
         // The mumtable ref is used for configuring Flash and BleServer
         let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        unwrap!(spawner.spawn(softdevice_task(sdv)))
+        spawner
+            .spawn(softdevice_task(sdv))
+            .expect("Failed to start softdevice task")
     };
 
     // Flash and keymap configuration
@@ -259,9 +260,11 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     if let Ok(Some(StorageData::ActiveBleProfile(profile))) =
         read_storage!(storage, &(StorageKeys::ActiveBleProfile as u32), buf)
     {
+        debug!("Loaded active profile: {}", profile);
         ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
     } else {
         // If no saved active profile, use 0 as default
+        debug!("Loaded default active profile",);
         ACTIVE_PROFILE.store(0, Ordering::SeqCst);
     };
 
@@ -294,7 +297,8 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     static BONDER: StaticCell<MultiBonder> = StaticCell::new();
     let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
 
-    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
+    let ble_server =
+        BleServer::new(sd, keyboard_config.usb_config, bonder).expect("Failed to start ble server");
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
@@ -366,7 +370,9 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                 );
                                 continue;
                             }
+
                             bonder.load_sys_attrs(&conn);
+
                             if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                                 error!("Failed to update PHY");
                                 if let PhyUpdateError::Raw(re) = e {
@@ -424,6 +430,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                             error!("Bonded peer address doesn't match active profile, disconnect");
                             continue;
                         }
+
                         bonder.load_sys_attrs(&conn);
                         if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
                             error!("Failed to update PHY");
@@ -567,7 +574,9 @@ pub(crate) async fn run_dummy_keyboard<
             warn!("Dummy service receives")
         }
     };
-
+    // Even for dummy service, we need to set the connection state to true.
+    // So that we can receive the matrix scan result from split, which might be used for profile switching
+    CONNECTION_STATE.store(true, Ordering::Release);
     match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
         Either4::First(_) => (),
         Either4::Second(_) => (),

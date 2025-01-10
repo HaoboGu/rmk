@@ -9,7 +9,6 @@ use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::Matrix;
 use crate::CONNECTION_STATE;
-use defmt::{error, info};
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select;
@@ -150,6 +149,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
+                            info!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
                         }
                         _ => (),

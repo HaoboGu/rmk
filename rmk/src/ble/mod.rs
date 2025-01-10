@@ -6,7 +6,6 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
-use defmt::{debug, error};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
@@ -48,12 +47,12 @@ pub(crate) async fn ble_communication_task<
             match report {
                 KeyboardReportMessage::KeyboardReport(report) => {
                     debug!(
-                        "Send keyboard report via BLE: {=[u8]:#X}, modifier: {:b}",
+                        "Send keyboard report via BLE: {:?}, modifier: {:b}",
                         report.keycodes, report.modifier
                     );
                     match ble_keyboard_writer.write_serialize(&report).await {
                         Ok(()) => {}
-                        Err(e) => error!("Send keyboard report error: {}", e),
+                        Err(e) => error!("Send keyboard report error: {:?}", e),
                     };
                 }
                 KeyboardReportMessage::CompositeReport(report, report_type) => {

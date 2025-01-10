@@ -1,6 +1,5 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use defmt::{debug, error, info, warn};
 use embassy_futures::block_on;
 use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_time::Timer;

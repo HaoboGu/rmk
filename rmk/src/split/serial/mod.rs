@@ -1,4 +1,4 @@
-use defmt::{error, info};
+use core::sync::atomic::Ordering;
 use embedded_io_async::{Read, Write};
 
 use crate::{

@@ -5,7 +5,6 @@ use crate::{
     CONNECTION_STATE,
 };
 use core::{cell::RefCell, sync::atomic::Ordering};
-use defmt::{debug, error, info, warn, Format};
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{
     gatt_server::{get_sys_attrs, set_sys_attrs},
@@ -15,7 +14,8 @@ use nrf_softdevice::ble::{
 };
 
 // Bond info which will be stored in flash
-#[derive(Clone, Copy, Debug, Format, Default)]
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct BondInfo {
     pub(crate) slot_num: u8,
     pub(crate) peer: Peer,
@@ -24,7 +24,8 @@ pub(crate) struct BondInfo {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct Peer {
     pub(crate) master_id: MasterId,
     pub(crate) key: EncryptionInfo,
@@ -45,7 +46,8 @@ impl Default for Peer {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct SystemAttribute {
     pub(crate) length: usize,
     pub(crate) data: [u8; 62],
@@ -91,6 +93,10 @@ impl MultiBonder {
 
         if let Some(slot_num) = saved_slot_num_for_conn {
             if slot_num != current_profile {
+                debug!(
+                    "Bonded device {} is not on active profile {}",
+                    addr, current_profile
+                );
                 return false;
             }
         }
@@ -108,11 +114,11 @@ impl SecurityHandler for MultiBonder {
     }
 
     fn display_passkey(&self, passkey: &[u8; 6]) {
-        info!("BLE passkey: {:#X}", passkey);
+        info!("BLE passkey: {:?}", passkey);
     }
 
     fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
-        info!("on_security_update, new security mode: {}", security_mode);
+        info!("on_security_update, new security mode: {:?}", security_mode);
         // Security updated, indicating that the connection is established?
         CONNECTION_STATE.store(true, Ordering::Release);
     }
@@ -125,7 +131,7 @@ impl SecurityHandler for MultiBonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        debug!("On bonded: storing bond for {}", master_id);
+        debug!("On bonded: storing bond for {:?}", master_id);
 
         // Get slot num, if the device has been bonded, reuse the slot num. Otherwise get a new slot num
         let slot_num = ACTIVE_PROFILE.load(Ordering::Acquire);
@@ -163,7 +169,7 @@ impl SecurityHandler for MultiBonder {
 
     fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
-        debug!("Getting bond for {}", master_id);
+        debug!("Getting bond for {:?}", master_id);
 
         self.bond_info
             .borrow()
@@ -202,7 +208,7 @@ impl SecurityHandler for MultiBonder {
                             && info.sys_attr.data[0..sys_attr_len] == buf[0..sys_attr_len])
                         {
                             debug!(
-                                "Updating sys_attr:\nnew: {},{}\nold: {},{}",
+                                "Updating sys_attr:\nnew: {:?},{:?}\nold: {:?},{:?}",
                                 buf, sys_attr_len, info.sys_attr.data, info.sys_attr.length
                             );
                             // Update bond info
@@ -223,17 +229,17 @@ impl SecurityHandler for MultiBonder {
                     }
                 }
                 Err(e) => {
-                    error!("Get system attr for {} erro: {}", info, e);
+                    error!("Get system attr for {:?} erro: {:?}", info, e);
                 }
             }
         } else {
-            info!("Peer doesn't match: {}", conn.peer_address());
+            info!("Peer doesn't match: {:?}", conn.peer_address());
         }
     }
 
     fn load_sys_attrs(&self, conn: &Connection) {
         let addr = conn.peer_address();
-        info!("Loading system attributes for {}", addr);
+        info!("Loading system attributes for {:?}", addr);
 
         let bond_info = self.bond_info.borrow();
 
@@ -243,7 +249,7 @@ impl SecurityHandler for MultiBonder {
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
-        // info!("call set_sys_attrs in load_sys_attrs: {}", sys_attr);
+        // info!("call set_sys_attrs in load_sys_attrs: {:?}", sys_attr);
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }
@@ -275,11 +281,11 @@ impl SecurityHandler for Bonder {
     }
 
     fn display_passkey(&self, passkey: &[u8; 6]) {
-        info!("BLE passkey: {:#X}", passkey);
+        info!("BLE passkey: {:?}", passkey);
     }
 
     fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
-        info!("on_security_update, new security mode: {}", security_mode);
+        info!("on_security_update, new security mode: {:?}", security_mode);
     }
 
     fn on_bonded(
@@ -290,7 +296,7 @@ impl SecurityHandler for Bonder {
         peer_id: IdentityKey,
     ) {
         // First time
-        debug!("On bonded: storing bond for {}", master_id);
+        debug!("On bonded: storing bond for {:?}", master_id);
 
         // Get slot num, if the device has been bonded, reuse the slot num. Otherwise get a new slot num
         let slot_num = self
@@ -346,7 +352,7 @@ impl SecurityHandler for Bonder {
 
     fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
         // Reconnecting with an existing bond
-        debug!("Getting bond for {}", master_id);
+        debug!("Getting bond for {:?}", master_id);
 
         self.bond_info
             .borrow()
@@ -378,7 +384,7 @@ impl SecurityHandler for Bonder {
                             && info.sys_attr.data[0..sys_attr_len] == buf[0..sys_attr_len])
                         {
                             debug!(
-                                "Updating sys_attr:\nnew: {},{}\nold: {},{}",
+                                "Updating sys_attr:\nnew: {:?},{:?}\nold: {:?},{:?}",
                                 buf, sys_attr_len, info.sys_attr.data, info.sys_attr.length
                             );
                             // Update bond info
@@ -399,17 +405,17 @@ impl SecurityHandler for Bonder {
                     }
                 }
                 Err(e) => {
-                    error!("Get system attr for {} erro: {}", info, e);
+                    error!("Get system attr for {:?} erro: {:?}", info, e);
                 }
             }
         } else {
-            info!("Peer doesn't match: {}", conn.peer_address());
+            info!("Peer doesn't match: {:?}", conn.peer_address());
         }
     }
 
     fn load_sys_attrs(&self, conn: &Connection) {
         let addr = conn.peer_address();
-        info!("Loading system attributes for {}", addr);
+        info!("Loading system attributes for {:?}", addr);
 
         let bond_info = self.bond_info.borrow();
 
@@ -419,7 +425,7 @@ impl SecurityHandler for Bonder {
             .find(|(_, b)| b.peer.peer_id.is_match(addr))
             .map(|(_, b)| &b.sys_attr.data[0..b.sys_attr.length]);
 
-        // info!("call set_sys_attrs in load_sys_attrs: {}", sys_attr);
+        // info!("call set_sys_attrs in load_sys_attrs: {:?}", sys_attr);
         if let Err(err) = set_sys_attrs(conn, sys_attr) {
             warn!("SecurityHandler failed to set sys attrs: {:?}", err);
         }
