@@ -60,9 +60,19 @@ pub async fn run_rmk_split_peripheral_with_config<
 
     // Keyboard matrix, use COL2ROW by default
     #[cfg(feature = "col2row")]
-    let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer, keyboard_config.matrix_config);
+    let matrix = Matrix::<_, _, _, ROW, COL>::new(
+        input_pins,
+        output_pins,
+        debouncer,
+        keyboard_config.matrix_config,
+    );
     #[cfg(not(feature = "col2row"))]
-    let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer, keyboard_config.matrix_config);
+    let matrix = Matrix::<_, _, _, COL, ROW>::new(
+        input_pins,
+        output_pins,
+        debouncer,
+        keyboard_config.matrix_config,
+    );
 
     #[cfg(not(feature = "_nrf_ble"))]
     crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(
@@ -115,12 +125,16 @@ pub async fn run_rmk_split_peripheral<
         input_pins,
         output_pins,
         keyboard_config,
-        #[cfg(feature = "_nrf_ble")] central_addr,
-        #[cfg(feature = "_nrf_ble")] peripheral_addr,
-        #[cfg(not(feature = "_nrf_ble"))] serial,
-        #[cfg(feature = "_nrf_ble")] spawner,
+        #[cfg(feature = "_nrf_ble")]
+        central_addr,
+        #[cfg(feature = "_nrf_ble")]
+        peripheral_addr,
+        #[cfg(not(feature = "_nrf_ble"))]
+        serial,
+        #[cfg(feature = "_nrf_ble")]
+        spawner,
     )
-        .await;
+    .await;
 }
 
 /// Run the split peripheral service with direct pin matrix.
