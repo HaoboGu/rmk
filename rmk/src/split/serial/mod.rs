@@ -11,7 +11,6 @@ use crate::{
 };
 
 use super::driver::SplitDriverError;
-use heapless::Vec;
 
 // Receive split message from peripheral via serial and process it
 ///
@@ -58,55 +57,46 @@ impl<S: Read + Write> SerialSplitDriver<S> {
 }
 
 impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
-    async fn read(&mut self) -> Result<Vec<SplitMessage, 2>, SplitDriverError> {
+    async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         const SENTINEL: u8 = 0x00;
-        let mut messages = Vec::new();
         while self.n_bytes_part < self.buffer.len() {
             let n_bytes = self
                 .serial
                 .read(&mut self.buffer[self.n_bytes_part..])
                 .await
-                .inspect_err(|_e| self.n_bytes_part = 0)
-                .map_err(|_e| SplitDriverError::SerialError)?;
+                .map_err(|_e| {
+                    self.n_bytes_part = 0;
+                    SplitDriverError::SerialError
+                })?;
             if n_bytes == 0 {
                 return Err(SplitDriverError::EmptyMessage);
             }
 
-            self.n_bytes_part += n_bytes;
+            self.n_bytes_part = (self.n_bytes_part + n_bytes).min(self.buffer.len());
             if self.buffer[..self.n_bytes_part].contains(&SENTINEL) {
                 break;
             }
         }
 
-        let mut start_byte = 0;
-        let mut end_byte = start_byte;
-        while end_byte < self.n_bytes_part {
-            let value = self.buffer[end_byte];
-            if value == SENTINEL {
-                postcard::from_bytes_cobs(&mut self.buffer[start_byte..=end_byte]).map_or_else(
-                    |e| error!("Postcard deserialize split message error: {}", e),
-                    |message| {
-                        messages
-                            .push(message)
-                            .unwrap_or_else(|_m| error!("Split message vector full"));
+        let (message, n_bytes_unused) = {
+            let (message, unused_bytes): (SplitMessage, &mut [u8]) =
+                postcard::take_from_bytes_cobs(&mut self.buffer[..self.n_bytes_part]).map_err(
+                    |e| {
+                        error!("Postcard deserialize split message error: {}", e);
+                        self.n_bytes_part = 0;
+                        SplitDriverError::SerializeError
                     },
-                );
-                start_byte = end_byte + 1;
-            }
+                )?;
+            (message, unused_bytes.len())
+        };
 
-            end_byte += 1;
-        }
+        self.buffer.copy_within(
+            (self.n_bytes_part - n_bytes_unused).max(0)..self.n_bytes_part,
+            0,
+        );
+        self.n_bytes_part = n_bytes_unused;
 
-        if start_byte != self.n_bytes_part {
-            // Store Partial Message for Next Read
-            self.buffer.copy_within(start_byte..self.n_bytes_part, 0);
-            self.n_bytes_part = self.n_bytes_part - start_byte;
-        } else {
-            // Reset Buffer
-            self.n_bytes_part = 0;
-        }
-
-        Ok(messages)
+        Ok(message)
     }
 }
 
