@@ -44,9 +44,9 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardConfig) -> TokenStrea
                 if usb_info.peripheral_name.contains("OTG") {
                     quote! {
                         static EP_OUT_BUFFER: ::static_cell::StaticCell<[u8; 1024]> = ::static_cell::StaticCell::new();
-                        let mut usb_config = ::embassy_stm32::usb_otg::Config::default();
+                        let mut usb_config = ::embassy_stm32::usb::Config::default();
                         usb_config.vbus_detection = false;
-                        let driver = ::embassy_stm32::usb_otg::Driver::new_fs(
+                        let driver = ::embassy_stm32::usb::Driver::new_fs(
                             p.#peripheral_name,
                             Irqs,
                             p.#dp,
