@@ -19,6 +19,7 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
     pub behavior_config: BehaviorConfig,
+    pub matrix_config: MatrixConfig,
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
     #[cfg(feature = "_esp_ble")]
@@ -34,8 +35,29 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
             light_config: LightConfig::default(),
             storage_config: StorageConfig::default(),
             behavior_config: BehaviorConfig::default(),
+            matrix_config: MatrixConfig::default(),
             #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
             ble_battery_config: BleBatteryConfig::default(),
+        }
+    }
+}
+
+/// Config for key matrix scanning
+#[derive(Clone, Copy, Debug)]
+pub struct MatrixConfig {
+    /// Microseconds to delay between pulling an output pin high and reading input pins.
+    /// This should only be adjusted if you need to compensate for slow electronics.
+    pub sample_delay_micros: u64,
+    /// Microseconds to delay between matrix scanning iterations.
+    /// This is usually the biggest contributor to the polling frequency.
+    pub scan_delay_micros: u64,
+}
+
+impl Default for MatrixConfig {
+    fn default() -> Self {
+        Self {
+            sample_delay_micros: 1,
+            scan_delay_micros: 100,
         }
     }
 }

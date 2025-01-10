@@ -1,4 +1,5 @@
 use crate::{
+    config::MatrixConfig,
     debounce::{DebounceState, DebouncerTrait},
     event::KeyEvent,
     keyboard::KEY_EVENT_CHANNEL,
@@ -116,6 +117,8 @@ pub struct Matrix<
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
     /// Start scanning
     scan_start: Option<Instant>,
+    /// Matrix configuration
+    matrix_config: MatrixConfig,
 }
 
 impl<
@@ -132,6 +135,7 @@ impl<
         input_pins: [In; INPUT_PIN_NUM],
         output_pins: [Out; OUTPUT_PIN_NUM],
         debouncer: D,
+        matrix_config: MatrixConfig,
     ) -> Self {
         Matrix {
             input_pins,
@@ -139,6 +143,7 @@ impl<
             debouncer,
             key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
+            matrix_config,
         }
     }
 }
@@ -200,9 +205,10 @@ impl<
 
             // Scan matrix and send report
             for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
-                // Pull up output pin, wait 1us ensuring the change comes into effect
+                // Pull up output pin, then wait to ensure the change comes into effect
                 out_pin.set_high().ok();
-                Timer::after_micros(1).await;
+                Timer::after_micros(self.matrix_config.sample_delay_micros).await;
+
                 for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(
@@ -242,7 +248,7 @@ impl<
                 out_pin.set_low().ok();
             }
 
-            embassy_time::Timer::after_micros(100).await;
+            Timer::after_micros(self.matrix_config.scan_delay_micros).await;
         }
     }
 
