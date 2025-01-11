@@ -178,6 +178,9 @@ impl<
         }
         // First, set all output pin to high
         for out in self.output_pins.iter_mut() {
+            #[cfg(feature = "active_low")]
+            out.set_low().ok();
+            #[cfg(not(feature = "active_low"))]
             out.set_high().ok();
         }
         Timer::after_micros(1).await;
@@ -190,6 +193,9 @@ impl<
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
+            #[cfg(feature = "active_low")]
+            out.set_high().ok();
+            #[cfg(not(feature = "active_low"))]
             out.set_low().ok();
         }
 
@@ -206,6 +212,9 @@ impl<
             // Scan matrix and send report
             for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
                 // Pull up output pin, then wait to ensure the change comes into effect
+                #[cfg(feature = "active_low")]
+                out_pin.set_low().ok();
+                #[cfg(not(feature = "active_low"))]
                 out_pin.set_high().ok();
                 Timer::after_micros(self.matrix_config.sample_delay_micros).await;
 
@@ -245,6 +254,9 @@ impl<
                         self.scan_start = Some(Instant::now());
                     }
                 }
+                #[cfg(feature = "active_low")]
+                out_pin.set_high().ok();
+                #[cfg(not(feature = "active_low"))]
                 out_pin.set_low().ok();
             }
 
