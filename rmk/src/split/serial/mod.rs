@@ -91,7 +91,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
         };
 
         self.buffer.copy_within(
-            (self.n_bytes_part - n_bytes_unused).max(0)..self.n_bytes_part,
+            self.n_bytes_part-n_bytes_unused..self.n_bytes_part,
             0,
         );
         self.n_bytes_part = n_bytes_unused;
