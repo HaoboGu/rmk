@@ -10,7 +10,7 @@ use embedded_hal_async::digital::Wait;
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
-use crate::config::RmkConfig;
+use crate::config::{MatrixConfig, RmkConfig};
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -90,7 +90,12 @@ pub async fn run_rmk_split_central<
         CENTRAL_COL_OFFSET,
         CENTRAL_ROW,
         CENTRAL_COL,
-    >::new(input_pins, output_pins, debouncer);
+    >::new(
+        input_pins,
+        output_pins,
+        debouncer,
+        keyboard_config.matrix_config,
+    );
     #[cfg(not(feature = "col2row"))]
     let matrix = CentralMatrix::<
         In,
@@ -100,7 +105,12 @@ pub async fn run_rmk_split_central<
         CENTRAL_COL_OFFSET,
         CENTRAL_COL,
         CENTRAL_ROW,
-    >::new(input_pins, output_pins, debouncer);
+    >::new(
+        input_pins,
+        output_pins,
+        debouncer,
+        keyboard_config.matrix_config,
+    );
 
     #[cfg(feature = "_nrf_ble")]
     let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
@@ -322,6 +332,8 @@ pub(crate) struct CentralMatrix<
     key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
     /// Start scanning
     scan_start: Option<Instant>,
+    /// Matrix configuration
+    matrix_config: MatrixConfig,
 }
 
 impl<
@@ -355,7 +367,8 @@ impl<
             for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
                 // Pull up output pin, wait 1us ensuring the change comes into effect
                 out_pin.set_high().ok();
-                Timer::after_micros(1).await;
+                Timer::after_micros(self.matrix_config.sample_delay_micros).await;
+
                 for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(
@@ -401,7 +414,7 @@ impl<
                 out_pin.set_low().ok();
             }
 
-            embassy_time::Timer::after_micros(100).await;
+            Timer::after_micros(self.matrix_config.scan_delay_micros).await;
         }
     }
 
@@ -464,6 +477,7 @@ impl<
         input_pins: [In; INPUT_PIN_NUM],
         output_pins: [Out; OUTPUT_PIN_NUM],
         debouncer: D,
+        matrix_config: MatrixConfig,
     ) -> Self {
         CentralMatrix {
             input_pins,
@@ -471,6 +485,7 @@ impl<
             debouncer,
             key_states: [[KeyState::default(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
+            matrix_config,
         }
     }
 }
