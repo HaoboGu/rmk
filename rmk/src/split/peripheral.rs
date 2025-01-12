@@ -61,22 +61,21 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
+    #[cfg(feature = "_nrf_ble")]
     run_rmk_split_peripheral_with_matrix::<
         Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
-        #[cfg(not(feature = "_nrf_ble"))] S,
         ROW,
         COL,
-    >(
-        matrix,
-        #[cfg(feature = "_nrf_ble")]
-        central_addr,
-        #[cfg(feature = "_nrf_ble")]
-        peripheral_addr,
-        #[cfg(not(feature = "_nrf_ble"))]
-        serial,
-        #[cfg(feature = "_nrf_ble")]
-        spawner,
-    )
+    >(matrix, central_addr, peripheral_addr, spawner)
+    .await;
+
+    #[cfg(not(feature = "_nrf_ble"))]
+    run_rmk_split_peripheral_with_matrix::<
+        Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
+        S,
+        ROW,
+        COL,
+    >(matrix, serial)
     .await;
 }
 
@@ -115,22 +114,21 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     // Keyboard matrix
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
+    #[cfg(feature = "_nrf_ble")]
     run_rmk_split_peripheral_with_matrix::<
         DirectPinMatrix<In, DefaultDebouncer<COL, ROW>, ROW, COL, SIZE>,
-        #[cfg(not(feature = "_nrf_ble"))] S,
         ROW,
         COL,
-    >(
-        matrix,
-        #[cfg(feature = "_nrf_ble")]
-        central_addr,
-        #[cfg(feature = "_nrf_ble")]
-        peripheral_addr,
-        #[cfg(not(feature = "_nrf_ble"))]
-        serial,
-        #[cfg(feature = "_nrf_ble")]
-        spawner,
-    )
+    >(matrix, central_addr, peripheral_addr, spawner)
+    .await;
+
+    #[cfg(not(feature = "_nrf_ble"))]
+    run_rmk_split_peripheral_with_matrix::<
+        DirectPinMatrix<In, DefaultDebouncer<COL, ROW>, ROW, COL, SIZE>,
+        S,
+        ROW,
+        COL,
+    >(matrix, serial)
     .await;
 }
 
