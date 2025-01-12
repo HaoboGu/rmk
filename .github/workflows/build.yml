@@ -50,6 +50,9 @@ jobs:
         run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
       - name: Build example
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
+        run: cargo build --release
+      - name: Build example uf2
+        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
   binary-size:
     # Copied from sequential-storage: https://github.com/tweedegolf/sequential-storage/blob/master/.github/workflows/ci.yaml
