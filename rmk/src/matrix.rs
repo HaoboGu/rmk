@@ -214,49 +214,49 @@ impl<
             // #[cfg(feature = "async_matrix")]
             // self.wait_for_key().await;
 
-            // // Scan matrix and send report
-            // for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
-            //     // Pull up output pin, wait 1us ensuring the change comes into effect
-            //     out_pin.set_high().ok();
-            //     Timer::after_micros(1).await;
-            //     for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
-            //         // Check input pins and debounce
-            //         let debounce_state = self.debouncer.detect_change_with_debounce(
-            //             in_idx,
-            //             out_idx,
-            //             in_pin.is_high().ok().unwrap_or_default(),
-            //             &self.key_states[out_idx][in_idx],
-            //         );
+            // Scan matrix and send report
+            for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
+                // Pull up output pin, wait 1us ensuring the change comes into effect
+                out_pin.set_high().ok();
+                Timer::after_micros(1).await;
+                for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
+                    // Check input pins and debounce
+                    let debounce_state = self.debouncer.detect_change_with_debounce(
+                        in_idx,
+                        out_idx,
+                        in_pin.is_high().ok().unwrap_or_default(),
+                        &self.key_states[out_idx][in_idx],
+                    );
 
-            //         match debounce_state {
-            //             DebounceState::Debounced => {
-            //                 self.key_states[out_idx][in_idx].toggle_pressed();
-            //                 #[cfg(feature = "col2row")]
-            //                 let (row, col, key_state) =
-            //                     (in_idx, out_idx, self.key_states[out_idx][in_idx]);
-            //                 #[cfg(not(feature = "col2row"))]
-            //                 let (row, col, key_state) =
-            //                     (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+                    match debounce_state {
+                        DebounceState::Debounced => {
+                            self.key_states[out_idx][in_idx].toggle_pressed();
+                            #[cfg(feature = "col2row")]
+                            let (row, col, key_state) =
+                                (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                            #[cfg(not(feature = "col2row"))]
+                            let (row, col, key_state) =
+                                (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-            //                 KEY_EVENT_CHANNEL
-            //                     .send(KeyEvent {
-            //                         row: row as u8,
-            //                         col: col as u8,
-            //                         pressed: key_state.pressed,
-            //                     })
-            //                     .await;
-            //             }
-            //             _ => (),
-            //         }
+                            KEY_EVENT_CHANNEL
+                                .send(KeyEvent {
+                                    row: row as u8,
+                                    col: col as u8,
+                                    pressed: key_state.pressed,
+                                })
+                                .await;
+                        }
+                        _ => (),
+                    }
 
-            //         // If there's key still pressed, always refresh the self.scan_start
-            //         #[cfg(feature = "async_matrix")]
-            //         if self.key_states[out_idx][in_idx].pressed {
-            //             self.scan_start = Some(Instant::now());
-            //         }
-            //     }
-            //     out_pin.set_low().ok();
-            // }
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if self.key_states[out_idx][in_idx].pressed {
+                        self.scan_start = Some(Instant::now());
+                    }
+                }
+                out_pin.set_low().ok();
+            }
 
             embassy_time::Timer::after_micros(100).await;
         }

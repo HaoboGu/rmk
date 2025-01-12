@@ -258,10 +258,10 @@ pub async fn initialize_usb_keyboard_and_run<
     let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
 
     // Create keyboard services and devices
-
     let mut keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
 
-    let mut usb_builder = new_usb_builder(usb_driver, keyboard_config.usb_config);
+    let mut usb_builder: embassy_usb::Builder<'_, D> =
+        new_usb_builder(usb_driver, keyboard_config.usb_config);
     let keyboard_reader_writer =
         register_usb_reader_writer::<_, KeyboardReport, 1, 8>(&mut usb_builder);
     let mut other_writer = register_usb_writer::<_, CompositeReport, 9>(&mut usb_builder);
@@ -292,7 +292,6 @@ pub async fn initialize_usb_keyboard_and_run<
 
 // Run keyboard task for once
 pub(crate) async fn run_keyboard<
-    'a,
     'b,
     M: MatrixTrait,
     Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,

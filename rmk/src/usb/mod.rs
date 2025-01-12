@@ -3,7 +3,7 @@ pub(crate) mod descriptor;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use embassy_usb::{
-    class::hid::{Config, HidReader, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
+    class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
     Builder, Handler,

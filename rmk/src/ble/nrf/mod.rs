@@ -377,59 +377,18 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                     info!("Running USB keyboard, while advertising");
                     let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
-                        Either3::First(Ok(mut conn)) => {
-                            info!("Connected to BLE");
-                            // Check whether the peer address is matched with current profile
-                            if !bonder.check_connection(&conn) {
-                                error!(
-                                    "Bonded peer address doesn't match active profile, disconnect"
-                                );
-                                continue;
-                            }
-
-                            bonder.load_sys_attrs(&conn);
-
-                            if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                                error!("Failed to update PHY");
-                                if let PhyUpdateError::Raw(re) = e {
-                                    error!("Raw error code: {:?}", re);
-                                }
-                            }
-
-                            // Run the ble keyboard, wait for disconnection or USB connect
-                            match select4(
-                                run_keyboard(
-                                    &keymap,
-                                    run_ble_server(&conn, &ble_server),
-                                    &mut keyboard,
-                                    &mut matrix,
-                                    &mut storage,
-                                    BleLedReader {},
-                                    BleVialReaderWriter::new(ble_server.vial, &conn),
-                                    BleKeyboardWriter::new(
-                                        &conn,
-                                        ble_server.hid.input_keyboard,
-                                        ble_server.hid.input_media_keys,
-                                        ble_server.hid.input_system_keys,
-                                        ble_server.hid.input_mouse_keys,
-                                    ),
-                                    &keyboard_config,
-                                ),
-                                ble_server
-                                    .bas
-                                    .clone()
-                                    .run(&keyboard_config.ble_battery_config, &conn),
-                                wait_for_usb_enabled(),
-                                update_profile(bonder),
+                        Either3::First(Ok(conn)) => {
+                            run_ble_keyboard(
+                                &mut matrix,
+                                &keyboard_config,
+                                &mut storage,
+                                &keymap,
+                                bonder,
+                                &ble_server,
+                                &mut keyboard,
+                                conn,
                             )
                             .await
-                            {
-                                Either4::First(_) => info!("BLE disconnected"),
-                                Either4::Second(_) => info!("Bas service error"),
-                                Either4::Third(_) => info!("Detected USB configured, quit BLE"),
-                                Either4::Fourth(_) => info!("Switch profile"),
-                            }
-                            bonder.save_sys_attrs(&conn);
                         }
                         _ => {
                             // Wait 10ms
@@ -446,55 +405,18 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                 info!("BLE advertising");
                 // Wait for BLE or USB connection
                 match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
-                    Either3::First(Ok(mut conn)) => {
-                        info!("Connected to BLE");
-                        // Check whether the peer address is matched with current profile
-                        if !bonder.check_connection(&conn) {
-                            error!("Bonded peer address doesn't match active profile, disconnect");
-                            continue;
-                        }
-
-                        bonder.load_sys_attrs(&conn);
-                        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                            error!("Failed to update PHY");
-                            if let PhyUpdateError::Raw(re) = e {
-                                error!("Raw error code: {:?}", re);
-                            }
-                        }
-                        // Run the ble keyboard, wait for disconnection
-                        match select4(
-                            run_keyboard(
-                                &keymap,
-                                run_ble_server(&conn, &ble_server),
-                                &mut keyboard,
-                                &mut matrix,
-                                &mut storage,
-                                BleLedReader {},
-                                BleVialReaderWriter::new(ble_server.vial, &conn),
-                                BleKeyboardWriter::new(
-                                    &conn,
-                                    ble_server.hid.input_keyboard,
-                                    ble_server.hid.input_media_keys,
-                                    ble_server.hid.input_system_keys,
-                                    ble_server.hid.input_mouse_keys,
-                                ),
-                                &keyboard_config,
-                            ),
-                            ble_server
-                                .bas
-                                .clone()
-                                .run(&keyboard_config.ble_battery_config, &conn),
-                            wait_for_usb_enabled(),
-                            update_profile(bonder),
+                    Either3::First(Ok(conn)) => {
+                        run_ble_keyboard(
+                            &mut matrix,
+                            &keyboard_config,
+                            &mut storage,
+                            &keymap,
+                            bonder,
+                            &ble_server,
+                            &mut keyboard,
+                            conn,
                         )
                         .await
-                        {
-                            Either4::First(_) => info!("BLE disconnected"),
-                            Either4::Second(_) => info!("Bas service error"),
-                            Either4::Third(_) => info!("Detected USB configured, quit BLE"),
-                            Either4::Fourth(_) => info!("Switch profile"),
-                        }
-                        bonder.save_sys_attrs(&conn);
                     }
                     _ => {
                         // Wait 10ms for usb resuming/switching profile/advertising error
@@ -506,30 +428,18 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
 
         #[cfg(feature = "_no_usb")]
         match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
-            Ok(mut conn) => {
-                bonder.load_sys_attrs(&conn);
-                if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                    error!("Failed to update PHY");
-                    if let PhyUpdateError::Raw(re) = e {
-                        error!("Raw error code: {:?}", re);
-                    }
-                }
-                select(
-                    run_ble_keyboard(
-                        &keymap,
-                        &conn,
-                        &ble_server,
-                        &mut keyboard,
-                        &mut matrix,
-                        &mut storage,
-                        &mut light_service,
-                        &mut keyboard_config.ble_battery_config,
-                        keyboard_config.vial_config,
-                    ),
-                    update_profile(bonder),
+            Ok(conn) => {
+                run_ble_keyboard(
+                    &mut matrix,
+                    &keyboard_config,
+                    &mut storage,
+                    &keymap,
+                    bonder,
+                    &ble_server,
+                    &mut keyboard,
+                    conn,
                 )
                 .await;
-                bonder.save_sys_attrs(&conn);
             }
             Err(e) => error!("Advertise error: {}", e),
         }
@@ -537,6 +447,70 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
         // Retry after 200 ms
         Timer::after_millis(200).await;
     }
+}
+
+async fn run_ble_keyboard<
+    'a,
+    M: MatrixTrait,
+    Out: OutputPin,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    matrix: &mut M,
+    keyboard_config: &RmkConfig<'static, Out>,
+    storage: &mut Storage<Flash, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    bonder: &'static MultiBonder,
+    ble_server: &BleServer,
+    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+    mut conn: Connection,
+) {
+    info!("Connected to BLE");
+    if !bonder.check_connection(&conn) {
+        error!("Bonded peer address doesn't match active profile, disconnect");
+        return;
+    }
+    bonder.load_sys_attrs(&conn);
+    if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+        error!("Failed to update PHY");
+        if let PhyUpdateError::Raw(re) = e {
+            error!("Raw error code: {:?}", re);
+        }
+    }
+    match select4(
+        run_keyboard(
+            keymap,
+            run_ble_server(&conn, ble_server),
+            keyboard,
+            matrix,
+            storage,
+            BleLedReader {},
+            BleVialReaderWriter::new(ble_server.vial, &conn),
+            BleKeyboardWriter::new(
+                &conn,
+                ble_server.hid.input_keyboard,
+                ble_server.hid.input_media_keys,
+                ble_server.hid.input_system_keys,
+                ble_server.hid.input_mouse_keys,
+            ),
+            keyboard_config,
+        ),
+        ble_server
+            .bas
+            .clone()
+            .run(&keyboard_config.ble_battery_config, &conn),
+        wait_for_usb_enabled(),
+        update_profile(bonder),
+    )
+    .await
+    {
+        Either4::First(_) => info!("BLE disconnected"),
+        Either4::Second(_) => info!("Bas service error"),
+        Either4::Third(_) => info!("Detected USB configured, quit BLE"),
+        Either4::Fourth(_) => info!("Switch profile"),
+    }
+    bonder.save_sys_attrs(&conn);
 }
 
 pub(crate) async fn set_conn_params(conn: &Connection) {
@@ -625,4 +599,11 @@ async fn run_ble_server(conn: &Connection, ble_server: &BleServer) {
     )
     .await;
     error!("BLE server exited with error: {:?}", err.1);
+}
+
+#[cfg(feature = "_no_usb")]
+async fn wait_for_usb_enabled() {
+    loop {
+        embassy_time::Timer::after_secs(u64::MAX).await;
+    }
 }

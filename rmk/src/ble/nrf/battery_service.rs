@@ -12,7 +12,7 @@ pub(crate) struct BatteryService {
 }
 
 impl<'a> BatteryService {
-    fn check_charging_state(battery_config: &BleBatteryConfig<'a>) {
+    fn check_charging_state(_battery_config: &BleBatteryConfig<'a>) {
         // if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
         //     if is_charging_pin.is_low() == battery_config.charge_state_low_active {
         //         info!("Charging!");
@@ -36,11 +36,7 @@ impl<'a> BatteryService {
         // }
     }
 
-    pub(crate) async fn run(
-        &mut self,
-        battery_config: &BleBatteryConfig<'a>,
-        conn: &Connection,
-    ) {
+    pub(crate) async fn run(&mut self, battery_config: &BleBatteryConfig<'a>, _conn: &Connection) {
         // Wait 1 seconds, ensure that gatt server has been started
         Timer::after_secs(1).await;
         BatteryService::check_charging_state(battery_config);

@@ -8,7 +8,7 @@ use embedded_hal::digital::{OutputPin, PinState};
 use serde::{Deserialize, Serialize};
 
 #[bitfield(u8)]
-#[derive( Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LedIndicator {
     #[bits(1)]
