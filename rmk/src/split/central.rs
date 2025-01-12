@@ -102,28 +102,20 @@ pub async fn run_rmk_split_central<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
-    #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
+    run_rmk_split_central_with_matrix(
         matrix,
+        #[cfg(not(feature = "_no_usb"))]
         usb_driver,
-        default_keymap,
-        keyboard_config,
-        Some(central_addr),
-        spawner,
-    )
-    .await;
-
-    #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_split_central_and_run::<_, _, D, F, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
-        matrix,
-        usb_driver,
+        #[cfg(not(feature = "_no_external_storage"))]
         flash,
         default_keymap,
         keyboard_config,
+        #[cfg(feature = "_nrf_ble")]
+        central_addr,
+        #[cfg(not(feature = "_esp_ble"))]
+        spawner,
     )
     .await;
-
-    fut
 }
 
 /// Run RMK split central keyboard service. This function should never return.
@@ -183,6 +175,52 @@ pub async fn run_rmk_split_central_direct_pin<
         SIZE,
     >::new(direct_pins, debouncer, low_active);
 
+    run_rmk_split_central_with_matrix(
+        matrix,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        #[cfg(not(feature = "_no_external_storage"))]
+        flash,
+        default_keymap,
+        keyboard_config,
+        #[cfg(feature = "_nrf_ble")]
+        central_addr,
+        #[cfg(not(feature = "_esp_ble"))]
+        spawner,
+    )
+    .await;
+}
+
+/// Run RMK split central keyboard service. This function should never return.
+///
+/// # Arguments
+///
+/// * `matrix` - the matrix scanning implementation to use.
+/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
+/// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
+/// * `default_keymap` - default keymap definition
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split central now
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[allow(unused_variables)]
+#[allow(unreachable_code)]
+pub async fn run_rmk_split_central_with_matrix<
+    M: MatrixTrait,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
+    const TOTAL_ROW: usize,
+    const TOTAL_COL: usize,
+    const NUM_LAYER: usize,
+>(
+    matrix: M,
+    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+    #[cfg(not(feature = "_no_external_storage"))] flash: F,
+    default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
+
+    keyboard_config: RmkConfig<'static, Out>,
+    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
+) -> ! {
     #[cfg(feature = "_nrf_ble")]
     let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
         matrix,
