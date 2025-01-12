@@ -220,6 +220,7 @@ pub async fn run_rmk_with_async_flash<
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
 pub async fn run_rmk_with_async_flash_and_matrix<
+    Out: OutputPin,
     M: MatrixTrait,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
