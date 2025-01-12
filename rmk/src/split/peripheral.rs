@@ -63,7 +63,7 @@ pub async fn run_rmk_split_peripheral<
 
     #[cfg(feature = "_nrf_ble")]
     run_rmk_split_peripheral_with_matrix::<
-        Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
+        _,
         ROW,
         COL,
     >(matrix, central_addr, peripheral_addr, spawner)
@@ -71,7 +71,7 @@ pub async fn run_rmk_split_peripheral<
 
     #[cfg(not(feature = "_nrf_ble"))]
     run_rmk_split_peripheral_with_matrix::<
-        Matrix<In, Out, DefaultDebouncer<ROW, COL>, ROW, COL>,
+        _,
         S,
         ROW,
         COL,
@@ -116,7 +116,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
 
     #[cfg(feature = "_nrf_ble")]
     run_rmk_split_peripheral_with_matrix::<
-        DirectPinMatrix<In, DefaultDebouncer<COL, ROW>, ROW, COL, SIZE>,
+        _,
         ROW,
         COL,
     >(matrix, central_addr, peripheral_addr, spawner)
@@ -124,7 +124,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
 
     #[cfg(not(feature = "_nrf_ble"))]
     run_rmk_split_peripheral_with_matrix::<
-        DirectPinMatrix<In, DefaultDebouncer<COL, ROW>, ROW, COL, SIZE>,
+        _,
         S,
         ROW,
         COL,
