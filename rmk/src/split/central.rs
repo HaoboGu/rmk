@@ -205,6 +205,7 @@ pub async fn run_rmk_split_central_direct_pin<
 #[allow(unused_variables)]
 #[allow(unreachable_code)]
 pub async fn run_rmk_split_central_with_matrix<
+    Out: OutputPin,
     M: MatrixTrait,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,

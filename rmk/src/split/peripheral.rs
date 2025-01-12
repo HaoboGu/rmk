@@ -7,7 +7,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::KEY_EVENT_CHANNEL;
-use crate::matrix::Matrix;
+use crate::matrix::{Matrix, MatrixTrait};
 use crate::CONNECTION_STATE;
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
