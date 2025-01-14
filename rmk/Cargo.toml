@@ -56,7 +56,7 @@ nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-s
     "ble-gatt-client",
     "ble-sec",
 ], optional = true }
-embassy-nrf = { version = "0.3.0", features = [
+embassy-nrf = { version = "0.3.1", features = [
     "unstable-pac",
     "time",
 ], optional = true }

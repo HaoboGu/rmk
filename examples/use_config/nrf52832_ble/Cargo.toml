@@ -14,7 +14,7 @@ rmk = { path = "../../../rmk", features = ["nrf52832_ble", "col2row"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.3.0", features = [
+embassy-nrf = { version = "0.3.1", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
