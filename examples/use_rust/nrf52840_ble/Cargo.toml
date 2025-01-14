@@ -16,7 +16,7 @@ rmk = { path = "../../../rmk", features = [
     "async_matrix",
 ] }
 cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
+cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
 embassy-nrf = { version = "0.3.1", features = [
     "defmt",
