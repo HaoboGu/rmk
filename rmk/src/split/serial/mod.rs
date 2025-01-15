@@ -78,25 +78,25 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
             }
         }
 
-        let (message, n_bytes_unused) = {
-            let (message, unused_bytes): (SplitMessage, &mut [u8]) =
-                postcard::take_from_bytes_cobs(&mut self.buffer[..self.n_bytes_part]).map_err(
-                    |e| {
-                        error!("Postcard deserialize split message error: {}", e);
-                        self.n_bytes_part = 0;
-                        SplitDriverError::SerializeError
-                    },
-                )?;
-            (message, unused_bytes.len())
+        let (result, n_bytes_unused) = match postcard::take_from_bytes_cobs::<SplitMessage>(
+            &mut self.buffer.clone()[..self.n_bytes_part],
+        ) {
+            Ok((message, unused_bytes)) => (Ok(message), unused_bytes.len()),
+            Err(e) => {
+                error!("Postcard deserialize split message error: {}", e);
+                let n_bytes_unused = self.buffer[..self.n_bytes_part]
+                    .iter()
+                    .position(|&x| x == SENTINEL)
+                    .map_or(0, |index| self.n_bytes_part - index - 1);
+                (Err(SplitDriverError::SerializeError), n_bytes_unused)
+            }
         };
 
-        self.buffer.copy_within(
-            self.n_bytes_part-n_bytes_unused..self.n_bytes_part,
-            0,
-        );
+        self.buffer
+            .copy_within(self.n_bytes_part - n_bytes_unused..self.n_bytes_part, 0);
         self.n_bytes_part = n_bytes_unused;
 
-        Ok(message)
+        result
     }
 }
 
