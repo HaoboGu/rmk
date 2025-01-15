@@ -16,7 +16,7 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
-    pub light_config: LightConfig<'a, O>,
+    pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
     pub behavior_config: BehaviorConfig,
     #[cfg(feature = "_nrf_ble")]
@@ -104,18 +104,18 @@ impl Default for StorageConfig {
 }
 
 /// Config for lights
-pub struct LightConfig<'d, O: OutputPin> {
-    pub capslock: Option<LightPinConfig<'d, O>>,
-    pub scrolllock: Option<LightPinConfig<'d, O>>,
-    pub numslock: Option<LightPinConfig<'d, O>>,
+pub struct LightConfig<O: OutputPin> {
+    pub capslock: Option<LightPinConfig<O>>,
+    pub scrolllock: Option<LightPinConfig<O>>,
+    pub numslock: Option<LightPinConfig<O>>,
 }
 
-pub struct LightPinConfig<'d, O: OutputPin> {
-    pub pin: &'d mut O,
+pub struct LightPinConfig<O: OutputPin> {
+    pub pin: O,
     pub low_active: bool,
 }
 
-impl<'d, O: OutputPin> Default for LightConfig<'d, O> {
+impl<O: OutputPin> Default for LightConfig<O> {
     fn default() -> Self {
         Self {
             capslock: None,

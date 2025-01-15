@@ -10,8 +10,9 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::ble::BleKeyboardWriter;
+use crate::config::VialConfig;
 use crate::input_device::InputProcessor as _;
-use crate::light::UsbLedReader;
+use crate::light::{LightController, UsbLedReader};
 use crate::matrix::MatrixTrait;
 use crate::reporter::{DummyReporter, Runnable as _, UsbKeyboardWriter};
 use crate::storage::StorageKeys;
@@ -327,6 +328,8 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
         )
     };
 
+    let mut light_controller = LightController::new(keyboard_config.light_config);
+
     // Main loop
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -352,15 +355,16 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
             if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_keyboard(
                     &keymap,
-                    run_usb_device(&mut usb_device),
                     &mut keyboard,
                     &mut matrix,
                     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
                     &mut storage,
+                    run_usb_device(&mut usb_device),
+                    &mut light_controller,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                    &keyboard_config,
+                    keyboard_config.vial_config,
                 );
                 if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
                     info!("Running USB keyboard");
@@ -379,13 +383,14 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                     match select3(adv_fut, usb_fut, update_profile(bonder)).await {
                         Either3::First(Ok(conn)) => {
                             run_ble_keyboard(
-                                &mut matrix,
-                                &keyboard_config,
-                                &mut storage,
                                 &keymap,
-                                bonder,
-                                &ble_server,
                                 &mut keyboard,
+                                &mut matrix,
+                                &mut storage,
+                                &mut light_controller,
+                                keyboard_config.vial_config,
+                                &ble_server,
+                                bonder,
                                 conn,
                             )
                             .await
@@ -407,13 +412,14 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                 match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
                     Either3::First(Ok(conn)) => {
                         run_ble_keyboard(
-                            &mut matrix,
-                            &keyboard_config,
-                            &mut storage,
                             &keymap,
-                            bonder,
-                            &ble_server,
                             &mut keyboard,
+                            &mut matrix,
+                            &mut storage,
+                            &mut light_controller,
+                            keyboard_config.vial_config,
+                            &ble_server,
+                            bonder,
                             conn,
                         )
                         .await
@@ -457,13 +463,14 @@ async fn run_ble_keyboard<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    matrix: &mut M,
-    keyboard_config: &RmkConfig<'static, Out>,
-    storage: &mut Storage<Flash, ROW, COL, NUM_LAYER>,
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    bonder: &'static MultiBonder,
-    ble_server: &BleServer,
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
+    matrix: &mut M,
+    storage: &mut Storage<Flash, ROW, COL, NUM_LAYER>,
+    light_controller: &mut LightController<Out>,
+    vial_config: VialConfig<'static>,
+    ble_server: &BleServer,
+    bonder: &'static MultiBonder,
     mut conn: Connection,
 ) {
     info!("Connected to BLE");
@@ -481,10 +488,11 @@ async fn run_ble_keyboard<
     match select4(
         run_keyboard(
             keymap,
-            run_ble_server(&conn, ble_server),
             keyboard,
             matrix,
             storage,
+            run_ble_server(&conn, ble_server),
+            light_controller,
             BleLedReader {},
             BleVialReaderWriter::new(ble_server.vial, &conn),
             BleKeyboardWriter::new(
@@ -494,12 +502,13 @@ async fn run_ble_keyboard<
                 ble_server.hid.input_system_keys,
                 ble_server.hid.input_mouse_keys,
             ),
-            keyboard_config,
+            vial_config,
         ),
-        ble_server
-            .bas
-            .clone()
-            .run(&keyboard_config.ble_battery_config, &conn),
+        async {},
+        // ble_server
+        //     .bas
+        //     .clone()
+        //     .run(ble_battery_config, &conn),
         wait_for_usb_enabled(),
         update_profile(bonder),
     )

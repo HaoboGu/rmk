@@ -24,8 +24,9 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::input_device::InputProcessor;
-use crate::light::LightService;
+use crate::light::LightController;
 use action::KeyAction;
+use config::VialConfig;
 use core::{
     cell::RefCell,
     future::Future,
@@ -49,7 +50,7 @@ pub use flash::EmptyFlashWrapper;
 use hid::{HidReaderTrait, HidWriterTrait};
 use keyboard::Keyboard;
 use keymap::KeyMap;
-use light::{LedIndicator, UsbLedReader};
+use light::{LedIndicator, LightService, UsbLedReader};
 use matrix::{Matrix, MatrixTrait};
 use reporter::UsbKeyboardWriter;
 pub use rmk_macro as macros;
@@ -271,20 +272,23 @@ pub async fn initialize_usb_keyboard_and_run<
 
     let mut usb_device = usb_builder.build();
 
+    let mut light_controller = LightController::new(keyboard_config.light_config);
+
     KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
     // Run all tasks, if one of them fails, wait 1 second and then restart
     loop {
         run_keyboard(
             &keymap,
-            run_usb_device(&mut usb_device),
             &mut keyboard,
             &mut matrix,
             #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
             &mut storage,
+            run_usb_device(&mut usb_device),
+            &mut light_controller,
             UsbLedReader::new(&mut keyboard_reader),
             UsbVialReaderWriter::new(&mut vial_reader_writer),
             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-            &keyboard_config,
+            keyboard_config.vial_config,
         )
         .await;
     }
@@ -305,7 +309,6 @@ pub(crate) async fn run_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'b RefCell<KeyMap<'b, ROW, COL, NUM_LAYER>>,
-    communication_fut: Fu,
     keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
     matrix: &mut M,
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
@@ -314,20 +317,20 @@ pub(crate) async fn run_keyboard<
         COL,
         NUM_LAYER,
     >,
+    communication_fut: Fu,
+    light_controller: &mut LightController<Out>,
     led_reader: R,
     vial_reader_writer: Rw,
     mut keyboard_writer: W,
-    keyboard_config: &RmkConfig<'static, Out>,
+    vial_config: VialConfig<'static>,
 ) {
     CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
     let keyboard_fut = keyboard.run();
     let matrix_fut = matrix.run();
     let writer_fut = keyboard_writer.run_reporter();
-    // FIXME: light service
-    let mut light_service: LightService<'_, Out, R> = LightService::new(led_reader);
+    let mut light_service = LightService::new(light_controller, led_reader);
 
-    let mut vial_service =
-        VialService::new(&keymap, keyboard_config.vial_config, vial_reader_writer);
+    let mut vial_service = VialService::new(&keymap, vial_config, vial_reader_writer);
 
     let led_fut = light_service.run();
     let via_fut = vial_service.run();
