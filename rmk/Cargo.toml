@@ -19,7 +19,7 @@ embedded-storage = "0.3"
 embedded-storage-async = "0.4"
 embassy-embedded-hal = { version = "0.3" }
 embassy-time = { version = "0.4" }
-embassy-usb = { version = "0.3", features = [
+embassy-usb = { version = "0.4", features = [
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
@@ -63,7 +63,7 @@ embassy-nrf = { version = "0.3.1", features = [
 
 # Espressif dependencies
 esp32-nimble = { version = "0.9", optional = true }
-esp-idf-svc = { version = "0.50", default-features = false, optional = true }
+esp-idf-svc = { version = "0.51", default-features = false, optional = true }
 
 # Document feature
 document-features = "0.2"
