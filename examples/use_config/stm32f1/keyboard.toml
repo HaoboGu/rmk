@@ -8,8 +8,8 @@ chip = "stm32f103c8"
 
 [matrix]
 # Input and output pins are mandatory
-input_pins = ["PD4", "PD5", "PD6", "PD3"]
-output_pins = ["PD7", "PD8", "PD9"]
+input_pins = ["PA4", "PA5", "PA6", "PA3"]
+output_pins = ["PA7", "PA8", "PA9"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
