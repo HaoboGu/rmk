@@ -10,7 +10,7 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::ble::BleKeyboardWriter;
-use crate::config::VialConfig;
+use crate::config::{BleBatteryConfig, VialConfig};
 use crate::input_device::InputProcessor as _;
 use crate::light::{LightController, UsbLedReader};
 use crate::matrix::MatrixTrait;
@@ -228,8 +228,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
     mut matrix: M,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-
-    keyboard_config: RmkConfig<'static, Out>,
+    mut keyboard_config: RmkConfig<'static, Out>,
     ble_addr: Option<[u8; 6]>,
     spawner: Spawner,
 ) -> ! {
@@ -389,6 +388,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                                 &mut storage,
                                 &mut light_controller,
                                 keyboard_config.vial_config,
+                                &mut keyboard_config.ble_battery_config,
                                 &ble_server,
                                 bonder,
                                 conn,
@@ -418,6 +418,7 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
                             &mut storage,
                             &mut light_controller,
                             keyboard_config.vial_config,
+                            &mut keyboard_config.ble_battery_config,
                             &ble_server,
                             bonder,
                             conn,
@@ -469,6 +470,7 @@ async fn run_ble_keyboard<
     storage: &mut Storage<Flash, ROW, COL, NUM_LAYER>,
     light_controller: &mut LightController<Out>,
     vial_config: VialConfig<'static>,
+    ble_battery_config: &mut BleBatteryConfig<'static>,
     ble_server: &BleServer,
     bonder: &'static MultiBonder,
     mut conn: Connection,
@@ -504,11 +506,11 @@ async fn run_ble_keyboard<
             ),
             vial_config,
         ),
-        async {},
-        // ble_server
-        //     .bas
-        //     .clone()
-        //     .run(ble_battery_config, &conn),
+        // async {},
+        ble_server
+            .bas
+            .clone()
+            .run(ble_battery_config, &conn),
         wait_for_usb_enabled(),
         update_profile(bonder),
     )
