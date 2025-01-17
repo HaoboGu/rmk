@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["col2row", "esp32c6_ble"] }
-esp32-nimble = { version = "0.9" }
+esp32-nimble = { version = "0.9", git = "https://github.com/taks/esp32-nimble", rev = "9c33c98"  }
 defmt = "0.3"
 embassy-time = { version = "0.4.0", features = ["defmt", "generic-queue-8", "defmt-timestamp-uptime"] }
 esp-println = { version = "0.13", features = ["esp32c6", "defmt-espflash"] }
@@ -30,7 +30,7 @@ xz2 = "0.1.7"
 json = "0.12"
 const-gen = "1.6"
 embuild = "0.33"
-cc = "=1.1.31"
+cc = "1.2.9"
 
 [[bin]]
 name = "rmk-esp32c6"

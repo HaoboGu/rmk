@@ -62,7 +62,7 @@ embassy-nrf = { version = "0.3.1", features = [
 ], optional = true }
 
 # Espressif dependencies
-esp32-nimble = { version = "0.9", optional = true }
+esp32-nimble = { version = "0.9", git = "https://github.com/taks/esp32-nimble", rev = "9c33c98" , optional = true }
 esp-idf-svc = { version = "0.51", default-features = false, optional = true }
 
 # Document feature

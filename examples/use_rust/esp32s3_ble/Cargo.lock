@@ -248,9 +248,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.31"
+version = "1.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e7962b54006dcfcc61cb72735f4d89bb97061dd6a7ed882ec6b8ee53714c6f"
+checksum = "c8293772165d9345bdaaa39b45b2109591e63fe5e6fbc23c6ff930a048aa310b"
 dependencies = [
  "shlex",
 ]
@@ -1010,6 +1010,7 @@ dependencies = [
 [[package]]
 name = "esp32-nimble"
 version = "0.9.0"
+source = "git+https://github.com/taks/esp32-nimble?rev=9c33c98#9c33c989342e6848824124b5d2d0e4fe31af153c"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
