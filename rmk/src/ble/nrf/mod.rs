@@ -615,6 +615,6 @@ async fn run_ble_server(conn: &Connection, ble_server: &BleServer) {
 #[cfg(feature = "_no_usb")]
 async fn wait_for_usb_enabled() {
     loop {
-        embassy_time::Timer::after_secs(u64::MAX).await;
+        core::future::pending().await;
     }
 }

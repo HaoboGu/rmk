@@ -1,5 +1,3 @@
-use core::u64;
-
 use crate::config::VialConfig;
 use crate::{
     hid::{HidError, HidReaderTrait, HidWriterTrait},
@@ -383,7 +381,7 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'a, 'd, D> {
     async fn run_reporter(&mut self) {
         loop {
             // Do nothing?
-            embassy_time::Timer::after_secs(u64::MAX).await;
+            core::future::pending().await
         }
     }
 

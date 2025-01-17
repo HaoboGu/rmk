@@ -1,4 +1,4 @@
-use core::{future::Future, u64};
+use core::future::Future;
 
 use embassy_usb::{class::hid::HidWriter, driver::Driver};
 use ssmarshal::serialize;
@@ -106,14 +106,14 @@ impl HidWriterTrait for DummyReporter {
     async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {
         loop {
             // Wait forever
-            embassy_time::Timer::after_secs(u64::MAX).await
+            core::future::pending().await
         }
     }
 
     async fn get_report(&mut self) -> Self::ReportType {
         loop {
             // Wait forever
-            embassy_time::Timer::after_secs(u64::MAX).await
+            core::future::pending().await
         }
     }
 }
