@@ -51,13 +51,12 @@ async fn main(spawner: Spawner) {
     nrf_config.gpiote_interrupt_priority = Priority::P3;
     nrf_config.time_interrupt_priority = Priority::P3;
     interrupt::USBD.set_priority(interrupt::Priority::P2);
-    interrupt::POWER_CLOCK.set_priority(interrupt::Priority::P2);
+    interrupt::CLOCK_POWER.set_priority(interrupt::Priority::P2);
     let p = embassy_nrf::init(nrf_config);
     // Disable external HF clock by default, reduce power consumption
-    // let clock: embassy_nrf::pac::CLOCK = unsafe { core::mem::transmute(()) };
     // info!("Enabling ext hfosc...");
-    // clock.tasks_hfclkstart.write(|w| unsafe { w.bits(1) });
-    // while clock.events_hfclkstarted.read().bits() != 1 {}
+    // ::embassy_nrf::pac::CLOCK.tasks_hfclkstart().write_value(1);
+    // while ::embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10, P0_03, P0_28, P1_13], output:  [P0_30, P0_31, P0_29, P0_02, P0_05, P1_09, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_04, P1_06]);

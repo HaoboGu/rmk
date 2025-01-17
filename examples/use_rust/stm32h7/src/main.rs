@@ -17,7 +17,7 @@ use embassy_stm32::{
     gpio::{Input, Output},
     peripherals::USB_OTG_HS,
     time::Hertz,
-    usb_otg::{Driver, InterruptHandler},
+    usb::{Driver, InterruptHandler},
     Config,
 };
 use panic_probe as _;
@@ -72,7 +72,7 @@ async fn main(spawner: Spawner) {
 
     // Usb config
     static EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    let mut usb_config = embassy_stm32::usb_otg::Config::default();
+    let mut usb_config = embassy_stm32::usb::Config::default();
     usb_config.vbus_detection = false;
     let driver = Driver::new_fs(
         p.USB_OTG_HS,
@@ -85,6 +85,14 @@ async fn main(spawner: Spawner) {
 
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
+
+    // Pin config when using async_matrix feature
+    // let output_pins = config_output_pins_stm32!(peripherals: p, output: [PE13, PE14, PE15]);
+    // let pd9 = ExtiInput::new(p.PD9, p.EXTI9, Pull::Down);
+    // let pd8 = ExtiInput::new(p.PD8, p.EXTI8, Pull::Down);
+    // let pb13 = ExtiInput::new(p.PB13, p.EXTI13, Pull::Down);
+    // let pb12 = ExtiInput::new(p.PB12, p.EXTI12, Pull::Down);
+    // let input_pins = [pd9, pd8, pb13, pb12];
 
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);

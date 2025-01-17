@@ -50,7 +50,7 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PD9, PD8, PB13, PB12], output: [PE13, PE14, PE15]);
+    let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PA9, PB8, PB13, PB12], output: [PA13, PA14, PA15]);
 
     // Use internal flash to emulate eeprom
     let f = Flash::new_blocking(p.FLASH);
