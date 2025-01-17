@@ -202,18 +202,14 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                         Ok(message) => {
                             info!("Message from central: {:?}", message);
                             // Retry 3 times
-                            let mut success = false;
                             for _i in 0..3 {
                                 if let Err(e) = sender.try_send(message) {
                                     error!("Send split message to reader error: {:?}", e);
+                                    // Wait for 20ms before the next try
+                                    block_on(embassy_time::Timer::after_millis(20));
                                     continue;
                                 }
-                                success = true;
                                 break;
-                            }
-                            // Should we block on it?
-                            if !success {
-                                block_on(sender.send(message));
                             }
                         }
                         Err(e) => error!("Postcard deserialize split message error: {}", e),
