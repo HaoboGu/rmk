@@ -1,16 +1,17 @@
+use core::any::type_name;
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::marker::PhantomData;
 use core::task::Poll;
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
+use embassy_rp::Peripheral;
 use embassy_rp::{
     clocks::clk_sys_freq,
     gpio::{Drive, Level, Pull, SlewRate},
     interrupt::{
-        typelevel::{Binding, Handler, Interrupt, PIO0_IRQ_0},
+        typelevel::{Binding, Handler, Interrupt},
         Priority,
     },
-    peripherals::PIO0,
     pio::{
         Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin,
         ShiftDirection, StateMachine,
@@ -24,10 +25,10 @@ use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
 use pio_proc;
-use rp_pac::{io::vals::Oeover, PIO0};
+use rp_pac::{io::vals::Oeover, PIO0, PIO1};
 
 pub struct IrqBinding;
-unsafe impl Binding<PIO0_IRQ_0, InterruptHandler<PIO0>> for IrqBinding {}
+unsafe impl<PIO: Instance> Binding<PIO::Interrupt, InterruptHandler<PIO>> for IrqBinding {}
 
 const BAUD_RATE: u32 = 115_200;
 
@@ -71,32 +72,28 @@ impl<T: Instance> UartPioAccess for T {
         &BUFFER
     }
     fn regs() -> &'static rp_pac::pio::Pio {
-        &PIO0
-    }
-}
-
-pub struct BufferedHalfDuplexUart<'a> {
-    uart: HalfDuplexUart<'a, PIO0>,
-}
-
-impl<'a> BufferedHalfDuplexUart<'a> {
-    pub fn new(pio: PIO0, pin: impl PioPin, tx_buf: &'a mut [u8], rx_buf: &'a mut [u8]) -> Self {
-        Self {
-            uart: HalfDuplexUart::new(pio, pin, tx_buf, rx_buf),
+        match type_name::<T>() {
+            "embassy_rp::pio::PIO0" => &PIO0,
+            "embassy_rp::pio::PIO1" => &PIO1,
+            other => panic!("Unknown PIO instance for type {}", other),
         }
     }
 }
 
-pub struct HalfDuplexUart<'a, PIO: Instance + UartPioAccess> {
-    pin: Pin<'a, PIO0>,
-    common: Common<'a, PIO0>,
-    sm_tx: StateMachine<'a, PIO0, 0>,
-    sm_rx: StateMachine<'a, PIO0, 1>,
-    _pio: PhantomData<PIO>,
+pub struct BufferedHalfDuplexUart<'a, PIO: Instance + UartPioAccess> {
+    pin: Pin<'a, PIO>,
+    common: Common<'a, PIO>,
+    sm_tx: StateMachine<'a, PIO, 0>,
+    sm_rx: StateMachine<'a, PIO, 1>,
 }
 
-impl<'a, PIO: Instance + UartPioAccess> HalfDuplexUart<'a, PIO> {
-    pub fn new(pio: PIO0, pin: impl PioPin, tx_buf: &mut [u8], rx_buf: &mut [u8]) -> Self {
+impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
+    pub fn new(
+        pio: impl Peripheral<P = PIO> + 'a,
+        pin: impl PioPin,
+        tx_buf: &mut [u8],
+        rx_buf: &mut [u8],
+    ) -> Self {
         let Pio {
             mut common,
             sm0: sm_tx,
@@ -126,7 +123,6 @@ impl<'a, PIO: Instance + UartPioAccess> HalfDuplexUart<'a, PIO> {
             common,
             sm_tx,
             sm_rx,
-            _pio: PhantomData,
         };
 
         uart.setup_pin();
@@ -391,22 +387,22 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
     }
 }
 
-impl<'a> Read for BufferedHalfDuplexUart<'a> {
+impl<'a, PIO: Instance + UartPioAccess> Read for BufferedHalfDuplexUart<'a, PIO> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        self.uart.read_buffer(buf).await
+        self.read_buffer(buf).await
     }
 }
 
-impl<'a> Write for BufferedHalfDuplexUart<'a> {
+impl<'a, PIO: Instance + UartPioAccess> Write for BufferedHalfDuplexUart<'a, PIO> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.uart.write_buffer(buf).await
+        self.write_buffer(buf).await
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
-        self.uart.flush().await
+        self.flush().await
     }
 }
 
-impl<'a> ErrorType for BufferedHalfDuplexUart<'a> {
+impl<'a, PIO: Instance + UartPioAccess> ErrorType for BufferedHalfDuplexUart<'a, PIO> {
     type Error = Error;
 }
