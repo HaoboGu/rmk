@@ -31,7 +31,7 @@ pub(crate) struct VialService<
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
     // Vial config
-    vial_config: VialConfig<'a>,
+    vial_config: VialConfig<'static>,
 
     // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
@@ -49,7 +49,7 @@ impl<
     // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-        vial_config: VialConfig<'a>,
+        vial_config: VialConfig<'static>,
         reader_writer: RW,
     ) -> Self {
         Self {
@@ -378,7 +378,7 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'a, 'd, D> {
         Ok(32)
     }
 
-    async fn run_reporter(&mut self) {
+    async fn run_writer(&mut self) {
         loop {
             // Do nothing?
             core::future::pending().await

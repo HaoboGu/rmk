@@ -43,7 +43,7 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
-    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) {
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -101,7 +101,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     low_active: bool,
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
-    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) {
     // Create the debouncer, use COL2ROW by default
     #[cfg(feature = "rapid_debouncer")]

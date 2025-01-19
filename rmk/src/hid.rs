@@ -42,8 +42,8 @@ pub trait HidWriterTrait {
     /// Get the report to be sent to the host
     fn get_report(&mut self) -> impl Future<Output = Self::ReportType>;
 
-    /// Run the reporter task.
-    fn run_reporter(&mut self) -> impl Future<Output = ()> {
+    /// Run the writer task.
+    fn run_writer(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
                 // Get report to send
@@ -76,4 +76,24 @@ pub trait HidReaderTrait {
 
     /// Read HID report from the host
     fn read_report(&mut self) -> impl Future<Output = Result<Self::ReportType, HidError>>;
+}
+
+pub struct DummyWriter {}
+
+impl HidWriterTrait for DummyWriter {
+    type ReportType = Report;
+
+    async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {
+        loop {
+            // Wait forever
+            core::future::pending().await
+        }
+    }
+
+    async fn get_report(&mut self) -> Self::ReportType {
+        loop {
+            // Wait forever
+            core::future::pending().await
+        }
+    }
 }

@@ -1,4 +1,10 @@
+use core::cell::RefCell;
+
 use crate::action::KeyAction;
+#[cfg(feature = "_esp_ble")]
+use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+#[cfg(feature = "_nrf_ble")]
+use crate::ble::nrf::initialize_nrf_sd_and_flash;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -6,21 +12,15 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
 use crate::event::KeyEvent;
+use crate::keyboard::Keyboard;
 use crate::keyboard::KEY_EVENT_CHANNEL;
+use crate::keymap::KeyMap;
+use crate::light::LightController;
 use crate::matrix::KeyState;
+use crate::run_rmk_internal;
+use crate::storage::Storage;
 use crate::MatrixTrait;
 use crate::RmkConfig;
-
-#[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
-#[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
-#[cfg(all(
-    not(feature = "_no_usb"),
-    not(any(feature = "_nrf_ble", feature = "_esp_ble"))
-))]
-use crate::initialize_usb_keyboard_and_run;
-
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -158,11 +158,21 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    #[cfg(feature = "_nrf_ble")]
+    let (sd, flash) = initialize_nrf_sd_and_flash(keyboard_config.usb_config.product_name, spawner);
+
+    #[cfg(feature = "_esp_ble")]
+    let flash = DummyFlash::new();
+
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
+    let light_controller = LightController::new(keyboard_config.light_config);
+
     // Create the debouncer
     #[cfg(feature = "rapid_debouncer")]
     let debouncer = RapidDebouncer::<COL, ROW>::new();
@@ -172,38 +182,22 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     // Keyboard matrix
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
-    // Dispatch according to chip and communication type
-    #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_keyboard_and_run(
-        matrix,
+    run_rmk_internal(
+        matrix,   // matrix input device
+        keyboard, // key processor
+        &keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
-        default_keymap,
-        keyboard_config,
-        None,
-        spawner,
+        storage,
+        light_controller,
+        keyboard_config.usb_config,
+        keyboard_config.vial_config,
+        #[cfg(feature = "_nrf_ble")]
+        keyboard_config.ble_battery_config,
+        #[cfg(feature = "_nrf_ble")]
+        sd,
     )
-    .await;
-
-    #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
-
-    #[cfg(all(
-        not(feature = "_no_usb"),
-        not(any(feature = "_nrf_ble", feature = "_esp_ble"))
-    ))]
-    initialize_usb_keyboard_and_run(
-        matrix,
-        usb_driver,
-        #[cfg(not(feature = "_no_external_storage"))]
-        flash,
-        default_keymap,
-        keyboard_config,
-    )
-    .await;
-    // The fut should never return.
-    // If there's no fut, the feature flags must not be correct.
-    panic!("The run_rmk should never return");
+    .await
 }
 
 /// DirectPinMartex only has input pins.

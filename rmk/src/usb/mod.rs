@@ -3,15 +3,22 @@ pub(crate) mod descriptor;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use embassy_usb::{
-    class::hid::{Config, HidReaderWriter, HidWriter, ReportId, RequestHandler, State},
+    class::hid::{Config, HidWriter, ReportId, RequestHandler, State},
     control::OutResponse,
     driver::Driver,
     Builder, Handler,
 };
+use ssmarshal::serialize;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::SerializedDescriptor;
 
-use crate::{config::KeyboardUsbConfig, CONNECTION_STATE};
+use crate::{
+    config::KeyboardUsbConfig,
+    hid::{HidError, HidWriterTrait, Report},
+    keyboard::KEYBOARD_REPORT_CHANNEL,
+    usb::descriptor::CompositeReportType,
+    CONNECTION_STATE,
+};
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
 
@@ -61,10 +68,79 @@ pub(crate) async fn wait_for_usb_enabled() {
         }
     }
 }
+pub struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
+    pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
+    pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
+}
+impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
+    pub(crate) fn new(
+        keyboard_writer: &'a mut HidWriter<'d, D, 8>,
+        other_writer: &'a mut HidWriter<'d, D, 9>,
+    ) -> Self {
+        Self {
+            keyboard_writer,
+            other_writer,
+        }
+    }
+}
+
+impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
+    type ReportType = Report;
+
+    async fn get_report(&mut self) -> Self::ReportType {
+        KEYBOARD_REPORT_CHANNEL.receive().await
+    }
+
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
+        // Write report to USB
+        match report {
+            Report::KeyboardReport(keyboard_report) => {
+                self.keyboard_writer
+                    .write_serialize(&keyboard_report)
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(8)
+            }
+            Report::MouseReport(mouse_report) => {
+                let mut buf: [u8; 9] = [0; 9];
+                buf[0] = CompositeReportType::Mouse as u8;
+                let n = serialize(&mut buf[1..], &mouse_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
+            }
+            Report::MediaKeyboardReport(media_keyboard_report) => {
+                let mut buf: [u8; 9] = [0; 9];
+                buf[0] = CompositeReportType::Media as u8;
+                let n = serialize(&mut buf[1..], &media_keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
+            }
+            Report::SystemControlReport(system_control_report) => {
+                let mut buf: [u8; 9] = [0; 9];
+                buf[0] = CompositeReportType::System as u8;
+                let n = serialize(&mut buf[1..], &system_control_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&mut buf[0..n + 1])
+                    .await
+                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                Ok(n)
+            }
+        }
+    }
+}
 
 pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     driver: D,
-    keyboard_config: KeyboardUsbConfig<'static>,
+    keyboard_config: KeyboardUsbConfig<'d>,
 ) -> Builder<'d, D> {
     // Create embassy-usb Config
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
@@ -103,45 +179,6 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     builder
 }
 
-// In this case, report id should be used.
-// The keyboard usb device should have 3 hid instances:
-// 1. Boot keyboard: 1 endpoint in
-// 2. Other: Mouse + System control + Consumer control: 1 endpoint in
-// 3. Via: used to communicate with via: 2 endpoints(in/out)
-// pub(crate) struct KeyboardUsbDevice<'d, D: Driver<'d>, R: UsbReporterTrait<'d, D>> {
-//     pub(crate) device: UsbDevice<'d, D>,
-//     pub(crate) usb_reporter: R,
-//     // pub(crate) keyboard_hid_writer: UsbHidWriter<'d, D, 8>,
-//     pub(crate) keyboard_hid_reader: UsbHidReader<'d, D, 1>,
-//     // pub(crate) other_hid_writer: UsbHidWriter<'d, D, 9>,
-//     pub(crate) via_hid: UsbHidReaderWriter<'d, D, 32, 32>,
-// }
-
-// impl<D: Driver<'static>, R: UsbReporterTrait<'static, D>> KeyboardUsbDevice<'static, D, R> {
-//     pub(crate) fn new(driver: D, keyboard_config: KeyboardUsbConfig<'static>) -> Self {
-//         let mut builder = new_usb_builder(driver, keyboard_config);
-
-//         // Create classes on the builder.
-//         let keyboard_hid = build_usb_reader_writer::<D, KeyboardReport, 1, 8>(&mut builder);
-//         let other_hid = build_usb_reader_writer::<D, CompositeReport, 0, 9>(&mut builder);
-//         let via_hid = build_usb_reader_writer::<D, ViaReport, 32, 32>(&mut builder);
-
-//         let rp = R::new(&mut builder);
-
-//         // Build usb device
-//         let usb = builder.build();
-//         let (reader, writer) = keyboard_hid.split();
-//         Self {
-//             device: usb,
-//             keyboard_hid_reader: UsbHidReader::new(reader),
-//             usb_reporter: rp,
-//             // keyboard_hid_writer: UsbHidWriter::new(writer),
-//             // other_hid_writer: UsbHidWriter::new(other_hid.split().1),
-//             via_hid: UsbHidReaderWriter::new(via_hid),
-//         }
-//     }
-// }
-
 pub(crate) fn register_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, const N: usize>(
     usb_builder: &mut Builder<'static, D>,
 ) -> HidWriter<'static, D, N> {
@@ -158,13 +195,40 @@ pub(crate) fn register_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, 
 }
 
 #[macro_export]
-macro_rules! add_usb_reader_writer {
-    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
-        // 静态变量名基于类型名称生成
+macro_rules! register_usb_writer {
+    ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
+        // Initialize hid writer
+        // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
         use usbd_hid::descriptor::SerializedDescriptor;
         paste::paste! {
-            static [<$descriptor:snake:upper _STATE>]: StaticCell<::embassy_usb::class::hid::State> = StaticCell::new();
-            static [<$descriptor:snake:upper _HANDLER>]: StaticCell<$crate::usb::UsbRequestHandler> = StaticCell::new();
+            static [<$descriptor:snake:upper _STATE>]: ::static_cell::StaticCell<::embassy_usb::class::hid::State> = ::static_cell::StaticCell::new();
+            static [<$descriptor:snake:upper _HANDLER>]: ::static_cell::StaticCell<$crate::usb::UsbRequestHandler> = ::static_cell::StaticCell::new();
+        }
+
+        let state = paste::paste! { [<$descriptor:snake:upper _STATE>].init(::embassy_usb::class::hid::State::new()) };
+        let request_handler = paste::paste! { [<$descriptor:snake:upper _HANDLER>].init($crate::usb::UsbRequestHandler {}) };
+
+        let hid_config = ::embassy_usb::class::hid::Config {
+            report_descriptor: <$descriptor>::desc(),
+            request_handler: Some(request_handler),
+            poll_ms: 1,
+            max_packet_size: 64,
+        };
+
+        let rw: ::embassy_usb::class::hid::HidWriter<_, $n> = ::embassy_usb::class::hid::HidWriter::new($usb_builder, state, hid_config);
+        rw
+    }};
+}
+
+#[macro_export]
+macro_rules! add_usb_reader_writer {
+    ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
+        // Initialize hid reader writer
+        // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
+        use usbd_hid::descriptor::SerializedDescriptor;
+        paste::paste! {
+            static [<$descriptor:snake:upper _STATE>]: ::static_cell::StaticCell<::embassy_usb::class::hid::State> = ::static_cell::StaticCell::new();
+            static [<$descriptor:snake:upper _HANDLER>]: ::static_cell::StaticCell<$crate::usb::UsbRequestHandler> = ::static_cell::StaticCell::new();
         }
 
         let state = paste::paste! { [<$descriptor:snake:upper _STATE>].init(::embassy_usb::class::hid::State::new()) };
@@ -180,25 +244,6 @@ macro_rules! add_usb_reader_writer {
         let rw: ::embassy_usb::class::hid::HidReaderWriter<_, $read_n, $write_n> = ::embassy_usb::class::hid::HidReaderWriter::new($usb_builder, state, hid_config);
         rw
     }};
-}
-
-pub(crate) fn register_usb_reader_writer<
-    D: Driver<'static>,
-    SD: SerializedDescriptor,
-    const READ_N: usize,
-    const WRITE_N: usize,
->(
-    usb_builder: &mut Builder<'static, D>,
-) -> HidReaderWriter<'static, D, READ_N, WRITE_N> {
-    static request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
-    let hid_config = Config {
-        report_descriptor: SD::desc(),
-        request_handler: Some(request_handler.init(UsbRequestHandler {})),
-        poll_ms: 1,
-        max_packet_size: 64,
-    };
-    static STATE: StaticCell<State> = StaticCell::new();
-    HidReaderWriter::new(usb_builder, STATE.init(State::new()), hid_config)
 }
 
 pub(crate) struct UsbRequestHandler {}
