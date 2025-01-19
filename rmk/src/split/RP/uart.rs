@@ -93,6 +93,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
         pin: impl PioPin,
         tx_buf: &mut [u8],
         rx_buf: &mut [u8],
+        _irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
     ) -> Self {
         let Pio {
             mut common,
