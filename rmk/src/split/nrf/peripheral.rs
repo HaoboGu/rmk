@@ -1,9 +1,8 @@
-use crate::ble::nrf::softdevice_task;
+use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::MatrixTrait;
-use core::mem;
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -11,8 +10,7 @@ use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
 use nrf_softdevice::ble::{gatt_server, Connection, PhySet, PhyUpdateError};
-use nrf_softdevice::ble::{set_address, Address, AddressType};
-use nrf_softdevice::{raw, Config, Softdevice};
+use nrf_softdevice::ble::{Address, AddressType};
 
 /// Gatt service used in split peripheral to send split message to central
 #[nrf_softdevice::gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -105,59 +103,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         CONNECTION_STATE,
     };
 
-    let ble_config = Config {
-        clock: Some(raw::nrf_clock_lf_cfg_t {
-            source: raw::NRF_CLOCK_LF_SRC_RC as u8,
-            rc_ctiv: 16,
-            rc_temp_ctiv: 2,
-            accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
-            // External osc
-            // source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
-            // rc_ctiv: 0,
-            // rc_temp_ctiv: 0,
-            // accuracy: raw::NRF_CLOCK_LF_ACCURACY_20_PPM as u8,
-        }),
-        conn_gap: Some(raw::ble_gap_conn_cfg_t {
-            conn_count: 6,
-            event_length: 24,
-        }),
-        conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 256 }),
-        gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
-            attr_tab_size: raw::BLE_GATTS_ATTR_TAB_SIZE_DEFAULT,
-        }),
-        gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
-            adv_set_count: 1,
-            periph_role_count: 4,
-            central_role_count: 4,
-            central_sec_count: 4,
-            _bitfield_1: raw::ble_gap_cfg_role_count_t::new_bitfield_1(0),
-        }),
-        gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: "rmk_peripheral_board".as_ptr() as _,
-            current_len: "rmk_peripheral_board".len() as u16,
-            max_len: "rmk_peripheral_board".len() as u16,
-            write_perm: unsafe { mem::zeroed() },
-            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
-                raw::BLE_GATTS_VLOC_STACK as u8,
-            ),
-        }),
-        ..Default::default()
-    };
-
-    let sd = Softdevice::enable(&ble_config);
-    set_address(
-        sd,
-        &Address::new(AddressType::RandomStatic, peripheral_addr),
-    );
-
-    {
-        // Use the immutable ref of `Softdevice` to run the softdevice_task
-        // The mumtable ref is used for configuring Flash and BleServer
-        let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        spawner
-            .spawn(softdevice_task(sdv))
-            .expect("Failed to start softdevice task");
-    };
+    let (sd, _) = initialize_nrf_sd_and_flash("rmk_split_peri", spawner, Some(peripheral_addr));
 
     let server =
         BleSplitPeripheralServer::new(sd).expect("Failed to start BLE split peripheral server");

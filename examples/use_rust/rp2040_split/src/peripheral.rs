@@ -24,7 +24,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -52,6 +52,7 @@ async fn main(_spawner: Spawner) {
         input_pins,
         output_pins,
         uart_instance,
+        spawner,
     )
     .await;
 }

@@ -207,16 +207,15 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
 pub(crate) fn initialize_nrf_sd_and_flash(
     keyboard_name: &str,
     spawner: Spawner,
-    #[cfg(feature = "split")] ble_addr: Option<[u8; 6]>,
+    ble_addr: Option<[u8; 6]>,
 ) -> (&mut Softdevice, Flash) {
     // Set ble config and enable nrf-softdevice first
     let ble_config = nrf_ble_config(keyboard_name);
 
     let sd = Softdevice::enable(&ble_config);
 
-    #[cfg(feature = "split")]
     if let Some(addr) = ble_addr {
-        // This is used mainly for split central
+        // This is used mainly for split
         use nrf_softdevice::ble::{set_address, Address, AddressType};
         set_address(sd, &Address::new(AddressType::RandomStatic, addr));
     };

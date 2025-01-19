@@ -163,7 +163,8 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     #[cfg(feature = "_nrf_ble")]
-    let (sd, flash) = initialize_nrf_sd_and_flash(keyboard_config.usb_config.product_name, spawner);
+    let (sd, flash) =
+        initialize_nrf_sd_and_flash(keyboard_config.usb_config.product_name, spawner, None);
 
     #[cfg(feature = "_esp_ble")]
     let flash = DummyFlash::new();

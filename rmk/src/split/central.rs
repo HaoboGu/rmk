@@ -1,13 +1,8 @@
-use embassy_executor::Spawner;
-use embassy_time::{Instant, Timer};
-use embassy_usb::driver::Driver;
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
+use core::cell::RefCell;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
+use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
@@ -15,10 +10,18 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyEvent;
-#[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-use crate::initialize_usb_keyboard_and_run;
-use crate::keyboard::KEY_EVENT_CHANNEL;
+use crate::keyboard::{Keyboard, KEY_EVENT_CHANNEL};
+use crate::keymap::KeyMap;
+use crate::light::LightController;
 use crate::matrix::{KeyState, MatrixTrait};
+use crate::run_rmk_internal;
+use crate::storage::Storage;
+use embassy_executor::Spawner;
+use embassy_time::{Instant, Timer};
+use embassy_usb::driver::Driver;
+use embedded_hal::digital::{InputPin, OutputPin};
+#[cfg(feature = "async_matrix")]
+use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage_async::nor_flash::NorFlash;
 
@@ -60,11 +63,25 @@ pub async fn run_rmk_split_central<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
-
     keyboard_config: RmkConfig<'static, Out>,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    #[cfg(feature = "_nrf_ble")]
+    let (sd, flash) = initialize_nrf_sd_and_flash(
+        keyboard_config.usb_config.product_name,
+        spawner,
+        Some(central_addr),
+    );
+
+    #[cfg(feature = "_esp_ble")]
+    let flash = DummyFlash::new();
+
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
+    let light_controller = LightController::new(keyboard_config.light_config);
+
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
     let debouncer: RapidDebouncer<CENTRAL_ROW, CENTRAL_COL> = RapidDebouncer::new();
@@ -97,28 +114,22 @@ pub async fn run_rmk_split_central<
         CENTRAL_ROW,
     >::new(input_pins, output_pins, debouncer);
 
-    #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
-        matrix,
+    run_rmk_internal(
+        matrix,   // matrix input device
+        keyboard, // key processor
+        &keymap,
+        #[cfg(not(feature = "_no_usb"))]
         usb_driver,
-        default_keymap,
-        keyboard_config,
-        Some(central_addr),
-        spawner,
+        storage,
+        light_controller,
+        keyboard_config.usb_config,
+        keyboard_config.vial_config,
+        #[cfg(feature = "_nrf_ble")]
+        keyboard_config.ble_battery_config,
+        #[cfg(feature = "_nrf_ble")]
+        sd,
     )
-    .await;
-
-    #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_keyboard_and_run::<_, D, _, F, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
-        matrix,
-        usb_driver,
-        flash,
-        default_keymap,
-        keyboard_config,
-    )
-    .await;
-
-    fut
+    .await
 }
 
 /// Run RMK split central keyboard service. This function should never return.
@@ -154,13 +165,26 @@ pub async fn run_rmk_split_central_direct_pin<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; TOTAL_COL]; TOTAL_ROW]; NUM_LAYER],
-
     keyboard_config: RmkConfig<'static, Out>,
     low_active: bool,
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
-    info!("Debouncer");
+    #[cfg(feature = "_nrf_ble")]
+    let (sd, flash) = initialize_nrf_sd_and_flash(
+        keyboard_config.usb_config.product_name,
+        spawner,
+        Some(central_addr),
+    );
+
+    #[cfg(feature = "_esp_ble")]
+    let flash = DummyFlash::new();
+
+    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
+    let light_controller = LightController::new(keyboard_config.light_config);
+
     // Create the debouncer, use COL2ROW by default
     #[cfg(feature = "rapid_debouncer")]
     let debouncer: RapidDebouncer<CENTRAL_COL, CENTRAL_ROW> = RapidDebouncer::new();
@@ -178,28 +202,22 @@ pub async fn run_rmk_split_central_direct_pin<
         SIZE,
     >::new(direct_pins, debouncer, low_active);
 
-    #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
-        matrix,
+    run_rmk_internal(
+        matrix,   // matrix input device
+        keyboard, // key processor
+        &keymap,
+        #[cfg(not(feature = "_no_usb"))]
         usb_driver,
-        default_keymap,
-        keyboard_config,
-        Some(central_addr),
-        spawner,
+        storage,
+        light_controller,
+        keyboard_config.usb_config,
+        keyboard_config.vial_config,
+        #[cfg(feature = "_nrf_ble")]
+        keyboard_config.ble_battery_config,
+        #[cfg(feature = "_nrf_ble")]
+        sd,
     )
-    .await;
-
-    #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_keyboard_and_run::<_, D, _, F, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
-        matrix,
-        usb_driver,
-        flash,
-        default_keymap,
-        keyboard_config,
-    )
-    .await;
-
-    fut
+    .await
 }
 
 /// Run central's peripheral monitor task.
