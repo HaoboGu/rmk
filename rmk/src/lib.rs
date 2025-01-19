@@ -210,8 +210,7 @@ pub async fn run_rmk_with_async_flash<
 ///
 /// # Arguments
 ///
-/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
-/// * `output_pins` - output gpio pins
+/// * `matrix` - the matrix scanning implementation to use.
 /// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
 /// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
