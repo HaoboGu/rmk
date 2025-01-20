@@ -7,7 +7,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
 use crate::keyboard::KEY_EVENT_CHANNEL;
-use crate::matrix::Matrix;
+use crate::matrix::{Matrix, MatrixTrait};
 use crate::CONNECTION_STATE;
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
@@ -61,19 +61,21 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
-    #[cfg(not(feature = "_nrf_ble"))]
-    crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(
-        matrix, serial,
-    )
+    #[cfg(feature = "_nrf_ble")]
+    run_rmk_split_peripheral_with_matrix::<
+        _,
+        ROW,
+        COL,
+    >(matrix, central_addr, peripheral_addr, spawner)
     .await;
 
-    #[cfg(feature = "_nrf_ble")]
-    crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run::<_, ROW, COL>(
-        matrix,
-        central_addr,
-        peripheral_addr,
-        spawner,
-    )
+    #[cfg(not(feature = "_nrf_ble"))]
+    run_rmk_split_peripheral_with_matrix::<
+        _,
+        S,
+        ROW,
+        COL,
+    >(matrix, serial)
     .await;
 }
 
@@ -112,6 +114,45 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     // Keyboard matrix
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
+    #[cfg(feature = "_nrf_ble")]
+    run_rmk_split_peripheral_with_matrix::<
+        _,
+        ROW,
+        COL,
+    >(matrix, central_addr, peripheral_addr, spawner)
+    .await;
+
+    #[cfg(not(feature = "_nrf_ble"))]
+    run_rmk_split_peripheral_with_matrix::<
+        _,
+        S,
+        ROW,
+        COL,
+    >(matrix, serial)
+    .await;
+}
+
+/// Run the split peripheral service.
+///
+/// # Arguments
+///
+/// * `matrix` - the matrix scanning implementation to use.
+/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+pub async fn run_rmk_split_peripheral_with_matrix<
+    M: MatrixTrait,
+    #[cfg(not(feature = "_nrf_ble"))] S: Write + Read,
+    const ROW: usize,
+    const COL: usize,
+>(
+    matrix: M,
+    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
+    #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
+    #[cfg(not(feature = "_nrf_ble"))] serial: S,
+    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+) {
     #[cfg(not(feature = "_nrf_ble"))]
     crate::split::serial::initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(
         matrix, serial,

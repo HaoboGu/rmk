@@ -192,6 +192,49 @@ pub async fn run_rmk_with_async_flash<
     #[cfg(not(feature = "col2row"))]
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
+    run_rmk_with_async_flash_and_matrix(
+        matrix,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        #[cfg(not(feature = "_no_external_storage"))]
+        flash,
+        default_keymap,
+        keyboard_config,
+        #[cfg(not(feature = "_esp_ble"))]
+        spawner,
+    )
+    .await;
+}
+
+/// Run RMK keyboard service. This function should never return.
+///
+/// # Arguments
+///
+/// * `matrix` - the matrix scanning implementation to use.
+/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
+/// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
+/// * `default_keymap` - default keymap definition
+/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[allow(unused_variables)]
+#[allow(unreachable_code)]
+pub async fn run_rmk_with_async_flash_and_matrix<
+    Out: OutputPin,
+    M: MatrixTrait,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    matrix: M,
+    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+    #[cfg(not(feature = "_no_external_storage"))] flash: F,
+    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+
+    keyboard_config: RmkConfig<'static, Out>,
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
+) -> ! {
     // Dispatch according to chip and communication type
     #[cfg(feature = "_nrf_ble")]
     initialize_nrf_ble_keyboard_and_run(

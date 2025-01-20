@@ -44,11 +44,14 @@ jobs:
           python-version: "3.11"
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
-      - name: Install cargo-make
-        run: cargo binstall cargo-make
+      - name: Install cargo-make and flip-link
+        run: cargo binstall cargo-make flip-link
       - name: Install target
         run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
       - name: Build example
+        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
+        run: cargo build --release
+      - name: Build example uf2
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
   binary-size:
