@@ -1,7 +1,7 @@
 use crate::{
+    channel::KEY_EVENT_CHANNEL,
     debounce::{DebounceState, DebouncerTrait},
     event::KeyEvent,
-    keyboard::KEY_EVENT_CHANNEL,
     CONNECTION_STATE,
 };
 use core::future::Future;

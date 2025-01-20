@@ -71,8 +71,6 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     );
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
-
-    static via_output: Channel<ThreadModeRawMutex, [u8; 32], 2> = Channel::new();
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
@@ -110,10 +108,10 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
         ble_server.output_vial.lock().on_write(|args| {
             let data: &[u8] = args.recv_data();
             debug!("BLE received {} {=[u8]:#X}", data.len(), data);
-            block_on(via_output.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
+            block_on(VIAL_OUTPUT_CHANNEL.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
         });
         let mut via_rw = VialReaderWriter {
-            receiver: via_output.receiver(),
+            receiver: VIAL_OUTPUT_CHANNEL.receiver(),
             hid_writer: ble_server.input_vial,
         };
         let via_fut = vial_task(&mut via_rw, &mut vial_service);

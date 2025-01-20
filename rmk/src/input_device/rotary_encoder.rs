@@ -1,6 +1,5 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::{Receiver, Sender};
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
@@ -8,11 +7,12 @@ use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Event, RotaryEncoderEvent};
-use crate::hid::Report;
-use crate::keyboard::{
+use crate::channel::{
     EVENT_CHANNEL, EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE,
 };
+use crate::event::{Event, RotaryEncoderEvent};
+use crate::hid::Report;
+use crate::RawMutex;
 
 use super::{InputDevice, InputProcessor};
 
@@ -174,9 +174,7 @@ impl<
         }
     }
 
-    fn event_sender(
-        &self,
-    ) -> Sender<ThreadModeRawMutex, Self::EventType, { EVENT_CHANNEL_SIZE }> {
+    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, { EVENT_CHANNEL_SIZE }> {
         EVENT_CHANNEL.sender()
     }
 }
@@ -203,15 +201,11 @@ impl InputProcessor for RotaryEncoderProcessor {
         }
     }
 
-    fn event_receiver(
-        &self,
-    ) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_receiver(&self) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.receiver()
     }
 
-    fn report_sender(
-        &self,
-    ) -> Sender<ThreadModeRawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
+    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }

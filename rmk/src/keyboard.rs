@@ -1,8 +1,12 @@
+use crate::channel::{
+    EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL, REPORT_CHANNEL_SIZE,
+};
 use crate::config::BehaviorConfig;
-use crate::event::{Event, KeyEvent};
+use crate::event::KeyEvent;
 use crate::hid::Report;
 use crate::input_device::InputProcessor;
 use crate::usb::descriptor::KeyboardReport;
+use crate::RawMutex;
 use crate::{
     action::{Action, KeyAction},
     keyboard_macro::{MacroOperation, NUM_MACRO},
@@ -13,32 +17,10 @@ use crate::{
 };
 use core::cell::RefCell;
 use embassy_futures::{select::select, yield_now};
-use embassy_sync::{
-    blocking_mutex::raw::ThreadModeRawMutex,
-    channel::{Channel, Receiver, Sender},
-};
+use embassy_sync::channel::{Receiver, Sender};
 use embassy_time::{Instant, Timer};
 use heapless::{FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
-
-pub const EVENT_CHANNEL_SIZE: usize = 32;
-pub static KEY_EVENT_CHANNEL: Channel<ThreadModeRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
-    Channel::new();
-
-pub static EVENT_CHANNEL: Channel<ThreadModeRawMutex, Event, EVENT_CHANNEL_SIZE> = Channel::new();
-
-pub const REPORT_CHANNEL_SIZE: usize = 32;
-pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
-    ThreadModeRawMutex,
-    Report,
-    REPORT_CHANNEL_SIZE,
-> = Channel::new();
-
-pub(crate) static KEY_REPORT_CHANNEL: Channel<
-    ThreadModeRawMutex,
-    KeyboardReport,
-    REPORT_CHANNEL_SIZE,
-> = Channel::new();
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -152,11 +134,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProces
         }
     }
 
-    fn event_receiver(&self) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_receiver(&self) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         KEY_EVENT_CHANNEL.receiver()
     }
 
-    fn report_sender(&self) -> Sender<ThreadModeRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
+    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }
@@ -167,7 +149,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 
     // /// Report Sender
     // pub(crate) sender:
-    //     &'a Sender<'a, ThreadModeRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+    //     &'a Sender<'a, RawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
 
@@ -702,7 +684,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_mouse(key, key_event).await;
         } else if key.is_user() {
             #[cfg(feature = "_nrf_ble")]
-            use crate::ble::nrf::profile::{BleProfileAction, BLE_PROFILE_CHANNEL};
+            use {crate::ble::nrf::profile::BleProfileAction, crate::channel::BLE_PROFILE_CHANNEL};
             #[cfg(feature = "_nrf_ble")]
             if !key_event.pressed {
                 // Get user key id

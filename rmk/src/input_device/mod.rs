@@ -7,11 +7,10 @@
 
 use core::future::Future;
 
-use embassy_sync::{
-    blocking_mutex::raw::ThreadModeRawMutex,
-    channel::{Receiver, Sender},
-};
+use embassy_sync::channel::{Receiver, Sender};
 use usbd_hid::descriptor::AsInputReport;
+
+use crate::RawMutex;
 
 pub mod rotary_encoder;
 
@@ -63,7 +62,7 @@ pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 32> {
     fn run(&mut self) -> impl Future<Output = ()>;
 
     /// Get the event sender for the input device. All events should be send by this channel.
-    fn event_sender(&self) -> Sender<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
@@ -95,16 +94,12 @@ pub trait InputProcessor<
     ///
     /// The input processor receives events from this channel, processes the event,
     /// then sends to the report channel.
-    fn event_receiver(
-        &self,
-    ) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn event_receiver(&self) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
     /// Get the output report sender for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
-    fn report_sender(
-        &self,
-    ) -> Sender<ThreadModeRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.

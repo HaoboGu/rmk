@@ -15,7 +15,7 @@ use usbd_hid::descriptor::SerializedDescriptor;
 use crate::{
     config::KeyboardUsbConfig,
     hid::{HidError, HidWriterTrait, Report},
-    keyboard::KEYBOARD_REPORT_CHANNEL,
+    channel::KEYBOARD_REPORT_CHANNEL,
     usb::descriptor::CompositeReportType,
     CONNECTION_STATE,
 };

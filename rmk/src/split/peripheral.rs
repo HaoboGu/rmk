@@ -6,7 +6,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
-use crate::keyboard::KEY_EVENT_CHANNEL;
+use crate::channel::KEY_EVENT_CHANNEL;
 use crate::matrix::{Matrix, MatrixTrait};
 use crate::CONNECTION_STATE;
 #[cfg(not(feature = "_esp_ble"))]

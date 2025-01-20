@@ -34,7 +34,11 @@ use debounce::DebouncerTrait;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::*};
+#[cfg(not(any(cortex_m)))]
+pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex as RawMutex, channel::*};
+// #[cfg(all(target_arch = "arm", target_os = "none"))]
+#[cfg(any(cortex_m))]
+pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex as RawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
@@ -73,6 +77,7 @@ use {
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+pub mod channel;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;

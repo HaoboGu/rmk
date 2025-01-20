@@ -5,6 +5,7 @@ use crate::action::KeyAction;
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
+use crate::channel::KEY_EVENT_CHANNEL;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -13,7 +14,6 @@ use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
 use crate::event::KeyEvent;
 use crate::keyboard::Keyboard;
-use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
 use crate::matrix::KeyState;

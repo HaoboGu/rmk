@@ -1,9 +1,10 @@
 use crate::config::VialConfig;
 use crate::{
+    channel::FLASH_CHANNEL,
     hid::{HidError, HidReaderTrait, HidWriterTrait},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
+    storage::FlashOperationMessage,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };

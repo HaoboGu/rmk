@@ -3,17 +3,14 @@ use crate::{
     hid::{HidError, HidReaderTrait},
 };
 use bitfield_struct::bitfield;
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{Error, OutputPin, PinState};
 use serde::{Deserialize, Serialize};
 
-pub(crate) static LED_CHANNEL: Channel<ThreadModeRawMutex, LedIndicator, 4> = Channel::new();
-
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct LedIndicator {
+pub struct LedIndicator {
     #[bits(1)]
     numslock: bool,
     #[bits(1)]

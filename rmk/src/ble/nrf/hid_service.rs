@@ -3,11 +3,8 @@ use crate::{
     ble::{
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         HidError,
-    },
-    hid::HidReaderTrait,
-    light::LedIndicator,
+    }, channel::LED_CHANNEL, hid::HidReaderTrait, light::LedIndicator
 };
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -21,8 +18,6 @@ use nrf_softdevice::{
     Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor as _;
-
-static LED_CHANNEL: Channel<ThreadModeRawMutex, LedIndicator, 4> = Channel::new();
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]

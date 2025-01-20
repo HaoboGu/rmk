@@ -3,6 +3,7 @@ use core::cell::RefCell;
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
+use crate::channel::KEY_EVENT_CHANNEL;
 use crate::config::RmkConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
@@ -10,7 +11,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyEvent;
-use crate::keyboard::{Keyboard, KEY_EVENT_CHANNEL};
+use crate::keyboard::Keyboard;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
 use crate::matrix::{KeyState, MatrixTrait};

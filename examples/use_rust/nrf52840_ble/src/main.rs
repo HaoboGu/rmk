@@ -19,12 +19,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    ble::SOFTWARE_VBUS,
-    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    event::Event,
-    input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
-    run_devices, run_rmk, ThreadModeRawMutex, Sender,
+    ble::SOFTWARE_VBUS, channel::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE}, config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig}, event::Event, input_device::{rotary_encoder::RotaryEncoder, InputDevice}, run_devices, run_rmk, RawMutex, Sender
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -137,7 +132,7 @@ impl InputDevice for MyDevice {
 
     type EventType = Event;
 
-    fn event_sender(&self) -> Sender<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.sender()
     }
 }

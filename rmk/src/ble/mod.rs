@@ -12,8 +12,8 @@ use nrf_softdevice::ble::{gatt_server, Connection};
 use ssmarshal::serialize;
 
 use crate::{
+    channel::KEYBOARD_REPORT_CHANNEL,
     hid::{HidError, HidWriterTrait, Report},
-    keyboard::KEYBOARD_REPORT_CHANNEL,
 };
 
 pub(crate) struct BleKeyboardWriter<'a> {
