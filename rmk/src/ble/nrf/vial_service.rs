@@ -14,7 +14,7 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::{
-    channel::VIAL_OUTPUT_CHANNEL,
+    channel::VIAL_READ_CHANNEL,
     hid::{HidError, HidReaderTrait, HidWriterTrait},
     usb::descriptor::ViaReport,
 };
@@ -139,7 +139,7 @@ impl gatt_server::Service for BleVialService {
             let data = unsafe { *(data.as_ptr() as *const [u8; 32]) };
             // Retry at most 3 times
             for _ in 0..3 {
-                if let Ok(_) = VIAL_OUTPUT_CHANNEL.try_send(data) {
+                if let Ok(_) = VIAL_READ_CHANNEL.try_send(data) {
                     break;
                 }
                 // Wait for 20ms before sending the next report
@@ -184,7 +184,7 @@ impl HidReaderTrait for BleVialReaderWriter<'_> {
     type ReportType = ViaReport;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
-        let v = VIAL_OUTPUT_CHANNEL.receive().await;
+        let v = VIAL_READ_CHANNEL.receive().await;
         Ok(ViaReport {
             input_data: v,
             output_data: [0; 32],
