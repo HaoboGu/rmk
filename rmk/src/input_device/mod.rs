@@ -43,7 +43,7 @@ pub mod rotary_encoder;
 /// )
 /// .await;
 /// ```
-pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 32> {
+pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 16> {
     /// Event type that input device will send
     type EventType;
 
@@ -72,8 +72,8 @@ pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 32> {
 ///
 /// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
 pub trait InputProcessor<
-    const EVENT_CHANNEL_SIZE: usize = 32,
-    const REPORT_CHANNEL_SIZE: usize = 32,
+    const EVENT_CHANNEL_SIZE: usize = 16,
+    const REPORT_CHANNEL_SIZE: usize = 16,
 >
 {
     /// The event type that the input processor receives.

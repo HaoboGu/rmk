@@ -46,8 +46,8 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
-    for Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    InputProcessor<EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE> for Keyboard<'a, ROW, COL, NUM_LAYER>
 {
     type EventType = KeyEvent;
 

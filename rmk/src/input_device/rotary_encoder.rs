@@ -143,7 +143,7 @@ impl<
         #[cfg(feature = "async_matrix")] B: InputPin + Wait,
         #[cfg(not(feature = "async_matrix"))] B: InputPin,
         P: Phase,
-    > InputDevice for RotaryEncoder<A, B, P>
+    > InputDevice<EVENT_CHANNEL_SIZE> for RotaryEncoder<A, B, P>
 {
     type EventType = Event;
 
@@ -181,7 +181,7 @@ impl<
 
 pub struct RotaryEncoderProcessor {}
 
-impl InputProcessor for RotaryEncoderProcessor {
+impl InputProcessor<EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE> for RotaryEncoderProcessor {
     type EventType = Event;
 
     type ReportType = Report;
@@ -205,7 +205,7 @@ impl InputProcessor for RotaryEncoderProcessor {
         EVENT_CHANNEL.receiver()
     }
 
-    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
+    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }
