@@ -4,7 +4,7 @@ use core::sync::atomic::Ordering;
 ///!
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
+use crate::{event::KeyEvent, channel::KEY_EVENT_CHANNEL};
 use embassy_futures::select::select;
 
 #[derive(Debug, Clone, Copy)]

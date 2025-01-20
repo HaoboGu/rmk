@@ -6,74 +6,87 @@ pub mod esp;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
-use embassy_time::Timer;
 #[cfg(any(feature = "nrf52840_ble", feature = "nrf52833_ble"))]
 pub use nrf::SOFTWARE_VBUS;
+use nrf_softdevice::ble::{gatt_server, Connection};
+use ssmarshal::serialize;
 
 use crate::{
-    hid::HidWriterWrapper,
-    keyboard::{write_other_report_to_host, KeyboardReportMessage, REPORT_CHANNEL_SIZE},
-    usb::descriptor::CompositeReportType,
-    CONNECTION_STATE,
+    channel::KEYBOARD_REPORT_CHANNEL,
+    hid::{HidError, HidWriterTrait, Report},
 };
 
-/// BLE communication task, send reports to host via BLE.
-/// TODO: Merge `ble_communication_task` and `communication_task` into one task.
-pub(crate) async fn ble_communication_task<
-    'a,
-    W: HidWriterWrapper,
-    W2: HidWriterWrapper,
-    W3: HidWriterWrapper,
-    W4: HidWriterWrapper,
->(
-    keyboard_report_receiver: &Receiver<
-        'a,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
-    ble_keyboard_writer: &mut W,
-    ble_media_writer: &mut W2,
-    ble_system_control_writer: &mut W3,
-    ble_mouse_writer: &mut W4,
-) {
-    // Wait 1 seconds, ensure that gatt server has been started
-    Timer::after_secs(1).await;
-    loop {
-        let report = keyboard_report_receiver.receive().await;
-        // Only send the report after the connection is established.
-        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-            match report {
-                KeyboardReportMessage::KeyboardReport(report) => {
-                    debug!(
-                        "Send keyboard report via BLE: {:?}, modifier: {:b}",
-                        report.keycodes, report.modifier
-                    );
-                    match ble_keyboard_writer.write_serialize(&report).await {
-                        Ok(()) => {}
-                        Err(e) => error!("Send keyboard report error: {:?}", e),
-                    };
-                }
-                KeyboardReportMessage::CompositeReport(report, report_type) => {
-                    match report_type {
-                        CompositeReportType::Media => {
-                            write_other_report_to_host(report, report_type, ble_media_writer).await
-                        }
-                        CompositeReportType::Mouse => {
-                            write_other_report_to_host(report, report_type, ble_mouse_writer).await
-                        }
-                        CompositeReportType::System => {
-                            write_other_report_to_host(
-                                report,
-                                report_type,
-                                ble_system_control_writer,
-                            )
-                            .await
-                        }
-                        CompositeReportType::None => (),
-                    };
-                }
+pub(crate) struct BleKeyboardWriter<'a> {
+    conn: &'a Connection,
+    keyboard_handle: u16,
+    media_handle: u16,
+    system_control_handle: u16,
+    mouse_handle: u16,
+}
+
+impl<'a> BleKeyboardWriter<'a> {
+    pub(crate) fn new(
+        conn: &'a Connection,
+        keyboard_handle: u16,
+        media_handle: u16,
+        system_control_handle: u16,
+        mouse_handle: u16,
+    ) -> Self {
+        Self {
+            conn,
+            keyboard_handle,
+            media_handle,
+            system_control_handle,
+            mouse_handle,
+        }
+    }
+    async fn write(&mut self, handle: u16, report: &[u8]) -> Result<(), HidError> {
+        gatt_server::notify_value(self.conn, handle, report).map_err(|e| {
+            error!("Send ble report error: {}", e);
+            match e {
+                gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
+                gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
+            }
+        })
+    }
+}
+
+impl HidWriterTrait for BleKeyboardWriter<'_> {
+    type ReportType = Report;
+
+    async fn get_report(&mut self) -> Self::ReportType {
+        KEYBOARD_REPORT_CHANNEL.receive().await
+    }
+
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
+        match report {
+            Report::KeyboardReport(keyboard_report) => {
+                let mut buf = [0u8; 8];
+                let n = serialize(&mut buf, &keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.keyboard_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::MouseReport(mouse_report) => {
+                let mut buf = [0u8; 5];
+                let n = serialize(&mut buf, &mouse_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.mouse_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::MediaKeyboardReport(media_keyboard_report) => {
+                let mut buf = [0u8; 2];
+                let n = serialize(&mut buf, &media_keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.media_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::SystemControlReport(system_control_report) => {
+                let mut buf = [0u8; 2];
+                let n = serialize(&mut buf, &system_control_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.system_control_handle, &buf).await?;
+                Ok(n)
             }
         }
     }

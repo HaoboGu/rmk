@@ -1,7 +1,7 @@
 use crate::{
+    channel::KEY_EVENT_CHANNEL,
     debounce::{DebounceState, DebouncerTrait},
     event::KeyEvent,
-    keyboard::KEY_EVENT_CHANNEL,
     CONNECTION_STATE,
 };
 use core::future::Future;
@@ -195,8 +195,24 @@ impl<
     async fn scan(&mut self) {
         info!("Matrix scanning");
         loop {
-            #[cfg(feature = "async_matrix")]
-            self.wait_for_key().await;
+            // KEY_EVENT_CHANNEL
+            //     .send(KeyEvent {
+            //         row: 0,
+            //         col: 0,
+            //         pressed: true,
+            //     })
+            //     .await;
+            // embassy_time::Timer::after_micros(200).await;
+            // KEY_EVENT_CHANNEL
+            //     .send(KeyEvent {
+            //         row: 0,
+            //         col: 0,
+            //         pressed: false,
+            //     })
+            //     .await;
+            // embassy_time::Timer::after_secs(5).await;
+            // #[cfg(feature = "async_matrix")]
+            // self.wait_for_key().await;
 
             // Scan matrix and send report
             for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {

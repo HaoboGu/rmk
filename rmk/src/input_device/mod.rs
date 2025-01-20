@@ -7,12 +7,10 @@
 
 use core::future::Future;
 
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Receiver, Sender},
-};
+use embassy_sync::channel::{Receiver, Sender};
+use usbd_hid::descriptor::AsInputReport;
 
-use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use crate::RawMutex;
 
 pub mod rotary_encoder;
 
@@ -45,7 +43,7 @@ pub mod rotary_encoder;
 /// )
 /// .await;
 /// ```
-pub trait InputDevice {
+pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 16> {
     /// Event type that input device will send
     type EventType;
 
@@ -53,7 +51,7 @@ pub trait InputDevice {
     // FIXME: it's not possible in stable to define an associated const and use it as the channel size in stable Rust.
     // It requires #[feature(generic_const_exprs)]:
     //
-    // `fn event_sender(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
+    // `fn event_sender(..) -> &Channel<RawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
     // So this size is commented out
     // const EVENT_CHANNEL_SIZE: usize = 32;
 
@@ -64,7 +62,7 @@ pub trait InputDevice {
     fn run(&mut self) -> impl Future<Output = ()>;
 
     /// Get the event sender for the input device. All events should be send by this channel.
-    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 
 /// The trait for input processors.
@@ -73,12 +71,16 @@ pub trait InputDevice {
 /// Take the normal keyboard as the example:
 ///
 /// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
-pub trait InputProcessor {
+pub trait InputProcessor<
+    const EVENT_CHANNEL_SIZE: usize = 16,
+    const REPORT_CHANNEL_SIZE: usize = 16,
+>
+{
     /// The event type that the input processor receives.
     type EventType;
 
     /// The report type that the input processor sends.
-    type ReportType;
+    type ReportType: AsInputReport;
 
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
@@ -92,16 +94,12 @@ pub trait InputProcessor {
     ///
     /// The input processor receives events from this channel, processes the event,
     /// then sends to the report channel.
-    fn event_receiver(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn event_receiver(&self) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
     /// Get the output report sender for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
-    fn report_sender(
-        &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.

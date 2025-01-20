@@ -18,7 +18,7 @@ use embassy_stm32::{
 };
 use panic_halt as _;
 use rmk::{
-    config::{RmkConfig, VialConfig},
+    config::{KeyboardConfig, RmkConfig, VialConfig},
     run_rmk,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -56,8 +56,14 @@ async fn main(spawner: Spawner) {
     let f = Flash::new_blocking(p.FLASH);
 
     // Keyboard config
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF),
+        ..Default::default()
+    };
+
+    // Keyboard config
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

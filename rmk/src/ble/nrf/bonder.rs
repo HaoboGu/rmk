@@ -1,9 +1,6 @@
 use super::BONDED_DEVICE_NUM;
-use crate::{
-    ble::nrf::ACTIVE_PROFILE,
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
-    CONNECTION_STATE,
-};
+use crate::channel::FLASH_CHANNEL;
+use crate::{ble::nrf::ACTIVE_PROFILE, storage::FlashOperationMessage, CONNECTION_STATE};
 use core::{cell::RefCell, sync::atomic::Ordering};
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{

@@ -37,7 +37,7 @@ let storage_config = StorageConfig {
     num_sectors: 2,
     ..Default::default()
 };
-let keyboard_config = RmkConfig {
+let rmk_config = RmkConfig {
     usb_config: keyboard_usb_config,
     vial_config,
     storage_config,

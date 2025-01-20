@@ -1,12 +1,11 @@
 mod eeconfig;
 pub mod nor_flash;
+pub mod dummy_flash;
 
-use crate::config::StorageConfig;
+use crate::{channel::FLASH_CHANNEL, config::StorageConfig};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::{
@@ -24,10 +23,6 @@ use crate::{
 };
 
 use self::eeconfig::EeKeymapConfig;
-
-// Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperationMessage, 4> =
-    Channel::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
 #[derive(Clone, Copy, Debug)]

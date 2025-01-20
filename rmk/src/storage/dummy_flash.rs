@@ -9,21 +9,21 @@ impl embedded_storage_async::nor_flash::NorFlashError for EmptyFlashErrorWrapper
 }
 
 /// An empty implementation of `NorFlash`
-pub struct EmptyFlashWrapper {}
+pub struct DummyFlash {}
 
-impl Default for EmptyFlashWrapper {
+impl Default for DummyFlash {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl EmptyFlashWrapper {
+impl DummyFlash {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl embedded_storage::nor_flash::NorFlash for EmptyFlashWrapper {
+impl embedded_storage::nor_flash::NorFlash for DummyFlash {
     const WRITE_SIZE: usize = 0;
     const ERASE_SIZE: usize = 0;
 
@@ -36,7 +36,7 @@ impl embedded_storage::nor_flash::NorFlash for EmptyFlashWrapper {
     }
 }
 
-impl embedded_storage::nor_flash::ReadNorFlash for EmptyFlashWrapper {
+impl embedded_storage::nor_flash::ReadNorFlash for DummyFlash {
     const READ_SIZE: usize = 0;
 
     fn read(&mut self, _offset: u32, _bytes: &mut [u8]) -> Result<(), Self::Error> {
@@ -48,11 +48,11 @@ impl embedded_storage::nor_flash::ReadNorFlash for EmptyFlashWrapper {
     }
 }
 
-impl embedded_storage_async::nor_flash::ErrorType for EmptyFlashWrapper {
+impl embedded_storage_async::nor_flash::ErrorType for DummyFlash {
     type Error = EmptyFlashErrorWrapper;
 }
 
-impl embedded_storage_async::nor_flash::NorFlash for EmptyFlashWrapper {
+impl embedded_storage_async::nor_flash::NorFlash for DummyFlash {
     const WRITE_SIZE: usize = 0;
     const ERASE_SIZE: usize = 0;
 
@@ -65,7 +65,7 @@ impl embedded_storage_async::nor_flash::NorFlash for EmptyFlashWrapper {
     }
 }
 
-impl embedded_storage_async::nor_flash::ReadNorFlash for EmptyFlashWrapper {
+impl embedded_storage_async::nor_flash::ReadNorFlash for DummyFlash {
     const READ_SIZE: usize = 1;
     async fn read(&mut self, _offset: u32, _bytes: &mut [u8]) -> Result<(), Self::Error> {
         Ok(())

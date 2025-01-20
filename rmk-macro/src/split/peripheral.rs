@@ -220,7 +220,7 @@ fn expand_split_peripheral_entry(
                         _,
                         #row,
                         #col,
-                    >(input_pins, output_pins, uart0).await;
+                    >(input_pins, output_pins, uart0, spawner).await;
                 },
                 MatrixType::direct_pin => quote! {
                     ::rmk::split::peripheral::run_rmk_split_peripheral_direct_pin::<
