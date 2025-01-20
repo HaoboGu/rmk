@@ -7,7 +7,7 @@ use crate::{
     hid::HidReaderTrait,
     light::LedIndicator,
 };
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -22,7 +22,7 @@ use nrf_softdevice::{
 };
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
-static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 4> = Channel::new();
+static LED_CHANNEL: Channel<ThreadModeRawMutex, LedIndicator, 4> = Channel::new();
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]

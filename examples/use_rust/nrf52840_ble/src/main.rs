@@ -24,7 +24,7 @@ use rmk::{
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
     keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
-    run_devices, run_rmk, CriticalSectionRawMutex, Sender,
+    run_devices, run_rmk, ThreadModeRawMutex, Sender,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -137,7 +137,7 @@ impl InputDevice for MyDevice {
 
     type EventType = Event;
 
-    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_sender(&self) -> Sender<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.sender()
     }
 }

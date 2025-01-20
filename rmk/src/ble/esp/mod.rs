@@ -16,7 +16,7 @@ use crate::{
 };
 use core::cell::RefCell;
 use embassy_futures::select::{select, select4};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;
@@ -72,7 +72,7 @@ pub async fn initialize_esp_ble_keyboard_with_config_and_run<
     // esp32c3 doesn't have USB device, so there is no usb here
     // TODO: add usb service for other chips of esp32 which have USB device
 
-    static via_output: Channel<CriticalSectionRawMutex, [u8; 32], 2> = Channel::new();
+    static via_output: Channel<ThreadModeRawMutex, [u8; 32], 2> = Channel::new();
     let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
     loop {
         KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);

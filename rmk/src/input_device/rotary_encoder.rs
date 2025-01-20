@@ -1,6 +1,6 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::{Receiver, Sender};
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
@@ -176,7 +176,7 @@ impl<
 
     fn event_sender(
         &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::EventType, { EVENT_CHANNEL_SIZE }> {
+    ) -> Sender<ThreadModeRawMutex, Self::EventType, { EVENT_CHANNEL_SIZE }> {
         EVENT_CHANNEL.sender()
     }
 }
@@ -205,13 +205,13 @@ impl InputProcessor for RotaryEncoderProcessor {
 
     fn event_receiver(
         &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    ) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         EVENT_CHANNEL.receiver()
     }
 
     fn report_sender(
         &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
+    ) -> Sender<ThreadModeRawMutex, Self::ReportType, { REPORT_CHANNEL_SIZE }> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }

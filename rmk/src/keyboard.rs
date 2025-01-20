@@ -14,7 +14,7 @@ use crate::{
 use core::cell::RefCell;
 use embassy_futures::{select::select, yield_now};
 use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
+    blocking_mutex::raw::ThreadModeRawMutex,
     channel::{Channel, Receiver, Sender},
 };
 use embassy_time::{Instant, Timer};
@@ -22,21 +22,20 @@ use heapless::{FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 pub const EVENT_CHANNEL_SIZE: usize = 32;
-pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
+pub static KEY_EVENT_CHANNEL: Channel<ThreadModeRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
     Channel::new();
 
-pub static EVENT_CHANNEL: Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> =
-    Channel::new();
+pub static EVENT_CHANNEL: Channel<ThreadModeRawMutex, Event, EVENT_CHANNEL_SIZE> = Channel::new();
 
 pub const REPORT_CHANNEL_SIZE: usize = 32;
 pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
-    CriticalSectionRawMutex,
+    ThreadModeRawMutex,
     Report,
     REPORT_CHANNEL_SIZE,
 > = Channel::new();
 
 pub(crate) static KEY_REPORT_CHANNEL: Channel<
-    CriticalSectionRawMutex,
+    ThreadModeRawMutex,
     KeyboardReport,
     REPORT_CHANNEL_SIZE,
 > = Channel::new();
@@ -153,15 +152,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProces
         }
     }
 
-    fn event_receiver(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
+    fn event_receiver(&self) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
         KEY_EVENT_CHANNEL.receiver()
     }
 
-    fn report_sender(
-        &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
+    fn report_sender(&self) -> Sender<ThreadModeRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
         KEYBOARD_REPORT_CHANNEL.sender()
     }
 }
@@ -172,7 +167,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 
     // /// Report Sender
     // pub(crate) sender:
-    //     &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+    //     &'a Sender<'a, ThreadModeRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
 

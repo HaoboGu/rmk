@@ -4,7 +4,7 @@
 use core::sync::atomic::Ordering;
 
 use embassy_futures::yield_now;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 
 use crate::{
     ble::nrf::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
@@ -14,7 +14,7 @@ use crate::{
 
 use super::bonder::MultiBonder;
 
-pub(crate) static BLE_PROFILE_CHANNEL: Channel<CriticalSectionRawMutex, BleProfileAction, 1> =
+pub(crate) static BLE_PROFILE_CHANNEL: Channel<ThreadModeRawMutex, BleProfileAction, 1> =
     Channel::new();
 
 /// BLE profile switch action

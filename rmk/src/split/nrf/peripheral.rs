@@ -5,7 +5,7 @@ use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::MatrixTrait;
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
@@ -32,14 +32,14 @@ pub(crate) struct BleSplitPeripheralServer {
 pub(crate) struct BleSplitPeripheralDriver<'a> {
     server: &'a BleSplitPeripheralServer,
     conn: &'a Connection,
-    receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 4>,
+    receiver: Receiver<'a, ThreadModeRawMutex, SplitMessage, 4>,
 }
 
 impl<'a> BleSplitPeripheralDriver<'a> {
     pub(crate) fn new(
         server: &'a BleSplitPeripheralServer,
         conn: &'a Connection,
-        receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 4>,
+        receiver: Receiver<'a, ThreadModeRawMutex, SplitMessage, 4>,
     ) -> Self {
         Self {
             server,
@@ -123,7 +123,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         };
 
         // Channel used for receiving messages from central
-        let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 4> = Channel::new();
+        let receive_channel: Channel<ThreadModeRawMutex, SplitMessage, 4> = Channel::new();
         let receiver = receive_channel.receiver();
         let sender = receive_channel.sender();
 

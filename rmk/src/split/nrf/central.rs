@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_futures::{join::join, select::select};
 use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
+    blocking_mutex::raw::ThreadModeRawMutex,
     channel::{Channel, Receiver, Sender},
 };
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
@@ -35,9 +35,9 @@ pub(crate) async fn run_ble_peripheral_monitor<
     addr: [u8; 6],
 ) {
     // Channel is used to receive messages from peripheral
-    let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    let receive_channel: Channel<ThreadModeRawMutex, SplitMessage, 8> = Channel::new();
     // Channel is used to notify messages to peripheral
-    let notify_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    let notify_channel: Channel<ThreadModeRawMutex, SplitMessage, 8> = Channel::new();
 
     let receive_sender = receive_channel.sender();
     let receive_receiver = receive_channel.receiver();
@@ -66,8 +66,8 @@ static CONNECTING_CLIENT: AtomicBool = AtomicBool::new(false);
 /// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
 /// Split driver will take `SplitBleCentralDriver` as the reader, process the message in matrix scanning.
 pub(crate) async fn run_ble_client(
-    receive_sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
-    notify_receiver: Receiver<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    receive_sender: Sender<'_, ThreadModeRawMutex, SplitMessage, 8>,
+    notify_receiver: Receiver<'_, ThreadModeRawMutex, SplitMessage, 8>,
     addr: [u8; 6],
 ) -> ! {
     // Wait 1s, ensure that the softdevice is ready
@@ -172,9 +172,9 @@ pub(crate) async fn run_ble_client(
 /// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a> {
     // Receiver that receives message from peripheral
-    pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    pub(crate) receiver: Receiver<'a, ThreadModeRawMutex, SplitMessage, 8>,
     // Sender that send message to peripherals
-    pub(crate) sender: Sender<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    pub(crate) sender: Sender<'a, ThreadModeRawMutex, SplitMessage, 8>,
     // Cached connection state
     connection_state: bool,
 }

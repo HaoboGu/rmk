@@ -1,5 +1,5 @@
 use embassy_futures::block_on;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -21,7 +21,7 @@ use crate::{
 
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 
-static vial_output_channel: Channel<CriticalSectionRawMutex, [u8; 32], 4> = Channel::new();
+static vial_output_channel: Channel<ThreadModeRawMutex, [u8; 32], 4> = Channel::new();
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BleVialService {

@@ -3,12 +3,12 @@ use crate::{
     hid::{HidError, HidReaderTrait},
 };
 use bitfield_struct::bitfield;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
 use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{Error, OutputPin, PinState};
 use serde::{Deserialize, Serialize};
 
-pub(crate) static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 4> = Channel::new();
+pub(crate) static LED_CHANNEL: Channel<ThreadModeRawMutex, LedIndicator, 4> = Channel::new();
 
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]

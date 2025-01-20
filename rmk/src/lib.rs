@@ -34,7 +34,7 @@ use debounce::DebouncerTrait;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::*};
+pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
