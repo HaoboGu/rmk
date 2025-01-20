@@ -16,7 +16,7 @@ pub(crate) mod fmt;
 
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
-use crate::config::RmkConfig;
+use crate::config::KeyboardConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
@@ -24,7 +24,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::input_device::InputProcessor;
 use crate::light::LightController;
 use action::KeyAction;
-use config::{KeyboardUsbConfig, VialConfig};
+use config::{RmkConfig, VialConfig};
 use core::{
     cell::RefCell,
     future::Future,
@@ -63,7 +63,6 @@ use via::VialService;
 #[cfg(feature = "_nrf_ble")]
 use {
     crate::ble::nrf::{initialize_nrf_sd_and_flash, run_nrf_ble_keyboard},
-    crate::config::BleBatteryConfig,
     nrf_softdevice::Softdevice,
 };
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
@@ -118,7 +117,7 @@ pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 /// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
 /// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `keyboard_config` - other configurations of the keyboard, check [KeyboardConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 pub async fn run_rmk<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
@@ -137,7 +136,7 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: RmkConfig<'static, Out>,
+    keyboard_config: KeyboardConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
     // Wrap `embedded-storage` to `embedded-storage-async`
@@ -167,7 +166,7 @@ pub async fn run_rmk<
 /// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
 /// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
 /// * `default_keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
+/// * `keyboard_config` - other configurations of the keyboard, check [KeyboardConfig] struct for details
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
 #[allow(unused_variables)]
 pub async fn run_rmk_with_async_flash<
@@ -187,20 +186,21 @@ pub async fn run_rmk_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: RmkConfig<'static, Out>,
+    keyboard_config: KeyboardConfig<'static, Out>,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    let rmk_config = keyboard_config.rmk_config;
     #[cfg(feature = "_nrf_ble")]
     let (sd, flash) =
-        initialize_nrf_sd_and_flash(keyboard_config.usb_config.product_name, spawner, None);
+        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
     #[cfg(feature = "_esp_ble")]
     let flash = DummyFlash::new();
 
-    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
-    let keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
-    let light_controller = LightController::new(keyboard_config.light_config);
+    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config);
+    let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -226,10 +226,7 @@ pub async fn run_rmk_with_async_flash<
         usb_driver,
         storage,
         light_controller,
-        keyboard_config.usb_config,
-        keyboard_config.vial_config,
-        #[cfg(feature = "_nrf_ble")]
-        keyboard_config.ble_battery_config,
+        rmk_config,
         #[cfg(feature = "_nrf_ble")]
         sd,
     )
@@ -253,9 +250,7 @@ pub(crate) async fn run_rmk_internal<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     mut storage: Storage<F, ROW, COL, NUM_LAYER>,
     mut light_controller: LightController<Out>,
-    usb_config: KeyboardUsbConfig<'static>,
-    vial_config: VialConfig<'static>,
-    #[cfg(feature = "_nrf_ble")] ble_battery_config: BleBatteryConfig<'static>,
+    rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
 ) -> ! {
     // Dispatch the keyboard runner
@@ -268,9 +263,7 @@ pub(crate) async fn run_rmk_internal<
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         &mut light_controller,
-        usb_config,
-        vial_config,
-        ble_battery_config,
+        rmk_config,
         sd,
     )
     .await;
@@ -278,7 +271,8 @@ pub(crate) async fn run_rmk_internal<
     // USB keyboard
     #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
     {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, usb_config);
+        let mut usb_builder: embassy_usb::Builder<'_, D> =
+            new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let mut other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -297,7 +291,7 @@ pub(crate) async fn run_rmk_internal<
                 UsbLedReader::new(&mut keyboard_reader),
                 UsbVialReaderWriter::new(&mut vial_reader_writer),
                 UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                vial_config,
+                rmk_config.vial_config,
             )
             .await;
         }

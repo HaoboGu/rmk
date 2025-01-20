@@ -147,9 +147,6 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
-    // /// Report Sender
-    // pub(crate) sender:
-    //     &'a Sender<'a, RawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
 

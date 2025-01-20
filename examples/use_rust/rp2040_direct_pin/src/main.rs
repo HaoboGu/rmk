@@ -21,7 +21,7 @@ use embassy_rp::{
 use keymap::{COL, NUM_LAYER, ROW, SIZE};
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     direct_pin::run_rmk_direct_pin_with_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -68,9 +68,14 @@ async fn main(spawner: Spawner) {
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
-    let keyboard_config: RmkConfig<'_, Output> = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
+        ..Default::default()
+    };
+
+    let keyboard_config: KeyboardConfig<'_, Output> = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

@@ -29,7 +29,7 @@ pub trait InputDevice {
     fn run(&mut self) -> impl Future<Output = ()>;
 
     /// Get the event sender for the input device. All events should be send by this channel.
-    fn event_sender(&self) -> Sender<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 }
 ```
 
@@ -103,14 +103,14 @@ pub trait InputProcessor {
     /// then sends to the report channel.
     fn event_receiver(
         &self,
-    ) -> Receiver<ThreadModeRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    ) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
 
     /// Get the output report sender for the input processor.
     ///
     /// The input processor sends keyboard reports to this channel.
     fn report_sender(
         &self,
-    ) -> Sender<ThreadModeRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    ) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.

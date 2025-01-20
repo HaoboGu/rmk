@@ -19,7 +19,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{RmkConfig, VialConfig},
+    config::{KeyboardConfig, RmkConfig, VialConfig},
     run_rmk,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -52,9 +52,15 @@ async fn main(spawner: Spawner) {
     // Use internal flash to emulate eeprom
     let f = Nvmc::new(p.NVMC);
 
-    // Keyboard config
-    let keyboard_config = RmkConfig {
+    // RMK config
+    let rmk_config = RmkConfig {
         vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF),
+        ..Default::default()
+    };
+
+    // Keyboard config
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

@@ -21,7 +21,7 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     channel::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
-    config::{BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    config::{BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
     run_devices, run_rmk, RawMutex, Sender,
@@ -100,11 +100,16 @@ async fn main(spawner: Spawner) {
         num_sectors: 6,
         ..Default::default()
     };
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
         ble_battery_config,
         storage_config,
+        ..Default::default()
+    };
+    // Keyboard config
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

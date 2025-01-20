@@ -10,7 +10,7 @@ mod vial_service;
 
 use self::server::BleServer;
 use crate::ble::BleKeyboardWriter;
-use crate::config::{BleBatteryConfig, KeyboardUsbConfig, VialConfig};
+use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
 use crate::hid::{DummyWriter, HidWriterTrait};
 use crate::input_device::InputProcessor as _;
 use crate::light::LightController;
@@ -245,9 +245,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     light_controller: &mut LightController<Out>,
-    usb_config: KeyboardUsbConfig<'static>,
-    vial_config: VialConfig<'static>,
-    #[cfg(feature = "_nrf_ble")] mut ble_battery_config: BleBatteryConfig<'static>,
+    mut rmk_config: RmkConfig<'static>,
     sd: &mut Softdevice,
 ) -> ! {
     // Initialize usb device, ble service, etc
@@ -260,7 +258,8 @@ pub(crate) async fn run_nrf_ble_keyboard<
         mut other_writer,
         mut vial_reader_writer,
     ) = {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, usb_config);
+        let mut usb_builder: embassy_usb::Builder<'_, D> =
+            new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -282,7 +281,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
     static BONDER: StaticCell<MultiBonder> = StaticCell::new();
     let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
     let ble_server: BleServer =
-        BleServer::new(sd, usb_config, bonder).expect("Failed to start ble server");
+        BleServer::new(sd, rmk_config.usb_config, bonder).expect("Failed to start ble server");
 
     // Main loop
     loop {
@@ -293,7 +292,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
         config.interval = 800;
         config.tx_power = TxPower::Plus4dBm;
         let adv = ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &create_advertisement_data(usb_config.product_name),
+            adv_data: &create_advertisement_data(rmk_config.usb_config.product_name),
             scan_data: &SCAN_DATA,
         };
         // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
@@ -318,7 +317,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                    vial_config,
+                    rmk_config.vial_config,
                 );
                 if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
                     info!("Running USB keyboard");
@@ -342,8 +341,8 @@ pub(crate) async fn run_nrf_ble_keyboard<
                                 matrix,
                                 storage,
                                 light_controller,
-                                vial_config,
-                                &mut ble_battery_config,
+                                rmk_config.vial_config,
+                                &mut rmk_config.ble_battery_config,
                                 &ble_server,
                                 bonder,
                                 conn,
@@ -372,8 +371,8 @@ pub(crate) async fn run_nrf_ble_keyboard<
                             matrix,
                             storage,
                             light_controller,
-                            vial_config,
-                            &mut ble_battery_config,
+                            rmk_config.vial_config,
+                            &mut rmk_config.ble_battery_config,
                             &ble_server,
                             bonder,
                             conn,
@@ -397,8 +396,8 @@ pub(crate) async fn run_nrf_ble_keyboard<
                     matrix,
                     storage,
                     light_controller,
-                    vial_config,
-                    &mut ble_battery_config,
+                    rmk_config.vial_config,
+                    &mut rmk_config.ble_battery_config,
                     &ble_server,
                     bonder,
                     conn,

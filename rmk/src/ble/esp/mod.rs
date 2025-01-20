@@ -16,7 +16,7 @@ use crate::{
 };
 use core::cell::RefCell;
 use embassy_futures::select::{select, select4};
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, channel::Channel};
+use embassy_sync::channel::Channel;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::ReadNorFlash;
 use esp_idf_svc::hal::task::block_on;

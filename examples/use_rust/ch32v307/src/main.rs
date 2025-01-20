@@ -18,7 +18,7 @@ use defmt::{info, println, Display2Format};
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use logger::set_logger;
-use rmk::config::{KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
 use rmk::{k, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -85,11 +85,17 @@ async fn main(spawner: Spawner) -> ! {
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
         ..Default::default()
     };
+
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
+        ..Default::default()
+    };
+
     run_rmk(
         i,
         o,

@@ -19,8 +19,8 @@ use crate::light::LightController;
 use crate::matrix::KeyState;
 use crate::run_rmk_internal;
 use crate::storage::Storage;
+use crate::KeyboardConfig;
 use crate::MatrixTrait;
-use crate::RmkConfig;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -65,7 +65,7 @@ pub async fn run_rmk_direct_pin<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: RmkConfig<'static, Out>,
+    keyboard_config: KeyboardConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
@@ -158,21 +158,22 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(not(feature = "_no_external_storage"))] flash: F,
     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: RmkConfig<'static, Out>,
+    keyboard_config: KeyboardConfig<'static, Out>,
     low_active: bool,
     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) -> ! {
+    let rmk_config = keyboard_config.rmk_config;
     #[cfg(feature = "_nrf_ble")]
     let (sd, flash) =
-        initialize_nrf_sd_and_flash(keyboard_config.usb_config.product_name, spawner, None);
+        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
     #[cfg(feature = "_esp_ble")]
     let flash = DummyFlash::new();
 
-    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
+    let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
-    let keyboard = Keyboard::new(&keymap, keyboard_config.behavior_config);
-    let light_controller = LightController::new(keyboard_config.light_config);
+    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config);
+    let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 
     // Create the debouncer
     #[cfg(feature = "rapid_debouncer")]
@@ -191,10 +192,7 @@ pub async fn run_rmk_direct_pin_with_async_flash<
         usb_driver,
         storage,
         light_controller,
-        keyboard_config.usb_config,
-        keyboard_config.vial_config,
-        #[cfg(feature = "_nrf_ble")]
-        keyboard_config.ble_battery_config,
+        rmk_config,
         #[cfg(feature = "_nrf_ble")]
         sd,
     )
