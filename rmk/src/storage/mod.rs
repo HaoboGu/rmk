@@ -1,5 +1,6 @@
 mod eeconfig;
 pub mod nor_flash;
+pub mod dummy_flash;
 
 use crate::{channel::FLASH_CHANNEL, config::StorageConfig};
 use byteorder::{BigEndian, ByteOrder};
