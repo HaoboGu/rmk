@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "cargo_toml",
  "darling 0.20.10",
