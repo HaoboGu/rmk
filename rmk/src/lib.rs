@@ -71,7 +71,7 @@ use {
 };
 #[cfg(feature = "_esp_ble")]
 use {
-    embedded_storage::nor_flash::{NorFlash, ReadNorFlash as _},
+    crate::ble::esp::run_esp_ble_keyboard,
     esp_idf_svc::partition::EspPartition,
 };
 
@@ -278,7 +278,7 @@ pub(crate) async fn run_rmk_internal<
     )
     .await;
 
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_esp_ble")]
     run_esp_ble_keyboard(
         keymap,
         &mut keyboard,
@@ -288,12 +288,11 @@ pub(crate) async fn run_rmk_internal<
         usb_driver,
         &mut light_controller,
         rmk_config,
-        sd,
     )
     .await;
 
     // USB keyboard
-    #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
+    #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb"), not(feature = "_esp_ble")))]
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> =
             new_usb_builder(usb_driver, rmk_config.usb_config);
@@ -321,7 +320,7 @@ pub(crate) async fn run_rmk_internal<
         }
     }
 
-    panic!("Should never reach here");
+    panic!("Should never reach here, wrong feature gate combination?");
 }
 
 // Run keyboard task for once
@@ -360,14 +359,14 @@ pub(crate) async fn run_keyboard<
     let led_fut = light_service.run();
     let via_fut = vial_service.run();
 
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+    #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
     let storage_fut = storage.run();
 
     match select4(
         select(communication_task, keyboard_fut),
-        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+        #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
         select(storage_fut, via_fut),
-        #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
+        #[cfg(all(not(feature = "_ble"), feature = "_no_external_storage"))]
         via_fut,
         led_fut,
         select(matrix_fut, writer_fut),

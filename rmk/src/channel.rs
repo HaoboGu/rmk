@@ -12,6 +12,7 @@ pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;
 
 /// Channel for control led indicator
+/// TODO: Use Signal instead of Channel
 pub static LED_CHANNEL: Channel<RawMutex, LedIndicator, 4> = Channel::new();
 /// Channel for key events only
 pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();

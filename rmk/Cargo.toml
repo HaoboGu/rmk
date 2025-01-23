@@ -67,7 +67,10 @@ embassy-nrf = { version = "0.3.1", features = [
 
 # Espressif dependencies
 esp32-nimble = { version = "0.10", optional = true }
-esp-idf-svc = { version = "0.51", default-features = false, optional = true }
+esp-idf-svc = { version = "0.51", default-features = false, features = [
+    "embedded-storage",
+    "experimental",
+], optional = true }
 
 # Document feature
 document-features = "0.2"

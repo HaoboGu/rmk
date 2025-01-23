@@ -1,7 +1,6 @@
 extern crate alloc;
 use alloc::sync::Arc;
 use embassy_futures::block_on;
-use embassy_sync::{blocking_mutex::raw::RawMutex, channel::Receiver};
 use embassy_time::Timer;
 use esp32_nimble::{
     enums::{AuthReq, SecurityIOCap},
@@ -9,11 +8,10 @@ use esp32_nimble::{
     BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer, NimbleProperties,
 };
 use ssmarshal::serialize;
-use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor as _};
+use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use crate::{
     ble::{
-        as_bytes,
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
     },
@@ -23,6 +21,8 @@ use crate::{
     light::LedIndicator,
     usb::descriptor::ViaReport,
 };
+
+use super::VIAL_READ_CHANNEL;
 
 pub(crate) struct BleKeyboardWriter {
     pub(crate) keyboard_handle: Arc<Mutex<BLECharacteristic>>,
@@ -92,6 +92,8 @@ pub(crate) struct BleLedReader {
 impl HidReaderTrait for BleLedReader {
     type ReportType = LedIndicator;
 
+    // ESP BLE provides only a blocking callback function for reading data.
+    // So we use a channel to do async read
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         Ok(LED_CHANNEL.receive().await)
     }
@@ -99,31 +101,87 @@ impl HidReaderTrait for BleLedReader {
 
 impl BleLedReader {
     async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
-        self.lock().on_read(|characteristic, _conn| {
-            let v = characteristic.value_mut();
-            info!("on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
-            let led_indicator = LedIndicator::from_bits(v.as_slice()[0]);
-            // Retry 3 times in case the channel is full(which is really rare)
-            for _i in 0..3 {
-                match LED_CHANNEL.try_send(led_indicator) {
-                    Ok(_) => break,
-                    Err(e) => warn!("LED channel full, retrying: {:?}", e),
+        self.keyboard_output_handle
+            .lock()
+            .on_read(|characteristic, _conn| {
+                let v = characteristic.value_mut();
+                info!("led on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
+                let led_indicator = LedIndicator::from_bits(v.as_slice()[0]);
+                if let Err(e) = LED_CHANNEL.try_send(led_indicator) {
+                    warn!("LED channel full: {:?}", e);
                 }
-            }
-        });
+            });
         Ok(1)
     }
 }
+
+pub(crate) struct BleVialReaderWriter {
+    // Read vial data from host via vial_output_handle
+    pub(crate) vial_output_handle: Arc<Mutex<BLECharacteristic>>,
+    // Writer vial data to host via vial_input_handle
+    pub(crate) vial_input_handle: Arc<Mutex<BLECharacteristic>>,
+}
+
+impl HidReaderTrait for BleVialReaderWriter {
+    type ReportType = ViaReport;
+
+    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
+        let v = VIAL_READ_CHANNEL.receive().await;
+
+        Ok(ViaReport {
+            input_data: v,
+            output_data: [0u8; 32],
+        })
+    }
+}
+
+impl HidWriterTrait for BleVialReaderWriter {
+    type ReportType = ViaReport;
+
+    async fn get_report(&mut self) -> Self::ReportType {
+        todo!()
+    }
+
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
+        let mut buf = [0u8; 32];
+        let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
+        self.write(&buf).await?;
+        Ok(n)
+    }
+}
+
+impl BleVialReaderWriter {
+    async fn write(&self, report: &[u8]) -> Result<(), HidError> {
+        self.vial_input_handle.lock().set_value(&report).notify();
+        Timer::after_millis(7).await;
+        Ok(())
+    }
+
+    async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
+        self.vial_output_handle
+            .lock()
+            .on_read(|characteristic, _conn| {
+                let v = characteristic.value_mut();
+                info!("vial on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
+                let data = unsafe { *(v.as_slice().as_ptr() as *const [u8; 32]) };
+                if let Err(_e) = VIAL_READ_CHANNEL.try_send(data) {
+                    error!("Vial output channel full: ");
+                }
+            });
+        Ok(32)
+    }
+}
+
 // BLE HID keyboard server
 pub(crate) struct BleServer {
     pub(crate) server: &'static mut BLEServer,
-    pub(crate) input_keyboard: BleHidWriter,
-    pub(crate) output_keyboard: BleHidReader,
-    pub(crate) input_media_keys: BleHidWriter,
-    pub(crate) input_system_keys: BleHidWriter,
-    pub(crate) input_mouse_keys: BleHidWriter,
-    pub(crate) input_vial: BleHidWriter,
-    pub(crate) output_vial: BleHidReader,
+    pub(crate) input_keyboard: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) output_keyboard: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) input_media_keys: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) input_system_keys: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) input_mouse_keys: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) input_vial: Arc<Mutex<BLECharacteristic>>,
+    pub(crate) output_vial: Arc<Mutex<BLECharacteristic>>,
 }
 
 impl BleServer {
@@ -216,6 +274,28 @@ impl BleServer {
         }
     }
 
+    pub(crate) fn get_led_reader(&self) -> BleLedReader {
+        BleLedReader {
+            keyboard_output_handle: self.output_keyboard.clone(),
+        }
+    }
+
+    pub(crate) fn get_keyboard_writer(&self) -> BleKeyboardWriter {
+        BleKeyboardWriter {
+            keyboard_handle: self.input_keyboard.clone(),
+            media_handle: self.input_media_keys.clone(),
+            system_control_handle: self.input_system_keys.clone(),
+            mouse_handle: self.input_mouse_keys.clone(),
+        }
+    }
+
+    pub(crate) fn get_vial_reader_writer(&self) -> BleVialReaderWriter {
+        BleVialReaderWriter {
+            vial_output_handle: self.output_vial.clone(),
+            vial_input_handle: self.input_vial.clone(),
+        }
+    }
+
     pub(crate) async fn wait_for_connection(&mut self) {
         loop {
             // Check connection status every 100 ms
@@ -237,38 +317,38 @@ impl BleServer {
     }
 }
 
-pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
-{
-    pub(crate) receiver: Receiver<'ch, M, T, N>,
-    pub(crate) hid_writer: W,
-}
+// pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
+// {
+//     pub(crate) receiver: Receiver<'ch, M, T, N>,
+//     pub(crate) hid_writer: W,
+// }
 
-impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
-    for VialReaderWriter<'ch, M, T, N, W>
-{
-    fn get_conn_type(&self) -> ConnectionType {
-        ConnectionType::Ble
-    }
-}
+// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
+//     for VialReaderWriter<'ch, M, T, N, W>
+// {
+//     fn get_conn_type(&self) -> ConnectionType {
+//         ConnectionType::Ble
+//     }
+// }
 
-impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
-    for VialReaderWriter<'ch, M, T, N, W>
-{
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
-        let v = self.receiver.receive().await;
-        buf.copy_from_slice(as_bytes(&v));
-        Ok(as_bytes(&v).len())
-    }
-}
+// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
+//     for VialReaderWriter<'ch, M, T, N, W>
+// {
+//     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
+//         let v = self.receiver.receive().await;
+//         buf.copy_from_slice(as_bytes(&v));
+//         Ok(as_bytes(&v).len())
+//     }
+// }
 
-impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
-    for VialReaderWriter<'ch, M, T, N, W>
-{
-    async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
-        self.hid_writer.write_serialize(r).await
-    }
+// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
+//     for VialReaderWriter<'ch, M, T, N, W>
+// {
+//     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
+//         self.hid_writer.write_serialize(r).await
+//     }
 
-    async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
-        self.hid_writer.write(report).await
-    }
-}
+//     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
+//         self.hid_writer.write(report).await
+//     }
+// }

@@ -2,7 +2,7 @@ use core::cell::RefCell;
 
 use crate::action::KeyAction;
 #[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+use esp_idf_svc::partition::EspPartition;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::channel::KEY_EVENT_CHANNEL;
@@ -168,7 +168,15 @@ pub async fn run_rmk_direct_pin_with_async_flash<
         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
     #[cfg(feature = "_esp_ble")]
-    let flash = DummyFlash::new();
+    let flash = {
+        let f = unsafe {
+            EspPartition::new("rmk")
+                .expect("Create storage partition error")
+                .expect("Empty partition")
+        };
+        let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(f);
+        async_flash
+    };
 
     let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);

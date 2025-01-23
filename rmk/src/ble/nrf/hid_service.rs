@@ -1,9 +1,9 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::{
-    ble::{
-        descriptor::{BleCompositeReportType, BleKeyboardReport},
-        HidError,
-    }, channel::LED_CHANNEL, hid::HidReaderTrait, light::LedIndicator
+    ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
+    channel::{KEYBOARD_REPORT_CHANNEL, LED_CHANNEL},
+    hid::{HidError, HidReaderTrait, HidWriterTrait, Report},
+    light::LedIndicator,
 };
 use nrf_softdevice::{
     ble::{
@@ -17,6 +17,7 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
+use ssmarshal::serialize;
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 #[allow(dead_code)]

@@ -1480,6 +1480,7 @@ dependencies = [
  "heapless 0.8.0",
  "nrf-softdevice",
  "num_enum 0.7.3",
+ "paste",
  "postcard",
  "rmk-macro",
  "sequential-storage",

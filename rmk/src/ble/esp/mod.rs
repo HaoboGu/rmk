@@ -1,22 +1,18 @@
 pub(crate) mod server;
 
-use self::server::{BleServer, VialReaderWriter};
+use self::server::BleServer;
 use crate::channel::VIAL_READ_CHANNEL;
-use crate::config::{KeyboardConfig, RmkConfig, StorageConfig};
-use crate::input_device::InputProcessor as _;
+use crate::config::RmkConfig;
 use crate::light::LightController;
 use crate::matrix::MatrixTrait;
 use crate::storage::Storage;
-use crate::via::VialService;
-use crate::CONNECTION_STATE;
 use crate::KEYBOARD_STATE;
-use crate::{action::KeyAction, keyboard::Keyboard, keymap::KeyMap};
+use crate::{keyboard::Keyboard, keymap::KeyMap};
+use crate::{run_keyboard, CONNECTION_STATE};
 use core::cell::RefCell;
-use embassy_futures::select::{select, select4};
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use esp_idf_svc::hal::task::block_on;
-use futures::pin_mut;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
@@ -31,7 +27,7 @@ use futures::pin_mut;
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
 // TODO: add usb service for other chips of esp32 which have USB device
-pub async fn run_esp_ble_keyboard<
+pub(crate) async fn run_esp_ble_keyboard<
     'a,
     M: MatrixTrait,
     F: AsyncNorFlash,
@@ -45,7 +41,7 @@ pub async fn run_esp_ble_keyboard<
     matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_controller: &mut LightController<Out>,
-    mut rmk_config: RmkConfig<'static>,
+    rmk_config: RmkConfig<'static>,
 ) -> ! {
     // esp32c3 doesn't have USB device, so there is no usb here
     loop {
@@ -65,35 +61,29 @@ pub async fn run_esp_ble_keyboard<
         CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
 
         // Create BLE HID writers
-        let mut keyboard_writer = ble_server.input_keyboard;
-        let mut media_writer = ble_server.input_media_keys;
-        let mut system_writer = ble_server.input_system_keys;
-        let mut mouse_writer = ble_server.input_mouse_keys;
+        let keyboard_writer = ble_server.get_keyboard_writer();
+        let vial_reader_writer = ble_server.get_vial_reader_writer();
+        let led_reader = ble_server.get_led_reader();
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
-
-        let keyboard_fut = keyboard.run();
 
         ble_server.output_vial.lock().on_write(|args| {
             let data: &[u8] = args.recv_data();
             debug!("BLE received {} {=[u8]:#X}", data.len(), data);
             block_on(VIAL_READ_CHANNEL.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
         });
-        let mut via_rw = VialReaderWriter {
-            receiver: VIAL_READ_CHANNEL.receiver(),
-            hid_writer: ble_server.input_vial,
-        };
-        let mut vial_service =
-            VialService::new(&keymap, &mut via_rw, rmk_config.vial_config);
-        // let via_fut = vial_task(&mut via_rw, &mut vial_service);
-        let matrix_fut = matrix.run();
-        let storage_fut = storage.run();
 
-        select4(
-            select(storage_fut, keyboard_fut),
-            select(disconnect, matrix_fut),
-            ble_fut,
-            via_fut,
+        run_keyboard(
+            keymap,
+            keyboard,
+            matrix,
+            storage,
+            disconnect,
+            light_controller,
+            led_reader,
+            vial_reader_writer,
+            keyboard_writer,
+            rmk_config.vial_config,
         )
         .await;
 
