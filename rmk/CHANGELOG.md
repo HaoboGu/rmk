@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update embassy dependencies to latest
 - Improve robustness of serial communication between splits
 
-### Fix
+### Fixed
 
 - Record positions of triggered keys, fix key stuck 
 - Remove invalid PHY type setting between splits
