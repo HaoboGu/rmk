@@ -50,8 +50,9 @@ impl HidWriterWrapper for BleHidWriter {
 
 impl HidReaderWrapper for BleHidReader {
     async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
-        self.lock().on_read(|a, _| {
-            info!("on_read!, {} {=[u8]:#X}", a.len(), a.as_slice());
+        self.lock().on_read(|characteristic, _conn| {
+            let v = characteristic.value_mut();
+            info!("on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
         });
         Ok(1)
     }
