@@ -316,39 +316,3 @@ impl BleServer {
         }
     }
 }
-
-// pub(crate) struct VialReaderWriter<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper>
-// {
-//     pub(crate) receiver: Receiver<'ch, M, T, N>,
-//     pub(crate) hid_writer: W,
-// }
-
-// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> ConnectionTypeWrapper
-//     for VialReaderWriter<'ch, M, T, N, W>
-// {
-//     fn get_conn_type(&self) -> ConnectionType {
-//         ConnectionType::Ble
-//     }
-// }
-
-// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidReaderWrapper
-//     for VialReaderWriter<'ch, M, T, N, W>
-// {
-//     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HidError> {
-//         let v = self.receiver.receive().await;
-//         buf.copy_from_slice(as_bytes(&v));
-//         Ok(as_bytes(&v).len())
-//     }
-// }
-
-// impl<'ch, M: RawMutex, T: Sized, const N: usize, W: HidWriterWrapper> HidWriterWrapper
-//     for VialReaderWriter<'ch, M, T, N, W>
-// {
-//     async fn write_serialize<IR: AsInputReport>(&mut self, r: &IR) -> Result<(), HidError> {
-//         self.hid_writer.write_serialize(r).await
-//     }
-
-//     async fn write(&mut self, report: &[u8]) -> Result<(), HidError> {
-//         self.hid_writer.write(report).await
-//     }
-// }
