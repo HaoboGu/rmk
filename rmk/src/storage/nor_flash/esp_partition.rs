@@ -9,6 +9,7 @@ use embedded_storage_async::nor_flash::{
     ErrorType, MultiwriteNorFlash, NorFlash, NorFlashError, NorFlashErrorKind, ReadNorFlash,
 };
 use esp_idf_svc::sys::*;
+use esp_idf_svc::partition::EspPartition;
 
 #[derive(Copy, Clone)]
 #[repr(u32)]

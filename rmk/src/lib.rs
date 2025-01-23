@@ -14,8 +14,6 @@
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-#[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
 use crate::config::KeyboardConfig;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
@@ -48,7 +46,6 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage::nor_flash::NorFlash;
-#[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use hid::{HidReaderTrait, HidWriterTrait};
 use keyboard::Keyboard;
@@ -71,6 +68,11 @@ use {
     crate::usb::descriptor::{CompositeReport, KeyboardReport},
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
     crate::via::UsbVialReaderWriter,
+};
+#[cfg(feature = "_esp_ble")]
+use {
+    embedded_storage::nor_flash::{NorFlash, ReadNorFlash as _},
+    esp_idf_svc::partition::EspPartition,
 };
 
 pub mod action;
@@ -195,7 +197,15 @@ pub async fn run_rmk_with_async_flash<
         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
     #[cfg(feature = "_esp_ble")]
-    let flash = DummyFlash::new();
+    let flash = {
+        let f = unsafe {
+            EspPartition::new("rmk")
+                .expect("Create storage partition error")
+                .expect("Empty partition")
+        };
+        let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(f);
+        async_flash
+    };
 
     let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
     let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
@@ -256,6 +266,20 @@ pub(crate) async fn run_rmk_internal<
     // Dispatch the keyboard runner
     #[cfg(feature = "_nrf_ble")]
     run_nrf_ble_keyboard(
+        keymap,
+        &mut keyboard,
+        &mut matrix,
+        &mut storage,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        &mut light_controller,
+        rmk_config,
+        sd,
+    )
+    .await;
+
+    #[cfg(feature = "_nrf_ble")]
+    run_esp_ble_keyboard(
         keymap,
         &mut keyboard,
         &mut matrix,
