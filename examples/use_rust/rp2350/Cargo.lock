@@ -497,9 +497,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5a32ea116dc9f2e0ce5a5ec10d11e6da91114eff533e5afe144986ac823f735"
+checksum = "6d7494efe1e0183568327c7e681d4b77ed5241921dcb5976426d9a65b65a0c81"
 dependencies = [
  "bitflags 2.6.0",
  "cfg-if",
@@ -559,6 +559,7 @@ dependencies = [
  "pio",
  "pio-proc",
  "rand_core",
+ "rp-binary-info",
  "rp-pac",
  "rp2040-boot2",
  "sha2-const-stable",
@@ -618,9 +619,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-usb"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d0b882133fa684b9d4652351cd7aac5afe8a2c2bf4a7da59f442ff61087cda2"
+checksum = "6e651b9b7b47b514e6e6d1940a6e2e300891a2c33641917130643602a0cb6386"
 dependencies = [
  "defmt",
  "embassy-futures",
@@ -1457,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "bitfield-struct",
  "byteorder",
@@ -1480,6 +1481,7 @@ dependencies = [
  "heapless 0.8.0",
  "nrf-softdevice",
  "num_enum 0.7.3",
+ "paste",
  "postcard",
  "rmk-macro",
  "sequential-storage",
@@ -1491,7 +1493,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "cargo_toml",
  "darling 0.20.10",
@@ -1522,6 +1524,12 @@ dependencies = [
  "rmk",
  "xz2",
 ]
+
+[[package]]
+name = "rp-binary-info"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "534e2a451671116f5b9391cb15fae43b9abdc56817bcaca9a95ed32c3e4c6b38"
 
 [[package]]
 name = "rp-pac"

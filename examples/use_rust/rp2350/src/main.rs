@@ -10,14 +10,15 @@ mod vial;
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
+// use embassy_rp::flash::Blocking;
 use embassy_rp::{
     bind_interrupts,
+    block::ImageDef,
     flash::{Async, Flash},
     gpio::{AnyPin, Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
 };
-// use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
     config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
@@ -28,6 +29,23 @@ use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
+
+#[link_section = ".start_block"]
+#[used]
+pub static IMAGE_DEF: ImageDef = ImageDef::secure_exe();
+
+// Program metadata for `picotool info`.
+// This isn't needed, but it's recomended to have these minimal entries.
+#[link_section = ".bi_entries"]
+#[used]
+pub static PICOTOOL_ENTRIES: [embassy_rp::binary_info::EntryAddr; 4] = [
+    embassy_rp::binary_info::rp_program_name!(c"RMK Example"),
+    embassy_rp::binary_info::rp_program_description!(
+        c"This example tests the RMK for RP Pico board"
+    ),
+    embassy_rp::binary_info::rp_cargo_version!(),
+    embassy_rp::binary_info::rp_program_build_attribute!(),
+];
 
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
@@ -71,6 +89,7 @@ async fn main(spawner: Spawner) {
 
     // Start serving
     // Use `run_rmk` for blocking flash
+    // rmk::run_rmk(
     run_rmk_with_async_flash(
         input_pins,
         output_pins,
