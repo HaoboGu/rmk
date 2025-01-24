@@ -181,7 +181,7 @@ fn expand_split_central(
                 #set_ble_config
                 ..Default::default()
             };
-            
+
             let controller_config = ::rmk::config::ControllerConfig {
                 light_config,
             };

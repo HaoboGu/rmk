@@ -6,7 +6,6 @@ use crate::config::RmkConfig;
 use crate::light::LightController;
 use crate::matrix::MatrixTrait;
 use crate::storage::Storage;
-use crate::KEYBOARD_STATE;
 use crate::{keyboard::Keyboard, keymap::KeyMap};
 use crate::{run_keyboard, CONNECTION_STATE};
 use core::cell::RefCell;
@@ -45,7 +44,6 @@ pub(crate) async fn run_esp_ble_keyboard<
 ) -> ! {
     // esp32c3 doesn't have USB device, so there is no usb here
     loop {
-        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
         info!("Advertising..");
         let mut ble_server = BleServer::new(rmk_config.usb_config);

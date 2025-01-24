@@ -1,8 +1,6 @@
 use core::cell::RefCell;
 
 use crate::action::KeyAction;
-#[cfg(feature = "_esp_ble")]
-use esp_idf_svc::partition::EspPartition;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::channel::KEY_EVENT_CHANNEL;
@@ -33,6 +31,8 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_storage::nor_flash::NorFlash;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+#[cfg(feature = "_esp_ble")]
+use esp_idf_svc::partition::EspPartition;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 

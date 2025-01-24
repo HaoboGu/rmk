@@ -13,7 +13,6 @@ use crate::{
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
     usb::descriptor::ViaReport,
-    KEYBOARD_STATE,
 };
 use core::cell::RefCell;
 use embassy_futures::{select::select, yield_now};
@@ -114,7 +113,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Main keyboard task, it receives input devices result, processes keys.
     /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
     async fn run(&mut self) -> () {
-        KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {
             let key_event = self.event_receiver().receive().await;
 

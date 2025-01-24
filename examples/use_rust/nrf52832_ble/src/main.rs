@@ -16,7 +16,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, KeyboardConfig, StorageConfig, VialConfig},
+    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     run_rmk,
 };
 

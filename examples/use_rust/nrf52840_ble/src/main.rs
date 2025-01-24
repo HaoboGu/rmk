@@ -21,7 +21,9 @@ use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
     channel::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
-    config::{BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    config::{
+        BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
+    },
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
     run_devices, run_rmk, RawMutex, Sender,

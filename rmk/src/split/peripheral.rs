@@ -1,12 +1,12 @@
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
+use crate::channel::KEY_EVENT_CHANNEL;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
-use crate::channel::KEY_EVENT_CHANNEL;
 use crate::matrix::{Matrix, MatrixTrait};
 use crate::CONNECTION_STATE;
 #[cfg(not(feature = "_esp_ble"))]
@@ -63,21 +63,16 @@ pub async fn run_rmk_split_peripheral<
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     #[cfg(feature = "_nrf_ble")]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        ROW,
-        COL,
-    >(matrix, central_addr, peripheral_addr, spawner)
+    run_rmk_split_peripheral_with_matrix::<_, ROW, COL>(
+        matrix,
+        central_addr,
+        peripheral_addr,
+        spawner,
+    )
     .await;
 
     #[cfg(not(feature = "_nrf_ble"))]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        S,
-        ROW,
-        COL,
-    >(matrix, serial)
-    .await;
+    run_rmk_split_peripheral_with_matrix::<_, S, ROW, COL>(matrix, serial).await;
 }
 
 /// Run the split peripheral service with direct pin matrix.
@@ -117,21 +112,16 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(feature = "_nrf_ble")]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        ROW,
-        COL,
-    >(matrix, central_addr, peripheral_addr, spawner)
+    run_rmk_split_peripheral_with_matrix::<_, ROW, COL>(
+        matrix,
+        central_addr,
+        peripheral_addr,
+        spawner,
+    )
     .await;
 
     #[cfg(not(feature = "_nrf_ble"))]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        S,
-        ROW,
-        COL,
-    >(matrix, serial)
-    .await;
+    run_rmk_split_peripheral_with_matrix::<_, S, ROW, COL>(matrix, serial).await;
 }
 
 /// Run the split peripheral service.

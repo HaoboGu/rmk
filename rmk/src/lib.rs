@@ -57,6 +57,8 @@ pub use storage::dummy_flash::DummyFlash;
 use storage::Storage;
 use usb::descriptor::ViaReport;
 use via::VialService;
+#[cfg(feature = "_esp_ble")]
+use {crate::ble::esp::run_esp_ble_keyboard, esp_idf_svc::partition::EspPartition};
 #[cfg(feature = "_nrf_ble")]
 use {
     crate::ble::nrf::{initialize_nrf_sd_and_flash, run_nrf_ble_keyboard},
@@ -68,11 +70,6 @@ use {
     crate::usb::descriptor::{CompositeReport, KeyboardReport},
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
     crate::via::UsbVialReaderWriter,
-};
-#[cfg(feature = "_esp_ble")]
-use {
-    crate::ble::esp::run_esp_ble_keyboard,
-    esp_idf_svc::partition::EspPartition,
 };
 
 pub mod action;
@@ -99,8 +96,6 @@ mod storage;
 mod usb;
 mod via;
 
-/// Keyboard state, true for started, false for stopped
-pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// Current connection type:
 /// - 0: USB
 /// - 1: BLE
@@ -292,7 +287,11 @@ pub(crate) async fn run_rmk_internal<
     .await;
 
     // USB keyboard
-    #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb"), not(feature = "_esp_ble")))]
+    #[cfg(all(
+        not(feature = "_nrf_ble"),
+        not(feature = "_no_usb"),
+        not(feature = "_esp_ble")
+    ))]
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> =
             new_usb_builder(usb_driver, rmk_config.usb_config);
@@ -301,7 +300,6 @@ pub(crate) async fn run_rmk_internal<
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
         let mut usb_device = usb_builder.build();
-        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Run all tasks, if one of them fails, wait 1 second and then restart
         loop {
             run_keyboard(

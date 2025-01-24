@@ -25,7 +25,7 @@ use crate::{
     storage::{get_bond_info_key, Storage, StorageData},
     KeyMap, CONNECTION_TYPE,
 };
-use crate::{run_keyboard, CONNECTION_STATE, KEYBOARD_STATE};
+use crate::{run_keyboard, CONNECTION_STATE};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
@@ -285,7 +285,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
 
     // Main loop
     loop {
-        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
         // Init BLE advertising data
         let mut config = peripheral::Config::default();
         // Interval: 500ms
