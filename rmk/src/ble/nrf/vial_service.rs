@@ -186,8 +186,8 @@ impl HidReaderTrait for BleVialReaderWriter<'_> {
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         let v = VIAL_READ_CHANNEL.receive().await;
         Ok(ViaReport {
-            input_data: v,
-            output_data: [0; 32],
+            input_data: [0u8; 32],
+            output_data: v,
         })
     }
 }

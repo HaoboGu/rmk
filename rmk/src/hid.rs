@@ -6,7 +6,7 @@ use embassy_usb::{class::hid::ReadError, driver::EndpointError};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub enum Report {
     /// Normal keyboard hid report
     KeyboardReport(KeyboardReport),

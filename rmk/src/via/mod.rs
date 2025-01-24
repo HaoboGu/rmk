@@ -400,7 +400,7 @@ impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'a, 'd, D> {
             output_data: [0; 32],
         };
         self.vial_reader_writer
-            .read(&mut read_report.input_data)
+            .read(&mut read_report.output_data)
             .await
             .map_err(|e| HidError::UsbReadError(e))?;
 

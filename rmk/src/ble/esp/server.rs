@@ -20,6 +20,7 @@ use crate::{
     hid::{HidError, HidReaderTrait, HidWriterTrait, Report},
     light::LedIndicator,
     usb::descriptor::ViaReport,
+    CONNECTION_STATE,
 };
 
 use super::VIAL_READ_CHANNEL;
@@ -41,6 +42,7 @@ impl HidWriterTrait for BleKeyboardWriter {
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
+                debug!("Writing keyboard report {}", keyboard_report);
                 let mut buf = [0u8; 8];
                 let n = serialize(&mut buf, &keyboard_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
@@ -128,9 +130,10 @@ impl HidReaderTrait for BleVialReaderWriter {
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         let v = VIAL_READ_CHANNEL.receive().await;
 
+        // The output_data field is the input from host
         Ok(ViaReport {
-            input_data: v,
-            output_data: [0u8; 32],
+            input_data: [0u8; 32],
+            output_data: v,
         })
     }
 }
@@ -307,6 +310,7 @@ impl BleServer {
     }
 
     pub(crate) async fn wait_for_disconnection(server: &'static mut BLEServer) {
+        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {
             // Check connection status every 500 ms
             Timer::after_millis(500).await;

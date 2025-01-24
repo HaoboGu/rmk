@@ -268,6 +268,7 @@ impl HidWriterTrait for BleKeyboardWriter<'_> {
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
+                debug!("Writing keyboard report {}", keyboard_report);
                 let mut buf = [0u8; 8];
                 let n = serialize(&mut buf, &keyboard_report)
                     .map_err(|_| HidError::ReportSerializeError)?;

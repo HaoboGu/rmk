@@ -22,6 +22,7 @@ use usbd_hid::descriptor::generator_prelude::*;
 )]
 #[allow(dead_code)]
 #[derive(Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardReport {
     pub modifier: u8,
     pub reserved: u8,
