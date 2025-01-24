@@ -101,22 +101,6 @@ impl HidReaderTrait for BleLedReader {
     }
 }
 
-impl BleLedReader {
-    async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
-        self.keyboard_output_handle
-            .lock()
-            .on_read(|characteristic, _conn| {
-                let v = characteristic.value_mut();
-                info!("led on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
-                let led_indicator = LedIndicator::from_bits(v.as_slice()[0]);
-                if let Err(e) = LED_CHANNEL.try_send(led_indicator) {
-                    warn!("LED channel full: {:?}", e);
-                }
-            });
-        Ok(1)
-    }
-}
-
 pub(crate) struct BleVialReaderWriter {
     // Read vial data from host via vial_output_handle
     pub(crate) vial_output_handle: Arc<Mutex<BLECharacteristic>>,
@@ -158,20 +142,6 @@ impl BleVialReaderWriter {
         self.vial_input_handle.lock().set_value(&report).notify();
         Timer::after_millis(7).await;
         Ok(())
-    }
-
-    async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, HidError> {
-        self.vial_output_handle
-            .lock()
-            .on_read(|characteristic, _conn| {
-                let v = characteristic.value_mut();
-                info!("vial on_read!, {} {=[u8]:#X}", v.len(), v.as_slice());
-                let data = unsafe { *(v.as_slice().as_ptr() as *const [u8; 32]) };
-                if let Err(_e) = VIAL_READ_CHANNEL.try_send(data) {
-                    error!("Vial output channel full: ");
-                }
-            });
-        Ok(32)
     }
 }
 
@@ -278,6 +248,15 @@ impl BleServer {
     }
 
     pub(crate) fn get_led_reader(&self) -> BleLedReader {
+        // Set vial output characteristic read callback
+        self.output_keyboard.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("BLE received LED, len: {} {=[u8]:#X}", data.len(), data);
+            if data.len() > 0 {
+                // Send the first byte to the LED_CHANNEL
+                block_on(LED_CHANNEL.send(LedIndicator::from_bits(data[0])));
+            }
+        });
         BleLedReader {
             keyboard_output_handle: self.output_keyboard.clone(),
         }
@@ -293,6 +272,13 @@ impl BleServer {
     }
 
     pub(crate) fn get_vial_reader_writer(&self) -> BleVialReaderWriter {
+        // Set vial output characteristic read callback
+        self.output_vial.lock().on_write(|args| {
+            let data: &[u8] = args.recv_data();
+            debug!("BLE received vial, len: {} {=[u8]:#X}", data.len(), data);
+            block_on(VIAL_READ_CHANNEL.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
+        });
+
         BleVialReaderWriter {
             vial_output_handle: self.output_vial.clone(),
             vial_input_handle: self.input_vial.clone(),

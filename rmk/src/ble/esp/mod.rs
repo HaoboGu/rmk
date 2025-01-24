@@ -11,7 +11,6 @@ use crate::{run_keyboard, CONNECTION_STATE};
 use core::cell::RefCell;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use esp_idf_svc::hal::task::block_on;
 
 /// Initialize and run the BLE keyboard service, with given keyboard usb config.
 /// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
@@ -64,12 +63,6 @@ pub(crate) async fn run_esp_ble_keyboard<
         let led_reader = ble_server.get_led_reader();
 
         let disconnect = BleServer::wait_for_disconnection(ble_server.server);
-
-        ble_server.output_vial.lock().on_write(|args| {
-            let data: &[u8] = args.recv_data();
-            debug!("BLE received {} {=[u8]:#X}", data.len(), data);
-            block_on(VIAL_READ_CHANNEL.send(unsafe { *(data.as_ptr() as *const [u8; 32]) }));
-        });
 
         run_keyboard(
             keymap,
