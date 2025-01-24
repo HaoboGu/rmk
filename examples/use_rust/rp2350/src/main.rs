@@ -64,6 +64,11 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
+        ..Default::default()
+    };
+
     // Start serving
     // Use `run_rmk` for blocking flash
     run_rmk_with_async_flash(
