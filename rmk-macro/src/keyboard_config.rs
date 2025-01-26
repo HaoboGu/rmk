@@ -477,7 +477,11 @@ impl KeyboardConfig {
 
 pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStream2> {
     // Read keyboard config file at project root
-    let s = match fs::read_to_string("keyboard.toml") {
+    let config_toml_path = std::env::var("KEYBOARD_TOML_PATH").expect(
+        "\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n",
+    );
+
+    let s = match fs::read_to_string(config_toml_path) {
         Ok(s) => s,
         Err(e) => {
             let msg = format!("Read keyboard config file `keyboard.toml` error: {}", e);

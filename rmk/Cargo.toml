@@ -75,6 +75,11 @@ esp-idf-svc = { version = "0.51", default-features = false, features = [
 # Document feature
 document-features = "0.2"
 
+[build-dependencies]
+toml = "0.8"
+serde = "1.0"
+serde_derive = "1.0"
+
 [package.metadata.docs.rs]
 features = ["split"]
 
