@@ -159,8 +159,8 @@ impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> 
         PIO::Interrupt::set_priority(Priority::P0);
         PIO::regs().irqs(0).inte().write(|i| {
             i.set_sm0(true);
-            i.set_sm1(true);
-            i.set_sm2(true);
+            i.set_sm1(!self.full_duplex);
+            i.set_sm2(!self.full_duplex);
             i.set_sm1_rxnempty(true);
         });
         PIO::Interrupt::unpend();
