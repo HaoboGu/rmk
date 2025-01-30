@@ -16,7 +16,7 @@ use embassy_rp::{
 use panic_probe as _;
 use rmk::split::{
     peripheral::run_rmk_split_peripheral,
-    RP::uart::{BufferedHalfDuplexUart, UartInterruptHandler},
+    RP::uart::{BufferedUart, UartInterruptHandler},
     SPLIT_MESSAGE_MAX_SIZE,
 };
 use static_cell::StaticCell;
@@ -36,11 +36,9 @@ async fn main(_spawner: Spawner) {
     let (input_pins, output_pins) =
         config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
 
-    static TX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_instance = BufferedHalfDuplexUart::new(p.PIO0, p.PIN_1, tx_buf, rx_buf, Irqs);
+    let uart_instance = BufferedUart::new_half_duplex(p.PIO0, p.PIN_1, rx_buf, Irqs);
 
     // Start serving
     run_rmk_split_peripheral::<Input<'_>, Output<'_>, _, 2, 2>(

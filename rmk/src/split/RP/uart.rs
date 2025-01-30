@@ -80,19 +80,44 @@ impl<T: Instance> UartPioAccess for T {
     }
 }
 
-pub struct BufferedHalfDuplexUart<'a, PIO: Instance + UartPioAccess> {
-    pin: Pin<'a, PIO>,
+pub struct BufferedUart<'a, PIO: Instance + UartPioAccess, PIN: PioPin> {
+    full_duplex: bool,
+    pin_rx: Pin<'a, PIO>,
+    pin_tx: Option<Pin<'a, PIO>>,
     common: Common<'a, PIO>,
     sm_tx: StateMachine<'a, PIO, 0>,
     sm_rx: StateMachine<'a, PIO, 1>,
+    _phantom: PhantomData<PIN>,
 }
 
-impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
-    pub fn new(
+impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> {
+    pub fn new_half_duplex(
         pio: impl Peripheral<P = PIO> + 'a,
-        pin: impl PioPin,
+        pin: impl Peripheral<P = PIN> + 'a,
+        rx_buf: &mut [u8],
+        irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
+    ) -> Self {
+        Self::new(pio, pin, None::<PIN>, rx_buf, None, false, irq)
+    }
+
+    pub fn new_full_duplex(
+        pio: impl Peripheral<P = PIO> + 'a,
+        pin_tx: impl Peripheral<P = PIN> + 'a,
+        pin_rx: impl Peripheral<P = PIN> + 'a,
         tx_buf: &mut [u8],
         rx_buf: &mut [u8],
+        irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
+    ) -> Self {
+        Self::new(pio, pin_tx, Some(pin_rx), rx_buf, Some(tx_buf), true, irq)
+    }
+
+    fn new(
+        pio: impl Peripheral<P = PIO> + 'a,
+        pin_rx: impl Peripheral<P = PIN> + 'a,
+        pin_tx: Option<impl Peripheral<P = PIN> + 'a>,
+        rx_buf: &mut [u8],
+        tx_buf: Option<&mut [u8]>,
+        full_duplex: bool,
         _irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
     ) -> Self {
         let Pio {
@@ -102,12 +127,34 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
             ..
         } = Pio::new(pio, IrqBinding);
 
-        let pio_pin = common.make_pio_pin(pin);
+        let pio_pin_rx = common.make_pio_pin(pin_rx);
+        let pio_pin_tx = pin_tx.map(|pin| common.make_pio_pin(pin));
 
         let buffer = PIO::uart_buffer();
         unsafe { buffer.buf_rx.init(rx_buf.as_mut_ptr(), rx_buf.len()) };
-        unsafe { buffer.buf_tx.init(tx_buf.as_mut_ptr(), tx_buf.len()) };
+        if let Some(buf) = tx_buf {
+            unsafe { buffer.buf_tx.init(buf.as_mut_ptr(), buf.len()) };
+        }
 
+        let mut uart = Self {
+            full_duplex,
+            pin_rx: pio_pin_rx,
+            pin_tx: pio_pin_tx,
+            common,
+            sm_tx,
+            sm_rx,
+            _phantom: PhantomData,
+        };
+
+        uart.setup_interrupts();
+        uart.setup_pins();
+        uart.setup_sm_tx();
+        uart.setup_sm_rx();
+
+        uart
+    }
+
+    fn setup_interrupts(&self) {
         PIO::Interrupt::disable();
         PIO::Interrupt::set_priority(Priority::P0);
         PIO::regs().irqs(0).inte().write(|i| {
@@ -118,30 +165,21 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
         });
         PIO::Interrupt::unpend();
         unsafe { PIO::Interrupt::enable() };
-
-        let mut uart = Self {
-            pin: pio_pin,
-            common,
-            sm_tx,
-            sm_rx,
-        };
-
-        uart.setup_pin();
-        uart.setup_sm_tx();
-        uart.setup_sm_rx();
-
-        uart
     }
 
-    fn setup_pin(&mut self) {
-        rp_pac::IO_BANK0
-            .gpio(self.pin.pin() as _)
-            .ctrl()
-            .modify(|f| f.set_oeover(Oeover::INVERT));
-        self.pin.set_schmitt(true);
-        self.pin.set_pull(Pull::Up);
-        self.pin.set_slew_rate(SlewRate::Fast);
-        self.pin.set_drive_strength(Drive::_12mA);
+    fn setup_pins(&mut self) {
+        let pins = [Some(&mut self.pin_rx), self.pin_tx.as_mut()];
+
+        for pin in pins.into_iter().flatten() {
+            rp_pac::IO_BANK0
+                .gpio(pin.pin() as _)
+                .ctrl()
+                .modify(|f| f.set_oeover(Oeover::INVERT));
+            pin.set_schmitt(true);
+            pin.set_pull(Pull::Up);
+            pin.set_slew_rate(SlewRate::Fast);
+            pin.set_drive_strength(Drive::_12mA);
+        }
     }
 
     fn setup_sm_tx(&mut self) {
@@ -155,9 +193,11 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
             ".wrap",
         );
 
+        let pin_tx = self.pin_tx.as_ref().unwrap_or(&self.pin_rx);
+
         let mut cfg = Config::default();
-        cfg.use_program(&self.common.load_program(&prg.program), &[&self.pin]);
-        cfg.set_out_pins(&[&self.pin]);
+        cfg.use_program(&self.common.load_program(&prg.program), &[pin_tx]);
+        cfg.set_out_pins(&[pin_tx]);
         let div = clk_sys_freq() / (BAUD_RATE as u32 * 8u32);
         cfg.clock_divider = div.to_fixed();
         cfg.shift_out.auto_fill = false;
@@ -165,6 +205,14 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
         cfg.shift_out.threshold = 32;
         cfg.fifo_join = FifoJoin::TxOnly;
         self.sm_tx.set_config(&cfg);
+
+        // OEOVER set to INVERT, Direction::Out inverted to Direction:In
+        self.sm_tx.set_pin_dirs(Direction::Out, &[pin_tx]);
+        self.sm_tx.set_pins(Level::Low, &[pin_tx]);
+
+        if self.full_duplex {
+            self.sm_tx.set_enable(true);
+        }
     }
 
     fn setup_sm_rx(&mut self) {
@@ -197,8 +245,8 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
 
         let mut cfg = Config::default();
         cfg.use_program(&self.common.load_program(&prg.program), &[]);
-        cfg.set_in_pins(&[&self.pin]);
-        cfg.set_jmp_pin(&self.pin);
+        cfg.set_in_pins(&[&self.pin_rx]);
+        cfg.set_jmp_pin(&self.pin_rx);
         let div = clk_sys_freq() / (BAUD_RATE as u32 * 8u32);
         cfg.clock_divider = div.to_fixed();
         cfg.shift_in.auto_fill = false;
@@ -208,8 +256,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
         self.sm_rx.set_config(&cfg);
 
         // OEOVER set to INVERT, Direction::Out inverted to Direction:In
-        self.sm_rx.set_pin_dirs(Direction::Out, &[&self.pin]);
-        self.sm_tx.set_pins(Level::Low, &[&self.pin]);
+        self.sm_rx.set_pin_dirs(Direction::Out, &[&self.pin_rx]);
 
         self.sm_rx.set_enable(true);
     }
@@ -275,33 +322,43 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedHalfDuplexUart<'a, PIO> {
         if buf.is_empty() {
             return Ok(0);
         }
-        self.write_ring(buf);
-        if !self.sm_tx.is_enabled() {
-            self.enable_sm_tx().await;
+        if self.full_duplex {
+            let result = self.write_ring(buf);
+            PIO::regs()
+                .irqs(0)
+                .inte()
+                .modify(|i| i.set_sm0_txnfull(true));
+            return result;
+        } else {
+            if !self.sm_tx.is_enabled() {
+                self.enable_sm_tx().await;
+            }
+            let result = self.write_fifo(buf).await;
+            self.enable_sm_rx().await;
+            return result;
         }
-        let result = self.write_fifo().await;
-        self.enable_sm_rx().await;
-        result
     }
 
-    fn write_ring(&self, buf: &[u8]) -> () {
+    fn write_ring(&self, buf: &[u8]) -> Result<usize, Error> {
         let mut writer = unsafe { PIO::uart_buffer().buf_tx.writer() };
-        for &byte in buf.iter() {
-            writer.push_one(byte);
-        }
-    }
-
-    async fn write_fifo(&mut self) -> Result<usize, Error> {
-        let mut reader = unsafe { PIO::uart_buffer().buf_tx.reader() };
-        let mut n = 0;
-        while let Some(byte) = reader.pop_one() {
-            self.wait_push(byte as u32).await;
-            n += 1;
-        }
+        let data = writer.push_slice();
+        let n = data.len().min(buf.len());
+        data[..n].copy_from_slice(&buf[..n]);
+        writer.push_done(n);
         Ok(n)
     }
 
-    fn wait_push<'b>(&'b mut self, byte: u32) -> impl Future<Output = ()> + 'b + use<'b, 'a, PIO> {
+    async fn write_fifo(&mut self, buf: &[u8]) -> Result<usize, Error> {
+        for byte in buf {
+            self.wait_push(*byte as u32).await;
+        }
+        Ok(buf.len())
+    }
+
+    fn wait_push<'b>(
+        &'b mut self,
+        byte: u32,
+    ) -> impl Future<Output = ()> + 'b + use<'b, 'a, PIO, PIN> {
         poll_fn(move |cx| {
             if self.sm_tx.tx().try_push(byte) {
                 return Poll::Ready(());
@@ -342,9 +399,7 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
                 let rx_buf = writer.push_slice();
                 if rx_buf.len() > 0 {
                     let mut n = 0;
-                    while (pio.fstat().read().rxempty() & STATUS_SM1_RX_BIT as u8) == 0
-                        && n < rx_buf.len()
-                    {
+                    while (pio.fstat().read().rxempty() & 1 << 1 as u8) == 0 && n < rx_buf.len() {
                         let byte = pio.rxf(1).read();
                         rx_buf[n] = (byte >> 24) as u8;
                         n += 1;
@@ -358,11 +413,33 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
         if ints & STATUS_SM0_TX_BIT != 0 {
             // TX_SM FIFO Not Full
             PIO::Interrupt::unpend();
-            PIO::regs()
-                .irqs(0)
-                .inte()
-                .modify(|i| i.set_sm0_txnfull(false));
-            PIO::uart_buffer().waker_tx.wake();
+            if PIO::uart_buffer().buf_tx.is_available() {
+                // Full-Duplex Mode
+                if !PIO::uart_buffer().buf_tx.is_full() {
+                    let mut reader = unsafe { PIO::uart_buffer().buf_tx.reader() };
+                    let tx_buf = reader.pop_slice();
+                    let mut n = 0;
+                    while (pio.fstat().read().txfull() & 1 << 0 as u8) == 0 && n < tx_buf.len() {
+                        let byte = tx_buf[n];
+                        pio.txf(0).write(|f| *f = byte as u32);
+                        n += 1;
+                    }
+                    reader.pop_done(n);
+                }
+                if PIO::uart_buffer().buf_tx.is_empty() {
+                    PIO::regs()
+                        .irqs(0)
+                        .inte()
+                        .modify(|i| i.set_sm0_txnfull(false));
+                }
+            } else {
+                // Half-Duplex Mode
+                PIO::regs()
+                    .irqs(0)
+                    .inte()
+                    .modify(|i| i.set_sm0_txnfull(false));
+                PIO::uart_buffer().waker_tx.wake();
+            }
         }
         if ints & STATUS_SM_IRQ0_BIT != 0 {
             // RX_SM Invalid Stop Bit Raised IRQ 0
@@ -388,13 +465,13 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess> Read for BufferedHalfDuplexUart<'a, PIO> {
+impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> Read for BufferedUart<'a, PIO, PIN> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         self.read_buffer(buf).await
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess> Write for BufferedHalfDuplexUart<'a, PIO> {
+impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> Write for BufferedUart<'a, PIO, PIN> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         self.write_buffer(buf).await
     }
@@ -404,6 +481,6 @@ impl<'a, PIO: Instance + UartPioAccess> Write for BufferedHalfDuplexUart<'a, PIO
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess> ErrorType for BufferedHalfDuplexUart<'a, PIO> {
+impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> ErrorType for BufferedUart<'a, PIO, PIN> {
     type Error = Error;
 }

@@ -25,7 +25,7 @@ use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
         central::{run_peripheral_monitor, run_rmk_split_central},
-        RP::uart::{BufferedHalfDuplexUart, UartInterruptHandler},
+        RP::uart::{BufferedUart, UartInterruptHandler},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };
@@ -73,11 +73,9 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    static TX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
-    let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_receiver = BufferedHalfDuplexUart::new(p.PIO0, p.PIN_1, tx_buf, rx_buf, Irqs);
+    let uart_receiver = BufferedUart::new_half_duplex(p.PIO0, p.PIN_1, rx_buf, Irqs);
 
     // Start serving
     join(
