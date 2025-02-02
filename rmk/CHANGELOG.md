@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2025-01-22
+
+### Added
+
+- `defmt` feature gate
+- rp2350 example
+- Added `_matrix` functions to allow passing custom matrix implementation
+
+### Changed
+
+- Make more modules public
+- Update embassy dependencies to latest
+- Improve robustness of serial communication between splits
+
+### Fixed
+
+- Record positions of triggered keys, fix key stuck 
+- Remove invalid PHY type setting between splits
+- Receive keys from peripheral when there's no connection
+- Always sync the connection state to fix the unexpected lost of peripherals
+- Fix link scripts which are broken after flip-link updated
+- Remove `block_on` to prevent unexpected hang on the periphrals
+
 ## [0.5.1] - 2025-01-02
 
 ### Added

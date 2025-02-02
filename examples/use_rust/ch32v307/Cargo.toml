@@ -13,8 +13,7 @@ ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "3ccf0c8", featu
     "highcode",
     "time-driver-tim1",
 ] }
-embassy-executor = { version = "0.6.0", features = [
-    "integrated-timers",
+embassy-executor = { version = "0.7.0", features = [
     "arch-spin",
     "task-arena-size-32768",
     "executor-thread",
@@ -22,7 +21,7 @@ embassy-executor = { version = "0.6.0", features = [
 static_cell = "2"
 critical-section = "1.2.0"
 
-embassy-time = "0.3.2"
+embassy-time = "0.4"
 embassy-usb = "0.3.0"
 nb = "1.1.0"
 
