@@ -80,30 +80,33 @@ impl<T: Instance> UartPioAccess for T {
     }
 }
 
-pub struct BufferedUart<'a, PIO: Instance + UartPioAccess, PIN: PioPin> {
+pub struct BufferedUart<'a, PIO: Instance + UartPioAccess> {
     full_duplex: bool,
     pin_rx: Pin<'a, PIO>,
     pin_tx: Option<Pin<'a, PIO>>,
     common: Common<'a, PIO>,
     sm_tx: StateMachine<'a, PIO, 0>,
     sm_rx: StateMachine<'a, PIO, 1>,
-    _phantom: PhantomData<PIN>,
 }
 
-impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> {
-    pub fn new_half_duplex(
+impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
+    pub fn new_half_duplex<T, P>(
         pio: impl Peripheral<P = PIO> + 'a,
-        pin: impl Peripheral<P = PIN> + 'a,
+        pin: T,
         rx_buf: &mut [u8],
         irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
-    ) -> Self {
-        Self::new(pio, pin, None::<PIN>, rx_buf, None, false, irq)
+    ) -> Self
+    where
+        T: Peripheral<P = P> + 'a,
+        P: PioPin,
+    {
+        Self::new(pio, pin, None::<T>, rx_buf, None, false, irq)
     }
 
     pub fn new_full_duplex(
         pio: impl Peripheral<P = PIO> + 'a,
-        pin_tx: impl Peripheral<P = PIN> + 'a,
-        pin_rx: impl Peripheral<P = PIN> + 'a,
+        pin_tx: impl Peripheral<P = impl PioPin> + 'a,
+        pin_rx: impl Peripheral<P = impl PioPin> + 'a,
         tx_buf: &mut [u8],
         rx_buf: &mut [u8],
         irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
@@ -113,8 +116,8 @@ impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> 
 
     fn new(
         pio: impl Peripheral<P = PIO> + 'a,
-        pin_rx: impl Peripheral<P = PIN> + 'a,
-        pin_tx: Option<impl Peripheral<P = PIN> + 'a>,
+        pin_rx: impl Peripheral<P = impl PioPin> + 'a,
+        pin_tx: Option<impl Peripheral<P = impl PioPin> + 'a>,
         rx_buf: &mut [u8],
         tx_buf: Option<&mut [u8]>,
         full_duplex: bool,
@@ -143,7 +146,6 @@ impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> 
             common,
             sm_tx,
             sm_rx,
-            _phantom: PhantomData,
         };
 
         uart.setup_interrupts();
@@ -355,10 +357,7 @@ impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> BufferedUart<'a, PIO, PIN> 
         Ok(buf.len())
     }
 
-    fn wait_push<'b>(
-        &'b mut self,
-        byte: u32,
-    ) -> impl Future<Output = ()> + 'b + use<'b, 'a, PIO, PIN> {
+    fn wait_push<'b>(&'b mut self, byte: u32) -> impl Future<Output = ()> + 'b + use<'b, 'a, PIO> {
         poll_fn(move |cx| {
             if self.sm_tx.tx().try_push(byte) {
                 return Poll::Ready(());
@@ -465,13 +464,13 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> Read for BufferedUart<'a, PIO, PIN> {
+impl<'a, PIO: Instance + UartPioAccess> Read for BufferedUart<'a, PIO> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         self.read_buffer(buf).await
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> Write for BufferedUart<'a, PIO, PIN> {
+impl<'a, PIO: Instance + UartPioAccess> Write for BufferedUart<'a, PIO> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         self.write_buffer(buf).await
     }
@@ -481,6 +480,6 @@ impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> Write for BufferedUart<'a, 
     }
 }
 
-impl<'a, PIO: Instance + UartPioAccess, PIN: PioPin> ErrorType for BufferedUart<'a, PIO, PIN> {
+impl<'a, PIO: Instance + UartPioAccess> ErrorType for BufferedUart<'a, PIO> {
     type Error = Error;
 }
