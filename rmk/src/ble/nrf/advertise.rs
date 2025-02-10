@@ -22,7 +22,7 @@ pub(crate) fn create_advertisement_data(keyboard_name: &str) -> LegacyAdvertisem
                 "keyboard name is {} characters oversize",
                 expected - 31 /* for some reason LEGACY_PAYLOAD_LEN is private */
             )
-        });
+        })
 }
 
 pub(crate) static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
