@@ -6,9 +6,13 @@ RMK supports multi-split keyboard, which contains at least one central board and
 
 See `examples/use_rust/rp2040_split` and for the wired split keyboard example using rp2040.
 
+See `examples/use_rust/rp2040_split_pio` for the wired split keyboard example using rp2040 and PIO serial driver.
+
 See `examples/use_rust/nrf52840_ble_split` for the wireless split keyboard example using nRF52840.
 
 See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040.
+
+See `examples/use_config/rp2040_split_pio` and for the `keyboard.toml` + wired split keyboard example using rp2040 and PIO serial driver.
 
 See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040 and a direct pin matrix.
 
@@ -133,6 +137,23 @@ serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 ```
 
+If you're using the Programmable IO (PIO) serial port with an RP2040 chip, subsitute the UART serial port interface with the PIO block, e.g. `PIO0`:
+
+```toml
+[split]
+connection = "serial"
+
+[split.central]
+..
+serial = [
+    # Half-duplex serial port using Programmable IO block PIO0
+    { instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" },
+]
+
+[[split.peripheral]]
+..
+serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
+```
 
 ## Define central and peripherals via Rust
 
@@ -209,6 +230,8 @@ Currently, the communication type indicates that how split central communicates 
 RMK uses `embedded-io-async` as the abstract layer of wired communication. Any device that implements `embedded-io-async::Read` and `embedded-io-async::Write` traits can be used as RMK split central/peripheral. The most common implementations of those traits are serial ports(UART/USART), such as `embassy_rp::uart::BufferedUart` and `embassy_stm32::usart::BufferedUart`. That unlocks many possibilities of RMK's split keyboard. For example, using different chips for central/peripheral is easy in RMK.
 
 For hardwire connection, the TRRS cable is widely used in split keyboards to connect central and peripherals. It's also compatible with UART/USART, that means RMK can be used in most existing opensource serial based split keyboard hardwares.
+
+For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::RP::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
 
 ### Wireless split
 

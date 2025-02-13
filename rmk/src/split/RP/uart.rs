@@ -80,6 +80,7 @@ impl<T: Instance> UartPioAccess for T {
     }
 }
 
+// PIO Buffered UART serial driver
 pub struct BufferedUart<'a, PIO: Instance + UartPioAccess> {
     full_duplex: bool,
     pin_rx: Pin<'a, PIO>,
@@ -90,6 +91,18 @@ pub struct BufferedUart<'a, PIO: Instance + UartPioAccess> {
 }
 
 impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
+    /// Create a new half-duplex 'BufferedUart' serial driver instance
+    ///
+    /// # Arguments
+    ///
+    /// * `pio` - Programmable IO (PIO) block peripheral
+    /// * `pin` - RX/TX pin
+    /// * `rx_buf` - RX buffer
+    /// * `irq` - Interrupt handler binding
+    /// 
+    /// # Returns
+    /// 
+    /// A new instance of 'BufferedUart' driver
     pub fn new_half_duplex<T, P>(
         pio: impl Peripheral<P = PIO> + 'a,
         pin: T,
@@ -103,6 +116,20 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         Self::new(pio, pin, None::<T>, rx_buf, None, false, irq)
     }
 
+    /// Create a new full-duplex 'BufferedUart' serial driver instance
+    ///
+    /// # Arguments
+    ///
+    /// * `pio` - Programmable IO (PIO) block peripheral
+    /// * `pin_tx` - TX pin
+    /// * `pin_rx` - RX pin
+    /// * `tx_buf` - TX buffer
+    /// * `rx_buf` - RX buffer
+    /// * `irq` - Interrupt handler binding
+    /// 
+    /// # Returns
+    /// 
+    /// A new instance of 'BufferedUart' driver
     pub fn new_full_duplex(
         pio: impl Peripheral<P = PIO> + 'a,
         pin_tx: impl Peripheral<P = impl PioPin> + 'a,
