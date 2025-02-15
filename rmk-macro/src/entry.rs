@@ -120,7 +120,7 @@ pub(crate) fn rmk_entry_direct_pin(keyboard_config: &KeyboardConfig) -> TokenStr
             .await;
         },
         ChipSeries::Esp32 => quote! {
-            ::esp_idf_svc::hal::task::block_on(::rmk::direct_pin::run_rmk_direct_pin::<_, ::esp_idf_svc::hal::gpio::Output, ROW, COL, SIZE, NUM_LAYER>(
+            ::esp_idf_svc::hal::task::block_on(::rmk::direct_pin::run_rmk_direct_pin::<_, ::esp_idf_svc::hal::gpio::PinDriver<AnyOutputPin, Output>, ROW, COL, SIZE, NUM_LAYER>(
                 direct_pins,
                 &mut get_default_keymap(),
                 keyboard_config,
