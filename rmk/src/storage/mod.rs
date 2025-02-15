@@ -581,9 +581,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 match item {
                     StorageData::KeymapKey(key) => {
                         if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
-                            assert!(key.layer < NUM_LAYER);
-                            assert!(key.row < ROW);
-                            assert!(key.col < COL);
                             keymap[key.layer][key.row][key.col] = key.action;
                         }
                     }
