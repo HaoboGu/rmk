@@ -4,7 +4,7 @@ product_name = "RMK Keyboard"
 vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
-chip = "stm32f103c8"
+chip = "stm32f103cb"
 
 [matrix]
 # Input and output pins are mandatory
