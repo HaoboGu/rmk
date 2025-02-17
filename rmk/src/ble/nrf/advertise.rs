@@ -1,5 +1,5 @@
 use nrf_softdevice::ble::advertisement_builder::{
-    AdvertisementDataType, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
+    AdvertisementDataType, Error, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
     ServiceList, ServiceUuid16,
 };
 
@@ -16,7 +16,13 @@ pub(crate) fn create_advertisement_data(keyboard_name: &str) -> LegacyAdvertisem
         .full_name(keyboard_name)
         // Change the appearance (icon of the bluetooth device) to a keyboard
         .raw(AdvertisementDataType::APPEARANCE, &[0xC1, 0x03])
-        .build()
+        .try_build()
+        .unwrap_or_else(|Error::Oversize { expected }| {
+            panic!(
+                "keyboard name is {} characters oversize",
+                expected - 31 /* for some reason LEGACY_PAYLOAD_LEN is private */
+            )
+        })
 }
 
 pub(crate) static SCAN_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
