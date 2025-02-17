@@ -22,6 +22,7 @@ fn main() {
     let default_config: StaticConfig =
         toml::from_str(&s).expect("Parse `default_config.toml` error");
 
+    // TODO: Don't panic when there's no `toml`, aka using Rust
     let toml_path = std::env::var("KEYBOARD_TOML_PATH").expect(
         "\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n",
     );
@@ -37,5 +38,5 @@ fn main() {
     // Parse keyboard config file content to `KeyboardTomlConfig`
     // let toml_config: KeyboardTomlConfig = toml::from_str(&s).expect("Parse `keyboard.toml` error");
 
-    panic!("num_macro: {}", default_config.num_macros);
+    // panic!("num_macro: {}", default_config.num_macros);
 }
