@@ -378,17 +378,6 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'a, 'd, D> {
             .map_err(|e| HidError::UsbEndpointError(e))?;
         Ok(32)
     }
-
-    async fn run_writer(&mut self) {
-        loop {
-            // Do nothing?
-            core::future::pending().await
-        }
-    }
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        todo!()
-    }
 }
 
 impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'a, 'd, D> {

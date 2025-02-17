@@ -167,10 +167,6 @@ impl<'a> BleVialReaderWriter<'a> {
 impl HidWriterTrait for BleVialReaderWriter<'_> {
     type ReportType = ViaReport;
 
-    async fn get_report(&mut self) -> Self::ReportType {
-        todo!()
-    }
-
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         use ssmarshal::serialize;
         let mut buf: [u8; 32] = [0; 32];

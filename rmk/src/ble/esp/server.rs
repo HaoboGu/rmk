@@ -17,7 +17,7 @@ use crate::{
     },
     channel::{KEYBOARD_REPORT_CHANNEL, LED_CHANNEL},
     config::KeyboardUsbConfig,
-    hid::{HidError, HidReaderTrait, HidWriterTrait, Report},
+    hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
     light::LedIndicator,
     usb::descriptor::ViaReport,
     CONNECTION_STATE,
@@ -32,12 +32,14 @@ pub(crate) struct BleKeyboardWriter {
     pub(crate) mouse_handle: Arc<Mutex<BLECharacteristic>>,
 }
 
-impl HidWriterTrait for BleKeyboardWriter {
-    type ReportType = Report;
-
+impl RunnableHidWriter for BleKeyboardWriter {
     async fn get_report(&mut self) -> Self::ReportType {
         KEYBOARD_REPORT_CHANNEL.receive().await
     }
+}
+
+impl HidWriterTrait for BleKeyboardWriter {
+    type ReportType = Report;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         match report {
@@ -124,10 +126,6 @@ impl HidReaderTrait for BleVialReaderWriter {
 
 impl HidWriterTrait for BleVialReaderWriter {
     type ReportType = ViaReport;
-
-    async fn get_report(&mut self) -> Self::ReportType {
-        todo!()
-    }
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buf = [0u8; 32];

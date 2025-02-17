@@ -11,7 +11,7 @@ mod vial_service;
 use self::server::BleServer;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
-use crate::hid::{DummyWriter, HidWriterTrait};
+use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::input_device::InputProcessor as _;
 use crate::light::LightController;
 use crate::matrix::MatrixTrait;

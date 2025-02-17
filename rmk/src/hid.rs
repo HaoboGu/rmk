@@ -39,6 +39,15 @@ pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
     type ReportType: AsInputReport;
 
+    /// Write report to the host, return the number of bytes written if success.
+    fn write_report(
+        &mut self,
+        report: Self::ReportType,
+    ) -> impl Future<Output = Result<usize, HidError>>;
+}
+
+/// Runnable writer
+pub trait RunnableHidWriter: HidWriterTrait {
     /// Get the report to be sent to the host
     fn get_report(&mut self) -> impl Future<Output = Self::ReportType>;
 
@@ -58,12 +67,6 @@ pub trait HidWriterTrait {
             }
         }
     }
-
-    /// Write report to the host, return the number of bytes written if success.
-    fn write_report(
-        &mut self,
-        report: Self::ReportType,
-    ) -> impl Future<Output = Result<usize, HidError>>;
 }
 
 /// HidListener trait is used for listening to HID messages from the host, via USB, BLE, etc.
@@ -89,11 +92,17 @@ impl HidWriterTrait for DummyWriter {
             core::future::pending().await
         }
     }
+}
 
-    async fn get_report(&mut self) -> Self::ReportType {
+impl RunnableHidWriter for DummyWriter {
+    async fn run_writer(&mut self) -> () {
         loop {
             // Wait forever
             core::future::pending().await
         }
+    }
+
+    async fn get_report(&mut self) -> Self::ReportType {
+        panic!("`get_report` in Dummy writer should not be used");
     }
 }

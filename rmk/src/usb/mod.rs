@@ -15,7 +15,7 @@ use usbd_hid::descriptor::SerializedDescriptor;
 use crate::{
     channel::KEYBOARD_REPORT_CHANNEL,
     config::KeyboardUsbConfig,
-    hid::{HidError, HidWriterTrait, Report},
+    hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
     usb::descriptor::CompositeReportType,
     CONNECTION_STATE,
 };
@@ -68,6 +68,7 @@ pub(crate) async fn wait_for_usb_enabled() {
         }
     }
 }
+
 pub struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
     pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
@@ -84,12 +85,14 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
-    type ReportType = Report;
-
+impl<'a, 'd, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'a, 'd, D> {
     async fn get_report(&mut self) -> Self::ReportType {
         KEYBOARD_REPORT_CHANNEL.receive().await
     }
+}
+
+impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
+    type ReportType = Report;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         // Write report to USB

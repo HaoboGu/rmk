@@ -47,7 +47,7 @@ use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-use hid::{HidReaderTrait, HidWriterTrait};
+use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keyboard::Keyboard;
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
@@ -327,7 +327,7 @@ pub(crate) async fn run_keyboard<
     M: MatrixTrait,
     Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
     R: HidReaderTrait<ReportType = LedIndicator>,
-    W: HidWriterTrait,
+    W: RunnableHidWriter,
     Fu: Future<Output = ()>,
     F: AsyncNorFlash,
     Out: OutputPin,

@@ -2,7 +2,7 @@ use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::{
     ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
     channel::{KEYBOARD_REPORT_CHANNEL, LED_CHANNEL},
-    hid::{HidError, HidReaderTrait, HidWriterTrait, Report},
+    hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
     light::LedIndicator,
 };
 use nrf_softdevice::{
@@ -258,12 +258,14 @@ impl<'a> BleKeyboardWriter<'a> {
     }
 }
 
-impl HidWriterTrait for BleKeyboardWriter<'_> {
-    type ReportType = Report;
-
+impl RunnableHidWriter for BleKeyboardWriter<'_> {
     async fn get_report(&mut self) -> Self::ReportType {
         KEYBOARD_REPORT_CHANNEL.receive().await
     }
+}
+
+impl HidWriterTrait for BleKeyboardWriter<'_> {
+    type ReportType = Report;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         match report {
