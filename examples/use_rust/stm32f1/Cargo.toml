@@ -15,7 +15,7 @@ cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
 embassy-stm32 = { version = "0.2", features = [
-    "stm32f103c8",
+    "stm32f103cb",
     "defmt",
     "memory-x",
     "time-driver-any",
