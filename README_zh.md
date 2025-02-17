@@ -46,6 +46,8 @@
 
 ```shell
 cargo install rmkit flip-link
+# 如果你在Windows下安装rmkit报错，那么可以尝试改用下面的命令安装:
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
