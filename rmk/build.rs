@@ -4,6 +4,11 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    // Ensure build.rs is re-run if files change
+    // println!("cargo:rerun-if-changed=NEVER_EXISTS");
+    println!("cargo:rerun-if-changed=.git/HEAD");
+    println!("cargo:rerun-if-changed=build.rs");
+
     // Get the short hash of the latest Git commit. If it fails, use "unknown"
     let commit_id = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
@@ -35,7 +40,4 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, contents).expect("Failed to write build identifier");
 
-    // Ensure build.rs is re-run if files change
-    println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=build.rs");
 }
