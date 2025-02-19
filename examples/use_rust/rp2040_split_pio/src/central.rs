@@ -25,7 +25,7 @@ use rmk::{
     config::{KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
         central::{run_peripheral_monitor, run_rmk_split_central},
-        RP::uart::{BufferedUart, UartInterruptHandler},
+        rp::uart::{BufferedUart, UartInterruptHandler},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };

@@ -231,7 +231,7 @@ RMK uses `embedded-io-async` as the abstract layer of wired communication. Any d
 
 For hardwire connection, the TRRS cable is widely used in split keyboards to connect central and peripherals. It's also compatible with UART/USART, that means RMK can be used in most existing opensource serial based split keyboard hardwares.
 
-For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::RP::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
+For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::rp::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
 
 To use the the PIO UART driver feature, you need to enable the `rp2040_pio` feature gate in your `Cargo.toml`:
 

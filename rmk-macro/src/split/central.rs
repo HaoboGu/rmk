@@ -466,7 +466,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                         let uart_irq = format_ident!("{}_IRQ_0", s.instance);
                         let instance_init = if s.rx_pin.eq(&s.tx_pin) {
                             quote! {
-                                let #uart_name = ::rmk::split::RP::uart::BufferedUart::new_half_duplex(
+                                let #uart_name = ::rmk::split::rp::uart::BufferedUart::new_half_duplex(
                                     p.#uart_instance,
                                     p.#rx_pin,
                                     #rx_buf_name,
@@ -475,7 +475,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                             }
                         } else {
                             quote! {
-                                let #uart_name = ::rmk::split::RP::uart::BufferedUart::new_full_duplex(
+                                let #uart_name = ::rmk::split::rp::uart::BufferedUart::new_full_duplex(
                                     p.#uart_instance,
                                     p.#tx_pin,
                                     p.#rx_pin,
@@ -487,7 +487,7 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                         };
                         quote! {
                             ::embassy_rp::bind_interrupts!(struct #irq_name {
-                                #uart_irq => ::rmk::split::RP::uart::UartInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
+                                #uart_irq => ::rmk::split::rp::uart::UartInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
                             });
                             #instance_init
                         }

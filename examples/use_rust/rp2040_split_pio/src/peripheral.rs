@@ -16,7 +16,7 @@ use embassy_rp::{
 use panic_probe as _;
 use rmk::split::{
     peripheral::run_rmk_split_peripheral,
-    RP::uart::{BufferedUart, UartInterruptHandler},
+    rp::uart::{BufferedUart, UartInterruptHandler},
     SPLIT_MESSAGE_MAX_SIZE,
 };
 use static_cell::StaticCell;
