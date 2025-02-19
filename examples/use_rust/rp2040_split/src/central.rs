@@ -25,7 +25,7 @@ use panic_probe as _;
 use rmk::{
     config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     split::{
-        central::{run_peripheral_monitor, run_rmk_split_central},
+        central::{run_peripheral_manager, run_rmk_split_central},
         SPLIT_MESSAGE_MAX_SIZE,
     },
 };
@@ -115,7 +115,7 @@ async fn main(spawner: Spawner) {
             keyboard_config,
             spawner,
         ),
-        run_peripheral_monitor::<2, 1, 2, 2, _>(0, uart_receiver),
+        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
     )
     .await;
 }
