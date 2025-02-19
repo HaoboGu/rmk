@@ -69,11 +69,11 @@ jobs:
     if: needs.get_chip_name.outputs.chip_name == 'esp32c3' || needs.get_chip_name.outputs.chip_name == 'esp32s3' || needs.get_chip_name.outputs.chip_name == 'esp32c6'
     steps:
       - uses: cargo-bins/cargo-binstall@main
-      - name: Install rmkit and espflash
-        run: cargo binstall rmkit espflash -y
       - uses: actions/checkout@v3
       - name: Install libssl
         run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      - name: Install rmkit and espflash
+        run: cargo binstall rmkit espflash -y
       - name: Prepare esp environment
         run: |
           cargo binstall ldproxy espup -y
