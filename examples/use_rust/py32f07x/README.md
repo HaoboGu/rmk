@@ -6,8 +6,6 @@ Driven by the [py32-hal](https://github.com/py32-rs/py32-hal) and [musb](https:/
 
 The py32f07x has only 16KB of RAM. To make the most of this limited memory, we are using the [`nightly`](https://docs.embassy.dev/embassy-executor/git/std/index.html#task-arena) feature of [embassy_executor](https://docs.embassy.dev/embassy-executor/git/std/index.html).
 
-While [py32-hal](https://github.com/py32-rs/py32-hal) supports flash read and write, adding flash increases stack memory usage significantly, causing the program to fail to run. This example does not use flash and thus cannot store modified information.
-
 ## Memory Issues
 
 In this example, the `codegen-units` in the Cargo.toml profile is set to 8.
