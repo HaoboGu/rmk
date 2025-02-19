@@ -9,6 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::ble::led::BleLedReader;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
 use crate::hid::{DummyWriter, RunnableHidWriter};
@@ -36,7 +37,6 @@ use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::FnvIndexMap;
-use hid_service::BleLedReader;
 use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
 use nrf_softdevice::ble::{PhySet, PhyUpdateError, TxPower};
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;

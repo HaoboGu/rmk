@@ -47,14 +47,6 @@ pub trait InputDevice<const EVENT_CHANNEL_SIZE: usize = 16> {
     /// Event type that input device will send
     type EventType;
 
-    /// The number of required channel size
-    // FIXME: it's not possible in stable to define an associated const and use it as the channel size in stable Rust.
-    // It requires #[feature(generic_const_exprs)]:
-    //
-    // `fn event_sender(..) -> &Channel<RawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
-    // So this size is commented out
-    // const EVENT_CHANNEL_SIZE: usize = 32;
-
     /// Starts the input device task.
     ///
     /// This asynchronous method should contain the main logic for the input device.

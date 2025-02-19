@@ -14,8 +14,9 @@ use crate::{
     ble::{
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
+        led::BleLedReader,
     },
-    channel::{KEYBOARD_REPORT_CHANNEL, LED_CHANNEL},
+    channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL},
     config::KeyboardUsbConfig,
     hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
     light::LedIndicator,
@@ -86,20 +87,6 @@ impl BleKeyboardWriter {
         handle.lock().set_value(report).notify();
         Timer::after_millis(7).await;
         Ok(())
-    }
-}
-
-pub(crate) struct BleLedReader {
-    pub(crate) keyboard_output_handle: Arc<Mutex<BLECharacteristic>>,
-}
-
-impl HidReaderTrait for BleLedReader {
-    type ReportType = LedIndicator;
-
-    // ESP BLE provides only a blocking callback function for reading data.
-    // So we use a channel to do async read
-    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
-        Ok(LED_CHANNEL.receive().await)
     }
 }
 
@@ -251,13 +238,11 @@ impl BleServer {
             let data: &[u8] = args.recv_data();
             debug!("BLE received LED, len: {} {=[u8]:#X}", data.len(), data);
             if data.len() > 0 {
-                // Send the first byte to the LED_CHANNEL
-                block_on(LED_CHANNEL.send(LedIndicator::from_bits(data[0])));
+                // Send the first byte to the LED_SIGNAL
+                LED_SIGNAL.signal(LedIndicator::from_bits(data[0]));
             }
         });
-        BleLedReader {
-            keyboard_output_handle: self.output_keyboard.clone(),
-        }
+        BleLedReader {}
     }
 
     pub(crate) fn get_keyboard_writer(&self) -> BleKeyboardWriter {

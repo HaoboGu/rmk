@@ -87,10 +87,7 @@ impl HidWriterTrait for DummyWriter {
     type ReportType = Report;
 
     async fn write_report(&mut self, _report: Self::ReportType) -> Result<usize, HidError> {
-        loop {
-            // Wait forever
-            core::future::pending().await
-        }
+        Ok(0)
     }
 }
 

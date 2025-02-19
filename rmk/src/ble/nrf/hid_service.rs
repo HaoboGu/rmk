@@ -1,8 +1,8 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::{
     ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
-    channel::{KEYBOARD_REPORT_CHANNEL, LED_CHANNEL},
-    hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
+    channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL},
+    hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
     light::LedIndicator,
 };
 use nrf_softdevice::{
@@ -188,13 +188,7 @@ impl gatt_server::Service for HidService {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             let led_indicator = LedIndicator::from_bits(data[0]);
             info!("HID output keyboard: {:?}", led_indicator);
-            // Retry 3 times in case the channel is full(which is really rare)
-            for _i in 0..3 {
-                match LED_CHANNEL.try_send(led_indicator) {
-                    Ok(_) => break,
-                    Err(e) => warn!("LED channel full, retrying: {:?}", e),
-                }
-            }
+            LED_SIGNAL.signal(led_indicator);
             Some(HidServiceEvent::OutputKeyboard)
         } else {
             None
@@ -211,16 +205,6 @@ pub(crate) enum HidServiceEvent {
     InputMouseKeyCccdWrite,
     InputSystemKeyCccdWrite,
     OutputKeyboard,
-}
-
-pub(crate) struct BleLedReader {}
-
-impl HidReaderTrait for BleLedReader {
-    type ReportType = LedIndicator;
-
-    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
-        Ok(LED_CHANNEL.receive().await)
-    }
 }
 
 pub(crate) struct BleKeyboardWriter<'a> {

@@ -5,15 +5,15 @@ use embassy_sync::channel::Channel;
 use crate::ble::nrf::profile::BleProfileAction;
 use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
-use crate::light::LedIndicator;
 use crate::storage::FlashOperationMessage;
-
+#[cfg(feature = "_ble")]
+use {crate::light::LedIndicator, embassy_sync::signal::Signal};
 pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;
 
-/// Channel for control led indicator
-/// TODO: Use Signal instead of Channel
-pub static LED_CHANNEL: Channel<RawMutex, LedIndicator, 4> = Channel::new();
+/// Signal for control led indicator, it's used only in BLE keyboards, since BLE receiving is not async
+#[cfg(feature = "_ble")]
+pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 /// Channel for key events only
 pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for all events

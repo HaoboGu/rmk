@@ -1,5 +1,6 @@
 pub(crate) mod descriptor;
 pub(crate) mod device_info;
+pub(crate) mod led;
 
 #[cfg(feature = "_esp_ble")]
 pub mod esp;
