@@ -12,21 +12,21 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk", features = ["_no_external_storage"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
-py32-hal = { version = "0.2.0", features = [
+py32-hal = { version = "0.3.0", features = [
 # py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "ecfec8f", features = [
     "py32f072c1b", 
     "memory-x", 
-    "embassy", 
-    "rt", 
+    "embassy-usb-driver-impl", 
     "time-driver-tim3"
 ] }
 embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
-    "task-arena-size-12288", # py32f072 has only 16K RAM
+    "nightly"
 ] }
 cortex-m-rt = "0.7.5"
+cortex-m = "0.7"
 portable-atomic = { version = "1.10", features = ["critical-section"] }
 defmt = "0.3"
 defmt-rtt = "0.4"
@@ -43,16 +43,21 @@ test = false
 bench = false
 
 [profile.dev]
-codegen-units = 1      # better optimizations
-debug = true
-opt-level = 1
+# This is very strange: setting codegen-units = 8 or higher reduces memory usage 
+# by 7KB compared to setting it to 1.
+# If you have any insights, feel free to reach out to me: myDecaday@outlook.com
+# For more details, check the README at examples/use_rust/py32f07x/README.md
+codegen-units = 8
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3
 overflow-checks = true
-lto = false
-panic = 'unwind'
 
 [profile.release]
-codegen-units = 1       # better optimizations
-debug = true           # no overhead for bare-metal
-opt-level = "z"         # optimize for binary size
-overflow-checks = false
-lto = "fat"
+codegen-units = 8
+debug = true
+debug-assertions = true
+incremental = false
+opt-level = 3
+overflow-checks = true

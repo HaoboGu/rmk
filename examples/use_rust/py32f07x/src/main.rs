@@ -13,8 +13,7 @@ use embassy_executor::Spawner;
 use py32_hal::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
-    rcc::{Pll, PllMul, PllSource, Sysclk},
-    time::Hertz,
+    rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk},
     usb::{Driver, InterruptHandler},
 };
 // use py32_hal::flash::Blocking;
@@ -33,8 +32,12 @@ bind_interrupts!(struct Irqs {
 async fn main(spawner: Spawner) {
     let mut cfg: py32_hal::Config = Default::default();
 
+    // print the sp register
+    let sp = cortex_m::register::msp::read();
+    defmt::info!("SP: {:x}", sp);
+
     // PY32 USB uses PLL as the clock source and can only run at 48Mhz.
-    cfg.rcc.hsi = Some(Hertz::mhz(16));
+    cfg.rcc.hsi = Some(HsiFs::HSI_16MHZ);
     cfg.rcc.pll = Some(Pll {
         src: PllSource::HSI,
         mul: PllMul::MUL3,
