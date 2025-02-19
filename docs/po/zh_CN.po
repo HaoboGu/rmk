@@ -1936,7 +1936,7 @@ msgstr ""
 
 #: src\split_keyboard.md:56
 msgid ""
-"In peripheral central, you should also run the peripheral monitor for each "
+"In peripheral central, you should also run the peripheral manager for each "
 "peripheral. This task monitors the peripheral key changes and forwards them "
 "to central core keyboard task"
 msgstr ""
@@ -2532,7 +2532,7 @@ msgstr ""
 #: src\how_to_contribute.md:41
 msgid ""
 "`KEY_EVENT_CHANNEL`: a multi-sender, single-receiver channel. The sender can "
-"be a matrix task which scans the key matrix or a split peripheral monitor "
+"be a matrix task which scans the key matrix or a split peripheral manager "
 "which receives key event from split peripheral. The receiver, i.e. keyboard "
 "task, receives the key event and processes the key"
 msgstr ""

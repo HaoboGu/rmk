@@ -219,13 +219,13 @@ pub async fn run_rmk_split_central_direct_pin<
     .await
 }
 
-/// Run central's peripheral monitor task.
+/// Run central's peripheral manager task.
 ///
 /// # Arguments
 /// * `id` - peripheral id
 /// * `addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
-pub async fn run_peripheral_monitor<
+pub async fn run_peripheral_manager<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -238,14 +238,14 @@ pub async fn run_peripheral_monitor<
 ) {
     #[cfg(feature = "_nrf_ble")]
     {
-        use crate::split::nrf::central::run_ble_peripheral_monitor;
-        run_ble_peripheral_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
+        use crate::split::nrf::central::run_ble_peripheral_manager;
+        run_ble_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
     };
 
     #[cfg(not(feature = "_nrf_ble"))]
     {
-        use crate::split::serial::run_serial_peripheral_monitor;
-        run_serial_peripheral_monitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
+        use crate::split::serial::run_serial_peripheral_manager;
+        run_serial_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
     };
 }
 

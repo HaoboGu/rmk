@@ -166,10 +166,10 @@ run_rmk_split_central::<
         )
 ```
 
-In peripheral central, you should also run the peripheral monitor for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
+In peripheral central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
 ```rust
-run_peripheral_monitor<
+run_peripheral_manager<
     2, // PERIPHERAL_ROW
     1, // PERIPHERAL_COL
     2, // PERIPHERAL_ROW_OFFSET

@@ -6,7 +6,7 @@ use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
 use crate::{
     split::{
-        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
+        driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
     RawMutex, CONNECTION_STATE,
@@ -22,7 +22,7 @@ pub(crate) struct BleSplitCentralClient {
     pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
-pub(crate) async fn run_ble_peripheral_monitor<
+pub(crate) async fn run_ble_peripheral_manager<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -49,9 +49,9 @@ pub(crate) async fn run_ble_peripheral_monitor<
     };
 
     let peripheral =
-        PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+        PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
-    info!("Running peripheral monitor {}", id);
+    info!("Running peripheral manager {}", id);
     join(peripheral.run(), run_ble_client).await;
 }
 

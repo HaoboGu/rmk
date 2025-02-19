@@ -5,7 +5,6 @@ use crate::{channel::FLASH_CHANNEL, config::StorageConfig};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use sequential_storage::{
     cache::NoCache,
@@ -414,11 +413,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
 
         storage
-    }
-
-    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
-    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
-        // Self { flash }
     }
 
     pub(crate) async fn run(&mut self) {

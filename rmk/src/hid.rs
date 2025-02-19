@@ -1,7 +1,7 @@
 /// Traits and types for HID message reporting and listening.
 use core::future::Future;
 
-use crate::{usb::descriptor::KeyboardReport, CONNECTION_STATE};
+use crate::{channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport, CONNECTION_STATE};
 use embassy_usb::{class::hid::ReadError, driver::EndpointError};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -94,8 +94,7 @@ impl HidWriterTrait for DummyWriter {
 impl RunnableHidWriter for DummyWriter {
     async fn run_writer(&mut self) -> () {
         loop {
-            // Wait forever
-            core::future::pending().await
+            let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }
     }
 

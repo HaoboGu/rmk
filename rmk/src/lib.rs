@@ -318,7 +318,7 @@ pub(crate) async fn run_rmk_internal<
         }
     }
 
-    panic!("Should never reach here, wrong feature gate combination?");
+    unreachable!("Should never reach here, wrong feature gate combination?");
 }
 
 // Run keyboard task for once

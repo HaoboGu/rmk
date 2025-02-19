@@ -570,8 +570,6 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
 
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
 // It's useful for functions like switching active profiles when there's no connection.
-// TODO: make matrix + keyboard + storage task running in the background ALWAYS,
-// add a dummy receiver preventing everything blocks
 pub(crate) async fn run_dummy_keyboard<
     'a,
     'b,

@@ -79,6 +79,7 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
         break;
     }
     yield_now().await;
-    // TODO: How to ensure that the flash operations have been completed?
+    // Wait for the flash operation to complete
+    // A signal could be used here, but for simplicity, just waiting for 1s
     embassy_time::Timer::after_secs(1).await
 }
