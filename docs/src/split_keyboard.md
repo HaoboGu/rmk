@@ -233,6 +233,15 @@ For hardwire connection, the TRRS cable is widely used in split keyboards to con
 
 For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::RP::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
 
+To use the the PIO UART driver feature, you need to enable the `rp2040_pio` feature gate in your `Cargo.toml`:
+
+```toml
+rmk = { version = "0.4", features = [
+    "split",
+    "rp2040_pio", # Enable PIO UART driver for rp2040
+] }
+```
+
 ### Wireless split
 
 RMK supports BLE wireless split on only nRF chips right now. The [BLE random static address](https://novelbits.io/bluetooth-address-privacy-ble/) for both central and peripheral should be defined.
