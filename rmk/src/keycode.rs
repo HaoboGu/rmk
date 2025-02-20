@@ -995,6 +995,11 @@ impl KeyCode {
         KeyCode::Bootloader <= self && self <= KeyCode::AltRepeatKey
     }
 
+    /// Returns `true` if the keycode is a combo keycode
+    pub(crate) fn is_combo(self) -> bool {
+        KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
+    }
+
     /// Returns `true` if the keycode is a kb keycode
     pub(crate) fn is_kb(self) -> bool {
         KeyCode::Kb0 <= self && self <= KeyCode::Kb31

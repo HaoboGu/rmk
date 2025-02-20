@@ -1,5 +1,7 @@
 use crate::{
     action::KeyAction,
+    combo::{Combo, COMBO_MAX_NUM},
+    config::BehaviorConfig,
     event::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
@@ -28,50 +30,63 @@ pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER
     layer_cache: [[u8; COL]; ROW],
     /// Macro cache
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
+    /// Combos
+    pub(crate) combos: [Combo; COMBO_MAX_NUM],
+    /// Options for configurable action behavior
+    pub(crate) behavior: BehaviorConfig,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     KeyMap<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
+    pub(crate) async fn new(
+        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        behavior: BehaviorConfig,
+    ) -> Self {
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in behavior.combo.combos.iter().enumerate() {
+            combos[i] = combo.clone();
+        }
         KeyMap {
             layers: action_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache: [0; MACRO_SPACE_SIZE],
+            combos,
+            behavior,
         }
     }
 
     pub(crate) async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER>>,
+        behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         let mut macro_cache = [0; MACRO_SPACE_SIZE];
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in behavior.combo.combos.iter().enumerate() {
+            combos[i] = combo.clone();
+        }
         if let Some(storage) = storage {
-            // Read keymap to `action_map`
-            if storage.read_keymap(action_map).await.is_err() {
-                error!("Keymap reading aborted by an error, clearing the storage...");
-                // Dont sent flash message here, since the storage task is not running yet
+            if {
+                Ok(())
+                    // Read keymap to `action_map`
+                    .and(storage.read_keymap(action_map).await)
+                    // Read combo cache
+                    .and(storage.read_macro_cache(&mut macro_cache).await)
+                    // Read macro cache
+                    .and(storage.read_combos(&mut combos).await)
+            }
+            .is_err()
+            {
+                error!("Failed to read from storage, clearing...");
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
                     .await
                     .ok();
 
                 reboot_keyboard();
-            } else {
-                // Read macro cache
-                if storage.read_macro_cache(&mut macro_cache).await.is_err() {
-                    error!("Wrong macro cache, clearing the storage...");
-                    sequential_storage::erase_all(
-                        &mut storage.flash,
-                        storage.storage_range.clone(),
-                    )
-                    .await
-                    .ok();
-
-                    reboot_keyboard();
-                }
             }
         }
 
@@ -81,6 +96,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache,
+            combos,
+            behavior,
         }
     }
 
@@ -229,7 +246,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         KeyAction::No
     }
 
-    fn get_activated_layer(&self) -> u8 {
+    pub(crate) fn get_activated_layer(&self) -> u8 {
         for (layer_idx, _) in self.layers.iter().enumerate().rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                 return layer_idx as u8;
@@ -254,10 +271,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         self.layer_cache[row][col] = layer_num;
     }
 
-    /// Update given Tri Layer state
-    pub(crate) fn update_tri_layer(&mut self, tri_layer: &[u8; 3]) {
-        self.layer_state[tri_layer[2] as usize] =
-            self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
+    /// Update Tri Layer state
+    fn update_tri_layer(&mut self) {
+        if let Some(ref tri_layer) = self.behavior.tri_layer {
+            self.layer_state[tri_layer[2] as usize] =
+                self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
+        }
     }
 
     /// Activate given layer
@@ -270,6 +289,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             return;
         }
         self.layer_state[layer_num as usize] = true;
+        self.update_tri_layer();
     }
 
     /// Deactivate given layer
@@ -282,6 +302,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             return;
         }
         self.layer_state[layer_num as usize] = false;
+        self.update_tri_layer();
     }
 
     /// Toggle given layer

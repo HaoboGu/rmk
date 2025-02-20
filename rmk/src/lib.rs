@@ -47,8 +47,12 @@ use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+pub use flash::EmptyFlashWrapper;
+use futures::pin_mut;
+pub use heapless;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
-use keyboard::Keyboard;
+use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
+pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::{Matrix, MatrixTrait};
@@ -76,6 +80,7 @@ pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 pub mod channel;
+pub mod combo;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;
@@ -203,7 +208,14 @@ pub async fn run_rmk_with_async_flash<
     };
 
     let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
-    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            default_keymap,
+            Some(&mut storage),
+            keyboard_config.behavior_config,
+        )
+        .await,
+    );
     let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config);
     let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 

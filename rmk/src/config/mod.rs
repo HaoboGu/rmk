@@ -3,6 +3,7 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
+use ::heapless::Vec;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
@@ -13,6 +14,7 @@ use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 
 use crate::{
+    combo::{Combo, COMBO_MAX_NUM},
     event::{Event, KeyEvent},
     hid::Report,
     light::LedIndicator,
@@ -134,6 +136,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+    pub combo: CombosConfig,
 }
 
 /// Configurations for tap hold behavior
@@ -166,6 +169,21 @@ impl Default for OneShotConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(1),
+        }
+    }
+}
+
+/// Config for combo behavior
+pub struct CombosConfig {
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub timeout: Duration,
+}
+
+impl Default for CombosConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_millis(50),
+            combos: Vec::new(),
         }
     }
 }
