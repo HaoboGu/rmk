@@ -47,12 +47,9 @@ use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_no_external_storage"))]
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-pub use flash::EmptyFlashWrapper;
-use futures::pin_mut;
 pub use heapless;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
-use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
-pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use keyboard::Keyboard;
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::{Matrix, MatrixTrait};
@@ -212,11 +209,11 @@ pub async fn run_rmk_with_async_flash<
         KeyMap::new_from_storage(
             default_keymap,
             Some(&mut storage),
-            keyboard_config.behavior_config,
+            rmk_config.behavior_config.clone(),
         )
         .await,
     );
-    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config);
+    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
     let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 
     // Create the debouncer, use COL2ROW by default

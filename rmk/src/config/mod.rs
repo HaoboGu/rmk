@@ -131,7 +131,7 @@ impl<'a> Default for RmkConfig<'a> {
 }
 
 /// Config for configurable action behavior
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
@@ -174,6 +174,7 @@ impl Default for OneShotConfig {
 }
 
 /// Config for combo behavior
+#[derive(Clone, Debug)]
 pub struct CombosConfig {
     pub combos: Vec<Combo, COMBO_MAX_NUM>,
     pub timeout: Duration,

@@ -1,6 +1,6 @@
-use crate::config::VialConfig;
 use crate::{
     channel::FLASH_CHANNEL,
+    config::VialConfig,
     hid::{HidError, HidReaderTrait, HidWriterTrait},
     keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
     keymap::KeyMap,
@@ -328,12 +328,15 @@ impl<
             ViaCommand::DynamicKeymapSetEncoder => {
                 warn!("Keymap set encoder -- not supported");
             }
-            ViaCommand::Vial => process_vial(
-                report,
-                self.vial_config.vial_keyboard_id,
-                self.vial_config.vial_keyboard_def,
-                keymap,
-            ),
+            ViaCommand::Vial => {
+                process_vial(
+                    report,
+                    self.vial_config.vial_keyboard_id,
+                    self.vial_config.vial_keyboard_def,
+                    keymap,
+                )
+                .await
+            }
             ViaCommand::Unhandled => {
                 info!("Unknown cmd: {}", report.output_data);
                 report.input_data[0] = ViaCommand::Unhandled as u8

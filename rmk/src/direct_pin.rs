@@ -179,8 +179,15 @@ pub async fn run_rmk_direct_pin_with_async_flash<
     };
 
     let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
-    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
-    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config);
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            default_keymap,
+            Some(&mut storage),
+            rmk_config.behavior_config.clone(),
+        )
+        .await,
+    );
+    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
     let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 
     // Create the debouncer
