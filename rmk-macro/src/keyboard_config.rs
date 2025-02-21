@@ -30,6 +30,7 @@ pub const COMBO_MAX_LENGTH: usize = 4;
 /// Keyboard's basic info
 #[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Basic {
     /// Keyboard name
     pub name: String,
