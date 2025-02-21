@@ -302,6 +302,7 @@ pub async fn initialize_usb_split_central_and_run<
             KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new_from_storage(
                 default_keymap,
                 Some(&mut s),
+                keyboard_config.behavior_config,
             )
             .await,
         );
@@ -309,18 +310,20 @@ pub async fn initialize_usb_split_central_and_run<
     };
 
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap = RefCell::new(
+        KeyMap::<TOTAL_ROW, TOTAL_COL, NUM_LAYER>::new(
+            default_keymap,
+            keyboard_config.behavior_config,
+        )
+        .await,
+    );
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(
-            &keymap,
-            &keyboard_report_sender,
-            keyboard_config.behavior_config,
-        ),
+        Keyboard::new(&keymap, &keyboard_report_sender),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),

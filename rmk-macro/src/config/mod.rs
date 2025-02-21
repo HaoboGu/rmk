@@ -140,6 +140,7 @@ pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
+    pub combo: Option<CombosConfig>,
 }
 
 /// Configurations for tap hold
@@ -163,6 +164,21 @@ pub struct TriLayerConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
+}
+
+/// Configurations for combos
+#[derive(Clone, Debug, Deserialize)]
+pub struct CombosConfig {
+    pub combos: Vec<ComboConfig>,
+    pub timeout: Option<DurationMillis>,
+}
+
+/// Configurations for combo
+#[derive(Clone, Debug, Deserialize)]
+pub struct ComboConfig {
+    pub actions: Vec<String>,
+    pub output: String,
+    pub layer: Option<u8>,
 }
 
 /// Configurations for split keyboards
@@ -223,7 +239,7 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     let unit = &input[num.len()..];
     let num: u64 = num.parse().map_err(|_| {
         de::Error::custom(format!(
-            "Invalid number \"{num}\" in [one_shot.timeout]: number part must be a u64"
+            "Invalid number \"{num}\" in duration: number part must be a u64"
         ))
     })?;
 

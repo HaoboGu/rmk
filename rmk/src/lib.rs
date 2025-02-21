@@ -50,6 +50,7 @@ use embedded_hal_async::digital::Wait;
 use embedded_storage::nor_flash::NorFlash;
 pub use flash::EmptyFlashWrapper;
 use futures::pin_mut;
+pub use heapless;
 use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
 pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
 use keymap::KeyMap;
@@ -63,6 +64,7 @@ use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Stor
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+pub mod combo;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;
@@ -294,22 +296,27 @@ pub async fn initialize_usb_keyboard_and_run<
     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
     let (mut storage, keymap) = {
         let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
+        let keymap = RefCell::new(
+            KeyMap::new_from_storage(
+                default_keymap,
+                Some(&mut s),
+                keyboard_config.behavior_config,
+            )
+            .await,
+        );
         (s, keymap)
     };
     #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
+    let keymap = RefCell::new(
+        KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap, keyboard_config.behavior_config).await,
+    );
 
     let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
     let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
 
     // Create keyboard services and devices
     let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(
-            &keymap,
-            &keyboard_report_sender,
-            keyboard_config.behavior_config,
-        ),
+        Keyboard::new(&keymap, &keyboard_report_sender),
         KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
         VialService::new(&keymap, keyboard_config.vial_config),
         LightService::from_config(keyboard_config.light_config),

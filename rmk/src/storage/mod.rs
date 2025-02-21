@@ -1,13 +1,18 @@
 mod eeconfig;
 pub mod nor_flash;
 
-use crate::{config::StorageConfig, BUILD_HASH};
+use crate::{
+    combo::{Combo, COMBO_MAX_LENGTH},
+    config::StorageConfig,
+    BUILD_HASH,
+};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use heapless::Vec;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
@@ -56,6 +61,8 @@ pub(crate) enum FlashOperationMessage {
     },
     // Current saved connection type
     ConnectionType(u8),
+    // Write combo
+    WriteCombo(ComboData),
 }
 
 #[repr(u32)]
@@ -67,6 +74,7 @@ pub(crate) enum StorageKeys {
     LayoutConfig,
     KeymapKeys,
     MacroData,
+    ComboData,
     ConnectionType,
     #[cfg(feature = "_nrf_ble")]
     ActiveBleProfile = 0xEE,
@@ -84,6 +92,7 @@ impl StorageKeys {
             4 => Some(StorageKeys::LayoutConfig),
             5 => Some(StorageKeys::KeymapKeys),
             6 => Some(StorageKeys::MacroData),
+            7 => Some(StorageKeys::ComboData),
             #[cfg(feature = "_nrf_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
             _ => None,
@@ -98,6 +107,7 @@ pub(crate) enum StorageData {
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey),
     MacroData([u8; MACRO_SPACE_SIZE]),
+    ComboData(ComboData),
     ConnectionType(u8),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
@@ -115,6 +125,10 @@ pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER
     layer: usize,
 ) -> u32 {
     (0x1000 + layer * COL * ROW + row * COL + col) as u32
+}
+
+pub(crate) fn get_combo_key(idx: usize) -> u32 {
+    (0x3000 + idx) as u32
 }
 
 impl Value<'_> for StorageData {
@@ -162,6 +176,20 @@ impl Value<'_> for StorageData {
                 buffer[0] = StorageKeys::MacroData as u8;
                 buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
                 Ok(MACRO_SPACE_SIZE + 1)
+            }
+            StorageData::ComboData(combo) => {
+                if buffer.len() < 11 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::ComboData as u8;
+                for i in 0..4 {
+                    BigEndian::write_u16(
+                        &mut buffer[1 + i * 2..3 + i * 2],
+                        to_via_keycode(combo.actions[i]),
+                    );
+                }
+                BigEndian::write_u16(&mut buffer[9..11], to_via_keycode(combo.output));
+                Ok(11)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -253,6 +281,22 @@ impl Value<'_> for StorageData {
                     buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
                     Ok(StorageData::MacroData(buf))
                 }
+                StorageKeys::ComboData => {
+                    if buffer.len() < 11 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let mut actions = [KeyAction::No; 4];
+                    for i in 0..4 {
+                        actions[i] =
+                            from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
+                    }
+                    let output = from_via_keycode(BigEndian::read_u16(&buffer[9..11]));
+                    Ok(StorageData::ComboData(ComboData {
+                        idx: 0,
+                        actions,
+                        output,
+                    }))
+                }
                 StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
                 #[cfg(feature = "_nrf_ble")]
                 StorageKeys::BleBondInfo => {
@@ -282,6 +326,9 @@ impl StorageData {
                 panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
             }
             StorageData::MacroData(_) => StorageKeys::MacroData as u32,
+            StorageData::ComboData(_) => {
+                panic!("To get combo key for ComboData, use `get_combo_key` instead");
+            }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
@@ -311,6 +358,14 @@ pub(crate) struct KeymapKey {
     col: usize,
     layer: usize,
     action: KeyAction,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct ComboData {
+    pub(crate) idx: usize,
+    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
+    pub(crate) output: KeyAction,
 }
 
 pub(crate) struct Storage<
@@ -503,6 +558,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
+                FlashOperationMessage::WriteCombo(combo) => {
+                    let key = get_combo_key(combo.idx);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &StorageData::ComboData(combo),
+                    )
+                    .await
+                }
                 FlashOperationMessage::ConnectionType(ty) => {
                     store_item(
                         &mut self.flash,
@@ -613,6 +680,31 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         if let Some(StorageData::MacroData(data)) = read_data {
             // Send data back
             macro_cache.copy_from_slice(&data);
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
+        for i in 0..combos.len() {
+            let key = get_combo_key(i);
+            let read_data = fetch_item::<u32, StorageData, _>(
+                &mut self.flash,
+                self.storage_range.clone(),
+                &mut NoCache::new(),
+                &mut self.buffer,
+                &key,
+            )
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
+
+            if let Some(StorageData::ComboData(combo)) = read_data {
+                let mut actions = Vec::<_, 4>::new();
+                for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
+                    let _ = actions.push(action);
+                }
+                combos[i] = Combo::new(actions, combo.output, combos[i].layer);
+            }
         }
 
         Ok(())
