@@ -2,6 +2,7 @@ use crate::{
     channel::KEY_EVENT_CHANNEL,
     debounce::{DebounceState, DebouncerTrait},
     event::KeyEvent,
+    input_device::InputDevice,
     CONNECTION_STATE,
 };
 use core::future::Future;
@@ -14,7 +15,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
 /// The `KeyState` at position (row, col) can be read by `get_key_state` and updated by `update_key_state`.
-pub trait MatrixTrait {
+pub trait MatrixTrait: InputDevice {
     // Matrix size
     const ROW: usize;
     const COL: usize;
@@ -26,17 +27,6 @@ pub trait MatrixTrait {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");
-        }
-    }
-
-    // Run the matrix
-    fn run(&mut self) -> impl Future<Output = ()> {
-        async {
-            // We don't check disconnected state because disconnection means the task will be dropped
-            loop {
-                self.wait_for_connected().await;
-                self.scan().await;
-            }
         }
     }
 
@@ -150,6 +140,31 @@ impl<
         D: DebouncerTrait,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
+    > InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
+    type EventType = KeyEvent;
+
+    // Run the matrix
+    async fn run(&mut self) {
+        // We don't check disconnected state because disconnection means the task will be dropped
+        loop {
+            self.wait_for_connected().await;
+            self.scan().await;
+        }
+    }
+
+    async fn send_event(&mut self, event: Self::EventType) -> () {
+        KEY_EVENT_CHANNEL.send(event).await
+    }
+}
+
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        Out: OutputPin,
+        D: DebouncerTrait,
+        const INPUT_PIN_NUM: usize,
+        const OUTPUT_PIN_NUM: usize,
     > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     #[cfg(feature = "col2row")]
@@ -199,11 +214,14 @@ impl<
             self.wait_for_key().await;
 
             // Scan matrix and send report
-            for (out_idx, out_pin) in self.output_pins.iter_mut().enumerate() {
+            for out_idx in 0..self.output_pins.len() {
                 // Pull up output pin, wait 1us ensuring the change comes into effect
-                out_pin.set_high().ok();
+                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                    out_pin.set_high().ok();
+                }
                 Timer::after_micros(1).await;
-                for (in_idx, in_pin) in self.input_pins.iter_mut().enumerate() {
+                for in_idx in 0..self.input_pins.len() {
+                    let in_pin = self.input_pins.get_mut(in_idx).unwrap();
                     // Check input pins and debounce
                     let debounce_state = self.debouncer.detect_change_with_debounce(
                         in_idx,
@@ -222,13 +240,12 @@ impl<
                             let (row, col, key_state) =
                                 (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-                            KEY_EVENT_CHANNEL
-                                .send(KeyEvent {
-                                    row: row as u8,
-                                    col: col as u8,
-                                    pressed: key_state.pressed,
-                                })
-                                .await;
+                            self.send_event(KeyEvent {
+                                row: row as u8,
+                                col: col as u8,
+                                pressed: key_state.pressed,
+                            })
+                            .await;
                         }
                         _ => (),
                     }
@@ -239,7 +256,11 @@ impl<
                         self.scan_start = Some(Instant::now());
                     }
                 }
-                out_pin.set_low().ok();
+
+                // Pull it back to low
+                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                    out_pin.set_low().ok();
+                }
             }
 
             embassy_time::Timer::after_micros(100).await;

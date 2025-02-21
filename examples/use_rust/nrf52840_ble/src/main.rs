@@ -20,13 +20,13 @@ use embassy_nrf::{
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
-    channel::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE},
+    channel::EVENT_CHANNEL,
     config::{
         BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     event::Event,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    run_devices, run_rmk, RawMutex, Sender,
+    run_devices, run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -135,7 +135,7 @@ async fn main(spawner: Spawner) {
 }
 
 struct MyDevice {}
-impl InputDevice<EVENT_CHANNEL_SIZE> for MyDevice {
+impl InputDevice for MyDevice {
     async fn run(&mut self) {
         loop {
             embassy_time::Timer::after_secs(1).await;
@@ -144,7 +144,7 @@ impl InputDevice<EVENT_CHANNEL_SIZE> for MyDevice {
 
     type EventType = Event;
 
-    fn event_sender(&self) -> Sender<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        EVENT_CHANNEL.sender()
+    async fn send_event(&mut self, event: Self::EventType) {
+        EVENT_CHANNEL.sender().send(event).await
     }
 }

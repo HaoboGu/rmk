@@ -11,6 +11,7 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::KeyEvent;
+use crate::input_device::InputDevice;
 use crate::keyboard::Keyboard;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
@@ -295,6 +296,34 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
+    > InputDevice
+    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
+    type EventType = KeyEvent;
+
+    // Run the matrix
+    async fn run(&mut self) {
+        // We don't check disconnected state because disconnection means the task will be dropped
+        loop {
+            self.wait_for_connected().await;
+            self.scan().await;
+        }
+    }
+
+    async fn send_event(&mut self, event: Self::EventType) -> () {
+        KEY_EVENT_CHANNEL.send(event).await
+    }
+}
+
+impl<
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        Out: OutputPin,
+        D: DebouncerTrait,
+        const ROW_OFFSET: usize,
+        const COL_OFFSET: usize,
+        const INPUT_PIN_NUM: usize,
+        const OUTPUT_PIN_NUM: usize,
     > MatrixTrait
     for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
@@ -484,6 +513,33 @@ impl<
             scan_start: None,
             low_active,
         }
+    }
+}
+
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        D: DebouncerTrait,
+        const ROW_OFFSET: usize,
+        const COL_OFFSET: usize,
+        const ROW: usize,
+        const COL: usize,
+        const SIZE: usize,
+    > InputDevice for CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
+{
+    type EventType = KeyEvent;
+
+    // Run the matrix
+    async fn run(&mut self) {
+        // We don't check disconnected state because disconnection means the task will be dropped
+        loop {
+            self.wait_for_connected().await;
+            self.scan().await;
+        }
+    }
+
+    async fn send_event(&mut self, event: Self::EventType) -> () {
+        KEY_EVENT_CHANNEL.send(event).await
     }
 }
 

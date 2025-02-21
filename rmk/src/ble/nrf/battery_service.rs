@@ -61,7 +61,7 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_millis(200).await;
+                    Timer::after_secs(200).await;
                     continue;
                 } else {
                     // Turn off the led

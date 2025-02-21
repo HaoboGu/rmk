@@ -1,13 +1,10 @@
-use crate::channel::{
-    EVENT_CHANNEL_SIZE, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL, REPORT_CHANNEL_SIZE,
-};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::hid::Report;
 use crate::input_device::InputProcessor;
 use crate::usb::descriptor::KeyboardReport;
-use crate::RawMutex;
 use crate::{
     action::{Action, KeyAction},
     keyboard_macro::{MacroOperation, NUM_MACRO},
@@ -17,7 +14,6 @@ use crate::{
 };
 use core::cell::RefCell;
 use embassy_futures::{select::select, yield_now};
-use embassy_sync::channel::{Receiver, Sender};
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -46,8 +42,8 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    InputProcessor<EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE> for Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
+    for Keyboard<'a, ROW, COL, NUM_LAYER>
 {
     type EventType = KeyEvent;
 
@@ -79,7 +75,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
     async fn run(&mut self) -> () {
         loop {
-            let key_event = self.event_receiver().receive().await;
+            let key_event = self.read_event().await;
 
             // Process the key change
             self.process(key_event).await;
@@ -97,12 +93,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    fn event_receiver(&self) -> Receiver<RawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        KEY_EVENT_CHANNEL.receiver()
+    async fn read_event(&self) -> Self::EventType {
+        KEY_EVENT_CHANNEL.receiver().receive().await
     }
 
-    fn report_sender(&self) -> Sender<RawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
-        KEYBOARD_REPORT_CHANNEL.sender()
+    async fn send_report(&self, report: Self::ReportType) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }
 
@@ -214,17 +210,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     pub(crate) async fn send_keyboard_report(&mut self) {
-        self.report_sender()
-            .send(Report::KeyboardReport(self.report))
-            .await;
+        self.send_report(Report::KeyboardReport(self.report)).await;
         // Yield once after sending the report to channel
         yield_now().await;
     }
 
     /// Send system control report if needed
     pub(crate) async fn send_system_control_report(&mut self) {
-        self.report_sender()
-            .send(Report::SystemControlReport(self.system_control_report))
+        self.send_report(Report::SystemControlReport(self.system_control_report))
             .await;
         self.system_control_report.usage_id = 0;
         yield_now().await;
@@ -232,8 +225,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Send media report if needed
     pub(crate) async fn send_media_report(&mut self) {
-        self.report_sender()
-            .send(Report::MediaKeyboardReport(self.media_report))
+        self.send_report(Report::MediaKeyboardReport(self.media_report))
             .await;
         self.media_report.usage_id = 0;
         yield_now().await;
@@ -242,8 +234,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Send mouse report if needed
     pub(crate) async fn send_mouse_report(&mut self) {
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.report_sender()
-            .send(Report::MouseReport(self.mouse_report))
+        self.send_report(Report::MouseReport(self.mouse_report))
             .await;
         yield_now().await;
     }

@@ -11,6 +11,7 @@ use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
 use crate::event::KeyEvent;
+use crate::input_device::InputDevice;
 use crate::keyboard::Keyboard;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
@@ -257,6 +258,31 @@ impl<
             scan_start: None,
             low_active,
         }
+    }
+}
+
+impl<
+        #[cfg(not(feature = "async_matrix"))] In: InputPin,
+        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+        D: DebouncerTrait,
+        const ROW: usize,
+        const COL: usize,
+        const SIZE: usize,
+    > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
+{
+    type EventType = KeyEvent;
+
+    // Run the matrix
+    async fn run(&mut self) {
+        // We don't check disconnected state because disconnection means the task will be dropped
+        loop {
+            self.wait_for_connected().await;
+            self.scan().await;
+        }
+    }
+
+    async fn send_event(&mut self, event: Self::EventType) -> () {
+        KEY_EVENT_CHANNEL.send(event).await
     }
 }
 

@@ -46,5 +46,4 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, contents).expect("Failed to write build identifier");
-
 }
