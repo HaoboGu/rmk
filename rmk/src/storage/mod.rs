@@ -5,6 +5,7 @@ use crate::{
     channel::FLASH_CHANNEL,
     combo::{Combo, COMBO_MAX_LENGTH},
     config::StorageConfig,
+    BUILD_HASH,
 };
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
@@ -139,7 +140,9 @@ impl Value<'_> for StorageData {
                 } else {
                     buffer[1] = 1;
                 }
-                Ok(4)
+                // Save build_hash
+                BigEndian::write_u32(&mut buffer[2..6], c.build_hash);
+                Ok(6)
             }
             StorageData::LayoutConfig(c) => {
                 buffer[0] = StorageKeys::LayoutConfig as u8;
@@ -220,14 +223,21 @@ impl Value<'_> for StorageData {
         if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
             match key_type {
                 StorageKeys::StorageConfig => {
+                    if buffer.len() < 6 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
                     // 1 is the initial state of flash, so it means storage is NOT initialized
                     if buffer[1] == 1 {
                         Ok(StorageData::StorageConfig(LocalStorageConfig {
                             enable: false,
+                            build_hash: BUILD_HASH,
                         }))
                     } else {
+                        // Enabled, read build hash
+                        let build_hash = BigEndian::read_u32(&buffer[2..6]);
                         Ok(StorageData::StorageConfig(LocalStorageConfig {
                             enable: true,
+                            build_hash,
                         }))
                     }
                 }
@@ -326,6 +336,7 @@ impl StorageData {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
+    build_hash: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -438,15 +449,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             buffer: [0; get_buffer_size()],
         };
 
-        if config.clear_storage {
-            // Clear storage
+        // Check whether keymap and configs have been storaged in flash
+        if !storage.check_enable().await {
+            // Clear storage first
+            debug!("Clearing storage!");
             let _ =
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
                     .await;
-        }
 
-        // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await {
             // Initialize storage from keymap and config
             if storage
                 .initialize_storage_with_config(keymap)
@@ -460,7 +470,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     &mut NoCache::new(),
                     &mut storage.buffer,
                     &(StorageKeys::StorageConfig as u32),
-                    &StorageData::StorageConfig(LocalStorageConfig { enable: false }),
+                    &StorageData::StorageConfig(LocalStorageConfig {
+                        enable: false,
+                        build_hash: BUILD_HASH,
+                    }),
                 )
                 .await
                 .ok();
@@ -698,7 +711,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
-        let storage_config = StorageData::StorageConfig(LocalStorageConfig { enable: true });
+        let storage_config = StorageData::StorageConfig(LocalStorageConfig {
+            enable: true,
+            build_hash: BUILD_HASH,
+        });
         store_item(
             &mut self.flash,
             self.storage_range.clone(),
@@ -765,10 +781,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         )
         .await
         {
-            config.enable
-        } else {
-            false
+            if config.enable && config.build_hash == BUILD_HASH {
+                return true;
+            }
         }
+        false
     }
 }
 

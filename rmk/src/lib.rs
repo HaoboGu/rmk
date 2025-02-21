@@ -11,6 +11,9 @@
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// Include generated constants
+include!(concat!(env!("OUT_DIR"), "/constants.rs"));
+
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
