@@ -1,4 +1,3 @@
-use core::any::type_name;
 use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::marker::PhantomData;
@@ -25,7 +24,7 @@ use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
 use pio_proc;
-use rp_pac::{io::vals::Oeover, PIO0, PIO1};
+use rp_pac::io::vals::Oeover;
 
 pub struct IrqBinding;
 unsafe impl<PIO: Instance> Binding<PIO::Interrupt, InterruptHandler<PIO>> for IrqBinding {}
@@ -66,19 +65,22 @@ pub trait UartPioAccess {
     fn regs() -> &'static rp_pac::pio::Pio;
 }
 
-impl<T: Instance> UartPioAccess for T {
-    fn uart_buffer() -> &'static UartBuffer {
-        static BUFFER: UartBuffer = UartBuffer::new();
-        &BUFFER
-    }
-    fn regs() -> &'static rp_pac::pio::Pio {
-        match type_name::<T>() {
-            "embassy_rp::peripherals::PIO0" => &PIO0,
-            "embassy_rp::peripherals::PIO1" => &PIO1,
-            other => panic!("Unknown PIO instance for type {}", other),
+macro_rules! impl_pio_access {
+    ($ty:ty, $pio:path) => {
+        impl UartPioAccess for $ty {
+            fn uart_buffer() -> &'static UartBuffer {
+                static BUFFER: UartBuffer = UartBuffer::new();
+                &BUFFER
+            }
+            fn regs() -> &'static rp_pac::pio::Pio {
+                &$pio
+            }
         }
-    }
+    };
 }
+
+impl_pio_access!(embassy_rp::peripherals::PIO0, rp_pac::PIO0);
+impl_pio_access!(embassy_rp::peripherals::PIO1, rp_pac::PIO1);
 
 // PIO Buffered UART serial driver
 pub struct BufferedUart<'a, PIO: Instance + UartPioAccess> {
