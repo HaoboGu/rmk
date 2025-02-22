@@ -93,7 +93,7 @@ impl BleServer {
         block_on(server.get_service(BleUuid::from_uuid16(0x180a)))
             .unwrap()
             .lock()
-            .create_characteristic(BleUuid::from_uuid16(0x2a50), NimbleProperties::READ)
+            .create_characteristic(BleUuid::from_uuid16(0x2a25), NimbleProperties::READ)
             .lock()
             .set_value(usb_config.serial_number.as_bytes());
 
