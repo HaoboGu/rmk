@@ -73,8 +73,8 @@ impl<T: Instance> UartPioAccess for T {
     }
     fn regs() -> &'static rp_pac::pio::Pio {
         match type_name::<T>() {
-            "embassy_rp::pio::PIO0" => &PIO0,
-            "embassy_rp::pio::PIO1" => &PIO1,
+            "embassy_rp::peripherals::PIO0" => &PIO0,
+            "embassy_rp::peripherals::PIO1" => &PIO1,
             other => panic!("Unknown PIO instance for type {}", other),
         }
     }
