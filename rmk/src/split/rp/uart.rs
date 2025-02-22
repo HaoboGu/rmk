@@ -31,14 +31,19 @@ unsafe impl<PIO: Instance> Binding<PIO::Interrupt, InterruptHandler<PIO>> for Ir
 
 const BAUD_RATE: u32 = 115_200;
 
-const STATUS_SM1_RX_BIT: u32 = 1 << 1;
-const STATUS_SM0_TX_BIT: u32 = 1 << 4;
-const STATUS_SM_IRQ0_BIT: u32 = 1 << 8;
-const STATUS_SM_IRQ1_BIT: u32 = 1 << 9;
-const STATUS_SM_IRQ2_BIT: u32 = 1 << 10;
-const IRQ_FLAG_0: u8 = 1 << 0;
-const IRQ_FLAG_1: u8 = 1 << 1;
-const IRQ_FLAG_2: u8 = 1 << 2;
+mod StatusBit {
+    pub const SM1_RX: u32 = 1 << 1;
+    pub const SM0_TX: u32 = 1 << 4;
+    pub const SM_IRQ0: u32 = 1 << 8;
+    pub const SM_IRQ1: u32 = 1 << 9;
+    pub const SM_IRQ2: u32 = 1 << 10;
+}
+
+mod IrqBit {
+    pub const IRQ0: u8 = 1 << 0;
+    pub const IRQ1: u8 = 1 << 1;
+    pub const IRQ2: u8 = 1 << 2;
+}
 
 pub struct UartBuffer {
     buf_tx: RingBuffer,
@@ -101,9 +106,9 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     /// * `pin` - RX/TX pin
     /// * `rx_buf` - RX buffer
     /// * `irq` - Interrupt handler binding
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A new instance of 'BufferedUart' driver
     pub fn new_half_duplex<T, P>(
         pio: impl Peripheral<P = PIO> + 'a,
@@ -128,9 +133,9 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     /// * `tx_buf` - TX buffer
     /// * `rx_buf` - RX buffer
     /// * `irq` - Interrupt handler binding
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A new instance of 'BufferedUart' driver
     pub fn new_full_duplex(
         pio: impl Peripheral<P = PIO> + 'a,
@@ -422,7 +427,7 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
         let ints = PIO::regs().irqs(0).ints().read().0;
 
         if PIO::uart_buffer().buf_rx.is_available() {
-            if ints & STATUS_SM1_RX_BIT != 0 {
+            if ints & StatusBit::SM1_RX != 0 {
                 let mut writer = unsafe { PIO::uart_buffer().buf_rx.writer() };
                 let rx_buf = writer.push_slice();
                 if rx_buf.len() > 0 {
@@ -438,7 +443,7 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
                 }
             }
         }
-        if ints & STATUS_SM0_TX_BIT != 0 {
+        if ints & StatusBit::SM0_TX != 0 {
             // TX_SM FIFO Not Full
             PIO::Interrupt::unpend();
             if PIO::uart_buffer().buf_tx.is_available() {
@@ -469,25 +474,25 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
                 PIO::uart_buffer().waker_tx.wake();
             }
         }
-        if ints & STATUS_SM_IRQ0_BIT != 0 {
+        if ints & StatusBit::SM_IRQ0 != 0 {
             // RX_SM Invalid Stop Bit Raised IRQ 0
-            pio.irq().write(|f| f.set_irq(IRQ_FLAG_0));
+            pio.irq().write(|f| f.set_irq(IrqBit::IRQ0));
             PIO::Interrupt::unpend();
         }
-        if ints & STATUS_SM_IRQ1_BIT != 0 {
+        if ints & StatusBit::SM_IRQ1 != 0 {
             // Line Non-Idle Toogle Raised IRQ 1
             PIO::uart_buffer()
                 .idle_line
                 .lock(|b| *b.borrow_mut() = false);
-            pio.irq().write(|f| f.set_irq(IRQ_FLAG_1));
+            pio.irq().write(|f| f.set_irq(IrqBit::IRQ1));
             PIO::Interrupt::unpend();
         }
-        if ints & STATUS_SM_IRQ2_BIT != 0 {
+        if ints & StatusBit::SM_IRQ2 != 0 {
             // Line Idle Toogle Raised IRQ 2
             PIO::uart_buffer()
                 .idle_line
                 .lock(|b| *b.borrow_mut() = true);
-            pio.irq().write(|f| f.set_irq(IRQ_FLAG_2));
+            pio.irq().write(|f| f.set_irq(IrqBit::IRQ2));
             PIO::Interrupt::unpend();
         }
     }
