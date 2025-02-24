@@ -424,6 +424,11 @@ col_offset = 0
 serial = [
     { instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" },
     { instance = "UART1", tx_pin = "PIN_4", rx_pin = "PIN_5" },
+    # For the RP2040 only, you can also use RMK's Programmable IO (PIO) UART serial port using either or both of the RP2040's two PIO blocks, PIO0 and PIO1, by enabling the RMK `rp2040_pio` feature gate in Cargo.toml.
+    # The PIO serial port can be used in half-duplex mode using the same pin for RX/TX
+    { instance = "PIO0", tx_pin = "PIN_6", rx_pin = "PIN_6" },
+    # Or use the PIO serial port in full-duplex mode using different pins for RX/TX
+    { instance = "PIO1", tx_pin = "PIN_7", rx_pin = "PIN_8" },
 ]
 # If the connection type is "ble", we should have `ble_addr` to define the central's BLE static address
 # This address should be a valid BLE random static address, see: https://academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/lesson-2-bluetooth-le-advertising/topic/bluetooth-address/

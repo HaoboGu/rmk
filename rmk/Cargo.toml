@@ -72,6 +72,14 @@ esp-idf-svc = { version = "0.51", default-features = false, features = [
     "experimental",
 ], optional = true }
 
+# RP2040 dependencies
+embassy-rp = { version = "0.3", optional = true }
+embassy-hal-internal = { version = "0.2.0", optional = true }
+rp-pac = { version = "7.0.0", optional = true }
+pio = { version = "0.2.1", optional = true }
+pio-proc = { version = "0.2.2", optional = true }
+fixed = { version = "1.28.0", optional = true }
+
 # Document feature
 document-features = "0.2"
 
@@ -180,3 +188,13 @@ _esp_ble = [
 ]
 _nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]
+
+## Enable feature if you want to use RP2040 PIO UART
+rp2040_pio = [
+    "dep:embassy-rp",
+    "dep:embassy-hal-internal",
+    "dep:rp-pac",
+    "dep:pio",
+    "dep:pio-proc",
+    "dep:fixed"
+]
