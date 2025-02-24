@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::ItemMod;
 
 use crate::{
@@ -212,6 +212,17 @@ fn expand_split_peripheral_entry(
 
             let row = peripheral_config.rows as usize;
             let col = peripheral_config.cols as usize;
+            let uart_instance = format_ident!(
+                "{}",
+                peripheral_config
+                    .serial
+                    .as_ref()
+                    .expect("Missing peripheral serial config")
+                    .first()
+                    .expect("Peripheral should have only one serial config")
+                    .instance
+                    .to_lowercase()
+            );
             let peripheral_run = match peripheral_config.matrix.matrix_type {
                 MatrixType::normal => quote! {
                     ::rmk::split::peripheral::run_rmk_split_peripheral::<
@@ -220,7 +231,7 @@ fn expand_split_peripheral_entry(
                         _,
                         #row,
                         #col,
-                    >(input_pins, output_pins, uart0).await;
+                    >(input_pins, output_pins, #uart_instance).await;
                 },
                 MatrixType::direct_pin => quote! {
                     ::rmk::split::peripheral::run_rmk_split_peripheral_direct_pin::<
@@ -229,7 +240,7 @@ fn expand_split_peripheral_entry(
                         _,
                         #row,
                         #col,
-                    >(direct_pins, uart0).await;
+                    >(direct_pins, #uart_instance).await;
                 },
             };
             quote! {

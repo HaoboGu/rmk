@@ -441,23 +441,58 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
             ChipSeries::Rp2040 => {
                 let uart_instance = format_ident!("{}", s.instance);
                 let uart_name = format_ident!("{}", s.instance.to_lowercase());
-                let uart_irq = format_ident!("{}_IRQ", s.instance);
                 let tx_pin = format_ident!("{}", s.tx_pin);
                 let rx_pin = format_ident!("{}", s.rx_pin);
                 let irq_name = format_ident!("IrqsUart{}", idx);
-                quote! {
-                    ::embassy_rp::bind_interrupts!(struct #irq_name {
-                        #uart_irq => ::embassy_rp::uart::BufferedInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
-                    });
-                    let #uart_name = ::embassy_rp::uart::BufferedUart::new(
-                        p.#uart_instance,
-                        #irq_name,
-                        p.#tx_pin,
-                        p.#rx_pin,
-                        #tx_buf_name,
-                        #rx_buf_name,
-                        ::embassy_rp::uart::Config::default(),
-                    );
+                match &s.instance {
+                    i if i.starts_with("UART") => {
+                        let uart_irq = format_ident!("{}_IRQ", s.instance);
+                        quote! {
+                            ::embassy_rp::bind_interrupts!(struct #irq_name {
+                                #uart_irq => ::embassy_rp::uart::BufferedInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
+                            });
+                            let #uart_name = ::embassy_rp::uart::BufferedUart::new(
+                                p.#uart_instance,
+                                #irq_name,
+                                p.#tx_pin,
+                                p.#rx_pin,
+                                #tx_buf_name,
+                                #rx_buf_name,
+                                ::embassy_rp::uart::Config::default(),
+                            );
+                        }
+                    }
+                    i if i.starts_with("PIO") => {
+                        let uart_irq = format_ident!("{}_IRQ_0", s.instance);
+                        let instance_init = if s.rx_pin.eq(&s.tx_pin) {
+                            quote! {
+                                let #uart_name = ::rmk::split::rp::uart::BufferedUart::new_half_duplex(
+                                    p.#uart_instance,
+                                    p.#rx_pin,
+                                    #rx_buf_name,
+                                    #irq_name,
+                                );
+                            }
+                        } else {
+                            quote! {
+                                let #uart_name = ::rmk::split::rp::uart::BufferedUart::new_full_duplex(
+                                    p.#uart_instance,
+                                    p.#tx_pin,
+                                    p.#rx_pin,
+                                    #tx_buf_name,
+                                    #rx_buf_name,
+                                    #irq_name,
+                                );
+                            }
+                        };
+                        quote! {
+                            ::embassy_rp::bind_interrupts!(struct #irq_name {
+                                #uart_irq => ::rmk::split::rp::uart::UartInterruptHandler<::embassy_rp::peripherals::#uart_instance>;
+                            });
+                            #instance_init
+                        }
+                    }
+                    _ => panic!("Serial instance {:?} is not recognised", s.instance),
                 }
             }
             _ => panic!("Serial for chip {:?} isn't implemented yet", chip.series),
