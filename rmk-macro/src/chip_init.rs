@@ -1,9 +1,9 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{ItemFn, ItemMod};
 
-use crate::{keyboard::Overwritten, keyboard_config::KeyboardConfig, ChipModel, ChipSeries};
+use crate::{ChipModel, ChipSeries, keyboard::Overwritten, keyboard_config::KeyboardConfig};
 
 // Default implementations of chip initialization
 pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {

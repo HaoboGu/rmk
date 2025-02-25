@@ -20,7 +20,7 @@ mod split;
 mod usb_interrupt_map;
 
 use crate::keyboard::parse_keyboard_mod;
-use darling::{ast::NestedMeta, FromMeta};
+use darling::{FromMeta, ast::NestedMeta};
 use proc_macro::TokenStream;
 use split::{central::parse_split_central_mod, peripheral::parse_split_peripheral_mod};
 use syn::parse_macro_input;

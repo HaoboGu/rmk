@@ -2,8 +2,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
 use crate::{
-    keyboard_config::{CommunicationConfig, KeyboardConfig},
     ChipSeries,
+    keyboard_config::{CommunicationConfig, KeyboardConfig},
 };
 
 // Default implementations of ble configuration.

@@ -1,15 +1,14 @@
 use embassy_futures::block_on;
 use nrf_softdevice::{
+    Softdevice,
     ble::{
+        Connection, SecurityMode,
         gatt_server::{
-            self,
+            self, RegisterError,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Properties},
-            RegisterError,
         },
-        Connection, SecurityMode,
     },
-    Softdevice,
 };
 use usbd_hid::descriptor::SerializedDescriptor;
 
@@ -19,7 +18,7 @@ use crate::{
     usb::descriptor::ViaReport,
 };
 
-use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
+use super::spec::{BLE_HID_SERVICE_UUID, BleCharacteristics, BleDescriptor};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BleVialService {

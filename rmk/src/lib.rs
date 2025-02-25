@@ -34,15 +34,15 @@ use core::{
 use debounce::DebouncerTrait;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{Either4, select, select4};
 #[cfg(not(any(cortex_m)))]
 pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex as RawMutex, channel::*};
 // #[cfg(all(target_arch = "arm", target_os = "none"))]
 #[cfg(any(cortex_m))]
 pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex as RawMutex, channel::*};
 use embassy_time::Timer;
-use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
+use embassy_usb::driver::Driver;
 pub use embedded_hal;
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -57,8 +57,8 @@ use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::{Matrix, MatrixTrait};
 pub use rmk_macro as macros;
-pub use storage::dummy_flash::DummyFlash;
 use storage::Storage;
+pub use storage::dummy_flash::DummyFlash;
 use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(feature = "_esp_ble")]
@@ -72,7 +72,7 @@ use {
 use {
     crate::light::UsbLedReader,
     crate::usb::descriptor::{CompositeReport, KeyboardReport},
-    crate::usb::{new_usb_builder, UsbKeyboardWriter},
+    crate::usb::{UsbKeyboardWriter, new_usb_builder},
     crate::via::UsbVialReaderWriter,
 };
 

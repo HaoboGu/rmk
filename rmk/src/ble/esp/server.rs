@@ -3,14 +3,15 @@ use alloc::sync::Arc;
 use embassy_futures::block_on;
 use embassy_time::Timer;
 use esp32_nimble::{
-    enums::{AuthReq, SecurityIOCap},
-    utilities::{mutex::Mutex, BleUuid},
     BLEAdvertisementData, BLECharacteristic, BLEDevice, BLEHIDDevice, BLEServer, NimbleProperties,
+    enums::{AuthReq, SecurityIOCap},
+    utilities::{BleUuid, mutex::Mutex},
 };
 use ssmarshal::serialize;
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 use crate::{
+    CONNECTION_STATE,
     ble::{
         descriptor::{BleCompositeReportType, BleKeyboardReport},
         device_info::VidSource,
@@ -21,7 +22,6 @@ use crate::{
     hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
     light::LedIndicator,
     usb::descriptor::ViaReport,
-    CONNECTION_STATE,
 };
 
 use super::VIAL_READ_CHANNEL;

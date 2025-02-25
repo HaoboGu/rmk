@@ -3,9 +3,9 @@ use embedded_io_async::{Read, Write};
 use crate::{
     matrix::MatrixTrait,
     split::{
+        SPLIT_MESSAGE_MAX_SIZE, SplitMessage,
         driver::{PeripheralManager, SplitReader, SplitWriter},
         peripheral::SplitPeripheral,
-        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
 };
 

@@ -1,7 +1,7 @@
 use crate::config::{BleConfig, StorageConfig};
 use crate::{
-    keyboard_config::{CommunicationConfig, KeyboardConfig},
     ChipModel,
+    keyboard_config::{CommunicationConfig, KeyboardConfig},
 };
 
 // Default config for nRF52832

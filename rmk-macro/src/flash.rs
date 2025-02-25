@@ -2,7 +2,7 @@
 //!
 
 use crate::config::StorageConfig;
-use crate::{keyboard_config::KeyboardConfig, ChipSeries};
+use crate::{ChipSeries, keyboard_config::KeyboardConfig};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 

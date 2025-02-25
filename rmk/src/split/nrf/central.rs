@@ -2,14 +2,14 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_futures::{join::join, select::select};
 use embassy_sync::channel::{Channel, Receiver, Sender};
-use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
+use nrf_softdevice::ble::{Address, AddressType, central, gatt_client};
 
 use crate::{
+    CONNECTION_STATE, RawMutex,
     split::{
+        SPLIT_MESSAGE_MAX_SIZE, SplitMessage,
         driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter},
-        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
-    RawMutex, CONNECTION_STATE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals

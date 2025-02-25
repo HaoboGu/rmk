@@ -1,5 +1,5 @@
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::combo::{COMBO_MAX_LENGTH, Combo};
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::hid::Report;

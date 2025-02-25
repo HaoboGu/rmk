@@ -1,9 +1,9 @@
 use crate::config::{BleConfig, StorageConfig};
 
 use crate::{
+    ChipModel,
     keyboard_config::{CommunicationConfig, KeyboardConfig},
     usb_interrupt_map::get_usb_info,
-    ChipModel,
 };
 
 // Default config for nRF52840

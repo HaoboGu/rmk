@@ -1,15 +1,17 @@
 use core::cell::RefCell;
 
+use crate::KeyboardConfig;
+use crate::MatrixTrait;
 use crate::action::KeyAction;
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::channel::KEY_EVENT_CHANNEL;
+use crate::debounce::DebounceState;
+use crate::debounce::DebouncerTrait;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::debounce::DebounceState;
-use crate::debounce::DebouncerTrait;
 use crate::event::KeyEvent;
 use crate::input_device::InputDevice;
 use crate::keyboard::Keyboard;
@@ -18,8 +20,6 @@ use crate::light::LightController;
 use crate::matrix::KeyState;
 use crate::run_rmk_internal;
 use crate::storage::Storage;
-use crate::KeyboardConfig;
-use crate::MatrixTrait;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_time::Instant;
@@ -237,13 +237,13 @@ pub(crate) struct DirectPinMatrix<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     /// Create a matrix from input and output pins.
     pub(crate) fn new(
@@ -262,13 +262,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     type EventType = KeyEvent;
 
@@ -287,13 +287,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;

@@ -1,15 +1,15 @@
 use super::spec::{BleCharacteristics, BleSpecification};
 use crate::ble::device_info::{DeviceInformation, PnPID};
 use nrf_softdevice::{
+    Softdevice,
     ble::{
+        Uuid,
         gatt_server::{
+            CharacteristicHandles, RegisterError,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Properties},
-            CharacteristicHandles, RegisterError,
         },
-        Uuid,
     },
-    Softdevice,
 };
 
 pub(crate) struct DeviceInformationService {}

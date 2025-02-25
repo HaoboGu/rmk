@@ -3,12 +3,12 @@
 use quote::quote;
 
 use crate::{
+    ChipModel, ChipSeries,
     gpio_config::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
         convert_output_pins_to_initializers,
     },
     keyboard_config::{BoardConfig, KeyboardConfig},
-    ChipModel, ChipSeries,
 };
 
 pub(crate) fn expand_matrix_config(

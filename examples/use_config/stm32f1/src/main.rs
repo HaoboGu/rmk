@@ -7,7 +7,7 @@ use rmk::macros::rmk_keyboard;
 #[rmk_keyboard]
 mod keyboard {
     use embassy_stm32::rcc::*;
-    use embassy_stm32::{time::Hertz, Config};
+    use embassy_stm32::{Config, time::Hertz};
 
     #[Override(chip_config)]
     fn config() -> Config {

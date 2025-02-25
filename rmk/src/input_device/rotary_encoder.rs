@@ -134,12 +134,12 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
 }
 
 impl<
-        #[cfg(feature = "async_matrix")] A: InputPin + Wait,
-        #[cfg(not(feature = "async_matrix"))] A: InputPin,
-        #[cfg(feature = "async_matrix")] B: InputPin + Wait,
-        #[cfg(not(feature = "async_matrix"))] B: InputPin,
-        P: Phase,
-    > InputDevice for RotaryEncoder<A, B, P>
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+    P: Phase,
+> InputDevice for RotaryEncoder<A, B, P>
 {
     type EventType = Event;
 

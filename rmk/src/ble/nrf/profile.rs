@@ -6,10 +6,10 @@ use core::sync::atomic::Ordering;
 use embassy_futures::yield_now;
 
 use crate::{
+    CONNECTION_TYPE,
     ble::nrf::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
     channel::{BLE_PROFILE_CHANNEL, FLASH_CHANNEL},
     storage::FlashOperationMessage,
-    CONNECTION_TYPE,
 };
 
 use super::bonder::MultiBonder;

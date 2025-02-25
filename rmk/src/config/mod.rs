@@ -14,12 +14,12 @@ use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 
 use crate::{
-    combo::{Combo, COMBO_MAX_NUM},
+    RawMutex,
+    combo::{COMBO_MAX_NUM, Combo},
     event::{Event, KeyEvent},
     hid::Report,
     light::LedIndicator,
     storage::FlashOperationMessage,
-    RawMutex,
 };
 
 /// The config struct for RMK keyboard.
@@ -60,10 +60,10 @@ pub struct ChannelConfig<
 }
 
 impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > Default for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+    const KEY_EVENT_CHANNEL_SIZE: usize,
+    const EVENT_CHANNEL_SIZE: usize,
+    const REPORT_CHANNEL_SIZE: usize,
+> Default for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     fn default() -> Self {
         Self {
@@ -78,10 +78,10 @@ impl<
 }
 
 impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+    const KEY_EVENT_CHANNEL_SIZE: usize,
+    const EVENT_CHANNEL_SIZE: usize,
+    const REPORT_CHANNEL_SIZE: usize,
+> ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     pub fn new() -> Self {
         Self::default()

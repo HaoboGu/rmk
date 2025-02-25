@@ -1,7 +1,7 @@
 /// Traits and types for HID message reporting and listening.
 use core::future::Future;
 
-use crate::{channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport, CONNECTION_STATE};
+use crate::{CONNECTION_STATE, channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport};
 use embassy_usb::{class::hid::ReadError, driver::EndpointError};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
