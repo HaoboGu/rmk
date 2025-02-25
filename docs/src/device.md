@@ -2,7 +2,7 @@
 
 There are two types of device in RMK:
 
-- input device: an external device which finally generates a HID(keyboard/mouse/media) report, such as encoder, joystick, touchpad, etc.
+- input device: an external device which generates HID reports (keyboard/mouse/media), such as encoder, joystick, touchpad, etc.
 
 - output device: an external device which is triggered by RMK, to perform some functionalities, such as LED, RGB, screen, motor, etc
 
@@ -26,34 +26,34 @@ The encoder list is represented separately in vial, different from normal matrix
 
 RMK supports various input devices beyond just key matrices. The input system consists of two main components:
 
-## Input Devices
+### Input Device Trait
 
-Input devices are physical components that generate input events. These can include:
-- Rotary encoders
-- Touchpads
-- Direct input pins
-- Key matrices
+Each input device must implement the `InputDevice` trait, which requires:
 
-Each input device implements the `InputDevice` trait, which requires:
 - An associated `EventType` that defines what kind of events this device generates
 - A `run()` method containing the device's main logic
-- An `event_sender()` method to get the channel for sending events
+- A `send_event()` method to send events to processors
 
 Example implementation:
 
 ```rust
 struct MyEncoder;
 impl InputDevice for MyEncoder {
-    type EventType = EncoderEvent;
+    type EventType = Event;
+    
     async fn run(&mut self) {
         // Read encoder and send events
-        let event = EncoderEvent::Clockwise;
-        self.event_sender().send(event).await;
+        let event = Event::RotaryEncoder(RotaryEncoderEvent::Clockwise);
+        self.send_event(event).await;
+    }
+    
+    async fn send_event(&mut self, event: Self::EventType) {
+        // Send event to processor
     }
 }
 ```
 
-## Input Processors 
+## Input Processors
 
 Input processors handle events from input devices and convert them into HID reports. A processor:
 
@@ -63,14 +63,26 @@ Input processors handle events from input devices and convert them into HID repo
 
 The `InputProcessor` trait defines this behavior with:
 
-- Associated types for the events it handles and reports it generates
+- Associated types for events it handles (`EventType`) and reports it generates (`ReportType`)
 - A `process()` method to convert events to reports
-- Channel getters for receiving events and sending reports
+- A `read_event()` method to receive events
+- A `send_report()` method to send processed reports
+- A default `run()` implementation that handles the event processing loop
 
-<!-- 
-## Running Multiple Devices
+### Built-in Event Types
+
+RMK provides several built-in event types through the `Event` enum:
+
+- `Key` - Standard keyboard key events
+- `RotaryEncoder` - Rotary encoder rotation events
+- `Touchpad` - Multi-touch touchpad events
+- `Joystick` - Joystick axis events
+- `AxisEventStream` - Stream of axis events for complex input devices
+
+### Running Multiple Devices
 
 RMK provides macros to run multiple input devices and processors concurrently:
+
 ```rust
 // Run multiple input devices
 let encoder = MyEncoder::new();
@@ -80,5 +92,8 @@ let touchpad = MyTouchpad::new();
 let encoder_proc = EncoderProcessor::new();
 let touchpad_proc = TouchpadProcessor::new();
 
-join(run_processors!(encoder_proc, touchpad_proc), run_devices!(encoder, touchpad)).await;
-``` -->
+join(
+    run_processors!(encoder_proc, touchpad_proc),
+    run_devices!(encoder, touchpad)
+).await;
+```
