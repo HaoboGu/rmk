@@ -16,7 +16,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     run_rmk,
 };
 
@@ -49,10 +49,15 @@ async fn main(spawner: Spawner) {
         num_sectors: 2,
         ..Default::default()
     };
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
         storage_config,
+        ..Default::default()
+    };
+
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

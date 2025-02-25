@@ -164,3 +164,6 @@ If you're comfortable with nightly Rust, you can enable `nightly` feature of emb
 
 By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
+### What font is used for the RMK logo?
+
+It's [Honk](https://fonts.google.com/specimen/Honk?categoryFilters=Technology:%2FTechnology%2FColor&preview.text=RMK).

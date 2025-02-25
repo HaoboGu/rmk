@@ -13,7 +13,7 @@ pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStrea
         layers.push(expand_layer(layer));
     }
     return quote! {
-        pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+        pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
     };

@@ -43,6 +43,10 @@ sequential-storage = { version = "4.0.0" }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
+# Used in macro
+paste = "1"
+
+
 # Optional dependencies
 # nRF dependencies
 once_cell = { version = "1.19", features = [
@@ -63,7 +67,10 @@ embassy-nrf = { version = "0.3.1", features = [
 
 # Espressif dependencies
 esp32-nimble = { version = "0.10", optional = true }
-esp-idf-svc = { version = "0.51", default-features = false, optional = true }
+esp-idf-svc = { version = "0.51", default-features = false, features = [
+    "embedded-storage",
+    "experimental",
+], optional = true }
 
 # RP2040 dependencies
 embassy-rp = { version = "0.3", optional = true }

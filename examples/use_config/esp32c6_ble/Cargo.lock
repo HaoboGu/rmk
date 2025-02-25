@@ -284,7 +284,9 @@ checksum = "7e36cc9d416881d2e24f9a963be5fb1cd90966419ac844274161d10488b3e825"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
+ "wasm-bindgen",
  "windows-targets",
 ]
 
@@ -390,6 +392,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+]
+
+[[package]]
+name = "crc32fast"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -963,6 +974,7 @@ dependencies = [
  "embassy-time-driver",
  "embassy-time-queue-utils",
  "embedded-hal-async",
+ "embedded-storage",
  "embedded-svc",
  "embuild",
  "enumset",
@@ -1547,6 +1559,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
 
 [[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1717,7 +1735,9 @@ version = "0.5.2"
 dependencies = [
  "bitfield-struct",
  "byteorder",
+ "chrono",
  "cortex-m",
+ "crc32fast",
  "defmt",
  "document-features",
  "embassy-embedded-hal",
@@ -1738,6 +1758,7 @@ dependencies = [
  "heapless 0.8.0",
  "nrf-softdevice",
  "num_enum",
+ "paste",
  "postcard",
  "rmk-macro",
  "sequential-storage",

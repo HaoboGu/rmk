@@ -7,7 +7,7 @@ pub(crate) const COMBO_MAX_NUM: usize = 8;
 // Max size of combos
 pub(crate) const COMBO_MAX_LENGTH: usize = 4;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Combo {
     pub(crate) actions: Vec<KeyAction, COMBO_MAX_LENGTH>,
     pub(crate) output: KeyAction,

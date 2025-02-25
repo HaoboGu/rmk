@@ -173,13 +173,22 @@ fn expand_split_central(
             #ble_config
 
             // Set all keyboard config
-            let keyboard_config = ::rmk::config::RmkConfig {
+            let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
                 vial_config: VIAL_CONFIG,
-                light_config,
                 storage_config,
                 behavior_config,
                 #set_ble_config
+                ..Default::default()
+            };
+
+            let controller_config = ::rmk::config::ControllerConfig {
+                light_config,
+            };
+
+            let keyboard_config = ::rmk::config::KeyboardConfig {
+                rmk_config,
+                controller_config,
                 ..Default::default()
             };
 
@@ -258,7 +267,7 @@ fn expand_split_central_entry(
                     let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
 
                     tasks.push(quote! {
-                        ::rmk::split::central::run_peripheral_monitor::<#row, #col, #row_offset, #col_offset, _>(
+                        ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                             #idx,
                             #uart_instance,
                         )
@@ -312,7 +321,7 @@ fn expand_split_central_entry(
                 let col_offset = p.col_offset ;
                 let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
                 tasks.push(quote! {
-                    ::rmk::split::central::run_peripheral_monitor::<#row, #col, #row_offset, #col_offset>(
+                    ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset>(
                         #idx,
                         [#(#peripheral_ble_addr), *],
                     )
@@ -374,7 +383,7 @@ fn expand_split_central_entry(
                     let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
 
                     tasks.push(quote! {
-                        ::rmk::split::central::run_peripheral_monitor::<#row, #col, #row_offset, #col_offset, _>(
+                        ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                             #idx,
                             #uart_instance,
                         )

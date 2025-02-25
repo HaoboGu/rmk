@@ -1,18 +1,15 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_futures::{join::join, select::select};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
-};
+use embassy_sync::channel::{Channel, Receiver, Sender};
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
 use crate::{
     split::{
-        driver::{PeripheralMatrixMonitor, SplitDriverError, SplitReader, SplitWriter},
+        driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter},
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
-    CONNECTION_STATE,
+    RawMutex, CONNECTION_STATE,
 };
 
 /// Gatt client used in split central to receive split message from peripherals
@@ -25,7 +22,7 @@ pub(crate) struct BleSplitCentralClient {
     pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
-pub(crate) async fn run_ble_peripheral_monitor<
+pub(crate) async fn run_ble_peripheral_manager<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -35,9 +32,9 @@ pub(crate) async fn run_ble_peripheral_monitor<
     addr: [u8; 6],
 ) {
     // Channel is used to receive messages from peripheral
-    let receive_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    let receive_channel: Channel<RawMutex, SplitMessage, 8> = Channel::new();
     // Channel is used to notify messages to peripheral
-    let notify_channel: Channel<CriticalSectionRawMutex, SplitMessage, 8> = Channel::new();
+    let notify_channel: Channel<RawMutex, SplitMessage, 8> = Channel::new();
 
     let receive_sender = receive_channel.sender();
     let receive_receiver = receive_channel.receiver();
@@ -52,9 +49,9 @@ pub(crate) async fn run_ble_peripheral_monitor<
     };
 
     let peripheral =
-        PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+        PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
-    info!("Running peripheral monitor {}", id);
+    info!("Running peripheral manager {}", id);
     join(peripheral.run(), run_ble_client).await;
 }
 
@@ -66,8 +63,8 @@ static CONNECTING_CLIENT: AtomicBool = AtomicBool::new(false);
 /// All received messages are sent to the sender, those message are received in `SplitBleCentralDriver`.
 /// Split driver will take `SplitBleCentralDriver` as the reader, process the message in matrix scanning.
 pub(crate) async fn run_ble_client(
-    receive_sender: Sender<'_, CriticalSectionRawMutex, SplitMessage, 8>,
-    notify_receiver: Receiver<'_, CriticalSectionRawMutex, SplitMessage, 8>,
+    receive_sender: Sender<'_, RawMutex, SplitMessage, 8>,
+    notify_receiver: Receiver<'_, RawMutex, SplitMessage, 8>,
     addr: [u8; 6],
 ) -> ! {
     // Wait 1s, ensure that the softdevice is ready
@@ -172,9 +169,9 @@ pub(crate) async fn run_ble_client(
 /// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a> {
     // Receiver that receives message from peripheral
-    pub(crate) receiver: Receiver<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    pub(crate) receiver: Receiver<'a, RawMutex, SplitMessage, 8>,
     // Sender that send message to peripherals
-    pub(crate) sender: Sender<'a, CriticalSectionRawMutex, SplitMessage, 8>,
+    pub(crate) sender: Sender<'a, RawMutex, SplitMessage, 8>,
     // Cached connection state
     connection_state: bool,
 }

@@ -1,15 +1,15 @@
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
+use crate::channel::KEY_EVENT_CHANNEL;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
-use crate::keyboard::KEY_EVENT_CHANNEL;
 use crate::matrix::{Matrix, MatrixTrait};
 use crate::CONNECTION_STATE;
-#[cfg(feature = "_nrf_ble")]
+#[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::select;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -28,6 +28,7 @@ use embedded_io_async::{Read, Write};
 /// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[allow(unused_variables)]
 pub async fn run_rmk_split_peripheral<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -43,7 +44,7 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
-    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) {
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
@@ -62,21 +63,16 @@ pub async fn run_rmk_split_peripheral<
     let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
 
     #[cfg(feature = "_nrf_ble")]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        ROW,
-        COL,
-    >(matrix, central_addr, peripheral_addr, spawner)
+    run_rmk_split_peripheral_with_matrix::<_, ROW, COL>(
+        matrix,
+        central_addr,
+        peripheral_addr,
+        spawner,
+    )
     .await;
 
     #[cfg(not(feature = "_nrf_ble"))]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        S,
-        ROW,
-        COL,
-    >(matrix, serial)
-    .await;
+    run_rmk_split_peripheral_with_matrix::<_, S, ROW, COL>(matrix, serial).await;
 }
 
 /// Run the split peripheral service with direct pin matrix.
@@ -89,6 +85,7 @@ pub async fn run_rmk_split_peripheral<
 /// * `low_active`: pin active level
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+#[allow(unused_variables)]
 pub async fn run_rmk_split_peripheral_direct_pin<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
@@ -103,7 +100,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     low_active: bool,
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
-    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
 ) {
     // Create the debouncer, use COL2ROW by default
     #[cfg(feature = "rapid_debouncer")]
@@ -115,21 +112,16 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(feature = "_nrf_ble")]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        ROW,
-        COL,
-    >(matrix, central_addr, peripheral_addr, spawner)
+    run_rmk_split_peripheral_with_matrix::<_, ROW, COL>(
+        matrix,
+        central_addr,
+        peripheral_addr,
+        spawner,
+    )
     .await;
 
     #[cfg(not(feature = "_nrf_ble"))]
-    run_rmk_split_peripheral_with_matrix::<
-        _,
-        S,
-        ROW,
-        COL,
-    >(matrix, serial)
-    .await;
+    run_rmk_split_peripheral_with_matrix::<_, S, ROW, COL>(matrix, serial).await;
 }
 
 /// Run the split peripheral service.

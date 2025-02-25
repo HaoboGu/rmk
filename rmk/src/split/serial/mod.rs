@@ -3,7 +3,7 @@ use embedded_io_async::{Read, Write};
 use crate::{
     matrix::MatrixTrait,
     split::{
-        driver::{PeripheralMatrixMonitor, SplitReader, SplitWriter},
+        driver::{PeripheralManager, SplitReader, SplitWriter},
         peripheral::SplitPeripheral,
         SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
     },
@@ -19,7 +19,7 @@ use super::driver::SplitDriverError;
 /// - `const ROW_OFFSET`: row offset of the peripheral's matrix in the whole matrix
 /// - `const COL_OFFSET`: column offset of the peripheral's matrix in the whole matrix
 /// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
-pub(crate) async fn run_serial_peripheral_monitor<
+pub(crate) async fn run_serial_peripheral_manager<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -30,11 +30,9 @@ pub(crate) async fn run_serial_peripheral_monitor<
     receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let peripheral = PeripheralMatrixMonitor::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(
-        split_serial_driver,
-        id,
-    );
-    info!("Running peripheral monitor {}", id);
+    let peripheral =
+        PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
+    info!("Running peripheral manager {}", id);
     peripheral.run().await;
 }
 

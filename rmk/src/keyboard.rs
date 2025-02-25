@@ -1,38 +1,22 @@
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
-use crate::event::{Event, KeyEvent};
-use crate::CONNECTION_STATE;
+use crate::config::BehaviorConfig;
+use crate::event::KeyEvent;
+use crate::hid::Report;
+use crate::input_device::InputProcessor;
+use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
-    hid::{ConnectionType, HidWriterWrapper},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
-    usb::descriptor::{CompositeReport, CompositeReportType, ViaReport},
-    KEYBOARD_STATE,
+    usb::descriptor::ViaReport,
 };
 use core::cell::RefCell;
 use embassy_futures::{select::select, yield_now};
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Channel, Receiver, Sender},
-};
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
-use usbd_hid::descriptor::KeyboardReport;
-
-pub const EVENT_CHANNEL_SIZE: usize = 32;
-pub static KEY_EVENT_CHANNEL: Channel<CriticalSectionRawMutex, KeyEvent, EVENT_CHANNEL_SIZE> =
-    Channel::new();
-
-pub static EVENT_CHANNEL: Channel<CriticalSectionRawMutex, Event, EVENT_CHANNEL_SIZE> =
-    Channel::new();
-
-pub const REPORT_CHANNEL_SIZE: usize = 32;
-pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<
-    CriticalSectionRawMutex,
-    KeyboardReportMessage,
-    REPORT_CHANNEL_SIZE,
-> = Channel::new();
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -58,71 +42,69 @@ impl<T> OneShotState<T> {
     }
 }
 
-/// Matrix scanning task sends this [KeyboardReportMessage] to communication task.
-pub enum KeyboardReportMessage {
-    /// Normal keyboard hid report
-    KeyboardReport(KeyboardReport),
-    /// Other types of keyboard reports: mouse + media(consumer) + system control
-    CompositeReport(CompositeReport, CompositeReportType),
-}
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
+    for Keyboard<'a, ROW, COL, NUM_LAYER>
+{
+    type EventType = KeyEvent;
 
-/// This task processes all keyboard reports and send them to the host
-pub(crate) async fn communication_task<'a, W: HidWriterWrapper, W2: HidWriterWrapper>(
-    receiver: &Receiver<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
-    keybooard_hid_writer: &mut W,
-    other_hid_writer: &mut W2,
-) {
-    // This delay is necessary otherwise this task will stuck at the first send when the USB is suspended
-    Timer::after_secs(2).await;
-    loop {
-        let report = receiver.receive().await;
-        // Only send the report after the connection is established.
-        if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-            match report {
-                KeyboardReportMessage::KeyboardReport(report) => {
-                    match keybooard_hid_writer.write_serialize(&report).await {
-                        Ok(()) => {}
-                        Err(e) => error!("Send keyboard report error: {:?}", e),
-                    };
+    type ReportType = Report;
+
+    /// Process key changes at (row, col)
+    async fn process(&mut self, key_event: Self::EventType) {
+        // Matrix should process key pressed event first, record the timestamp of key changes
+        if key_event.pressed {
+            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
+        }
+
+        // Process key
+        let key_action = self
+            .keymap
+            .borrow_mut()
+            .get_action_with_layer_cache(key_event);
+
+        if self.combo_on {
+            if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                self.process_key_action(key_action, key_event).await;
+            }
+        } else {
+            self.process_key_action(key_action, key_event).await;
+        }
+    }
+
+    /// Main keyboard task, it receives input devices result, processes keys.
+    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
+    async fn run(&mut self) -> () {
+        loop {
+            let key_event = self.read_event().await;
+
+            // Process the key change
+            self.process(key_event).await;
+
+            // After processing the key change, check if there are unprocessed events
+            // This will happen if there's recursion in key processing
+            loop {
+                if self.unprocessed_events.is_empty() {
+                    break;
                 }
-                KeyboardReportMessage::CompositeReport(report, report_type) => {
-                    write_other_report_to_host(report, report_type, other_hid_writer).await;
-                }
+                // Process unprocessed events
+                let e = self.unprocessed_events.remove(0);
+                self.process(e).await;
             }
         }
     }
-}
 
-pub(crate) async fn write_other_report_to_host<W: HidWriterWrapper>(
-    report: CompositeReport,
-    report_type: CompositeReportType,
-    other_hid_writer: &mut W,
-) {
-    let mut buf: [u8; 9] = [0; 9];
-    // Prepend report id
-    buf[0] = report_type as u8;
-    match report.serialize(&mut buf[1..], report_type) {
-        Ok(s) => {
-            #[cfg(feature = "defmt")]
-            debug!("Sending other report: {=[u8]:#X}", buf[0..s + 1]);
-            if let Err(e) = match other_hid_writer.get_conn_type() {
-                ConnectionType::Usb => other_hid_writer.write(&buf[0..s + 1]).await,
-                ConnectionType::Ble => other_hid_writer.write(&buf[1..s + 1]).await,
-            } {
-                error!("Send other report error: {:?}", e);
-            }
-        }
-        Err(_) => error!("Serialize other report error"),
+    async fn read_event(&self) -> Self::EventType {
+        KEY_EVENT_CHANNEL.receiver().receive().await
+    }
+
+    async fn send_report(&self, report: Self::ReportType) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }
 
 pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-
-    /// Report Sender
-    pub(crate) sender:
-        &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
@@ -136,20 +118,29 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
 
+    /// Options for configurable action behavior
+    behavior: BehaviorConfig,
+
     /// One shot modifier state
     osm_state: OneShotState<ModifierCombination>,
 
     /// One shot layer state
     osl_state: OneShotState<u8>,
 
-    /// Keyboard internal hid report buf
-    report: KeyboardReport,
-
     /// Registered key position
     registered_keys: [Option<(u8, u8)>; 6],
 
-    /// Internal composite report: mouse + media(consumer) + system control
-    other_report: CompositeReport,
+    /// Keyboard internal hid report buf
+    report: KeyboardReport,
+
+    /// Internal mouse report buf
+    mouse_report: MouseReport,
+
+    /// Internal media report buf
+    media_report: MediaKeyboardReport,
+
+    /// Internal system control report buf
+    system_control_report: SystemControlReport,
 
     /// Via report
     via_report: ViaReport,
@@ -176,11 +167,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 {
     pub(crate) fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-        sender: &'a Sender<'a, CriticalSectionRawMutex, KeyboardReportMessage, REPORT_CHANNEL_SIZE>,
+        behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
             keymap,
-            sender,
             timer: [[None; ROW]; COL],
             last_release: (
                 KeyEvent {
@@ -192,17 +182,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 None,
             ),
             hold_after_tap: Default::default(),
+            behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
             unprocessed_events: Vec::new(),
-            report: KeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0; 6],
+            registered_keys: [None; 6],
+            report: KeyboardReport::default(),
+            mouse_report: MouseReport {
+                buttons: 0,
+                x: 0,
+                y: 0,
+                wheel: 0,
+                pan: 0,
             },
-            registered_keys: Default::default(),
-            other_report: CompositeReport::default(),
+            media_report: MediaKeyboardReport { usage_id: 0 },
+            system_control_report: SystemControlReport { usage_id: 0 },
             via_report: ViaReport {
                 input_data: [0; 32],
                 output_data: [0; 32],
@@ -216,92 +210,61 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     pub(crate) async fn send_keyboard_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::KeyboardReport(self.report))
-            .await;
+        self.send_report(Report::KeyboardReport(self.report)).await;
         // Yield once after sending the report to channel
         yield_now().await;
     }
 
     /// Send system control report if needed
     pub(crate) async fn send_system_control_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::System,
-            ))
+        self.send_report(Report::SystemControlReport(self.system_control_report))
             .await;
-        self.other_report.system_usage_id = 0;
+        self.system_control_report.usage_id = 0;
         yield_now().await;
     }
 
     /// Send media report if needed
     pub(crate) async fn send_media_report(&mut self) {
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::Media,
-            ))
+        self.send_report(Report::MediaKeyboardReport(self.media_report))
             .await;
-        self.other_report.media_usage_id = 0;
+        self.media_report.usage_id = 0;
         yield_now().await;
     }
 
     /// Send mouse report if needed
     pub(crate) async fn send_mouse_report(&mut self) {
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.sender
-            .send(KeyboardReportMessage::CompositeReport(
-                self.other_report,
-                CompositeReportType::Mouse,
-            ))
+        self.send_report(Report::MouseReport(self.mouse_report))
             .await;
         yield_now().await;
     }
 
-    /// Main keyboard task, it receives input devices result, processes keys.
-    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
-    /// TODO: make keyboard an `InputProcessor`
-    pub(crate) async fn run(&mut self) {
-        KEYBOARD_STATE.store(true, core::sync::atomic::Ordering::Release);
-        loop {
-            let key_event = KEY_EVENT_CHANNEL.receive().await;
-
-            // Process the key change
-            self.process_key_change(key_event).await;
-
-            // After processing the key change, check if there are unprocessed events
-            // This will happen if there's recursion in key processing
-            loop {
-                if self.unprocessed_events.is_empty() {
-                    break;
+    async fn update_osm(&mut self, key_event: KeyEvent) {
+        match self.osm_state {
+            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
+            OneShotState::Single(modifier) => {
+                if !key_event.pressed {
+                    let (keycodes, n) = modifier.to_modifier_keycodes();
+                    for kc in keycodes.iter().take(n) {
+                        self.process_action_keycode(*kc, key_event).await;
+                    }
+                    self.osm_state = OneShotState::None;
                 }
-                // Process unprocessed events
-                let e = self.unprocessed_events.remove(0);
-                self.process_key_change(e).await;
             }
+            _ => (),
         }
     }
 
-    /// Process key changes at (row, col)
-    async fn process_key_change(&mut self, key_event: KeyEvent) {
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if key_event.pressed {
-            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
-        }
-
-        // Process key
-        let key_action = self
-            .keymap
-            .borrow_mut()
-            .get_action_with_layer_cache(key_event);
-
-        if self.combo_on {
-            if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                self.process_key_action(key_action, key_event).await;
+    fn update_osl(&mut self, key_event: KeyEvent) {
+        match self.osl_state {
+            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
+            OneShotState::Single(layer_num) => {
+                if key_event.pressed {
+                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.osl_state = OneShotState::None;
+                }
             }
-        } else {
-            self.process_key_action(key_action, key_event).await;
+            _ => (),
         }
     }
 
@@ -413,35 +376,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             .iter_mut()
             .filter(|combo| !combo.done())
             .for_each(Combo::reset);
-    }
-
-    async fn update_osm(&mut self, key_event: KeyEvent) {
-        match self.osm_state {
-            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(modifier) => {
-                if !key_event.pressed {
-                    let (keycodes, n) = modifier.to_modifier_keycodes();
-                    for kc in keycodes.iter().take(n) {
-                        self.process_action_keycode(*kc, key_event).await;
-                    }
-                    self.osm_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn update_osl(&mut self, key_event: KeyEvent) {
-        match self.osl_state {
-            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
-            OneShotState::Single(layer_num) => {
-                if key_event.pressed {
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
-                    self.osl_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
     }
 
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
@@ -834,7 +768,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_mouse(key, key_event).await;
         } else if key.is_user() {
             #[cfg(feature = "_nrf_ble")]
-            use crate::ble::nrf::profile::{BleProfileAction, BLE_PROFILE_CHANNEL};
+            use {crate::ble::nrf::profile::BleProfileAction, crate::channel::BLE_PROFILE_CHANNEL};
             #[cfg(feature = "_nrf_ble")]
             if !key_event.pressed {
                 // Get user key id
@@ -909,7 +843,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
     async fn process_action_consumer_control(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_consumer() {
-            self.other_report.media_usage_id = if key_event.pressed {
+            self.media_report.usage_id = if key_event.pressed {
                 key.as_consumer_control_usage_id() as u16
             } else {
                 0
@@ -924,11 +858,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         if key.is_system() {
             if key_event.pressed {
                 if let Some(system_key) = key.as_system_control_usage_id() {
-                    self.other_report.system_usage_id = system_key as u8;
+                    self.system_control_report.usage_id = system_key as u8;
                     self.send_system_control_report().await;
                 }
             } else {
-                self.other_report.system_usage_id = 0;
+                self.system_control_report.usage_id = 0;
                 self.send_system_control_report().await;
             }
         }
@@ -952,36 +886,36 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     // TODO: Add accerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
-                        self.other_report.y = -self.mouse_key_move_delta;
+                        self.mouse_report.y = -self.mouse_key_move_delta;
                     }
                     KeyCode::MouseDown => {
-                        self.other_report.y = self.mouse_key_move_delta;
+                        self.mouse_report.y = self.mouse_key_move_delta;
                     }
                     KeyCode::MouseLeft => {
-                        self.other_report.x = -self.mouse_key_move_delta;
+                        self.mouse_report.x = -self.mouse_key_move_delta;
                     }
                     KeyCode::MouseRight => {
-                        self.other_report.x = self.mouse_key_move_delta;
+                        self.mouse_report.x = self.mouse_key_move_delta;
                     }
                     KeyCode::MouseWheelUp => {
-                        self.other_report.wheel = self.mouse_wheel_move_delta;
+                        self.mouse_report.wheel = self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseWheelDown => {
-                        self.other_report.wheel = -self.mouse_wheel_move_delta;
+                        self.mouse_report.wheel = -self.mouse_wheel_move_delta;
                     }
-                    KeyCode::MouseBtn1 => self.other_report.buttons |= 0b1,
-                    KeyCode::MouseBtn2 => self.other_report.buttons |= 0b10,
-                    KeyCode::MouseBtn3 => self.other_report.buttons |= 0b100,
-                    KeyCode::MouseBtn4 => self.other_report.buttons |= 0b1000,
-                    KeyCode::MouseBtn5 => self.other_report.buttons |= 0b10000,
-                    KeyCode::MouseBtn6 => self.other_report.buttons |= 0b100000,
-                    KeyCode::MouseBtn7 => self.other_report.buttons |= 0b1000000,
-                    KeyCode::MouseBtn8 => self.other_report.buttons |= 0b10000000,
+                    KeyCode::MouseBtn1 => self.mouse_report.buttons |= 0b1,
+                    KeyCode::MouseBtn2 => self.mouse_report.buttons |= 0b10,
+                    KeyCode::MouseBtn3 => self.mouse_report.buttons |= 0b100,
+                    KeyCode::MouseBtn4 => self.mouse_report.buttons |= 0b1000,
+                    KeyCode::MouseBtn5 => self.mouse_report.buttons |= 0b10000,
+                    KeyCode::MouseBtn6 => self.mouse_report.buttons |= 0b100000,
+                    KeyCode::MouseBtn7 => self.mouse_report.buttons |= 0b1000000,
+                    KeyCode::MouseBtn8 => self.mouse_report.buttons |= 0b10000000,
                     KeyCode::MouseWheelLeft => {
-                        self.other_report.pan = -self.mouse_wheel_move_delta;
+                        self.mouse_report.pan = -self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseWheelRight => {
-                        self.other_report.pan = self.mouse_wheel_move_delta;
+                        self.mouse_report.pan = self.mouse_wheel_move_delta;
                     }
                     KeyCode::MouseAccel0 => {}
                     KeyCode::MouseAccel1 => {}
@@ -991,25 +925,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             } else {
                 match key {
                     KeyCode::MouseUp | KeyCode::MouseDown => {
-                        self.other_report.y = 0;
+                        self.mouse_report.y = 0;
                     }
                     KeyCode::MouseLeft | KeyCode::MouseRight => {
-                        self.other_report.x = 0;
+                        self.mouse_report.x = 0;
                     }
                     KeyCode::MouseWheelUp | KeyCode::MouseWheelDown => {
-                        self.other_report.wheel = 0;
+                        self.mouse_report.wheel = 0;
                     }
                     KeyCode::MouseWheelLeft | KeyCode::MouseWheelRight => {
-                        self.other_report.pan = 0;
+                        self.mouse_report.pan = 0;
                     }
-                    KeyCode::MouseBtn1 => self.other_report.buttons &= 0b0,
-                    KeyCode::MouseBtn2 => self.other_report.buttons &= 0b01,
-                    KeyCode::MouseBtn3 => self.other_report.buttons &= 0b011,
-                    KeyCode::MouseBtn4 => self.other_report.buttons &= 0b0111,
-                    KeyCode::MouseBtn5 => self.other_report.buttons &= 0b01111,
-                    KeyCode::MouseBtn6 => self.other_report.buttons &= 0b011111,
-                    KeyCode::MouseBtn7 => self.other_report.buttons &= 0b0111111,
-                    KeyCode::MouseBtn8 => self.other_report.buttons &= 0b01111111,
+                    KeyCode::MouseBtn1 => self.mouse_report.buttons &= 0b0,
+                    KeyCode::MouseBtn2 => self.mouse_report.buttons &= 0b01,
+                    KeyCode::MouseBtn3 => self.mouse_report.buttons &= 0b011,
+                    KeyCode::MouseBtn4 => self.mouse_report.buttons &= 0b0111,
+                    KeyCode::MouseBtn5 => self.mouse_report.buttons &= 0b01111,
+                    KeyCode::MouseBtn6 => self.mouse_report.buttons &= 0b011111,
+                    KeyCode::MouseBtn7 => self.mouse_report.buttons &= 0b0111111,
+                    KeyCode::MouseBtn8 => self.mouse_report.buttons &= 0b01111111,
                     _ => {}
                 }
             }

@@ -9,17 +9,105 @@ pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
+use embassy_sync::channel::Channel;
 use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 
-use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::{
+    combo::{Combo, COMBO_MAX_NUM},
+    event::{Event, KeyEvent},
+    hid::Report,
+    light::LedIndicator,
+    storage::FlashOperationMessage,
+    RawMutex,
+};
+
+/// The config struct for RMK keyboard.
+///
+/// There are 3 types of configs:
+/// 1. `ChannelConfig`: Configurations for channels used in RMK.
+/// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
+/// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
+
+pub struct KeyboardConfig<'a, O: OutputPin> {
+    pub channel_config: ChannelConfig,
+    pub controller_config: ControllerConfig<O>,
+    pub rmk_config: RmkConfig<'a>,
+}
+
+impl<'a, O: OutputPin> Default for KeyboardConfig<'a, O> {
+    fn default() -> Self {
+        Self {
+            channel_config: ChannelConfig::default(),
+            controller_config: ControllerConfig::default(),
+            rmk_config: RmkConfig::default(),
+        }
+    }
+}
+
+/// Configurations for channels used in RMK
+pub struct ChannelConfig<
+    const KEY_EVENT_CHANNEL_SIZE: usize = 16,
+    const EVENT_CHANNEL_SIZE: usize = 16,
+    const REPORT_CHANNEL_SIZE: usize = 16,
+> {
+    pub key_event_channel: Channel<RawMutex, KeyEvent, KEY_EVENT_CHANNEL_SIZE>,
+    pub event_channel: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE>,
+    pub keyboard_report_channel: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>,
+    pub(crate) flash_channel: Channel<RawMutex, FlashOperationMessage, 4>,
+    pub(crate) led_channel: Channel<RawMutex, LedIndicator, 4>,
+    pub(crate) vial_read_channel: Channel<RawMutex, [u8; 32], 4>,
+}
+
+impl<
+        const KEY_EVENT_CHANNEL_SIZE: usize,
+        const EVENT_CHANNEL_SIZE: usize,
+        const REPORT_CHANNEL_SIZE: usize,
+    > Default for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+{
+    fn default() -> Self {
+        Self {
+            key_event_channel: Channel::new(),
+            event_channel: Channel::new(),
+            keyboard_report_channel: Channel::new(),
+            flash_channel: Channel::new(),
+            led_channel: Channel::new(),
+            vial_read_channel: Channel::new(),
+        }
+    }
+}
+
+impl<
+        const KEY_EVENT_CHANNEL_SIZE: usize,
+        const EVENT_CHANNEL_SIZE: usize,
+        const REPORT_CHANNEL_SIZE: usize,
+    > ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+{
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Config for controllers.
+///
+/// Controllers are used for controlling other devices on the board, such as lights, RGB, etc.
+pub struct ControllerConfig<O: OutputPin> {
+    pub light_config: LightConfig<O>,
+}
+
+impl<O: OutputPin> Default for ControllerConfig<O> {
+    fn default() -> Self {
+        Self {
+            light_config: LightConfig::default(),
+        }
+    }
+}
 
 /// Internal configurations for RMK keyboard.
-pub struct RmkConfig<'a, O: OutputPin> {
+pub struct RmkConfig<'a> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
-    pub light_config: LightConfig<O>,
     pub storage_config: StorageConfig,
     pub behavior_config: BehaviorConfig,
     #[cfg(feature = "_nrf_ble")]
@@ -28,13 +116,12 @@ pub struct RmkConfig<'a, O: OutputPin> {
     pub ble_battery_config: BleBatteryConfig,
 }
 
-impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
+impl<'a> Default for RmkConfig<'a> {
     fn default() -> Self {
         Self {
             mouse_config: MouseConfig::default(),
             usb_config: KeyboardUsbConfig::default(),
             vial_config: VialConfig::default(),
-            light_config: LightConfig::default(),
             storage_config: StorageConfig::default(),
             behavior_config: BehaviorConfig::default(),
             #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
@@ -44,7 +131,7 @@ impl<'a, O: OutputPin> Default for RmkConfig<'a, O> {
 }
 
 /// Config for configurable action behavior
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
@@ -53,6 +140,7 @@ pub struct BehaviorConfig {
 }
 
 /// Configurations for tap hold behavior
+#[derive(Clone, Copy, Debug)]
 pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
@@ -72,6 +160,7 @@ impl Default for TapHoldConfig {
 }
 
 /// Config for one shot behavior
+#[derive(Clone, Copy, Debug)]
 pub struct OneShotConfig {
     pub timeout: Duration,
 }
@@ -85,6 +174,7 @@ impl Default for OneShotConfig {
 }
 
 /// Config for combo behavior
+#[derive(Clone, Debug)]
 pub struct CombosConfig {
     pub combos: Vec<Combo, COMBO_MAX_NUM>,
     pub timeout: Duration,
@@ -121,14 +211,12 @@ impl Default for StorageConfig {
 }
 
 /// Config for lights
-#[derive(Clone, Copy, Debug)]
 pub struct LightConfig<O: OutputPin> {
     pub capslock: Option<LightPinConfig<O>>,
     pub scrolllock: Option<LightPinConfig<O>>,
     pub numslock: Option<LightPinConfig<O>>,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
 pub struct LightPinConfig<O: OutputPin> {
     pub pin: O,
     pub low_active: bool,

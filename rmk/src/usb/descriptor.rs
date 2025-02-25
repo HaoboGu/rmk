@@ -1,7 +1,5 @@
-use ssmarshal::serialize;
-use usbd_hid::descriptor::{
-    generator_prelude::*, MediaKeyboardReport, MouseReport, SystemControlReport,
-};
+use serde::Serialize;
+use usbd_hid::descriptor::generator_prelude::*;
 
 /// KeyboardReport describes a report and its companion descriptor that can be
 /// used to send keyboard button presses to a host and receive the status of the
@@ -23,6 +21,8 @@ use usbd_hid::descriptor::{
     }
 )]
 #[allow(dead_code)]
+#[derive(Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardReport {
     pub modifier: u8,
     pub reserved: u8,
@@ -40,7 +40,8 @@ pub struct KeyboardReport {
         };
     }
 )]
-pub(crate) struct ViaReport {
+#[derive(Default)]
+pub struct ViaReport {
     pub(crate) input_data: [u8; 32],
     pub(crate) output_data: [u8; 32],
 }
@@ -49,9 +50,10 @@ pub(crate) struct ViaReport {
 /// Should be same with `#[gen_hid_descriptor]`
 /// DO NOT EDIT
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 
 pub enum CompositeReportType {
+    #[default]
     None = 0x00,
     Mouse = 0x01,
     Media = 0x02,
@@ -112,7 +114,7 @@ impl CompositeReportType {
         };
     }
 )]
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct CompositeReport {
     pub(crate) buttons: u8,
     pub(crate) x: i8,
@@ -121,47 +123,4 @@ pub struct CompositeReport {
     pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
     pub(crate) media_usage_id: u16,
     pub(crate) system_usage_id: u8,
-}
-
-impl CompositeReport {
-    pub(crate) fn reset_mouse(&mut self) {
-        self.x = 0;
-        self.y = 0;
-        self.buttons = 0;
-        self.wheel = 0;
-        self.pan = 0;
-    }
-
-    pub(crate) fn serialize(
-        &self,
-        data: &mut [u8],
-        report_type: CompositeReportType,
-    ) -> Result<usize, ssmarshal::Error> {
-        // Use usbd-hid's report to do serialization, but not so efficient.
-        match report_type {
-            CompositeReportType::None => Ok(0),
-            CompositeReportType::Mouse => {
-                let mouse_report = MouseReport {
-                    buttons: self.buttons,
-                    x: self.x,
-                    y: self.y,
-                    wheel: self.wheel,
-                    pan: self.pan,
-                };
-                Ok(serialize(data, &mouse_report)?)
-            }
-            CompositeReportType::Media => {
-                let consumer_report = MediaKeyboardReport {
-                    usage_id: self.media_usage_id,
-                };
-                Ok(serialize(data, &consumer_report)?)
-            }
-            CompositeReportType::System => {
-                let system_report = SystemControlReport {
-                    usage_id: self.system_usage_id,
-                };
-                Ok(serialize(data, &system_report)?)
-            }
-        }
-    }
 }

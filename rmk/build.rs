@@ -1,9 +1,16 @@
+#[path = "./build_common.rs"]
+mod common;
+
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    // Set the compilation config
+    let mut cfgs = common::CfgSet::new();
+    common::set_target_cfgs(&mut cfgs);
+
     // Ensure build.rs is re-run if files change
     // println!("cargo:rerun-if-changed=NEVER_EXISTS");
     println!("cargo:rerun-if-changed=.git/HEAD");
@@ -39,5 +46,4 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, contents).expect("Failed to write build identifier");
-
 }

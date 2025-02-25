@@ -10,7 +10,7 @@ use defmt::*;
 use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals, task::block_on};
 use esp_println as _;
 use rmk::{
-    config::{RmkConfig, VialConfig},
+    config::{KeyboardConfig, RmkConfig, VialConfig},
     run_rmk,
 };
 
@@ -30,8 +30,14 @@ fn main() {
 
     // Keyboard config
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         vial_config,
+        ..Default::default()
+    };
+
+    // Keyboard config
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

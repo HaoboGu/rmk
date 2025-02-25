@@ -1,18 +1,16 @@
 //! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
 
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::{Receiver, Sender};
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
+use crate::channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::event::{Event, RotaryEncoderEvent};
-use crate::keyboard::{KeyboardReportMessage, EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use crate::REPORT_CHANNEL_SIZE;
+use crate::hid::Report;
 
-use super::{InputDevice, InputProcessor, EVENT_CHANNEL_SIZE};
+use super::{InputDevice, InputProcessor};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -163,17 +161,16 @@ impl<
 
             let direction = self.update();
 
-            self.event_sender()
-                .send(Event::RotaryEncoder(RotaryEncoderEvent {
-                    id: self.id,
-                    direction,
-                }))
-                .await;
+            self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
+                id: self.id,
+                direction,
+            }))
+            .await;
         }
     }
 
-    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        EVENT_CHANNEL.sender()
+    async fn send_event(&mut self, event: Self::EventType) {
+        EVENT_CHANNEL.sender().send(event).await
     }
 }
 
@@ -182,7 +179,7 @@ pub struct RotaryEncoderProcessor {}
 impl InputProcessor for RotaryEncoderProcessor {
     type EventType = Event;
 
-    type ReportType = KeyboardReportMessage;
+    type ReportType = Report;
 
     async fn process(&mut self, event: Self::EventType) {
         match event {
@@ -199,15 +196,11 @@ impl InputProcessor for RotaryEncoderProcessor {
         }
     }
 
-    fn event_receiver(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE> {
-        EVENT_CHANNEL.receiver()
+    async fn read_event(&self) -> Self::EventType {
+        EVENT_CHANNEL.receiver().receive().await
     }
 
-    fn report_sender(
-        &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE> {
-        KEYBOARD_REPORT_CHANNEL.sender()
+    async fn send_report(&self, report: Self::ReportType) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }

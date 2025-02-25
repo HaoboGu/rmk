@@ -22,7 +22,7 @@ use embassy_stm32::{
 };
 use panic_probe as _;
 use rmk::{
-    config::{RmkConfig, VialConfig},
+    config::{KeyboardConfig, RmkConfig, VialConfig},
     run_rmk,
 };
 use static_cell::StaticCell;
@@ -99,8 +99,14 @@ async fn main(spawner: Spawner) {
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         vial_config,
+        ..Default::default()
+    };
+
+    // Keyboard config
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

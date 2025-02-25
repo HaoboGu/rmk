@@ -99,7 +99,6 @@ pub(crate) fn gen_imports(config: &KeyboardConfig) -> TokenStream2 {
         }
     };
 
-    // TODO: remove static var?
     quote! {
         #imports
 
@@ -167,13 +166,22 @@ fn expand_main(
             #ble_config
 
             // Set all keyboard config
-            let keyboard_config = ::rmk::config::RmkConfig {
+            let rmk_config = ::rmk::config::RmkConfig {
                 usb_config: KEYBOARD_USB_CONFIG,
                 vial_config: VIAL_CONFIG,
-                light_config,
                 storage_config,
                 behavior_config,
                 #set_ble_config
+                ..Default::default()
+            };
+
+            let controller_config = ::rmk::config::ControllerConfig {
+                light_config,
+            };
+
+            let keyboard_config = ::rmk::config::KeyboardConfig {
+                rmk_config,
+                controller_config,
                 ..Default::default()
             };
 

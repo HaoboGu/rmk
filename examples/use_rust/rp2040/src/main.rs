@@ -20,7 +20,7 @@ use embassy_rp::{
 // use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     run_rmk_with_async_flash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -58,9 +58,14 @@ async fn main(spawner: Spawner) {
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
+        ..Default::default()
+    };
+
+    let keyboard_config = KeyboardConfig {
+        rmk_config,
         ..Default::default()
     };
 

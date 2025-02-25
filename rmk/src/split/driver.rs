@@ -1,10 +1,9 @@
-use core::sync::atomic::Ordering;
-
-///! The abstracted driver layer of the split keyboard.
-///!
+//! The abstracted driver layer of the split keyboard.
+//!
 use super::SplitMessage;
 use crate::CONNECTION_STATE;
-use crate::{event::KeyEvent, keyboard::KEY_EVENT_CHANNEL};
+use crate::{channel::KEY_EVENT_CHANNEL, event::KeyEvent};
+use core::sync::atomic::Ordering;
 use embassy_futures::select::select;
 
 #[derive(Debug, Clone, Copy)]
@@ -27,15 +26,14 @@ pub(crate) trait SplitWriter {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError>;
 }
 
-/// PeripheralMatrixMonitor runs in central.
+/// PeripheralManager runs in central.
 /// It reads split message from peripheral and updates key matrix cache of the peripheral.
 ///
 /// When the central scans the matrix, the scanning thread sends sync signal and gets key state cache back.
 ///
 /// The `ROW` and `COL` are the number of rows and columns of the corresponding peripheral's keyboard matrix.
 /// The `ROW_OFFSET` and `COL_OFFSET` are the offset of the peripheral's matrix in the keyboard's matrix.
-/// TODO: Rename `PeripheralMatrixMonitor`
-pub(crate) struct PeripheralMatrixMonitor<
+pub(crate) struct PeripheralManager<
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -54,18 +52,19 @@ impl<
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
         R: SplitReader + SplitWriter,
-    > PeripheralMatrixMonitor<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+    > PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
         Self { receiver, id }
     }
 
-    /// Run the monitor.
+    /// Run the manager.
     ///
-    /// The monitor receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
+    /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
+    /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) -> ! {
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-        // Send once on start
+        // Send connection state once on start
         if let Err(e) = self
             .receiver
             .write(&SplitMessage::ConnectionState(conn_state))
@@ -74,6 +73,7 @@ impl<
             error!("SplitDriver write error: {:?}", e);
         }
         loop {
+            // Read the message from peripheral, or sync the connection state every 500ms.
             match select(self.receiver.read(), embassy_time::Timer::after_millis(500)).await {
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_message) => {
@@ -102,7 +102,7 @@ impl<
                     Err(e) => error!("Peripheral message read error: {:?}", e),
                 },
                 embassy_futures::select::Either::Second(_) => {
-                    // Sync ConnectionState every 500ms
+                    // Sync ConnectionState
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     if let Err(e) = self
                         .receiver

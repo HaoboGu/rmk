@@ -2,8 +2,6 @@ use crate::config::BleBatteryConfig;
 use embassy_time::Timer;
 use nrf_softdevice::ble::Connection;
 
-use super::server::BleServer;
-
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BatteryService {
@@ -55,9 +53,7 @@ impl<'a> BatteryService {
                     Ok(_) => info!("Battery value: {}", val),
                     Err(e) => match self.battery_level_set(&val) {
                         Ok(_) => info!("Battery value set: {}", val),
-                        Err(e2) => {
-                            error!("Battery value notify error: {:?}, set error: {:?}", e, e2)
-                        }
+                        Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
                     },
                 }
                 if val < 10 {
@@ -65,7 +61,7 @@ impl<'a> BatteryService {
                     if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                         charge_led.toggle();
                     }
-                    Timer::after_secs(2).await;
+                    Timer::after_secs(200).await;
                     continue;
                 } else {
                     // Turn off the led
@@ -90,7 +86,6 @@ impl<'a> BatteryService {
         }
     }
 
-    // TODO: Make battery calculation user customizable
     fn get_battery_percent(&self, val: i16, battery_config: &BleBatteryConfig<'a>) -> u8 {
         info!("Detected adc value: {:?}", val);
         // Avoid overflow
@@ -124,18 +119,6 @@ impl<'a> BatteryService {
             0_u8
         } else {
             ((val * total / measured - 4055) / 7) as u8
-        }
-    }
-}
-
-impl BleServer {
-    pub(crate) fn set_battery_value(&self, conn: &Connection, val: &u8) {
-        match self.bas.battery_level_notify(conn, val) {
-            Ok(_) => info!("Battery value: {}", val),
-            Err(e) => match self.bas.battery_level_set(val) {
-                Ok(_) => info!("Battery value set: {}", val),
-                Err(e2) => error!("Battery value notify error: {:?}, set error: {:?}", e, e2),
-            },
         }
     }
 }

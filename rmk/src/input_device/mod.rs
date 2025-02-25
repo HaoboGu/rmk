@@ -6,13 +6,7 @@
 //! Note: The `InputDevice` trait must be used in conjunction with the `run_devices` macro to ensure correct execution of all input devices.
 
 use core::future::Future;
-
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Receiver, Sender},
-};
-
-use crate::keyboard::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use usbd_hid::descriptor::AsInputReport;
 
 pub mod rotary_encoder;
 
@@ -49,22 +43,14 @@ pub trait InputDevice {
     /// Event type that input device will send
     type EventType;
 
-    /// The number of required channel size
-    // FIXME: it's not possible in stable to define an associated const and use it as the channel size in stable Rust.
-    // It requires #[feature(generic_const_exprs)]:
-    //
-    // `fn event_sender(..) -> &Channel<CriticalSectionRawMutex, Self::EventType, { Self::EVENT_CHANNEL_SIZE } >;`
-    // So this size is commented out
-    // const EVENT_CHANNEL_SIZE: usize = 32;
-
     /// Starts the input device task.
     ///
     /// This asynchronous method should contain the main logic for the input device.
     /// It will be executed concurrently with other input devices using the `run_devices` macro.
     fn run(&mut self) -> impl Future<Output = ()>;
 
-    /// Get the event sender for the input device. All events should be send by this channel.
-    fn event_sender(&self) -> Sender<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    /// Send the event from current input device to the input processor.
+    fn send_event(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
 }
 
 /// The trait for input processors.
@@ -78,7 +64,7 @@ pub trait InputProcessor {
     type EventType;
 
     /// The report type that the input processor sends.
-    type ReportType;
+    type ReportType: AsInputReport;
 
     /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
     /// then send the report to the USB/BLE.
@@ -88,20 +74,13 @@ pub trait InputProcessor {
     /// The input processor implementor should be aware of this.  
     fn process(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
 
-    /// Get the input event channel  receiver for the input processor.
+    /// Get the input event.
     ///
-    /// The input processor receives events from this channel, processes the event,
-    /// then sends to the report channel.
-    fn event_receiver(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, Self::EventType, EVENT_CHANNEL_SIZE>;
+    /// The read input event is processed by the input processor, converted to HID report, and sent to the HID writer.
+    fn read_event(&self) -> impl Future<Output = Self::EventType>;
 
-    /// Get the output report sender for the input processor.
-    ///
-    /// The input processor sends keyboard reports to this channel.
-    fn report_sender(
-        &self,
-    ) -> Sender<CriticalSectionRawMutex, Self::ReportType, REPORT_CHANNEL_SIZE>;
+    /// Send the processed report.
+    fn send_report(&self, report: Self::ReportType) -> impl Future<Output = ()>;
 
     /// Default implementation of the input processor. It wait for a new event from the event channel,
     /// then process the event.
@@ -110,7 +89,7 @@ pub trait InputProcessor {
     fn run(&mut self) -> impl Future<Output = ()> {
         async {
             loop {
-                let event = self.event_receiver().receive().await;
+                let event = self.read_event().await;
                 self.process(event).await;
             }
         }
