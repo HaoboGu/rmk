@@ -75,6 +75,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                     quote! {
                         #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
                         #saadc_interrupt
+                        SPIM3 => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::SPI3>;
                         CLOCK_POWER => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
                     }
                 } else {

@@ -1,10 +1,12 @@
 mod behavior;
 mod bind_interrupt;
 mod ble;
+mod bus;
 mod chip_init;
 mod comm;
 mod config;
 mod default_config;
+mod display;
 mod entry;
 mod feature;
 mod flash;

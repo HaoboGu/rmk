@@ -26,6 +26,10 @@ pub struct KeyboardTomlConfig {
     pub split: Option<SplitConfig>,
     /// Input device config
     pub input_device: Option<InputDeviceConfig>,
+    /// Display config
+    pub display: Option<DisplayConfig>,
+    /// Bus config
+    pub bus: Option<CommunicationProtocol>,
 }
 
 /// Configurations for keyboard info
@@ -224,6 +228,19 @@ pub struct SplitBoardConfig {
     pub matrix: MatrixConfig,
     /// Input device config for the split
     pub input_device: Option<InputDeviceConfig>,
+    /// Display
+    pub display: Option<DisplayConfig>,
+    /// Bus
+    pub bus: Option<Vec<CommunicationProtocol>>,
+}
+
+/// Display config
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayConfig {
+    pub instance: Option<String>,
+    pub bus: String,
+    pub interface: CommunicationProtocolType,
 }
 
 /// Serial port config
@@ -293,30 +310,43 @@ pub struct EncoderConfig {
 }
 
 /// Pointing device config
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
 #[serde(deny_unknown_fields)]
 pub struct PointingDeviceConfig {
-    pub interface: Option<CommunicationProtocol>,
+    pub bus: Option<String>,
+    pub interface: CommunicationProtocolType,
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "protocol", content = "config")]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub enum CommunicationProtocol {
     I2C(I2cConfig),
     SPI(SpiConfig),
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "protocol", content = "config")]
+#[serde(deny_unknown_fields)]
+#[allow(unused)]
+pub enum CommunicationProtocolType {
+    /// I2C with address
+    I2C(String),
+    /// SPI with cs pin
+    SPI(String),
+}
+
 /// SPI config
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
+#[serde(deny_unknown_fields)]
 pub struct SpiConfig {
     pub instance: String,
     pub sck: String,
-    pub mosi: String,
-    pub miso: String,
-    pub cs: Option<String>,
-    pub cpi: Option<u32>,
+    pub mosi: Option<String>,
+    pub miso: Option<String>,
 }
 
 /// I2C config
@@ -326,5 +356,4 @@ pub struct I2cConfig {
     pub instance: String,
     pub sda: String,
     pub scl: String,
-    pub address: u8,
 }

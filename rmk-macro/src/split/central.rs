@@ -8,9 +8,11 @@ use crate::{
     behavior::expand_behavior_config,
     bind_interrupt::expand_bind_interrupt,
     ble::expand_ble_config,
+    bus::expand_communication_bus_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
     config::{MatrixType, SerialConfig, SplitConfig},
+    display::{convert_display_name_into_identity, expand_display_config},
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
@@ -75,6 +77,9 @@ fn expand_split_central(
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
+    let bus_config =
+        expand_communication_bus_config(&split_config.central.bus, &keyboard_config.chip);
+    let display_config = expand_display_config(&split_config.central.display);
     let behavior_config = expand_behavior_config(keyboard_config);
 
     let mut matrix_config = proc_macro2::TokenStream::new();
@@ -171,6 +176,12 @@ fn expand_split_central(
 
             // Initialize split central ble config
             #ble_config
+
+            // Initialize split central protocols config
+            #bus_config
+
+            // Initialize split central display config
+            #display_config
 
             // Set all keyboard config
             let keyboard_config = ::rmk::config::RmkConfig {
@@ -318,6 +329,14 @@ fn expand_split_central_entry(
                     )
                 });
             });
+
+            if let Some(display) = &split_config.central.display {
+                let display_identity = convert_display_name_into_identity(&display.instance);
+                tasks.push(quote! {
+                    ::rmk::display::run_display(#display_identity)
+                });
+            }
+
             join_all_tasks(tasks)
         }
         ChipSeries::Rp2040 => {

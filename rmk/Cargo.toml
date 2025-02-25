@@ -43,6 +43,9 @@ sequential-storage = { version = "4.0.0" }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
+embedded-graphics = { version = "0.8", optional = true }
+memory-lcd-spi = { version = "0.0.8", git = "https://github.com/andelf/memory-lcd-spi", optional = true }
+
 # Optional dependencies
 # nRF dependencies
 once_cell = { version = "1.19", features = [
@@ -119,7 +122,7 @@ _no_usb = []
 _no_external_storage = []
 
 #! ### BLE feature flags
-#! 
+#!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
@@ -173,3 +176,4 @@ _esp_ble = [
 ]
 _nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]
+display = ["dep:embedded-graphics", "dep:memory-lcd-spi"]

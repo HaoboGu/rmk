@@ -68,6 +68,8 @@ pub mod combo;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;
+#[cfg(feature = "display")]
+pub mod display;
 pub mod event;
 mod flash;
 mod hid;
