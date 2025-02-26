@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 use syn::ItemMod;
 
 use crate::{
+    ChipModel, ChipSeries,
     behavior::expand_behavior_config,
     bind_interrupt::expand_bind_interrupt,
     ble::expand_ble_config,
@@ -15,10 +16,9 @@ use crate::{
     flash::expand_flash_init,
     import::expand_imports,
     keyboard::gen_imports,
-    keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
+    keyboard_config::{BoardConfig, KeyboardConfig, read_keyboard_toml_config},
     light::expand_light_config,
     matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
-    ChipModel, ChipSeries,
 };
 
 /// Parse split central mod and generate a valid RMK main function with all needed code

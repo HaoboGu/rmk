@@ -1,14 +1,14 @@
-use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
+use super::driver::{SplitReader, SplitWriter};
+use crate::CONNECTION_STATE;
 use crate::channel::KEY_EVENT_CHANNEL;
+use crate::debounce::DebouncerTrait;
 #[cfg(not(feature = "rapid_debouncer"))]
 use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::debounce::DebouncerTrait;
 use crate::direct_pin::DirectPinMatrix;
 use crate::matrix::{Matrix, MatrixTrait};
-use crate::CONNECTION_STATE;
 #[cfg(not(feature = "_esp_ble"))]
 use embassy_executor::Spawner;
 use embassy_futures::select::select;

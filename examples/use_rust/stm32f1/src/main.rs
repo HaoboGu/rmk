@@ -9,12 +9,11 @@ mod vial;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::{
-    bind_interrupts,
+    Config, bind_interrupts,
     flash::Flash,
     gpio::{Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
-    Config,
 };
 use panic_halt as _;
 use rmk::{

@@ -8,7 +8,7 @@ use rmk::macros::rmk_keyboard;
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
-    use embassy_stm32::{time::Hertz, usb::Driver, Config};
+    use embassy_stm32::{Config, time::Hertz, usb::Driver};
     use rmk::run_rmk;
     use static_cell::StaticCell;
 

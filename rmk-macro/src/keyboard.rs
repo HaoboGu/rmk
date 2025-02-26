@@ -4,6 +4,7 @@ use quote::quote;
 use syn::ItemMod;
 
 use crate::{
+    ChipSeries,
     behavior::expand_behavior_config,
     bind_interrupt::expand_bind_interrupt,
     ble::expand_ble_config,
@@ -14,12 +15,11 @@ use crate::{
     flash::expand_flash_init,
     import::expand_imports,
     keyboard_config::{
-        expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, KeyboardConfig,
+        KeyboardConfig, expand_keyboard_info, expand_vial_config, read_keyboard_toml_config,
     },
     layout::expand_layout_init,
     light::expand_light_config,
     matrix::expand_matrix_config,
-    ChipSeries,
 };
 
 /// List of functions that can be overwritten
@@ -42,7 +42,9 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
 
     if let Some(m) = toml_config.clone().matrix {
         if m.row2col {
-            eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
+            eprintln!(
+                "row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)"
+            );
         }
     }
 

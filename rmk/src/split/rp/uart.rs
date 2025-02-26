@@ -1,5 +1,5 @@
 use core::cell::RefCell;
-use core::future::{poll_fn, Future};
+use core::future::{Future, poll_fn};
 use core::marker::PhantomData;
 use core::task::Poll;
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
@@ -8,8 +8,8 @@ use embassy_rp::{
     clocks::clk_sys_freq,
     gpio::{Drive, Level, Pull, SlewRate},
     interrupt::{
-        typelevel::{Binding, Handler, Interrupt},
         Priority,
+        typelevel::{Binding, Handler, Interrupt},
     },
     pio::{
         Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin,
@@ -17,8 +17,8 @@ use embassy_rp::{
     },
     uart::Error,
 };
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};

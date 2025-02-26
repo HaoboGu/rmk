@@ -1,9 +1,9 @@
 use crate::{
     action::KeyAction,
-    combo::{Combo, COMBO_MAX_NUM},
+    combo::{COMBO_MAX_NUM, Combo},
     config::BehaviorConfig,
     event::KeyEvent,
-    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
+    keyboard_macro::{MACRO_SPACE_SIZE, MacroOperation},
     keycode::KeyCode,
     reboot_keyboard,
     storage::Storage,

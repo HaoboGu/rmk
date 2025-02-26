@@ -1,13 +1,13 @@
 use super::BONDED_DEVICE_NUM;
 use crate::channel::FLASH_CHANNEL;
-use crate::{ble::nrf::ACTIVE_PROFILE, storage::FlashOperationMessage, CONNECTION_STATE};
+use crate::{CONNECTION_STATE, ble::nrf::ACTIVE_PROFILE, storage::FlashOperationMessage};
 use core::{cell::RefCell, sync::atomic::Ordering};
 use heapless::FnvIndexMap;
 use nrf_softdevice::ble::{
-    gatt_server::{get_sys_attrs, set_sys_attrs},
-    security::{IoCapabilities, SecurityHandler},
     Address, AddressType, Connection, EncryptionInfo, IdentityKey, IdentityResolutionKey, MasterId,
     SecurityMode,
+    gatt_server::{get_sys_attrs, set_sys_attrs},
+    security::{IoCapabilities, SecurityHandler},
 };
 
 // Bond info which will be stored in flash
@@ -306,7 +306,9 @@ impl SecurityHandler for Bonder {
 
         // Check whether all slots are full, if so randomly remove one
         if (slot_num as usize) == self.bond_info.borrow().capacity() {
-            warn!("Reach maximum number of bonded devices, a device which is not lucky today will be removed:(");
+            warn!(
+                "Reach maximum number of bonded devices, a device which is not lucky today will be removed:("
+            );
             // The unlucky number is 4
             let unlucky: u8 = 4;
             match FLASH_CHANNEL.try_send(FlashOperationMessage::ClearSlot(unlucky)) {

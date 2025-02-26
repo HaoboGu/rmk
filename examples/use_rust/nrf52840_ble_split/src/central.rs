@@ -17,7 +17,7 @@ use embassy_nrf::{
     interrupt::{self, InterruptExt, Priority},
     peripherals::{self, SAADC, USBD},
     saadc::{self, AnyInput, Input as _, Saadc},
-    usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
+    usb::{self, Driver, vbus_detect::SoftwareVbusDetect},
 };
 use panic_probe as _;
 use rmk::{

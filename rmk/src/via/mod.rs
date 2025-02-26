@@ -14,7 +14,7 @@ use embassy_time::Instant;
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
 use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
-use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
+use protocol::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
 pub(crate) mod keycode_convert;
@@ -39,12 +39,12 @@ pub(crate) struct VialService<
 }
 
 impl<
-        'a,
-        RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-    > VialService<'a, RW, ROW, COL, NUM_LAYER>
+    'a,
+    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+> VialService<'a, RW, ROW, COL, NUM_LAYER>
 {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.

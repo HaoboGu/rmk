@@ -2,10 +2,10 @@ pub mod dummy_flash;
 mod eeconfig;
 
 use crate::{
-    channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_LENGTH},
-    config::StorageConfig,
     BUILD_HASH,
+    channel::FLASH_CHANNEL,
+    combo::{COMBO_MAX_LENGTH, Combo},
+    config::StorageConfig,
 };
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
@@ -13,9 +13,9 @@ use core::ops::Range;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
 use sequential_storage::{
-    cache::NoCache,
-    map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
     Error as SSError,
+    cache::NoCache,
+    map::{SerializationError, Value, fetch_all_items, fetch_item, store_item},
 };
 #[cfg(feature = "_nrf_ble")]
 use {crate::ble::nrf::bonder::BondInfo, core::mem};

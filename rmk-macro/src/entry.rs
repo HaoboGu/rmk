@@ -4,9 +4,9 @@ use quote::quote;
 use syn::{ItemFn, ItemMod};
 
 use crate::{
+    ChipSeries,
     keyboard::Overwritten,
     keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig},
-    ChipSeries,
 };
 
 pub(crate) fn expand_rmk_entry(

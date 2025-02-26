@@ -47,12 +47,12 @@ pub(crate) struct PeripheralManager<
 }
 
 impl<
-        const ROW: usize,
-        const COL: usize,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        R: SplitReader + SplitWriter,
-    > PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+    const ROW: usize,
+    const COL: usize,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    R: SplitReader + SplitWriter,
+> PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     pub(crate) fn new(receiver: R, id: usize) -> Self {
         Self { receiver, id }
@@ -95,7 +95,9 @@ impl<
                                     })
                                     .await;
                             } else {
-                                warn!("Key event from peripheral is ignored because the connection is not established.");
+                                warn!(
+                                    "Key event from peripheral is ignored because the connection is not established."
+                                );
                             }
                         }
                     }

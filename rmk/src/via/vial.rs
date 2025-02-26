@@ -6,7 +6,7 @@ use num_enum::FromPrimitive;
 use crate::{
     action::KeyAction,
     channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_NUM},
+    combo::{COMBO_MAX_NUM, Combo},
     keymap::KeyMap,
     storage::{ComboData, FlashOperationMessage},
     usb::descriptor::ViaReport,
@@ -118,7 +118,7 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     // TODO: Support dynamic tap dance
                     report.input_data[0] = 0; // Tap dance entries
                     report.input_data[1] = 8; // Combo entries
-                                              // TODO: Support dynamic key override
+                    // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                 }
                 VialDynamic::DynamicVialTapDanceGet => {

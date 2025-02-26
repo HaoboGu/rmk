@@ -1,9 +1,9 @@
 use crate::{
+    CONNECTION_STATE,
     channel::KEY_EVENT_CHANNEL,
     debounce::{DebounceState, DebouncerTrait},
     event::KeyEvent,
     input_device::InputDevice,
-    CONNECTION_STATE,
 };
 use core::future::Future;
 use embassy_time::{Instant, Timer};
@@ -109,13 +109,13 @@ pub struct Matrix<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
     pub fn new(
@@ -134,13 +134,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> InputDevice for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     type EventType = KeyEvent;
 
@@ -159,13 +159,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     #[cfg(feature = "col2row")]
     const ROW: usize = INPUT_PIN_NUM;
