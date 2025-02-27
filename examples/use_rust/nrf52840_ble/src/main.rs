@@ -11,6 +11,7 @@ use core::cell::RefCell;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
+use embassy_futures::join::join;
 use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
@@ -19,24 +20,26 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
-use keymap::{COL, NUM_LAYER, ROW, get_default_keymap};
+use keymap::{get_default_keymap, COL, NUM_LAYER, ROW};
 use panic_probe as _;
 use rmk::{
     action::KeyAction,
     bind_device_and_processor_and_run,
     ble::SOFTWARE_VBUS,
-    channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE},
     config::{
-        BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
+        BleBatteryConfig, ControllerConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig,
+        StorageConfig, VialConfig,
     },
-    debounce::{DebouncerTrait, default_bouncer::DefaultDebouncer},
+    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
     event::{Event, KeyEvent},
     hid::Report,
     initialize_nrf_sd_and_flash,
-    input_device::{InputDevice, InputProcessor, rotary_encoder::RotaryEncoder},
+    input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor},
     keyboard::Keyboard,
     keymap::KeyMap,
-    matrix::Matrix,
+    light::LightController,
+    matrix::{Matrix, TestMatrix},
+    run_rmk,
     storage::Storage,
 };
 
@@ -137,7 +140,8 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
 
     // Keyboard matrix, use COL2ROW by default
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    // let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut matrix = TestMatrix::<ROW, COL>::new();
 
     let (sd, flash) =
         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
@@ -158,8 +162,15 @@ async fn main(spawner: Spawner) {
     );
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
-    bind_device_and_processor_and_run!((matrix) => keyboard).await;
-    
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    join(
+        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+    )
+    .await;
+
     // bind_device_and_processor!(device_task = (matrix: Matrix<Input<'static>, Output<'static>, DefaultDebouncer<ROW, COL>, ROW, COL>, my_device2: MyDevice) => processor: Keyboard<'static, ROW, COL, NUM_LAYER>);
     // spawner
     //     .spawn(device_task(keyboard, matrix, my_device2))

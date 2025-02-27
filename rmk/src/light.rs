@@ -68,7 +68,7 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
     }
 }
 
-pub(crate) struct LightController<P: OutputPin> {
+pub struct LightController<P: OutputPin> {
     capslock: Option<SingleLed<P>>,
     scrolllock: Option<SingleLed<P>>,
     numslock: Option<SingleLed<P>>,
@@ -171,7 +171,7 @@ macro_rules! impl_led_on_off {
 }
 
 impl<P: OutputPin> LightController<P> {
-    pub(crate) fn new(light_config: LightConfig<P>) -> Self {
+    pub fn new(light_config: LightConfig<P>) -> Self {
         Self {
             capslock: light_config.capslock.map(|p| SingleLed::new(p)),
             scrolllock: light_config.scrolllock.map(|p| SingleLed::new(p)),

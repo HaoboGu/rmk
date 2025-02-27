@@ -348,3 +348,37 @@ impl<
     //     f(&mut self.key_states[row][col]);
     // }
 }
+
+pub struct TestMatrix<const ROW: usize, const COL: usize> {
+    last: bool,
+}
+impl<const ROW: usize, const COL: usize> TestMatrix<ROW, COL> {
+    pub fn new() -> Self {
+        Self { last: false }
+    }
+}
+impl<const ROW: usize, const COL: usize> MatrixTrait for TestMatrix<ROW, COL> {
+    const ROW: usize = ROW;
+    const COL: usize = COL;
+
+    #[cfg(feature = "async_matrix")]
+    fn wait_for_key(&mut self) -> impl Future<Output = ()> {
+        async {}
+    }
+}
+
+impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
+    async fn read_event(&mut self) -> Event {
+        if self.last {
+            embassy_time::Timer::after_millis(100).await;
+        } else {
+            embassy_time::Timer::after_secs(5).await;
+        }
+        self.last = !self.last;
+        Event::Key(KeyEvent {
+            row: 0,
+            col: 0,
+            pressed: self.last,
+        })
+    }
+}

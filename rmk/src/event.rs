@@ -25,6 +25,8 @@ pub enum Event {
     ///
     /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
     Eos,
+    /// Custom event
+    Custom([u8; 16]),
 }
 
 /// Event for rotary encoder
