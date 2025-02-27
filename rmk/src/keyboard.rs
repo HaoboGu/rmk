@@ -1,7 +1,7 @@
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
-use crate::event::KeyEvent;
+use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
 use crate::input_device::InputProcessor;
 use crate::usb::descriptor::KeyboardReport;
@@ -45,40 +45,12 @@ impl<T> OneShotState<T> {
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
     for Keyboard<'a, ROW, COL, NUM_LAYER>
 {
-    type EventType = KeyEvent;
-
-    type ReportType = Report;
-
-    /// Process key changes at (row, col)
-    async fn process(&mut self, key_event: Self::EventType) {
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if key_event.pressed {
-            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
-        }
-
-        // Process key
-        let key_action = self
-            .keymap
-            .borrow_mut()
-            .get_action_with_layer_cache(key_event);
-
-        if self.combo_on {
-            if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                self.process_key_action(key_action, key_event).await;
-            }
-        } else {
-            self.process_key_action(key_action, key_event).await;
-        }
-    }
-
-    /// Main keyboard task, it receives input devices result, processes keys.
-    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
-    async fn run(&mut self) -> () {
-        loop {
-            let key_event = self.read_event().await;
-
+    /// Main keyboard processing task, it receives input devices result, processes keys.
+    /// The report is sent using `send_report`.
+    async fn process(&mut self, event: Event) -> () {
+        if let Event::Key(key_event) = event {
             // Process the key change
-            self.process(key_event).await;
+            self.process_inner(key_event).await;
 
             // After processing the key change, check if there are unprocessed events
             // This will happen if there's recursion in key processing
@@ -88,21 +60,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProces
                 }
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
-                self.process(e).await;
+                self.process_inner(e).await;
             }
         }
     }
 
-    async fn read_event(&self) -> Self::EventType {
-        KEY_EVENT_CHANNEL.receiver().receive().await
-    }
-
-    async fn send_report(&self, report: Self::ReportType) {
+    async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }
 
-pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
@@ -165,7 +133,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) fn new(
+    pub fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         behavior: BehaviorConfig,
     ) -> Self {
@@ -206,6 +174,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+        }
+    }
+
+    /// Process key changes at (row, col)
+    async fn process_inner(&mut self, key_event: KeyEvent) {
+        // Matrix should process key pressed event first, record the timestamp of key changes
+        if key_event.pressed {
+            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
+        }
+
+        // Process key
+        let key_action = self
+            .keymap
+            .borrow_mut()
+            .get_action_with_layer_cache(key_event);
+
+        if self.combo_on {
+            if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                self.process_key_action(key_action, key_event).await;
+            }
+        } else {
+            self.process_key_action(key_action, key_event).await;
         }
     }
 

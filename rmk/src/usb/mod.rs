@@ -1,4 +1,4 @@
-pub(crate) mod descriptor;
+pub mod descriptor;
 
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;

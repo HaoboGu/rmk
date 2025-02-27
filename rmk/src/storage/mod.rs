@@ -363,7 +363,7 @@ pub(crate) struct ComboData {
     pub(crate) output: KeyAction,
 }
 
-pub(crate) struct Storage<
+pub struct Storage<
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
@@ -401,7 +401,7 @@ macro_rules! write_storage {
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Storage<F, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(
+    pub async fn new(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         config: StorageConfig,

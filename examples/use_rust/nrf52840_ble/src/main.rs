@@ -6,7 +6,9 @@ mod macros;
 mod keymap;
 mod vial;
 
-use defmt::*;
+use core::cell::RefCell;
+
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::{
@@ -17,16 +19,25 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
+use keymap::{COL, NUM_LAYER, ROW, get_default_keymap};
 use panic_probe as _;
 use rmk::{
+    action::KeyAction,
+    bind_device_and_processor_and_run,
     ble::SOFTWARE_VBUS,
-    channel::EVENT_CHANNEL,
+    channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE},
     config::{
         BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
-    event::Event,
-    input_device::{rotary_encoder::RotaryEncoder, InputDevice},
-    run_devices, run_rmk,
+    debounce::{DebouncerTrait, default_bouncer::DefaultDebouncer},
+    event::{Event, KeyEvent},
+    hid::Report,
+    initialize_nrf_sd_and_flash,
+    input_device::{InputDevice, InputProcessor, rotary_encoder::RotaryEncoder},
+    keyboard::Keyboard,
+    keymap::KeyMap,
+    matrix::Matrix,
+    storage::Storage,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -110,41 +121,144 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
     // Keyboard config
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
+    // let keyboard_config = KeyboardConfig {
+    //     rmk_config,
+    //     ..Default::default()
+    // };
 
     let mut my_device = MyDevice {};
+    let mut my_device2 = MyDevice {};
+    let mut processor = MyProcessor {};
     let pin_a = Input::new(AnyPin::from(p.P0_06), embassy_nrf::gpio::Pull::Up);
     let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
     let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 
-    embassy_futures::join::join(
-        run_rmk(
-            input_pins,
-            output_pins,
-            driver,
-            &mut keymap::get_default_keymap(),
-            keyboard_config,
-            spawner,
-        ),
-        run_devices!(my_device, encoder),
+    // Create the debouncer, use COL2ROW by default
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+
+    // Keyboard matrix, use COL2ROW by default
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+
+    let (sd, flash) =
+        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
+    let mut storage = Storage::new(
+        flash,
+        &mut keymap::get_default_keymap(),
+        rmk_config.storage_config,
     )
     .await;
+    let mut km = get_default_keymap();
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            &mut km,
+            Some(&mut storage),
+            rmk_config.behavior_config.clone(),
+        )
+        .await,
+    );
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    bind_device_and_processor_and_run!((matrix) => keyboard).await;
+    
+    // bind_device_and_processor!(device_task = (matrix: Matrix<Input<'static>, Output<'static>, DefaultDebouncer<ROW, COL>, ROW, COL>, my_device2: MyDevice) => processor: Keyboard<'static, ROW, COL, NUM_LAYER>);
+    // spawner
+    //     .spawn(device_task(keyboard, matrix, my_device2))
+    //     .unwrap();
+
+    // loop {}
+
+    // embassy_futures::join::join(
+    //     run_rmk(
+    //         input_pins,
+    //         output_pins,
+    //         driver,
+    //         &mut keymap::get_default_keymap(),
+    //         keyboard_config,
+    //         spawner,
+    //     ),
+    //     // Option 1
+    //     f,
+    // )
+    // .await;
 }
 
 struct MyDevice {}
+// impl InputDevice for MyDevice {
+//     async fn run(&mut self) {
+//         loop {
+//             embassy_time::Timer::after_secs(1).await;
+//             self.send_event(Event::Key(KeyEvent {
+//                 row: 0,
+//                 col: 0,
+//                 pressed: true,
+//             }))
+//             .await;
+//         }
+//     }
+
+//     type EventType = Event;
+
+//     async fn send_event(&mut self, event: Self::EventType) {
+//         EVENT_CHANNEL.sender().send(event).await
+//     }
+// }
+
 impl InputDevice for MyDevice {
-    async fn run(&mut self) {
-        loop {
-            embassy_time::Timer::after_secs(1).await;
+    async fn read_event(&mut self) -> Event {
+        embassy_time::Timer::after_secs(1).await;
+        Event::Key(KeyEvent {
+            row: 0,
+            col: 0,
+            pressed: true,
+        })
+    }
+}
+
+struct MyProcessor {}
+// impl InputProcessor for MyProcessor {
+//     async fn process(&mut self, event: Event) {
+//         match event {
+//             Event::Key(key) => {
+//                 // Process key event
+//                 info!("Hey received key")
+//             }
+//             _ => {}
+//         }
+//     }
+//     type EventType = Event;
+
+//     async fn read_event(&self) -> Self::EventType {
+//         EVENT_CHANNEL.receive().await
+//     }
+
+//     async fn send_report(&self, report: Report) {
+//         // Send report
+//         info!("Sending report");
+//         KEYBOARD_REPORT_CHANNEL.send(report).await
+//     }
+// }
+impl InputProcessor for MyProcessor {
+    async fn process(&mut self, event: Event) {
+        match event {
+            Event::Key(key) => {
+                // Process key event
+                info!("Hey received key")
+            }
+            _ => {}
         }
     }
+    // type EventType = Event;
+    // type ReportType = rmk::usb::descriptor::KeyboardReport;
 
-    type EventType = Event;
+    // async fn read_event(&self) -> Self::EventType {
+    //     EVENT_CHANNEL.receive().await
+    // }
 
-    async fn send_event(&mut self, event: Self::EventType) {
-        EVENT_CHANNEL.sender().send(event).await
-    }
+    // fn send_report(&self, report: Self::ReportType) -> impl Future<Output = ()> {
+    //     async {
+    //         // Send report
+    //         info!("Sending report");
+    //         KEYBOARD_REPORT_CHANNEL.send(Report)
+    //     }
+    // }
 }

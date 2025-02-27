@@ -6,7 +6,7 @@ use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
 
@@ -141,47 +141,27 @@ impl<
         P: Phase,
     > InputDevice for RotaryEncoder<A, B, P>
 {
-    type EventType = Event;
-
-    async fn run(&mut self) {
-        loop {
-            // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
-            #[cfg(not(feature = "async_matrix"))]
-            embassy_time::Timer::after_millis(20).await;
-
-            #[cfg(feature = "async_matrix")]
-            {
-                let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(
-                    pin_a.wait_for_any_edge(),
-                    pin_b.wait_for_any_edge(),
-                )
+    async fn read_event(&mut self) -> Event {
+        #[cfg(feature = "async_matrix")]
+        {
+            let (pin_a, pin_b) = self.pins();
+            embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge())
                 .await;
-            }
-
-            let direction = self.update();
-
-            self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
-                id: self.id,
-                direction,
-            }))
-            .await;
         }
-    }
 
-    async fn send_event(&mut self, event: Self::EventType) {
-        EVENT_CHANNEL.sender().send(event).await
+        let direction = self.update();
+
+        Event::RotaryEncoder(RotaryEncoderEvent {
+            id: self.id,
+            direction,
+        })
     }
 }
 
 pub struct RotaryEncoderProcessor {}
 
 impl InputProcessor for RotaryEncoderProcessor {
-    type EventType = Event;
-
-    type ReportType = Report;
-
-    async fn process(&mut self, event: Self::EventType) {
+    async fn process(&mut self, event: Event) {
         match event {
             Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => match direction {
                 Direction::Clockwise => {
@@ -196,11 +176,7 @@ impl InputProcessor for RotaryEncoderProcessor {
         }
     }
 
-    async fn read_event(&self) -> Self::EventType {
-        EVENT_CHANNEL.receiver().receive().await
-    }
-
-    async fn send_report(&self, report: Self::ReportType) {
+    async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }

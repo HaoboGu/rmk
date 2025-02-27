@@ -10,13 +10,14 @@ use crate::debounce::default_bouncer::DefaultDebouncer;
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
 use crate::debounce::DebouncerTrait;
+use crate::event::Event;
 use crate::event::KeyEvent;
 use crate::input_device::InputDevice;
 use crate::keyboard::Keyboard;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
 use crate::matrix::KeyState;
-use crate::run_rmk_internal;
+// use crate::run_rmk_internal;
 use crate::storage::Storage;
 use crate::KeyboardConfig;
 use crate::MatrixTrait;
@@ -48,88 +49,88 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `low_active`: pin active level
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-pub async fn run_rmk_direct_pin<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
-    const ROW: usize,
-    const COL: usize,
-    // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
-    // generic parameters may not be used in const operations.
-    // Maybe we can use nightly only feature `generic_const_exprs`
-    const SIZE: usize,
-    const NUM_LAYER: usize,
->(
-    direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: KeyboardConfig<'static, Out>,
-    low_active: bool,
-    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
-) -> ! {
-    // Wrap `embedded-storage` to `embedded-storage-async`
-    #[cfg(not(feature = "_no_external_storage"))]
-    let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
+// pub async fn run_rmk_direct_pin<
+//     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+//     #[cfg(not(feature = "async_matrix"))] In: InputPin,
+//     Out: OutputPin,
+//     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+//     #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
+//     const ROW: usize,
+//     const COL: usize,
+//     // `let mut futs: Vec<_, {ROW * COL}>` is invalid because of
+//     // generic parameters may not be used in const operations.
+//     // Maybe we can use nightly only feature `generic_const_exprs`
+//     const SIZE: usize,
+//     const NUM_LAYER: usize,
+// >(
+//     direct_pins: [[Option<In>; COL]; ROW],
+//     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+//     #[cfg(not(feature = "_no_external_storage"))] flash: F,
+//     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+//     keyboard_config: KeyboardConfig<'static, Out>,
+//     low_active: bool,
+//     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
+// ) -> ! {
+//     // Wrap `embedded-storage` to `embedded-storage-async`
+//     #[cfg(not(feature = "_no_external_storage"))]
+//     let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
 
-    #[cfg(all(feature = "_no_usb", feature = "_no_external_storage"))]
-    {
-        run_rmk_direct_pin_with_async_flash::<_, _, ROW, COL, SIZE, NUM_LAYER>(
-            direct_pins,
-            default_keymap,
-            keyboard_config,
-            low_active,
-            #[cfg(not(feature = "_esp_ble"))]
-            spawner,
-        )
-        .await
-    }
+//     #[cfg(all(feature = "_no_usb", feature = "_no_external_storage"))]
+//     {
+//         run_rmk_direct_pin_with_async_flash::<_, _, ROW, COL, SIZE, NUM_LAYER>(
+//             direct_pins,
+//             default_keymap,
+//             keyboard_config,
+//             low_active,
+//             #[cfg(not(feature = "_esp_ble"))]
+//             spawner,
+//         )
+//         .await
+//     }
 
-    #[cfg(all(not(feature = "_no_usb"), feature = "_no_external_storage"))]
-    {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
-            direct_pins,
-            usb_driver,
-            default_keymap,
-            keyboard_config,
-            low_active,
-            #[cfg(not(feature = "_esp_ble"))]
-            spawner,
-        )
-        .await
-    }
+//     #[cfg(all(not(feature = "_no_usb"), feature = "_no_external_storage"))]
+//     {
+//         run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
+//             direct_pins,
+//             usb_driver,
+//             default_keymap,
+//             keyboard_config,
+//             low_active,
+//             #[cfg(not(feature = "_esp_ble"))]
+//             spawner,
+//         )
+//         .await
+//     }
 
-    #[cfg(all(feature = "_no_usb", not(feature = "_no_external_storage")))]
-    {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
-            direct_pins,
-            async_flash,
-            default_keymap,
-            keyboard_config,
-            low_active,
-            #[cfg(not(feature = "_esp_ble"))]
-            spawner,
-        )
-        .await
-    }
+//     #[cfg(all(feature = "_no_usb", not(feature = "_no_external_storage")))]
+//     {
+//         run_rmk_direct_pin_with_async_flash::<_, _, _, ROW, COL, SIZE, NUM_LAYER>(
+//             direct_pins,
+//             async_flash,
+//             default_keymap,
+//             keyboard_config,
+//             low_active,
+//             #[cfg(not(feature = "_esp_ble"))]
+//             spawner,
+//         )
+//         .await
+//     }
 
-    #[cfg(all(not(feature = "_no_usb"), not(feature = "_no_external_storage")))]
-    {
-        run_rmk_direct_pin_with_async_flash::<_, _, _, _, ROW, COL, SIZE, NUM_LAYER>(
-            direct_pins,
-            usb_driver,
-            async_flash,
-            default_keymap,
-            keyboard_config,
-            low_active,
-            #[cfg(not(feature = "_esp_ble"))]
-            spawner,
-        )
-        .await
-    }
-}
+//     #[cfg(all(not(feature = "_no_usb"), not(feature = "_no_external_storage")))]
+//     {
+//         run_rmk_direct_pin_with_async_flash::<_, _, _, _, ROW, COL, SIZE, NUM_LAYER>(
+//             direct_pins,
+//             usb_driver,
+//             async_flash,
+//             default_keymap,
+//             keyboard_config,
+//             low_active,
+//             #[cfg(not(feature = "_esp_ble"))]
+//             spawner,
+//         )
+//         .await
+//     }
+// }
 
 /// Run RMK keyboard service. This function should never return.
 ///
@@ -142,78 +143,78 @@ pub async fn run_rmk_direct_pin<
 /// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 /// * `low_active`: pin active level
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-#[allow(unused_variables)]
-#[allow(unreachable_code)]
-pub async fn run_rmk_direct_pin_with_async_flash<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const SIZE: usize,
-    const NUM_LAYER: usize,
->(
-    direct_pins: [[Option<In>; COL]; ROW],
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    keyboard_config: KeyboardConfig<'static, Out>,
-    low_active: bool,
-    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
-) -> ! {
-    let rmk_config = keyboard_config.rmk_config;
-    #[cfg(feature = "_nrf_ble")]
-    let (sd, flash) =
-        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
+// #[allow(unused_variables)]
+// #[allow(unreachable_code)]
+// pub async fn run_rmk_direct_pin_with_async_flash<
+//     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+//     #[cfg(not(feature = "async_matrix"))] In: InputPin,
+//     Out: OutputPin,
+//     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+//     #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
+//     const ROW: usize,
+//     const COL: usize,
+//     const SIZE: usize,
+//     const NUM_LAYER: usize,
+// >(
+//     direct_pins: [[Option<In>; COL]; ROW],
+//     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+//     #[cfg(not(feature = "_no_external_storage"))] flash: F,
+//     default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+//     keyboard_config: KeyboardConfig<'static, Out>,
+//     low_active: bool,
+//     #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
+// ) -> ! {
+//     let rmk_config = keyboard_config.rmk_config;
+//     #[cfg(feature = "_nrf_ble")]
+//     let (sd, flash) =
+//         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
-    #[cfg(feature = "_esp_ble")]
-    let flash = {
-        let f = unsafe {
-            EspPartition::new("rmk")
-                .expect("Create storage partition error")
-                .expect("Empty partition")
-        };
-        let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(f);
-        async_flash
-    };
+//     #[cfg(feature = "_esp_ble")]
+//     let flash = {
+//         let f = unsafe {
+//             EspPartition::new("rmk")
+//                 .expect("Create storage partition error")
+//                 .expect("Empty partition")
+//         };
+//         let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(f);
+//         async_flash
+//     };
 
-    let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
-    let keymap = RefCell::new(
-        KeyMap::new_from_storage(
-            default_keymap,
-            Some(&mut storage),
-            rmk_config.behavior_config.clone(),
-        )
-        .await,
-    );
-    let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
-    let light_controller = LightController::new(keyboard_config.controller_config.light_config);
+//     let mut storage = Storage::new(flash, default_keymap, rmk_config.storage_config).await;
+//     let keymap = RefCell::new(
+//         KeyMap::new_from_storage(
+//             default_keymap,
+//             Some(&mut storage),
+//             rmk_config.behavior_config.clone(),
+//         )
+//         .await,
+//     );
+//     let keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+//     let light_controller = LightController::new(keyboard_config.controller_config.light_config);
 
-    // Create the debouncer
-    #[cfg(feature = "rapid_debouncer")]
-    let debouncer = RapidDebouncer::<COL, ROW>::new();
-    #[cfg(not(feature = "rapid_debouncer"))]
-    let debouncer = DefaultDebouncer::<COL, ROW>::new();
+//     // Create the debouncer
+//     #[cfg(feature = "rapid_debouncer")]
+//     let debouncer = RapidDebouncer::<COL, ROW>::new();
+//     #[cfg(not(feature = "rapid_debouncer"))]
+//     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
-    // Keyboard matrix
-    let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
+//     // Keyboard matrix
+//     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
 
-    run_rmk_internal(
-        matrix,   // matrix input device
-        keyboard, // key processor
-        &keymap,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        storage,
-        light_controller,
-        rmk_config,
-        #[cfg(feature = "_nrf_ble")]
-        sd,
-    )
-    .await
-}
+//     run_rmk_internal(
+//         matrix,   // matrix input device
+//         keyboard, // key processor
+//         &keymap,
+//         #[cfg(not(feature = "_no_usb"))]
+//         usb_driver,
+//         storage,
+//         light_controller,
+//         rmk_config,
+//         #[cfg(feature = "_nrf_ble")]
+//         sd,
+//     )
+//     .await
+// }
 
 /// DirectPinMartex only has input pins.
 pub(crate) struct DirectPinMatrix<
@@ -234,6 +235,8 @@ pub(crate) struct DirectPinMatrix<
     scan_start: Option<Instant>,
     /// Pin active level
     low_active: bool,
+    /// Current scan pos: (out_idx, in_idx)
+    scan_pos: (usize, usize),
 }
 
 impl<
@@ -257,6 +260,7 @@ impl<
             key_states: [[KeyState::new(); COL]; ROW],
             scan_start: None,
             low_active,
+            scan_pos: (0, 0),
         }
     }
 }
@@ -270,19 +274,58 @@ impl<
         const SIZE: usize,
     > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
-    type EventType = KeyEvent;
-
-    // Run the matrix
-    async fn run(&mut self) {
-        // We don't check disconnected state because disconnection means the task will be dropped
+    async fn read_event(&mut self) -> crate::event::Event {
         loop {
-            self.wait_for_connected().await;
-            self.scan().await;
-        }
-    }
+            let (row_idx_start, col_idx_start) = self.scan_pos;
+            #[cfg(feature = "async_matrix")]
+            self.wait_for_key().await;
 
-    async fn send_event(&mut self, event: Self::EventType) -> () {
-        KEY_EVENT_CHANNEL.send(event).await
+            // Scan matrix and send report
+            for row_idx in row_idx_start..self.direct_pins.len() {
+                let pins_row = self.direct_pins.get_mut(row_idx).unwrap();
+                for col_idx in col_idx_start..pins_row.len() {
+                    let direct_pin = pins_row.get_mut(col_idx).unwrap();
+                    // for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
+                    if let Some(direct_pin) = direct_pin {
+                        let pin_state = if self.low_active {
+                            direct_pin.is_low().ok().unwrap_or_default()
+                        } else {
+                            direct_pin.is_high().ok().unwrap_or_default()
+                        };
+
+                        let debounce_state = self.debouncer.detect_change_with_debounce(
+                            col_idx,
+                            row_idx,
+                            pin_state,
+                            &self.key_states[row_idx][col_idx],
+                        );
+
+                        match debounce_state {
+                            DebounceState::Debounced => {
+                                self.key_states[row_idx][col_idx].toggle_pressed();
+                                let key_state = self.key_states[row_idx][col_idx];
+
+                                self.scan_pos = (row_idx, col_idx);
+                                return Event::Key(KeyEvent {
+                                    row: row_idx as u8,
+                                    col: col_idx as u8,
+                                    pressed: key_state.pressed,
+                                });
+                            }
+                            _ => (),
+                        }
+
+                        // If there's key still pressed, always refresh the self.scan_start
+                        #[cfg(feature = "async_matrix")]
+                        if self.key_states[row_idx][col_idx].pressed {
+                            self.scan_start = Some(Instant::now());
+                        }
+                    }
+                }
+            }
+
+            Timer::after_micros(100).await;
+        }
     }
 }
 
@@ -335,65 +378,66 @@ impl<
         self.scan_start = Some(Instant::now());
     }
 
-    /// Do matrix scanning, the result is stored in matrix's key_state field.
-    async fn scan(&mut self) {
-        info!("Matrix scanning");
-        loop {
-            #[cfg(feature = "async_matrix")]
-            self.wait_for_key().await;
+    // /// Do matrix scanning, the result is stored in matrix's key_state field.
+    // async fn scan(&mut self) {
+    //     info!("Matrix scanning");
+    //     loop {
+    //         #[cfg(feature = "async_matrix")]
+    //         self.wait_for_key().await;
 
-            // Scan matrix and send report
-            for (row_idx, pins_row) in self.direct_pins.iter_mut().enumerate() {
-                for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
-                    if let Some(direct_pin) = direct_pin {
-                        let pin_state = if self.low_active {
-                            direct_pin.is_low().ok().unwrap_or_default()
-                        } else {
-                            direct_pin.is_high().ok().unwrap_or_default()
-                        };
+    //         // Scan matrix and send report
+    //         for (row_idx, pins_row) in self.direct_pins.iter_mut().enumerate() {
+    //             for (col_idx, direct_pin) in pins_row.iter_mut().enumerate() {
+    //                 if let Some(direct_pin) = direct_pin {
+    //                     let pin_state = if self.low_active {
+    //                         direct_pin.is_low().ok().unwrap_or_default()
+    //                     } else {
+    //                         direct_pin.is_high().ok().unwrap_or_default()
+    //                     };
 
-                        let debounce_state = self.debouncer.detect_change_with_debounce(
-                            col_idx,
-                            row_idx,
-                            pin_state,
-                            &self.key_states[row_idx][col_idx],
-                        );
+    //                     let debounce_state = self.debouncer.detect_change_with_debounce(
+    //                         col_idx,
+    //                         row_idx,
+    //                         pin_state,
+    //                         &self.key_states[row_idx][col_idx],
+    //                     );
 
-                        match debounce_state {
-                            DebounceState::Debounced => {
-                                self.key_states[row_idx][col_idx].toggle_pressed();
-                                let key_state = self.key_states[row_idx][col_idx];
+    //                     match debounce_state {
+    //                         DebounceState::Debounced => {
+    //                             self.key_states[row_idx][col_idx].toggle_pressed();
+    //                             let key_state = self.key_states[row_idx][col_idx];
 
-                                KEY_EVENT_CHANNEL
-                                    .send(KeyEvent {
-                                        row: row_idx as u8,
-                                        col: col_idx as u8,
-                                        pressed: key_state.pressed,
-                                    })
-                                    .await;
-                            }
-                            _ => (),
-                        }
+    //                             KEY_EVENT_CHANNEL
+    //                                 .send(KeyEvent {
+    //                                     row: row_idx as u8,
+    //                                     col: col_idx as u8,
+    //                                     pressed: key_state.pressed,
+    //                                 })
+    //                                 .await;
+    //                         }
+    //                         _ => (),
+    //                     }
 
-                        // If there's key still pressed, always refresh the self.scan_start
-                        #[cfg(feature = "async_matrix")]
-                        if self.key_states[row_idx][col_idx].pressed {
-                            self.scan_start = Some(Instant::now());
-                        }
-                    }
-                }
-            }
+    //                     // If there's key still pressed, always refresh the self.scan_start
+    //                     #[cfg(feature = "async_matrix")]
+    //                     if self.key_states[row_idx][col_idx].pressed {
+    //                         self.scan_start = Some(Instant::now());
+    //                     }
+    //                 }
+    //             }
+    //         }
 
-            Timer::after_micros(100).await;
-        }
-    }
+    //         Timer::after_micros(100).await;
+    //     }
+    // }
 
-    /// Read key state at position (row, col)
-    fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
-        return self.key_states[row][col];
-    }
+    //     /// Read key state at position (row, col)
+    //     fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
+    //         return self.key_states[row][col];
+    //     }
 
-    fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
-        f(&mut self.key_states[row][col]);
-    }
+    //     fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
+    //         f(&mut self.key_states[row][col]);
+    //     }
+    // }
 }
