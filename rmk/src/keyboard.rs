@@ -903,14 +903,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     KeyCode::MouseWheelDown => {
                         self.mouse_report.wheel = -self.mouse_wheel_move_delta;
                     }
-                    KeyCode::MouseBtn1 => self.mouse_report.buttons |= 0b1,
-                    KeyCode::MouseBtn2 => self.mouse_report.buttons |= 0b10,
-                    KeyCode::MouseBtn3 => self.mouse_report.buttons |= 0b100,
-                    KeyCode::MouseBtn4 => self.mouse_report.buttons |= 0b1000,
-                    KeyCode::MouseBtn5 => self.mouse_report.buttons |= 0b10000,
-                    KeyCode::MouseBtn6 => self.mouse_report.buttons |= 0b100000,
-                    KeyCode::MouseBtn7 => self.mouse_report.buttons |= 0b1000000,
-                    KeyCode::MouseBtn8 => self.mouse_report.buttons |= 0b10000000,
+                    KeyCode::MouseBtn1 => self.mouse_report.buttons |= 1 << 0,
+                    KeyCode::MouseBtn2 => self.mouse_report.buttons |= 1 << 1,
+                    KeyCode::MouseBtn3 => self.mouse_report.buttons |= 1 << 2,
+                    KeyCode::MouseBtn4 => self.mouse_report.buttons |= 1 << 3,
+                    KeyCode::MouseBtn5 => self.mouse_report.buttons |= 1 << 4,
+                    KeyCode::MouseBtn6 => self.mouse_report.buttons |= 1 << 5,
+                    KeyCode::MouseBtn7 => self.mouse_report.buttons |= 1 << 6,
+                    KeyCode::MouseBtn8 => self.mouse_report.buttons |= 1 << 7,
                     KeyCode::MouseWheelLeft => {
                         self.mouse_report.pan = -self.mouse_wheel_move_delta;
                     }
@@ -936,14 +936,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     KeyCode::MouseWheelLeft | KeyCode::MouseWheelRight => {
                         self.mouse_report.pan = 0;
                     }
-                    KeyCode::MouseBtn1 => self.mouse_report.buttons &= 0b0,
-                    KeyCode::MouseBtn2 => self.mouse_report.buttons &= 0b01,
-                    KeyCode::MouseBtn3 => self.mouse_report.buttons &= 0b011,
-                    KeyCode::MouseBtn4 => self.mouse_report.buttons &= 0b0111,
-                    KeyCode::MouseBtn5 => self.mouse_report.buttons &= 0b01111,
-                    KeyCode::MouseBtn6 => self.mouse_report.buttons &= 0b011111,
-                    KeyCode::MouseBtn7 => self.mouse_report.buttons &= 0b0111111,
-                    KeyCode::MouseBtn8 => self.mouse_report.buttons &= 0b01111111,
+                    KeyCode::MouseBtn1 => self.mouse_report.buttons &= !(1 << 0),
+                    KeyCode::MouseBtn2 => self.mouse_report.buttons &= !(1 << 1),
+                    KeyCode::MouseBtn3 => self.mouse_report.buttons &= !(1 << 2),
+                    KeyCode::MouseBtn4 => self.mouse_report.buttons &= !(1 << 3),
+                    KeyCode::MouseBtn5 => self.mouse_report.buttons &= !(1 << 4),
+                    KeyCode::MouseBtn6 => self.mouse_report.buttons &= !(1 << 5),
+                    KeyCode::MouseBtn7 => self.mouse_report.buttons &= !(1 << 6),
+                    KeyCode::MouseBtn8 => self.mouse_report.buttons &= !(1 << 7),
                     _ => {}
                 }
             }

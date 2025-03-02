@@ -90,13 +90,35 @@ impl ModifierCombination {
     }
 
     /// Get modifier hid report bits from modifier combination
-    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
-        let (keycodes, n) = self.to_modifier_keycodes();
+    pub(crate) fn to_hid_modifier_bits(self) -> u8 {    
         let mut hid_modifier_bits = 0;
-        for item in keycodes.iter().take(n) {
-            hid_modifier_bits |= item.as_modifier_bit();
+        if self.right() {
+            if self.ctrl() {
+                hid_modifier_bits |= 1 << 4;
+            }
+            if self.shift() {
+                hid_modifier_bits |= 1 << 5;
+            }
+            if self.alt() {
+                hid_modifier_bits |= 1 << 6;
+            }
+            if self.gui() {
+                hid_modifier_bits |= 1 << 7;
+            }
+        } else {
+            if self.ctrl() {
+                hid_modifier_bits |= 1 << 0;
+            }
+            if self.shift() {
+                hid_modifier_bits |= 1 << 1;
+            }
+            if self.alt() {
+                hid_modifier_bits |= 1 << 2;
+            }
+            if self.gui() {
+                hid_modifier_bits |= 1 << 3;
+            }
         }
-
         hid_modifier_bits
     }
 }
