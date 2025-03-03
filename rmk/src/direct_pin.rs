@@ -255,6 +255,7 @@ impl<
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
             let (row_idx_start, col_idx_start) = self.scan_pos;
+
             #[cfg(feature = "async_matrix")]
             self.wait_for_key().await;
 
@@ -301,6 +302,8 @@ impl<
                     }
                 }
             }
+
+            self.scan_pos = (0, 0);
 
             Timer::after_micros(100).await;
         }

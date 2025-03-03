@@ -15,7 +15,15 @@ use embassy_rp::{
     usb::InterruptHandler,
 };
 use panic_probe as _;
-use rmk::split::{peripheral::run_rmk_split_peripheral, SPLIT_MESSAGE_MAX_SIZE};
+use rmk::{
+    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    futures::future::join,
+    matrix::Matrix,
+    split::{
+        peripheral::{run_peripheral_matrix, run_rmk_split_peripheral},
+        SPLIT_MESSAGE_MAX_SIZE,
+    },
+};
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -24,7 +32,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -47,12 +55,14 @@ async fn main(spawner: Spawner) {
         uart::Config::default(),
     );
 
+    // Define the matrix
+    let debouncer = DefaultDebouncer::<2, 2>::new();
+    let matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+
     // Start serving
-    run_rmk_split_peripheral::<Input<'_>, Output<'_>, _, 2, 2>(
-        input_pins,
-        output_pins,
-        uart_instance,
-        spawner,
+    join(
+        run_peripheral_matrix(matrix),
+        run_rmk_split_peripheral(uart_instance),
     )
     .await;
 }

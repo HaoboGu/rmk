@@ -237,7 +237,6 @@ pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 #[allow(unreachable_code)]
 pub async fn run_rmk<
     'a,
-    // M: MatrixTrait,
     F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,

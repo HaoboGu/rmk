@@ -76,18 +76,13 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    // Create the debouncer, use COL2ROW by default
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    // Keyboard matrix, use COL2ROW by default
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-
+    // 1. Create the storage + keymap
     let mut storage = Storage::new(
         flash,
         &mut keymap::get_default_keymap(),
         rmk_config.storage_config,
     )
     .await;
-
     let mut km = get_default_keymap();
     let keymap = RefCell::new(
         KeyMap::new_from_storage(
@@ -97,8 +92,15 @@ async fn main(_spawner: Spawner) {
         )
         .await,
     );
+
+    // 2. Create the matrix + keyboard
+    // Create the debouncer, use COL2ROW by default
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    // Keyboard matrix, use COL2ROW by default
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
+    // 3. Create the light controller
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 

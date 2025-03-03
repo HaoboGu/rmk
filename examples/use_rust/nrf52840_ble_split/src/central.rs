@@ -6,26 +6,36 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
-use defmt::*;
+use core::cell::RefCell;
+
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
     interrupt::{self, InterruptExt, Priority},
-    peripherals::{self, SAADC, USBD},
+    peripherals::{self, SAADC},
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
+use keymap::get_default_keymap;
 use panic_probe as _;
 use rmk::{
+    bind_device_and_processor_and_run,
     ble::SOFTWARE_VBUS,
     config::{
-        BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
+        BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
-    split::central::{run_peripheral_manager, run_rmk_split_central},
+    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    futures::future::join3,
+    initialize_nrf_sd_and_flash,
+    keyboard::Keyboard,
+    keymap::KeyMap,
+    light::LightController,
+    run_rmk,
+    split::central::{run_peripheral_manager, CentralMatrix},
+    storage::Storage,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -109,38 +119,50 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
-
     let (input_pins, output_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P0_12, P0_13], output:  [P0_14, P0_15]);
 
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
-    join(
-        run_rmk_split_central::<
-            Input<'_>,
-            Output<'_>,
-            Driver<'_, USBD, &SoftwareVbusDetect>,
-            ROW,
-            COL,
-            2,
-            2,
-            0,
-            0,
-            NUM_LAYER,
-        >(
-            input_pins,
-            output_pins,
-            driver,
-            &mut keymap::get_default_keymap(),
-            config,
-            central_addr,
-            spawner,
-        ),
+    let (sd, flash) = initialize_nrf_sd_and_flash(
+        rmk_config.usb_config.product_name,
+        spawner,
+        Some(central_addr),
+    );
+
+    // 1. Create the storage + keymap
+    let mut storage = Storage::new(
+        flash,
+        &mut keymap::get_default_keymap(),
+        rmk_config.storage_config,
+    )
+    .await;
+    let mut km = get_default_keymap();
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            &mut km,
+            Some(&mut storage),
+            rmk_config.behavior_config.clone(),
+        )
+        .await,
+    );
+
+    // 2. Create the matrix + keyboard
+    // Create the debouncer, use COL2ROW by default
+    let debouncer = DefaultDebouncer::<2, 2>::new();
+    // Keyboard matrix, use COL2ROW by default
+    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // 3. Create the light controller
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Start serving
+    join3(
+        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
         run_peripheral_manager::<2, 1, 2, 2>(0, peripheral_addr),
     )
     .await;

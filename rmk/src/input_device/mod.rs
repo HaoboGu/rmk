@@ -115,6 +115,7 @@ macro_rules! bind_device_and_processor_and_run {
     (($( $dev:ident),*) => $proc:ident) => {
         async {
             use $crate::futures::{self, FutureExt, select_biased};
+            use $crate::input_device::{InputDevice, InputProcessor};
             loop {
                 let e = select_biased! {
                     $(
