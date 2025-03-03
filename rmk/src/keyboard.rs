@@ -239,7 +239,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         yield_now().await;
     }
 
-    async fn update_osm(&mut self, key_event: KeyEvent) {
+    fn update_osm(&mut self, key_event: KeyEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
             OneShotState::Single(modifiers) => {
@@ -379,7 +379,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         match action {
             Action::Key(key) => {
                 self.process_action_keycode(key, key_event).await;
-                self.update_osm(key_event).await;
+                self.update_osm(key_event);
                 self.update_osl(key_event);
             }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
@@ -661,8 +661,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             };
 
             // Press modifier
-            self.process_key_action_normal(Action::Modifier(modifiers), key_event)
-                .await;
+            self.register_modifiers(modifiers);
+            self.update_osl(key_event);
         } else {
             match self.osm_state {
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
@@ -672,9 +672,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
-                            // Timeout, release modifier
-                            self.process_key_action_normal(Action::Modifier(modifiers), key_event)
-                                .await;
+                            // Timeout, release modifiers
+                            self.unregister_modifiers(modifiers);
+                            self.update_osl(key_event);
                             self.osm_state = OneShotState::None;
                         }
                         embassy_futures::select::Either::Second(e) => {
@@ -686,11 +686,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     }
                 }
                 OneShotState::Held(modifiers) => {
-                    self.osm_state = OneShotState::None;
-
                     // Release modifier
-                    self.process_key_action_normal(Action::Modifier(modifiers), key_event)
-                        .await;
+                    self.unregister_modifiers(modifiers);
+                    self.update_osl(key_event);
+                    self.osm_state = OneShotState::None;
                 }
                 _ => (),
             };
