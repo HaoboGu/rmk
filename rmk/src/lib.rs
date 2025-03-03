@@ -18,23 +18,13 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-use crate::config::KeyboardConfig;
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::input_device::InputProcessor;
 use crate::light::LightController;
-use action::KeyAction;
 use config::{RmkConfig, VialConfig};
 use core::{
     cell::RefCell,
     future::Future,
     sync::atomic::{AtomicBool, AtomicU8},
 };
-use debounce::DebouncerTrait;
-#[cfg(not(feature = "_esp_ble"))]
-use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
 #[cfg(not(any(cortex_m)))]
 pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex as RawMutex, channel::*};
@@ -45,19 +35,14 @@ use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
 pub use embedded_hal;
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
-#[cfg(not(feature = "_no_external_storage"))]
-use embedded_storage::nor_flash::NorFlash;
+use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 pub use futures;
 pub use heapless;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
-use keyboard::Keyboard;
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
-use matrix::{Matrix, MatrixTrait};
+use matrix::MatrixTrait;
 pub use rmk_macro as macros;
 pub use storage::dummy_flash::DummyFlash;
 use storage::Storage;
@@ -273,8 +258,6 @@ pub async fn run_rmk<
     #[cfg(feature = "_nrf_ble")]
     crate::ble::nrf::run_nrf_ble_keyboard(
         keymap,
-        // &mut keyboard,
-        // &mut matrix,
         &mut storage,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
@@ -315,8 +298,6 @@ pub async fn run_rmk<
         loop {
             run_keyboard(
                 keymap,
-                // &mut keyboard,
-                // &mut matrix,
                 &mut storage,
                 run_usb_device(&mut usb_device),
                 &mut light_controller,
@@ -346,8 +327,6 @@ pub(crate) async fn run_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    // keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    // matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     communication_task: Fu,
     light_controller: &mut LightController<Out>,
@@ -358,8 +337,6 @@ pub(crate) async fn run_keyboard<
 ) {
     // The state will be changed to true after the keyboard starts running
     CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-    // let keyboard_fut = keyboard.run();
-    // let matrix_fut = matrix.run();
     let writer_fut = keyboard_writer.run_writer();
     let mut light_service = LightService::new(light_controller, led_reader);
     let mut vial_service = VialService::new(&keymap, vial_config, vial_reader_writer);

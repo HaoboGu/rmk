@@ -22,7 +22,7 @@ impl AsInputReport for Report {}
 
 #[derive(PartialEq, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum HidError {
+pub enum HidError {
     UsbReadError(ReadError),
     UsbEndpointError(EndpointError),
     // FIXME: remove unused errors

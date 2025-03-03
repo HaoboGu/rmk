@@ -1,5 +1,4 @@
 use crate::{
-    channel::KEY_EVENT_CHANNEL,
     debounce::{DebounceState, DebouncerTrait},
     event::{Event, KeyEvent},
     input_device::InputDevice,
@@ -20,19 +19,6 @@ pub trait MatrixTrait: InputDevice {
     const ROW: usize;
     const COL: usize;
 
-    // // Run the matrix
-    // async fn run(&mut self) {
-    //     // We don't check disconnected state because disconnection means the task will be dropped
-    //     loop {
-    //         self.wait_for_connected().await;
-    //         self.scan().await;
-    //     }
-    // }
-
-    // async fn send_event(&mut self, event: KeyEvent) -> () {
-    //     KEY_EVENT_CHANNEL.send(event).await
-    // }
-
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
@@ -42,25 +28,6 @@ pub trait MatrixTrait: InputDevice {
             info!("Connected, start scanning matrix");
         }
     }
-
-    // Do matrix scanning, save the result in matrix's key_state field.
-    // fn scan(&mut self) -> impl Future<Output = ()>;
-
-    // // Read key state at position (row, col)
-    // fn get_key_state(&mut self, row: usize, col: usize) -> KeyState;
-
-    // // Update key state at position (row, col)
-    // fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState));
-
-    // // Get matrix row num
-    // fn get_row_num(&self) -> usize {
-    //     Self::ROW
-    // }
-
-    // // Get matrix col num
-    // fn get_col_num(&self) -> usize {
-    //     Self::COL
-    // }
 
     #[cfg(feature = "async_matrix")]
     fn wait_for_key(&mut self) -> impl Future<Output = ()>;
@@ -265,88 +232,6 @@ impl<
 
         self.scan_start = Some(Instant::now());
     }
-
-    // /// Do matrix scanning, the result is stored in matrix's key_state field.
-    // async fn scan(&mut self) {
-    //     info!("Matrix scanning");
-    //     loop {
-    //         #[cfg(feature = "async_matrix")]
-    //         self.wait_for_key().await;
-
-    //         // Scan matrix and send report
-    //         for out_idx in 0..self.output_pins.len() {
-    //             // Pull up output pin, wait 1us ensuring the change comes into effect
-    //             if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
-    //                 out_pin.set_high().ok();
-    //             }
-    //             Timer::after_micros(1).await;
-    //             for in_idx in 0..self.input_pins.len() {
-    //                 let in_pin = self.input_pins.get_mut(in_idx).unwrap();
-    //                 // Check input pins and debounce
-    //                 let debounce_state = self.debouncer.detect_change_with_debounce(
-    //                     in_idx,
-    //                     out_idx,
-    //                     in_pin.is_high().ok().unwrap_or_default(),
-    //                     &self.key_states[out_idx][in_idx],
-    //                 );
-
-    //                 match debounce_state {
-    //                     DebounceState::Debounced => {
-    //                         self.key_states[out_idx][in_idx].toggle_pressed();
-    //                         #[cfg(feature = "col2row")]
-    //                         let (row, col, key_state) =
-    //                             (in_idx, out_idx, self.key_states[out_idx][in_idx]);
-    //                         #[cfg(not(feature = "col2row"))]
-    //                         let (row, col, key_state) =
-    //                             (out_idx, in_idx, self.key_states[out_idx][in_idx]);
-
-    //                         self.send_event(KeyEvent {
-    //                             row: row as u8,
-    //                             col: col as u8,
-    //                             pressed: key_state.pressed,
-    //                         })
-    //                         .await;
-    //                     }
-    //                     _ => (),
-    //                 }
-
-    //                 // If there's key still pressed, always refresh the self.scan_start
-    //                 #[cfg(feature = "async_matrix")]
-    //                 if self.key_states[out_idx][in_idx].pressed {
-    //                     self.scan_start = Some(Instant::now());
-    //                 }
-    //             }
-
-    //             // Pull it back to low
-    //             if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
-    //                 out_pin.set_low().ok();
-    //             }
-    //         }
-
-    //         embassy_time::Timer::after_micros(100).await;
-    //     }
-    // }
-
-    // Read key state at position (row, col)
-    // fn get_key_state(&mut self, row: usize, col: usize) -> KeyState {
-    //     // COL2ROW
-    //     #[cfg(feature = "col2row")]
-    //     return self.key_states[col][row];
-
-    //     // ROW2COL
-    //     #[cfg(not(feature = "col2row"))]
-    //     return self.key_states[row][col];
-    // }
-
-    // fn update_key_state(&mut self, row: usize, col: usize, f: impl FnOnce(&mut KeyState)) {
-    //     // COL2ROW
-    //     #[cfg(feature = "col2row")]
-    //     f(&mut self.key_states[col][row]);
-
-    //     // ROW2COL
-    //     #[cfg(not(feature = "col2row"))]
-    //     f(&mut self.key_states[row][col]);
-    // }
 }
 
 pub struct TestMatrix<const ROW: usize, const COL: usize> {

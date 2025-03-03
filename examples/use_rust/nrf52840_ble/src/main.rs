@@ -11,7 +11,7 @@ use core::cell::RefCell;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
+use embassy_futures::join::join3;
 use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
@@ -20,25 +20,22 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
-use keymap::{get_default_keymap, COL, NUM_LAYER, ROW};
+use keymap::{get_default_keymap, COL, ROW};
 use panic_probe as _;
 use rmk::{
-    action::KeyAction,
     bind_device_and_processor_and_run,
     ble::SOFTWARE_VBUS,
     config::{
-        BleBatteryConfig, ControllerConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig,
-        StorageConfig, VialConfig,
+        BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
     event::{Event, KeyEvent},
-    hid::Report,
     initialize_nrf_sd_and_flash,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor},
     keyboard::Keyboard,
     keymap::KeyMap,
     light::LightController,
-    matrix::{Matrix, TestMatrix},
+    matrix::Matrix,
     run_rmk,
     storage::Storage,
 };
@@ -140,14 +137,13 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
 
     // Keyboard matrix, use COL2ROW by default
-    // let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    let mut matrix = TestMatrix::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    // let mut matrix = TestMatrix::<ROW, COL>::new();
 
     let (sd, flash) =
         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
     let mut storage = Storage::new(
-        flash,
-        &mut keymap::get_default_keymap(),
+        flash,        &mut keymap::get_default_keymap(),
         rmk_config.storage_config,
     )
     .await;
@@ -165,54 +161,15 @@ async fn main(spawner: Spawner) {
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
-    join(
+    join3(
         bind_device_and_processor_and_run!((matrix) => keyboard),
+        bind_device_and_processor_and_run!((my_device, my_device2, encoder) => processor),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
     )
     .await;
-
-    // bind_device_and_processor!(device_task = (matrix: Matrix<Input<'static>, Output<'static>, DefaultDebouncer<ROW, COL>, ROW, COL>, my_device2: MyDevice) => processor: Keyboard<'static, ROW, COL, NUM_LAYER>);
-    // spawner
-    //     .spawn(device_task(keyboard, matrix, my_device2))
-    //     .unwrap();
-
-    // loop {}
-
-    // embassy_futures::join::join(
-    //     run_rmk(
-    //         input_pins,
-    //         output_pins,
-    //         driver,
-    //         &mut keymap::get_default_keymap(),
-    //         keyboard_config,
-    //         spawner,
-    //     ),
-    //     // Option 1
-    //     f,
-    // )
-    // .await;
 }
 
 struct MyDevice {}
-// impl InputDevice for MyDevice {
-//     async fn run(&mut self) {
-//         loop {
-//             embassy_time::Timer::after_secs(1).await;
-//             self.send_event(Event::Key(KeyEvent {
-//                 row: 0,
-//                 col: 0,
-//                 pressed: true,
-//             }))
-//             .await;
-//         }
-//     }
-
-//     type EventType = Event;
-
-//     async fn send_event(&mut self, event: Self::EventType) {
-//         EVENT_CHANNEL.sender().send(event).await
-//     }
-// }
 
 impl InputDevice for MyDevice {
     async fn read_event(&mut self) -> Event {
@@ -226,50 +183,15 @@ impl InputDevice for MyDevice {
 }
 
 struct MyProcessor {}
-// impl InputProcessor for MyProcessor {
-//     async fn process(&mut self, event: Event) {
-//         match event {
-//             Event::Key(key) => {
-//                 // Process key event
-//                 info!("Hey received key")
-//             }
-//             _ => {}
-//         }
-//     }
-//     type EventType = Event;
 
-//     async fn read_event(&self) -> Self::EventType {
-//         EVENT_CHANNEL.receive().await
-//     }
-
-//     async fn send_report(&self, report: Report) {
-//         // Send report
-//         info!("Sending report");
-//         KEYBOARD_REPORT_CHANNEL.send(report).await
-//     }
-// }
 impl InputProcessor for MyProcessor {
     async fn process(&mut self, event: Event) {
         match event {
-            Event::Key(key) => {
+            Event::Key(_key) => {
                 // Process key event
                 info!("Hey received key")
             }
-            _ => {}
+            _ => info!("Hey received other event"),
         }
     }
-    // type EventType = Event;
-    // type ReportType = rmk::usb::descriptor::KeyboardReport;
-
-    // async fn read_event(&self) -> Self::EventType {
-    //     EVENT_CHANNEL.receive().await
-    // }
-
-    // fn send_report(&self, report: Self::ReportType) -> impl Future<Output = ()> {
-    //     async {
-    //         // Send report
-    //         info!("Sending report");
-    //         KEYBOARD_REPORT_CHANNEL.send(Report)
-    //     }
-    // }
 }

@@ -13,19 +13,15 @@ use crate::ble::led::BleLedReader;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
 use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::input_device::InputProcessor as _;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
-use crate::matrix::MatrixTrait;
+use crate::run_keyboard;
 use crate::storage::StorageKeys;
-// use crate::{CONNECTION_STATE, run_keyboard};
 use crate::{
     ble::nrf::bonder::BondInfo,
-    keyboard::Keyboard,
     storage::{get_bond_info_key, Storage, StorageData},
     CONNECTION_STATE, CONNECTION_TYPE,
 };
-use crate::{keyboard, run_keyboard};
 use advertise::{create_advertisement_data, SCAN_DATA};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
@@ -306,8 +302,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
             if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_keyboard(
                     keymap,
-                    // keyboard,
-                    // matrix,
                     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
                     storage,
                     run_usb_device(&mut usb_device),
@@ -335,8 +329,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
                         Either3::First(Ok(conn)) => {
                             run_ble_keyboard(
                                 keymap,
-                                // keyboard,
-                                // matrix,
                                 storage,
                                 light_controller,
                                 rmk_config.vial_config,
@@ -365,8 +357,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
                     Either3::First(Ok(conn)) => {
                         run_ble_keyboard(
                             keymap,
-                            // keyboard,
-                            // matrix,
                             storage,
                             light_controller,
                             rmk_config.vial_config,
@@ -390,8 +380,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
             Ok(conn) => {
                 run_ble_keyboard(
                     keymap,
-                    keyboard,
-                    matrix,
                     storage,
                     light_controller,
                     rmk_config.vial_config,
@@ -502,8 +490,6 @@ async fn run_ble_keyboard<
     match select4(
         run_keyboard(
             keymap,
-            // keyboard,
-            // matrix,
             storage,
             run_ble_server(&conn, ble_server),
             light_controller,

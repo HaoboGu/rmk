@@ -1,11 +1,3 @@
-use core::cell::RefCell;
-
-use crate::action::KeyAction;
-#[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_sd_and_flash;
-use crate::channel::KEY_EVENT_CHANNEL;
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::DebounceState;
@@ -13,28 +5,14 @@ use crate::debounce::DebouncerTrait;
 use crate::event::Event;
 use crate::event::KeyEvent;
 use crate::input_device::InputDevice;
-use crate::keyboard::Keyboard;
-use crate::keymap::KeyMap;
-use crate::light::LightController;
+
 use crate::matrix::KeyState;
-// use crate::run_rmk_internal;
-use crate::storage::Storage;
-use crate::KeyboardConfig;
 use crate::MatrixTrait;
-#[cfg(not(feature = "_esp_ble"))]
-use embassy_executor::Spawner;
+
 use embassy_time::Instant;
 use embassy_time::Timer;
-#[cfg(not(feature = "_no_usb"))]
-use embassy_usb::driver::Driver;
 use embedded_hal;
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(not(feature = "_no_external_storage"))]
-use embedded_storage::nor_flash::NorFlash;
-#[cfg(not(feature = "_no_external_storage"))]
-use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
-#[cfg(feature = "_esp_ble")]
-use esp_idf_svc::partition::EspPartition;
+use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
