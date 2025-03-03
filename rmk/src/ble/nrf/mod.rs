@@ -235,8 +235,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    // keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    // matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     light_controller: &mut LightController<Out>,

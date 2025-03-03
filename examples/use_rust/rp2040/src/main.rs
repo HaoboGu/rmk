@@ -7,7 +7,9 @@ mod keymap;
 mod macros;
 mod vial;
 
-use defmt::*;
+use core::cell::RefCell;
+
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::{
@@ -17,11 +19,21 @@ use embassy_rp::{
     peripherals::USB,
     usb::{Driver, InterruptHandler},
 };
+use keymap::{get_default_keymap, COL, ROW};
 // use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    run_rmk_with_async_flash,
+    bind_device_and_processor_and_run,
+    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
+    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    futures::future::join,
+    input_device::{InputDevice, InputProcessor},
+    keyboard::Keyboard,
+    keymap::KeyMap,
+    light::LightController,
+    matrix::Matrix,
+    run_rmk,
+    storage::Storage,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -32,7 +44,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -64,21 +76,36 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
+    // Create the debouncer, use COL2ROW by default
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    // Keyboard matrix, use COL2ROW by default
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
 
-    // Start serving
-    // Use `run_rmk` for blocking flash
-    run_rmk_with_async_flash(
-        input_pins,
-        output_pins,
-        driver,
+    let mut storage = Storage::new(
         flash,
         &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+        rmk_config.storage_config,
+    )
+    .await;
+
+    let mut km = get_default_keymap();
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            &mut km,
+            Some(&mut storage),
+            rmk_config.behavior_config.clone(),
+        )
+        .await,
+    );
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Start serving
+    join(
+        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config),
     )
     .await;
 }

@@ -10,6 +10,8 @@ use crate::{
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
+use embassy_embedded_hal::adapter::BlockingAsync;
+use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
 use sequential_storage::{
@@ -363,12 +365,11 @@ pub(crate) struct ComboData {
     pub(crate) output: KeyAction,
 }
 
-pub struct Storage<
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
+pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
+    embassy_embedded_hal::adapter::BlockingAsync::new(flash)
+}
+
+pub struct Storage<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],

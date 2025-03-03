@@ -245,8 +245,6 @@ pub async fn run_rmk<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    // mut matrix: M,
-    // mut keyboard: Keyboard<'a, ROW, COL, NUM_LAYER>,
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     mut storage: Storage<F, ROW, COL, NUM_LAYER>,

@@ -120,11 +120,6 @@ async fn main(spawner: Spawner) {
         storage_config,
         ..Default::default()
     };
-    // Keyboard config
-    // let keyboard_config = KeyboardConfig {
-    //     rmk_config,
-    //     ..Default::default()
-    // };
 
     let mut my_device = MyDevice {};
     let mut my_device2 = MyDevice {};
@@ -143,10 +138,12 @@ async fn main(spawner: Spawner) {
     let (sd, flash) =
         initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
     let mut storage = Storage::new(
-        flash,        &mut keymap::get_default_keymap(),
+        flash,
+        &mut keymap::get_default_keymap(),
         rmk_config.storage_config,
     )
     .await;
+
     let mut km = get_default_keymap();
     let keymap = RefCell::new(
         KeyMap::new_from_storage(
@@ -161,6 +158,7 @@ async fn main(spawner: Spawner) {
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
+    // Matrix, keyboard, storage, input_dev/proc, light_controller, sd
     join3(
         bind_device_and_processor_and_run!((matrix) => keyboard),
         bind_device_and_processor_and_run!((my_device, my_device2, encoder) => processor),
