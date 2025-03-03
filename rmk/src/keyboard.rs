@@ -242,12 +242,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     async fn update_osm(&mut self, key_event: KeyEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(modifier) => {
+            OneShotState::Single(modifiers) => {
                 if !key_event.pressed {
-                    let (keycodes, n) = modifier.to_modifier_keycodes();
-                    for kc in keycodes.iter().take(n) {
-                        self.process_action_keycode(*kc, key_event).await;
-                    }
+                    self.unregister_modifiers(modifiers);
                     self.osm_state = OneShotState::None;
                 }
             }
@@ -417,12 +414,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // Set the default layer
                 self.keymap.borrow_mut().set_default_layer(layer_num);
             }
-            Action::Modifier(modifier) => {
-                let (keycodes, n) = modifier.to_modifier_keycodes();
-                for kc in keycodes.iter().take(n) {
-                    self.process_action_keycode(*kc, key_event).await;
+            Action::Modifier(modifiers) => {
+                if key_event.pressed {
+                    self.register_modifiers(modifiers);
+                } else {
+                    self.unregister_modifiers(modifiers);
                 }
-
                 self.update_osl(key_event);
             }
         }
@@ -431,27 +428,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     async fn process_key_action_with_modifier(
         &mut self,
         action: Action,
-        modifier: ModifierCombination,
+        modifiers: ModifierCombination,
         key_event: KeyEvent,
     ) {
         if key_event.pressed {
-            // Process modifier
-            let (keycodes, n) = modifier.to_modifier_keycodes();
-            for kc in keycodes.iter().take(n) {
-                self.process_action_keycode(*kc, key_event).await;
-            }
-            // Send the modifier first, then send the key
-            self.send_keyboard_report().await;
-            self.process_key_action_normal(action, key_event).await;
+            // The modifiers are prepared in the hid report, so will be pressed same time (same hid report) as the key
+            self.register_modifiers(modifiers);
         } else {
-            // Releasing, release the key first, then release the modifier
-            self.process_key_action_normal(action, key_event).await;
-            self.send_keyboard_report().await;
-            let (keycodes, n) = modifier.to_modifier_keycodes();
-            for kc in keycodes.iter().take(n) {
-                self.process_action_keycode(*kc, key_event).await;
-            }
+            // The modifiers are removed from the prepared hid report, so will be released same time (same hid report) as the key
+            self.unregister_modifiers(modifiers);
         }
+        self.process_key_action_normal(action, key_event).await;
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
@@ -662,19 +649,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    async fn process_action_osm(&mut self, modifier: ModifierCombination, key_event: KeyEvent) {
+    async fn process_action_osm(&mut self, modifiers: ModifierCombination, key_event: KeyEvent) {
         // Update one shot state
         if key_event.pressed {
             // Add new modifier combination to existing one shot or init if none
             self.osm_state = match self.osm_state {
-                OneShotState::None => OneShotState::Initial(modifier),
-                OneShotState::Initial(m) => OneShotState::Initial(m | modifier),
-                OneShotState::Single(m) => OneShotState::Single(m | modifier),
-                OneShotState::Held(m) => OneShotState::Held(m | modifier),
+                OneShotState::None => OneShotState::Initial(modifiers),
+                OneShotState::Initial(m) => OneShotState::Initial(m | modifiers),
+                OneShotState::Single(m) => OneShotState::Single(m | modifiers),
+                OneShotState::Held(m) => OneShotState::Held(m | modifiers),
             };
 
             // Press modifier
-            self.process_key_action_normal(Action::Modifier(modifier), key_event)
+            self.process_key_action_normal(Action::Modifier(modifiers), key_event)
                 .await;
         } else {
             match self.osm_state {
@@ -686,7 +673,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifier
-                            self.process_key_action_normal(Action::Modifier(modifier), key_event)
+                            self.process_key_action_normal(Action::Modifier(modifiers), key_event)
                                 .await;
                             self.osm_state = OneShotState::None;
                         }
@@ -698,11 +685,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                     }
                 }
-                OneShotState::Held(modifier) => {
+                OneShotState::Held(modifiers) => {
                     self.osm_state = OneShotState::None;
 
                     // Release modifier
-                    self.process_key_action_normal(Action::Modifier(modifier), key_event)
+                    self.process_key_action_normal(Action::Modifier(modifiers), key_event)
                         .await;
                 }
                 _ => (),
@@ -1007,7 +994,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         MacroOperation::Text(k, is_cap) => {
                             if is_cap {
                                 // If it's a capital letter, send shift first
-                                self.register_modifier(KeyCode::LShift.as_modifier_bit());
+                                self.register_modifier_key(KeyCode::LShift);
                                 self.send_keyboard_report().await;
                             }
                             self.register_keycode(k, key_event);
@@ -1016,7 +1003,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                             self.unregister_keycode(k, key_event);
                             if is_cap {
                                 self.send_keyboard_report().await;
-                                self.unregister_modifier(KeyCode::LShift.as_modifier_bit());
+                                self.unregister_modifier_key(KeyCode::LShift);
                             }
                         }
                         MacroOperation::Delay(t) => {
@@ -1045,7 +1032,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Register a key, the key can be a basic keycode or a modifier.
     fn register_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
-            self.register_modifier(key.as_modifier_bit());
+            self.register_modifier_key(key);
         } else if key.is_basic() {
             self.register_keycode(key, key_event);
         }
@@ -1054,7 +1041,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Unregister a key, the key can be a basic keycode or a modifier.
     fn unregister_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_modifier() {
-            self.unregister_modifier(key.as_modifier_bit());
+            self.unregister_modifier_key(key);
         } else if key.is_basic() {
             self.unregister_keycode(key, key_event);
         }
@@ -1111,12 +1098,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Register a modifier to be sent in hid report.
-    fn register_modifier(&mut self, modifier_bit: u8) {
-        self.report.modifier |= modifier_bit;
+    fn register_modifier_key(&mut self, key: KeyCode) {
+        self.report.modifier |= key.to_hid_modifier_bit() as u8;
     }
 
     /// Unregister a modifier from hid report.
-    fn unregister_modifier(&mut self, modifier_bit: u8) {
-        self.report.modifier &= !modifier_bit;
+    fn unregister_modifier_key(&mut self, key: KeyCode) {
+        self.report.modifier &= !(key.to_hid_modifier_bit() as u8);
+    }
+
+    /// Register a modifier combination to be sent in hid report.
+    fn register_modifiers(&mut self, modifiers: ModifierCombination) {
+        self.report.modifier |= modifiers.to_hid_modifier_bits();
+    }
+
+    /// Unregister a modifier combination from hid report.
+    fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
+        self.report.modifier &= !modifiers.to_hid_modifier_bits();
     }
 }
