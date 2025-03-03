@@ -256,7 +256,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         match self.osl_state {
             OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
             OneShotState::Single(layer_num) => {
-                if key_event.pressed {
+                if !key_event.pressed {
                     self.keymap.borrow_mut().deactivate_layer(layer_num);
                     self.osl_state = OneShotState::None;
                 }
