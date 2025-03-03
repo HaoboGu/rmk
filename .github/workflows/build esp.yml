@@ -41,6 +41,4 @@ jobs:
         run: espup install
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
-        run: |
-          cargo +esp build --release 
-          cargo clean
+        run: cargo build --release 
