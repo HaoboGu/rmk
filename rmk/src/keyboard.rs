@@ -1,3 +1,4 @@
+use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
@@ -813,6 +814,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_macro(key, key_event).await;
         } else if key.is_combo() {
             self.process_action_combo(key, key_event).await;
+        } else if key.is_boot() {
+            self.process_boot(key, key_event);
         } else {
             warn!("Unsupported key: {:?}", key);
         }
@@ -965,6 +968,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 embassy_time::Timer::after_millis(20).await;
                 KEY_EVENT_CHANNEL.try_send(key_event).ok();
             }
+        }
+    }
+
+    fn process_boot(&mut self, key: KeyCode, key_event: KeyEvent) {
+        if key_event.pressed {
+            match key {
+                KeyCode::Bootloader => {
+                    boot::jump_to_bootloader();
+                }
+                KeyCode::Reboot => {
+                    boot::reboot_keyboard();
+                }
+                _ => (), // unreachable, do nothing
+            };
         }
     }
 

@@ -7,7 +7,7 @@ use num_enum::FromPrimitive;
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
 ///
 /// | bit4 | bit3 | bit2 | bit1 | bit0 |
-/// | --- | --- | --- | --- | --- |  
+/// | --- | --- | --- | --- | --- |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[bitfield(u8, order = Lsb)]
 #[derive(Eq, PartialEq)]
@@ -998,6 +998,11 @@ impl KeyCode {
     /// Returns `true` if the keycode is a combo keycode
     pub(crate) fn is_combo(self) -> bool {
         KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
+    }
+
+    /// Returns `true` if the keycode is a combo keycode
+    pub(crate) fn is_boot(self) -> bool {
+        KeyCode::Bootloader <= self && self <= KeyCode::Reboot
     }
 
     /// Returns `true` if the keycode is a kb keycode

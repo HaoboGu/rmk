@@ -15,8 +15,9 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16 & 0xFF | 0x7700
                 } else if k.is_user() {
                     k as u16 & 0xF | 0x7E00
-                } else if k.is_combo() {
-                    k as u16 & 0xF | 0x7C50
+                } else if k.is_combo() || k.is_boot() {
+                    // is_rmk() 's subset
+                    k as u16 & 0xFF | 0x7C00
                 } else {
                     k as u16
                 }
@@ -164,9 +165,10 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("Backlight and RGB configuration key not supported");
             KeyAction::No
         }
-        0x7C50..=0x7C52 => {
-            // Combo
-            let keycode = via_keycode & 0xFF | 0x750;
+        // boot related | combo related
+        0x7C00..=0x7C01 | 0x7C50..=0x7C52 => {
+            // is_rmk() 's related
+            let keycode = via_keycode & 0xFF | 0x700;
             KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
         0x7C00..=0x7C5F => {
