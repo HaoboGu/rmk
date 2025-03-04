@@ -239,12 +239,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         yield_now().await;
     }
 
-    fn update_osm(&mut self, key_event: KeyEvent) {
+    async fn update_osm(&mut self, key_event: KeyEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(modifiers) => {
+            OneShotState::Single(_) => {
                 if !key_event.pressed {
-                    self.unregister_modifiers(modifiers);
                     self.osm_state = OneShotState::None;
                 }
             }
@@ -379,7 +378,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         match action {
             Action::Key(key) => {
                 self.process_action_keycode(key, key_event).await;
-                self.update_osm(key_event);
+                self.update_osm(key_event).await;
                 self.update_osl(key_event);
             }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
@@ -420,6 +419,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 } else {
                     self.unregister_modifiers(modifiers);
                 }
+                //report the modifier press/release in its own hid report
+                self.send_keyboard_report().await;
                 self.update_osl(key_event);
             }
         }
@@ -660,8 +661,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 OneShotState::Held(m) => OneShotState::Held(m | modifiers),
             };
 
-            // Press modifier
-            self.register_modifiers(modifiers);
             self.update_osl(key_event);
         } else {
             match self.osm_state {
@@ -673,7 +672,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifiers
-                            self.unregister_modifiers(modifiers);
                             self.update_osl(key_event);
                             self.osm_state = OneShotState::None;
                         }
@@ -685,11 +683,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                     }
                 }
-                OneShotState::Held(modifiers) => {
+                OneShotState::Held(_) => {
                     // Release modifier
-                    self.unregister_modifiers(modifiers);
                     self.update_osl(key_event);
                     self.osm_state = OneShotState::None;
+
+                    // This sends a separate hid report with the
+                    // currently registred modifiers except the
+                    // one shoot modifies this way "releasing" them.
+                    self.send_keyboard_report().await;
                 }
                 _ => (),
             };
@@ -788,12 +790,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 }
             }
         } else if key.is_basic() {
-            if key_event.pressed {
-                self.register_key(key, key_event);
-            } else {
-                self.unregister_key(key, key_event);
-            }
-            self.send_keyboard_report().await;
+            self.process_basic(key, key_event).await;
         } else if key.is_macro() {
             // Process macro
             self.process_action_macro(key, key_event).await;
@@ -801,6 +798,37 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             self.process_action_combo(key, key_event).await;
         } else {
             warn!("Unsupported key: {:?}", key);
+        }
+    }
+
+    // precess a basic keypress/release and also take care of applying one shot modifiers
+    async fn process_basic(&mut self, key: KeyCode, key_event: KeyEvent) {
+        if key_event.pressed {
+            self.register_key(key, key_event);
+            //if one shot modifier is active, decorate the hid report of keypress with those modifiers
+            if let Some(modifiers) = self.osm_state.value() {
+                let old = self.report.modifier;
+                self.report.modifier |= modifiers.to_hid_modifier_bits();
+                self.send_keyboard_report().await;
+                self.report.modifier = old;
+            } else {
+                self.send_keyboard_report().await;
+            }
+        } else {
+            // One shot modifiers are "released" together key release,
+            // except when in one shoot is in "held mode" (to allow Alt+Tab like use cases)
+            // In that later case Held -> None state change will report
+            // the "modifier released" change in a separate hid report
+            self.unregister_key(key, key_event);
+            if let OneShotState::Held(modifiers) = self.osm_state {
+                // OneShotState::Held keeps the teporary modifiers active
+                let old = self.report.modifier;
+                self.report.modifier |= modifiers.to_hid_modifier_bits();
+                self.send_keyboard_report().await;
+                self.report.modifier = old;
+            } else {
+                self.send_keyboard_report().await;
+            }
         }
     }
 
@@ -992,16 +1020,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         }
                         MacroOperation::Text(k, is_cap) => {
                             if is_cap {
-                                // If it's a capital letter, send shift first
+                                // If it's a capital letter, send the pressed report with a shift modifier included
                                 self.register_modifier_key(KeyCode::LShift);
-                                self.send_keyboard_report().await;
                             }
                             self.register_keycode(k, key_event);
                             self.send_keyboard_report().await;
-
+                            embassy_time::Timer::after_millis(2).await;
                             self.unregister_keycode(k, key_event);
                             if is_cap {
-                                self.send_keyboard_report().await;
+                                // If it was a capital letter, send the release report with the shift modifier released too
                                 self.unregister_modifier_key(KeyCode::LShift);
                             }
                         }
