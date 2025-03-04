@@ -195,7 +195,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 // }
 
 /// DirectPinMartex only has input pins.
-pub(crate) struct DirectPinMatrix<
+pub struct DirectPinMatrix<
     #[cfg(feature = "async_matrix")] In: Wait + InputPin,
     #[cfg(not(feature = "async_matrix"))] In: InputPin,
     D: DebouncerTrait,
@@ -227,11 +227,7 @@ impl<
     > DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     /// Create a matrix from input and output pins.
-    pub(crate) fn new(
-        direct_pins: [[Option<In>; COL]; ROW],
-        debouncer: D,
-        low_active: bool,
-    ) -> Self {
+    pub fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
         DirectPinMatrix {
             direct_pins,
             debouncer,

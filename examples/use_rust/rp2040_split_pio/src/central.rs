@@ -77,30 +77,30 @@ async fn main(spawner: Spawner) {
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     let uart_receiver = BufferedUart::new_half_duplex(p.PIO0, p.PIN_1, rx_buf, Irqs);
 
-    // Start serving
-    join(
-        run_rmk_split_central::<
-            Input<'_>,
-            Output<'_>,
-            Driver<'_, USB>,
-            Flash<peripherals::FLASH, Async, FLASH_SIZE>,
-            ROW,
-            COL,
-            2,
-            2,
-            0,
-            0,
-            NUM_LAYER,
-        >(
-            input_pins,
-            output_pins,
-            driver,
-            flash,
-            &mut keymap::get_default_keymap(),
-            keyboard_config,
-            spawner,
-        ),
-        run_peripheral_monitor::<2, 1, 2, 2, _>(0, uart_receiver),
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let debouncer = DefaultDebouncer::<2, 2>::new();
+    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // Initialize the light controller
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    join3(
+        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
     )
     .await;
 }

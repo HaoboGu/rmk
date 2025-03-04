@@ -77,21 +77,14 @@ async fn main(_spawner: Spawner) {
     };
 
     // 1. Create the storage + keymap
-    let mut storage = Storage::new(
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
         flash,
-        &mut keymap::get_default_keymap(),
         rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
     )
     .await;
-    let mut km = get_default_keymap();
-    let keymap = RefCell::new(
-        KeyMap::new_from_storage(
-            &mut km,
-            Some(&mut storage),
-            rmk_config.behavior_config.clone(),
-        )
-        .await,
-    );
 
     // 2. Create the matrix + keyboard
     // Create the debouncer, use COL2ROW by default

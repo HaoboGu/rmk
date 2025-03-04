@@ -15,7 +15,12 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
 };
 use panic_probe as _;
-use rmk::{debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait}, futures::future::join, matrix::Matrix, split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral}};
+use rmk::{
+    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    futures::future::join,
+    matrix::Matrix,
+    split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral},
+};
 
 bind_interrupts!(struct Irqs {
     SAADC => saadc::InterruptHandler;
@@ -63,11 +68,11 @@ async fn main(spawner: Spawner) {
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
-    // Define the matrix
+    // Initialize the peripheral matrix
     let debouncer = DefaultDebouncer::<2, 2>::new();
     let matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
 
-    // Start serving
+    // Start
     join(
         run_peripheral_matrix(matrix),
         run_rmk_split_peripheral(central_addr, peripheral_addr, spawner),

@@ -94,6 +94,28 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
+pub async fn initialize_keymap_and_storage<
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    flash: F,
+    storage_config: config::StorageConfig,
+    behavior_config: config::BehaviorConfig,
+) -> (
+    RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    Storage<F, ROW, COL, NUM_LAYER>,
+) {
+    let mut storage = Storage::new(flash, default_keymap, storage_config).await;
+
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(default_keymap, Some(&mut storage), behavior_config).await,
+    );
+    (keymap, storage)
+}
+
 /// Run RMK keyboard service. This function should never return.
 ///
 /// # Arguments
