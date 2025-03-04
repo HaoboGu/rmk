@@ -43,7 +43,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
             }
         } else if key_state.pressed != pin_state {
             // If current key isn't in debouncing state, and a key change is detected
-            // Trigger the key imeediately and record current tick
+            // Trigger the key immediately and record current tick
             self.last_ms = Instant::now();
             // Change debouncing state
             self.debouncing[out_idx][in_idx] = true;
