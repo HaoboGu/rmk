@@ -185,7 +185,7 @@ fn expand_main(
                 ..Default::default()
             };
 
-            // Start serving
+            // Start
             #run_rmk
         }
     }

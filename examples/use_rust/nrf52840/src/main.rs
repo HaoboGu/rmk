@@ -6,8 +6,6 @@ mod macros;
 mod keymap;
 mod vial;
 
-use core::cell::RefCell;
-
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -19,20 +17,19 @@ use embassy_nrf::{
     peripherals,
     usb::{self, vbus_detect::HardwareVbusDetect, Driver},
 };
-use keymap::{get_default_keymap, COL, ROW};
+use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     bind_device_and_processor_and_run,
     config::{ControllerConfig, RmkConfig, VialConfig},
-    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    debounce::default_bouncer::DefaultDebouncer,
     futures::future::join,
-    input_device::{InputDevice, InputProcessor},
+    initialize_keymap_and_storage,
     keyboard::Keyboard,
-    keymap::KeyMap,
     light::LightController,
     matrix::Matrix,
     run_rmk,
-    storage::{async_flash_wrapper, Storage},
+    storage::async_flash_wrapper,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -62,7 +59,7 @@ async fn main(_spawner: Spawner) {
     let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_07, P0_08, P0_11, P0_12], output: [P0_13, P0_14, P0_15]);
 
     // Use internal flash to emulate eeprom
-    let flash = BlockingAsync::new(Nvmc::new(p.NVMC));
+    let flash = async_flash_wrapper(Nvmc::new(p.NVMC));
 
     // RMK config
     let rmk_config = RmkConfig {
@@ -79,7 +76,7 @@ async fn main(_spawner: Spawner) {
         rmk_config.behavior_config.clone(),
     )
     .await;
-    
+
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);

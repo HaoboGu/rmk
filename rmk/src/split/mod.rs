@@ -9,10 +9,10 @@ pub(crate) mod driver;
 #[cfg(feature = "_nrf_ble")]
 pub mod nrf;
 pub mod peripheral;
-#[cfg(not(feature = "_nrf_ble"))]
-pub mod serial;
 #[cfg(feature = "rp2040_pio")]
 pub mod rp;
+#[cfg(not(feature = "_nrf_ble"))]
+pub mod serial;
 
 /// Maximum size of a split message
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;

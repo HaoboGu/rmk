@@ -76,7 +76,7 @@ mod my_keyboard {
     // Use `#[Override(entry)]` to override default rmk keyboard runner
     #[Override(entry)]
     fn run() {
-        // Start serving
+        // Start
         run_rmk(
             input_pins,
             output_pins,

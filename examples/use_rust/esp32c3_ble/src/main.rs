@@ -6,12 +6,24 @@ mod keymap;
 mod vial;
 
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use defmt::*;
-use esp_idf_svc::hal::{gpio::*, peripherals::Peripherals, task::block_on};
+use defmt::info;
+use esp_idf_svc::{
+    hal::{gpio::*, peripherals::Peripherals, task::block_on},
+    partition::EspPartition,
+};
 use esp_println as _;
+use keymap::{COL, ROW};
 use rmk::{
-    config::{KeyboardConfig, RmkConfig, VialConfig},
+    bind_device_and_processor_and_run,
+    config::{ControllerConfig, RmkConfig, VialConfig},
+    debounce::default_bouncer::DefaultDebouncer,
+    futures::future::join,
+    initialize_keymap_and_storage,
+    keyboard::Keyboard,
+    light::LightController,
+    matrix::Matrix,
     run_rmk,
+    storage::async_flash_wrapper,
 };
 
 fn main() {
@@ -35,17 +47,33 @@ fn main() {
         ..Default::default()
     };
 
-    // Keyboard config
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
+    let flash = async_flash_wrapper(unsafe {
+        EspPartition::new("rmk")
+            .expect("Create storage partition error")
+            .expect("Empty partition")
+    });
 
-    // Start serving
-    block_on(run_rmk(
-        input_pins,
-        output_pins,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, storage) = block_on(initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    ));
+
+    // Initialize the matrix + keyboard
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // Initialize the light controller
+    let light_controller: LightController<PinDriver<AnyOutputPin, Output>> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    block_on(join(
+        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_rmk(&keymap, storage, light_controller, rmk_config),
     ));
 }

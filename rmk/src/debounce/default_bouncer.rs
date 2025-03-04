@@ -33,17 +33,21 @@ pub struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: us
     counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
-    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
+    DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a default debouncer
-    fn new() -> Self {
+    pub fn new() -> Self {
         DefaultDebouncer {
             counters: [[DebounceCounter(0); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_ms: 0,
         }
     }
+}
 
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     /// Per-key debounce, same with zmk's debounce algorithm
     fn detect_change_with_debounce(
         &mut self,

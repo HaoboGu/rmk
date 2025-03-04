@@ -7,8 +7,6 @@ mod keymap;
 mod macros;
 mod vial;
 
-use core::cell::RefCell;
-
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -19,21 +17,18 @@ use embassy_rp::{
     peripherals::USB,
     usb::{Driver, InterruptHandler},
 };
-use keymap::{get_default_keymap, COL, ROW};
-// use embassy_rp::flash::Blocking;
+use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     bind_device_and_processor_and_run,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    debounce::default_bouncer::DefaultDebouncer,
     futures::future::join,
-    input_device::{InputDevice, InputProcessor},
+    initialize_keymap_and_storage,
     keyboard::Keyboard,
-    keymap::KeyMap,
     light::LightController,
     matrix::Matrix,
     run_rmk,
-    storage::Storage,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -76,7 +71,7 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    // 1. Create the storage + keymap
+    // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let (keymap, storage) = initialize_keymap_and_storage(
         &mut default_keymap,
@@ -86,18 +81,16 @@ async fn main(_spawner: Spawner) {
     )
     .await;
 
-    // 2. Create the matrix + keyboard
-    // Create the debouncer, use COL2ROW by default
+    // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    // Keyboard matrix, use COL2ROW by default
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
-    // 3. Create the light controller
+    // Initialize the light controller
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
-    // Start serving
+    // Start
     join(
         bind_device_and_processor_and_run!((matrix) => keyboard),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),

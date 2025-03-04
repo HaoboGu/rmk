@@ -7,8 +7,6 @@ mod keymap;
 mod macros;
 mod vial;
 
-use core::cell::RefCell;
-
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -20,24 +18,20 @@ use embassy_rp::{
     uart::{self, BufferedUart},
     usb::{Driver, InterruptHandler},
 };
-use keymap::get_default_keymap;
-// use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
+    initialize_keymap_and_storage,
     bind_device_and_processor_and_run,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    debounce::{default_bouncer::DefaultDebouncer},
     futures::future::join3,
-    input_device::{InputDevice, InputProcessor},
     keyboard::Keyboard,
-    keymap::KeyMap,
     light::LightController,
     run_rmk,
     split::{
         central::{run_peripheral_manager, CentralMatrix},
         SPLIT_MESSAGE_MAX_SIZE,
     },
-    storage::Storage,
 };
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};

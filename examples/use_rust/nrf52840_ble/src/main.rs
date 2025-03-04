@@ -6,8 +6,6 @@ mod macros;
 mod keymap;
 mod vial;
 
-use core::cell::RefCell;
-
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -20,7 +18,7 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
-use keymap::{get_default_keymap, COL, ROW};
+use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     bind_device_and_processor_and_run,
@@ -28,16 +26,14 @@ use rmk::{
     config::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
-    debounce::{default_bouncer::DefaultDebouncer, DebouncerTrait},
+    debounce::default_bouncer::DefaultDebouncer,
     event::{Event, KeyEvent},
-    initialize_nrf_sd_and_flash,
+    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor},
     keyboard::Keyboard,
-    keymap::KeyMap,
     light::LightController,
     matrix::Matrix,
     run_rmk,
-    storage::Storage,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -144,7 +140,7 @@ async fn main(spawner: Spawner) {
     // Initialize the light controller
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
-    
+
     // Initialize other devices and processors
     let mut my_device = MyDevice {};
     let mut my_device2 = MyDevice {};

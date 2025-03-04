@@ -194,7 +194,7 @@ fn expand_split_central(
 
             #split_communication_config
 
-            // Start serving
+            // Start
             #run_rmk
         }
     }

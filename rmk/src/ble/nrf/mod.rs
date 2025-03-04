@@ -28,7 +28,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select4, Either4};
+use embassy_futures::select::{select,select4, Either4};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -55,7 +55,6 @@ use {
     },
     crate::via::UsbVialReaderWriter,
     crate::{add_usb_reader_writer, run_usb_device},
-    embassy_futures::select::select,
     embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
@@ -562,31 +561,12 @@ pub(crate) async fn run_dummy_keyboard<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    // keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    // matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
-    // // Don't need to wait for connection, just do scanning to detect if there's a profile update
-    // let matrix_fut = matrix.scan();
-    // let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
     let mut dummy_writer = DummyWriter {};
     select(storage_fut, dummy_writer.run_writer()).await;
-
-    // match select4(
-    //     matrix_fut,
-    //     keyboard_fut,
-    //     storage_fut,
-    //     dummy_writer.run_writer(),
-    // )
-    // .await
-    // {
-    //     Either4::First(_) => (),
-    //     Either4::Second(_) => (),
-    //     Either4::Third(_) => (),
-    //     Either4::Fourth(_) => (),
-    // }
 }
 
 #[cfg(not(feature = "_no_usb"))]

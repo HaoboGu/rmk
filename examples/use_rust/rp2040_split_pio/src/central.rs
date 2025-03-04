@@ -7,24 +7,28 @@ mod keymap;
 mod macros;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
-use defmt::*;
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_rp::{
     bind_interrupts,
     flash::{Async, Flash},
     gpio::{AnyPin, Input, Output},
-    peripherals::{self, PIO0, USB},
+    peripherals::{PIO0, USB},
     usb::{Driver, InterruptHandler},
 };
-// use embassy_rp::flash::Blocking;
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardUsbConfig, RmkConfig, VialConfig},
+    bind_device_and_processor_and_run,
+    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
+    debounce::default_bouncer::DefaultDebouncer,
+    futures::future::join3,
+    initialize_keymap_and_storage,
+    keyboard::Keyboard,
+    light::LightController,
+    run_rmk,
     split::{
-        central::{run_peripheral_monitor, run_rmk_split_central},
+        central::{run_peripheral_manager, CentralMatrix},
         rp::uart::{BufferedUart, UartInterruptHandler},
         SPLIT_MESSAGE_MAX_SIZE,
     },
@@ -40,7 +44,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -53,8 +57,6 @@ async fn main(spawner: Spawner) {
         config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
 
     // Use internal flash to emulate eeprom
-    // Both blocking and async flash are support, use different API
-    // let flash = Flash::<_, Blocking, FLASH_SIZE>::new_blocking(p.FLASH);
     let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
 
     let keyboard_usb_config = KeyboardUsbConfig {
@@ -67,7 +69,7 @@ async fn main(spawner: Spawner) {
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
 
-    let keyboard_config = RmkConfig {
+    let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
         ..Default::default()

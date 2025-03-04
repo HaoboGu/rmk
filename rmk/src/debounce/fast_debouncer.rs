@@ -11,17 +11,21 @@ pub struct RapidDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usiz
     debouncing: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
-    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
+    RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a rapid debouncer
-    fn new() -> Self {
+    pub fn new() -> Self {
         RapidDebouncer {
             debouncing: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_ms: Instant::now(),
         }
     }
+}
 
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     /// Per-key fast debounce
     fn detect_change_with_debounce(
         &mut self,

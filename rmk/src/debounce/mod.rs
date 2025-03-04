@@ -7,8 +7,6 @@ pub mod fast_debouncer;
 static DEBOUNCE_THRESHOLD: u16 = 10;
 
 pub trait DebouncerTrait {
-    fn new() -> Self;
-
     /// The `in_idx` `out_idx` can be used as two normal dimensions.
     fn detect_change_with_debounce(
         &mut self,
