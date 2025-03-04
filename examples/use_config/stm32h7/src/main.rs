@@ -9,7 +9,7 @@ use rmk::macros::rmk_keyboard;
 #[rmk_keyboard]
 mod my_keyboard {
     use embassy_stm32::{time::Hertz, usb::Driver, Config};
-    use rmk::run_rmk;
+    use rmk::{bind_device_and_processor_and_run, futures::future::join, run_rmk};
     use static_cell::StaticCell;
 
     // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
@@ -77,14 +77,9 @@ mod my_keyboard {
     #[Override(entry)]
     fn run() {
         // Start
-        run_rmk(
-            input_pins,
-            output_pins,
-            driver,
-            f,
-            &mut get_default_keymap(),
-            keyboard_config,
-            spawner,
+        join(
+            bind_device_and_processor_and_run!((matrix) => keyboard),
+            run_rmk(&keymap, driver, storage, light_controller, rmk_config),
         )
         .await;
     }

@@ -276,7 +276,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
                     let size =
                         split_config.central.rows as usize * split_config.central.cols as usize;
                     quote! {
-                        let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pin, debouncer, #low_active);
+                        let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
                     }
                 }
             }
