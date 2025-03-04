@@ -1,14 +1,14 @@
 pub fn jump_to_bootloader() {
     // TODO: support more MCUs
 
-    #[cfg(feature = "adafruit")]
+    #[cfg(feature = "adafruit_bl")]
     //reference: https://github.com/adafruit/Adafruit_nRF52_Bootloader/blob/d6b28e66053eea467166f44875e3c7ec741cb471/src/main.c#L107
     embassy_nrf::pac::POWER
         .gpregret()
         .write_value(embassy_nrf::pac::power::regs::Gpregret(0x57));
 
-    #[cfg(not(any(feature = "adafruit")))]
-    warn!("Jump-to-Bootloader is unsupported for the chip");
+    #[cfg(not(any(feature = "adafruit_bl")))]
+    warn!("Please specified a bootloader to jump to!");
 
     reboot_keyboard();
 }

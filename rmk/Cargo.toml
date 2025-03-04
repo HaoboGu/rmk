@@ -199,4 +199,4 @@ rp2040_pio = [
     "dep:fixed",
 ]
 
-adafruit = ["_nrf_ble"]
+adafruit_bl = ["_nrf_ble"]
