@@ -3,6 +3,7 @@
 use quote::quote;
 
 use crate::{
+    config::MatrixType,
     feature::is_feature_enabled,
     gpio_config::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
@@ -49,10 +50,28 @@ pub(crate) fn expand_matrix_config(
                 let low_active = #low_active;
             });
         }
-        _ => (),
+        BoardConfig::Split(split_config) => {
+            // Matrix config for split central
+            match split_config.central.matrix.matrix_type {
+                MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
+                    &keyboard_config.chip,
+                    split_config.central.matrix.input_pins.clone().unwrap(),
+                    split_config.central.matrix.output_pins.clone().unwrap(),
+                    async_matrix,
+                )),
+                MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
+                    &keyboard_config.chip,
+                    split_config.central.matrix.direct_pins.clone().unwrap(),
+                    async_matrix,
+                    split_config.central.matrix.direct_pin_low_active,
+                )),
+            }
+        }
     };
     matrix_config
 }
+
+
 
 pub(crate) fn expand_matrix_direct_pins(
     chip: &ChipModel,

@@ -13,13 +13,14 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
-    keyboard_config::BoardConfig::{DirectPin, Normal},
     keyboard_config::{
-        expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, KeyboardConfig,
+        expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig,
+        KeyboardConfig,
     },
     layout::expand_default_keymap,
     light::expand_light_config,
     matrix::expand_matrix_config,
+    split::central::expand_split_central_config,
     ChipSeries,
 };
 
@@ -122,6 +123,7 @@ fn expand_main(
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
+    let split_central_config = expand_split_central_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
@@ -164,6 +166,9 @@ fn expand_main(
 
             // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
+
+            // Initialize split central config(if needed)
+            #split_central_config
 
             // Initialize flash driver as `flash` and storage config as `storage_config`
             #flash_init
@@ -241,16 +246,31 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }
     };
     let matrix = match &keyboard_config.board {
-        Normal(_matrix_config) => quote! {
+        BoardConfig::Normal(_matrix_config) => quote! {
             let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
         },
-        DirectPin(matrix_config) => {
+        BoardConfig::DirectPin(matrix_config) => {
             let low_active = matrix_config.direct_pin_low_active;
             quote! {
                 let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
             }
         }
-        _ => quote! {},
+        BoardConfig::Split(split_config) => {
+            // Matrix config for split central
+            let central_row = split_config.central.rows;
+            let central_row_offset = split_config.central.row_offset;
+            let central_col = split_config.central.cols;
+            let central_col_offset = split_config.central.col_offset;
+            if split_config.central.matrix.row2col {
+                quote! {
+                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_col, #central_row>::new(input_pins, output_pins, debouncer);
+                }
+            } else {
+                quote! {
+                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col>::new(input_pins, output_pins, debouncer);
+                }
+            }
+        }
     };
     quote! {
         let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
@@ -260,7 +280,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
 }
 
 fn expand_controller_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    // TODO: Controller initialization
+    // TODO: Initialization for other controllers
     let output_pin_type = match keyboard_config.chip.series {
         ChipSeries::Esp32 => quote! {
             ::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>>

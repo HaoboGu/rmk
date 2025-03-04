@@ -2,11 +2,17 @@
 //!
 
 use crate::config::StorageConfig;
+use crate::keyboard_config::BoardConfig;
 use crate::{keyboard_config::KeyboardConfig, ChipSeries};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    let sd_addr = if let BoardConfig::Split(_split_config) = &keyboard_config.board {
+        quote! { Some(central_addr) }
+    } else {
+        quote! { None }
+    };
     if !keyboard_config.storage.enabled {
         // This config actually does nothing if storage is disabled
         return quote! {
@@ -31,7 +37,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream
                 } else {
                     // If BLE enables, initialize both sd and flash
                     quote! {
-                        let (sd, flash) = ::rmk::initialize_nrf_sd_and_flash("rmk", spawner, None);
+                        let (sd, flash) = ::rmk::initialize_nrf_sd_and_flash("rmk", spawner, #sd_addr);
                     }
                 }
             }
