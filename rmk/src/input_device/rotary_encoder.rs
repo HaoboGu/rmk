@@ -25,7 +25,7 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Debug, MaxSize, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn
@@ -159,13 +159,14 @@ impl<
                 .await;
             }
 
-            let direction = self.update();
-
-            self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
-                id: self.id,
-                direction,
-            }))
-            .await;
+            let direction = self.update();            
+            if direction != Direction::None {
+                self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
+                    id: self.id,
+                    direction,
+                }))
+                .await;
+            }
         }
     }
 
