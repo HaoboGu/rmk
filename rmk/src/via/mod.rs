@@ -1,4 +1,5 @@
 use crate::{
+    boot,
     channel::FLASH_CHANNEL,
     config::VialConfig,
     hid::{HidError, HidReaderTrait, HidWriterTrait},
@@ -202,7 +203,8 @@ impl<
                 // TODO: Reboot after a eeprom reset?
             }
             ViaCommand::BootloaderJump => {
-                warn!("Bootloader jump -- not supported")
+                warn!("Bootloader jumping");
+                boot::jump_to_bootloader();
             }
             ViaCommand::DynamicKeymapMacroGetCount => {
                 report.input_data[1] = 8;

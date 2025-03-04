@@ -1,11 +1,11 @@
 use crate::{
     action::KeyAction,
+    boot::reboot_keyboard,
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::KeyEvent,
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    reboot_keyboard,
     storage::Storage,
 };
 use embedded_storage_async::nor_flash::NorFlash;
