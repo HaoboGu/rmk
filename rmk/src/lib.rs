@@ -31,7 +31,7 @@ pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex as RawMutex,
 // #[cfg(all(target_arch = "arm", target_os = "none"))]
 #[cfg(feature = "_esp_ble")]
 use crate::ble::esp::run_esp_ble_keyboard;
-#[cfg(any(cortex_m))]
+#[cfg(cortex_m)]
 pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex as RawMutex, channel::*};
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
@@ -217,7 +217,7 @@ pub(crate) async fn run_keyboard<
     CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
     let mut light_service = LightService::new(light_controller, led_reader);
-    let mut vial_service = VialService::new(&keymap, vial_config, vial_reader_writer);
+    let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
 
     let led_fut = light_service.run();
     let via_fut = vial_service.run();

@@ -85,13 +85,13 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'a, 'd, D> {
+impl<'d, D: Driver<'d>> RunnableHidWriter for UsbKeyboardWriter<'_, 'd, D> {
     async fn get_report(&mut self) -> Self::ReportType {
         KEYBOARD_REPORT_CHANNEL.receive().await
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
     type ReportType = Report;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
@@ -101,7 +101,7 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
                 self.keyboard_writer
                     .write_serialize(&keyboard_report)
                     .await
-                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                    .map_err(HidError::UsbEndpointError)?;
                 Ok(8)
             }
             Report::MouseReport(mouse_report) => {
@@ -110,9 +110,9 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
                 let n = serialize(&mut buf[1..], &mouse_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
-                    .write(&mut buf[0..n + 1])
+                    .write(&buf[0..n + 1])
                     .await
-                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                    .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
@@ -121,9 +121,9 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
                 let n = serialize(&mut buf[1..], &media_keyboard_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
-                    .write(&mut buf[0..n + 1])
+                    .write(&buf[0..n + 1])
                     .await
-                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                    .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
             Report::SystemControlReport(system_control_report) => {
@@ -132,9 +132,9 @@ impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'a, 'd, D> {
                 let n = serialize(&mut buf[1..], &system_control_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
-                    .write(&mut buf[0..n + 1])
+                    .write(&buf[0..n + 1])
                     .await
-                    .map_err(|e| HidError::UsbEndpointError(e))?;
+                    .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
         }

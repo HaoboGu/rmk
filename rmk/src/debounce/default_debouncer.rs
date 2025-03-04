@@ -33,6 +33,12 @@ pub struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: us
     counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
     DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {

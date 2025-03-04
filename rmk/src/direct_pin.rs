@@ -97,19 +97,16 @@ impl<
                             &self.key_states[row_idx][col_idx],
                         );
 
-                        match debounce_state {
-                            DebounceState::Debounced => {
-                                self.key_states[row_idx][col_idx].toggle_pressed();
-                                let key_state = self.key_states[row_idx][col_idx];
+                        if let DebounceState::Debounced = debounce_state {
+                            self.key_states[row_idx][col_idx].toggle_pressed();
+                            let key_state = self.key_states[row_idx][col_idx];
 
-                                self.scan_pos = (row_idx, col_idx);
-                                return Event::Key(KeyEvent {
-                                    row: row_idx as u8,
-                                    col: col_idx as u8,
-                                    pressed: key_state.pressed,
-                                });
-                            }
-                            _ => (),
+                            self.scan_pos = (row_idx, col_idx);
+                            return Event::Key(KeyEvent {
+                                row: row_idx as u8,
+                                col: col_idx as u8,
+                                pressed: key_state.pressed,
+                            });
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start

@@ -148,24 +148,21 @@ impl<
                         &self.key_states[out_idx][in_idx],
                     );
 
-                    match debounce_state {
-                        DebounceState::Debounced => {
-                            self.key_states[out_idx][in_idx].toggle_pressed();
-                            #[cfg(feature = "col2row")]
-                            let (row, col, key_state) =
-                                (in_idx, out_idx, self.key_states[out_idx][in_idx]);
-                            #[cfg(not(feature = "col2row"))]
-                            let (row, col, key_state) =
-                                (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+                    if let DebounceState::Debounced = debounce_state {
+                        self.key_states[out_idx][in_idx].toggle_pressed();
+                        #[cfg(feature = "col2row")]
+                        let (row, col, key_state) =
+                            (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                        #[cfg(not(feature = "col2row"))]
+                        let (row, col, key_state) =
+                            (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
-                            self.scan_pos = (out_idx, in_idx);
-                            return Event::Key(KeyEvent {
-                                row: row as u8,
-                                col: col as u8,
-                                pressed: key_state.pressed,
-                            });
-                        }
-                        _ => (),
+                        self.scan_pos = (out_idx, in_idx);
+                        return Event::Key(KeyEvent {
+                            row: row as u8,
+                            col: col as u8,
+                            pressed: key_state.pressed,
+                        });
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -237,6 +234,12 @@ impl<
 pub struct TestMatrix<const ROW: usize, const COL: usize> {
     last: bool,
 }
+impl<const ROW: usize, const COL: usize> Default for TestMatrix<ROW, COL> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const ROW: usize, const COL: usize> TestMatrix<ROW, COL> {
     pub fn new() -> Self {
         Self { last: false }

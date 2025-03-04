@@ -140,7 +140,7 @@ impl<'a, 'd, D: Driver<'d>> UsbLedReader<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbLedReader<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
     type ReportType = LedIndicator;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
@@ -148,7 +148,7 @@ impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbLedReader<'a, 'd, D> {
         self.hid_reader
             .read(&mut buf)
             .await
-            .map_err(|e| HidError::UsbReadError(e))?;
+            .map_err(HidError::UsbReadError)?;
 
         Ok(LedIndicator::from_bits(buf[0]))
     }

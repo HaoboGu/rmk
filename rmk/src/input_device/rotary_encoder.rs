@@ -169,18 +169,15 @@ pub struct RotaryEncoderProcessor {}
 
 impl InputProcessor for RotaryEncoderProcessor {
     async fn process(&mut self, event: Event) {
-        match event {
-            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => match direction {
-                Direction::Clockwise => {
-                    debug!("Encoder {} - Clockwise", id);
-                }
-                Direction::CounterClockwise => {
-                    debug!("Encoder {} - CounterClockwise", id);
-                }
-                Direction::None => (),
-            },
-            _ => {}
-        }
+        if let Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) = event { match direction {
+            Direction::Clockwise => {
+                debug!("Encoder {} - Clockwise", id);
+            }
+            Direction::CounterClockwise => {
+                debug!("Encoder {} - CounterClockwise", id);
+            }
+            Direction::None => (),
+        } }
     }
 
     async fn send_report(&self, report: Report) {

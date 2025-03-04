@@ -92,7 +92,7 @@ impl HidWriterTrait for DummyWriter {
 }
 
 impl RunnableHidWriter for DummyWriter {
-    async fn run_writer(&mut self) -> () {
+    async fn run_writer(&mut self) {
         loop {
             let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }

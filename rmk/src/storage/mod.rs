@@ -682,7 +682,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
-        for i in 0..combos.len() {
+        // for i in 0..combos.len() {
+        for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
@@ -699,7 +700,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }
-                combos[i] = Combo::new(actions, combo.output, combos[i].layer);
+                *item = Combo::new(actions, combo.output, item.layer);
+                // combos[i] = Combo::new(actions, combo.output, combos[i].layer);
             }
         }
 

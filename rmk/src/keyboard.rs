@@ -43,12 +43,12 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
-    for Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
+    for Keyboard<'_, ROW, COL, NUM_LAYER>
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
-    async fn process(&mut self, event: Event) -> () {
+    async fn process(&mut self, event: Event) {
         if let Event::Key(key_event) = event {
             // Process the key change
             self.process_inner(key_event).await;
@@ -574,7 +574,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 if let Some(ke) = k {
                     return ke.row == key_event.row && ke.col == key_event.col;
                 }
-                return false;
+                false
             }) {
                 // Release the hold after tap key
                 info!("Releasing hold after tap: {:?} {:?}", tap_action, key_event);
@@ -582,7 +582,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.hold_after_tap[index] = None;
                 return;
             }
-            if let Some(_) = self.timer[col][row] {
+            if self.timer[col][row].is_some() {
                 // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
                     "HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
@@ -928,9 +928,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
             self.send_mouse_report().await;
 
-            if let Err(_) = self
+            if self
                 .last_mouse_tick
-                .insert(key, (key_event.pressed, Instant::now()))
+                .insert(key, (key_event.pressed, Instant::now())).is_err()
             {
                 error!("The buffer for last moust tick is full");
             }
@@ -963,7 +963,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     async fn process_action_macro(&mut self, key: KeyCode, key_event: KeyEvent) {
         // Execute the macro only when releasing the key
-        if !!key_event.pressed {
+        if key_event.pressed {
             return;
         }
 
@@ -1062,7 +1062,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     return Some(i);
                 }
             }
-            return None;
+            None
         });
 
         // If the slot is found, update the key in the slot
@@ -1087,7 +1087,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     return Some(i);
                 }
             }
-            return None;
+            None
         });
 
         // If the slot is found, update the key in the slot
@@ -1105,12 +1105,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier |= key.to_hid_modifier_bit() as u8;
+        self.report.modifier |= key.to_hid_modifier_bit();
     }
 
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier &= !(key.to_hid_modifier_bit() as u8);
+        self.report.modifier &= !{ key.to_hid_modifier_bit() };
     }
 
     /// Register a modifier combination to be sent in hid report.
