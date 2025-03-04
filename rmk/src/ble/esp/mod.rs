@@ -18,11 +18,9 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 /// # Arguments
 ///
 /// * `keymap` - default keymap definition
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
+/// * `storage` - storage for saving keymap and other data
+/// * `light_controller` - light controller for controlling the light
+/// * `rmk_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 // TODO: add usb service for other chips of esp32 which have USB device
 pub(crate) async fn run_esp_ble_keyboard<
     'a,

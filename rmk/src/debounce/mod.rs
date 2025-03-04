@@ -1,6 +1,6 @@
 use crate::matrix::KeyState;
 
-pub mod default_bouncer;
+pub mod default_debouncer;
 pub mod fast_debouncer;
 
 /// Default DEBOUNCE_THRESHOLD in ms.

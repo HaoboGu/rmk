@@ -16,7 +16,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    debounce::default_bouncer::DefaultDebouncer,
+    debounce::default_debouncer::DefaultDebouncer,
     futures::future::join,
     matrix::Matrix,
     split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral},

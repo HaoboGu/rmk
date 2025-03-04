@@ -106,7 +106,7 @@ fn expand_split_peripheral(
         }
     } else {
         quote! {
-            let debouncer = ::rmk::debounce::default_bouncer::DefaultDebouncer::<#input_output_num>::new();
+            let debouncer = ::rmk::debounce::default_debouncer::DefaultDebouncer::<#input_output_num>::new();
         }
     };
 

@@ -63,6 +63,7 @@ use {
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
+/// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 #[cfg(not(feature = "_no_usb"))]
@@ -454,7 +455,6 @@ pub(crate) async fn load_bond_info<
 
 async fn run_ble_keyboard<
     'a,
-    // M: MatrixTrait,
     F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
@@ -462,8 +462,6 @@ async fn run_ble_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    // keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    // matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_controller: &mut LightController<Out>,
     vial_config: VialConfig<'static>,
@@ -555,7 +553,6 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
 pub(crate) async fn run_dummy_keyboard<
     'a,
     'b,
-    // M: MatrixTrait,
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,

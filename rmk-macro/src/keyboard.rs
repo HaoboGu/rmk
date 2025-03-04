@@ -243,7 +243,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }
     } else {
         quote! {
-            let debouncer = ::rmk::debounce::default_bouncer::DefaultDebouncer::<#input_output_num>::new();
+            let debouncer = ::rmk::debounce::default_debouncer::DefaultDebouncer::<#input_output_num>::new();
         }
     };
     let matrix = match &keyboard_config.board {

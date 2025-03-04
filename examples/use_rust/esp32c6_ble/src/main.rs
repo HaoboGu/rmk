@@ -16,7 +16,7 @@ use keymap::{COL, ROW};
 use rmk::{
     bind_device_and_processor_and_run,
     config::{ControllerConfig, RmkConfig, VialConfig},
-    debounce::default_bouncer::DefaultDebouncer,
+    debounce::default_debouncer::DefaultDebouncer,
     futures::future::join,
     initialize_keymap_and_storage,
     keyboard::Keyboard,

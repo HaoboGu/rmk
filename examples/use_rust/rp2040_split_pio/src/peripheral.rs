@@ -15,7 +15,7 @@ use embassy_rp::{
 };
 use panic_probe as _;
 use rmk::{
-    debounce::default_bouncer::DefaultDebouncer,
+    debounce::default_debouncer::DefaultDebouncer,
     futures::future::join,
     matrix::Matrix,
     split::{

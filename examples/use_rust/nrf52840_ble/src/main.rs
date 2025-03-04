@@ -26,7 +26,7 @@ use rmk::{
     config::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
-    debounce::default_bouncer::DefaultDebouncer,
+    debounce::default_debouncer::DefaultDebouncer,
     event::{Event, KeyEvent},
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor},
