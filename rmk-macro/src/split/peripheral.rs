@@ -147,11 +147,13 @@ fn expand_split_peripheral(
             ));
             // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
             // So we need to declaring them in advance.
+            let row = keyboard_config.layout.rows;
+            let col = keyboard_config.layout.cols;
             let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
             let low_active = peripheral_config.matrix.direct_pin_low_active;
 
             matrix_config.extend(quote! {
-                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, #size>::new(direct_pins, debouncer, #low_active);
+                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
             });
         }
     }

@@ -9,6 +9,7 @@ use crate::{
     ble::expand_ble_config,
     chip_init::expand_chip_init,
     comm::expand_usb_init,
+    config::MatrixType,
     entry::expand_rmk_entry,
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
@@ -252,7 +253,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         BoardConfig::DirectPin(matrix_config) => {
             let low_active = matrix_config.direct_pin_low_active;
             quote! {
-                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
+                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
             }
         }
         BoardConfig::Split(split_config) => {
@@ -261,13 +262,22 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             let central_row_offset = split_config.central.row_offset;
             let central_col = split_config.central.cols;
             let central_col_offset = split_config.central.col_offset;
-            if split_config.central.matrix.row2col {
-                quote! {
-                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_col, #central_row>::new(input_pins, output_pins, debouncer);
-                }
+            let input_output_pin_num = if split_config.central.matrix.row2col {
+                quote! { #central_row_offset, #central_col_offset, #central_col, #central_row }
             } else {
-                quote! {
-                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #central_row_offset, #central_col_offset, #central_row, #central_col>::new(input_pins, output_pins, debouncer);
+                quote! { #central_row_offset, #central_col_offset, #central_row, #central_col }
+            };
+            match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #input_output_pin_num>::new(input_pins, output_pins, debouncer);
+                },
+                MatrixType::direct_pin => {
+                    let low_active = split_config.central.matrix.direct_pin_low_active;
+                    let size =
+                        split_config.central.rows as usize * split_config.central.cols as usize;
+                    quote! {
+                        let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pin, debouncer, #low_active);
+                    }
                 }
             }
         }
