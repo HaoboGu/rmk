@@ -811,6 +811,11 @@ const fn get_buffer_size() -> usize {
         MACRO_SPACE_SIZE + 8
     };
 
-    // Efficiently round up to the nearest multiple of 32 using bit manipulation.
-    (buffer_size + 31) & !31
+    let remainder = buffer_size % 32;
+
+    if remainder == 0 {
+        buffer_size
+    } else {
+        buffer_size + 32 - remainder
+    }
 }

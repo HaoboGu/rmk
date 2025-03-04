@@ -45,36 +45,58 @@ impl ModifierCombination {
             .with_ctrl(ctrl)
     }
 
-    /// Get modifier hid report bits from modifier combination
-    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
-        let mut hid_modifier_bits = 0;
-        if !self.right() {
+    /// Convert modifier combination to a list of modifier keycodes.
+    /// Returns a list of modifiers keycodes, and the length of the list.
+    pub(crate) fn to_modifier_keycodes(self) -> ([KeyCode; 8], usize) {
+        let mut keycodes = [KeyCode::No; 8];
+        let mut i = 0;
+        if self.right() {
             if self.ctrl() {
-                hid_modifier_bits |= HidModifierBit::RCtrl as u8;
+                keycodes[i] = KeyCode::RCtrl;
+                i += 1;
             }
             if self.shift() {
-                hid_modifier_bits |= HidModifierBit::RShift as u8;
+                keycodes[i] = KeyCode::RShift;
+                i += 1;
             }
             if self.alt() {
-                hid_modifier_bits |= HidModifierBit::RAlt as u8;
+                keycodes[i] = KeyCode::RAlt;
+                i += 1;
             }
             if self.gui() {
-                hid_modifier_bits |= HidModifierBit::RGui as u8;
+                keycodes[i] = KeyCode::RGui;
+                i += 1;
             }
         } else {
             if self.ctrl() {
-                hid_modifier_bits |= HidModifierBit::LCtrl as u8;
+                keycodes[i] = KeyCode::LCtrl;
+                i += 1;
             }
             if self.shift() {
-                hid_modifier_bits |= HidModifierBit::LShift as u8;
+                keycodes[i] = KeyCode::LShift;
+                i += 1;
             }
             if self.alt() {
-                hid_modifier_bits |= HidModifierBit::LAlt as u8;
+                keycodes[i] = KeyCode::LAlt;
+                i += 1;
             }
             if self.gui() {
-                hid_modifier_bits |= HidModifierBit::LGui as u8;
+                keycodes[i] = KeyCode::LGui;
+                i += 1;
             }
         }
+
+        (keycodes, i)
+    }
+
+    /// Get modifier hid report bits from modifier combination
+    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
+        let (keycodes, n) = self.to_modifier_keycodes();
+        let mut hid_modifier_bits = 0;
+        for item in keycodes.iter().take(n) {
+            hid_modifier_bits |= item.as_modifier_bit();
+        }
+
         hid_modifier_bits
     }
 }
@@ -894,17 +916,11 @@ impl KeyCode {
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
-    pub(crate) fn to_hid_modifier_bit(self) -> u8 {
-        match self {
-            KeyCode::LCtrl => HidModifierBit::LCtrl as u8,
-            KeyCode::LShift => HidModifierBit::LShift as u8,
-            KeyCode::LAlt => HidModifierBit::LAlt as u8,
-            KeyCode::LGui => HidModifierBit::LGui as u8,
-            KeyCode::RCtrl => HidModifierBit::RCtrl as u8,
-            KeyCode::RShift => HidModifierBit::RShift as u8,
-            KeyCode::RAlt => HidModifierBit::RAlt as u8,
-            KeyCode::RGui => HidModifierBit::RGui as u8,
-            _ => 0,
+    pub(crate) fn as_modifier_bit(self) -> u8 {
+        if self.is_modifier() {
+            1 << (self as u16 as u8 - KeyCode::LCtrl as u16 as u8)
+        } else {
+            0
         }
     }
 
@@ -1158,17 +1174,4 @@ impl KeyCode {
             _ => (KeyCode::No, false),
         }
     }
-}
-
-#[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum HidModifierBit {
-    LCtrl = 1 << 0,
-    LShift = 1 << 1,
-    LAlt = 1 << 2,
-    LGui = 1 << 3,
-    RCtrl = 1 << 4,
-    RShift = 1 << 5,
-    RAlt = 1 << 6,
-    RGui = 1 << 7,
 }

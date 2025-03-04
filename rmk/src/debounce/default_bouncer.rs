@@ -14,7 +14,7 @@ impl DebounceCounter {
         if u16::MAX - self.0 <= elapsed_ms {
             self.0 = u16::MAX;
         } else {
-            self.0 += elapsed_ms;
+            self.0 += 1;
         }
     }
 
@@ -22,7 +22,7 @@ impl DebounceCounter {
         if elapsed_ms > self.0 {
             self.0 = 0;
         } else {
-            self.0 -= elapsed_ms;
+            self.0 -= 1;
         }
     }
 }
