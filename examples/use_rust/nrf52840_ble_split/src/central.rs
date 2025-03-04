@@ -24,7 +24,7 @@ use rmk::{
     config::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
-    debounce::{default_bouncer::DefaultDebouncer},
+    debounce::default_bouncer::DefaultDebouncer,
     futures::future::join3,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     keyboard::Keyboard,

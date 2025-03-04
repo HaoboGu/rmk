@@ -71,8 +71,6 @@ pub(crate) fn expand_matrix_config(
     matrix_config
 }
 
-
-
 pub(crate) fn expand_matrix_direct_pins(
     chip: &ChipModel,
     direct_pins: Vec<Vec<String>>,

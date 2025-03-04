@@ -20,11 +20,11 @@ use embassy_rp::{
 };
 use panic_probe as _;
 use rmk::{
-    initialize_keymap_and_storage,
     bind_device_and_processor_and_run,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    debounce::{default_bouncer::DefaultDebouncer},
+    debounce::default_bouncer::DefaultDebouncer,
     futures::future::join3,
+    initialize_keymap_and_storage,
     keyboard::Keyboard,
     light::LightController,
     run_rmk,

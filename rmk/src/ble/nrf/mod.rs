@@ -28,7 +28,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select,select4, Either4};
+use embassy_futures::select::{select, select4, Either4};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;

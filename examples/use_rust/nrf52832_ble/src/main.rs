@@ -18,11 +18,9 @@ use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     bind_device_and_processor_and_run,
-    config::{
-        ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
-    },
-    futures::future::join,
+    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     debounce::default_bouncer::DefaultDebouncer,
+    futures::future::join,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     keyboard::Keyboard,
     light::LightController,
@@ -90,7 +88,6 @@ async fn main(spawner: Spawner) {
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
-    
     // Start
     join(
         bind_device_and_processor_and_run!((matrix) => keyboard),

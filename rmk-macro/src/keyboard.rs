@@ -283,7 +283,7 @@ fn expand_controller_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     // TODO: Initialization for other controllers
     let output_pin_type = match keyboard_config.chip.series {
         ChipSeries::Esp32 => quote! {
-            ::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>>
+            ::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>
         },
         ChipSeries::Stm32 => quote! {
             ::embassy_stm32::gpio::Output

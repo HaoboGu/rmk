@@ -69,7 +69,6 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                             let row_offset = p.row_offset;
                             let col_offset = p.col_offset;
                             let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
-        
                             tasks.push(quote! {
                                 ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                                     #idx,
@@ -78,7 +77,7 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                             });
                         });
                     join_all_tasks(tasks)
-                },
+                }
                 ChipSeries::Nrf52 => {
                     let rmk_task = quote! {
                         ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
@@ -98,7 +97,7 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                         });
                     });
                     join_all_tasks(tasks)
-                },
+                }
                 ChipSeries::Esp32 => panic!("Split for esp32 isn't implemented yet"),
             }
         }
