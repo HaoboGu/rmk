@@ -34,7 +34,7 @@ pub enum HidError {
     BleRawError,
 }
 
-/// HidReporter trait is used for reporting HID messages to the host, via USB, BLE, etc.
+/// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
 pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
     type ReportType: AsInputReport;
@@ -69,9 +69,9 @@ pub trait RunnableHidWriter: HidWriterTrait {
     }
 }
 
-/// HidListener trait is used for listening to HID messages from the host, via USB, BLE, etc.
+/// HidReader trait is used for listening to HID messages from the host, via USB, BLE, etc.
 ///
-/// HidListener only receives `[u8; READ_N]`, the raw HID report from the host.
+/// HidReader only receives `[u8; READ_N]`, the raw HID report from the host.
 /// Then processes the received message, forward to other tasks
 pub trait HidReaderTrait {
     /// Report type

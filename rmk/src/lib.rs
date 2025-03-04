@@ -63,6 +63,7 @@ use {
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+mod boot;
 pub mod channel;
 pub mod combo;
 pub mod config;
@@ -389,20 +390,6 @@ pub(crate) async fn run_keyboard<
 
 pub(crate) async fn run_usb_device<'d, D: Driver<'d>>(usb_device: &mut UsbDevice<'d, D>) {
     usb_device.run().await;
-}
-
-pub(crate) fn reboot_keyboard() {
-    warn!("Rebooting keyboard!");
-    // For cortex-m:
-    #[cfg(all(
-        target_arch = "arm",
-        target_os = "none",
-        any(target_abi = "eabi", target_abi = "eabihf")
-    ))]
-    cortex_m::peripheral::SCB::sys_reset();
-
-    #[cfg(feature = "_esp_ble")]
-    esp_idf_svc::hal::reset::restart();
 }
 
 /// Runnable trait defines `run` function for running the task

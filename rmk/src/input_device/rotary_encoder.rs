@@ -25,7 +25,7 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Debug, MaxSize, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn
@@ -142,19 +142,26 @@ impl<
     > InputDevice for RotaryEncoder<A, B, P>
 {
     async fn read_event(&mut self) -> Event {
-        #[cfg(feature = "async_matrix")]
-        {
-            let (pin_a, pin_b) = self.pins();
-            embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge())
+        loop {
+            #[cfg(feature = "async_matrix")]
+            {
+                let (pin_a, pin_b) = self.pins();
+                embassy_futures::select::select(
+                    pin_a.wait_for_any_edge(),
+                    pin_b.wait_for_any_edge(),
+                )
                 .await;
+            }
+
+            let direction = self.update();
+
+            if direction != Direction::None {
+                return Event::RotaryEncoder(RotaryEncoderEvent {
+                    id: self.id,
+                    direction,
+                });
+            }
         }
-
-        let direction = self.update();
-
-        Event::RotaryEncoder(RotaryEncoderEvent {
-            id: self.id,
-            direction,
-        })
     }
 }
 
