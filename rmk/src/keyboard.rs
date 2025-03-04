@@ -239,7 +239,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         yield_now().await;
     }
 
-    async fn update_osm(&mut self, key_event: KeyEvent) {
+    fn update_osm(&mut self, key_event: KeyEvent) {
         match self.osm_state {
             OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
             OneShotState::Single(_) => {
@@ -378,7 +378,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         match action {
             Action::Key(key) => {
                 self.process_action_keycode(key, key_event).await;
-                self.update_osm(key_event).await;
+                self.update_osm(key_event);
                 self.update_osl(key_event);
             }
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
@@ -689,7 +689,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     self.osm_state = OneShotState::None;
 
                     // This sends a separate hid report with the
-                    // currently registred modifiers except the
+                    // currently registered modifiers except the
                     // one shoot modifies this way "releasing" them.
                     self.send_keyboard_report().await;
                 }
@@ -821,7 +821,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             // the "modifier released" change in a separate hid report
             self.unregister_key(key, key_event);
             if let OneShotState::Held(modifiers) = self.osm_state {
-                // OneShotState::Held keeps the teporary modifiers active
+                // OneShotState::Held keeps the temporary modifiers active
                 let old = self.report.modifier;
                 self.report.modifier |= modifiers.to_hid_modifier_bits();
                 self.send_keyboard_report().await;
@@ -897,7 +897,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             // https://github.com/qmk/qmk_firmware/blob/fb598e7e617692be0bf562afaf3c852c8db1c349/quantum/action.c#L332
             if key_event.pressed {
                 match key {
-                    // TODO: Add accerated mode when pressing the mouse key
+                    // TODO: Add accelerated mode when pressing the mouse key
                     // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
                         self.mouse_report.y = -self.mouse_key_move_delta;
@@ -967,7 +967,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 .last_mouse_tick
                 .insert(key, (key_event.pressed, Instant::now()))
             {
-                error!("The buffer for last moust tick is full");
+                error!("The buffer for last mouse tick is full");
             }
 
             // Send the key event back to channel again, to keep processing the mouse key until release
@@ -994,7 +994,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 error!("Macro idx invalid: {}", macro_idx);
                 return;
             }
-            // Read macro operations untill the end of the macro
+            // Read macro operations until the end of the macro
             let macro_idx = self.keymap.borrow().get_macro_start(macro_idx);
             if let Some(macro_start_idx) = macro_idx {
                 let mut offset = 0;
