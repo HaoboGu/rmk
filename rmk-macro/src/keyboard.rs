@@ -13,10 +13,11 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
+    keyboard_config::BoardConfig::{DirectPin, Normal},
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, KeyboardConfig,
     },
-    layout::expand_layout_init,
+    layout::expand_default_keymap,
     light::expand_light_config,
     matrix::expand_matrix_config,
     ChipSeries,
@@ -33,7 +34,6 @@ pub enum Overwritten {
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
-    let async_matrix = is_feature_enabled(&rmk_features, "async_matrix");
 
     let toml_config = match read_keyboard_toml_config() {
         Ok(c) => c,
@@ -51,27 +51,28 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         Err(e) => return e,
     };
 
-    let imports = gen_imports(&keyboard_config);
+    // Generate imports and statics
+    let imports_and_statics = gen_imports_and_static_values(&keyboard_config);
 
-    // Expanded main function
-    let main_function = expand_main(&keyboard_config, item_mod, async_matrix);
+    // Generate main function body
+    let main_function = expand_main(&keyboard_config, item_mod, &rmk_features);
 
     quote! {
-        #imports
+        #imports_and_statics
 
         #main_function
     }
 }
 
-pub(crate) fn gen_imports(config: &KeyboardConfig) -> TokenStream2 {
-    // Create layout info
-    let layout = expand_layout_init(config);
-    // Create keyboard info and vial struct
+pub(crate) fn gen_imports_and_static_values(config: &KeyboardConfig) -> TokenStream2 {
+    // Generate keyboard info and number of rows/cols/layers
     let keyboard_info_static_var = expand_keyboard_info(config);
-
-    // Create vial config
+    // Generate default keymap
+    let default_keymap = expand_default_keymap(config);
+    // Generate vial config
     let vial_static_var = expand_vial_config();
 
+    // Generate extra imports
     let imports = match config.chip.series {
         ChipSeries::Esp32 => quote! {}, // For ESP32s, no panic handler and defmt logger are used
         _ => {
@@ -104,14 +105,14 @@ pub(crate) fn gen_imports(config: &KeyboardConfig) -> TokenStream2 {
 
         #keyboard_info_static_var
         #vial_static_var
-        #layout
+        #default_keymap
     }
 }
 
 fn expand_main(
     keyboard_config: &KeyboardConfig,
     item_mod: ItemMod,
-    async_matrix: bool,
+    rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Expand components of main function
     let imports = expand_imports(&item_mod);
@@ -121,9 +122,12 @@ fn expand_main(
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
-    let matrix_config = expand_matrix_config(keyboard_config, async_matrix);
-    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod);
+    let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
+    let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
+    let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
+    let controller = expand_controller_init(keyboard_config);
+    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod);
 
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
@@ -145,14 +149,12 @@ fn expand_main(
 
         #main_function_sig {
             ::defmt::info!("RMK start!");
+
             // Initialize peripherals as `p`
             #chip_init
 
             // Initialize usb driver as `driver`
             #usb_init
-
-            // Initialize flash driver as `flash` and storage config as `storage_config`
-            #flash_init
 
             // Initialize light config as `light_config`
             #light_config
@@ -163,6 +165,10 @@ fn expand_main(
             // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
 
+            // Initialize flash driver as `flash` and storage config as `storage_config`
+            #flash_init
+
+            // Initialize ble config as `ble_battery_config`
             #ble_config
 
             // Set all keyboard config
@@ -175,18 +181,102 @@ fn expand_main(
                 ..Default::default()
             };
 
-            let controller_config = ::rmk::config::ControllerConfig {
-                light_config,
-            };
+            #controller
 
-            let keyboard_config = ::rmk::config::KeyboardConfig {
-                rmk_config,
-                controller_config,
-                ..Default::default()
-            };
+            // Initialize the storage and keymap, as `storage` and `keymap`
+            #keymap_and_storage
+
+            // Initialize the matrix + keyboard, as `matrix` and `keyboard`
+            #matrix_and_keyboard
+
+            // TODO: Initialize other devices and processors
 
             // Start
             #run_rmk
         }
+    }
+}
+
+pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    let keymap_storage_init = quote! {
+        ::rmk::initialize_keymap_and_storage(
+            &mut default_keymap,
+            flash,
+            rmk_config.storage_config,
+            rmk_config.behavior_config.clone(),
+        )
+    };
+    match keyboard_config.chip.series {
+        ChipSeries::Esp32 => {
+            quote! {
+                let mut default_keymap = get_default_keymap();
+                let (keymap, storage) =  ::esp_idf_svc::hal::task::block_on(#keymap_storage_init);
+            }
+        }
+        _ => quote! {
+            let mut default_keymap = get_default_keymap();
+            let (keymap, storage) = #keymap_storage_init.await;
+        },
+    }
+}
+
+pub(crate) fn expand_matrix_and_keyboard_init(
+    keyboard_config: &KeyboardConfig,
+    rmk_features: &Option<Vec<String>>,
+) -> TokenStream2 {
+    let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
+    let col2row_enabled = is_feature_enabled(rmk_features, "col2row");
+    let input_output_num = if col2row_enabled {
+        quote! { ROW, COL }
+    } else {
+        quote! { COL, ROW }
+    };
+    let debouncer = if rapid_debouncer_enabled {
+        quote! {
+            let debouncer = ::rmk::debounce::fast_bouncer::RapidDebouncer::<#input_output_num>::new();
+        }
+    } else {
+        quote! {
+            let debouncer = ::rmk::debounce::default_bouncer::DefaultDebouncer::<#input_output_num>::new();
+        }
+    };
+    let matrix = match &keyboard_config.board {
+        Normal(_matrix_config) => quote! {
+            let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
+        },
+        DirectPin(matrix_config) => {
+            let low_active = matrix_config.direct_pin_low_active;
+            quote! {
+                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
+            }
+        }
+        _ => quote! {},
+    };
+    quote! {
+        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+        #debouncer
+        #matrix
+    }
+}
+
+fn expand_controller_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    // TODO: Controller initialization
+    let output_pin_type = match keyboard_config.chip.series {
+        ChipSeries::Esp32 => quote! {
+            ::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>>
+        },
+        ChipSeries::Stm32 => quote! {
+            ::embassy_stm32::gpio::Output
+        },
+        ChipSeries::Nrf52 => quote! {
+            ::embassy_nrf::gpio::Output
+        },
+        ChipSeries::Rp2040 => quote! {
+            ::embassy_rp::gpio::Output
+        },
+    };
+
+    quote! {
+        let mut light_controller: ::rmk::light::LightController<#output_pin_type>  = ::rmk::light::LightController::new(light_config);
     }
 }

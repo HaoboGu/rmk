@@ -11,6 +11,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream
         // This config actually does nothing if storage is disabled
         return quote! {
             let storage_config = ::rmk::config::StorageConfig::default();
+            let flash = ::rmk::DummyFlash::new();
         };
     }
     let mut flash_init = get_storage_config(&keyboard_config.storage);
@@ -18,25 +19,33 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream
     match keyboard_config.chip.series {
             ChipSeries::Stm32 => {
                 quote! {
-                    let f = ::embassy_stm32::flash::Flash::new_blocking(p.FLASH);
+                    let flash = ::rmk::storage::async_flash_wrapper(::embassy_stm32::flash::Flash::new_blocking(p.FLASH));
                 }
             }
             ChipSeries::Nrf52 => {
                 if !keyboard_config.communication.ble_enabled() {
                     // Usb only
                     quote! {
-                        let f = ::embassy_nrf::nvmc::Nvmc::new(p.NVMC);
+                        let flash = ::rmk::storage::async_flash_wrapper(::embassy_nrf::nvmc::Nvmc::new(p.NVMC));
                     }
                 } else {
-                    // If BLE enables, RMK manages storage internally
-                    quote! {}
+                    // If BLE enables, initialize both sd and flash
+                    quote! {
+                        let (sd, flash) = ::rmk::initialize_nrf_sd_and_flash("rmk", spawner, None);
+                    }
                 }
             }
             ChipSeries::Rp2040 => quote! {
                 const FLASH_SIZE: usize = 2 * 1024 * 1024;
                 let flash = ::embassy_rp::flash::Flash::<_, ::embassy_rp::flash::Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0);
             },
-            ChipSeries::Esp32 => quote! {}, // RMK manages ESP storage internally
+            ChipSeries::Esp32 => quote! {
+                let flash = ::rmk::storage::async_flash_wrapper(unsafe {
+                    ::esp_idf_svc::partition::EspPartition::new("rmk")
+                        .expect("Create storage partition error")
+                        .expect("Empty partition")
+                });
+            },
         }
     );
 

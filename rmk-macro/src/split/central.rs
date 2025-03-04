@@ -14,7 +14,7 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
-    keyboard::gen_imports,
+    keyboard::gen_imports_and_static_values,
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
     light::expand_light_config,
     matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
@@ -45,7 +45,7 @@ pub(crate) fn parse_split_central_mod(
         Err(e) => return e,
     };
 
-    let imports = gen_imports(&keyboard_config);
+    let imports = gen_imports_and_static_values(&keyboard_config);
 
     let main_function = expand_split_central(&keyboard_config, item_mod, async_matrix);
 

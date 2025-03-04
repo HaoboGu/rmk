@@ -3,6 +3,7 @@
 use quote::quote;
 
 use crate::{
+    feature::is_feature_enabled,
     gpio_config::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
         convert_output_pins_to_initializers,
@@ -13,8 +14,9 @@ use crate::{
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,
-    async_matrix: bool,
+    rmk_features: &Option<Vec<String>>,
 ) -> proc_macro2::TokenStream {
+    let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &keyboard_config.board {
         BoardConfig::Normal(matrix) => {
