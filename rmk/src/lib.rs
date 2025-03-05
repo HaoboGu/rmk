@@ -18,6 +18,10 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
+#[cfg(feature = "_esp_ble")]
+use crate::ble::esp::run_esp_ble_keyboard;
+#[cfg(feature = "_nrf_ble")]
+pub use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::light::LightController;
 use config::{RmkConfig, VialConfig};
 use core::{
@@ -27,31 +31,26 @@ use core::{
 };
 use embassy_futures::select::{select, select4, Either4};
 #[cfg(not(any(cortex_m)))]
-pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex as RawMutex, channel::*};
-// #[cfg(all(target_arch = "arm", target_os = "none"))]
-#[cfg(feature = "_esp_ble")]
-use crate::ble::esp::run_esp_ble_keyboard;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
-pub use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex as RawMutex, channel::*};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
-pub use embedded_hal;
+use embedded_hal;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 pub use futures;
-pub use heapless;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
-pub use rmk_macro as macros;
-pub use storage::dummy_flash::DummyFlash;
-use storage::Storage;
-use usb::descriptor::ViaReport;
-use via::VialService;
 #[cfg(feature = "_nrf_ble")]
-pub use {crate::ble::nrf::initialize_nrf_sd_and_flash, nrf_softdevice::Softdevice};
+use nrf_softdevice::Softdevice;
+pub use rmk_macro as macros;
+use storage::Storage;
+use usb::{add_usb_reader_writer, descriptor::ViaReport, register_usb_writer};
+use via::VialService;
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
 use {
     crate::light::UsbLedReader,
@@ -82,8 +81,7 @@ pub mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod storage;
-#[macro_use]
-pub mod usb;
+pub(crate) mod usb;
 pub mod via;
 
 /// Current connection type:

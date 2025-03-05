@@ -97,7 +97,7 @@ cortex-m = { version = "0.7" }
 [features]
 default = ["col2row", "defmt"]
 
-## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
 ## Enable defmt feature

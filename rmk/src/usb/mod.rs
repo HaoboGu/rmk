@@ -3,14 +3,13 @@ pub mod descriptor;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use embassy_usb::{
-    class::hid::{Config, HidWriter, ReportId, RequestHandler, State},
+    class::hid::{HidWriter, ReportId, RequestHandler},
     control::OutResponse,
     driver::Driver,
     Builder, Handler,
 };
 use ssmarshal::serialize;
 use static_cell::StaticCell;
-use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::{
     channel::KEYBOARD_REPORT_CHANNEL,
@@ -69,7 +68,7 @@ pub(crate) async fn wait_for_usb_enabled() {
     }
 }
 
-pub struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
+pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) keyboard_writer: &'a mut HidWriter<'d, D, 8>,
     pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
 }
@@ -182,22 +181,6 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     builder
 }
 
-pub(crate) fn register_usb_writer<D: Driver<'static>, SD: SerializedDescriptor, const N: usize>(
-    usb_builder: &mut Builder<'static, D>,
-) -> HidWriter<'static, D, N> {
-    // Initialize hid interfaces
-    static request_handler: StaticCell<UsbRequestHandler> = StaticCell::new();
-    let hid_config = Config {
-        report_descriptor: SD::desc(),
-        request_handler: Some(request_handler.init(UsbRequestHandler {})),
-        poll_ms: 1,
-        max_packet_size: 64,
-    };
-    static STATE: StaticCell<State> = StaticCell::new();
-    HidWriter::new(usb_builder, STATE.init(State::new()), hid_config)
-}
-
-#[macro_export]
 macro_rules! register_usb_writer {
     ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
         // Initialize hid writer
@@ -223,7 +206,6 @@ macro_rules! register_usb_writer {
     }};
 }
 
-#[macro_export]
 macro_rules! add_usb_reader_writer {
     ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
         // Initialize hid reader writer
@@ -248,6 +230,8 @@ macro_rules! add_usb_reader_writer {
         rw
     }};
 }
+pub(crate) use add_usb_reader_writer;
+pub(crate) use register_usb_writer;
 
 pub(crate) struct UsbRequestHandler {}
 

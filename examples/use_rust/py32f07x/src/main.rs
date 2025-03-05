@@ -28,7 +28,7 @@ use rmk::{
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,
-    run_rmk, DummyFlash,
+    run_rmk, storage::DummyFlash,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 

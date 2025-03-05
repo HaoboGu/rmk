@@ -6,6 +6,8 @@ use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report};
 
 pub mod rotary_encoder;
 
+// TODO: Runnable device and processor
+
 /// The trait for input devices.
 ///
 /// This trait defines the interface for input devices in RMK.
@@ -45,9 +47,9 @@ pub trait InputDevice {
 /// The input processor processes the [`Event`] from the input devices and converts it to the final HID report.
 /// Take the normal keyboard as the example:
 ///
-/// The [`Matrix`] is actually an input device and the [`Keyboard`] is actually an input processor.
+/// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
 pub trait InputProcessor {
-    /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
+    /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
     /// Note there might be mulitple HID reports are generated for one event,
@@ -61,11 +63,76 @@ pub trait InputProcessor {
     }
 }
 
-// TODO: Runnable device and processor
-// For example, devices like keymatrix emits multiple events during one pass, so the `read_event` is not good for thoese devices
-// Adding runnable devices makes it possible to
+/// Macro to bind input devices to event channels and run all of them.
+///
+/// This macro simplifies the creation of a task that reads events from multiple input devices
+/// and send all of them to. It allows for efficient handling of
+/// input events in a concurrent manner.
+///
+/// # Arguments
+///
+/// * `dev`: A list of input devices.
+/// * `channel`: The channel that devices send the events to.
+///
+/// # Example
+/// ```rust
+/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
+/// // Initialize channel
+/// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
+///
+/// // Define your input devices, both MyInputDevice and MyInputDevice2 should implement `InputDevice] trait
+/// struct MyInputDevice;
+/// struct MyInputDevice2;
+///
+/// let d1 = MyInputDevice{};
+/// let d2 = MyInputDevice2{};
+/// // Bind devices to channels and run, RMK also provides EVENT_CHANNEL for general use
+/// let device_future = run_device! {
+///     (d1, d2) => local_channel,
+///     (matrix) => rmk::EVENT_CHANNEL,
+/// };
+///
+/// ```
 
-/// Macro to bind input devices and an input processor into a single asynchronous task.
+#[macro_export]
+macro_rules! run_devices {
+    ( $( ( $( $dev:ident ),* ) => $channel:ident ),+ $(,)? ) => {{
+        use $crate::futures::{self, future::FutureExt, select_biased};
+        $crate::join_all!(
+            $(
+                async {
+                    loop {
+                        let e = select_biased! {
+                            $(
+                                e = $dev.read_event().fuse() => e,
+                            )*
+                        };
+                        $channel.send(e).await;
+                    }
+                }
+            ),+
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! run_processors {
+    ( $( $channel:ident => $proc:ident ),+ $(,)? ) => {{
+        use $crate::futures::{self, future::FutureExt, select_biased};
+        $crate::join_all!(
+            $(
+                async {
+                    loop {
+                        let e = $channel.receive().await;
+                        $proc.process(e).await;
+                    }
+                }
+            ),+
+        )
+    }};
+}
+
+/// Macro to bind input devices and an input processor directly.
 ///
 /// This macro simplifies the creation of a task that reads events from multiple input devices
 /// and processes them using a specified input processor. It allows for efficient handling of
@@ -73,8 +140,7 @@ pub trait InputProcessor {
 ///
 /// # Arguments
 ///
-/// * `task_name`: The name of the asynchronous task to be created.
-/// * `dev`: A list of input devices, each with a specified type.
+/// * `dev`: A list of input devices.
 /// * `proc`: The input processor that will handle the events from the devices.
 ///
 /// # Example
@@ -96,20 +162,10 @@ pub trait InputProcessor {
 ///     }
 /// }
 ///
-/// // Bind devices and processor into a task
-/// bind_device_and_processor!(my_task = (device1: MyInputDevice, device2: MyInputDevice2) => processor: MyInputProcessor);
+/// // Bind devices and processor into a task, aka use `processor` to process input events from `device1` and `device2`
+/// let device_future = bind_device_and_processor!((device1, device2) => processor);
 ///
-/// // In main function, you need to spawn `my_task`
-/// #[embassy_executor::main]
-/// async fn main(spawner: Spawner) {
-///     // ...
-///     spawner.spawn(my_task(processor, my_device, my_device2)).unwrap();
-/// }
 /// ```
-///
-/// This macro will create an asynchronous task named `my_task` that continuously reads events
-/// from `device1` and `device2`, and processes them using `processor`.
-/// The task will run indefinitely in a loop, handling events as they come in.
 #[macro_export]
 macro_rules! bind_device_and_processor_and_run {
     (($( $dev:ident),*) => $proc:ident) => {
@@ -126,4 +182,19 @@ macro_rules! bind_device_and_processor_and_run {
             }
         }
     };
+}
+
+/// Helper macro for joining all futures
+#[macro_export]
+macro_rules! join_all {
+    ($first:expr, $second:expr, $($rest:expr),*) => {
+        $crate::futures::future::join(
+            $first,
+            $crate::join_all!($second, $($rest),*)
+        )
+    };
+    ($a:expr, $b:expr) => {
+        $crate::futures::future::join($a, $b)
+    };
+    ($single:expr) => { $single };
 }
