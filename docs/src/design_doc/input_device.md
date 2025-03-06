@@ -117,3 +117,4 @@ join3(
 This design balances convenience and flexibility:
 - For common devices, developers can use the built-in `Event` types and RMK's processing pipeline
 - For advanced use cases, developers can define custom events and processors to fully control the input logic
+- The keyboard is special -- it receives events only from `KEY_EVENT_CHANNEL` and processes `KeyEvent`s only. `KeyEvent` from ALL devices are handled by the `Keyboard` processor, then the other events are dispatched to binded processors.
