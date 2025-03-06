@@ -19,15 +19,16 @@ use embassy_stm32::{
 use keymap::{COL, ROW};
 use panic_halt as _;
 use rmk::{
-    bind_device_and_processor_and_run,
+    channel::EVENT_CHANNEL,
     config::{ControllerConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join,
+    futures::future::join3,
     initialize_keymap_and_storage,
+    input_device::{InputDevice, Runnable},
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,
-    run_rmk,
+    run_devices, run_rmk,
     storage::async_flash_wrapper,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -90,8 +91,11 @@ async fn main(_spawner: Spawner) {
         LightController::new(ControllerConfig::default().light_config);
 
     // Start
-    join(
-        bind_device_and_processor_and_run!((matrix) => keyboard),
+    join3(
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
+        ),
+        keyboard.run(),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),
     )
     .await;

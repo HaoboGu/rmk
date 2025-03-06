@@ -20,14 +20,15 @@ use embassy_rp::{
 };
 use panic_probe as _;
 use rmk::{
-    bind_device_and_processor_and_run,
+    channel::EVENT_CHANNEL,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
+    futures::future::{join, join3},
     initialize_keymap_and_storage,
+    input_device::{InputDevice, Runnable},
     keyboard::Keyboard,
     light::LightController,
-    run_rmk,
+    run_devices, run_rmk,
     split::{
         central::{run_peripheral_manager, CentralMatrix},
         SPLIT_MESSAGE_MAX_SIZE,
@@ -112,9 +113,14 @@ async fn main(_spawner: Spawner) {
 
     // Start
     join3(
-        bind_device_and_processor_and_run!((matrix) => keyboard),
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
+        ),
+        join(
+            keyboard.run(),
+            run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
+        ),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),
-        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
     )
     .await;
 }

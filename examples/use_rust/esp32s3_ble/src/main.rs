@@ -14,15 +14,16 @@ use esp_idf_svc::{
 use esp_println as _;
 use keymap::{COL, ROW};
 use rmk::{
-    bind_device_and_processor_and_run,
+    channel::EVENT_CHANNEL,
     config::{ControllerConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join,
+    futures::future::join3,
+    input_device::{InputDevice, Runnable},
     initialize_keymap_and_storage,
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,
-    run_rmk,
+    run_devices, run_rmk,
     storage::async_flash_wrapper,
 };
 
@@ -72,8 +73,11 @@ fn main() {
         LightController::new(ControllerConfig::default().light_config);
 
     // Start
-    block_on(join(
-        bind_device_and_processor_and_run!((matrix) => keyboard),
+    block_on(join3(
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
+        ),
+        keyboard.run(),
         run_rmk(&keymap, storage, light_controller, rmk_config),
     ));
 }

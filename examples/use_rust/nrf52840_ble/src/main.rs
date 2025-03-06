@@ -9,7 +9,6 @@ mod vial;
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_futures::join::join3;
 use embassy_nrf::{
     self as _, bind_interrupts,
     gpio::{AnyPin, Input, Output},
@@ -22,14 +21,15 @@ use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
-    channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL},
+    channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel},
     config::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     debounce::default_debouncer::DefaultDebouncer,
     event::{Event, KeyEvent},
+    futures::future::{join, join3},
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
-    input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor},
+    input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor, Runnable},
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,
@@ -155,14 +155,12 @@ async fn main(spawner: Spawner) {
     // Start
     join3(
         run_devices! (
-            (matrix) => EVENT_CHANNEL,
-            (my_device, my_device2, encoder) => local_channel,
+            (matrix, my_device, my_device2, encoder) => local_channel,
         ),
         run_processors! {
-            EVENT_CHANNEL => keyboard,
             local_channel => processor,
         },
-        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+        join(keyboard.run(), run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd)),
     )
     .await;
 }

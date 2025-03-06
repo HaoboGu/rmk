@@ -11,40 +11,43 @@ RMK's input device framework is designed to provide a simple yet extensible way 
 
 ## Input device trait
 
-The input devices can be key matrix or sensors, which read the physical devices, send raw events to the input processors. All input devices in RMK should implement the `InputDevice` trait:
-
-All input devices in RMK should implement the `InputDevice` trait:
+Input devices such as key matrices or sensors read physical devices and generate events. All input devices in RMK should implement the `InputDevice` trait:
 
 ```rust
 pub trait InputDevice {
-    /// Event type that input device will send
-    type EventType;
-
-    /// Starts the input device task.
-    ///
-    /// This asynchronous method should contain the main logic for the input device.
-    /// It will be executed concurrently with other input devices using the run_devices macro.
-    fn run(&mut self) -> impl Future<Output = ()>;
-
-    /// Send the event from current input device to the input processor.
-    fn send_event(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
+    /// Read the raw input event
+    async fn read_event(&mut self) -> Event;
 }
 ```
 
-This trait should be used with the `run_devices!` macro:
+This trait is used with the `run_devices!` macro to collect events from multiple input devices and send them to a specified channel:
 
 ```rust
-// Suppose that the d1 & d2 both implement `InputDevice`. `run()` will be called in `run_devices!`
-run_devices!(d1, d2).await;
+// Send events from matrix to EVENT_CHANNEL
+run_devices! (
+    (matrix) => EVENT_CHANNEL,
+)
 ```
 
 > Why `run_devices!`?
 >
-> Currently, embassy-rs does not support generic tasks. The only option is to join all tasks (the `run` functions in `InputDevice`) together. That's what `run_devices!` does.
+> Currently, embassy-rs does not support generic tasks. The only option is to join all tasks together to handle multiple input devices concurrently. The `run_devices!` macro helps accomplish this efficiently.
+
+## Runnable trait
+
+For components that need to run continuously in a task, RMK provides the `Runnable` trait:
+
+```rust
+pub trait Runnable {
+    async fn run(&mut self);
+}
+```
+
+The `Keyboard` type implements this trait to process events and generate reports.
 
 ## Event Types
 
-Each input device defines its own `EventType`. RMK provides a default `Event` enum that is compatible with built-in `InputProcessor`s:
+RMK provides a default `Event` enum that is compatible with built-in `InputProcessor`s:
 
 ```rust
 #[non_exhaustive]
@@ -75,46 +78,42 @@ Input processors receive events from input devices, process them, and convert th
 
 ```rust
 pub trait InputProcessor {
-    /// The event type that the input processor receives.
-    type EventType;
-
-    /// The report type that the input processor sends.
-    type ReportType: AsInputReport;
-
-    /// Process the incoming events, convert them to HID report [`KeyboardReportMessage`],
+    /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
-    /// Note there might be mulitple HID reports are generated for one event,
+    /// Note there might be multiple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
     /// The input processor implementor should be aware of this.  
-    fn process(&mut self, event: Self::EventType) -> impl Future<Output = ()>;
-
-    /// Get the input event.
-    ///
-    /// The read input event is processed by the input processor, converted to HID report, and sent to the HID writer.
-    fn read_event(&self) -> impl Future<Output = Self::EventType>;
+    async fn process(&mut self, event: Event);
 
     /// Send the processed report.
-    fn send_report(&self, report: Self::ReportType) -> impl Future<Output = ()>;
-
-    /// Default implementation of the input processor. It wait for a new event from the event channel,
-    /// then process the event.
-    ///
-    /// The report is sent to the USB/BLE in the `process` method.
-    fn run(&mut self) -> impl Future<Output = ()> {
-        async {
-            loop {
-                let event = self.read_event().await;
-                self.process(event).await;
-            }
-        }
+    async fn send_report(&self, report: Report) {
+        KEYBOARD_REPORT_CHANNEL.send(report).await;
     }
 }
 ```
 
-
 The `process` method is responsible for processing input events and sending HID reports through the report channel. All processors share a common keymap state through `&'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>`.
 
+## Standard System Architecture
+
+RMK uses a standard pattern for running the entire system:
+
+```rust
+// Start the system with three concurrent tasks
+join3(
+    // Task 1: Run all input devices and send events to EVENT_CHANNEL
+    run_devices! (
+        (matrix) => EVENT_CHANNEL,
+    ),
+    // Task 2: Run the keyboard processor
+    keyboard.run(),
+    // Task 3: Run the main RMK system
+    run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+)
+.await;
+```
+
 This design balances convenience and flexibility:
-- For common devices, developers can use the built-in `Event` and `InputProcessor` implementations
+- For common devices, developers can use the built-in `Event` types and RMK's processing pipeline
 - For advanced use cases, developers can define custom events and processors to fully control the input logic

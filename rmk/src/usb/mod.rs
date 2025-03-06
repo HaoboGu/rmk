@@ -181,6 +181,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     builder
 }
 
+#[cfg(not(feature = "_no_usb"))]
 macro_rules! register_usb_writer {
     ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
         // Initialize hid writer
@@ -206,6 +207,7 @@ macro_rules! register_usb_writer {
     }};
 }
 
+#[cfg(not(feature = "_no_usb"))]
 macro_rules! add_usb_reader_writer {
     ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
         // Initialize hid reader writer
@@ -230,7 +232,9 @@ macro_rules! add_usb_reader_writer {
         rw
     }};
 }
+#[cfg(not(feature = "_no_usb"))]
 pub(crate) use add_usb_reader_writer;
+#[cfg(not(feature = "_no_usb"))]
 pub(crate) use register_usb_writer;
 
 pub(crate) struct UsbRequestHandler {}

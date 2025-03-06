@@ -49,7 +49,7 @@ use matrix::MatrixTrait;
 use nrf_softdevice::Softdevice;
 pub use rmk_macro as macros;
 use storage::Storage;
-use usb::{add_usb_reader_writer, descriptor::ViaReport, register_usb_writer};
+use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
 use {
@@ -58,6 +58,9 @@ use {
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
     crate::via::UsbVialReaderWriter,
 };
+
+#[cfg(not(feature = "_no_usb"))]
+use usb::{add_usb_reader_writer, register_usb_writer};
 
 pub mod action;
 #[cfg(feature = "_ble")]

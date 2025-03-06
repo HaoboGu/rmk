@@ -2,9 +2,9 @@ use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
-use crate::event::{Event, KeyEvent};
+use crate::event::KeyEvent;
 use crate::hid::Report;
-use crate::input_device::InputProcessor;
+use crate::input_device::Runnable;
 use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
@@ -43,13 +43,15 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
     for Keyboard<'_, ROW, COL, NUM_LAYER>
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
-    async fn process(&mut self, event: Event) {
-        if let Event::Key(key_event) = event {
+    async fn run(&mut self) {
+        loop {
+            let key_event = KEY_EVENT_CHANNEL.receive().await;
+
             // Process the key change
             self.process_inner(key_event).await;
 
@@ -64,10 +66,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
                 self.process_inner(e).await;
             }
         }
-    }
-
-    async fn send_report(&self, report: Report) {
-        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }
 
@@ -176,6 +174,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             combo_actions_buffer: Deque::new(),
             combo_on: true,
         }
+    }
+
+    async fn send_report(&self, report: Report) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
     /// Process key changes at (row, col)
@@ -930,7 +932,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
             if self
                 .last_mouse_tick
-                .insert(key, (key_event.pressed, Instant::now())).is_err()
+                .insert(key, (key_event.pressed, Instant::now()))
+                .is_err()
             {
                 error!("The buffer for last moust tick is full");
             }
