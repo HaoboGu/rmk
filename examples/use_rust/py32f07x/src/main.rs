@@ -12,9 +12,9 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use py32_hal::{
     bind_interrupts,
+    flash::Flash,
     gpio::{AnyPin, Input, Output},
-    rcc::{Pll, PllMul, PllSource, Sysclk},
-    time::Hertz,
+    rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk},
     usb::{Driver, InterruptHandler},
 };
 // use py32_hal::flash::Blocking;
@@ -34,7 +34,7 @@ async fn main(spawner: Spawner) {
     let mut cfg: py32_hal::Config = Default::default();
 
     // PY32 USB uses PLL as the clock source and can only run at 48Mhz.
-    cfg.rcc.hsi = Some(Hertz::mhz(16));
+    cfg.rcc.hsi = Some(HsiFs::HSI_16MHZ);
     cfg.rcc.pll = Some(Pll {
         src: PllSource::HSI,
         mul: PllMul::MUL3,
@@ -42,8 +42,14 @@ async fn main(spawner: Spawner) {
     cfg.rcc.sys = Sysclk::PLL;
     let p = py32_hal::init(cfg);
 
+    // print the sp register
+    let sp = cortex_m::register::msp::read();
+    defmt::info!("SP: {:x}", sp);
+
     // Create the driver, from the HAL.
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
+
+    let flash = Flash::new_blocking(p.FLASH);
 
     // Pin config
     let (input_pins, output_pins) = config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
@@ -76,7 +82,7 @@ async fn main(spawner: Spawner) {
         input_pins,
         output_pins,
         driver,
-        // flash,
+        flash,
         &mut keymap::get_default_keymap(),
         keyboard_config,
         spawner,
