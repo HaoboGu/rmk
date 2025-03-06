@@ -101,26 +101,25 @@ pub trait InputProcessor {
 /// ```
 #[macro_export]
 macro_rules! run_devices {
-    ( $( ( $( $dev:ident ),* ) => $channel:ident ),+ $(,)? ) => {{
-        use $crate::futures::{self, future::FutureExt, select_biased};
+    ( $( ( $( $dev:ident ),* ) => $channel:ident),+ $(,)? ) => {{
         $crate::join_all!(
             $(
-                async {
-                    loop {
-                        let e = select_biased! {
-                            $(
-                                e = $dev.read_event().fuse() => e,
-                            )*
-                        };
-                        // For KeyEvent, send it to KEY_EVENT_CHANNEL
-                        match e {
-                            $crate::event::Event::Key(key_event) => {
-                                $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await
+                $crate::join_all!(
+                    $(
+                        async {
+                            loop {
+                                let e = $dev.read_event().await;
+                                // For KeyEvent, send it to KEY_EVENT_CHANNEL
+                                match e {
+                                    $crate::event::Event::Key(key_event) => {
+                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await
+                                    }
+                                    _ => $channel.send(e).await,
+                                }
                             }
-                            _ => $channel.send(e).await,
                         }
-                    }
-                }
+                    ),*
+                )
             ),+
         )
     }};
@@ -145,7 +144,6 @@ macro_rules! run_devices {
 #[macro_export]
 macro_rules! run_processors {
     ( $( $channel:ident => $proc:ident ),+ $(,)? ) => {{
-        use $crate::futures::{self, future::FutureExt, select_biased};
         $crate::join_all!(
             $(
                 async {

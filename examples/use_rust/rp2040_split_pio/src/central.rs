@@ -22,7 +22,7 @@ use rmk::{
     channel::EVENT_CHANNEL,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::{join, join3},
+    futures::future::join4,
     initialize_keymap_and_storage,
     input_device::{InputDevice, Runnable},
     keyboard::Keyboard,
@@ -100,14 +100,12 @@ async fn main(_spawner: Spawner) {
         LightController::new(ControllerConfig::default().light_config);
 
     // Start
-    join3(
+    join4(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
-        join(
-            keyboard.run(),
-            run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
-        ),
+        keyboard.run(),
+        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),
     )
     .await;

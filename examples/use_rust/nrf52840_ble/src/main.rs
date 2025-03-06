@@ -17,7 +17,7 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
 };
-use keymap::{COL, ROW};
+use keymap::{COL, NUM_LAYER, ROW};
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
@@ -26,8 +26,8 @@ use rmk::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     debounce::default_debouncer::DefaultDebouncer,
-    event::{Event, KeyEvent},
-    futures::future::{join, join3},
+    event::Event,
+    futures::future::join4,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{rotary_encoder::RotaryEncoder, InputDevice, InputProcessor, Runnable},
     keyboard::Keyboard,
@@ -132,10 +132,10 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Initialize the matrix + keyboard
-    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let mut keyboard: Keyboard<'_, ROW, COL, NUM_LAYER> =
+        Keyboard::new(&keymap, rmk_config.behavior_config.clone());
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    // let mut matrix = TestMatrix::<ROW, COL>::new();
 
     // Initialize the light controller
     let light_controller: LightController<Output> =
@@ -149,18 +149,18 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
     let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 
-    let local_channel: Channel<NoopRawMutex, Event, 16> =
-        Channel::new();
+    let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
 
     // Start
-    join3(
+    join4(
         run_devices! (
             (matrix, my_device, my_device2, encoder) => local_channel,
         ),
         run_processors! {
             local_channel => processor,
         },
-        join(keyboard.run(), run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd)),
+        keyboard.run(),
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
     )
     .await;
 }
@@ -170,11 +170,7 @@ struct MyDevice {}
 impl InputDevice for MyDevice {
     async fn read_event(&mut self) -> Event {
         embassy_time::Timer::after_secs(1).await;
-        Event::Key(KeyEvent {
-            row: 0,
-            col: 0,
-            pressed: true,
-        })
+        Event::Eos
     }
 }
 
@@ -187,7 +183,7 @@ impl InputProcessor for MyProcessor {
                 // Process key event
                 info!("Hey received key")
             }
-            _ => info!("Hey received other event"),
+            _ => info!("Hey received other event: {:?}", event),
         }
     }
 }

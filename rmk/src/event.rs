@@ -10,6 +10,7 @@ use crate::input_device::rotary_encoder::Direction;
 /// and then converts it to the final keyboard/mouse report.
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     /// Keyboard event
     Key(KeyEvent),

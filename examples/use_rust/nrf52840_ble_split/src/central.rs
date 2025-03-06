@@ -25,13 +25,13 @@ use rmk::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::{join, join3},
+    futures::future::join4,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{InputDevice, Runnable},
     keyboard::Keyboard,
     light::LightController,
-    split::central::{run_peripheral_manager, CentralMatrix},
     run_devices, run_rmk,
+    split::central::{run_peripheral_manager, CentralMatrix},
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -147,14 +147,12 @@ async fn main(spawner: Spawner) {
         LightController::new(ControllerConfig::default().light_config);
 
     // Start
-    join3(
+    join4(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
-        join(
-            keyboard.run(),
-            run_peripheral_manager::<2, 1, 2, 2>(0, peripheral_addr),
-        ),
+        keyboard.run(),
+        run_peripheral_manager::<2, 1, 2, 2>(0, peripheral_addr),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
     )
     .await;
