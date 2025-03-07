@@ -4,7 +4,7 @@ use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::hid::Report;
-use crate::input_device::InputProcessor;
+use crate::input_device::Runnable;
 use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
@@ -43,43 +43,17 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProcessor
-    for Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
+    for Keyboard<'_, ROW, COL, NUM_LAYER>
 {
-    type EventType = KeyEvent;
-
-    type ReportType = Report;
-
-    /// Process key changes at (row, col)
-    async fn process(&mut self, key_event: Self::EventType) {
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if key_event.pressed {
-            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
-        }
-
-        // Process key
-        let key_action = self
-            .keymap
-            .borrow_mut()
-            .get_action_with_layer_cache(key_event);
-
-        if self.combo_on {
-            if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                self.process_key_action(key_action, key_event).await;
-            }
-        } else {
-            self.process_key_action(key_action, key_event).await;
-        }
-    }
-
-    /// Main keyboard task, it receives input devices result, processes keys.
-    /// The report is sent to communication task via `KEYBOARD_REPORT_CHANNEL`, and finally sent to the host
-    async fn run(&mut self) -> () {
+    /// Main keyboard processing task, it receives input devices result, processes keys.
+    /// The report is sent using `send_report`.
+    async fn run(&mut self) {
         loop {
-            let key_event = self.read_event().await;
+            let key_event = KEY_EVENT_CHANNEL.receive().await;
 
             // Process the key change
-            self.process(key_event).await;
+            self.process_inner(key_event).await;
 
             // After processing the key change, check if there are unprocessed events
             // This will happen if there's recursion in key processing
@@ -89,21 +63,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> InputProces
                 }
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
-                self.process(e).await;
+                self.process_inner(e).await;
             }
         }
     }
-
-    async fn read_event(&self) -> Self::EventType {
-        KEY_EVENT_CHANNEL.receiver().receive().await
-    }
-
-    async fn send_report(&self, report: Self::ReportType) {
-        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
-    }
 }
 
-pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 
@@ -166,7 +132,7 @@ pub(crate) struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAY
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) fn new(
+    pub fn new(
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
         behavior: BehaviorConfig,
     ) -> Self {
@@ -207,6 +173,32 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+        }
+    }
+
+    async fn send_report(&self, report: Report) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    }
+
+    /// Process key changes at (row, col)
+    async fn process_inner(&mut self, key_event: KeyEvent) {
+        // Matrix should process key pressed event first, record the timestamp of key changes
+        if key_event.pressed {
+            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
+        }
+
+        // Process key
+        let key_action = self
+            .keymap
+            .borrow_mut()
+            .get_action_with_layer_cache(key_event);
+
+        if self.combo_on {
+            if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                self.process_key_action(key_action, key_event).await;
+            }
+        } else {
+            self.process_key_action(key_action, key_event).await;
         }
     }
 
@@ -585,7 +577,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 if let Some(ke) = k {
                     return ke.row == key_event.row && ke.col == key_event.col;
                 }
-                return false;
+                false
             }) {
                 // Release the hold after tap key
                 info!("Releasing hold after tap: {:?} {:?}", tap_action, key_event);
@@ -593,7 +585,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 self.hold_after_tap[index] = None;
                 return;
             }
-            if let Some(_) = self.timer[col][row] {
+            if self.timer[col][row].is_some() {
                 // Release hold action, wait for `post_wait_time`, then clear timer
                 debug!(
                     "HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
@@ -966,9 +958,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
             self.send_mouse_report().await;
 
-            if let Err(_) = self
+            if self
                 .last_mouse_tick
                 .insert(key, (key_event.pressed, Instant::now()))
+                .is_err()
             {
                 error!("The buffer for last mouse tick is full");
             }
@@ -1001,7 +994,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     async fn process_action_macro(&mut self, key: KeyCode, key_event: KeyEvent) {
         // Execute the macro only when releasing the key
-        if !!key_event.pressed {
+        if key_event.pressed {
             return;
         }
 
@@ -1099,7 +1092,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     return Some(i);
                 }
             }
-            return None;
+            None
         });
 
         // If the slot is found, update the key in the slot
@@ -1124,7 +1117,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     return Some(i);
                 }
             }
-            return None;
+            None
         });
 
         // If the slot is found, update the key in the slot
@@ -1142,12 +1135,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier |= key.to_hid_modifier_bit() as u8;
+        self.report.modifier |= key.to_hid_modifier_bit();
     }
 
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier &= !(key.to_hid_modifier_bit() as u8);
+        self.report.modifier &= !{ key.to_hid_modifier_bit() };
     }
 
     /// Register a modifier combination to be sent in hid report.

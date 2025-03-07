@@ -61,7 +61,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    // Start serving
+    // Start
     run_rmk(
         input_pins,
         output_pins,

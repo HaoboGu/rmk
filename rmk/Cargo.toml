@@ -37,7 +37,7 @@ static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 bitfield-struct = "0.10"
 byteorder = { version = "1", default-features = false }
-futures = { version = "0.3", default-features = false }
+futures = { version = "0.3", default-features = false, features = ["async-await"]}
 sequential-storage = { version = "4.0.0" }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -97,7 +97,7 @@ cortex-m = { version = "0.7" }
 [features]
 default = ["col2row", "defmt"]
 
-## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
 ## Enable defmt feature

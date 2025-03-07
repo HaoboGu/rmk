@@ -2,7 +2,6 @@ use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
-use crate::MatrixTrait;
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -82,17 +81,12 @@ impl<'a> SplitWriter for BleSplitPeripheralDriver<'a> {
 /// * `input_pins` - input gpio pins
 /// * `output_pins` - output gpio pins
 /// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub async fn initialize_nrf_ble_split_peripheral_and_run<
-    M: MatrixTrait,
-    const ROW: usize,
-    const COL: usize,
->(
-    mut matrix: M,
+pub async fn initialize_nrf_ble_split_peripheral_and_run(
     central_addr: [u8; 6],
     peripheral_addr: [u8; 6],
     spawner: Spawner,
 ) -> ! {
-    use embassy_futures::select::select3;
+    use embassy_futures::select::select;
     use nrf_softdevice::ble::gatt_server;
 
     use crate::{
@@ -167,7 +161,6 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         let mut peripheral =
             SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn, receiver));
         let peripheral_fut = peripheral.run();
-        let matrix_fut = matrix.run();
-        select3(matrix_fut, server_fut, peripheral_fut).await;
+        select(server_fut, peripheral_fut).await;
     }
 }

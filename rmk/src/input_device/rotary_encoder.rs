@@ -1,12 +1,13 @@
-//! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
-
+//! Rotary encoder implementation.
+//
+// The rotary encoder implementation is adapted from: <https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs>
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
 
@@ -25,7 +26,7 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn
@@ -141,14 +142,8 @@ impl<
         P: Phase,
     > InputDevice for RotaryEncoder<A, B, P>
 {
-    type EventType = Event;
-
-    async fn run(&mut self) {
+    async fn read_event(&mut self) -> Event {
         loop {
-            // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
-            #[cfg(not(feature = "async_matrix"))]
-            embassy_time::Timer::after_millis(20).await;
-
             #[cfg(feature = "async_matrix")]
             {
                 let (pin_a, pin_b) = self.pins();
@@ -159,49 +154,34 @@ impl<
                 .await;
             }
 
-            let direction = self.update();            
+            let direction = self.update();
+
             if direction != Direction::None {
-                self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
+                return Event::RotaryEncoder(RotaryEncoderEvent {
                     id: self.id,
                     direction,
-                }))
-                .await;
+                });
             }
         }
-    }
-
-    async fn send_event(&mut self, event: Self::EventType) {
-        EVENT_CHANNEL.sender().send(event).await
     }
 }
 
 pub struct RotaryEncoderProcessor {}
 
 impl InputProcessor for RotaryEncoderProcessor {
-    type EventType = Event;
-
-    type ReportType = Report;
-
-    async fn process(&mut self, event: Self::EventType) {
-        match event {
-            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => match direction {
-                Direction::Clockwise => {
-                    debug!("Encoder {} - Clockwise", id);
-                }
-                Direction::CounterClockwise => {
-                    debug!("Encoder {} - CounterClockwise", id);
-                }
-                Direction::None => (),
-            },
-            _ => {}
-        }
+    async fn process(&mut self, event: Event) {
+        if let Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) = event { match direction {
+            Direction::Clockwise => {
+                debug!("Encoder {} - Clockwise", id);
+            }
+            Direction::CounterClockwise => {
+                debug!("Encoder {} - CounterClockwise", id);
+            }
+            Direction::None => (),
+        } }
     }
 
-    async fn read_event(&self) -> Self::EventType {
-        EVENT_CHANNEL.receiver().receive().await
-    }
-
-    async fn send_report(&self, report: Self::ReportType) {
+    async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 }

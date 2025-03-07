@@ -3,10 +3,9 @@ pub(crate) mod server;
 use self::server::BleServer;
 use crate::channel::VIAL_READ_CHANNEL;
 use crate::config::RmkConfig;
+use crate::keymap::KeyMap;
 use crate::light::LightController;
-use crate::matrix::MatrixTrait;
 use crate::storage::Storage;
-use crate::{keyboard::Keyboard, keymap::KeyMap};
 use crate::{run_keyboard, CONNECTION_STATE};
 use core::cell::RefCell;
 use embedded_hal::digital::OutputPin;
@@ -19,15 +18,12 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 /// # Arguments
 ///
 /// * `keymap` - default keymap definition
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
+/// * `storage` - storage for saving keymap and other data
+/// * `light_controller` - light controller for controlling the light
+/// * `rmk_config` - other configurations of the keyboard, check [RmkConfig] struct for details
 // TODO: add usb service for other chips of esp32 which have USB device
 pub(crate) async fn run_esp_ble_keyboard<
     'a,
-    M: MatrixTrait,
     F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
@@ -35,8 +31,6 @@ pub(crate) async fn run_esp_ble_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
@@ -66,8 +60,6 @@ pub(crate) async fn run_esp_ble_keyboard<
 
         run_keyboard(
             keymap,
-            keyboard,
-            matrix,
             storage,
             disconnect,
             light_controller,

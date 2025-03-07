@@ -22,7 +22,7 @@ mod usb_interrupt_map;
 use crate::keyboard::parse_keyboard_mod;
 use darling::{ast::NestedMeta, FromMeta};
 use proc_macro::TokenStream;
-use split::{central::parse_split_central_mod, peripheral::parse_split_peripheral_mod};
+use split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;
 use usb_interrupt_map::get_usb_info;
 
@@ -72,9 +72,9 @@ pub fn rmk_keyboard(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn rmk_central(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn rmk_central(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_mod = parse_macro_input!(item as syn::ItemMod);
-    parse_split_central_mod(attr, item_mod).into()
+    parse_keyboard_mod(item_mod).into()
 }
 
 /// Attribute for `rmk_peripheral` macro

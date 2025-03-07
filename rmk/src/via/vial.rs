@@ -56,11 +56,11 @@ const VIAL_EP_SIZE: usize = 32;
 const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
 /// Note: vial uses litte endian, while via uses big endian
-pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     report: &mut ViaReport,
     vial_keyboard_Id: &[u8],
     vial_keyboard_def: &[u8],
-    keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
@@ -154,31 +154,35 @@ pub(crate) async fn process_vial<'a, const ROW: usize, const COL: usize, const N
                     debug!("DynamicEntryOp - DynamicVialComboSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    let combo_idx = report.output_data[3] as usize;
-                    let combos = &mut keymap.borrow_mut().combos;
-                    let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
-                        return;
-                    };
+                    let (real_idx, actions, output) = {
+                        // Drop combos to release the borrowed keymap, avoid potential run-time panics
+                        let combo_idx = report.output_data[3] as usize;
+                        let combos = &mut keymap.borrow_mut().combos;
+                        let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
+                            return;
+                        };
 
-                    let mut actions = heapless::Vec::new();
-                    for i in 0..4 {
-                        let action = from_via_keycode(LittleEndian::read_u16(
-                            &report.output_data[4 + i * 2..6 + i * 2],
-                        ));
-                        if action != KeyAction::No {
-                            let _ = actions.push(action);
+                        let mut actions = heapless::Vec::new();
+                        for i in 0..4 {
+                            let action = from_via_keycode(LittleEndian::read_u16(
+                                &report.output_data[4 + i * 2..6 + i * 2],
+                            ));
+                            if action != KeyAction::No {
+                                let _ = actions.push(action);
+                            }
                         }
-                    }
-                    let output =
-                        from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
+                        let output =
+                            from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
 
-                    combo.actions = actions;
-                    combo.output = output;
+                        combo.actions = actions;
+                        combo.output = output;
 
-                    let mut actions = [KeyAction::No; 4];
-                    for (i, &action) in combo.actions.iter().enumerate() {
-                        actions[i] = action;
-                    }
+                        let mut actions = [KeyAction::No; 4];
+                        for (i, &action) in combo.actions.iter().enumerate() {
+                            actions[i] = action;
+                        }
+                        (real_idx, actions, output)
+                    };
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteCombo(ComboData {
                             idx: real_idx,

@@ -28,14 +28,13 @@ use crate::{
 /// 1. `ChannelConfig`: Configurations for channels used in RMK.
 /// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
 /// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
-
 pub struct KeyboardConfig<'a, O: OutputPin> {
     pub channel_config: ChannelConfig,
     pub controller_config: ControllerConfig<O>,
     pub rmk_config: RmkConfig<'a>,
 }
 
-impl<'a, O: OutputPin> Default for KeyboardConfig<'a, O> {
+impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
     fn default() -> Self {
         Self {
             channel_config: ChannelConfig::default(),
@@ -104,6 +103,7 @@ impl<O: OutputPin> Default for ControllerConfig<O> {
 }
 
 /// Internal configurations for RMK keyboard.
+#[derive(Default)]
 pub struct RmkConfig<'a> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
@@ -116,19 +116,6 @@ pub struct RmkConfig<'a> {
     pub ble_battery_config: BleBatteryConfig,
 }
 
-impl<'a> Default for RmkConfig<'a> {
-    fn default() -> Self {
-        Self {
-            mouse_config: MouseConfig::default(),
-            usb_config: KeyboardUsbConfig::default(),
-            vial_config: VialConfig::default(),
-            storage_config: StorageConfig::default(),
-            behavior_config: BehaviorConfig::default(),
-            #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
-            ble_battery_config: BleBatteryConfig::default(),
-        }
-    }
-}
 
 /// Config for configurable action behavior
 #[derive(Clone, Debug, Default)]
@@ -299,7 +286,7 @@ pub struct KeyboardUsbConfig<'a> {
     pub serial_number: &'a str,
 }
 
-impl<'a> Default for KeyboardUsbConfig<'a> {
+impl Default for KeyboardUsbConfig<'_> {
     fn default() -> Self {
         Self {
             vid: 0x4c4b,
