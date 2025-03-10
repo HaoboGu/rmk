@@ -65,40 +65,35 @@ async fn main(spawner: Spawner) {
     // ::embassy_nrf::pac::CLOCK.tasks_hfclkstart().write_value(1);
     // while ::embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
-    // Pin config
-    // let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10, P0_03, P0_28, P1_13], output:  [P0_30, P0_31, P0_29, P0_02, P0_05, P1_09, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_04, P1_06]);
-
     // Usb config
     let software_vbus = SOFTWARE_VBUS.get_or_init(|| SoftwareVbusDetect::new(true, false));
     let driver = Driver::new(p.USBD, Irqs, software_vbus);
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
-    // let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    // let charging_led = Output::new(
-    //     AnyPin::from(p.P0_08),
-    //     embassy_nrf::gpio::Level::Low,
-    //     embassy_nrf::gpio::OutputDrive::Standard,
-    // );
+    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    let charging_led = Output::new(
+        AnyPin::from(p.P0_08),
+        embassy_nrf::gpio::Level::Low,
+        embassy_nrf::gpio::OutputDrive::Standard,
+    );
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
 
     // Keyboard config
     let keyboard_usb_config = KeyboardUsbConfig {
-        vid: 0x4c4c,
-        pid: 0x464c,
+        vid: 0x4c4b,
+        pid: 0x4643,
         manufacturer: "Haobo",
-        product_name: "SP46",
+        product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     let ble_battery_config = BleBatteryConfig::new(
-        // Some(is_charging_pin),
-        None,
+        Some(is_charging_pin),
         true,
-        None,
-        // Some(charging_led),
+        Some(charging_led),
         false,
         Some(saadc),
         2000,
