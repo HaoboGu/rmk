@@ -2,7 +2,9 @@
 //!
 //! This module defines the `InputDevice` trait, `InputProcessor` trait, `Runnable` trait and several macros for running input devices and processors.
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
-use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report};
+use core::cell::RefCell;
+
+use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report, keymap::KeyMap};
 
 pub mod rotary_encoder;
 
@@ -48,25 +50,36 @@ pub trait InputDevice {
     async fn read_event(&mut self) -> Event;
 }
 
+/// Processing result of the processor chain
+pub enum ProcessResult {
+    /// Continue processing the event
+    Continue(Event),
+    /// Stop processing
+    Stop,
+}
+
 /// The trait for input processors.
 ///
 /// The input processor processes the [`Event`] from the input devices and converts it to the final HID report.
 /// Take the normal keyboard as the example:
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor {
+pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
     /// Note there might be mulitple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
     /// The input processor implementor should be aware of this.  
-    async fn process(&mut self, event: Event);
+    async fn process(&mut self, event: Event) -> ProcessResult;
 
     /// Send the processed report.
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.send(report).await;
     }
+
+    /// Get the current keymap
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>;
 }
 
 /// Macro to bind input devices to event channels and run all of them.
@@ -121,38 +134,6 @@ macro_rules! run_devices {
                         }
                     ),*
                 )
-            ),+
-        )
-    }};
-}
-
-/// Macro to bind input processors to event channels and run them.
-///
-/// This macro creates tasks that receive events from channels and process them using specified processors.
-///
-/// # Arguments
-///
-/// * `channel`: The channel to receive events from
-/// * `proc`: The processor that will handle the events
-///
-/// # Example
-/// ```rust
-/// let processor_future = run_processors! {
-///     EVENT_CHANNEL => keyboard_processor,
-///     LOCAL_CHANNEL => custom_processor
-/// };
-/// ```
-#[macro_export]
-macro_rules! run_processors {
-    ( $( $channel:ident => $proc:ident ),+ $(,)? ) => {{
-        $crate::join_all!(
-            $(
-                async {
-                    loop {
-                        let e = $channel.receive().await;
-                        $proc.process(e).await;
-                    }
-                }
             ),+
         )
     }};
@@ -223,4 +204,65 @@ macro_rules! join_all {
         $crate::futures::future::join($a, $b)
     };
     ($single:expr) => { $single };
+}
+
+/// Macro for binding input processor chain to event channel and running them.
+///
+/// This macro creates tasks that receive events from channels and process them using specified processor chains.
+/// It calls processors in order and decides whether to continue the chain based on the result of each processor.
+///
+/// # Arguments
+///
+/// * `channel`: The channel to receive events from
+/// * `procs`: The processor list that will handle the events
+///
+/// # Example
+///
+/// ```rust
+/// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
+/// // Create a local channel for processor chain
+/// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
+/// // Two chains, one use local channel, the other use the global channel
+/// let processor_future = run_processor_chain! {
+///     local_channel => [processor1, processor2, processor3]
+///     EVENT_CHANNEL => [processor4, processor5, processor6]
+/// };
+/// ```
+#[macro_export]
+macro_rules! run_processor_chain {
+    ( $( $channel:expr => [ $first:expr $(, $rest:expr )* ] ),+ $(,)? ) => {{
+        $crate::join_all!(
+            $(
+                async {
+                    loop {
+                        let event = $channel.receive().await;
+
+                        // Process the event with the first processor
+                        match $first.process(event).await {
+                            $crate::input_device::ProcessResult::Stop => {
+                                // If the first processor returns Stop, continue to wait for the next event
+                                continue;
+                            },
+                            $crate::input_device::ProcessResult::Continue(next_event) => {
+                                // Pass the result to the next processor in the chain
+                                let mut current_event = next_event;
+                                $(
+                                    match $rest.process(current_event).await {
+                                        $crate::input_device::ProcessResult::Stop => {
+                                            // If any processor returns Stop, continue to wait for the next event
+                                            continue;
+                                        },
+                                        $crate::input_device::ProcessResult::Continue(next_event) => {
+                                            // Update the current event and continue processing
+                                            current_event = next_event;
+                                        }
+                                    }
+                                )*
+                            }
+                        }
+                    }
+                }
+            ),+
+        )
+    }};
 }

@@ -1,4 +1,6 @@
 //! Rotary encoder implementation.
+use core::cell::RefCell;
+
 //
 // The rotary encoder implementation is adapted from: <https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs>
 use embedded_hal::digital::InputPin;
@@ -10,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
+use crate::keymap::KeyMap;
 
-use super::{InputDevice, InputProcessor};
+use super::{InputDevice, InputProcessor, ProcessResult};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -166,22 +169,36 @@ impl<
     }
 }
 
-pub struct RotaryEncoderProcessor {}
+pub struct RotaryEncoderProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+}
 
-impl InputProcessor for RotaryEncoderProcessor {
-    async fn process(&mut self, event: Event) {
-        if let Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) = event { match direction {
-            Direction::Clockwise => {
-                debug!("Encoder {} - Clockwise", id);
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER> for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    async fn process(&mut self, event: Event) -> ProcessResult {
+        match event {
+            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => {
+                match direction {
+                    Direction::Clockwise => {
+                        debug!("Encoder {} - Clockwise", id);
+                    }
+                    Direction::CounterClockwise => {
+                        debug!("Encoder {} - CounterClockwise", id);
+                    }
+                    Direction::None => (),
+                }
+                ProcessResult::Stop
             }
-            Direction::CounterClockwise => {
-                debug!("Encoder {} - CounterClockwise", id);
-            }
-            Direction::None => (),
-        } }
+            _ => ProcessResult::Continue(event),
+        }
     }
 
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    }
+
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
+        self.keymap
     }
 }
