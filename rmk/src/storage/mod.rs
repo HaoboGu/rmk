@@ -775,20 +775,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::StorageConfig as u32),
-        )
-        .await
-        {
-            if config.enable && config.build_hash == BUILD_HASH {
-                return true;
-            }
-        }
-        false
+        return true;
+        // if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
+        //     &mut self.flash,
+        //     self.storage_range.clone(),
+        //     &mut NoCache::new(),
+        //     &mut self.buffer,
+        //     &(StorageKeys::StorageConfig as u32),
+        // )
+        // .await
+        // {
+        //     if config.enable && config.build_hash == BUILD_HASH {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 }
 

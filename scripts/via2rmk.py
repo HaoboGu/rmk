@@ -388,7 +388,7 @@ class Converter:
         if self.output_rust:
             return '\n'.join((
                 '#[rustfmt::skip]',
-                'pub fn get_default_keymap() -> '
+                'pub const fn get_default_keymap() -> '
                 + '[[[KeyAction; COL]; ROW]; NUM_LAYER] {',
                 '    [',
                 '        ' + ',\n        '.join(converted_layers),
