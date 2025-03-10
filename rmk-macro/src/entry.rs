@@ -43,17 +43,22 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 }
 
 pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    match &keyboard_config.board {
+    let entry = match &keyboard_config.board {
         BoardConfig::Split(split_config) => {
             let matrix_task = quote! {
-                ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard)
+                ::rmk::run_devices! (
+                    (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                )
+            };
+            let keyboard_task = quote! {
+                keyboard.run(),
             };
             match keyboard_config.chip.series {
                 ChipSeries::Stm32 | ChipSeries::Rp2040 => {
                     let rmk_task = quote! {
                         ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
                     };
-                    let mut tasks = vec![matrix_task, rmk_task];
+                    let mut tasks = vec![matrix_task, rmk_task, keyboard_task];
                     let central_serials = split_config
                         .central
                         .serial
@@ -102,6 +107,10 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
             }
         }
         _ => rmk_entry_default(keyboard_config),
+    };
+    quote! {
+        use ::rmk::input_device::Runnable;
+        #entry
     }
 }
 
@@ -110,21 +119,30 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
         ChipSeries::Nrf52 => match keyboard_config.communication {
             CommunicationConfig::Usb(_) => {
                 quote! {
-                    ::rmk::futures::future::join(
-                        ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard),
+                    ::rmk::futures::future::join3(
+                        ::rmk::run_devices! (
+                            (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                        ),
+                        keyboard.run(),
                         ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
                     ).await;
                 }
             }
             CommunicationConfig::Both(_, _) => quote! {
-                ::rmk::futures::future::join(
-                    ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard),
+                ::rmk::futures::future::join3(
+                    ::rmk::run_devices! (
+                        (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                    ),
+                    keyboard.run(),
                     ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
                 ).await;
             },
             CommunicationConfig::Ble(_) => quote! {
-                ::rmk::futures::future::join(
-                    ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard),
+                ::rmk::futures::future::join3(
+                    ::rmk::run_devices! (
+                        (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                    ),
+                    keyboard.run(),
                     ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config, sd),
                 ).await;
             },
@@ -132,15 +150,21 @@ pub(crate) fn rmk_entry_default(keyboard_config: &KeyboardConfig) -> TokenStream
         },
         ChipSeries::Esp32 => quote! {
             ::esp_idf_svc::hal::task::block_on(
-                ::rmk::futures::future::join(
-                    ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard),
+                ::rmk::futures::future::join3(
+                    ::rmk::run_devices! (
+                        (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                    ),
+                    keyboard.run(),
                     ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config),
                 )
             );
         },
         _ => quote! {
-            ::rmk::futures::future::join(
-                ::rmk::bind_device_and_processor_and_run!((matrix) => keyboard),
+            ::rmk::futures::future::join3(
+                ::rmk::run_devices! (
+                    (matrix) => ::rmk::channel::EVENT_CHANNEL,
+                ),
+                keyboard.run(),
                 ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
             ).await;
         },

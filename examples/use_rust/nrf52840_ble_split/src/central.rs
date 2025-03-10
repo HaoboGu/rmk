@@ -27,7 +27,7 @@ use rmk::{
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join4,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
-    input_device::{InputDevice, Runnable},
+    input_device::Runnable,
     keyboard::Keyboard,
     light::LightController,
     run_devices, run_rmk,
@@ -73,30 +73,32 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USBD, Irqs, software_vbus);
 
     // Initialize the ADC. We are only using one channel for detecting battery level
-    let adc_pin = p.P0_04.degrade_saadc();
-    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    let charging_led = Output::new(
-        AnyPin::from(p.P0_08),
-        embassy_nrf::gpio::Level::Low,
-        embassy_nrf::gpio::OutputDrive::Standard,
-    );
+    let adc_pin = p.P0_05.degrade_saadc();
+    // let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    // let charging_led = Output::new(
+    //     AnyPin::from(p.P0_08),
+    //     embassy_nrf::gpio::Level::Low,
+    //     embassy_nrf::gpio::OutputDrive::Standard,
+    // );
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
 
     // Keyboard config
     let keyboard_usb_config = KeyboardUsbConfig {
-        vid: 0x4c4b,
-        pid: 0x4643,
+        vid: 0x4c4c,
+        pid: 0x464c,
         manufacturer: "Haobo",
-        product_name: "RMK Keyboard",
+        product_name: "SP46",
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     let ble_battery_config = BleBatteryConfig::new(
-        Some(is_charging_pin),
+        // Some(is_charging_pin),
+        None,
         true,
-        Some(charging_led),
+        None,
+        // Some(charging_led),
         false,
         Some(saadc),
         2000,
@@ -115,8 +117,7 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let (input_pins, output_pins) =
-        config_matrix_pins_nrf!(peripherals: p, input: [P0_12, P0_13], output:  [P0_14, P0_15]);
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_02], output:  [P0_28, P0_03, P1_10, P1_11, P1_13, P0_09, P0_10]);
 
     // Initialize the Softdevice and flash
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
@@ -138,8 +139,8 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<2, 2>::new();
-    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::<4, 7>::new();
+    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
     // Initialize the light controller
@@ -152,7 +153,7 @@ async fn main(spawner: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        run_peripheral_manager::<2, 1, 2, 2>(0, peripheral_addr),
+        run_peripheral_manager::<4, 7, 4, 0>(0, peripheral_addr),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
     )
     .await;

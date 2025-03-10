@@ -28,7 +28,7 @@ use rmk::{
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join3,
     initialize_keymap_and_storage,
-    input_device::{InputDevice, Runnable},
+    input_device::Runnable,
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,

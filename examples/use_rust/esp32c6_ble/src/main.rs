@@ -18,7 +18,7 @@ use rmk::{
     config::{ControllerConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join3,
-    input_device::{InputDevice, Runnable},
+    input_device::Runnable,
     initialize_keymap_and_storage,
     keyboard::Keyboard,
     light::LightController,

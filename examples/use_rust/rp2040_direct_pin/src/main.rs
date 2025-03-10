@@ -26,7 +26,7 @@ use rmk::{
     direct_pin::DirectPinMatrix,
     futures::future::join3,
     initialize_keymap_and_storage,
-    input_device::{InputDevice, Runnable},
+    input_device::Runnable,
     keyboard::Keyboard,
     light::LightController,
     run_devices, run_rmk,

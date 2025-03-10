@@ -50,27 +50,27 @@ async fn main(spawner: Spawner) {
     // while ::embassy_nrf::pac::CLOCK.events_hfclkstarted().read() != 1 {}
 
     // Initialize the ADC. We are only using one channel for detecting battery level
-    let adc_pin = p.P0_04.degrade_saadc();
+    let adc_pin = p.P0_05.degrade_saadc();
     // TODO: Peripheral's charging state and battery level
-    let _is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    let _charging_led = Output::new(
-        AnyPin::from(p.P0_08),
-        embassy_nrf::gpio::Level::Low,
-        embassy_nrf::gpio::OutputDrive::Standard,
-    );
+    // let _is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    // let _charging_led = Output::new(
+    //     AnyPin::from(p.P0_08),
+    //     embassy_nrf::gpio::Level::Low,
+    //     embassy_nrf::gpio::OutputDrive::Standard,
+    // );
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
 
     let (input_pins, output_pins) =
-        config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10], output:  [P0_30, P0_31]);
+        config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
 
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
     // Initialize the peripheral matrix
-    let debouncer = DefaultDebouncer::<2, 2>::new();
-    let matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+    let debouncer = DefaultDebouncer::<4, 7>::new();
+    let matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
 
     // Start
     join(

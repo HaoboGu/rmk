@@ -101,7 +101,8 @@ pub trait InputProcessor {
 /// ```
 #[macro_export]
 macro_rules! run_devices {
-    ( $( ( $( $dev:ident ),* ) => $channel:ident),+ $(,)? ) => {{
+    ( $( ( $( $dev:ident ),* ) => $channel:expr),+ $(,)? ) => {{
+        use $crate::input_device::InputDevice;
         $crate::join_all!(
             $(
                 $crate::join_all!(
@@ -112,7 +113,7 @@ macro_rules! run_devices {
                                 // For KeyEvent, send it to KEY_EVENT_CHANNEL
                                 match e {
                                     $crate::event::Event::Key(key_event) => {
-                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await
+                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
                                     }
                                     _ => $channel.send(e).await,
                                 }
