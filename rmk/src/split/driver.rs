@@ -95,16 +95,13 @@ impl<
                 },
                 embassy_futures::select::Either::Second(_) => {
                     // Timer elapsed, sync the connection state
-                    let new_conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                    if new_conn_state != conn_state {
-                        conn_state = new_conn_state;
-                        if let Err(e) = self
-                            .receiver
-                            .write(&SplitMessage::ConnectionState(conn_state))
-                            .await
-                        {
-                            error!("SplitDriver write error: {:?}", e);
-                        }
+                    conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    if let Err(e) = self
+                        .receiver
+                        .write(&SplitMessage::ConnectionState(conn_state))
+                        .await
+                    {
+                        error!("SplitDriver write error: {:?}", e);
                     }
                     last_sync_time = Instant::now();
                 }

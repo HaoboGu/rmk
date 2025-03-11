@@ -1,8 +1,8 @@
-//! Rotary encoder implementation.
+//! General rotary encoder
+//!
+//! The rotary encoder implementation is adapted from: <https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs>
 use core::cell::RefCell;
 
-//
-// The rotary encoder implementation is adapted from: <https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs>
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
@@ -65,6 +65,7 @@ impl Phase for DefaultPhase {
     }
 }
 
+//// Phase implementation for E8H7 encoder
 pub struct E8H7Phase;
 impl Phase for E8H7Phase {
     fn direction(&mut self, s: u8) -> Direction {
@@ -159,6 +160,7 @@ impl<
     > InputDevice for RotaryEncoder<A, B, P>
 {
     async fn read_event(&mut self) -> Event {
+        // Read until a valid rotary encoder event is detected
         loop {
             #[cfg(feature = "async_matrix")]
             {
@@ -182,6 +184,7 @@ impl<
     }
 }
 
+/// Rotary encoder event processor
 pub struct RotaryEncoderProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
 }
