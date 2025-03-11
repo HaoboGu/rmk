@@ -237,6 +237,7 @@ macro_rules! join_all {
 #[macro_export]
 macro_rules! run_processor_chain {
     ( $( $channel:expr => [ $first:expr $(, $rest:expr )* ] ),+ $(,)? ) => {{
+        use rmk::input_device::InputProcessor;
         $crate::join_all!(
             $(
                 async {

@@ -25,12 +25,15 @@ use rmk::{
         BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join4,
+    futures::future::{join, join4},
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
-    input_device::Runnable,
+    input_device::{
+        rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
+        Runnable,
+    },
     keyboard::Keyboard,
     light::LightController,
-    run_devices, run_rmk,
+    run_devices, run_processor_chain, run_rmk,
     split::central::{run_peripheral_manager, CentralMatrix},
 };
 
@@ -133,6 +136,10 @@ async fn main(spawner: Spawner) {
     )
     .await;
 
+    let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::Up);
+    let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::Up);
+    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, E8H7Phase, 0);
+
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<4, 7>::new();
     let mut matrix = CentralMatrix::<_, _, _, 0, 0, 4, 7>::new(input_pins, output_pins, debouncer);
@@ -142,14 +149,21 @@ async fn main(spawner: Spawner) {
     let light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
+    let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
+
     // Start
     join4(
         run_devices! (
-            (matrix) => EVENT_CHANNEL,
+            (matrix, encoder) => EVENT_CHANNEL,
         ),
+        run_processor_chain! {
+            EVENT_CHANNEL => [encoder_processor],
+        },
         keyboard.run(),
-        run_peripheral_manager::<4, 7, 4, 0>(0, peripheral_addr),
-        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+        join(
+            run_peripheral_manager::<4, 7, 4, 0>(0, peripheral_addr),
+            run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+        ),
     )
     .await;
 }

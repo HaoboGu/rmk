@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
+use crate::keycode::KeyCode;
 use crate::keymap::KeyMap;
+use crate::usb::descriptor::KeyboardReport;
 
 use super::{InputDevice, InputProcessor, ProcessResult};
 
@@ -58,6 +60,17 @@ impl Phase for DefaultPhase {
         match s {
             0b0001 | 0b0111 | 0b1000 | 0b1110 => Direction::Clockwise,
             0b0010 | 0b0100 | 0b1011 | 0b1101 => Direction::CounterClockwise,
+            _ => Direction::None,
+        }
+    }
+}
+
+pub struct E8H7Phase;
+impl Phase for E8H7Phase {
+    fn direction(&mut self, s: u8) -> Direction {
+        match s {
+            0b0010 | 0b1101 => Direction::Clockwise,
+            0b0001 | 0b1110 => Direction::CounterClockwise,
             _ => Direction::None,
         }
     }
@@ -174,20 +187,65 @@ pub struct RotaryEncoderProcessor<'a, const ROW: usize, const COL: usize, const 
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>) -> Self {
+        Self { keymap }
+    }
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     InputProcessor<'a, ROW, COL, NUM_LAYER> for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
             Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => {
+                // TODO: Use Vial and shared keymap for encoders
+                // TODO: Merge the keyboard report sender, avoid KeyboardReport override each other
                 match direction {
                     Direction::Clockwise => {
                         debug!("Encoder {} - Clockwise", id);
+                        KEYBOARD_REPORT_CHANNEL
+                            .send(Report::KeyboardReport(KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [KeyCode::KbVolumeUp as u8, 0, 0, 0, 0, 0],
+                            }))
+                            .await;
+                        embassy_time::Timer::after_millis(2).await;
+                        KEYBOARD_REPORT_CHANNEL
+                            .send(Report::KeyboardReport(KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [0, 0, 0, 0, 0, 0],
+                            }))
+                            .await;
                     }
                     Direction::CounterClockwise => {
                         debug!("Encoder {} - CounterClockwise", id);
+                        KEYBOARD_REPORT_CHANNEL
+                            .send(Report::KeyboardReport(KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [KeyCode::KbVolumeDown as u8, 0, 0, 0, 0, 0],
+                            }))
+                            .await;
+                        embassy_time::Timer::after_millis(2).await;
+                        KEYBOARD_REPORT_CHANNEL
+                            .send(Report::KeyboardReport(KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [0, 0, 0, 0, 0, 0],
+                            }))
+                            .await;
                     }
                     Direction::None => (),
                 }
+
                 ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),
