@@ -228,7 +228,7 @@ macro_rules! join_all {
 /// use rmk::channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel, EVENT_CHANNEL};
 /// // Create a local channel for processor chain
 /// let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
-/// // Two chains, one use local channel, the other use the global channel
+/// // Two chains, one use local channel, the other use the built-in channel
 /// let processor_future = run_processor_chain! {
 ///     local_channel => [processor1, processor2, processor3]
 ///     EVENT_CHANNEL => [processor4, processor5, processor6]

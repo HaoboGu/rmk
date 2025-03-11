@@ -1,6 +1,7 @@
 //! The abstracted driver layer of the split keyboard.
 //!
 use super::SplitMessage;
+use crate::channel::EVENT_CHANNEL;
 use crate::CONNECTION_STATE;
 use crate::{channel::KEY_EVENT_CHANNEL, event::KeyEvent};
 use core::sync::atomic::Ordering;
@@ -78,25 +79,35 @@ impl<
                 embassy_futures::select::Either::First(read_result) => match read_result {
                     Ok(received_message) => {
                         debug!("Received peripheral message: {:?}", received_message);
-                        if let SplitMessage::Key(e) = received_message {
-                            // Check row/col
-                            if e.row as usize > ROW || e.col as usize > COL {
-                                error!("Invalid peripheral row/col: {} {}", e.row, e.col);
-                                continue;
+                        match received_message {
+                            SplitMessage::Key(e) => {
+                                // Check row/col
+                                if e.row as usize > ROW || e.col as usize > COL {
+                                    error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                                    continue;
+                                }
+                                if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                    // Only when the connection is established, send the key event.
+                                    KEY_EVENT_CHANNEL
+                                        .send(KeyEvent {
+                                            row: e.row + ROW_OFFSET as u8,
+                                            col: e.col + COL_OFFSET as u8,
+                                            pressed: e.pressed,
+                                        })
+                                        .await;
+                                } else {
+                                    warn!("Key event from peripheral is ignored because the connection is not established.");
+                                }
                             }
-
-                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                                // Only when the connection is established, send the key event.
-                                KEY_EVENT_CHANNEL
-                                    .send(KeyEvent {
-                                        row: e.row + ROW_OFFSET as u8,
-                                        col: e.col + COL_OFFSET as u8,
-                                        pressed: e.pressed,
-                                    })
-                                    .await;
-                            } else {
-                                warn!("Key event from peripheral is ignored because the connection is not established.");
+                            SplitMessage::Event(e) => {
+                                if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                    // Only when the connection is established, send the event
+                                    EVENT_CHANNEL.send(e).await;
+                                } else {
+                                    warn!("Event from peripheral is ignored because the connection is not established.");
+                                }
                             }
+                            _ => {}
                         }
                     }
                     Err(e) => error!("Peripheral message read error: {:?}", e),

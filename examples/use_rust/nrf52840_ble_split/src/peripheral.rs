@@ -16,10 +16,7 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join,
-    matrix::Matrix,
-    split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral},
+    channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel}, debounce::default_debouncer::DefaultDebouncer, event::Event, futures::future::join, matrix::Matrix, run_devices, split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral}
 };
 
 bind_interrupts!(struct Irqs {
@@ -70,12 +67,16 @@ async fn main(spawner: Spawner) {
 
     // Initialize the peripheral matrix
     let debouncer = DefaultDebouncer::<4, 7>::new();
-    let matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
+    let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
+
+    let event_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
 
     // Start
     join(
-        run_peripheral_matrix(matrix),
-        run_rmk_split_peripheral(central_addr, peripheral_addr, spawner),
+        run_devices! (
+            (matrix) => event_channel,
+        ),
+        run_rmk_split_peripheral(central_addr, peripheral_addr, spawner, &event_channel),
     )
     .await;
 }

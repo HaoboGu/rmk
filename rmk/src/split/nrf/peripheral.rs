@@ -1,10 +1,11 @@
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
+use crate::event::Event;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::blocking_mutex::raw::{NoopRawMutex, ThreadModeRawMutex};
 use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
@@ -85,6 +86,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run(
     central_addr: [u8; 6],
     peripheral_addr: [u8; 6],
     spawner: Spawner,
+    event_channel: &Channel<NoopRawMutex, Event, 16>,
 ) -> ! {
     use embassy_futures::select::select;
     use nrf_softdevice::ble::gatt_server;
@@ -160,7 +162,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run(
 
         let mut peripheral =
             SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn, receiver));
-        let peripheral_fut = peripheral.run();
+        let peripheral_fut = peripheral.run(event_channel);
         select(server_fut, peripheral_fut).await;
     }
 }
