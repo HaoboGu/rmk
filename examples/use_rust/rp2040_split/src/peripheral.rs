@@ -16,13 +16,12 @@ use embassy_rp::{
 };
 use panic_probe as _;
 use rmk::{
+    channel::EVENT_CHANNEL,
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join,
     matrix::Matrix,
-    split::{
-        peripheral::{run_peripheral_matrix, run_rmk_split_peripheral},
-        SPLIT_MESSAGE_MAX_SIZE,
-    },
+    run_devices,
+    split::{peripheral::run_rmk_split_peripheral, SPLIT_MESSAGE_MAX_SIZE},
 };
 use static_cell::StaticCell;
 
@@ -57,11 +56,11 @@ async fn main(_spawner: Spawner) {
 
     // Define the matrix
     let debouncer = DefaultDebouncer::<2, 2>::new();
-    let matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+    let mut matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
 
     // Start
     join(
-        run_peripheral_matrix(matrix),
+        run_devices!((matrix) => EVENT_CHANNEL), // Peripheral uses EVENT_CHANNEL to send events to central
         run_rmk_split_peripheral(uart_instance),
     )
     .await;

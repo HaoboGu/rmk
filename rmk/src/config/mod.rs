@@ -116,7 +116,6 @@ pub struct RmkConfig<'a> {
     pub ble_battery_config: BleBatteryConfig,
 }
 
-
 /// Config for configurable action behavior
 #[derive(Clone, Debug, Default)]
 pub struct BehaviorConfig {

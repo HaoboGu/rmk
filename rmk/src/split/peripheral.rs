@@ -1,15 +1,12 @@
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
-use crate::channel::KEY_EVENT_CHANNEL;
-use crate::event::Event;
+use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_nrf_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::CONNECTION_STATE;
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select3;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::channel::Channel;
 #[cfg(not(feature = "_nrf_ble"))]
 use embedded_io_async::{Read, Write};
 
@@ -27,13 +24,12 @@ pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_nrf_ble"))] S: Write
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     #[cfg(not(feature = "_nrf_ble"))] serial: S,
     #[cfg(feature = "_nrf_ble")] spawner: Spawner,
-    event_channel: &Channel<NoopRawMutex, Event, 16>,
 ) {
     #[cfg(not(feature = "_nrf_ble"))]
     {
         let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
         loop {
-            peripheral.run(event_channel).await;
+            peripheral.run().await;
         }
     }
 
@@ -42,7 +38,6 @@ pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_nrf_ble"))] S: Write
         central_addr,
         peripheral_addr,
         spawner,
-        event_channel,
     )
     .await;
 }
@@ -61,12 +56,12 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     ///
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
-    pub(crate) async fn run(&mut self, event_channel: &Channel<NoopRawMutex, Event, 16>) -> ! {
+    pub(crate) async fn run(&mut self) -> ! {
         loop {
             match select3(
                 self.split_driver.read(),
                 KEY_EVENT_CHANNEL.receive(),
-                event_channel.receive(),
+                EVENT_CHANNEL.receive(),
             )
             .await
             {
@@ -88,12 +83,16 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split key event to central");
                         self.split_driver.write(&SplitMessage::Key(e)).await.ok();
+                    } else {
+                        debug!("Connection not established, skipping key event");
                     }
                 }
                 embassy_futures::select::Either3::Third(e) => {
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split event to central: {:?}", e);
                         self.split_driver.write(&SplitMessage::Event(e)).await.ok();
+                    } else {
+                        debug!("Connection not established, skipping event");
                     }
                 }
             }

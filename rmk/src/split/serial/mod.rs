@@ -26,10 +26,11 @@ pub(crate) async fn run_serial_peripheral_manager<
     receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let peripheral =
+    let peripheral_manager =
         PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
     info!("Running peripheral manager {}", id);
-    peripheral.run().await;
+
+    peripheral_manager.run().await;
 }
 
 /// Serial driver for BOTH split central and peripheral

@@ -11,7 +11,9 @@ pub struct RapidDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usiz
     debouncing: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
+    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     fn default() -> Self {
         Self::new()
     }

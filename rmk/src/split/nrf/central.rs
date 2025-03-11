@@ -48,11 +48,13 @@ pub(crate) async fn run_ble_peripheral_manager<
         connection_state: CONNECTION_STATE.load(Ordering::Acquire),
     };
 
-    let peripheral =
+    // 创建PeripheralManager实例
+    let peripheral_manager =
         PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
     info!("Running peripheral manager {}", id);
-    join(peripheral.run(), run_ble_client).await;
+
+    join(peripheral_manager.run(), run_ble_client).await;
 }
 
 // If the one peripheral client is connecting, don't try to connect again

@@ -116,8 +116,8 @@ async fn main(_spawner: Spawner) {
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
-            keyboard.run(),
-            run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
+        keyboard.run(),
+        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),
     )
     .await;

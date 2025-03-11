@@ -1,10 +1,10 @@
 //! Exposed channels which can be used to share data across devices & processors
 //!
+use crate::RawMutex;
+pub use embassy_sync::blocking_mutex;
 pub use embassy_sync::channel;
 use embassy_sync::channel::Channel;
-pub use embassy_sync::blocking_mutex;
 pub use embassy_sync::zerocopy_channel;
-use crate::RawMutex;
 
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::profile::BleProfileAction;

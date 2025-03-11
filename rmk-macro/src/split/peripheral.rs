@@ -173,7 +173,7 @@ fn expand_split_peripheral_entry(
     central_config: &SplitBoardConfig,
 ) -> TokenStream2 {
     let peripheral_matrix_task = quote! {
-        ::rmk::split::peripheral::run_peripheral_matrix(matrix)
+        ::rmk::run_devices!((matrix) => ::rmk::channel::EVENT_CHANNEL)
     };
     match chip.series {
         ChipSeries::Nrf52 => {
@@ -187,7 +187,7 @@ fn expand_split_peripheral_entry(
                 ::rmk::split::peripheral::run_rmk_split_peripheral(
                     [#(#central_addr), *],
                     [#(#peripheral_addr), *],
-                    spawner
+                    spawner,
                 )
             };
             join_all_tasks(vec![peripheral_matrix_task, peripheral_run])

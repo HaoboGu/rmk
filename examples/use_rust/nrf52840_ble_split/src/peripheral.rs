@@ -16,7 +16,8 @@ use embassy_nrf::{
 };
 use panic_probe as _;
 use rmk::{
-    channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel}, debounce::default_debouncer::DefaultDebouncer, event::Event, futures::future::join, matrix::Matrix, run_devices, split::peripheral::{run_peripheral_matrix, run_rmk_split_peripheral}
+    channel::EVENT_CHANNEL, debounce::default_debouncer::DefaultDebouncer, futures::future::join,
+    matrix::Matrix, run_devices, split::peripheral::run_rmk_split_peripheral,
 };
 
 bind_interrupts!(struct Irqs {
@@ -59,8 +60,7 @@ async fn main(spawner: Spawner) {
     // Wait for ADC calibration.
     saadc.calibrate().await;
 
-    let (input_pins, output_pins) =
-        config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
 
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
@@ -68,15 +68,14 @@ async fn main(spawner: Spawner) {
     // Initialize the peripheral matrix
     let debouncer = DefaultDebouncer::<4, 7>::new();
     let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
-
-    let event_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
+    // let mut matrix = rmk::matrix::TestMatrix::<4, 7>::new();
 
     // Start
     join(
         run_devices! (
-            (matrix) => event_channel,
+            (matrix) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
         ),
-        run_rmk_split_peripheral(central_addr, peripheral_addr, spawner, &event_channel),
+        run_rmk_split_peripheral(central_addr, peripheral_addr, spawner),
     )
     .await;
 }
