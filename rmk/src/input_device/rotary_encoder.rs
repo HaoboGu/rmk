@@ -8,13 +8,12 @@ use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
+use usbd_hid::descriptor::{MediaKey, MediaKeyboardReport};
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
-use crate::keycode::KeyCode;
 use crate::keymap::KeyMap;
-use crate::usb::descriptor::KeyboardReport;
 
 use super::{InputDevice, InputProcessor, ProcessResult};
 
@@ -208,43 +207,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 match direction {
                     Direction::Clockwise => {
                         debug!("Encoder {} - Clockwise", id);
-                        KEYBOARD_REPORT_CHANNEL
-                            .send(Report::KeyboardReport(KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [KeyCode::KbVolumeUp as u8, 0, 0, 0, 0, 0],
-                            }))
-                            .await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: MediaKey::VolumeIncrement as u16,
+                        }))
+                        .await;
                         embassy_time::Timer::after_millis(2).await;
-                        KEYBOARD_REPORT_CHANNEL
-                            .send(Report::KeyboardReport(KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [0, 0, 0, 0, 0, 0],
-                            }))
-                            .await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: 0,
+                        }))
+                        .await;
                     }
                     Direction::CounterClockwise => {
                         debug!("Encoder {} - CounterClockwise", id);
-                        KEYBOARD_REPORT_CHANNEL
-                            .send(Report::KeyboardReport(KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [KeyCode::KbVolumeDown as u8, 0, 0, 0, 0, 0],
-                            }))
-                            .await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: MediaKey::VolumeDecrement as u16,
+                        }))
+                        .await;
                         embassy_time::Timer::after_millis(2).await;
-                        KEYBOARD_REPORT_CHANNEL
-                            .send(Report::KeyboardReport(KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [0, 0, 0, 0, 0, 0],
-                            }))
-                            .await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: 0,
+                        }))
+                        .await;
                     }
                     Direction::None => (),
                 }

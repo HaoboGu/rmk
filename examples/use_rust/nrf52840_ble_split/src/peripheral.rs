@@ -49,13 +49,6 @@ async fn main(spawner: Spawner) {
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
-    // TODO: Peripheral's charging state and battery level
-    // let _is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    // let _charging_led = Output::new(
-    //     AnyPin::from(p.P0_08),
-    //     embassy_nrf::gpio::Level::Low,
-    //     embassy_nrf::gpio::OutputDrive::Standard,
-    // );
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;

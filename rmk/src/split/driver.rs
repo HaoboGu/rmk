@@ -91,7 +91,12 @@ impl<
                 // Use built-in channels for split peripherals
                 embassy_futures::select::Either::First(event) => match event {
                     Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
-                    _ => EVENT_CHANNEL.send(event).await,
+                    _ => {
+                        if EVENT_CHANNEL.is_full() {
+                            let _ = EVENT_CHANNEL.receive().await;
+                        }
+                        EVENT_CHANNEL.send(event).await;
+                    }
                 },
                 embassy_futures::select::Either::Second(_) => {
                     // Timer elapsed, sync the connection state

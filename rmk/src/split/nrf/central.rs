@@ -48,7 +48,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         connection_state: CONNECTION_STATE.load(Ordering::Acquire),
     };
 
-    // 创建PeripheralManager实例
+    // Create peripheral manager instance
     let peripheral_manager =
         PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
