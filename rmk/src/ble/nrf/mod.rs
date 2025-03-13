@@ -471,10 +471,6 @@ async fn run_ble_keyboard<
     mut conn: Connection,
 ) {
     info!("Connected to BLE");
-    if !bonder.check_connection(&conn) {
-        error!("Bonded peer address doesn't match active profile, disconnect");
-        return;
-    }
     bonder.load_sys_attrs(&conn);
     if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
         error!("Failed to update PHY");
