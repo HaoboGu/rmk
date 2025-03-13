@@ -47,11 +47,11 @@ rows = 2
 cols = 2
 row_offset = 0
 col_offset = 0
-# Central's ble addr
 
+# Central's ble addr
 ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
-# Central's matrix pins
+# Central's matrix
 [split.central.matrix]
 matrix_type = "normal"
 input_pins = ["P0_12", "P0_13"]
@@ -60,7 +60,6 @@ output_pins = ["P0_14", "P0_15"]
 # Note there're TWO brackets, since the peripheral is a list
 # Peripheral 0
 [[split.peripheral]]
-# Matrix definition
 rows = 2
 cols = 1
 row_offset = 2
@@ -68,6 +67,7 @@ col_offset = 2
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x11, 0xe3]
 
+# Peripheral 0's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
 input_pins = ["P1_11", "P1_10"]
@@ -83,6 +83,7 @@ col_offset = 2
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x71, 0x91, 0x11, 0xe3]
 
+# Peripheral 1's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
 input_pins = ["P1_11", "P1_10"]
