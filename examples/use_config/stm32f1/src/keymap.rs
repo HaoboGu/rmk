@@ -3,7 +3,7 @@ use rmk::action::KeyAction;
 use rmk::{a, k, layer, mo};
 
 #[rustfmt::skip]
-pub fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         layer!([
             [k!(AudioVolUp), k!(B), k!(AudioVolDown)],

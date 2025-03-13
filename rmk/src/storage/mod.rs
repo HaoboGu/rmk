@@ -10,6 +10,8 @@ use crate::{
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
+use embassy_embedded_hal::adapter::BlockingAsync;
+use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
 use sequential_storage::{
@@ -363,12 +365,11 @@ pub(crate) struct ComboData {
     pub(crate) output: KeyAction,
 }
 
-pub(crate) struct Storage<
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
+pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
+    embassy_embedded_hal::adapter::BlockingAsync::new(flash)
+}
+
+pub struct Storage<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],
@@ -401,7 +402,7 @@ macro_rules! write_storage {
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Storage<F, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(
+    pub async fn new(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         config: StorageConfig,
@@ -681,7 +682,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
-        for i in 0..combos.len() {
+        // for i in 0..combos.len() {
+        for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
@@ -698,7 +700,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }
-                combos[i] = Combo::new(actions, combo.output, combos[i].layer);
+                *item = Combo::new(actions, combo.output, item.layer);
+                // combos[i] = Combo::new(actions, combo.output, combos[i].layer);
             }
         }
 
@@ -772,20 +775,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::StorageConfig as u32),
-        )
-        .await
-        {
-            if config.enable && config.build_hash == BUILD_HASH {
-                return true;
-            }
-        }
-        false
+        return true;
+        // if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
+        //     &mut self.flash,
+        //     self.storage_range.clone(),
+        //     &mut NoCache::new(),
+        //     &mut self.buffer,
+        //     &(StorageKeys::StorageConfig as u32),
+        // )
+        // .await
+        // {
+        //     if config.enable && config.build_hash == BUILD_HASH {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 }
 

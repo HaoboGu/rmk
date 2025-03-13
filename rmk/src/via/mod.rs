@@ -373,19 +373,19 @@ impl<'a, 'd, D: Driver<'d>> UsbVialReaderWriter<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidWriterTrait for UsbVialReaderWriter<'_, 'd, D> {
     type ReportType = ViaReport;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         self.vial_reader_writer
             .write_serialize(&report)
             .await
-            .map_err(|e| HidError::UsbEndpointError(e))?;
+            .map_err(HidError::UsbEndpointError)?;
         Ok(32)
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
     type ReportType = ViaReport;
 
     async fn read_report(&mut self) -> Result<ViaReport, HidError> {
@@ -396,7 +396,7 @@ impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'a, 'd, D> {
         self.vial_reader_writer
             .read(&mut read_report.output_data)
             .await
-            .map_err(|e| HidError::UsbReadError(e))?;
+            .map_err(HidError::UsbReadError)?;
 
         Ok(read_report)
     }

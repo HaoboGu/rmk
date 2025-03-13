@@ -5,7 +5,7 @@ pub(crate) const ROW: usize = 4;
 pub(crate) const NUM_LAYER: usize = 2;
 
 #[rustfmt::skip]
-pub fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         layer!([
             [k!(AudioVolUp), k!(B), k!(AudioVolDown)],

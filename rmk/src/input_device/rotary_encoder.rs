@@ -1,16 +1,21 @@
-//! The rotary encoder implementation is adapted from: https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs
+//! General rotary encoder
+//!
+//! The rotary encoder implementation is adapted from: <https://github.com/leshow/rotary-encoder-hal/blob/master/src/lib.rs>
+use core::cell::RefCell;
 
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
+use usbd_hid::descriptor::{MediaKey, MediaKeyboardReport};
 
-use crate::channel::{EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
+use crate::keymap::KeyMap;
 
-use super::{InputDevice, InputProcessor};
+use super::{InputDevice, InputProcessor, ProcessResult};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -25,7 +30,7 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn
@@ -54,6 +59,18 @@ impl Phase for DefaultPhase {
         match s {
             0b0001 | 0b0111 | 0b1000 | 0b1110 => Direction::Clockwise,
             0b0010 | 0b0100 | 0b1011 | 0b1101 => Direction::CounterClockwise,
+            _ => Direction::None,
+        }
+    }
+}
+
+//// Phase implementation for E8H7 encoder
+pub struct E8H7Phase;
+impl Phase for E8H7Phase {
+    fn direction(&mut self, s: u8) -> Direction {
+        match s {
+            0b0010 | 0b1101 => Direction::Clockwise,
+            0b0001 | 0b1110 => Direction::CounterClockwise,
             _ => Direction::None,
         }
     }
@@ -141,14 +158,9 @@ impl<
         P: Phase,
     > InputDevice for RotaryEncoder<A, B, P>
 {
-    type EventType = Event;
-
-    async fn run(&mut self) {
+    async fn read_event(&mut self) -> Event {
+        // Read until a valid rotary encoder event is detected
         loop {
-            // If not using async_matrix feature, scanning the encoder pins with 50HZ frequency
-            #[cfg(not(feature = "async_matrix"))]
-            embassy_time::Timer::after_millis(20).await;
-
             #[cfg(feature = "async_matrix")]
             {
                 let (pin_a, pin_b) = self.pins();
@@ -159,49 +171,78 @@ impl<
                 .await;
             }
 
-            let direction = self.update();            
+            let direction = self.update();
+
             if direction != Direction::None {
-                self.send_event(Event::RotaryEncoder(RotaryEncoderEvent {
+                return Event::RotaryEncoder(RotaryEncoderEvent {
                     id: self.id,
                     direction,
-                }))
-                .await;
+                });
             }
         }
     }
+}
 
-    async fn send_event(&mut self, event: Self::EventType) {
-        EVENT_CHANNEL.sender().send(event).await
+/// Rotary encoder event processor
+pub struct RotaryEncoderProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>) -> Self {
+        Self { keymap }
     }
 }
 
-pub struct RotaryEncoderProcessor {}
-
-impl InputProcessor for RotaryEncoderProcessor {
-    type EventType = Event;
-
-    type ReportType = Report;
-
-    async fn process(&mut self, event: Self::EventType) {
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER> for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
-            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => match direction {
-                Direction::Clockwise => {
-                    debug!("Encoder {} - Clockwise", id);
+            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => {
+                // TODO: Use Vial and shared keymap for encoders
+                // TODO: Merge the keyboard report sender, avoid KeyboardReport override each other
+                match direction {
+                    Direction::Clockwise => {
+                        debug!("Encoder {} - Clockwise", id);
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: MediaKey::VolumeIncrement as u16,
+                        }))
+                        .await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: 0,
+                        }))
+                        .await;
+                    }
+                    Direction::CounterClockwise => {
+                        debug!("Encoder {} - CounterClockwise", id);
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: MediaKey::VolumeDecrement as u16,
+                        }))
+                        .await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+                            usage_id: 0,
+                        }))
+                        .await;
+                    }
+                    Direction::None => (),
                 }
-                Direction::CounterClockwise => {
-                    debug!("Encoder {} - CounterClockwise", id);
-                }
-                Direction::None => (),
-            },
-            _ => {}
+
+                ProcessResult::Stop
+            }
+            _ => ProcessResult::Continue(event),
         }
     }
 
-    async fn read_event(&self) -> Self::EventType {
-        EVENT_CHANNEL.receiver().receive().await
+    async fn send_report(&self, report: Report) {
+        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
-    async fn send_report(&self, report: Self::ReportType) {
-        KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
+        self.keymap
     }
 }
