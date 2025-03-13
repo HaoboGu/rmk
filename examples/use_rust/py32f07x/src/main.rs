@@ -11,25 +11,26 @@ mod vial;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
+use panic_probe as _;
+use py32_hal::flash::Flash;
 use py32_hal::{
     bind_interrupts,
     gpio::{AnyPin, Input, Output},
     rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk},
     usb::{Driver, InterruptHandler},
 };
-// use py32_hal::flash::Blocking;
-use panic_probe as _;
 use rmk::{
-    bind_device_and_processor_and_run,
+    channel::EVENT_CHANNEL,
     config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join,
+    futures::future::join3,
     initialize_keymap_and_storage,
+    input_device::Runnable,
     keyboard::Keyboard,
     light::LightController,
     matrix::Matrix,
-    run_rmk,
-    storage::DummyFlash,
+    run_devices, run_rmk,
+    storage::async_flash_wrapper,
 };
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -72,11 +73,13 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
+    let f = Flash::new_blocking(p.FLASH);
+
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let (keymap, storage) = initialize_keymap_and_storage(
         &mut default_keymap,
-        DummyFlash::new(),
+        async_flash_wrapper(f),
         rmk_config.storage_config,
         rmk_config.behavior_config.clone(),
     )
@@ -92,8 +95,9 @@ async fn main(_spawner: Spawner) {
         LightController::new(ControllerConfig::default().light_config);
 
     // Start
-    join(
-        bind_device_and_processor_and_run!((matrix) => keyboard),
+    join3(
+        run_devices!((matrix) => EVENT_CHANNEL),
+        keyboard.run(),
         run_rmk(&keymap, driver, storage, light_controller, rmk_config),
     )
     .await;

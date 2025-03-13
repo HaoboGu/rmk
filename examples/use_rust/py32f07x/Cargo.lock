@@ -934,8 +934,7 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "musb"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccbbe41a12fa05544697f35a9dace3a9bfc41e2afcd74a1d9e68fdc36487c848"
+source = "git+https://github.com/decaday/musb.git#2f225326e923926d0e327f89cdde975df79bb347"
 dependencies = [
  "cfg-if",
  "defmt",
@@ -1149,8 +1148,7 @@ dependencies = [
 [[package]]
 name = "py32-hal"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78c4107866952c2f6676f752ba6cc285767f2b8a6b6aabdfe04b65be71da2ee2"
+source = "git+https://github.com/py32-rs/py32-hal?rev=7260371#726037103c5d29a7e89da8dd65048d00ddfa1637"
 dependencies = [
  "cfg-if",
  "cortex-m",
@@ -1185,8 +1183,7 @@ dependencies = [
 [[package]]
 name = "py32-metapac"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1745f2a0a78ed3acb1d665ac15cbbe5eca9d6293343aef0e55ed4c1310bffbf"
+source = "git+https://github.com/py32-rs/py32-metapac.git#fa166a63d2ba20b98d6b8d886763ceaf732bca7b"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
