@@ -214,6 +214,8 @@ macro_rules! join_all {
 
 /// Macro for binding input processor chain to event channel and running them.
 ///
+/// FIXME: For split keyboard, `EVENT_CHANNEL` is REQUIRED as it's the default channel for receiving events from peripherals.
+///
 /// This macro creates tasks that receive events from channels and process them using specified processor chains.
 /// It calls processors in order and decides whether to continue the chain based on the result of each processor.
 ///
