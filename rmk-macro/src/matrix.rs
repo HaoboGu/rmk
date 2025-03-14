@@ -3,6 +3,7 @@
 use quote::quote;
 
 use crate::{
+    ChipModel, ChipSeries,
     config::MatrixType,
     feature::is_feature_enabled,
     gpio_config::{

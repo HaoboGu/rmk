@@ -1,4 +1,3 @@
-use crate::MatrixTrait;
 use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;

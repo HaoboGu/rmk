@@ -23,7 +23,7 @@ use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
-use pio_proc;
+use pio;
 use rp_pac::io::vals::Oeover;
 
 pub struct IrqBinding;
@@ -219,7 +219,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn setup_sm_tx(&mut self) {
-        let prg = pio_proc::pio_asm!(
+        let prg = pio::pio_asm!(
             ".side_set 1 opt pindirs",
             ".wrap_target",
             "pull   block           side 1 [7]",
@@ -252,7 +252,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn setup_sm_rx(&mut self) {
-        let prg = pio_proc::pio_asm!(
+        let prg = pio::pio_asm!(
             ".wrap_target",
             "wait_idle:",
             "    wait 0 pin, 0",

@@ -1,7 +1,7 @@
 use crate::{
     debounce::{DebounceState, DebouncerTrait},
     event::{Event, KeyEvent},
-    input_device::InputDevice,
+    input_device::InputDevice, CONNECTION_STATE,
 };
 use core::future::Future;
 use embassy_time::{Instant, Timer};

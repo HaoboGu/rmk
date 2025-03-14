@@ -3,6 +3,7 @@ pub mod descriptor;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use embassy_usb::{
+    Builder, Handler,
     class::hid::{HidWriter, ReportId, RequestHandler},
     control::OutResponse,
     driver::Driver,

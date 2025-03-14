@@ -1,8 +1,9 @@
 use super::SplitMessage;
+use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::split::driver::{SplitReader, SplitWriter};
 #[cfg(not(feature = "_nrf_ble"))]
 use crate::split::serial::SerialSplitDriver;
-use crate::CONNECTION_STATE;
 #[cfg(feature = "_nrf_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select3;

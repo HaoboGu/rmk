@@ -35,7 +35,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_time::Timer;
-use embassy_usb::UsbDevice;
+use embassy_usb::{driver::Driver, UsbDevice};
 use embedded_hal;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;

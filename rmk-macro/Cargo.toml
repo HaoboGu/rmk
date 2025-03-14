@@ -1,3 +1,4 @@
+cargo-features = ["edition2024"]
 [package]
 name = "rmk-macro"
 version = "0.4.2"

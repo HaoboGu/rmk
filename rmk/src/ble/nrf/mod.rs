@@ -9,6 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::CONNECTION_STATE;
 use crate::ble::led::BleLedReader;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
@@ -17,19 +18,18 @@ use crate::keymap::KeyMap;
 use crate::light::LightController;
 use crate::run_keyboard;
 use crate::storage::StorageKeys;
-use crate::{CONNECTION_STATE, run_keyboard};
 use crate::{
+    CONNECTION_TYPE,
     ble::nrf::bonder::BondInfo,
-    storage::{get_bond_info_key, Storage, StorageData},
-    CONNECTION_STATE, CONNECTION_TYPE,
+    storage::{Storage, StorageData, get_bond_info_key},
 };
-use advertise::{create_advertisement_data, SCAN_DATA};
+use advertise::{SCAN_DATA, create_advertisement_data};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{Either4, select, select4};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -57,7 +57,7 @@ use {
     },
     crate::via::UsbVialReaderWriter,
     crate::{add_usb_reader_writer, run_usb_device},
-    embassy_futures::select::{select3, Either3},
+    embassy_futures::select::{Either3, select3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
     once_cell::sync::OnceCell,

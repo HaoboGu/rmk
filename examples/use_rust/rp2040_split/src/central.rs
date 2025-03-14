@@ -30,9 +30,8 @@ use rmk::{
     light::LightController,
     run_devices, run_rmk,
     split::{
-        central::{run_peripheral_manager, CentralMatrix},
         SPLIT_MESSAGE_MAX_SIZE,
-        central::{run_peripheral_manager, run_rmk_split_central},
+        central::{run_peripheral_manager, CentralMatrix},
     },
 };
 use static_cell::StaticCell;
