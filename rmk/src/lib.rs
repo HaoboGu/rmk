@@ -59,6 +59,7 @@ use {
     crate::via::UsbVialReaderWriter,
 };
 
+pub use heapless;
 #[cfg(not(feature = "_no_usb"))]
 use usb::{add_usb_reader_writer, register_usb_writer};
 
