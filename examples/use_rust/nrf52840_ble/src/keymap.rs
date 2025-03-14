@@ -6,7 +6,7 @@ pub(crate) const NUM_LAYER: usize = 8;
 // pub(crate) const NUM_ENCODER: usize = 2;
 
 #[rustfmt::skip]
-pub fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         layer!([
             [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],

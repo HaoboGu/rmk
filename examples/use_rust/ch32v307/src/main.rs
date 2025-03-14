@@ -100,7 +100,6 @@ async fn main(spawner: Spawner) -> ! {
         i,
         o,
         driver,
-        // rmk::DummyFlash::new(),
         &mut default_keymap,
         keyboard_config,
         spawner,

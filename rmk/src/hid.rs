@@ -1,5 +1,5 @@
 /// Traits and types for HID message reporting and listening.
-use core::future::Future;
+use core::{future::Future, sync::atomic::Ordering};
 
 use crate::{CONNECTION_STATE, channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport};
 use embassy_usb::{class::hid::ReadError, driver::EndpointError};
@@ -22,7 +22,7 @@ impl AsInputReport for Report {}
 
 #[derive(PartialEq, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum HidError {
+pub enum HidError {
     UsbReadError(ReadError),
     UsbEndpointError(EndpointError),
     // FIXME: remove unused errors
@@ -34,7 +34,7 @@ pub(crate) enum HidError {
     BleRawError,
 }
 
-/// HidReporter trait is used for reporting HID messages to the host, via USB, BLE, etc.
+/// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
 pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
     type ReportType: AsInputReport;
@@ -69,9 +69,9 @@ pub trait RunnableHidWriter: HidWriterTrait {
     }
 }
 
-/// HidListener trait is used for listening to HID messages from the host, via USB, BLE, etc.
+/// HidReader trait is used for listening to HID messages from the host, via USB, BLE, etc.
 ///
-/// HidListener only receives `[u8; READ_N]`, the raw HID report from the host.
+/// HidReader only receives `[u8; READ_N]`, the raw HID report from the host.
 /// Then processes the received message, forward to other tasks
 pub trait HidReaderTrait {
     /// Report type
@@ -92,7 +92,9 @@ impl HidWriterTrait for DummyWriter {
 }
 
 impl RunnableHidWriter for DummyWriter {
-    async fn run_writer(&mut self) -> () {
+    async fn run_writer(&mut self) {
+        // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+        CONNECTION_STATE.store(true, Ordering::Release);
         loop {
             let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }

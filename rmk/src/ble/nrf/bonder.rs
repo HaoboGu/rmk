@@ -77,28 +77,6 @@ impl MultiBonder {
             info.removed = true;
         }
     }
-
-    pub(crate) fn check_connection(&self, conn: &Connection) -> bool {
-        let addr = conn.peer_address();
-        let current_profile = ACTIVE_PROFILE.load(Ordering::Acquire);
-        let saved_slot_num_for_conn = self
-            .bond_info
-            .borrow()
-            .iter()
-            .find(|(_, info)| info.peer.peer_id.is_match(addr) && info.removed == false)
-            .map(|(i, _)| *i);
-
-        if let Some(slot_num) = saved_slot_num_for_conn {
-            if slot_num != current_profile {
-                debug!(
-                    "Bonded device {} is not on active profile {}",
-                    addr, current_profile
-                );
-                return false;
-            }
-        }
-        true
-    }
 }
 
 impl SecurityHandler for MultiBonder {

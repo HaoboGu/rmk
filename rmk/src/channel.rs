@@ -1,5 +1,10 @@
+//! Exposed channels which can be used to share data across devices & processors
+//!
 use crate::RawMutex;
+pub use embassy_sync::blocking_mutex;
+pub use embassy_sync::channel;
 use embassy_sync::channel::Channel;
+pub use embassy_sync::zerocopy_channel;
 
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::profile::BleProfileAction;
@@ -16,11 +21,10 @@ pub const REPORT_CHANNEL_SIZE: usize = 16;
 pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 /// Channel for key events only
 pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();
-/// Channel for all events
+/// Channel for all other events
 pub static EVENT_CHANNEL: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for keyboard report from input processors to hid writer/reader
-pub(crate) static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> =
-    Channel::new();
+pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
 /// Channel for reading vial reports from the host
 pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], 4> = Channel::new();
 // Sync messages from server to flash

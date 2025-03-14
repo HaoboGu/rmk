@@ -14,7 +14,7 @@ impl DebounceCounter {
         if u16::MAX - self.0 <= elapsed_ms {
             self.0 = u16::MAX;
         } else {
-            self.0 += 1;
+            self.0 += elapsed_ms;
         }
     }
 
@@ -22,7 +22,7 @@ impl DebounceCounter {
         if elapsed_ms > self.0 {
             self.0 = 0;
         } else {
-            self.0 -= 1;
+            self.0 -= elapsed_ms;
         }
     }
 }
@@ -33,17 +33,29 @@ pub struct DefaultDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: us
     counters: [[DebounceCounter; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
     for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
+    DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     /// Create a default debouncer
-    fn new() -> Self {
+    pub fn new() -> Self {
         DefaultDebouncer {
             counters: [[DebounceCounter(0); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_ms: 0,
         }
     }
+}
 
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+    for DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     /// Per-key debounce, same with zmk's debounce algorithm
     fn detect_change_with_debounce(
         &mut self,

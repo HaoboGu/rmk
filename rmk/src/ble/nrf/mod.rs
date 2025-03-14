@@ -13,26 +13,23 @@ use crate::ble::led::BleLedReader;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
 use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::input_device::InputProcessor as _;
+use crate::keymap::KeyMap;
 use crate::light::LightController;
-use crate::matrix::MatrixTrait;
+use crate::run_keyboard;
 use crate::storage::StorageKeys;
 use crate::{CONNECTION_STATE, run_keyboard};
 use crate::{
-    CONNECTION_TYPE, KeyMap,
-    ble::nrf::{
-        advertise::{SCAN_DATA, create_advertisement_data},
-        bonder::BondInfo,
-    },
-    keyboard::Keyboard,
-    storage::{Storage, StorageData, get_bond_info_key},
+    ble::nrf::bonder::BondInfo,
+    storage::{get_bond_info_key, Storage, StorageData},
+    CONNECTION_STATE, CONNECTION_TYPE,
 };
+use advertise::{create_advertisement_data, SCAN_DATA};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{Either4, select4};
+use embassy_futures::select::{select, select4, Either4};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -60,8 +57,7 @@ use {
     },
     crate::via::UsbVialReaderWriter,
     crate::{add_usb_reader_writer, run_usb_device},
-    embassy_futures::select::select,
-    embassy_futures::select::{Either3, select3},
+    embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
     once_cell::sync::OnceCell,
@@ -69,6 +65,7 @@ use {
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
+/// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 #[cfg(not(feature = "_no_usb"))]
@@ -205,7 +202,7 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     }
 }
 
-pub(crate) fn initialize_nrf_sd_and_flash(
+pub fn initialize_nrf_sd_and_flash(
     keyboard_name: &str,
     spawner: Spawner,
     ble_addr: Option<[u8; 6]>,
@@ -232,7 +229,6 @@ pub(crate) fn initialize_nrf_sd_and_flash(
 
 pub(crate) async fn run_nrf_ble_keyboard<
     'a,
-    M: MatrixTrait,
     F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -241,8 +237,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     light_controller: &mut LightController<Out>,
@@ -308,8 +302,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
             if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_keyboard(
                     keymap,
-                    keyboard,
-                    matrix,
                     #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
                     storage,
                     run_usb_device(&mut usb_device),
@@ -337,8 +329,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
                         Either3::First(Ok(conn)) => {
                             run_ble_keyboard(
                                 keymap,
-                                keyboard,
-                                matrix,
                                 storage,
                                 light_controller,
                                 rmk_config.vial_config,
@@ -358,7 +348,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
                 }
             } else {
                 // USB isn't connected, wait for any of BLE/USB connection
-                let dummy_task = run_dummy_keyboard(keyboard, matrix, storage);
+                let dummy_task = run_dummy_keyboard(storage);
                 let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
 
                 info!("BLE advertising");
@@ -367,8 +357,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
                     Either3::First(Ok(conn)) => {
                         run_ble_keyboard(
                             keymap,
-                            keyboard,
-                            matrix,
                             storage,
                             light_controller,
                             rmk_config.vial_config,
@@ -392,8 +380,6 @@ pub(crate) async fn run_nrf_ble_keyboard<
             Ok(conn) => {
                 run_ble_keyboard(
                     keymap,
-                    keyboard,
-                    matrix,
                     storage,
                     light_controller,
                     rmk_config.vial_config,
@@ -471,7 +457,6 @@ pub(crate) async fn load_bond_info<
 
 async fn run_ble_keyboard<
     'a,
-    M: MatrixTrait,
     F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
@@ -479,8 +464,6 @@ async fn run_ble_keyboard<
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     light_controller: &mut LightController<Out>,
     vial_config: VialConfig<'static>,
@@ -490,10 +473,6 @@ async fn run_ble_keyboard<
     mut conn: Connection,
 ) {
     info!("Connected to BLE");
-    if !bonder.check_connection(&conn) {
-        error!("Bonded peer address doesn't match active profile, disconnect");
-        return;
-    }
     bonder.load_sys_attrs(&conn);
     if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
         error!("Failed to update PHY");
@@ -504,8 +483,6 @@ async fn run_ble_keyboard<
     match select4(
         run_keyboard(
             keymap,
-            keyboard,
-            matrix,
             storage,
             run_ble_server(&conn, ble_server),
             light_controller,
@@ -574,36 +551,17 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
 pub(crate) async fn run_dummy_keyboard<
     'a,
     'b,
-    M: MatrixTrait,
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
-    // Don't need to wait for connection, just do scanning to detect if there's a profile update
-    let matrix_fut = matrix.scan();
-    let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
     let mut dummy_writer = DummyWriter {};
-
-    match select4(
-        matrix_fut,
-        keyboard_fut,
-        storage_fut,
-        dummy_writer.run_writer(),
-    )
-    .await
-    {
-        Either4::First(_) => (),
-        Either4::Second(_) => (),
-        Either4::Third(_) => (),
-        Either4::Fourth(_) => (),
-    }
+    select(storage_fut, dummy_writer.run_writer()).await;
 }
 
 #[cfg(not(feature = "_no_usb"))]

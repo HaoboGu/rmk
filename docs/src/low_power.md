@@ -32,18 +32,5 @@ There are a few more things that you have to do:
     let pb12 = ExtiInput::new(p.PB12, p.EXTI12, Pull::Down);
     let input_pins = [pd9, pd8, pb13, pb12];
 
-    // ...Other initialization code
-
-    // Run RMK
-    run_rmk(
-        input_pins,
-        output_pins,
-        driver,
-        f,
-        &mut get_default_keymap(),
-        keyboard_config,
-        spawner,
-    )
-    .await;
-
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
 ```

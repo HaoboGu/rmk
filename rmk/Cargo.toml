@@ -38,7 +38,9 @@ static_cell = "2"
 num_enum = { version = "0.7", default-features = false }
 bitfield-struct = "0.10"
 byteorder = { version = "1", default-features = false }
-futures = { version = "0.3", default-features = false }
+futures = { version = "0.3", default-features = false, features = [
+    "async-await",
+] }
 sequential-storage = { version = "4.0.0" }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -74,11 +76,11 @@ esp-idf-svc = { version = "0.51", default-features = false, features = [
 ], optional = true }
 
 # RP2040 dependencies
-embassy-rp = { version = "0.3", optional = true }
+embassy-rp = { version = "0.4", optional = true }
 embassy-hal-internal = { version = "0.2.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
-pio = { version = "0.2.1", optional = true }
-pio-proc = { version = "0.2.2", optional = true }
+pio = { version = "0.3.0", optional = true }
+pio-proc = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
 
 # Document feature
@@ -98,7 +100,7 @@ cortex-m = { version = "0.7" }
 [features]
 default = ["col2row", "defmt"]
 
-## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
 ## Enable defmt feature
@@ -135,7 +137,7 @@ _no_usb = []
 _no_external_storage = []
 
 #! ### BLE feature flags
-#! 
+#!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
 nrf52840_ble = [
@@ -197,5 +199,11 @@ rp2040_pio = [
     "dep:rp-pac",
     "dep:pio",
     "dep:pio-proc",
-    "dep:fixed"
+    "dep:fixed",
 ]
+
+## Enable feature if you want rp2040 bootloader jumping key
+rp2040_bl = ["dep:embassy-rp"]
+
+## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
+adafruit_bl = ["_nrf_ble"]

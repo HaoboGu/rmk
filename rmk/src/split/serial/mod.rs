@@ -1,12 +1,8 @@
 use embedded_io_async::{Read, Write};
 
-use crate::{
-    matrix::MatrixTrait,
-    split::{
-        SPLIT_MESSAGE_MAX_SIZE, SplitMessage,
-        driver::{PeripheralManager, SplitReader, SplitWriter},
-        peripheral::SplitPeripheral,
-    },
+use crate::split::{
+    driver::{PeripheralManager, SplitReader, SplitWriter},
+    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
 };
 
 use super::driver::SplitDriverError;
@@ -30,10 +26,11 @@ pub(crate) async fn run_serial_peripheral_manager<
     receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let peripheral =
+    let peripheral_manager =
         PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
     info!("Running peripheral manager {}", id);
-    peripheral.run().await;
+
+    peripheral_manager.run().await;
 }
 
 /// Serial driver for BOTH split central and peripheral
@@ -114,29 +111,5 @@ impl<S: Read + Write> SplitWriter for SerialSplitDriver<S> {
             remaining_bytes -= sent_bytes;
         }
         Ok(bytes.len())
-    }
-}
-
-/// Initialize and run the peripheral keyboard service via serial.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `serial` - serial port to send key events to central board
-pub async fn initialize_serial_split_peripheral_and_run<
-    M: MatrixTrait,
-    S: Write + Read,
-    const ROW: usize,
-    const COL: usize,
->(
-    mut matrix: M,
-    serial: S,
-) -> ! {
-    use embassy_futures::select::select;
-
-    let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
-    loop {
-        select(matrix.run(), peripheral.run()).await;
     }
 }

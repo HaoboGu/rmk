@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 use crate::keyboard_config::KeyboardConfig;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
-pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     let mut layers = vec![];
     for layer in keyboard_config.layout.keymap.clone() {
         layers.push(expand_layer(layer));

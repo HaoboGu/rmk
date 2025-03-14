@@ -211,6 +211,33 @@ In the `one_shot` sub-table you can define how long OSM or OSL will wait before 
 timeout = "5s"
 ```
 
+#### Combo
+
+In the `combo` sub-table, you can configure the keyboard's combo key functionality. Combo allows you to define a group of keys that, when pressed simultaneously, will trigger a specific output action.
+
+Combo configuration includes the following parameters:
+
+- `timeout`: Defines the maximum time window for pressing all combo keys. If the time exceeds this, the combo key will not be triggered. The format is a string, which can be milliseconds (e.g. "200ms") or seconds (e.g. "1s").
+- `combos`: An array containing all defined combos. Each combo configuration is an object containing the following attributes:
+  - `actions`: An array of strings defining the keys that need to be pressed simultaneously to trigger the combo action.
+  - `output`: A string defining the output action to be triggered when all keys in `actions` are pressed simultaneously.
+  - `layer`: An optional parameter, a number, specifying which layer the combo is valid on. If not specified, the combo is valid on all layers.
+
+Here is an example of combo configuration:
+
+```toml
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output Escape key
+  { actions = ["J", "K"], output = "Escape" },
+  # Press F and D keys simultaneously to output Tab key, but only valid on layer 0
+  { actions = ["F", "D"], output = "Tab", layer = 0 },
+  # Three-key combo, press A, S, and D keys to switch to layer 2
+  { actions = ["A", "S", "D"], output = "TO(2)" }
+]
+```
+
 ### `[light]`
 
 `[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.

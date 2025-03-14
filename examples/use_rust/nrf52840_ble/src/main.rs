@@ -6,7 +6,9 @@ mod macros;
 mod keymap;
 mod vial;
 
-use defmt::*;
+use core::cell::RefCell;
+
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::{
@@ -17,16 +19,26 @@ use embassy_nrf::{
     saadc::{self, AnyInput, Input as _, Saadc},
     usb::{self, Driver, vbus_detect::SoftwareVbusDetect},
 };
+use keymap::{COL, NUM_LAYER, ROW};
 use panic_probe as _;
 use rmk::{
     ble::SOFTWARE_VBUS,
-    channel::EVENT_CHANNEL,
+    channel::{blocking_mutex::raw::NoopRawMutex, channel::Channel},
     config::{
-        BleBatteryConfig, KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
+        BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
     },
+    debounce::default_debouncer::DefaultDebouncer,
     event::Event,
-    input_device::{InputDevice, rotary_encoder::RotaryEncoder},
-    run_devices, run_rmk,
+    futures::future::join4,
+    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
+    input_device::{
+        rotary_encoder::RotaryEncoder, InputDevice, InputProcessor, ProcessResult, Runnable,
+    },
+    keyboard::Keyboard,
+    keymap::KeyMap,
+    light::LightController,
+    matrix::Matrix,
+    run_devices, run_processor_chain, run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -109,42 +121,108 @@ async fn main(spawner: Spawner) {
         storage_config,
         ..Default::default()
     };
-    // Keyboard config
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
 
+    // Initialize the Softdevice and flash
+    let (sd, flash) =
+        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
+
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let mut keyboard: Keyboard<'_, ROW, COL, NUM_LAYER> =
+        Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    // let mut matrix = TestMatrix::<ROW, COL>::new();
+
+    // Initialize the light controller
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Initialize other devices and processors
     let mut my_device = MyDevice {};
+    let mut my_device2 = MyDevice {};
+
     let pin_a = Input::new(AnyPin::from(p.P0_06), embassy_nrf::gpio::Pull::Up);
     let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
     let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 
-    embassy_futures::join::join(
-        run_rmk(
-            input_pins,
-            output_pins,
-            driver,
-            &mut keymap::get_default_keymap(),
-            keyboard_config,
-            spawner,
+    let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
+
+    let mut p0 = MyProcessor {
+        id: 0,
+        keymap: &keymap,
+    };
+    let mut p1 = MyProcessor {
+        id: 1,
+        keymap: &keymap,
+    };
+    let mut p2 = MyProcessor {
+        id: 2,
+        keymap: &keymap,
+    };
+    let mut p3 = MyProcessor {
+        id: 3,
+        keymap: &keymap,
+    };
+
+    // Start
+    join4(
+        run_devices! (
+            (matrix, my_device, my_device2) => local_channel,
+            (encoder) => rmk::channel::EVENT_CHANNEL,
         ),
-        run_devices!(my_device, encoder),
+        run_processor_chain! {
+            local_channel => [p0, p1],
+            rmk::channel::EVENT_CHANNEL => [p2, p3],
+        },
+        keyboard.run(), // Keyboard is special
+        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
     )
     .await;
 }
 
 struct MyDevice {}
+
 impl InputDevice for MyDevice {
-    async fn run(&mut self) {
-        loop {
-            embassy_time::Timer::after_secs(1).await;
+    async fn read_event(&mut self) -> Event {
+        embassy_time::Timer::after_secs(10).await;
+        Event::Eos
+    }
+}
+
+struct MyProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+    id: u8,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER> for MyProcessor<'a, ROW, COL, NUM_LAYER>
+{
+    async fn process(&mut self, event: Event) -> ProcessResult {
+        info!("Processor {} received event: {:?}", self.id, event);
+        if self.id == 2 {
+            return ProcessResult::Stop;
         }
+        match event {
+            Event::Key(_key) => {
+                // Process key event
+                info!("Hey received key")
+            }
+            _ => info!("Hey received other event: {:?}", event),
+        }
+        ProcessResult::Continue(event)
     }
 
-    type EventType = Event;
-
-    async fn send_event(&mut self, event: Self::EventType) {
-        EVENT_CHANNEL.sender().send(event).await
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
+        self.keymap
     }
 }

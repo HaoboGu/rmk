@@ -1,11 +1,11 @@
 use crate::{
     action::KeyAction,
-    combo::{COMBO_MAX_NUM, Combo},
+    boot::reboot_keyboard,
+    combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::KeyEvent,
     keyboard_macro::{MACRO_SPACE_SIZE, MacroOperation},
     keycode::KeyCode,
-    reboot_keyboard,
     storage::Storage,
 };
 use embedded_storage_async::nor_flash::NorFlash;
@@ -17,7 +17,7 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     // TODO: Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
@@ -39,7 +39,7 @@ pub(crate) struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     KeyMap<'a, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(
+    pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         behavior: BehaviorConfig,
     ) -> Self {
@@ -58,7 +58,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    pub(crate) async fn new_from_storage<F: NorFlash>(
+    pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER>>,
         behavior: BehaviorConfig,

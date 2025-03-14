@@ -68,7 +68,7 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
     }
 }
 
-pub(crate) struct LightController<P: OutputPin> {
+pub struct LightController<P: OutputPin> {
     capslock: Option<SingleLed<P>>,
     scrolllock: Option<SingleLed<P>>,
     numslock: Option<SingleLed<P>>,
@@ -140,7 +140,7 @@ impl<'a, 'd, D: Driver<'d>> UsbLedReader<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbLedReader<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
     type ReportType = LedIndicator;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
@@ -148,7 +148,7 @@ impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbLedReader<'a, 'd, D> {
         self.hid_reader
             .read(&mut buf)
             .await
-            .map_err(|e| HidError::UsbReadError(e))?;
+            .map_err(HidError::UsbReadError)?;
 
         Ok(LedIndicator::from_bits(buf[0]))
     }
@@ -167,7 +167,7 @@ macro_rules! impl_led_on_off {
 }
 
 impl<P: OutputPin> LightController<P> {
-    pub(crate) fn new(light_config: LightConfig<P>) -> Self {
+    pub fn new(light_config: LightConfig<P>) -> Self {
         Self {
             capslock: light_config.capslock.map(|p| SingleLed::new(p)),
             scrolllock: light_config.scrolllock.map(|p| SingleLed::new(p)),

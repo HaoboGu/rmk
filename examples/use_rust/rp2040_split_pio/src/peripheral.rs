@@ -14,10 +14,17 @@ use embassy_rp::{
     usb::InterruptHandler,
 };
 use panic_probe as _;
-use rmk::split::{
-    peripheral::run_rmk_split_peripheral,
-    rp::uart::{BufferedUart, UartInterruptHandler},
-    SPLIT_MESSAGE_MAX_SIZE,
+use rmk::{
+    channel::EVENT_CHANNEL,
+    debounce::default_debouncer::DefaultDebouncer,
+    futures::future::join,
+    matrix::Matrix,
+    run_devices,
+    split::{
+        peripheral::{run_rmk_split_peripheral},
+        rp::uart::{BufferedUart, UartInterruptHandler},
+        SPLIT_MESSAGE_MAX_SIZE,
+    },
 };
 use static_cell::StaticCell;
 
@@ -40,11 +47,14 @@ async fn main(_spawner: Spawner) {
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     let uart_instance = BufferedUart::new_half_duplex(p.PIO0, p.PIN_1, rx_buf, Irqs);
 
-    // Start serving
-    run_rmk_split_peripheral::<Input<'_>, Output<'_>, _, 2, 2>(
-        input_pins,
-        output_pins,
-        uart_instance,
+    // Define the matrix
+    let debouncer = DefaultDebouncer::<2, 2>::new();
+    let mut matrix = Matrix::<_, _, _, 2, 2>::new(input_pins, output_pins, debouncer);
+
+    // Start
+    join(
+        run_devices!((matrix) => EVENT_CHANNEL), // Peripheral uses EVENT_CHANNEL to send events to central
+        run_rmk_split_peripheral(uart_instance),
     )
     .await;
 }

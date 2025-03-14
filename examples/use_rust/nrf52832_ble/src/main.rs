@@ -6,7 +6,7 @@ mod macros;
 mod keymap;
 mod vial;
 
-use defmt::*;
+use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::{
@@ -14,10 +14,19 @@ use embassy_nrf::{
     gpio::{AnyPin, Input, Output},
     interrupt::Priority,
 };
+use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    run_rmk,
+    channel::EVENT_CHANNEL,
+    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
+    debounce::default_debouncer::DefaultDebouncer,
+    futures::future::join3,
+    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
+    input_device::Runnable,
+    keyboard::Keyboard,
+    light::LightController,
+    matrix::Matrix,
+    run_devices, run_rmk,
 };
 
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -56,17 +65,37 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
+    // Initialize the Softdevice and flash
+    let (sd, flash) =
+        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
-    run_rmk(
-        input_pins,
-        output_pins,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    // let mut matrix = TestMatrix::<ROW, COL>::new();
+
+    // Initialize the light controller
+    let light_controller: LightController<Output> =
+        LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    join3(
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
+        ),
+        keyboard.run(),
+        run_rmk(&keymap, storage, light_controller, rmk_config, sd),
     )
     .await;
 }
