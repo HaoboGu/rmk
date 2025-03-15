@@ -8,12 +8,12 @@ use crate::config::{
     LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
 use crate::{
+    ChipModel, ChipSeries,
     default_config::{
         esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,
         nrf52840::default_nrf52840, rp2040::default_rp2040, stm32::default_stm32,
     },
-    usb_interrupt_map::{get_usb_info, UsbInfo},
-    ChipModel, ChipSeries,
+    usb_interrupt_map::{UsbInfo, get_usb_info},
 };
 
 macro_rules! rmk_compile_error {
@@ -269,7 +269,10 @@ impl KeyboardConfig {
             s if s.starts_with("stm32") => default_stm32(chip),
             s if s.starts_with("esp32") => default_esp32(chip),
             _ => {
-                let message = format!("No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues", chip.chip);
+                let message = format!(
+                    "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
+                    chip.chip
+                );
                 return rmk_compile_error!(message);
             }
         };
@@ -452,17 +455,23 @@ impl KeyboardConfig {
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
                     if combo.combos.len() > COMBO_MAX_NUM {
-                        return rmk_compile_error!(format!("keyboard.toml: number of combos is greater than [behavior.combo.max_num]"));
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of combos is greater than [behavior.combo.max_num]"
+                        ));
                     }
 
                     for (i, c) in combo.combos.iter().enumerate() {
                         if c.actions.len() > COMBO_MAX_LENGTH {
-                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
+                            return rmk_compile_error!(format!(
+                                "keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"
+                            ));
                         }
 
                         if let Some(layer) = c.layer {
                             if layer >= layout.layers {
-                                return rmk_compile_error!(format!("keyboard.toml: layer in combo #{i} is greater than [layout.layers]"));
+                                return rmk_compile_error!(format!(
+                                    "keyboard.toml: layer in combo #{i} is greater than [layout.layers]"
+                                ));
                             }
                         }
                     }

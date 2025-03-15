@@ -35,8 +35,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_time::Timer;
-use embassy_usb::driver::Driver;
-use embassy_usb::UsbDevice;
+use embassy_usb::{driver::Driver, UsbDevice};
 use embedded_hal;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -49,13 +48,14 @@ use matrix::MatrixTrait;
 use nrf_softdevice::Softdevice;
 pub use rmk_macro as macros;
 use storage::Storage;
+pub use storage::dummy_flash::DummyFlash;
 use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
 use {
     crate::light::UsbLedReader,
     crate::usb::descriptor::{CompositeReport, KeyboardReport},
-    crate::usb::{new_usb_builder, UsbKeyboardWriter},
+    crate::usb::{UsbKeyboardWriter, new_usb_builder},
     crate::via::UsbVialReaderWriter,
 };
 

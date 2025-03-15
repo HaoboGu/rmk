@@ -3,8 +3,8 @@
 use quote::quote;
 
 use crate::{
-    config::PinConfig, gpio_config::convert_gpio_str_to_output_pin,
-    keyboard_config::KeyboardConfig, ChipModel,
+    ChipModel, config::PinConfig, gpio_config::convert_gpio_str_to_output_pin,
+    keyboard_config::KeyboardConfig,
 };
 
 pub(crate) fn build_light_config(

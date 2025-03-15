@@ -3,6 +3,7 @@
 use quote::quote;
 
 use crate::{
+    ChipModel, ChipSeries,
     config::MatrixType,
     feature::is_feature_enabled,
     gpio_config::{
@@ -10,7 +11,6 @@ use crate::{
         convert_output_pins_to_initializers,
     },
     keyboard_config::{BoardConfig, KeyboardConfig},
-    ChipModel, ChipSeries,
 };
 
 pub(crate) fn expand_matrix_config(

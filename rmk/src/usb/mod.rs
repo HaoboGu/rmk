@@ -3,20 +3,20 @@ pub mod descriptor;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use embassy_usb::{
+    Builder, Handler,
     class::hid::{HidWriter, ReportId, RequestHandler},
     control::OutResponse,
     driver::Driver,
-    Builder, Handler,
 };
 use ssmarshal::serialize;
 use static_cell::StaticCell;
 
 use crate::{
+    CONNECTION_STATE,
     channel::KEYBOARD_REPORT_CHANNEL,
     config::KeyboardUsbConfig,
     hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
     usb::descriptor::CompositeReportType,
-    CONNECTION_STATE,
 };
 
 pub(crate) static USB_STATE: AtomicU8 = AtomicU8::new(UsbState::Disabled as u8);
@@ -289,9 +289,13 @@ impl Handler for UsbDeviceHandler {
     fn suspended(&mut self, suspended: bool) {
         USB_STATE.store(UsbState::Enabled as u8, Ordering::Release);
         if suspended {
-            info!("Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
+            info!(
+                "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
+            );
         } else {
-            info!("Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
+            info!(
+                "Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
+            );
         }
     }
 }

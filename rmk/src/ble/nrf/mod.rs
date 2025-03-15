@@ -9,6 +9,7 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
+use crate::CONNECTION_STATE;
 use crate::ble::led::BleLedReader;
 use crate::ble::nrf::hid_service::BleKeyboardWriter;
 use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
@@ -18,17 +19,17 @@ use crate::light::LightController;
 use crate::run_keyboard;
 use crate::storage::StorageKeys;
 use crate::{
+    CONNECTION_TYPE,
     ble::nrf::bonder::BondInfo,
-    storage::{get_bond_info_key, Storage, StorageData},
-    CONNECTION_STATE, CONNECTION_TYPE,
+    storage::{Storage, StorageData, get_bond_info_key},
 };
-use advertise::{create_advertisement_data, SCAN_DATA};
+use advertise::{SCAN_DATA, create_advertisement_data};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{Either4, select, select4};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -37,8 +38,9 @@ use nrf_softdevice::ble::peripheral::ConnectableAdvertisement;
 use nrf_softdevice::ble::{PhySet, PhyUpdateError, TxPower};
 use nrf_softdevice::raw::sd_ble_gap_conn_param_update;
 use nrf_softdevice::{
-    ble::{gatt_server, peripheral, security::SecurityHandler as _, Connection},
-    raw, Config, Flash, Softdevice,
+    Config, Flash, Softdevice,
+    ble::{Connection, gatt_server, peripheral, security::SecurityHandler as _},
+    raw,
 };
 use profile::update_profile;
 use sequential_storage::{cache::NoCache, map::fetch_item};
@@ -49,13 +51,13 @@ use {
     crate::light::UsbLedReader,
     crate::register_usb_writer,
     crate::usb::{
+        USB_STATE, UsbKeyboardWriter, UsbState,
         descriptor::{CompositeReport, KeyboardReport, ViaReport},
-        new_usb_builder, wait_for_usb_enabled, wait_for_usb_suspend, UsbKeyboardWriter, UsbState,
-        USB_STATE,
+        new_usb_builder, wait_for_usb_enabled, wait_for_usb_suspend,
     },
     crate::via::UsbVialReaderWriter,
     crate::{add_usb_reader_writer, run_usb_device},
-    embassy_futures::select::{select3, Either3},
+    embassy_futures::select::{Either3, select3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
     once_cell::sync::OnceCell,
@@ -76,7 +78,7 @@ pub static SOFTWARE_VBUS: OnceCell<SoftwareVbusDetect> = OnceCell::new();
 pub(crate) async fn softdevice_task(sd: &'static nrf_softdevice::Softdevice) -> ! {
     use nrf_softdevice::SocEvent;
 
-    use crate::usb::{UsbState, USB_STATE};
+    use crate::usb::{USB_STATE, UsbState};
 
     // Enable dcdc-mode, reduce power consumption
     unsafe {
@@ -212,7 +214,7 @@ pub fn initialize_nrf_sd_and_flash(
 
     if let Some(addr) = ble_addr {
         // This is used mainly for split
-        use nrf_softdevice::ble::{set_address, Address, AddressType};
+        use nrf_softdevice::ble::{Address, AddressType, set_address};
         set_address(sd, &Address::new(AddressType::RandomStatic, addr));
     };
 

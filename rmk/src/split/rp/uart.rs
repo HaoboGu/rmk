@@ -1,5 +1,5 @@
 use core::cell::RefCell;
-use core::future::{poll_fn, Future};
+use core::future::{Future, poll_fn};
 use core::marker::PhantomData;
 use core::task::Poll;
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
@@ -8,8 +8,8 @@ use embassy_rp::{
     clocks::clk_sys_freq,
     gpio::{Drive, Level, Pull, SlewRate},
     interrupt::{
-        typelevel::{Binding, Handler, Interrupt},
         Priority,
+        typelevel::{Binding, Handler, Interrupt},
     },
     pio::{
         Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin,
@@ -17,13 +17,13 @@ use embassy_rp::{
     },
     uart::Error,
 };
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
-use pio_proc;
+use pio;
 use rp_pac::io::vals::Oeover;
 
 pub struct IrqBinding;
@@ -219,7 +219,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn setup_sm_tx(&mut self) {
-        let prg = pio_proc::pio_asm!(
+        let prg = pio::pio_asm!(
             ".side_set 1 opt pindirs",
             ".wrap_target",
             "pull   block           side 1 [7]",
@@ -252,7 +252,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn setup_sm_rx(&mut self) {
-        let prg = pio_proc::pio_asm!(
+        let prg = pio::pio_asm!(
             ".wrap_target",
             "wait_idle:",
             "    wait 0 pin, 0",

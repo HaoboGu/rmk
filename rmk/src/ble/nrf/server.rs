@@ -7,12 +7,12 @@ use super::{
 use crate::ble::device_info::{DeviceInformation, PnPID, VidSource};
 use crate::config::KeyboardUsbConfig;
 use nrf_softdevice::{
+    Softdevice,
     ble::{
+        Connection,
         gatt_server::{self, RegisterError, Service, WriteOp},
         security::SecurityHandler,
-        Connection,
     },
-    Softdevice,
 };
 
 /// Wrapper struct for writing via BLE
