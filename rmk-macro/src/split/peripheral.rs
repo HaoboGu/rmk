@@ -100,14 +100,11 @@ fn expand_split_peripheral(
     } else {
         quote! { #col, #row }
     };
-    let debouncer = if rapid_debouncer_enabled {
-        quote! {
-            let debouncer = ::rmk::debounce::fast_bouncer::RapidDebouncer::<#input_output_num>::new();
-        }
+
+    let debouncer_type = if rapid_debouncer_enabled {
+        quote! { ::rmk::debounce::fast_debouncer::RapidDebouncer }
     } else {
-        quote! {
-            let debouncer = ::rmk::debounce::default_debouncer::DefaultDebouncer::<#input_output_num>::new();
-        }
+        quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer }
     };
 
     // Matrix config
@@ -131,6 +128,7 @@ fn expand_split_peripheral(
             ));
 
             matrix_config.extend(quote! {
+                let debouncer = #debouncer_type::<#input_output_num>::new();
                 let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
             });
         }
@@ -151,6 +149,7 @@ fn expand_split_peripheral(
             let low_active = peripheral_config.matrix.direct_pin_low_active;
 
             matrix_config.extend(quote! {
+                let debouncer = #debouncer_type::<#col, #row>::new();
                 let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #row, #col, #size>::new(direct_pins, debouncer, #low_active);
             });
         }
@@ -162,7 +161,6 @@ fn expand_split_peripheral(
     quote! {
         #imports
         #chip_init
-        #debouncer
         #matrix_config
         #run_rmk_peripheral
     }
