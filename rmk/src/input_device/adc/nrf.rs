@@ -1,5 +1,5 @@
 use crate::{
-    event::{AnalogEvent, Axis, AxisEvent, AxisValType, Event},
+    event::{AnalogEvent, Event},
     input_device::InputDevice,
 };
 use embassy_nrf::saadc::Saadc;
