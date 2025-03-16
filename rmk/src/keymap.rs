@@ -74,9 +74,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 Ok(())
                     // Read keymap to `action_map`
                     .and(storage.read_keymap(action_map).await)
-                    // Read combo cache
-                    .and(storage.read_macro_cache(&mut macro_cache).await)
                     // Read macro cache
+                    .and(storage.read_macro_cache(&mut macro_cache).await)
+                    // Read combo cache
                     .and(storage.read_combos(&mut combos).await)
             }
             .is_err()

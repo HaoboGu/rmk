@@ -984,7 +984,7 @@ impl KeyCode {
         KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
     }
 
-    /// Returns `true` if the keycode is a combo keycode
+    /// Returns `true` if the keycode is a boot keycode
     pub(crate) fn is_boot(self) -> bool {
         KeyCode::Bootloader <= self && self <= KeyCode::Reboot
     }
