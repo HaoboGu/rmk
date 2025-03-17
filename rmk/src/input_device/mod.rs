@@ -7,6 +7,7 @@ use core::cell::RefCell;
 use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report, keymap::KeyMap};
 
 pub mod adc;
+pub mod battery;
 pub mod joystick;
 pub mod rotary_encoder;
 
