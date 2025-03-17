@@ -1,11 +1,10 @@
-use crate::{event::AnalogEvent, event::Event, input_device::ProcessResult, KeyMap};
+use crate::{event::Event, input_device::ProcessResult, KeyMap};
 use core::cell::RefCell;
 use embassy_sync::channel::Sender;
 
 use super::InputProcessor;
 
 pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
-    adc_id: u8,
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
@@ -15,13 +14,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     BatteryProcessor<'a, ROW, COL, NUM_LAYER>
 {
     pub fn new(
-        adc_id: u8,
         adc_divider_measured: u32,
         adc_divider_total: u32,
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     ) -> Self {
         BatteryProcessor {
-            adc_id,
             keymap,
             adc_divider_measured,
             adc_divider_total,
@@ -70,14 +67,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
-            Event::Analog(AnalogEvent { id, value }) => {
-                if id != self.adc_id {
-                    return ProcessResult::Continue(event);
-                }
-
-                info!("Detected battery ADC value: {:?}", value);
+            Event::Battery(val) => {
+                info!("Detected battery ADC value: {:?}", val);
                 // failing to send is permitted, because the update frequency is not critical
-                let _ = crate::channel::BATTERY_CHANNEL.try_send(self.get_battery_pecent(value));
+                let _ = crate::channel::BATTERY_CHANNEL.try_send(self.get_battery_pecent(val));
                 ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),
