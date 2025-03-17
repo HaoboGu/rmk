@@ -304,6 +304,18 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
             .await;
         }
         self.sm_rx.set_enable(false);
+
+        // unset our fake-pull-up trickery
+        let pins = [Some(&mut self.pin_rx), self.pin_tx.as_mut()];
+        for pin in pins.into_iter().flatten() {
+            pin.set_drive_strength(Drive::_12mA);
+        }
+
+        let pin_tx = self.pin_tx.as_ref().unwrap_or(&self.pin_rx);
+        // OEOVER set to INVERT, Direction::Out inverted to Direction:In
+        self.sm_tx.set_pin_dirs(Direction::Out, &[pin_tx]);
+        self.sm_tx.set_pins(Level::Low, &[pin_tx]);
+
         self.sm_tx.restart();
         self.sm_tx.set_enable(true);
     }
@@ -315,6 +327,23 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         ))
         .await;
         self.sm_tx.set_enable(false);
+
+        // The rp2040 has weak pull up resistors, from 80k to 50k. This does not provide enough
+        // current to provide fast rise times at high baud rates with any moderately high
+        // capacitance, even as little capacitance as can be found with long traces, a few vias, or
+        // a longer TRRS cable. The solution is to also drive the line high at a weak drive current
+        // from the reciving side, providing plenty of current to drive the line high quickly while
+        // still being weak enough to be driven low from the tx side.
+        let pins = [Some(&mut self.pin_rx), self.pin_tx.as_mut()];
+        for pin in pins.into_iter().flatten() {
+            pin.set_drive_strength(Drive::_2mA);
+        }
+
+        let pin_tx = self.pin_tx.as_ref().unwrap_or(&self.pin_rx);
+        // OEOVER set to INVERT, Direction::In inverted to Direction:Out
+        self.sm_tx.set_pin_dirs(Direction::In, &[pin_tx]);
+        self.sm_tx.set_pins(Level::High, &[pin_tx]);
+
         PIO::uart_buffer()
             .idle_line
             .lock(|b| *b.borrow_mut() = true);
