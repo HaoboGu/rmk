@@ -129,7 +129,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
 
                 ble_config_tokens.extend(
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option, adc_divider_measured, adc_divider_total);
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active);
                     }
                 );
 

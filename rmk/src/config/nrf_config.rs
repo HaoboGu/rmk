@@ -1,7 +1,4 @@
-use embassy_nrf::{
-    gpio::{Input, Output},
-    saadc::Saadc,
-};
+use embassy_nrf::gpio::{Input, Output};
 
 pub struct BleBatteryConfig<'a> {
     pub charge_state_pin: Option<Input<'a>>,

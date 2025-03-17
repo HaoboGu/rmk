@@ -2,7 +2,7 @@ use usbd_hid::descriptor::MouseReport;
 
 use crate::{
     channel::KEYBOARD_REPORT_CHANNEL,
-    event::{AnalogEvent, Event},
+    event::Event,
     hid::Report,
     input_device::{InputProcessor, ProcessResult},
     keymap::KeyMap,
@@ -16,33 +16,28 @@ pub struct JoystickProcessor<
     const NUM_LAYER: usize,
     const N: usize,
 > {
-    adc_id: [u8; N],
     transform: [[i16; N]; N],
     bias: [i16; N],
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     record: [i16; N],
     resolution: u16,
-    filled_bit: u8,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: usize>
     JoystickProcessor<'a, ROW, COL, NUM_LAYER, N>
 {
     pub fn new(
-        adc_id: [u8; N],
         transform: [[i16; N]; N],
         bias: [i16; N],
         resolution: u16,
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     ) -> Self {
         Self {
-            adc_id,
             transform,
             bias,
             resolution,
             keymap,
             record: [0; N],
-            filled_bit: 0,
         }
     }
     async fn generate_report(&mut self) {
@@ -77,9 +72,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: us
             pan: 0,
         };
         self.send_report(Report::MouseReport(mouse_report)).await;
-
-        // clean the filled bits
-        self.filled_bit = 0;
     }
 }
 
@@ -89,19 +81,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: us
     async fn process(&mut self, event: Event) -> ProcessResult {
         embassy_time::Timer::after_millis(5).await;
         match event {
-            Event::Analog(AnalogEvent { id, value }) => {
-                if let Some(idx) = self.adc_id.iter().position(|&adc_id| adc_id == id) {
-                    self.record[idx] = ((value as i32) + core::i16::MIN as i32) as i16;
-                    self.filled_bit |= 1 << idx;
-
-                    if self.filled_bit == (1 << N) - 1 {
-                        self.generate_report().await;
-                    }
-
-                    ProcessResult::Stop
-                } else {
-                    ProcessResult::Continue(event)
+            Event::Joystick(event) => {
+                for (rec, e) in self.record.iter_mut().zip(event.iter()) {
+                    *rec = e.value;
                 }
+                debug!("Joystick info: {:#?}", self.record);
+                self.generate_report().await;
+                ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),
         }

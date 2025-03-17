@@ -22,8 +22,8 @@ pub enum Event {
     Joystick([AxisEvent; 3]),
     /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Event::Eos`] event.
     AxisEventStream(AxisEvent),
-    /// Analog event
-    Analog(AnalogEvent),
+    /// Battery percentage event
+    Battery(u16),
     /// End of the event sequence
     ///
     /// This is used with [`Event::AxisEventStream`] to indicate the end of the event sequence.
@@ -90,11 +90,4 @@ pub struct KeyEvent {
     pub row: u8,
     pub col: u8,
     pub pressed: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct AnalogEvent {
-    pub id: u8,
-    pub value: u16,
 }
