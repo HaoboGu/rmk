@@ -556,9 +556,22 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         // Wait for key release, record all pressed keys during this
                         loop {
                             let next_key_event = KEY_EVENT_CHANNEL.receive().await;
-                            self.unprocessed_events.push(next_key_event).ok();
                             if !next_key_event.pressed {
-                                break;
+
+                                // check self release for rolling keys
+                                if next_key_event.row == key_event.row && next_key_event.col == key_event.col {
+                                    // release self before hold timeout, trigger tap
+                                    self.process_key_action_tap(tap_action, key_event).await;
+                                    // clean timer
+                                    self.timer[col][row] = None;
+                                    return;
+                                } else {
+                                    self.unprocessed_events.push(next_key_event).ok();
+                                    // release other key , trigger hold
+                                    break;
+                                }
+                            } else {
+                                self.unprocessed_events.push(next_key_event).ok();
                             }
                         }
 
