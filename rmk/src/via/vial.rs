@@ -6,7 +6,7 @@ use num_enum::FromPrimitive;
 use crate::{
     action::KeyAction,
     channel::FLASH_CHANNEL,
-    combo::{COMBO_MAX_NUM, Combo},
+    combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM},
     keymap::KeyMap,
     storage::{ComboData, FlashOperationMessage},
     usb::descriptor::ViaReport,
@@ -55,7 +55,7 @@ const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
 const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
-/// Note: vial uses litte endian, while via uses big endian
+/// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     report: &mut ViaReport,
     vial_keyboard_Id: &[u8],
@@ -117,8 +117,8 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
                     // TODO: Support dynamic tap dance
                     report.input_data[0] = 0; // Tap dance entries
-                    report.input_data[1] = 8; // Combo entries
-                    // TODO: Support dynamic key override
+                    report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
+                                                                                     // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                 }
                 VialDynamic::DynamicVialTapDanceGet => {
@@ -136,18 +136,19 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
                     let combo_idx = report.output_data[3] as usize;
                     let combos = &keymap.borrow().combos;
                     if let Some((_, combo)) = vial_combo(combos, combo_idx) {
-                        for i in 0..4 {
+                        for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
                                 to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
                             );
                         }
                         LittleEndian::write_u16(
-                            &mut report.input_data[9..11],
+                            &mut report.input_data
+                                [1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
                             to_via_keycode(combo.output),
                         );
                     } else {
-                        report.input_data[1..11].fill(0);
+                        report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
                     }
                 }
                 VialDynamic::DynamicVialComboSet => {
@@ -162,25 +163,30 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
                             return;
                         };
 
-                        let mut actions = heapless::Vec::new();
-                        for i in 0..4 {
+                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                        let mut n: usize = 0;
+                        for i in 0..VIAL_COMBO_MAX_LENGTH {
                             let action = from_via_keycode(LittleEndian::read_u16(
                                 &report.output_data[4 + i * 2..6 + i * 2],
                             ));
                             if action != KeyAction::No {
-                                let _ = actions.push(action);
+                                if n >= COMBO_MAX_LENGTH {
+                                    //fail if the combo action buffer is too small
+                                    return;
+                                }
+                                actions[n] = action;
+                                n += 1;
                             }
                         }
-                        let output =
-                            from_via_keycode(LittleEndian::read_u16(&report.output_data[12..14]));
+                        let output = from_via_keycode(LittleEndian::read_u16(
+                            &report.output_data
+                                [4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                        ));
 
-                        combo.actions = actions;
+                        combo.actions.clear();
+                        let _ = combo.actions.extend_from_slice(&actions[0..n]);
                         combo.output = output;
 
-                        let mut actions = [KeyAction::No; 4];
-                        for (i, &action) in combo.actions.iter().enumerate() {
-                            actions[i] = action;
-                        }
                         (real_idx, actions, output)
                     };
                     FLASH_CHANNEL

@@ -239,23 +239,23 @@ pub(crate) fn expand_matrix_and_keyboard_init(
     } else {
         quote! { COL, ROW }
     };
-    let debouncer = if rapid_debouncer_enabled {
-        quote! {
-            let debouncer = ::rmk::debounce::fast_bouncer::RapidDebouncer::<#input_output_num>::new();
-        }
+
+    let debouncer_type = if rapid_debouncer_enabled {
+        quote! { ::rmk::debounce::fast_debouncer::RapidDebouncer }
     } else {
-        quote! {
-            let debouncer = ::rmk::debounce::default_debouncer::DefaultDebouncer::<#input_output_num>::new();
-        }
+        quote! { ::rmk::debounce::default_debouncer::DefaultDebouncer }
     };
+
     let matrix = match &keyboard_config.board {
         BoardConfig::Normal(_matrix_config) => quote! {
+            let debouncer = #debouncer_type::<#input_output_num>::new();
             let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
         },
         BoardConfig::DirectPin(matrix_config) => {
             let low_active = matrix_config.direct_pin_low_active;
             quote! {
-                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, #low_active);
+                let debouncer = #debouncer_type::<COL, ROW>::new();
+                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
             }
         }
         BoardConfig::Split(split_config) => {
@@ -271,6 +271,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             };
             match split_config.central.matrix.matrix_type {
                 MatrixType::normal => quote! {
+                    let debouncer = #debouncer_type::<#input_output_num>::new();
                     let mut matrix = ::rmk::split::central::CentralMatrix::<_, _, _, #input_output_pin_num>::new(input_pins, output_pins, debouncer);
                 },
                 MatrixType::direct_pin => {
@@ -278,6 +279,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
                     let size =
                         split_config.central.rows as usize * split_config.central.cols as usize;
                     quote! {
+                        let debouncer = #debouncer_type::<COL, ROW>::new();
                         let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
                     }
                 }
@@ -286,7 +288,6 @@ pub(crate) fn expand_matrix_and_keyboard_init(
     };
     quote! {
         let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
-        #debouncer
         #matrix
     }
 }

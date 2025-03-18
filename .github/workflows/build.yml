@@ -84,6 +84,9 @@ jobs:
           fetch-depth: "0"
       - name: Build new binary
         working-directory: ./examples/use_config/nrf52840_ble
+        run: cargo build --release
+      - name: Calculate binary size
+        working-directory: ./examples/use_config/nrf52840_ble
         run: |
           echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
           cargo size --release >> $GITHUB_OUTPUT

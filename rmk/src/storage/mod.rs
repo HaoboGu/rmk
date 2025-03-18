@@ -90,6 +90,7 @@ impl StorageKeys {
             5 => Some(StorageKeys::KeymapKeys),
             6 => Some(StorageKeys::MacroData),
             7 => Some(StorageKeys::ComboData),
+            8 => Some(StorageKeys::ConnectionType),
             #[cfg(feature = "_nrf_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
             _ => None,
@@ -175,18 +176,21 @@ impl Value<'_> for StorageData {
                 Ok(MACRO_SPACE_SIZE + 1)
             }
             StorageData::ComboData(combo) => {
-                if buffer.len() < 11 {
+                if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::ComboData as u8;
-                for i in 0..4 {
+                for i in 0..COMBO_MAX_LENGTH {
                     BigEndian::write_u16(
                         &mut buffer[1 + i * 2..3 + i * 2],
                         to_via_keycode(combo.actions[i]),
                     );
                 }
-                BigEndian::write_u16(&mut buffer[9..11], to_via_keycode(combo.output));
-                Ok(11)
+                BigEndian::write_u16(
+                    &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
+                    to_via_keycode(combo.output),
+                );
+                Ok(3 + COMBO_MAX_LENGTH * 2)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -279,15 +283,17 @@ impl Value<'_> for StorageData {
                     Ok(StorageData::MacroData(buf))
                 }
                 StorageKeys::ComboData => {
-                    if buffer.len() < 11 {
+                    if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let mut actions = [KeyAction::No; 4];
-                    for i in 0..4 {
+                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                    for i in 0..COMBO_MAX_LENGTH {
                         actions[i] =
                             from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
                     }
-                    let output = from_via_keycode(BigEndian::read_u16(&buffer[9..11]));
+                    let output = from_via_keycode(BigEndian::read_u16(
+                        &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
+                    ));
                     Ok(StorageData::ComboData(ComboData {
                         idx: 0,
                         actions,
@@ -696,7 +702,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::ComboData(combo)) = read_data {
-                let mut actions = Vec::<_, 4>::new();
+                let mut actions = Vec::<_, COMBO_MAX_LENGTH>::new();
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }

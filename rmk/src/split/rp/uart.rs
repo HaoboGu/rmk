@@ -23,7 +23,6 @@ use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use fixed::traits::ToFixed;
-use pio;
 use rp_pac::io::vals::Oeover;
 
 pub struct IrqBinding;

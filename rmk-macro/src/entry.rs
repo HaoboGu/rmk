@@ -87,7 +87,7 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                     let rmk_task = quote! {
                         ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
                     };
-                    let mut tasks = vec![matrix_task, rmk_task];
+                    let mut tasks = vec![matrix_task, rmk_task, keyboard_task];
                     split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
                         let row = p.rows ;
                         let col = p.cols ;

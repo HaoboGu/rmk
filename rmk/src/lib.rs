@@ -249,5 +249,6 @@ pub(crate) async fn run_keyboard<
 }
 
 pub(crate) async fn run_usb_device<'d, D: Driver<'d>>(usb_device: &mut UsbDevice<'d, D>) {
+    CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
     usb_device.run().await;
 }
