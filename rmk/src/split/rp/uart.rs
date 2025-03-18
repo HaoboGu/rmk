@@ -322,12 +322,12 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn set_pin_tx(&mut self){
-        // unset our fake-pull-up trickery
-        self.pin_rx.set_drive_strength(Drive::_12mA);
-
+        self.sm_tx.set_pin_dirs(Direction::Out, &[&self.pin_rx]);
         // OEOVER set to INVERT, Direction::Out inverted to Direction:In
         self.sm_tx.set_pins(Level::Low, &[&self.pin_rx]);
-        self.sm_tx.set_pin_dirs(Direction::Out, &[&self.pin_rx]);
+
+        // unset our fake-pull-up trickery
+        self.pin_rx.set_drive_strength(Drive::_12mA);
     }
 
     fn set_pin_rx(&mut self){
