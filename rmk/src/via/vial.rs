@@ -64,7 +64,7 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
 ) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
-    info!("Received vial command: {}", vial_command);
+    info!("Received vial command: {:?}", vial_command);
     match vial_command {
         VialCommand::GetKeyboardId => {
             debug!("Received Vial - GetKeyboardId");
@@ -259,7 +259,7 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
             //         }
             //     }
             // }
-            debug!("Received Vial - SetEncoder, data: {}", report.output_data);
+            debug!("Received Vial - SetEncoder, data: {:?}", report.output_data);
         }
         _ => (),
     }
