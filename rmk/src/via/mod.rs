@@ -66,7 +66,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    error!("Process vial error: {}", e);
+                    error!("Process vial error: {:?}", e);
                     Timer::after_millis(500).await
                 }
             }
@@ -164,7 +164,7 @@ impl<
                 let keycode = BigEndian::read_u16(&report.output_data[4..6]);
                 let action = from_via_keycode(keycode);
                 info!(
-                    "Setting keycode: 0x{:02X} at ({},{}), layer {} as {}",
+                    "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
                 keymap.borrow_mut().set_action_at(
@@ -222,7 +222,7 @@ impl<
                     report.input_data[4..4 + size]
                         .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
                     debug!(
-                        "Get macro buffer: offset: {}, data: {:02X}",
+                        "Get macro buffer: offset: {}, data: {:?}",
                         offset, report.input_data
                     );
                 } else {
@@ -245,6 +245,7 @@ impl<
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
+                #[cfg(feature = "defmt")]
                 info!("Data: {=[u8]:x}", report.output_data[4..]);
                 self.keymap.borrow_mut().macro_cache[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
@@ -340,7 +341,7 @@ impl<
                 .await
             }
             ViaCommand::Unhandled => {
-                info!("Unknown cmd: {}", report.output_data);
+                info!("Unknown cmd: {:?}", report.output_data);
                 report.input_data[0] = ViaCommand::Unhandled as u8
             }
         }
