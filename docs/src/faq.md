@@ -82,9 +82,20 @@ mod keyboard {
     #[Override(chip_config)]
     fn config() -> Config {
         let mut config = Config::default();
-        config.rcc.hse = Some(Hertz(8_000_000));
-        config.rcc.sys_ck = Some(Hertz(48_000_000));
-        config.rcc.pclk1 = Some(Hertz(24_000_000)); 
+        config.rcc.hse = Some(Hse {
+            freq: Hertz(8_000_000),
+            // Oscillator for bluepill, Bypass for nucleos.
+            mode: HseMode::Oscillator,
+        });
+        config.rcc.pll = Some(Pll {
+            src: PllSource::HSE,
+            prediv: PllPreDiv::DIV1,
+            mul: PllMul::MUL9,
+        });
+        config.rcc.sys = Sysclk::PLL1_P;
+        config.rcc.ahb_pre = AHBPrescaler::DIV1;
+        config.rcc.apb1_pre = APBPrescaler::DIV2;
+        config.rcc.apb2_pre = APBPrescaler::DIV1; 
         config
     }
 }
@@ -124,12 +135,11 @@ The current embassy requires manually setting of the task arena size. By default
 
 ```toml
 # Cargo.toml
-embassy-executor = { version = "0.6", features = [
+embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
     "task-arena-size-32768",
     "executor-thread",
-    "integrated-timers",
 ] }
 ```
 
@@ -137,13 +147,12 @@ If you got `ERROR panicked at 'embassy-executor: task arena is full.` error afte
 
 ```diff
 # Cargo.toml
-embassy-executor = { version = "0.6", features = [
+embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
 -   "task-arena-size-32768",
 +   "task-arena-size-65536",
     "executor-thread",
-    "integrated-timers",
 ] }
 ```
 
@@ -155,3 +164,6 @@ If you're comfortable with nightly Rust, you can enable `nightly` feature of emb
 
 By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
+### What font is used for the RMK logo?
+
+It's [Honk](https://fonts.google.com/specimen/Honk?categoryFilters=Technology:%2FTechnology%2FColor&preview.text=RMK).

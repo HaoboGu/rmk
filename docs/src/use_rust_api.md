@@ -28,7 +28,7 @@ at [line 15-17](https://github.com/embassy-rs/embassy/blob/main/examples/stm32f4
 
 ```rust
 bind_interrupts!(struct Irqs {
-    OTG_FS => usb_otg::InterruptHandler<peripherals::USB_OTG_FS>;
+    OTG_FS => usb::InterruptHandler<peripherals::USB_OTG_FS>;
 });
 ```
 
@@ -50,6 +50,8 @@ in `src/keymap.rs`, update keyboard matrix constants and add a `get_default_keym
 RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check
 out [keymap_configuration](../keymap.md) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
+
+Some `KeyAction`s are not supported by the macros, plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Kc1), Action::Key(KeyCode::Kc2))`
 
 ### Define your matrix
 

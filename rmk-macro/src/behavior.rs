@@ -1,8 +1,9 @@
 //! Initialize behavior config boilerplate of RMK
 //!
 
-use crate::config::{OneShotConfig, TapHoldConfig, TriLayerConfig};
+use crate::config::{CombosConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
+use crate::layout::parse_key;
 use quote::quote;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
@@ -82,16 +83,52 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
     }
 }
 
+fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+    match combos {
+        Some(combos) => {
+            let combos_def = combos.combos.iter().map(|combo| {
+                let actions = combo.actions.iter().map(|a| parse_key(a.to_owned()));
+                let output = parse_key(combo.output.to_owned());
+                let layer = match combo.layer {
+                    Some(layer) => quote! { ::core::option::Option::Some(#layer) },
+                    None => quote! { ::core::option::Option::None },
+                };
+                quote! { ::rmk::combo::Combo::new([#(#actions),*], #output, #layer) }
+            });
+
+            let timeout = match &combos.timeout {
+                Some(t) => {
+                    let millis = t.0;
+                    quote! { timeout: ::embassy_time::Duration::from_millis(#millis), }
+                }
+                None => quote! {},
+            };
+
+            quote! {
+                ::rmk::config::CombosConfig {
+                    combos: ::rmk::heapless::Vec::from_iter([#(#combos_def),*]),
+                    #timeout
+                    ..Default::default()
+                }
+            }
+        }
+        None => default,
+    }
+}
+
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
     let tri_layer = expand_tri_layer(&keyboard_config.behavior.tri_layer);
     let tap_hold = expand_tap_hold(&keyboard_config.behavior.tap_hold);
     let one_shot = expand_one_shot(&keyboard_config.behavior.one_shot);
+    let combos = expand_combos(&keyboard_config.behavior.combo);
 
     quote! {
         let behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             tap_hold: #tap_hold,
             one_shot: #one_shot,
+            combo: #combos,
         };
     }
 }

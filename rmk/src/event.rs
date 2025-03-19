@@ -1,4 +1,3 @@
-use defmt::Format;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +9,8 @@ use crate::input_device::rotary_encoder::Direction;
 /// The input processors receives it, processes it,
 /// and then converts it to the final keyboard/mouse report.
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     /// Keyboard event
     Key(KeyEvent),
@@ -20,16 +20,19 @@ pub enum Event {
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
     Joystick([AxisEvent; 3]),
-    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Eos`] event.
+    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Event::Eos`] event.
     AxisEventStream(AxisEvent),
     /// End of the event sequence
     ///
-    /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
+    /// This is used with [`Event::AxisEventStream`] to indicate the end of the event sequence.
     Eos,
+    /// Custom event
+    Custom([u8; 16]),
 }
 
 /// Event for rotary encoder
-#[derive(Serialize, Deserialize, Clone, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoderEvent {
     /// The id of the rotary encoder
     pub id: u8,
@@ -38,7 +41,8 @@ pub struct RotaryEncoderEvent {
 }
 
 /// Event for multi-touch touchpad
-#[derive(Serialize, Deserialize, Clone, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TouchpadEvent {
     /// Finger slot
     pub finger: u8,
@@ -46,7 +50,8 @@ pub struct TouchpadEvent {
     pub axis: [AxisEvent; 3],
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Copy, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AxisEvent {
     /// The axis event value type, relative or absolute
     pub typ: AxisValType,
@@ -56,7 +61,8 @@ pub struct AxisEvent {
     pub value: i16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Copy, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Debug, Copy, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AxisValType {
     /// The axis value is relative
     Rel,
@@ -64,7 +70,8 @@ pub enum AxisValType {
     Abs,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum Axis {
     X,
@@ -75,7 +82,8 @@ pub enum Axis {
     // .. More is allowed
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Format, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyEvent {
     pub row: u8,
     pub col: u8,

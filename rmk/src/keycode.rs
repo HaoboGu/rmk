@@ -1,17 +1,17 @@
 use core::ops::BitOr;
 
 use bitfield_struct::bitfield;
-use defmt::Format;
 use num_enum::FromPrimitive;
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
 ///
 /// | bit4 | bit3 | bit2 | bit1 | bit0 |
-/// | --- | --- | --- | --- | --- |  
+/// | --- | --- | --- | --- | --- |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[bitfield(u8, order = Lsb)]
 #[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ModifierCombination {
     #[bits(1)]
     pub(crate) ctrl: bool,
@@ -25,20 +25,6 @@ pub struct ModifierCombination {
     pub(crate) right: bool,
     #[bits(3)]
     _reserved: u8,
-}
-
-impl Format for ModifierCombination {
-    fn format(&self, fmt: defmt::Formatter) {
-        defmt::write!(
-            fmt,
-            "ModifierCombination {{ ctrl: {=bool}, shift: {=bool}, alt: {=bool}, gui: {=bool}, right: {=bool} }}",
-            self.ctrl(),
-            self.shift(),
-            self.alt(),
-            self.gui(),
-            self.right()
-        )
-    }
 }
 
 impl BitOr for ModifierCombination {
@@ -59,58 +45,36 @@ impl ModifierCombination {
             .with_ctrl(ctrl)
     }
 
-    /// Convert modifier combination to a list of modifier keycodes.
-    /// Returns a list of modifiers keycodes, and the length of the list.
-    pub(crate) fn to_modifier_keycodes(self) -> ([KeyCode; 8], usize) {
-        let mut keycodes = [KeyCode::No; 8];
-        let mut i = 0;
-        if self.right() {
+    /// Get modifier hid report bits from modifier combination
+    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
+        let mut hid_modifier_bits = 0;
+        if !self.right() {
             if self.ctrl() {
-                keycodes[i] = KeyCode::RCtrl;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::RCtrl as u8;
             }
             if self.shift() {
-                keycodes[i] = KeyCode::RShift;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::RShift as u8;
             }
             if self.alt() {
-                keycodes[i] = KeyCode::RAlt;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::RAlt as u8;
             }
             if self.gui() {
-                keycodes[i] = KeyCode::RGui;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::RGui as u8;
             }
         } else {
             if self.ctrl() {
-                keycodes[i] = KeyCode::LCtrl;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::LCtrl as u8;
             }
             if self.shift() {
-                keycodes[i] = KeyCode::LShift;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::LShift as u8;
             }
             if self.alt() {
-                keycodes[i] = KeyCode::LAlt;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::LAlt as u8;
             }
             if self.gui() {
-                keycodes[i] = KeyCode::LGui;
-                i += 1;
+                hid_modifier_bits |= HidModifierBit::LGui as u8;
             }
         }
-
-        (keycodes, i)
-    }
-
-    /// Get modifier hid report bits from modifier combination
-    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
-        let (keycodes, n) = self.to_modifier_keycodes();
-        let mut hid_modifier_bits = 0;
-        for item in keycodes.iter().take(n) {
-            hid_modifier_bits |= item.as_modifier_bit();
-        }
-
         hid_modifier_bits
     }
 }
@@ -118,8 +82,9 @@ impl ModifierCombination {
 /// Keys in consumer page
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConsumerKey {
     #[num_enum(default)]
     Zero = 0x00,
@@ -185,8 +150,9 @@ pub enum ConsumerKey {
 /// Keys in `Generic Desktop Page`, generally used for system control
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
 #[non_exhaustive]
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SystemControlKey {
     #[num_enum(default)]
     Zero = 0x00,
@@ -198,8 +164,9 @@ pub enum SystemControlKey {
 
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
-#[derive(Debug, Format, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, Hash)]
 #[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyCode {
     /// Reserved, no-key.
     #[num_enum(default)]
@@ -927,11 +894,17 @@ impl KeyCode {
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
-    pub(crate) fn as_modifier_bit(self) -> u8 {
-        if self.is_modifier() {
-            1 << (self as u16 as u8 - KeyCode::LCtrl as u16 as u8)
-        } else {
-            0
+    pub(crate) fn to_hid_modifier_bit(self) -> u8 {
+        match self {
+            KeyCode::LCtrl => HidModifierBit::LCtrl as u8,
+            KeyCode::LShift => HidModifierBit::LShift as u8,
+            KeyCode::LAlt => HidModifierBit::LAlt as u8,
+            KeyCode::LGui => HidModifierBit::LGui as u8,
+            KeyCode::RCtrl => HidModifierBit::RCtrl as u8,
+            KeyCode::RShift => HidModifierBit::RShift as u8,
+            KeyCode::RAlt => HidModifierBit::RAlt as u8,
+            KeyCode::RGui => HidModifierBit::RGui as u8,
+            _ => 0,
         }
     }
 
@@ -1004,6 +977,16 @@ impl KeyCode {
     /// Returns `true` if the keycode is defined by rmk to achieve special functionalities, such as reboot keyboard, goto bootloader, etc.
     pub(crate) fn is_rmk(self) -> bool {
         KeyCode::Bootloader <= self && self <= KeyCode::AltRepeatKey
+    }
+
+    /// Returns `true` if the keycode is a combo keycode
+    pub(crate) fn is_combo(self) -> bool {
+        KeyCode::ComboOn <= self && self <= KeyCode::ComboToggle
+    }
+
+    /// Returns `true` if the keycode is a boot keycode
+    pub(crate) fn is_boot(self) -> bool {
+        KeyCode::Bootloader <= self && self <= KeyCode::Reboot
     }
 
     /// Returns `true` if the keycode is a kb keycode
@@ -1175,4 +1158,17 @@ impl KeyCode {
             _ => (KeyCode::No, false),
         }
     }
+}
+
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum HidModifierBit {
+    LCtrl = 1 << 0,
+    LShift = 1 << 1,
+    LAlt = 1 << 2,
+    LGui = 1 << 3,
+    RCtrl = 1 << 4,
+    RShift = 1 << 5,
+    RAlt = 1 << 6,
+    RGui = 1 << 7,
 }

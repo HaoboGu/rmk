@@ -1,9 +1,10 @@
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 use crate::{
     ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
-    light::{LedIndicator, LED_CHANNEL},
+    channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL},
+    hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
+    light::LedIndicator,
 };
-use defmt::{error, info, warn, Format};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -16,10 +17,12 @@ use nrf_softdevice::{
     },
     Softdevice,
 };
+use ssmarshal::serialize;
 use usbd_hid::descriptor::SerializedDescriptor as _;
 
 #[allow(dead_code)]
-#[derive(Debug, defmt::Format)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct HidService {
     hid_info: u16,
     report_map: u16,
@@ -158,13 +161,13 @@ impl HidService {
 
     pub(crate) fn send_ble_keyboard_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_keyboard, data)
-            .map_err(|e| error!("send keyboard report error: {}", e))
+            .map_err(|e| error!("send keyboard report error: {:?}", e))
             .ok();
     }
 
     pub(crate) fn send_ble_media_report(&self, conn: &Connection, data: &[u8]) {
         gatt_server::notify_value(conn, self.input_media_keys, data)
-            .map_err(|e| error!("send keyboard report error: {}", e))
+            .map_err(|e| error!("send keyboard report error: {:?}", e))
             .ok();
     }
 }
@@ -184,14 +187,8 @@ impl gatt_server::Service for HidService {
         } else if handle == self.output_keyboard {
             // Fires if a keyboard output is changed - e.g. the caps lock LED
             let led_indicator = LedIndicator::from_bits(data[0]);
-            info!("HID output keyboard: {}", led_indicator);
-            // Retry 3 times in case the channel is full(which is really rare)
-            for _i in 0..3 {
-                match LED_CHANNEL.try_send(led_indicator) {
-                    Ok(_) => break,
-                    Err(e) => warn!("LED channel full, retrying: {:?}", e),
-                }
-            }
+            info!("HID output keyboard: {:?}", led_indicator);
+            LED_SIGNAL.signal(led_indicator);
             Some(HidServiceEvent::OutputKeyboard)
         } else {
             None
@@ -200,11 +197,91 @@ impl gatt_server::Service for HidService {
 }
 
 #[allow(unused)]
-#[derive(Debug, Format)]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum HidServiceEvent {
     InputKeyboardCccdWrite,
     InputMediaKeyCccdWrite,
     InputMouseKeyCccdWrite,
     InputSystemKeyCccdWrite,
     OutputKeyboard,
+}
+
+pub(crate) struct BleKeyboardWriter<'a> {
+    conn: &'a Connection,
+    keyboard_handle: u16,
+    media_handle: u16,
+    system_control_handle: u16,
+    mouse_handle: u16,
+}
+
+impl<'a> BleKeyboardWriter<'a> {
+    pub(crate) fn new(
+        conn: &'a Connection,
+        keyboard_handle: u16,
+        media_handle: u16,
+        system_control_handle: u16,
+        mouse_handle: u16,
+    ) -> Self {
+        Self {
+            conn,
+            keyboard_handle,
+            media_handle,
+            system_control_handle,
+            mouse_handle,
+        }
+    }
+    async fn write(&mut self, handle: u16, report: &[u8]) -> Result<(), HidError> {
+        gatt_server::notify_value(self.conn, handle, report).map_err(|e| {
+            error!("Send ble report error: {}", e);
+            match e {
+                gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
+                gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
+            }
+        })
+    }
+}
+
+impl RunnableHidWriter for BleKeyboardWriter<'_> {
+    async fn get_report(&mut self) -> Self::ReportType {
+        KEYBOARD_REPORT_CHANNEL.receive().await
+    }
+}
+
+impl HidWriterTrait for BleKeyboardWriter<'_> {
+    type ReportType = Report;
+
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
+        match report {
+            Report::KeyboardReport(keyboard_report) => {
+                debug!("Writing keyboard report {}", keyboard_report);
+                let mut buf = [0u8; 8];
+                let n = serialize(&mut buf, &keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.keyboard_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::MouseReport(mouse_report) => {
+                let mut buf = [0u8; 5];
+                let n = serialize(&mut buf, &mouse_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.mouse_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::MediaKeyboardReport(media_keyboard_report) => {
+                let mut buf = [0u8; 2];
+                let n = serialize(&mut buf, &media_keyboard_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.media_handle, &buf).await?;
+                Ok(n)
+            }
+            Report::SystemControlReport(system_control_report) => {
+                let mut buf = [0u8; 2];
+                let n = serialize(&mut buf, &system_control_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.write(self.system_control_handle, &buf).await?;
+                Ok(n)
+            }
+        }
+    }
 }

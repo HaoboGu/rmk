@@ -1,4 +1,3 @@
-use defmt::warn;
 use num_enum::FromPrimitive;
 
 use crate::{
@@ -16,6 +15,9 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16 & 0xFF | 0x7700
                 } else if k.is_user() {
                     k as u16 & 0xF | 0x7E00
+                } else if k.is_combo() || k.is_boot() {
+                    // is_rmk() 's subset
+                    k as u16 & 0xFF | 0x7C00
                 } else {
                     k as u16
                 }
@@ -74,7 +76,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         }
         KeyAction::TapHold(tap, hold) => {
             warn!(
-                "Tap hold action is not supported: tap: {}, hold: {}",
+                "Tap hold action is not supported: tap: {:?}, hold: {:?}",
                 tap, hold
             );
             0
@@ -154,6 +156,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7700..=0x770F => {
+            // Macro
             let keycode = via_keycode & 0xFF | 0x500;
             KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
@@ -161,6 +164,12 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // TODO: backlight and rgb configuration
             warn!("Backlight and RGB configuration key not supported");
             KeyAction::No
+        }
+        // boot related | combo related
+        0x7C00..=0x7C01 | 0x7C50..=0x7C52 => {
+            // is_rmk() 's related
+            let keycode = via_keycode & 0xFF | 0x700;
+            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
         0x7C00..=0x7C5F => {
             // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
@@ -320,6 +329,13 @@ mod test {
             ),
             from_via_keycode(via_keycode)
         );
+
+        // ComboOff
+        let via_keycode = 0x7C51;
+        assert_eq!(
+            KeyAction::Single(Action::Key(KeyCode::ComboOff)),
+            from_via_keycode(via_keycode)
+        );
     }
 
     #[test]
@@ -409,5 +425,9 @@ mod test {
             ModifierCombination::new_from(false, false, true, true, true),
         );
         assert_eq!(0x2704, to_via_keycode(a));
+
+        // ComboOff
+        let a = KeyAction::Single(Action::Key(KeyCode::ComboOff));
+        assert_eq!(0x7C51, to_via_keycode(a));
     }
 }

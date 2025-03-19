@@ -1,15 +1,19 @@
+pub mod dummy_flash;
 mod eeconfig;
-pub mod nor_flash;
 
-use crate::config::StorageConfig;
+use crate::{
+    channel::FLASH_CHANNEL,
+    combo::{Combo, COMBO_MAX_LENGTH},
+    config::StorageConfig,
+    BUILD_HASH,
+};
 use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
-use defmt::{debug, error, info, Format};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::Channel;
+use embassy_embedded_hal::adapter::BlockingAsync;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+use heapless::Vec;
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
@@ -26,12 +30,9 @@ use crate::{
 
 use self::eeconfig::EeKeymapConfig;
 
-// Sync messages from server to flash
-pub(crate) static FLASH_CHANNEL: Channel<CriticalSectionRawMutex, FlashOperationMessage, 4> =
-    Channel::new();
-
 // Message send from bonder to flash task, which will do saving or clearing operation
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
     #[cfg(feature = "_nrf_ble")]
@@ -57,6 +58,8 @@ pub(crate) enum FlashOperationMessage {
     },
     // Current saved connection type
     ConnectionType(u8),
+    // Write combo
+    WriteCombo(ComboData),
 }
 
 #[repr(u32)]
@@ -68,6 +71,7 @@ pub(crate) enum StorageKeys {
     LayoutConfig,
     KeymapKeys,
     MacroData,
+    ComboData,
     ConnectionType,
     #[cfg(feature = "_nrf_ble")]
     ActiveBleProfile = 0xEE,
@@ -85,6 +89,8 @@ impl StorageKeys {
             4 => Some(StorageKeys::LayoutConfig),
             5 => Some(StorageKeys::KeymapKeys),
             6 => Some(StorageKeys::MacroData),
+            7 => Some(StorageKeys::ComboData),
+            8 => Some(StorageKeys::ConnectionType),
             #[cfg(feature = "_nrf_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
             _ => None,
@@ -99,6 +105,7 @@ pub(crate) enum StorageData {
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey),
     MacroData([u8; MACRO_SPACE_SIZE]),
+    ComboData(ComboData),
     ConnectionType(u8),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
@@ -118,6 +125,10 @@ pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER
     (0x1000 + layer * COL * ROW + row * COL + col) as u32
 }
 
+pub(crate) fn get_combo_key(idx: usize) -> u32 {
+    (0x3000 + idx) as u32
+}
+
 impl Value<'_> for StorageData {
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
         if buffer.len() < 6 {
@@ -132,7 +143,9 @@ impl Value<'_> for StorageData {
                 } else {
                     buffer[1] = 1;
                 }
-                Ok(4)
+                // Save build_hash
+                BigEndian::write_u32(&mut buffer[2..6], c.build_hash);
+                Ok(6)
             }
             StorageData::LayoutConfig(c) => {
                 buffer[0] = StorageKeys::LayoutConfig as u8;
@@ -161,6 +174,23 @@ impl Value<'_> for StorageData {
                 buffer[0] = StorageKeys::MacroData as u8;
                 buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
                 Ok(MACRO_SPACE_SIZE + 1)
+            }
+            StorageData::ComboData(combo) => {
+                if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::ComboData as u8;
+                for i in 0..COMBO_MAX_LENGTH {
+                    BigEndian::write_u16(
+                        &mut buffer[1 + i * 2..3 + i * 2],
+                        to_via_keycode(combo.actions[i]),
+                    );
+                }
+                BigEndian::write_u16(
+                    &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
+                    to_via_keycode(combo.output),
+                );
+                Ok(3 + COMBO_MAX_LENGTH * 2)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -199,14 +229,21 @@ impl Value<'_> for StorageData {
         if let Some(key_type) = StorageKeys::from_u8(buffer[0]) {
             match key_type {
                 StorageKeys::StorageConfig => {
+                    if buffer.len() < 6 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
                     // 1 is the initial state of flash, so it means storage is NOT initialized
                     if buffer[1] == 1 {
                         Ok(StorageData::StorageConfig(LocalStorageConfig {
                             enable: false,
+                            build_hash: BUILD_HASH,
                         }))
                     } else {
+                        // Enabled, read build hash
+                        let build_hash = BigEndian::read_u32(&buffer[2..6]);
                         Ok(StorageData::StorageConfig(LocalStorageConfig {
                             enable: true,
+                            build_hash,
                         }))
                     }
                 }
@@ -245,6 +282,24 @@ impl Value<'_> for StorageData {
                     buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
                     Ok(StorageData::MacroData(buf))
                 }
+                StorageKeys::ComboData => {
+                    if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                    for i in 0..COMBO_MAX_LENGTH {
+                        actions[i] =
+                            from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
+                    }
+                    let output = from_via_keycode(BigEndian::read_u16(
+                        &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
+                    ));
+                    Ok(StorageData::ComboData(ComboData {
+                        idx: 0,
+                        actions,
+                        output,
+                    }))
+                }
                 StorageKeys::ConnectionType => Ok(StorageData::ConnectionType(buffer[1])),
                 #[cfg(feature = "_nrf_ble")]
                 StorageKeys::BleBondInfo => {
@@ -274,6 +329,9 @@ impl StorageData {
                 panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
             }
             StorageData::MacroData(_) => StorageKeys::MacroData as u32,
+            StorageData::ComboData(_) => {
+                panic!("To get combo key for ComboData, use `get_combo_key` instead");
+            }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
@@ -282,18 +340,22 @@ impl StorageData {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LocalStorageConfig {
     enable: bool,
+    build_hash: u32,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct LayoutConfig {
     default_layer: u8,
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeymapKey {
     row: usize,
     col: usize,
@@ -301,12 +363,19 @@ pub(crate) struct KeymapKey {
     action: KeyAction,
 }
 
-pub(crate) struct Storage<
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-> {
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct ComboData {
+    pub(crate) idx: usize,
+    pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
+    pub(crate) output: KeyAction,
+}
+
+pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
+    embassy_embedded_hal::adapter::BlockingAsync::new(flash)
+}
+
+pub struct Storage<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     buffer: [u8; get_buffer_size()],
@@ -339,7 +408,7 @@ macro_rules! write_storage {
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     Storage<F, ROW, COL, NUM_LAYER>
 {
-    pub(crate) async fn new(
+    pub async fn new(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         config: StorageConfig,
@@ -387,15 +456,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             buffer: [0; get_buffer_size()],
         };
 
-        if config.clear_storage {
-            // Clear storage
+        // Check whether keymap and configs have been storaged in flash
+        if !storage.check_enable().await {
+            // Clear storage first
+            debug!("Clearing storage!");
             let _ =
                 sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
                     .await;
-        }
 
-        // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await {
             // Initialize storage from keymap and config
             if storage
                 .initialize_storage_with_config(keymap)
@@ -409,7 +477,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     &mut NoCache::new(),
                     &mut storage.buffer,
                     &(StorageKeys::StorageConfig as u32),
-                    &StorageData::StorageConfig(LocalStorageConfig { enable: false }),
+                    &StorageData::StorageConfig(LocalStorageConfig {
+                        enable: false,
+                        build_hash: BUILD_HASH,
+                    }),
                 )
                 .await
                 .ok();
@@ -417,11 +488,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
 
         storage
-    }
-
-    // TODO: Is there a way to convert `NorFlash` trait object to `F: AsyncNorFlash`?
-    pub(crate) async fn new_from_blocking<BF: NorFlash>(_flash: BF) {
-        // Self { flash }
     }
 
     pub(crate) async fn run(&mut self) {
@@ -494,6 +560,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
+                FlashOperationMessage::WriteCombo(combo) => {
+                    let key = get_combo_key(combo.idx);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &StorageData::ComboData(combo),
+                    )
+                    .await
+                }
                 FlashOperationMessage::ConnectionType(ty) => {
                     store_item(
                         &mut self.flash,
@@ -537,7 +615,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::BondInfo(b) => {
-                    info!("Saving bond info: {}", b);
+                    info!("Saving bond info: {:?}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,
@@ -577,10 +655,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             {
                 match item {
                     StorageData::KeymapKey(key) => {
-                        assert!(key.layer < NUM_LAYER);
-                        assert!(key.row < ROW);
-                        assert!(key.col < COL);
-                        keymap[key.layer][key.row][key.col] = key.action;
+                        if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
+                            keymap[key.layer][key.row][key.col] = key.action;
+                        }
                     }
                     _ => continue,
                 }
@@ -610,13 +687,43 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
+    pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
+        // for i in 0..combos.len() {
+        for (i, item) in combos.iter_mut().enumerate() {
+            let key = get_combo_key(i);
+            let read_data = fetch_item::<u32, StorageData, _>(
+                &mut self.flash,
+                self.storage_range.clone(),
+                &mut NoCache::new(),
+                &mut self.buffer,
+                &key,
+            )
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
+
+            if let Some(StorageData::ComboData(combo)) = read_data {
+                let mut actions = Vec::<_, COMBO_MAX_LENGTH>::new();
+                for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
+                    let _ = actions.push(action);
+                }
+                *item = Combo::new(actions, combo.output, item.layer);
+                // combos[i] = Combo::new(actions, combo.output, combos[i].layer);
+            }
+        }
+
+        Ok(())
+    }
+
     async fn initialize_storage_with_config(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
-        let storage_config = StorageData::StorageConfig(LocalStorageConfig { enable: true });
+        let storage_config = StorageData::StorageConfig(LocalStorageConfig {
+            enable: true,
+            build_hash: BUILD_HASH,
+        });
         store_item(
             &mut self.flash,
             self.storage_range.clone(),
@@ -674,19 +781,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
-            &mut self.flash,
-            self.storage_range.clone(),
-            &mut NoCache::new(),
-            &mut self.buffer,
-            &(StorageKeys::StorageConfig as u32),
-        )
-        .await
-        {
-            config.enable
-        } else {
-            false
-        }
+        return true;
+        // if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
+        //     &mut self.flash,
+        //     self.storage_range.clone(),
+        //     &mut NoCache::new(),
+        //     &mut self.buffer,
+        //     &(StorageKeys::StorageConfig as u32),
+        // )
+        // .await
+        // {
+        //     if config.enable && config.build_hash == BUILD_HASH {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 }
 
@@ -712,11 +821,6 @@ const fn get_buffer_size() -> usize {
         MACRO_SPACE_SIZE + 8
     };
 
-    let remainder = buffer_size % 32;
-
-    if remainder == 0 {
-        buffer_size
-    } else {
-        buffer_size + 32 - remainder
-    }
+    // Efficiently round up to the nearest multiple of 32 using bit manipulation.
+    (buffer_size + 31) & !31
 }

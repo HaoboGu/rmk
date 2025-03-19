@@ -9,33 +9,26 @@ pub(crate) mod spec;
 mod vial_service;
 
 use self::server::BleServer;
-use crate::config::BleBatteryConfig;
-use crate::keyboard::{KEYBOARD_REPORT_CHANNEL, REPORT_CHANNEL_SIZE};
-use crate::matrix::MatrixTrait;
+use crate::ble::led::BleLedReader;
+use crate::ble::nrf::hid_service::BleKeyboardWriter;
+use crate::config::{BleBatteryConfig, RmkConfig, VialConfig};
+use crate::hid::{DummyWriter, RunnableHidWriter};
+use crate::keymap::KeyMap;
+use crate::light::LightController;
+use crate::run_keyboard;
 use crate::storage::StorageKeys;
 use crate::{
-    ble::{
-        ble_communication_task,
-        nrf::{
-            advertise::{create_advertisement_data, SCAN_DATA},
-            bonder::BondInfo,
-            server::BleHidWriter,
-        },
-    },
-    keyboard::{Keyboard, KeyboardReportMessage},
-    light::led_service_task,
+    ble::nrf::bonder::BondInfo,
     storage::{get_bond_info_key, Storage, StorageData},
-    vial_task, KeyAction, KeyMap, LightService, RmkConfig, VialService, CONNECTION_TYPE,
+    CONNECTION_STATE, CONNECTION_TYPE,
 };
-use crate::{CONNECTION_STATE, KEYBOARD_STATE};
+use advertise::{create_advertisement_data, SCAN_DATA};
 use bonder::MultiBonder;
 use core::sync::atomic::{AtomicU8, Ordering};
 use core::{cell::RefCell, mem};
-use defmt::{debug, error, info, unwrap, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select4, Either4};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Receiver};
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -50,14 +43,18 @@ use nrf_softdevice::{
 use profile::update_profile;
 use sequential_storage::{cache::NoCache, map::fetch_item};
 use static_cell::StaticCell;
-use vial_service::VialReaderWriter;
+use vial_service::BleVialReaderWriter;
 #[cfg(not(feature = "_no_usb"))]
 use {
-    crate::{
-        run_usb_keyboard,
-        usb::{wait_for_usb_enabled, wait_for_usb_suspend, UsbState, USB_STATE},
-        KeyboardUsbDevice,
+    crate::light::UsbLedReader,
+    crate::register_usb_writer,
+    crate::usb::{
+        descriptor::{CompositeReport, KeyboardReport, ViaReport},
+        new_usb_builder, wait_for_usb_enabled, wait_for_usb_suspend, UsbKeyboardWriter, UsbState,
+        USB_STATE,
     },
+    crate::via::UsbVialReaderWriter,
+    crate::{add_usb_reader_writer, run_usb_device},
     embassy_futures::select::{select3, Either3},
     embassy_nrf::usb::vbus_detect::SoftwareVbusDetect,
     embassy_usb::driver::Driver,
@@ -66,6 +63,7 @@ use {
 
 /// Maximum number of bonded devices
 pub const BONDED_DEVICE_NUM: usize = 8;
+/// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 #[cfg(not(feature = "_no_usb"))]
@@ -202,57 +200,210 @@ pub(crate) fn nrf_ble_config(keyboard_name: &str) -> Config {
     }
 }
 
-/// Initialize and run the BLE keyboard service, with given keyboard usb config.
-/// Can only be used on nrf52 series microcontrollers with `nrf-softdevice` crate.
-/// This function never returns.
-///
-/// # Arguments
-///
-/// * `keymap` - default keymap definition
-/// * `driver` - embassy usb driver instance
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-/// * `saadc` - nRF's [saadc](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fsaadc.html) instance for battery level detection, if you don't need it, pass `None`
-pub async fn initialize_nrf_ble_keyboard_and_run<
-    M: MatrixTrait,
-    Out: OutputPin,
+pub fn initialize_nrf_sd_and_flash(
+    keyboard_name: &str,
+    spawner: Spawner,
+    ble_addr: Option<[u8; 6]>,
+) -> (&mut Softdevice, Flash) {
+    // Set ble config and enable nrf-softdevice first
+    let ble_config = nrf_ble_config(keyboard_name);
+
+    let sd = Softdevice::enable(&ble_config);
+
+    if let Some(addr) = ble_addr {
+        // This is used mainly for split
+        use nrf_softdevice::ble::{set_address, Address, AddressType};
+        set_address(sd, &Address::new(AddressType::RandomStatic, addr));
+    };
+
+    // Use the immutable ref of `Softdevice` to run the softdevice_task
+    // It can also be used for create flash instance
+    let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
+    spawner
+        .spawn(softdevice_task(sdv))
+        .expect("Failed to start softdevice task");
+    (sd, Flash::take(sdv))
+}
+
+pub(crate) async fn run_nrf_ble_keyboard<
+    'a,
+    F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    mut matrix: M,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-
-    mut keyboard_config: RmkConfig<'static, Out>,
-    ble_addr: Option<[u8; 6]>,
-    spawner: Spawner,
+    light_controller: &mut LightController<Out>,
+    mut rmk_config: RmkConfig<'static>,
+    sd: &mut Softdevice,
 ) -> ! {
-    // Set ble config and start nrf-softdevice background task first
-    let keyboard_name = keyboard_config.usb_config.product_name;
-    let ble_config = nrf_ble_config(keyboard_name);
-
-    let sd = Softdevice::enable(&ble_config);
-    if let Some(addr) = ble_addr {
-        // This is used mainly for split central
-        use nrf_softdevice::ble::{set_address, Address, AddressType};
-        set_address(sd, &Address::new(AddressType::RandomStatic, addr));
+    // Initialize usb device, ble service, etc
+    #[cfg(not(feature = "_no_usb"))]
+    // Initialize usb device and usb hid reader/writer
+    let (
+        mut usb_device,
+        mut keyboard_reader,
+        mut keyboard_writer,
+        mut other_writer,
+        mut vial_reader_writer,
+    ) = {
+        let mut usb_builder: embassy_usb::Builder<'_, D> =
+            new_usb_builder(usb_driver, rmk_config.usb_config);
+        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
+        let other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
+        let usb_device = usb_builder.build();
+        (
+            usb_device,
+            keyboard_reader,
+            keyboard_writer,
+            other_writer,
+            vial_reader_writer,
+        )
     };
-    {
-        // Use the immutable ref of `Softdevice` to run the softdevice_task
-        // The mumtable ref is used for configuring Flash and BleServer
-        let sdv = unsafe { nrf_softdevice::Softdevice::steal() };
-        unwrap!(spawner.spawn(softdevice_task(sdv)))
-    };
 
-    // Flash and keymap configuration
-    let flash = Flash::take(sd);
-    let mut storage = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-    let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut storage)).await);
+    // Initialize ble service
+    load_keyboard_states(storage).await;
+    let bond_info = load_bond_info(storage).await;
+    info!("Loaded {} saved bond info", bond_info.len());
+    static BONDER: StaticCell<MultiBonder> = StaticCell::new();
+    let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
+    let ble_server: BleServer =
+        BleServer::new(sd, rmk_config.usb_config, bonder).expect("Failed to start ble server");
 
+    // Main loop
+    loop {
+        // Init BLE advertising data
+        let mut config = peripheral::Config::default();
+        // Interval: 500ms
+        config.interval = 800;
+        config.tx_power = TxPower::Plus4dBm;
+        let adv = ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &create_advertisement_data(rmk_config.usb_config.product_name),
+            scan_data: &SCAN_DATA,
+        };
+        // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
+        // Remember that USB ALWAYS has higher priority than BLE.
+        #[cfg(not(feature = "_no_usb"))]
+        {
+            debug!(
+                "usb state: {}, connection type: {}",
+                USB_STATE.load(Ordering::SeqCst),
+                CONNECTION_TYPE.load(Ordering::Relaxed)
+            );
+            // Check whether the USB is connected
+            if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
+                let usb_fut = run_keyboard(
+                    keymap,
+                    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+                    storage,
+                    run_usb_device(&mut usb_device),
+                    light_controller,
+                    UsbLedReader::new(&mut keyboard_reader),
+                    UsbVialReaderWriter::new(&mut vial_reader_writer),
+                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                    rmk_config.vial_config,
+                );
+                if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
+                    info!("Running USB keyboard");
+                    // USB is connected, connection_type is USB, then run USB keyboard
+                    match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
+                        Either3::Third(_) => {
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
+                        _ => (),
+                    }
+                } else {
+                    // USB is connected, but connection type is BLE, try BLE while running USB keyboard
+                    info!("Running USB keyboard, while advertising");
+                    let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+                    match select3(adv_fut, usb_fut, update_profile(bonder)).await {
+                        Either3::First(Ok(conn)) => {
+                            run_ble_keyboard(
+                                keymap,
+                                storage,
+                                light_controller,
+                                rmk_config.vial_config,
+                                &mut rmk_config.ble_battery_config,
+                                &ble_server,
+                                bonder,
+                                conn,
+                            )
+                            .await
+                        }
+                        _ => {
+                            // Wait 10ms
+                            Timer::after_millis(10).await;
+                            continue;
+                        }
+                    }
+                }
+            } else {
+                // USB isn't connected, wait for any of BLE/USB connection
+                let dummy_task = run_dummy_keyboard(storage);
+                let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
+
+                info!("BLE advertising");
+                // Wait for BLE or USB connection
+                match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
+                    Either3::First(Ok(conn)) => {
+                        run_ble_keyboard(
+                            keymap,
+                            storage,
+                            light_controller,
+                            rmk_config.vial_config,
+                            &mut rmk_config.ble_battery_config,
+                            &ble_server,
+                            bonder,
+                            conn,
+                        )
+                        .await
+                    }
+                    _ => {
+                        // Wait 10ms for usb resuming/switching profile/advertising error
+                        Timer::after_millis(10).await;
+                    }
+                }
+            }
+        }
+
+        #[cfg(feature = "_no_usb")]
+        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
+            Ok(conn) => {
+                run_ble_keyboard(
+                    keymap,
+                    storage,
+                    light_controller,
+                    rmk_config.vial_config,
+                    &mut rmk_config.ble_battery_config,
+                    &ble_server,
+                    bonder,
+                    conn,
+                )
+                .await;
+            }
+            Err(e) => error!("Advertise error: {}", e),
+        }
+
+        // Retry after 200 ms
+        Timer::after_millis(200).await;
+    }
+}
+
+pub(crate) async fn load_keyboard_states<
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+) {
     let mut buf: [u8; 128] = [0; 128];
 
     // Load current active profile
@@ -279,7 +430,17 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
 
     #[cfg(feature = "_no_usb")]
     CONNECTION_TYPE.store(0, Ordering::Relaxed);
+}
 
+pub(crate) async fn load_bond_info<
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+) -> FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> {
+    let mut buf: [u8; 128] = [0; 128];
     // Get all saved bond info, config BLE bonder
     let mut bond_info: FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> = FnvIndexMap::new();
     for key in 0..BONDED_DEVICE_NUM {
@@ -289,215 +450,63 @@ pub async fn initialize_nrf_ble_keyboard_and_run<
             bond_info.insert(key as u8, info).ok();
         }
     }
+    bond_info
+}
 
-    info!("Loaded {} saved bond info", bond_info.len());
-    // static BONDER: StaticCell<Bonder> = StaticCell::new();
-    // let bonder = BONDER.init(Bonder::new(RefCell::new(bond_info)));
-    static BONDER: StaticCell<MultiBonder> = StaticCell::new();
-    let bonder = BONDER.init(MultiBonder::new(RefCell::new(bond_info)));
-
-    let ble_server = unwrap!(BleServer::new(sd, keyboard_config.usb_config, bonder));
-
-    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
-    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
-
-    // Keyboard services
-    let mut keyboard = Keyboard::new(
-        &keymap,
-        &keyboard_report_sender,
-        keyboard_config.behavior_config,
-    );
-    #[cfg(not(feature = "_no_usb"))]
-    let mut usb_device = KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config);
-    let mut vial_service = VialService::new(&keymap, keyboard_config.vial_config);
-    let mut light_service = LightService::from_config(keyboard_config.light_config);
-
-    // Main loop
-    loop {
-        KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
-        // Init BLE advertising data
-        let mut config = peripheral::Config::default();
-        // Interval: 500ms
-        config.interval = 800;
-        config.tx_power = TxPower::Plus4dBm;
-        let adv = ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &create_advertisement_data(keyboard_name),
-            scan_data: &SCAN_DATA,
-        };
-        // If there is a USB device, things become a little bit complex because we need to enable switching between USB and BLE.
-        // Remember that USB ALWAYS has higher priority than BLE.
-        #[cfg(not(feature = "_no_usb"))]
-        {
-            debug!(
-                "usb state: {}, connection type: {}",
-                USB_STATE.load(Ordering::SeqCst),
-                CONNECTION_TYPE.load(Ordering::Relaxed)
-            );
-            // Check whether the USB is connected
-            if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
-                let usb_fut = run_usb_keyboard(
-                    &mut usb_device,
-                    &mut keyboard,
-                    &mut matrix,
-                    &mut storage,
-                    &mut light_service,
-                    &mut vial_service,
-                    &keyboard_report_receiver,
-                );
-                if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
-                    info!("Running USB keyboard");
-                    // USB is connected, connection_type is USB, then run USB keyboard
-                    match select3(usb_fut, wait_for_usb_suspend(), update_profile(bonder)).await {
-                        Either3::Third(_) => {
-                            Timer::after_millis(10).await;
-                            continue;
-                        }
-                        _ => (),
-                    }
-                } else {
-                    // USB is connected, but connection type is BLE, try BLE while running USB keyboard
-                    info!("Running USB keyboard, while advertising");
-                    let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-                    match select3(adv_fut, usb_fut, update_profile(bonder)).await {
-                        Either3::First(Ok(mut conn)) => {
-                            info!("Connected to BLE");
-                            // Check whether the peer address is matched with current profile
-                            if !bonder.check_connection(&conn) {
-                                error!(
-                                    "Bonded peer address doesn't match active profile, disconnect"
-                                );
-                                continue;
-                            }
-                            bonder.load_sys_attrs(&conn);
-                            if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                                error!("Failed to update PHY");
-                                if let PhyUpdateError::Raw(re) = e {
-                                    error!("Raw error code: {:?}", re);
-                                }
-                            }
-                            // Run the ble keyboard, wait for disconnection or USB connect
-                            match select3(
-                                run_ble_keyboard(
-                                    &conn,
-                                    &ble_server,
-                                    &mut keyboard,
-                                    &mut matrix,
-                                    &mut storage,
-                                    &mut light_service,
-                                    &mut vial_service,
-                                    &mut keyboard_config.ble_battery_config,
-                                    &keyboard_report_receiver,
-                                ),
-                                wait_for_usb_enabled(),
-                                update_profile(bonder),
-                            )
-                            .await
-                            {
-                                Either3::First(_) => info!("BLE disconnected"),
-                                Either3::Second(_) => info!("Detected USB configured, quit BLE"),
-                                Either3::Third(_) => info!("Switch profile"),
-                            }
-                            bonder.save_sys_attrs(&conn);
-                        }
-                        _ => {
-                            // Wait 10ms
-                            Timer::after_millis(10).await;
-                            continue;
-                        }
-                    }
-                }
-            } else {
-                // USB isn't connected, wait for any of BLE/USB connection
-                let dummy_task = run_dummy_keyboard(
-                    &mut keyboard,
-                    &mut matrix,
-                    &mut storage,
-                    &keyboard_report_receiver,
-                );
-                let adv_fut = peripheral::advertise_pairable(sd, adv, &config, bonder);
-
-                info!("BLE advertising");
-                // Wait for BLE or USB connection
-                match select3(adv_fut, wait_for_status_change(bonder), dummy_task).await {
-                    Either3::First(Ok(mut conn)) => {
-                        info!("Connected to BLE");
-                        // Check whether the peer address is matched with current profile
-                        if !bonder.check_connection(&conn) {
-                            error!("Bonded peer address doesn't match active profile, disconnect");
-                            continue;
-                        }
-                        bonder.load_sys_attrs(&conn);
-                        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                            error!("Failed to update PHY");
-                            if let PhyUpdateError::Raw(re) = e {
-                                error!("Raw error code: {:?}", re);
-                            }
-                        }
-                        // Run the ble keyboard, wait for disconnection
-                        match select3(
-                            run_ble_keyboard(
-                                &conn,
-                                &ble_server,
-                                &mut keyboard,
-                                &mut matrix,
-                                &mut storage,
-                                &mut light_service,
-                                &mut vial_service,
-                                &mut keyboard_config.ble_battery_config,
-                                &keyboard_report_receiver,
-                            ),
-                            wait_for_usb_enabled(),
-                            update_profile(bonder),
-                        )
-                        .await
-                        {
-                            Either3::First(_) => info!("BLE disconnected"),
-                            Either3::Second(_) => info!("Detected USB configured, quit BLE"),
-                            Either3::Third(_) => info!("Switch profile"),
-                        }
-                        bonder.save_sys_attrs(&conn);
-                    }
-                    _ => {
-                        // Wait 10ms for usb resuming/switching profile/advertising error
-                        Timer::after_millis(10).await;
-                    }
-                }
-            }
+async fn run_ble_keyboard<
+    'a,
+    F: AsyncNorFlash,
+    Out: OutputPin,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    light_controller: &mut LightController<Out>,
+    vial_config: VialConfig<'static>,
+    ble_battery_config: &mut BleBatteryConfig<'static>,
+    ble_server: &BleServer,
+    bonder: &'static MultiBonder,
+    mut conn: Connection,
+) {
+    info!("Connected to BLE");
+    bonder.load_sys_attrs(&conn);
+    if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
+        error!("Failed to update PHY");
+        if let PhyUpdateError::Raw(re) = e {
+            error!("Raw error code: {:?}", re);
         }
-
-        #[cfg(feature = "_no_usb")]
-        match peripheral::advertise_pairable(sd, adv, &config, bonder).await {
-            Ok(mut conn) => {
-                bonder.load_sys_attrs(&conn);
-                if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2) {
-                    error!("Failed to update PHY");
-                    if let PhyUpdateError::Raw(re) = e {
-                        error!("Raw error code: {:?}", re);
-                    }
-                }
-                select(
-                    run_ble_keyboard(
-                        &conn,
-                        &ble_server,
-                        &mut keyboard,
-                        &mut matrix,
-                        &mut storage,
-                        &mut light_service,
-                        &mut vial_service,
-                        &mut keyboard_config.ble_battery_config,
-                        &keyboard_report_receiver,
-                    ),
-                    update_profile(bonder),
-                )
-                .await;
-                bonder.save_sys_attrs(&conn);
-            }
-            Err(e) => error!("Advertise error: {}", e),
-        }
-
-        // Retry after 200 ms
-        Timer::after_millis(200).await;
     }
+    match select4(
+        run_keyboard(
+            keymap,
+            storage,
+            run_ble_server(&conn, ble_server),
+            light_controller,
+            BleLedReader {},
+            BleVialReaderWriter::new(ble_server.vial, &conn),
+            BleKeyboardWriter::new(
+                &conn,
+                ble_server.hid.input_keyboard,
+                ble_server.hid.input_media_keys,
+                ble_server.hid.input_system_keys,
+                ble_server.hid.input_mouse_keys,
+            ),
+            vial_config,
+        ),
+        ble_server.bas.clone().run(ble_battery_config, &conn),
+        wait_for_usb_enabled(),
+        update_profile(bonder),
+    )
+    .await
+    {
+        Either4::First(_) => info!("BLE disconnected"),
+        Either4::Second(_) => info!("Bas service error"),
+        Either4::Third(_) => info!("Detected USB configured, quit BLE"),
+        Either4::Fourth(_) => info!("Switch profile"),
+    }
+    bonder.save_sys_attrs(&conn);
 }
 
 pub(crate) async fn set_conn_params(conn: &Connection) {
@@ -537,47 +546,20 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
 
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
 // It's useful for functions like switching active profiles when there's no connection.
-// TODO: make matrix + keyboard + storage task running in the background ALWAYS,
-// add a dummy receiver preventing everything blocks
 pub(crate) async fn run_dummy_keyboard<
     'a,
     'b,
-    M: MatrixTrait,
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
     storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<
-        'a,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
-    // Don't need to wait for connection, just do scanning to detect if there's a profile update
-    let matrix_fut = matrix.scan();
-    let keyboard_fut = keyboard.run();
     let storage_fut = storage.run();
-    let dummy_communication = async {
-        loop {
-            keyboard_report_receiver.receive().await;
-            warn!("Dummy service receives")
-        }
-    };
-    // Even for dummy service, we need to set the connection state to true.
-    // So that we can receive the matrix scan result from split, which might be used for profile switching
-    CONNECTION_STATE.store(true, Ordering::Release);
-    match select4(matrix_fut, keyboard_fut, storage_fut, dummy_communication).await {
-        Either4::First(_) => (),
-        Either4::Second(_) => (),
-        Either4::Third(_) => (),
-        Either4::Fourth(_) => (),
-    }
+    let mut dummy_writer = DummyWriter {};
+    select(storage_fut, dummy_writer.run_writer()).await;
 }
 
 #[cfg(not(feature = "_no_usb"))]
@@ -592,73 +574,18 @@ pub(crate) async fn wait_for_status_change(bonder: &MultiBonder) {
     }
 }
 
-// Run ble keyboard task for once
-pub(crate) async fn run_ble_keyboard<
-    'a,
-    'b,
-    M: MatrixTrait,
-    F: AsyncNorFlash,
-    Out: OutputPin,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    conn: &Connection,
-    ble_server: &BleServer,
-    keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-    light_service: &mut LightService<Out>,
-    vial_service: &mut VialService<'a, ROW, COL, NUM_LAYER>,
-    battery_config: &mut BleBatteryConfig<'b>,
-    keyboard_report_receiver: &Receiver<
-        'a,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
-) {
-    CONNECTION_STATE.store(false, Ordering::Release);
-    info!("Starting GATT server 20 ms later");
-    Timer::after_millis(20).await;
-    let mut ble_keyboard_writer = BleHidWriter::<'_, 8>::new(&conn, ble_server.hid.input_keyboard);
-    let mut ble_media_writer = BleHidWriter::<'_, 2>::new(&conn, ble_server.hid.input_media_keys);
-    let mut ble_system_control_writer =
-        BleHidWriter::<'_, 1>::new(&conn, ble_server.hid.input_system_keys);
-    let mut ble_mouse_writer = BleHidWriter::<'_, 5>::new(&conn, ble_server.hid.input_mouse_keys);
-    let mut bas = ble_server.bas;
-    let mut vial_rw = VialReaderWriter::new(ble_server.vial, &conn);
-    let vial_task = vial_task(&mut vial_rw, vial_service);
-
-    // Tasks
-    let battery_fut = bas.run(battery_config, &conn);
-    let led_fut = led_service_task(light_service);
-    let matrix_fut = matrix.run();
-    // Run the GATT server on the connection. This returns when the connection gets disconnected.
-    let ble_fut = gatt_server::run(&conn, ble_server, |_| {});
-    let keyboard_fut = keyboard.run();
-    let ble_communication_task = ble_communication_task(
-        keyboard_report_receiver,
-        &mut ble_keyboard_writer,
-        &mut ble_media_writer,
-        &mut ble_system_control_writer,
-        &mut ble_mouse_writer,
-    );
-    let storage_fut = storage.run();
-    let set_conn_param = set_conn_params(&conn);
-
-    // Exit if anyone of those futures exits
-    match select4(
-        select(matrix_fut, join(ble_fut, set_conn_param)),
-        select(ble_communication_task, keyboard_fut),
-        select(battery_fut, led_fut),
-        select(vial_task, storage_fut),
+async fn run_ble_server(conn: &Connection, ble_server: &BleServer) {
+    let err = join(
+        set_conn_params(&conn),
+        gatt_server::run(conn, ble_server, |_| {}),
     )
-    .await
-    {
-        Either4::First(e) => error!("ble_fut exited with error: {:?}", e),
-        Either4::Second(_) => error!("Keyboard task or ble task exited"),
-        Either4::Third(_) => error!("Battery task or led task exited"),
-        Either4::Fourth(_) => error!("Storage task exited"),
+    .await;
+    error!("BLE server exited with error: {:?}", err.1);
+}
+
+#[cfg(feature = "_no_usb")]
+async fn wait_for_usb_enabled() {
+    loop {
+        core::future::pending::<()>().await;
     }
 }

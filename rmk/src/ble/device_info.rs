@@ -16,7 +16,7 @@ pub(crate) struct PnPID {
     pub(crate) product_version: u16,
 }
 
-#[derive(Debug, Default, defmt::Format)]
+#[derive(Debug, Default)]
 pub(crate) struct DeviceInformation {
     pub(crate) manufacturer_name: Option<&'static str>,
     pub(crate) model_number: Option<&'static str>,

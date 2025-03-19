@@ -38,6 +38,8 @@ rustup target add thumbv7em-none-eabihf
 
 ```shell
 cargo install rmkit
+# If you have problems installing rmkit on Windows, try the following command to install it:
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
 ```
 
 There are several other tools should be installed:

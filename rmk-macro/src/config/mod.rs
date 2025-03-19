@@ -74,6 +74,7 @@ pub struct MatrixConfig {
 
 /// Config for storage
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StorageConfig {
     /// Start address of local storage, MUST BE start of a sector.
     /// If start_addr is set to 0(this is the default value), the last `num_sectors` sectors will be used.
@@ -87,6 +88,7 @@ pub struct StorageConfig {
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BleConfig {
     pub enabled: bool,
     pub battery_adc_pin: Option<String>,
@@ -98,6 +100,7 @@ pub struct BleConfig {
 
 /// Config for lights
 #[derive(Clone, Default, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LightConfig {
     pub capslock: Option<PinConfig>,
     pub scrolllock: Option<PinConfig>,
@@ -106,6 +109,7 @@ pub struct LightConfig {
 
 /// Config for a single pin
 #[derive(Clone, Default, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PinConfig {
     pub pin: String,
     pub low_active: bool,
@@ -113,6 +117,7 @@ pub struct PinConfig {
 
 /// Configurations for dependencies
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DependencyConfig {
     /// Enable defmt log or not
     #[serde(default = "default_true")]
@@ -127,6 +132,7 @@ impl Default for DependencyConfig {
 
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LayoutConfig {
     pub rows: u8,
     pub cols: u8,
@@ -136,14 +142,17 @@ pub struct LayoutConfig {
 
 /// Configurations for actions behavior
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
+    pub combo: Option<CombosConfig>,
 }
 
 /// Configurations for tap hold
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TapHoldConfig {
     pub enable_hrm: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
@@ -153,6 +162,7 @@ pub struct TapHoldConfig {
 
 /// Configurations for tri layer
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TriLayerConfig {
     pub upper: u8,
     pub lower: u8,
@@ -161,12 +171,30 @@ pub struct TriLayerConfig {
 
 /// Configurations for one shot
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
 }
 
+/// Configurations for combos
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CombosConfig {
+    pub combos: Vec<ComboConfig>,
+    pub timeout: Option<DurationMillis>,
+}
+
+/// Configurations for combo
+#[derive(Clone, Debug, Deserialize)]
+pub struct ComboConfig {
+    pub actions: Vec<String>,
+    pub output: String,
+    pub layer: Option<u8>,
+}
+
 /// Configurations for split keyboards
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SplitConfig {
     pub connection: String,
     pub central: SplitBoardConfig,
@@ -178,6 +206,7 @@ pub struct SplitConfig {
 /// Either ble_addr or serial must be set, but not both.
 #[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SplitBoardConfig {
     /// Row number of the split board
     pub rows: usize,
@@ -223,7 +252,7 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
     let unit = &input[num.len()..];
     let num: u64 = num.parse().map_err(|_| {
         de::Error::custom(format!(
-            "Invalid number \"{num}\" in [one_shot.timeout]: number part must be a u64"
+            "Invalid number \"{num}\" in duration: number part must be a u64"
         ))
     })?;
 
@@ -240,6 +269,7 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
 ///
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
+#[serde(deny_unknown_fields)]
 pub struct InputDeviceConfig {
     pub encoder: Option<Vec<EncoderConfig>>,
     pub pointing: Option<Vec<PointingDeviceConfig>>,
@@ -247,6 +277,7 @@ pub struct InputDeviceConfig {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
+#[serde(deny_unknown_fields)]
 pub struct EncoderConfig {
     // Pin a of the encoder
     pub pin_a: String,
@@ -264,6 +295,7 @@ pub struct EncoderConfig {
 /// Pointing device config
 #[derive(Clone, Debug, Default, Deserialize)]
 #[allow(unused)]
+#[serde(deny_unknown_fields)]
 pub struct PointingDeviceConfig {
     pub interface: Option<CommunicationProtocol>,
 }

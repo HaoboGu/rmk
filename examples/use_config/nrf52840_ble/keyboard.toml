@@ -59,3 +59,14 @@ charge_state.pin = "P0_25"
 charge_state.low_active = false
 charge_led.pin = "P0_29"
 charge_led.low_active = false
+
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output "L"
+  { actions = ["J", "K"], output = "L" },
+  # Press F and D keys simultaneously to switch to layer 2, but only valid on layer 0
+  { actions = ["F", "D"], output = "TO(1)", layer = 0 },
+  # Three-key combo, press A, S, and D keys to output "X"
+  { actions = ["A", "S", "D"], output = "X" }
+]

@@ -1,70 +1,16 @@
-use crate::config::{LightConfig, LightPinConfig};
-use crate::hid::HidReaderWrapper;
+use crate::{
+    config::{LightConfig, LightPinConfig},
+    hid::{HidError, HidReaderTrait},
+};
 use bitfield_struct::bitfield;
-use defmt::{debug, error, warn, Format};
-use embassy_futures::select::select;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use embassy_usb::{class::hid::HidReader, driver::Driver};
 use embedded_hal::digital::{Error, OutputPin, PinState};
-
-pub(crate) static LED_CHANNEL: Channel<CriticalSectionRawMutex, LedIndicator, 8> = Channel::new();
-
-/// LED control task
-pub(crate) async fn led_service_task<P: OutputPin>(light_service: &mut LightService<P>) {
-    loop {
-        let led_indicator = LED_CHANNEL.receive().await;
-        if light_service.enabled {
-            if let Err(e) = light_service.set_leds(led_indicator) {
-                error!("Set led error {:?}", e.kind());
-                // If there's an error, wait for a while
-                embassy_time::Timer::after_millis(500).await;
-            }
-        } else {
-            warn!("Led service is not enabled but led_service_task is started, this should not happen!");
-        }
-    }
-}
-
-/// Check led indicator and send the led status to LED channel
-///
-/// If there's an error, print a message and ignore error types
-pub(crate) async fn hid_read_led<R: HidReaderWrapper>(keyboard_hid_reader: &mut R) -> ! {
-    loop {
-        let mut led_indicator_data = [0; 1];
-        match keyboard_hid_reader.read(&mut led_indicator_data).await {
-            Ok(_) => {
-                // Read led indicator data and send to LED channel
-                let indicator = LedIndicator::from_bits(led_indicator_data[0]);
-                debug!("Read keyboard state: {:?}", indicator);
-                LED_CHANNEL.send(indicator).await;
-            }
-            Err(e) => {
-                error!("Read keyboard state error: {}", e);
-                embassy_time::Timer::after_secs(1).await;
-            }
-        }
-    }
-}
-
-pub(crate) async fn led_hid_task<R: HidReaderWrapper, Out: OutputPin>(
-    keyboard_hid_reader: &mut R,
-    light_service: &mut LightService<Out>,
-) {
-    if !light_service.enabled {
-        loop {
-            embassy_time::Timer::after_secs(u32::MAX as u64).await;
-        }
-    } else {
-        select(
-            hid_read_led(keyboard_hid_reader),
-            led_service_task(light_service),
-        )
-        .await;
-    }
-}
+use serde::{Deserialize, Serialize};
 
 #[bitfield(u8)]
-#[derive(Format, Eq, PartialEq)]
-pub(crate) struct LedIndicator {
+#[derive(Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct LedIndicator {
     #[bits(1)]
     numslock: bool,
     #[bits(1)]
@@ -81,10 +27,57 @@ pub(crate) struct LedIndicator {
     _reserved: u8,
 }
 
+pub(crate) struct LightService<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> {
+    pub(crate) enabled: bool,
+    light_controller: &'d mut LightController<P>,
+    reader: R,
+}
+
+impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightService<'d, P, R> {
+    pub(crate) fn new(light_controller: &'d mut LightController<P>, reader: R) -> Self {
+        Self {
+            enabled: false,
+            light_controller,
+            reader,
+        }
+    }
+
+    pub(crate) async fn run(&mut self) {
+        loop {
+            if self.enabled {
+                match self.reader.read_report().await {
+                    Ok(indicator) => {
+                        // Read led indicator data and send to LED channel
+                        debug!("Read keyboard state: {:?}", indicator);
+                        if let Err(e) = self.light_controller.set_leds(indicator) {
+                            error!("Send led error {:?}", e.kind());
+                            // If there's an error, wait for a while
+                            embassy_time::Timer::after_millis(500).await;
+                        }
+                    }
+                    Err(e) => {
+                        error!("Read led error {:?}", e);
+                        embassy_time::Timer::after_secs(1).await;
+                    }
+                }
+            } else {
+                // Check service state after 1s
+                embassy_time::Timer::after_secs(1).await;
+            }
+        }
+    }
+}
+
+pub struct LightController<P: OutputPin> {
+    capslock: Option<SingleLed<P>>,
+    scrolllock: Option<SingleLed<P>>,
+    numslock: Option<SingleLed<P>>,
+}
+
 /// A single LED
 ///
 /// In general, a single LED can be used for capslock/numslock, or in a LED matrix.
-struct SingleLED<P: OutputPin> {
+struct SingleLed<P: OutputPin> {
     /// On/Off state
     state: bool,
 
@@ -101,7 +94,7 @@ struct SingleLED<P: OutputPin> {
     period: u8,
 }
 
-impl<P: OutputPin> SingleLED<P> {
+impl<P: OutputPin> SingleLed<P> {
     fn new(p: LightPinConfig<P>) -> Self {
         let on_state = if p.low_active {
             PinState::Low
@@ -137,12 +130,28 @@ impl<P: OutputPin> SingleLED<P> {
     }
 }
 
-pub(crate) struct LightService<P: OutputPin> {
-    pub(crate) enabled: bool,
-    led_indicator_data: [u8; 1],
-    capslock: Option<SingleLED<P>>,
-    scrolllock: Option<SingleLED<P>>,
-    numslock: Option<SingleLED<P>>,
+pub(crate) struct UsbLedReader<'a, 'd, D: Driver<'d>> {
+    hid_reader: &'a mut HidReader<'d, D, 1>,
+}
+
+impl<'a, 'd, D: Driver<'d>> UsbLedReader<'a, 'd, D> {
+    pub(crate) fn new(hid_reader: &'a mut HidReader<'d, D, 1>) -> Self {
+        Self { hid_reader }
+    }
+}
+
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
+    type ReportType = LedIndicator;
+
+    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
+        let mut buf = [0u8; 1];
+        self.hid_reader
+            .read(&mut buf)
+            .await
+            .map_err(HidError::UsbReadError)?;
+
+        Ok(LedIndicator::from_bits(buf[0]))
+    }
 }
 
 // Implement on/off function for LightService
@@ -161,44 +170,15 @@ macro_rules! impl_led_on_off {
     };
 }
 
-impl<P: OutputPin> LightService<P> {
-    pub(crate) fn new(
-        capslock_pin: Option<LightPinConfig<P>>,
-        scrolllock_pin: Option<LightPinConfig<P>>,
-        numslock_pin: Option<LightPinConfig<P>>,
-    ) -> Self {
-        let mut enabled = true;
-        if capslock_pin.is_none() && scrolllock_pin.is_none() && numslock_pin.is_none() {
-            enabled = false;
-        }
+impl<P: OutputPin> LightController<P> {
+    pub fn new(light_config: LightConfig<P>) -> Self {
         Self {
-            enabled,
-            led_indicator_data: [0; 1],
-            capslock: capslock_pin.map(|p| SingleLED::new(p)),
-            scrolllock: scrolllock_pin.map(|p| SingleLED::new(p)),
-            numslock: numslock_pin.map(|p| SingleLED::new(p)),
+            capslock: light_config.capslock.map(|p| SingleLed::new(p)),
+            scrolllock: light_config.scrolllock.map(|p| SingleLed::new(p)),
+            numslock: light_config.numslock.map(|p| SingleLed::new(p)),
         }
     }
 
-    pub(crate) fn from_config(light_config: LightConfig<P>) -> Self {
-        let mut enabled = true;
-        if light_config.capslock.is_none()
-            && light_config.numslock.is_none()
-            && light_config.scrolllock.is_none()
-        {
-            enabled = false;
-        }
-        Self {
-            enabled,
-            led_indicator_data: [0; 1],
-            capslock: light_config.capslock.map(|p| SingleLED::new(p)),
-            scrolllock: light_config.scrolllock.map(|p| SingleLED::new(p)),
-            numslock: light_config.numslock.map(|p| SingleLED::new(p)),
-        }
-    }
-}
-
-impl<P: OutputPin> LightService<P> {
     impl_led_on_off!(capslock, set_capslock);
     impl_led_on_off!(scrolllock, set_scrolllock);
     impl_led_on_off!(numslock, set_numslock);

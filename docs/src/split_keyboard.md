@@ -6,9 +6,13 @@ RMK supports multi-split keyboard, which contains at least one central board and
 
 See `examples/use_rust/rp2040_split` and for the wired split keyboard example using rp2040.
 
+See `examples/use_rust/rp2040_split_pio` for the wired split keyboard example using rp2040 and PIO serial driver.
+
 See `examples/use_rust/nrf52840_ble_split` for the wireless split keyboard example using nRF52840.
 
 See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040.
+
+See `examples/use_config/rp2040_split_pio` and for the `keyboard.toml` + wired split keyboard example using rp2040 and PIO serial driver.
 
 See `examples/use_config/rp2040_split` and for the `keyboard.toml` + wired split keyboard example using rp2040 and a direct pin matrix.
 
@@ -43,11 +47,11 @@ rows = 2
 cols = 2
 row_offset = 0
 col_offset = 0
-# Central's ble addr
 
+# Central's ble addr
 ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
-# Central's matrix pins
+# Central's matrix
 [split.central.matrix]
 matrix_type = "normal"
 input_pins = ["P0_12", "P0_13"]
@@ -56,7 +60,6 @@ output_pins = ["P0_14", "P0_15"]
 # Note there're TWO brackets, since the peripheral is a list
 # Peripheral 0
 [[split.peripheral]]
-# Matrix definition
 rows = 2
 cols = 1
 row_offset = 2
@@ -64,6 +67,7 @@ col_offset = 2
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x11, 0xe3]
 
+# Peripheral 0's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
 input_pins = ["P1_11", "P1_10"]
@@ -79,6 +83,7 @@ col_offset = 2
 # Peripheral's ble addr
 ble_addr = [0x7e, 0xfe, 0x71, 0x91, 0x11, 0xe3]
 
+# Peripheral 1's matrix definition
 [split.peripheral.matrix]
 matrix_type = "normal"
 input_pins = ["P1_11", "P1_10"]
@@ -133,6 +138,23 @@ serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
 ```
 
+If you're using the Programmable IO (PIO) serial port with an RP2040 chip, subsitute the UART serial port interface with the PIO block, e.g. `PIO0`:
+
+```toml
+[split]
+connection = "serial"
+
+[split.central]
+..
+serial = [
+    # Half-duplex serial port using Programmable IO block PIO0
+    { instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" },
+]
+
+[[split.peripheral]]
+..
+serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
+```
 
 ## Define central and peripherals via Rust
 
@@ -166,10 +188,10 @@ run_rmk_split_central::<
         )
 ```
 
-In peripheral central, you should also run the peripheral monitor for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
+In peripheral central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
 ```rust
-run_peripheral_monitor<
+run_peripheral_manager<
     2, // PERIPHERAL_ROW
     1, // PERIPHERAL_COL
     2, // PERIPHERAL_ROW_OFFSET
@@ -209,6 +231,17 @@ Currently, the communication type indicates that how split central communicates 
 RMK uses `embedded-io-async` as the abstract layer of wired communication. Any device that implements `embedded-io-async::Read` and `embedded-io-async::Write` traits can be used as RMK split central/peripheral. The most common implementations of those traits are serial ports(UART/USART), such as `embassy_rp::uart::BufferedUart` and `embassy_stm32::usart::BufferedUart`. That unlocks many possibilities of RMK's split keyboard. For example, using different chips for central/peripheral is easy in RMK.
 
 For hardwire connection, the TRRS cable is widely used in split keyboards to connect central and peripherals. It's also compatible with UART/USART, that means RMK can be used in most existing opensource serial based split keyboard hardwares.
+
+For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for the **RP2040 only** RMK implements a half-duplex UART serial port, `rmk::split::rp::uart::BufferedUart`, using one or both of the Programmable IO (PIO) blocks available on the RP2040 chip. The PIO serial port also supports full-duplex over two wires, and can be used when the central/peripheral connection does not use the pins connected to the chip's standard UART ports.
+
+To use the the PIO UART driver feature, you need to enable the `rp2040_pio` feature gate in your `Cargo.toml`:
+
+```toml
+rmk = { version = "0.4", features = [
+    "split",
+    "rp2040_pio", # Enable PIO UART driver for rp2040
+] }
+```
 
 ### Wireless split
 

@@ -7,13 +7,13 @@ use quote::{format_ident, quote};
 use crate::keyboard_config::KeyboardConfig;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
-pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     let mut layers = vec![];
     for layer in keyboard_config.layout.keymap.clone() {
         layers.push(expand_layer(layer));
     }
     return quote! {
-        pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+        pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
     };
@@ -107,7 +107,7 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
 }
 
 /// Parse the key string at a single position
-fn parse_key(key: String) -> TokenStream2 {
+pub(crate) fn parse_key(key: String) -> TokenStream2 {
     if key.len() < 5 {
         return if key.len() > 0 && key.trim_start_matches("_").len() == 0 {
             quote! { ::rmk::a!(No) }

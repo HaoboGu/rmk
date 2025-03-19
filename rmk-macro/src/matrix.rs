@@ -3,6 +3,8 @@
 use quote::quote;
 
 use crate::{
+    config::MatrixType,
+    feature::is_feature_enabled,
     gpio_config::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
         convert_output_pins_to_initializers,
@@ -13,8 +15,9 @@ use crate::{
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,
-    async_matrix: bool,
+    rmk_features: &Option<Vec<String>>,
 ) -> proc_macro2::TokenStream {
+    let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &keyboard_config.board {
         BoardConfig::Normal(matrix) => {
@@ -47,7 +50,23 @@ pub(crate) fn expand_matrix_config(
                 let low_active = #low_active;
             });
         }
-        _ => (),
+        BoardConfig::Split(split_config) => {
+            // Matrix config for split central
+            match split_config.central.matrix.matrix_type {
+                MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
+                    &keyboard_config.chip,
+                    split_config.central.matrix.input_pins.clone().unwrap(),
+                    split_config.central.matrix.output_pins.clone().unwrap(),
+                    async_matrix,
+                )),
+                MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
+                    &keyboard_config.chip,
+                    split_config.central.matrix.direct_pins.clone().unwrap(),
+                    async_matrix,
+                    split_config.central.matrix.direct_pin_low_active,
+                )),
+            }
+        }
     };
     matrix_config
 }

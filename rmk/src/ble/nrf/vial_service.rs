@@ -1,6 +1,4 @@
-use defmt::{debug, error, Format};
 use embassy_futures::block_on;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use nrf_softdevice::{
     ble::{
         gatt_server::{
@@ -16,16 +14,14 @@ use nrf_softdevice::{
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use crate::{
-    ble::as_bytes,
-    hid::{ConnectionType, ConnectionTypeWrapper, HidError, HidReaderWrapper, HidWriterWrapper},
+    channel::VIAL_READ_CHANNEL,
+    hid::{HidError, HidReaderTrait, HidWriterTrait},
     usb::descriptor::ViaReport,
 };
 
 use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
 
-static vial_output_channel: Channel<CriticalSectionRawMutex, [u8; 32], 4> = Channel::new();
-
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct BleVialService {
     pub(crate) input_vial: u16,
     input_vial_cccd: u16,
@@ -117,10 +113,18 @@ impl BleVialService {
         })
     }
 
-    pub(crate) fn send_ble_vial_report(&self, conn: &Connection, data: &[u8]) {
-        gatt_server::notify_value(conn, self.input_vial, data)
-            .map_err(|e| error!("send vial report error: {}", e))
-            .ok();
+    pub(crate) fn send_ble_vial_report(
+        &self,
+        conn: &Connection,
+        data: &[u8],
+    ) -> Result<(), HidError> {
+        gatt_server::notify_value(conn, self.input_vial, data).map_err(|e| {
+            error!("Send ble report error: {:?}", e);
+            match e {
+                gatt_server::NotifyValueError::Disconnected => HidError::BleDisconnected,
+                gatt_server::NotifyValueError::Raw(_) => HidError::BleRawError,
+            }
+        })
     }
 }
 
@@ -135,7 +139,7 @@ impl gatt_server::Service for BleVialService {
             let data = unsafe { *(data.as_ptr() as *const [u8; 32]) };
             // Retry at most 3 times
             for _ in 0..3 {
-                if let Ok(_) = vial_output_channel.try_send(data) {
+                if let Ok(_) = VIAL_READ_CHANNEL.try_send(data) {
                     break;
                 }
                 // Wait for 20ms before sending the next report
@@ -149,51 +153,43 @@ impl gatt_server::Service for BleVialService {
     }
 }
 
-pub(crate) struct VialReaderWriter<'a> {
+pub(crate) struct BleVialReaderWriter<'a> {
     pub(crate) service: BleVialService,
     pub(crate) conn: &'a Connection,
 }
 
-impl<'a> VialReaderWriter<'a> {
+impl<'a> BleVialReaderWriter<'a> {
     pub(crate) fn new(service: BleVialService, conn: &'a Connection) -> Self {
         Self { service, conn }
     }
 }
 
-impl<'a> ConnectionTypeWrapper for VialReaderWriter<'a> {
-    fn get_conn_type(&self) -> crate::hid::ConnectionType {
-        ConnectionType::Ble
-    }
-}
+impl HidWriterTrait for BleVialReaderWriter<'_> {
+    type ReportType = ViaReport;
 
-impl<'a> HidReaderWrapper for VialReaderWriter<'a> {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, crate::hid::HidError> {
-        let v = vial_output_channel.receive().await;
-        buf.copy_from_slice(as_bytes(&v));
-        Ok(as_bytes(&v).len())
-    }
-}
-
-impl<'a> HidWriterWrapper for VialReaderWriter<'a> {
-    async fn write_serialize<IR: usbd_hid::descriptor::AsInputReport>(
-        &mut self,
-        r: &IR,
-    ) -> Result<(), crate::hid::HidError> {
+    async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         use ssmarshal::serialize;
         let mut buf: [u8; 32] = [0; 32];
-        match serialize(&mut buf, r) {
-            Ok(n) => self.write(&buf[0..n]).await,
-            Err(_) => Err(HidError::ReportSerializeError),
-        }
-    }
-
-    async fn write(&mut self, report: &[u8]) -> Result<(), crate::hid::HidError> {
-        self.service.send_ble_vial_report(self.conn, report);
-        Ok(())
+        let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
+        self.service.send_ble_vial_report(self.conn, &mut buf)?;
+        Ok(n)
     }
 }
 
-#[derive(Debug, Format)]
+impl HidReaderTrait for BleVialReaderWriter<'_> {
+    type ReportType = ViaReport;
+
+    async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
+        let v = VIAL_READ_CHANNEL.receive().await;
+        Ok(ViaReport {
+            input_data: [0u8; 32],
+            output_data: v,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum VialServiceEvent {
     InputVialKeyCccdWrite,
     OutputVial,

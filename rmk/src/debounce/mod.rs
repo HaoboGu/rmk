@@ -1,14 +1,12 @@
 use crate::matrix::KeyState;
 
-pub mod default_bouncer;
+pub mod default_debouncer;
 pub mod fast_debouncer;
 
 /// Default DEBOUNCE_THRESHOLD in ms.
-static DEBOUNCE_THRESHOLD: u16 = 10;
+static DEBOUNCE_THRESHOLD: u16 = 20;
 
 pub trait DebouncerTrait {
-    fn new() -> Self;
-
     /// The `in_idx` `out_idx` can be used as two normal dimensions.
     fn detect_change_with_debounce(
         &mut self,

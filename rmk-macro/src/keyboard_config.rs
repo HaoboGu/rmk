@@ -22,9 +22,15 @@ macro_rules! rmk_compile_error {
     };
 }
 
+// Max number of combos
+pub const COMBO_MAX_NUM: usize = 8;
+// Max size of combos
+pub const COMBO_MAX_LENGTH: usize = 4;
+
 /// Keyboard's basic info
 #[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Basic {
     /// Keyboard name
     pub name: String,
@@ -442,6 +448,25 @@ impl KeyboardConfig {
 
                 behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
+
+                behavior.combo = behavior.combo.or(default.combo);
+                if let Some(combo) = &behavior.combo {
+                    if combo.combos.len() > COMBO_MAX_NUM {
+                        return rmk_compile_error!(format!("keyboard.toml: number of combos is greater than [behavior.combo.max_num]"));
+                    }
+
+                    for (i, c) in combo.combos.iter().enumerate() {
+                        if c.actions.len() > COMBO_MAX_LENGTH {
+                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
+                        }
+
+                        if let Some(layer) = c.layer {
+                            if layer >= layout.layers {
+                                return rmk_compile_error!(format!("keyboard.toml: layer in combo #{i} is greater than [layout.layers]"));
+                            }
+                        }
+                    }
+                }
 
                 Ok(behavior)
             }

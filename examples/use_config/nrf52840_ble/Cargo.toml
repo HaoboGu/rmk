@@ -14,11 +14,12 @@ rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "col2row",
     "async_matrix",
+    "defmt",
 ] }
 cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
-embassy-time = { version = "0.3", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.2.0", features = [
+cortex-m-rt = "0.7.5"
+embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
+embassy-nrf = { version = "0.3.1", features = [
     "defmt",
     "nrf52840",
     "time-driver-rtc1",
@@ -27,12 +28,11 @@ embassy-nrf = { version = "0.2.0", features = [
     "nfc-pins-as-gpio",
     "time",
 ] }
-embassy-executor = { version = "0.6", features = [
+embassy-executor = { version = "0.7", features = [
     "defmt",
     "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
-    "integrated-timers",
 ] }
 defmt = "0.3"
 defmt-rtt = "0.4"

@@ -1,0 +1,13 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# runner = "probe-rs run --chip RP2350"
+# Need `cargo install elf2uf2-rs`
+# runner = "elf2uf2-rs -d"
+# Need `brew install picotool`
+runner = "picotool load -u -v -x -t elf"
+
+
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[env]
+DEFMT_LOG = "debug"

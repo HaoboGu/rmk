@@ -3,20 +3,16 @@
 
 use core::sync::atomic::Ordering;
 
-use defmt::info;
 use embassy_futures::yield_now;
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 
 use crate::{
     ble::nrf::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
-    storage::{FlashOperationMessage, FLASH_CHANNEL},
+    channel::{BLE_PROFILE_CHANNEL, FLASH_CHANNEL},
+    storage::FlashOperationMessage,
     CONNECTION_TYPE,
 };
 
 use super::bonder::MultiBonder;
-
-pub(crate) static BLE_PROFILE_CHANNEL: Channel<CriticalSectionRawMutex, BleProfileAction, 1> =
-    Channel::new();
 
 /// BLE profile switch action
 pub(crate) enum BleProfileAction {
@@ -83,6 +79,7 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
         break;
     }
     yield_now().await;
-    // TODO: How to ensure that the flash operations have been completed?
+    // Wait for the flash operation to complete
+    // A signal could be used here, but for simplicity, just waiting for 1s
     embassy_time::Timer::after_secs(1).await
 }

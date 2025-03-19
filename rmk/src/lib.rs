@@ -8,78 +8,86 @@
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
 #![allow(non_snake_case, non_upper_case_globals)]
+#![allow(async_fn_in_trait)]
 // Enable std for espidf and test
 #![cfg_attr(not(test), no_std)]
 
+// Include generated constants
+include!(concat!(env!("OUT_DIR"), "/constants.rs"));
+
+// This mod MUST go first, so that the others see its macros.
+pub(crate) mod fmt;
+
 #[cfg(feature = "_esp_ble")]
-use crate::ble::esp::initialize_esp_ble_keyboard_with_config_and_run;
+use crate::ble::esp::run_esp_ble_keyboard;
 #[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::initialize_nrf_ble_keyboard_and_run;
-use crate::config::RmkConfig;
-#[cfg(not(feature = "rapid_debouncer"))]
-use crate::debounce::default_bouncer::DefaultDebouncer;
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::{
-    light::{led_hid_task, LightService},
-    via::vial_task,
-};
-use action::KeyAction;
+pub use crate::ble::nrf::initialize_nrf_sd_and_flash;
+use crate::light::LightController;
+use config::{RmkConfig, VialConfig};
 use core::{
     cell::RefCell,
+    future::Future,
     sync::atomic::{AtomicBool, AtomicU8},
 };
-use debounce::DebouncerTrait;
-use defmt::{error, warn};
-#[cfg(not(feature = "_esp_ble"))]
-use embassy_executor::Spawner;
 use embassy_futures::select::{select, select4, Either4};
-pub use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::*};
+#[cfg(not(any(cortex_m)))]
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
+#[cfg(cortex_m)]
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
-pub use embedded_hal;
-use embedded_hal::digital::{InputPin, OutputPin};
-#[cfg(feature = "async_matrix")]
-use embedded_hal_async::digital::Wait;
-#[cfg(not(feature = "_no_external_storage"))]
-use embedded_storage::nor_flash::NorFlash;
-pub use flash::EmptyFlashWrapper;
-use futures::pin_mut;
-use keyboard::{communication_task, Keyboard, KeyboardReportMessage, KEYBOARD_REPORT_CHANNEL};
-pub use keyboard::{EVENT_CHANNEL, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE};
+use embassy_usb::UsbDevice;
+use embedded_hal;
+use embedded_hal::digital::OutputPin;
+use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
+pub use futures;
+use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
-use matrix::{Matrix, MatrixTrait};
+use light::{LedIndicator, LightService};
+use matrix::MatrixTrait;
+#[cfg(feature = "_nrf_ble")]
+use nrf_softdevice::Softdevice;
 pub use rmk_macro as macros;
-use usb::KeyboardUsbDevice;
-use via::process::VialService;
-#[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-use {embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
+use storage::Storage;
+use usb::descriptor::ViaReport;
+use via::VialService;
+#[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
+use {
+    crate::light::UsbLedReader,
+    crate::usb::descriptor::{CompositeReport, KeyboardReport},
+    crate::usb::{new_usb_builder, UsbKeyboardWriter},
+    crate::via::UsbVialReaderWriter,
+};
+
+pub use heapless;
+#[cfg(not(feature = "_no_usb"))]
+use usb::{add_usb_reader_writer, register_usb_writer};
 
 pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
+mod boot;
+pub mod channel;
+pub mod combo;
 pub mod config;
 pub mod debounce;
 pub mod direct_pin;
 pub mod event;
-mod flash;
-mod hid;
+pub mod hid;
 pub mod input_device;
 pub mod keyboard;
 mod keyboard_macro;
 pub mod keycode;
-mod keymap;
-mod layout_macro;
-mod light;
+pub mod keymap;
+pub mod layout_macro;
+pub mod light;
 pub mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
-mod storage;
-mod usb;
-mod via;
+pub mod storage;
+pub(crate) mod usb;
+pub mod via;
 
-/// Keyboard state, true for started, false for stopped
-pub(crate) static KEYBOARD_STATE: AtomicBool = AtomicBool::new(false);
 /// Current connection type:
 /// - 0: USB
 /// - 1: BLE
@@ -89,287 +97,158 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
-/// Run RMK keyboard service. This function should never return.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
-/// * `output_pins` - output gpio pins
-/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
-/// * `flash` - (optional) flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
-/// * `default_keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-pub async fn run_rmk<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: NorFlash,
+pub async fn initialize_keymap_and_storage<
+    F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    flash: F,
+    storage_config: config::StorageConfig,
+    behavior_config: config::BehaviorConfig,
+) -> (
+    RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
+    Storage<F, ROW, COL, NUM_LAYER>,
+) {
+    let mut storage = Storage::new(flash, default_keymap, storage_config).await;
 
-    keyboard_config: RmkConfig<'static, Out>,
-    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
-) -> ! {
-    // Wrap `embedded-storage` to `embedded-storage-async`
-    #[cfg(not(feature = "_no_external_storage"))]
-    let async_flash = embassy_embedded_hal::adapter::BlockingAsync::new(flash);
-
-    run_rmk_with_async_flash(
-        input_pins,
-        output_pins,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        #[cfg(not(feature = "_no_external_storage"))]
-        async_flash,
-        default_keymap,
-        keyboard_config,
-        #[cfg(not(feature = "_esp_ble"))]
-        spawner,
-    )
-    .await
-}
-
-/// Run RMK keyboard service. This function should never return.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins, if `async_matrix` is enabled, the input pins should implement `embedded_hal_async::digital::Wait` trait
-/// * `output_pins` - output gpio pins
-/// * `usb_driver` - (optional) embassy usb driver instance. Some microcontrollers would enable the `_no_usb` feature implicitly, which eliminates this argument
-/// * `flash` - (optional) async flash storage, which is used for storing keymap and keyboard configs. Some microcontrollers would enable the `_no_external_storage` feature implicitly, which eliminates this argument
-/// * `default_keymap` - default keymap definition
-/// * `keyboard_config` - other configurations of the keyboard, check [RmkConfig] struct for details
-/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-#[allow(unused_variables)]
-#[allow(unreachable_code)]
-pub async fn run_rmk_with_async_flash<
-    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-    #[cfg(not(feature = "async_matrix"))] In: InputPin,
-    Out: OutputPin,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    #[cfg(not(feature = "_no_external_storage"))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    #[cfg(feature = "col2row")] input_pins: [In; ROW],
-    #[cfg(not(feature = "col2row"))] input_pins: [In; COL],
-    #[cfg(feature = "col2row")] output_pins: [Out; COL],
-    #[cfg(not(feature = "col2row"))] output_pins: [Out; ROW],
-    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(not(feature = "_no_external_storage"))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-
-    keyboard_config: RmkConfig<'static, Out>,
-    #[cfg(not(feature = "_esp_ble"))] spawner: Spawner,
-) -> ! {
-    // Create the debouncer, use COL2ROW by default
-    #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<ROW, COL>::new();
-    #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<COL, ROW>::new();
-    #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<COL, ROW>::new();
-
-    // Keyboard matrix, use COL2ROW by default
-    #[cfg(feature = "col2row")]
-    let matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    #[cfg(not(feature = "col2row"))]
-    let matrix = Matrix::<_, _, _, COL, ROW>::new(input_pins, output_pins, debouncer);
-
-    // Dispatch according to chip and communication type
-    #[cfg(feature = "_nrf_ble")]
-    initialize_nrf_ble_keyboard_and_run(
-        matrix,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        default_keymap,
-        keyboard_config,
-        None,
-        spawner,
-    )
-    .await;
-
-    #[cfg(feature = "_esp_ble")]
-    initialize_esp_ble_keyboard_with_config_and_run(matrix, default_keymap, keyboard_config).await;
-
-    #[cfg(all(
-        not(feature = "_no_usb"),
-        not(any(feature = "_nrf_ble", feature = "_esp_ble"))
-    ))]
-    initialize_usb_keyboard_and_run(
-        matrix,
-        usb_driver,
-        #[cfg(not(feature = "_no_external_storage"))]
-        flash,
-        default_keymap,
-        keyboard_config,
-    )
-    .await;
-
-    // The fut should never return.
-    // If there's no fut, the feature flags must not be correct.
-    defmt::panic!("The run_rmk should never return");
-}
-
-pub async fn initialize_usb_keyboard_and_run<
-    Out: OutputPin,
-    D: Driver<'static>,
-    M: MatrixTrait,
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    mut matrix: M,
-    usb_driver: D,
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] flash: F,
-    default_keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-
-    keyboard_config: RmkConfig<'static, Out>,
-) -> ! {
-    // Initialize storage and keymap
-    // For USB keyboard, the "external" storage means the storage initialized by the user.
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-    let (mut storage, keymap) = {
-        let mut s = Storage::new(flash, default_keymap, keyboard_config.storage_config).await;
-        let keymap = RefCell::new(KeyMap::new_from_storage(default_keymap, Some(&mut s)).await);
-        (s, keymap)
-    };
-    #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-    let keymap = RefCell::new(KeyMap::<ROW, COL, NUM_LAYER>::new(default_keymap).await);
-
-    let keyboard_report_sender = KEYBOARD_REPORT_CHANNEL.sender();
-    let keyboard_report_receiver = KEYBOARD_REPORT_CHANNEL.receiver();
-
-    // Create keyboard services and devices
-    let (mut keyboard, mut usb_device, mut vial_service, mut light_service) = (
-        Keyboard::new(
-            &keymap,
-            &keyboard_report_sender,
-            keyboard_config.behavior_config,
-        ),
-        KeyboardUsbDevice::new(usb_driver, keyboard_config.usb_config),
-        VialService::new(&keymap, keyboard_config.vial_config),
-        LightService::from_config(keyboard_config.light_config),
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(default_keymap, Some(&mut storage), behavior_config).await,
     );
-
-    KEYBOARD_STATE.store(false, core::sync::atomic::Ordering::Release);
-    // Run all tasks, if one of them fails, wait 1 second and then restart
-    run_usb_keyboard(
-        &mut usb_device,
-        &mut keyboard,
-        &mut matrix,
-        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-        &mut storage,
-        &mut light_service,
-        &mut vial_service,
-        &keyboard_report_receiver,
-    )
-    .await
+    (keymap, storage)
 }
 
-// Run usb keyboard task for once
-pub(crate) async fn run_usb_keyboard<
+#[allow(unreachable_code)]
+pub async fn run_rmk<
     'a,
-    'b,
-    D: Driver<'a>,
-    M: MatrixTrait,
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] F: AsyncNorFlash,
+    F: AsyncNorFlash,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    usb_device: &mut KeyboardUsbDevice<'a, D>,
-    keyboard: &mut Keyboard<'b, ROW, COL, NUM_LAYER>,
-    matrix: &mut M,
-    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))] storage: &mut Storage<
-        F,
-        ROW,
-        COL,
-        NUM_LAYER,
-    >,
-    light_service: &mut LightService<Out>,
-    vial_service: &mut VialService<'b, ROW, COL, NUM_LAYER>,
-    keyboard_report_receiver: &Receiver<
-        'b,
-        CriticalSectionRawMutex,
-        KeyboardReportMessage,
-        REPORT_CHANNEL_SIZE,
-    >,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    #[cfg(not(feature = "_no_usb"))] usb_driver: D,
+    mut storage: Storage<F, ROW, COL, NUM_LAYER>,
+    mut light_controller: LightController<Out>,
+    rmk_config: RmkConfig<'static>,
+    #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
 ) -> ! {
-    loop {
-        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-        let usb_fut = usb_device.device.run();
-        let keyboard_fut = keyboard.run();
-        let matrix_fut = matrix.run();
-        let communication_fut = communication_task(
-            keyboard_report_receiver,
-            &mut usb_device.keyboard_hid_writer,
-            &mut usb_device.other_hid_writer,
-        );
-        let led_fut = led_hid_task(&mut usb_device.keyboard_hid_reader, light_service);
-        let via_fut = vial_task(&mut usb_device.via_hid, vial_service);
-
-        pin_mut!(usb_fut);
-        pin_mut!(keyboard_fut);
-        pin_mut!(matrix_fut);
-        pin_mut!(led_fut);
-        pin_mut!(via_fut);
-        pin_mut!(communication_fut);
-
-        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-        let storage_fut = storage.run();
-        #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-        pin_mut!(storage_fut);
-
-        match select4(
-            select(usb_fut, keyboard_fut),
-            #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
-            select(storage_fut, via_fut),
-            #[cfg(all(not(feature = "_nrf_ble"), feature = "_no_external_storage"))]
-            #[cfg(feature = "_no_external_storage")]
-            via_fut,
-            led_fut,
-            select(matrix_fut, communication_fut),
-        )
-        .await
-        {
-            Either4::First(_) => error!("Usb or keyboard task has died"),
-            Either4::Second(_) => error!("Storage or vial task has died"),
-            Either4::Third(_) => error!("Led task has died"),
-            Either4::Fourth(_) => error!("Communication task has died"),
-        }
-
-        warn!("Detected failure, restarting keyboard sevice after 1 second");
-        Timer::after_secs(1).await;
-    }
-}
-
-pub(crate) fn reboot_keyboard() {
-    warn!("Rebooting keyboard!");
-    // For cortex-m:
-    #[cfg(all(
-        target_arch = "arm",
-        target_os = "none",
-        any(target_abi = "eabi", target_abi = "eabihf")
-    ))]
-    cortex_m::peripheral::SCB::sys_reset();
+    // Dispatch the keyboard runner
+    #[cfg(feature = "_nrf_ble")]
+    crate::ble::nrf::run_nrf_ble_keyboard(
+        keymap,
+        &mut storage,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        &mut light_controller,
+        rmk_config,
+        sd,
+    )
+    .await;
 
     #[cfg(feature = "_esp_ble")]
-    esp_idf_svc::hal::reset::restart();
+    run_esp_ble_keyboard(
+        keymap,
+        &mut storage,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        &mut light_controller,
+        rmk_config,
+    )
+    .await;
+
+    // USB keyboard
+    #[cfg(all(
+        not(feature = "_nrf_ble"),
+        not(feature = "_no_usb"),
+        not(feature = "_esp_ble")
+    ))]
+    {
+        let mut usb_builder: embassy_usb::Builder<'_, D> =
+            new_usb_builder(usb_driver, rmk_config.usb_config);
+        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
+        let mut other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
+        let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
+        let mut usb_device = usb_builder.build();
+        // Run all tasks, if one of them fails, wait 1 second and then restart
+        loop {
+            run_keyboard(
+                keymap,
+                &mut storage,
+                run_usb_device(&mut usb_device),
+                &mut light_controller,
+                UsbLedReader::new(&mut keyboard_reader),
+                UsbVialReaderWriter::new(&mut vial_reader_writer),
+                UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                rmk_config.vial_config,
+            )
+            .await;
+        }
+    }
+
+    unreachable!("Should never reach here, wrong feature gate combination?");
+}
+
+// Run keyboard task for once
+pub(crate) async fn run_keyboard<
+    'a,
+    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
+    R: HidReaderTrait<ReportType = LedIndicator>,
+    W: RunnableHidWriter,
+    Fu: Future<Output = ()>,
+    F: AsyncNorFlash,
+    Out: OutputPin,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    communication_task: Fu,
+    light_controller: &mut LightController<Out>,
+    led_reader: R,
+    vial_reader_writer: Rw,
+    mut keyboard_writer: W,
+    vial_config: VialConfig<'static>,
+) {
+    // The state will be changed to true after the keyboard starts running
+    CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
+    let writer_fut = keyboard_writer.run_writer();
+    let mut light_service = LightService::new(light_controller, led_reader);
+    let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
+
+    let led_fut = light_service.run();
+    let via_fut = vial_service.run();
+
+    #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
+    let storage_fut = storage.run();
+
+    match select4(
+        communication_task,
+        #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
+        select(storage_fut, via_fut),
+        #[cfg(all(not(feature = "_ble"), feature = "_no_external_storage"))]
+        via_fut,
+        led_fut,
+        writer_fut,
+    )
+    .await
+    {
+        Either4::First(_) => error!("Communication or keyboard task has died"),
+        Either4::Second(_) => error!("Storage or vial task has died"),
+        Either4::Third(_) => error!("Led task has died"),
+        Either4::Fourth(_) => error!("Matrix or writer task has died"),
+    }
+
+    warn!("Detected failure, restarting keyboard sevice after 1 second");
+    Timer::after_secs(1).await;
+}
+
+pub(crate) async fn run_usb_device<'d, D: Driver<'d>>(usb_device: &mut UsbDevice<'d, D>) {
+    CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
+    usb_device.run().await;
 }

@@ -26,24 +26,11 @@ There are a few more things that you have to do:
 3. If you're using `keyboard.toml`, nothing more to do. The `[rmk_keyboard]` macro will check your `Cargo.toml` and do the work for you. But if you're using Rust code, you need to use `ExtiInput` as your input pins, and update generics type of RMK keyboard run:
 
 ```rust
-    let pd9 = ExtiInput::new(Input::new(p.PD9, Pull::Down).degrade(), p.EXTI9.degrade());
-    let pd8 = ExtiInput::new(Input::new(p.PD8, Pull::Down).degrade(), p.EXTI8.degrade());
-    let pb13 = ExtiInput::new(Input::new(p.PB13, Pull::Down).degrade(), p.EXTI13.degrade());
-    let pb12 = ExtiInput::new(Input::new(p.PB12, Pull::Down).degrade(), p.EXTI12.degrade());
+    let pd9 = ExtiInput::new(p.PD9,  p.EXTI9, Pull::Down);
+    let pd8 = ExtiInput::new(p.PD8,  p.EXTI8, Pull::Down);
+    let pb13 = ExtiInput::new(p.PB13, p.EXTI13, Pull::Down);
+    let pb12 = ExtiInput::new(p.PB12, p.EXTI12, Pull::Down);
     let input_pins = [pd9, pd8, pb13, pb12];
 
-    // ...Other initialization code
-
-    // Run RMK
-    run_rmk(
-        input_pins,
-        output_pins,
-        driver,
-        f,
-        &mut get_default_keymap(),
-        keyboard_config,
-        spawner,
-    )
-    .await;
-
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
 ```
