@@ -129,3 +129,11 @@ macro_rules! df {
         $crate::action::KeyAction::Single($crate::action::Action::DefaultLayer($x))
     };
 }
+
+/// Create a shifted key
+#[macro_export]
+macro_rules! shifted {
+    ($x: ident) => {
+        $crate::wm!($x, $crate::keycode::ModifierCombination::new_from(false, false, false, true, false))
+    };
+}
