@@ -221,3 +221,7 @@ rp2040_bl = ["dep:embassy-rp"]
 
 ## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
 adafruit_bl = ["_nrf_ble"]
+
+[lib]
+# Don't run doctest for lib
+doctest = false
