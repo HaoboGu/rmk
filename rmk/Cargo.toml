@@ -55,7 +55,7 @@ once_cell = { version = "1.19", features = [
     "atomic-polyfill",
 ], default-features = false, optional = true }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "b53991e", features = [
-    "defmt",
+
     "ble-peripheral",
     "critical-section-impl",
     "ble-gatt-server",
@@ -67,17 +67,21 @@ embassy-nrf = { version = "0.3.1", features = [
     "time",
 ], optional = true }
 
-trouble-host = { path = "/Users/haobogu/Projects/keyboard/trouble/host", features = [
-    "defmt",
+trouble-host = { path = "/Volumes/Projects/rust/trouble/host", features = [
+    "log",
     "gatt",
-] }
+    "scan",
+    "derive",
+    "security",
+], optional = true }
+rand_core = { version = "0.6", optional = true }
 
 # Espressif dependencies
-esp32-nimble = { version = "0.10", optional = true }
-esp-idf-svc = { version = "0.51", default-features = false, features = [
-    "embedded-storage",
-    "experimental",
-], optional = true }
+# esp32-nimble = { version = "0.10", optional = true }
+# esp-idf-svc = { version = "0.51", default-features = false, features = [
+#     "embedded-storage",
+#     "experimental",
+# ], optional = true }
 
 # RP2040 dependencies
 embassy-rp = { version = "0.4", optional = true }
@@ -122,6 +126,12 @@ defmt = [
     "embassy-nrf?/defmt",
     "nrf-softdevice?/defmt",
     "postcard/use-defmt",
+    "trouble-host?/defmt",
+]
+
+log = [
+    "dep:log",
+    "trouble-host?/log",
 ]
 
 ## Enable async matrix scan
@@ -187,10 +197,12 @@ esp32c6_ble = ["_esp_ble"]
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
     "_ble",
-    "_no_usb",          # ESP doesn't have USB support right now
-    "ssmarshal/std",
-    "dep:esp32-nimble",
-    "dep:esp-idf-svc",
+    "_no_usb",      # ESP doesn't have USB support right now
+    "trouble-host",
+    "rand_core",
+    # "ssmarshal/std",
+    # "dep:esp32-nimble",
+    # "dep:esp-idf-svc",
 ]
 _nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]

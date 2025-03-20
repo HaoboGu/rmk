@@ -1,6 +1,6 @@
-pub(crate) mod server;
+// pub(crate) mod server;
 
-use self::server::BleServer;
+// use self::server::BleServer;
 use crate::channel::VIAL_READ_CHANNEL;
 use crate::config::RmkConfig;
 use crate::keymap::KeyMap;
@@ -37,38 +37,38 @@ pub(crate) async fn run_esp_ble_keyboard<
 ) -> ! {
     // esp32c3 doesn't have USB device, so there is no usb here
     loop {
-        CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-        info!("Advertising..");
-        let mut ble_server = BleServer::new(rmk_config.usb_config);
-        ble_server.output_keyboard.lock().on_write(|args| {
-            let data: &[u8] = args.recv_data();
-            debug!("output_keyboard {}, {}", data.len(), data[0]);
-        });
+        // CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
+        // info!("Advertising..");
+        // let mut ble_server = BleServer::new(rmk_config.usb_config);
+        // ble_server.output_keyboard.lock().on_write(|args| {
+        //     let data: &[u8] = args.recv_data();
+        //     debug!("output_keyboard {}, {}", data.len(), data[0]);
+        // });
 
-        info!("Waitting for connection..");
-        ble_server.wait_for_connection().await;
+        // info!("Waitting for connection..");
+        // ble_server.wait_for_connection().await;
 
-        info!("BLE connected!");
-        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
+        // info!("BLE connected!");
+        // CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
 
-        // Create BLE HID writers
-        let keyboard_writer = ble_server.get_keyboard_writer();
-        let vial_reader_writer = ble_server.get_vial_reader_writer();
-        let led_reader = ble_server.get_led_reader();
+        // // Create BLE HID writers
+        // let keyboard_writer = ble_server.get_keyboard_writer();
+        // let vial_reader_writer = ble_server.get_vial_reader_writer();
+        // let led_reader = ble_server.get_led_reader();
 
-        let disconnect = BleServer::wait_for_disconnection(ble_server.server);
+        // let disconnect = BleServer::wait_for_disconnection(ble_server.server);
 
-        run_keyboard(
-            keymap,
-            storage,
-            disconnect,
-            light_controller,
-            led_reader,
-            vial_reader_writer,
-            keyboard_writer,
-            rmk_config.vial_config,
-        )
-        .await;
+        // run_keyboard(
+        //     keymap,
+        //     storage,
+        //     disconnect,
+        //     light_controller,
+        //     led_reader,
+        //     vial_reader_writer,
+        //     keyboard_writer,
+        //     rmk_config.vial_config,
+        // )
+        // .await;
 
         warn!("BLE disconnected!")
     }
