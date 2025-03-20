@@ -1,12 +1,12 @@
 // pub(crate) mod server;
 
 // use self::server::BleServer;
-use crate::channel::VIAL_READ_CHANNEL;
+// use crate::channel::VIAL_READ_CHANNEL;
 use crate::config::RmkConfig;
 use crate::keymap::KeyMap;
 use crate::light::LightController;
 use crate::storage::Storage;
-use crate::{run_keyboard, CONNECTION_STATE};
+// use crate::{run_keyboard, CONNECTION_STATE};
 use core::cell::RefCell;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
@@ -30,10 +30,10 @@ pub(crate) async fn run_esp_ble_keyboard<
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-    light_controller: &mut LightController<Out>,
-    rmk_config: RmkConfig<'static>,
+    _keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    _storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    _light_controller: &mut LightController<Out>,
+    _rmk_config: RmkConfig<'static>,
 ) -> ! {
     // esp32c3 doesn't have USB device, so there is no usb here
     loop {

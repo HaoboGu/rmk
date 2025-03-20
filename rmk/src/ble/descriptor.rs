@@ -67,13 +67,13 @@ pub(crate) enum BleCompositeReportType {
     //         }
     //     };
     // },
-    (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
-        (report_id = 0x04,) = {
-            (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
-                #[item_settings data,array,absolute,not_null] system_usage_id=input;
-            };
-        };
-    }
+    // (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = SYSTEM_CONTROL) = {
+    //     (report_id = 0x04,) = {
+    //         (usage_min = 0x81, usage_max = 0xB7, logical_min = 1) = {
+    //             #[item_settings data,array,absolute,not_null] system_usage_id=input;
+    //         };
+    //     };
+    // }
 )]
 #[allow(dead_code)]
 pub(crate) struct BleKeyboardReport {
@@ -87,5 +87,5 @@ pub(crate) struct BleKeyboardReport {
     // pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units
     // pub(crate) pan: i8,   // Scroll left (negative) or right (positive) this many units
     // pub(crate) media_usage_id: u16,
-    pub(crate) system_usage_id: u8,
+    // pub(crate) system_usage_id: u8,
 }

@@ -66,7 +66,8 @@ embassy-nrf = { version = "0.3.1", features = [
     "time",
 ], optional = true }
 
-trouble-host = { path = "/Volumes/Projects/rust/trouble/host", features = [
+trouble-host = { path = "/Users/haobogu/Projects/rust/trouble/host", features = [
+# trouble-host = { git = "https://github.com/embassy-rs/trouble", features = [
     "log",
     "gatt",
     "scan",
