@@ -1153,3 +1153,153 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         self.report.modifier &= !modifiers.to_hid_modifier_bits();
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::action::KeyAction;
+    use crate::{a, k, layer, mo};
+    use embassy_futures::block_on;
+    use embassy_time::{Duration, Timer};
+
+    // Init logger for tests
+    #[ctor::ctor]
+    fn init_log() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+    }
+
+    #[rustfmt::skip]
+    pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
+        [
+            layer!([
+                [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
+                [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
+                [k!(Escape), k!(A), k!(S), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
+                [k!(LShift), k!(Z), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
+                [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
+            ]),
+            layer!([
+                [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
+                [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
+                [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
+                [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+                [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
+            ]),
+        ]
+    }
+
+    fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
+        // Box::leak is acceptable in tests
+        let keymap = Box::new(get_keymap());
+        let leaked_keymap = Box::leak(keymap);
+
+        let keymap = block_on(KeyMap::new(leaked_keymap, BehaviorConfig::default()));
+        let keymap_cell = RefCell::new(keymap);
+        let keymap_ref = Box::leak(Box::new(keymap_cell));
+
+        Keyboard::new(keymap_ref, BehaviorConfig::default())
+    }
+
+    fn key_event(row: u8, col: u8, pressed: bool) -> KeyEvent {
+        KeyEvent { row, col, pressed }
+    }
+
+    #[test]
+    fn test_register_key() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            keyboard.register_key(KeyCode::A, key_event(2, 1, true));
+            assert_eq!(keyboard.report.keycodes[0], 0x04);
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_basic_key_press_release() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Press A key
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x04); // A key's HID code is 0x04
+
+            // Release A key
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_modifier_key() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Press Shift key
+            keyboard.register_key(KeyCode::LShift, key_event(3, 0, true));
+            assert_eq!(keyboard.report.modifier, 0x02); // Left Shift's modifier bit is 0x02
+
+            // Release Shift key
+            keyboard.unregister_key(KeyCode::LShift, key_event(3, 0, false));
+            assert_eq!(keyboard.report.modifier, 0x00);
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_tap_hold_key() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            let tap_hold_action =
+                KeyAction::TapHold(Action::Key(KeyCode::A), Action::Key(KeyCode::LShift));
+
+            // Tap
+            keyboard
+                .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
+                .await;
+            Timer::after(Duration::from_millis(10)).await;
+            keyboard
+                .process_key_action(tap_hold_action.clone(), key_event(2, 1, false))
+                .await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00); // A should be released
+
+            // Hold
+            keyboard
+                .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
+                .await;
+            Timer::after(Duration::from_millis(200)).await; // wait for hold timeout
+            assert_eq!(keyboard.report.modifier, 0x02); // should activate Shift modifier
+
+            keyboard
+                .process_key_action(tap_hold_action, key_event(2, 1, false))
+                .await;
+            assert_eq!(keyboard.report.modifier, 0x00); // Shift should be released
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_multiple_keys() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert!(keyboard.report.keycodes.contains(&0x04));
+
+            keyboard.process_inner(key_event(3, 5, true)).await;
+            assert!(keyboard.report.keycodes.contains(&0x05));
+
+            keyboard.process_inner(key_event(3, 5, false)).await;
+            assert!(!keyboard.report.keycodes.contains(&0x05));
+
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert!(!keyboard.report.keycodes.contains(&0x04));
+            assert!(keyboard.report.keycodes.iter().all(|&k| k == 0));
+        };
+
+        block_on(main);
+    }
+}
