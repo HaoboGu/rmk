@@ -1,0 +1,38 @@
+name: Unit Test
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["rmk/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["rmk/**"]
+  workflow_dispatch:
+
+# Cancel any currently running workflows from the same PR, branch, or
+# tag when a new workflow is triggered.
+#
+# https://stackoverflow.com/a/66336834
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  unit_test:
+    name: Run RMK unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Run tests
+        working-directory: ./rmk
+        run: cargo test --tests --no-default-features --verbose

@@ -139,7 +139,8 @@ The key string should follow several rules:
     For example, if you set a keycode `"Backspace"`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile!
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
-2. For no-key, use `"__"`
+
+2. For no-key, use `"_"` or `"__"` (you can put any number of `_`)
 
 3. RMK supports many advanced layer operations:
     1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
@@ -156,7 +157,9 @@ The key string should follow several rules:
 
 4. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
 
-5. For generic key tap-hold, use `TH(key-tap, key-hold)`.
+5. For generic key tap-hold, use `TH(key-tap, key-hold)`
+
+6. For shifted key, use `SHIFTED(key)`
 
 ### `[behavior]`
 
