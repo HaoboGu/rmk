@@ -17,7 +17,7 @@ use crate::{
     input_device::expand_input_device_config,
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig,
-        KeyboardConfig, SingleConfig,
+        KeyboardConfig, UniBodyConfig,
     },
     layout::expand_default_keymap,
     light::expand_light_config,
@@ -250,7 +250,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
     };
 
     let matrix = match &keyboard_config.board {
-        BoardConfig::Single(SingleConfig {
+        BoardConfig::UniBody(UniBodyConfig {
             matrix: matrix_config,
             input_device: _,
         }) => match matrix_config.matrix_type {

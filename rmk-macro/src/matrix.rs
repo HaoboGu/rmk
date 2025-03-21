@@ -9,7 +9,7 @@ use crate::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
         convert_output_pins_to_initializers,
     },
-    keyboard_config::{BoardConfig, KeyboardConfig, SingleConfig},
+    keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig},
     ChipModel, ChipSeries,
 };
 
@@ -20,7 +20,7 @@ pub(crate) fn expand_matrix_config(
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &keyboard_config.board {
-        BoardConfig::Single(SingleConfig { matrix, .. }) => match matrix.matrix_type {
+        BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
             MatrixType::normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
                     &keyboard_config.chip,

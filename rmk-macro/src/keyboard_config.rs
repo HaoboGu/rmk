@@ -91,18 +91,18 @@ pub(crate) struct KeyboardConfig {
 #[derive(Clone, Debug)]
 pub(crate) enum BoardConfig {
     Split(SplitConfig),
-    Single(SingleConfig),
+    UniBody(UniBodyConfig),
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct SingleConfig {
+pub(crate) struct UniBodyConfig {
     pub(crate) matrix: MatrixConfig,
     pub(crate) input_device: InputDeviceConfig,
 }
 
 impl Default for BoardConfig {
     fn default() -> Self {
-        BoardConfig::Single(SingleConfig::default())
+        BoardConfig::UniBody(UniBodyConfig::default())
     }
 }
 
@@ -376,7 +376,7 @@ impl KeyboardConfig {
                         }
                     },
                 }?;
-                Ok(BoardConfig::Single(SingleConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
+                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
             _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),

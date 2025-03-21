@@ -1,7 +1,7 @@
 use crate::{
     config::InputDeviceConfig,
     keyboard_config::{BoardConfig, KeyboardConfig},
-    keyboard_config::{CommunicationConfig, SingleConfig},
+    keyboard_config::{CommunicationConfig, UniBodyConfig},
 };
 use adc::expand_adc_device;
 use proc_macro2::TokenStream;
@@ -24,7 +24,7 @@ pub(crate) fn expand_input_device_config(
         _ => None,
     };
     let (adc_config, adc_processors) = match &keyboard_config.board {
-        BoardConfig::Single(SingleConfig { input_device, .. }) => expand_adc_device(
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_adc_device(
             input_device.clone().joystick.unwrap_or(Vec::new()),
             ble_config,
             keyboard_config.chip.series,

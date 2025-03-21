@@ -131,7 +131,9 @@ pub(crate) fn rmk_entry_select(
                 ChipSeries::Esp32 => panic!("Split for esp32 isn't implemented yet"),
             }
         }
-        BoardConfig::Single(_) => rmk_entry_default(keyboard_config, devices_task, processors_task),
+        BoardConfig::UniBody(_) => {
+            rmk_entry_default(keyboard_config, devices_task, processors_task)
+        }
     };
     quote! {
         use ::rmk::input_device::Runnable;
