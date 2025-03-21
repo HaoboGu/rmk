@@ -28,7 +28,7 @@ use rmk::{
     futures::future::{join, join4},
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{
-        adc::{EventType, NrfAdc},
+        adc::{AnalogEventType, NrfAdc},
         battery::BatteryProcessor,
         rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
         Runnable,
@@ -146,7 +146,7 @@ async fn main(spawner: Spawner) {
 
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
-    let mut adc_device = NrfAdc::new(saadc, [EventType::Battery], 12000);
+    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000);
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
     // Start
