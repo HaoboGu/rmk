@@ -213,7 +213,6 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
             pin.set_schmitt(true);
             pin.set_pull(Pull::Up);
             pin.set_slew_rate(SlewRate::Fast);
-            pin.set_drive_strength(Drive::_12mA);
         }
     }
 
@@ -241,9 +240,8 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         cfg.fifo_join = FifoJoin::TxOnly;
         self.sm_tx.set_config(&cfg);
 
-        self.set_pin_tx();
-
         if self.full_duplex {
+            self.set_pin_tx();
             self.sm_tx.set_enable(true);
         }
     }
@@ -326,8 +324,9 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         // OEOVER set to INVERT, Direction::Out inverted to Direction:In
         self.sm_tx.set_pins(Level::Low, &[&self.pin_rx]);
 
+        let pin_tx = self.pin_tx.as_mut().unwrap_or(&mut self.pin_rx);
         // unset our fake-pull-up trickery
-        self.pin_rx.set_drive_strength(Drive::_12mA);
+        pin_tx.set_drive_strength(Drive::_12mA);
     }
 
     fn set_pin_rx(&mut self){
