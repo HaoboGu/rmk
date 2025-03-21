@@ -71,7 +71,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 // failing to send is permitted, because the update frequency is not critical
                 #[cfg(feature = "_nrf_ble")]
                 let _ = crate::channel::BATTERY_CHANNEL.try_send(self.get_battery_percent(val));
-                ProcessResult::Stop
+               ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),
         }

@@ -82,7 +82,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
                 self.buf_state += 1;
                 e
             }
-        };
+       };
         self.event_state += 1;
         ret_e
     }
