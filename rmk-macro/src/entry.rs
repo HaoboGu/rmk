@@ -189,12 +189,13 @@ pub(crate) fn rmk_entry_default(
                 );
             }
         }
-        _ => quote! {
+        _ => {
             let rmk_task = quote! {
                 ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
             };
+            tasks.push(rmk_task);
             join_all_tasks(tasks)
-        },
+        }
     }
 }
 
