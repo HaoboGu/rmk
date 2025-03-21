@@ -3,10 +3,10 @@
 
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{ItemFn, ItemMod};
 
-use crate::{keyboard::Overwritten, keyboard_config::KeyboardConfig, ChipSeries};
+use crate::{ChipSeries, keyboard::Overwritten, keyboard_config::KeyboardConfig};
 
 pub(crate) fn expand_usb_init(
     keyboard_config: &KeyboardConfig,

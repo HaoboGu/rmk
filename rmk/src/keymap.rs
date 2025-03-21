@@ -4,7 +4,7 @@ use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::KeyEvent,
-    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
+    keyboard_macro::{MACRO_SPACE_SIZE, MacroOperation},
     keycode::KeyCode,
     storage::Storage,
 };

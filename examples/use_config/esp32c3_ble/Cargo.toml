@@ -1,3 +1,4 @@
+cargo-features = ["edition2024"]
 [package]
 name = "rmk-esp32c3"
 version = "0.2.0"
@@ -6,7 +7,7 @@ description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
 repository = "https://github.com/haobogu/rmk"
 readme = "../../README.md"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]

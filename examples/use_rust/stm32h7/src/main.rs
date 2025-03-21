@@ -12,13 +12,12 @@ use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_stm32::{
-    bind_interrupts,
+    Config, bind_interrupts,
     flash::Flash,
     gpio::{Input, Output},
     peripherals::USB_OTG_HS,
     time::Hertz,
     usb::{Driver, InterruptHandler},
-    Config,
 };
 use keymap::{COL, ROW};
 use panic_probe as _;

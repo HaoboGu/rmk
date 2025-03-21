@@ -1,4 +1,4 @@
-use super::spec::{BleCharacteristics, BleDescriptor, BLE_HID_SERVICE_UUID};
+use super::spec::{BLE_HID_SERVICE_UUID, BleCharacteristics, BleDescriptor};
 use crate::{
     ble::descriptor::{BleCompositeReportType, BleKeyboardReport},
     channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL},
@@ -6,16 +6,15 @@ use crate::{
     light::LedIndicator,
 };
 use nrf_softdevice::{
+    Softdevice,
     ble::{
+        Connection, SecurityMode,
         gatt_server::{
-            self,
+            self, RegisterError,
             builder::ServiceBuilder,
             characteristic::{Attribute, Metadata, Properties},
-            RegisterError,
         },
-        Connection, SecurityMode,
     },
-    Softdevice,
 };
 use ssmarshal::serialize;
 use usbd_hid::descriptor::SerializedDescriptor as _;

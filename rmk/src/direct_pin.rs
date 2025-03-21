@@ -40,13 +40,13 @@ pub struct DirectPinMatrix<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     /// Create a matrix from input and output pins.
     pub fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
@@ -62,13 +62,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> InputDevice for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
@@ -126,13 +126,13 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> MatrixTrait for DirectPinMatrix<In, D, ROW, COL, SIZE>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;

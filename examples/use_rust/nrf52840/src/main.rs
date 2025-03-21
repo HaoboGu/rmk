@@ -15,7 +15,7 @@ use embassy_nrf::{
     interrupt::InterruptExt,
     nvmc::Nvmc,
     peripherals,
-    usb::{self, vbus_detect::HardwareVbusDetect, Driver},
+    usb::{self, Driver, vbus_detect::HardwareVbusDetect},
 };
 use keymap::{COL, ROW};
 use panic_probe as _;

@@ -159,11 +159,7 @@ macro_rules! impl_led_on_off {
     ($n:ident, $fn_name:ident) => {
         pub(crate) fn $fn_name(&mut self, state: bool) -> Result<(), P::Error> {
             if let Some(led) = &mut self.$n {
-                if state {
-                    led.on()?
-                } else {
-                    led.off()?
-                }
+                if state { led.on()? } else { led.off()? }
             }
             Ok(())
         }
