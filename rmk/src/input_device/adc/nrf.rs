@@ -1,4 +1,4 @@
-use super::EventType;
+use super::AnalogEventType;
 use crate::{
     event::{Axis, AxisEvent, AxisValType, Event},
     input_device::InputDevice,
@@ -9,7 +9,7 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
     polling_interval: u16,
     buf: [i16; PIN_NUM],
-    event_type: [EventType; EVENT_NUM],
+    event_type: [AnalogEventType; EVENT_NUM],
     event_state: u8,
     buf_state: u8,
 }
@@ -19,7 +19,7 @@ pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT_NUM> {
     pub fn new(
         saadc: Saadc<'a, PIN_NUM>,
-        event_type: [EventType; EVENT_NUM],
+        event_type: [AnalogEventType; EVENT_NUM],
         polling_interval: u16,
     ) -> Self {
         Self {
@@ -48,7 +48,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
             self.event_state = 0;
         }
         let ret_e = match self.event_type[self.event_state as usize] {
-            EventType::Joystick(sz) => {
+            AnalogEventType::Joystick(sz) => {
                 let mut e = [
                     AxisEvent {
                         typ: AxisValType::Rel,
@@ -77,7 +77,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
                 }
                 Event::Joystick(e)
             }
-            EventType::Battery => {
+            AnalogEventType::Battery => {
                 let e = Event::Battery(self.buf[self.buf_state as usize] as u16);
                 self.buf_state += 1;
                 e

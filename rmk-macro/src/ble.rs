@@ -33,6 +33,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();
                 // Adc config
+                /*
                 if let Some(adc_pin) = ble.battery_adc_pin.clone() {
                     // Tokens for adc pin
                     let adc_pin_def = if adc_pin == "vddh" {
@@ -84,6 +85,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         let adc_divider_total = 1;
                     });
                 };
+                */
 
                 if let Some(charging_state_config) = ble.charge_state.clone() {
                     let charging_state_pin = format_ident!("{}", charging_state_config.pin);
