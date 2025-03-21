@@ -41,6 +41,7 @@ use embedded_hal;
 use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 pub use futures;
+pub use embassy_futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};

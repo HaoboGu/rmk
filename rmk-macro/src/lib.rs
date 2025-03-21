@@ -10,6 +10,7 @@ mod feature;
 mod flash;
 mod gpio_config;
 mod import;
+mod input_device;
 mod keyboard;
 mod keyboard_config;
 mod layout;
