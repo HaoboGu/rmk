@@ -78,7 +78,7 @@ pub(crate) fn rmk_entry_select(
                         ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
-                    if processors.is_empty() {
+                    if !processors.is_empty() {
                         tasks.push(processors_task);
                     };
                     let central_serials = split_config
@@ -189,12 +189,13 @@ pub(crate) fn rmk_entry_default(
                 );
             }
         }
-        _ => quote! {
+        _ => {
             let rmk_task = quote! {
                 ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
             };
+            tasks.push(rmk_task);
             join_all_tasks(tasks)
-        },
+        }
     }
 }
 

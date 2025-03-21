@@ -32,7 +32,7 @@ use rmk::{
     futures::future::join4,
     initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{
-        rotary_encoder::RotaryEncoder, InputDevice, InputProcessor, ProcessResult, Runnable,
+        rotary_encoder::RotaryEncoder, InputDevice, InputProcessor, ProcessResult, Runnable, adc::{NrfAdc, AnalogEventType}, battery::BatteryProcessor
     },
     keyboard::Keyboard,
     keymap::KeyMap,
@@ -100,15 +100,8 @@ async fn main(spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(
-        Some(is_charging_pin),
-        true,
-        Some(charging_led),
-        false,
-        Some(saadc),
-        2000,
-        2806,
-    );
+    let ble_battery_config =
+        BleBatteryConfig::new(Some(is_charging_pin), true, Some(charging_led), false);
     let storage_config = StorageConfig {
         start_addr: 0,
         num_sectors: 6,
@@ -155,6 +148,9 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(AnyPin::from(p.P0_11), embassy_nrf::gpio::Pull::Up);
     let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 
+    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000);
+    let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
+
     let local_channel: Channel<NoopRawMutex, Event, 16> = Channel::new();
 
     let mut p0 = MyProcessor {
@@ -178,11 +174,11 @@ async fn main(spawner: Spawner) {
     join4(
         run_devices! (
             (matrix, my_device, my_device2) => local_channel,
-            (encoder) => rmk::channel::EVENT_CHANNEL,
+            (encoder, adc_device) => rmk::channel::EVENT_CHANNEL,
         ),
         run_processor_chain! {
             local_channel => [p0, p1],
-            rmk::channel::EVENT_CHANNEL => [p2, p3],
+            rmk::channel::EVENT_CHANNEL => [p2, p3, batt_proc],
         },
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
