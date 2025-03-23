@@ -23,6 +23,7 @@ use crate::ble::esp::run_esp_ble_keyboard;
 #[cfg(feature = "_nrf_ble")]
 pub use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::light::LightController;
+use action::{EncoderAction, KeyAction};
 use config::{RmkConfig, VialConfig};
 use core::{
     cell::RefCell,
@@ -98,23 +99,33 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
 pub async fn initialize_keymap_and_storage<
+    'a,
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODERS: usize,
 >(
-    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
     flash: F,
     storage_config: config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
-    RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
-    Storage<F, ROW, COL, NUM_LAYER>,
+    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, storage_config).await;
+    let mut storage =
+        Storage::new(flash, default_keymap, default_encoder_map, storage_config).await;
 
     let keymap = RefCell::new(
-        KeyMap::new_from_storage(default_keymap, Some(&mut storage), behavior_config).await,
+        KeyMap::new_from_storage(
+            default_keymap,
+            default_encoder_map,
+            Some(&mut storage),
+            behavior_config,
+        )
+        .await,
     );
     (keymap, storage)
 }
@@ -128,10 +139,11 @@ pub async fn run_rmk<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODERS: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    mut storage: Storage<F, ROW, COL, NUM_LAYER>,
+    mut storage: Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>,
     mut light_controller: LightController<Out>,
     rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
@@ -205,9 +217,10 @@ pub(crate) async fn run_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODERS: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>,
     communication_task: Fu,
     light_controller: &mut LightController<Out>,
     led_reader: R,

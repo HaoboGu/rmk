@@ -29,9 +29,10 @@ pub(crate) async fn run_esp_ble_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
