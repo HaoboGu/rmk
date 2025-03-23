@@ -79,6 +79,49 @@ impl Phase for E8H7Phase {
     }
 }
 
+/// Phase implementation based on configurable resolution
+pub struct ResolutionPhase {
+    resolution: u8,
+    lut: [i8; 16],
+    pulses: i8,
+}
+
+impl ResolutionPhase {
+    pub fn new(resolution: u8, reverse: bool) -> Self {
+        // This lookup table is based on the QMK implementation
+        // Each entry corresponds to a state transition and provides +1, -1, or 0 pulse
+        let mut lut = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
+        if reverse {
+            lut = lut.map(|x| x * -1);
+        }
+        Self {
+            resolution,
+            lut,
+            pulses: 0,
+        }
+    }
+}
+
+impl Phase for ResolutionPhase {
+    fn direction(&mut self, s: u8) -> Direction {
+        // Only proceed if there was a state change
+        if (s & 0xC) != (s & 0x3) {
+            // Add pulse value from the lookup table
+            self.pulses += self.lut[s as usize & 0xF];
+            // Check if we've reached the resolution threshold
+            if self.pulses >= self.resolution as i8 {
+                self.pulses %= self.resolution as i8;
+                return Direction::CounterClockwise;
+            } else if self.pulses <= -(self.resolution as i8) {
+                self.pulses %= self.resolution as i8;
+                return Direction::Clockwise;
+            }
+        }
+
+        Direction::None
+    }
+}
+
 impl<A, B> RotaryEncoder<A, B, DefaultPhase>
 where
     A: InputPin,
@@ -91,6 +134,24 @@ where
             pin_b,
             state: 0u8,
             phase: DefaultPhase,
+            id,
+        }
+    }
+}
+
+/// Create a resolution-based rotary encoder
+impl<A, B> RotaryEncoder<A, B, ResolutionPhase>
+where
+    A: InputPin,
+    B: InputPin,
+{
+    /// Creates a new encoder with the specified resolution
+    pub fn with_resolution(pin_a: A, pin_b: B, resolution: u8, reverse: bool, id: u8) -> Self {
+        Self {
+            pin_a,
+            pin_b,
+            state: 0u8,
+            phase: ResolutionPhase::new(resolution, reverse),
             id,
         }
     }
@@ -127,8 +188,11 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
             Err(_) => return Direction::None,
         }
 
+        info!("s: {:b}", s);
         // move new state in
         self.state = s >> 2;
+
+        // Use the phase implementation
         self.phase.direction(s)
     }
 
@@ -207,7 +271,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 // FIXME: now the encoder cannot process complicate key actions, because it's not worth to re-implement them again for encoders.
 // The solution might be separate `Keyboard` to the `Keyboard` device part and a `KeyManager`
-// The `Keyboard` part is responsible for getting `KeyAction`, and the `KeyManager` is responsible for processing all the key actions, from `Keyboard`, `Encoder`, etc. 
+// The `Keyboard` part is responsible for getting `KeyAction`, and the `KeyManager` is responsible for processing all the key actions, from `Keyboard`, `Encoder`, etc.
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
     for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
@@ -364,5 +428,50 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             keycodes: [0u8; 6],
         }))
         .await;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Init logger for tests
+
+    #[ctor::ctor]
+    fn init_log() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+    }
+
+    #[test]
+    fn test_resolutin_phase() {
+        // Check with E8H7 phase
+        let mut default_phase = E8H7Phase {};
+        let mut resolution_phase = ResolutionPhase::new(2, true);
+        // Clockwise sequence
+        for item in [0b100, 0b1101, 0b1011, 0b10] {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
+        // Counterclockwise sequence
+        for item in [0b1000, 0b1110, 0b111, 0b1] {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
+
+        // Check with default phase
+        let mut default_phase = DefaultPhase {};
+        let mut resolution_phase = ResolutionPhase::new(1, false);
+        for item in 0u8..16 {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
     }
 }

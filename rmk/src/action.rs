@@ -8,6 +8,14 @@ pub struct EncoderAction {
     counter_clockwise: KeyAction,
 }
 
+impl Default for EncoderAction {
+    fn default() -> Self {
+        Self {
+            clockwise: KeyAction::No,
+            counter_clockwise: KeyAction::No,
+        }
+    }
+}
 impl EncoderAction {
     pub const fn new(clockwise: KeyAction, counter_clockwise: KeyAction) -> Self {
         Self {

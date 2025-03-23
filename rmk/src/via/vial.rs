@@ -253,12 +253,12 @@ pub(crate) async fn process_vial<
                     if clockwise == 1 {
                         let keycode = BigEndian::read_u16(&report.output_data[5..7]);
                         let action = from_via_keycode(keycode);
-                        info!("Setting clockwise action: {}", action);
+                        info!("Setting clockwise action: {:?}", action);
                         encoder.set_clockwise(action);
                     } else {
                         let keycode = BigEndian::read_u16(&report.output_data[5..7]);
                         let action = from_via_keycode(keycode);
-                        info!("Setting counter-clockwise action: {}", action);
+                        info!("Setting counter-clockwise action: {:?}", action);
                         encoder.set_counter_clockwise(action);
                     }
                     // Save the encoder action to the storage

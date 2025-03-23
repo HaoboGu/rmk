@@ -45,6 +45,29 @@ pub struct KeyMap<
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODERS: usize>
     KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>
 {
+    pub async fn new(
+        action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        encoder_map: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        behavior: BehaviorConfig,
+    ) -> Self {
+        // If the storage is initialized, read keymap from storage
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in behavior.combo.combos.iter().enumerate() {
+            combos[i] = combo.clone();
+        }
+
+        KeyMap {
+            layers: action_map,
+            encoders: encoder_map,
+            layer_state: [false; NUM_LAYER],
+            default_layer: 0,
+            layer_cache: [[0; COL]; ROW],
+            macro_cache: [0; MACRO_SPACE_SIZE],
+            combos,
+            behavior,
+        }
+    }
+    
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
