@@ -1,9 +1,9 @@
-use rmk::action::KeyAction;
-use rmk::{a, k, layer, mo};
+use rmk::action::{EncoderAction, KeyAction};
+use rmk::{a, encoder, k, layer, mo};
 pub(crate) const COL: usize = 14;
 pub(crate) const ROW: usize = 5;
 pub(crate) const NUM_LAYER: usize = 8;
-// pub(crate) const NUM_ENCODER: usize = 2;
+pub(crate) const NUM_ENCODER: usize = 2;
 
 #[rustfmt::skip]
 pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
@@ -67,39 +67,39 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     ]
 }
 
-// pub fn get_default_encoder_map() -> [[(KeyAction, KeyAction); NUM_ENCODER]; NUM_LAYER] {
-//     [
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//     ]
-// }
+pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+    [
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+    ]
+}
