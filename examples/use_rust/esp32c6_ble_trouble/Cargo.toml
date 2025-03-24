@@ -10,14 +10,15 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "esp32c6_ble", "log"] }
-embassy-executor = { version = "0.7.0", features = ["task-arena-size-32768"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "esp32c6_ble", "log", "trouble_ble"] }
+embassy-executor = { version = "0.7.0", features = ["task-arena-size-65536"] }
 esp-backtrace = { version = "0.15", features = [
     "esp32c6",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
+esp-storage = { version = "0.5.0", features = ["esp32c6", "nor-flash"] }
 esp-hal = { version = "0.23.1", features = ["esp32c6", "unstable"] }
 esp-hal-embassy = { version = "0.6.0", features = ["esp32c6"] }
 esp-alloc = { version = "0.6.0" }
@@ -37,6 +38,9 @@ cc = "1.2.9"
 name = "rmk-esp32c6"
 test = false
 bench = false
+
+[profile.dev.package.esp-storage]
+opt-level = 3
 
 [profile.dev]
 # Rust debug is too slow.

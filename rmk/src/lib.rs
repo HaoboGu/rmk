@@ -58,6 +58,10 @@ use {
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
     crate::via::UsbVialReaderWriter,
 };
+#[cfg(feature = "trouble_ble")]
+use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "trouble_ble")]
+use trouble_host::prelude::*;
 
 pub use heapless;
 #[cfg(not(feature = "_no_usb"))]
@@ -123,7 +127,12 @@ pub async fn initialize_keymap_and_storage<
 pub async fn run_rmk<
     'a,
     F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(feature = "trouble_ble")]
+    C: Controller,
+    #[cfg(feature = "trouble_ble")]
+    RNG: RngCore + CryptoRng,
+    #[cfg(not(feature = "_no_usb"))]
+    D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -132,6 +141,10 @@ pub async fn run_rmk<
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     mut storage: Storage<F, ROW, COL, NUM_LAYER>,
+    #[cfg(feature = "trouble_ble")]
+    controller: C,
+    #[cfg(feature = "trouble_ble")]
+    random_generator: &mut RNG,
     mut light_controller: LightController<Out>,
     rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
@@ -160,11 +173,27 @@ pub async fn run_rmk<
     )
     .await;
 
+    #[cfg(feature = "trouble_ble")]
+    crate::ble::trouble::run(
+        keymap,
+        &mut storage,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        #[cfg(feature = "trouble_ble")]
+        controller,
+        #[cfg(feature = "trouble_ble")]
+        random_generator,
+        &mut light_controller,
+        rmk_config,
+    )
+    .await;
+
     // USB keyboard
     #[cfg(all(
         not(feature = "_nrf_ble"),
         not(feature = "_no_usb"),
-        not(feature = "_esp_ble")
+        not(feature = "_esp_ble"),
+        not(feature = "trouble_ble")
     ))]
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> =

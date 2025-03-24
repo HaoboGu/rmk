@@ -265,7 +265,7 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
             embassy_time::Timer::after_secs(5).await;
         }
         self.last = !self.last;
-        info!("Read event: {:?}", self.last);
+        // info!("Read event: {:?}", self.last);
         Event::Key(KeyEvent {
             row: 0,
             col: 0,

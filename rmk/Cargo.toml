@@ -73,6 +73,10 @@ trouble-host = { path = "/Users/haobogu/Projects/rust/trouble/host", features = 
     "scan",
     "derive",
     "security",
+    # "gatt-client-notification-max-subscribers-8",
+    # "gatt-client-notification-queue-size-4",
+    # "l2cap-tx-packet-pool-size-64",
+    # "l2cap-rx-packet-pool-size-64",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 
@@ -97,7 +101,7 @@ critical-section = { version = "1.2", optional = true }
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
-rmk = { path = ".", default-features = false, features = ["std", "log"] }
+# rmk = { path = ".", default-features = false, features = ["std", "log"] }
 env_logger = "0.11"
 ctor = "0.4.1"
 
@@ -222,6 +226,14 @@ _esp_ble = [
     # "dep:esp32-nimble",
     # "dep:esp-idf-svc",
 ]
+
+## Enable feature if you want to use trouble BLE stack
+trouble_ble = [
+    "_ble",
+    "trouble-host",
+    "rand_core",
+]
+
 _nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]
 

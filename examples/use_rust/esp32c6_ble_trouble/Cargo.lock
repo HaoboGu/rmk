@@ -199,9 +199,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.16"
+version = "1.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be714c154be609ec7f5dad223a33bf1482fff90472de28f7362806e6d4832b8c"
+checksum = "1fcb57c740ae1daf453ae85f16e37396f672b039e00d9d866e07ddb24e328e3a"
 dependencies = [
  "shlex",
 ]
@@ -730,8 +730,19 @@ name = "esp-backtrace"
 version = "0.15.0"
 source = "git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8#5d0145eca901f42cbebe1e41cde10e79afba3af8"
 dependencies = [
- "esp-build",
+ "esp-build 0.2.0 (git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8)",
  "esp-println",
+]
+
+[[package]]
+name = "esp-build"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8aa1c8f9954c9506699cf1ca10a2adcc226ff10b6ae3cb9e875cf2c6a0b9a372"
+dependencies = [
+ "quote",
+ "syn 2.0.100",
+ "termcolor",
 ]
 
 [[package]]
@@ -776,7 +787,7 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "enumset",
- "esp-build",
+ "esp-build 0.2.0 (git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8)",
  "esp-config",
  "esp-hal-procmacros",
  "esp-metadata",
@@ -809,7 +820,7 @@ dependencies = [
  "embassy-time",
  "embassy-time-driver",
  "embassy-time-queue-utils",
- "esp-build",
+ "esp-build 0.2.0 (git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8)",
  "esp-config",
  "esp-hal",
  "esp-hal-procmacros",
@@ -851,7 +862,7 @@ version = "0.13.0"
 source = "git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8#5d0145eca901f42cbebe1e41cde10e79afba3af8"
 dependencies = [
  "critical-section",
- "esp-build",
+ "esp-build 0.2.0 (git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8)",
  "log",
  "portable-atomic",
 ]
@@ -867,6 +878,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-storage"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e98b5069bd1482fb85f9236f8ea6cd1b5b6b5a1c3c3fb8c938c97ccfbbb051b"
+dependencies = [
+ "critical-section",
+ "embedded-storage",
+ "esp-build 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "esp-wifi"
 version = "0.12.0"
 source = "git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8#5d0145eca901f42cbebe1e41cde10e79afba3af8"
@@ -879,7 +901,7 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "esp-alloc",
- "esp-build",
+ "esp-build 0.2.0 (git+https://github.com/esp-rs/esp-hal.git?rev=5d0145eca901f42cbebe1e41cde10e79afba3af8)",
  "esp-config",
  "esp-hal",
  "esp-metadata",
@@ -1145,14 +1167,15 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.61"
+version = "0.1.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "235e081f3925a06703c2d0117ea8b91f042756fd6e7a6e5d901e8ca1a996b220"
+checksum = "b2fd658b06e56721792c5df4475705b6cda790e9298d19d2f8af083457bcd127"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
  "iana-time-zone-haiku",
  "js-sys",
+ "log",
  "wasm-bindgen",
  "windows-core",
 ]
@@ -1472,7 +1495,7 @@ version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
- "zerocopy 0.8.23",
+ "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -1694,6 +1717,7 @@ dependencies = [
  "esp-hal",
  "esp-hal-embassy",
  "esp-println",
+ "esp-storage",
  "esp-wifi",
  "json",
  "rand_core",
@@ -1997,7 +2021,7 @@ dependencies = [
  "rand_core",
  "static_cell",
  "trouble-host-macros",
- "zerocopy 0.8.23",
+ "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -2331,11 +2355,11 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.23"
+version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd97444d05a4328b90e75e503a34bad781f14e28a823ad3557f0750df1ebcbc6"
+checksum = "2586fea28e186957ef732a5f8b3be2da217d65c5969d4b1e17f973ebbe876879"
 dependencies = [
- "zerocopy-derive 0.8.23",
+ "zerocopy-derive 0.8.24",
 ]
 
 [[package]]
@@ -2351,9 +2375,9 @@ dependencies = [
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.23"
+version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6352c01d0edd5db859a63e2605f4ea3183ddbd15e2c4a9e7d32184df75e4f154"
+checksum = "a996a8f63c5c4448cd959ac1bab0aaa3306ccfd060472f85943ee0750f0169be"
 dependencies = [
  "proc-macro2",
  "quote",
