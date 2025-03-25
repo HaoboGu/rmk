@@ -134,6 +134,9 @@ macro_rules! df {
 #[macro_export]
 macro_rules! shifted {
     ($x: ident) => {
-        $crate::wm!($x, $crate::keycode::ModifierCombination::new_from(false, false, false, true, false))
+        $crate::wm!(
+            $x,
+            $crate::keycode::ModifierCombination::new_from(false, false, false, true, false)
+        )
     };
 }
