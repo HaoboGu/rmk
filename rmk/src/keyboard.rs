@@ -1163,7 +1163,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::action::{EncoderAction, KeyAction};
+    use crate::action::KeyAction;
     use crate::{a, k, layer, mo};
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
@@ -1201,14 +1201,8 @@ mod test {
         // Box::leak is acceptable in tests
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
-        let encoder_map = Box::new([[EncoderAction::default(); 0]; 2]);
-        let leaked_encoder = Box::leak(encoder_map);
 
-        let keymap = block_on(KeyMap::new(
-            leaked_keymap,
-            leaked_encoder,
-            BehaviorConfig::default(),
-        ));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, BehaviorConfig::default()));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
