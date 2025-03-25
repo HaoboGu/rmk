@@ -140,9 +140,11 @@ The key string should follow several rules:
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
-2. For no-key, use `"_"` or `"__"` (you can put any number of `_`)
+2. For no-key (`KeyAction::No`), use `"_"` or `"__"` (you can put any number of `_`)
 
-3. RMK supports many advanced layer operations:
+3. For transparent key (`KeyAction::Transparent`), use `"."` or `".."` (you can put any number of `.`)
+
+4. RMK supports many advanced layer operations:
     1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
     2. Use `"MO(n)"` to create a layer activate action, `n` is the layer number
     3. Use `"LM(n, modifier)"` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
@@ -155,11 +157,11 @@ The key string should follow several rules:
 
   The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-4. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
+5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. For example for a Home row modifier config you can use `MT(F,LShift)`
 
-5. For generic key tap-hold, use `TH(key-tap, key-hold)`
+6. For generic key tap-hold, use `TH(key-tap, key-hold)`
 
-6. For shifted key, use `SHIFTED(key)`
+7. For shifted key, use `SHIFTED(key)`
 
 ### `[behavior]`
 
