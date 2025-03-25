@@ -228,7 +228,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                 // This layer is activated
                 let action = layer[row][col];
-                if action == KeyAction::Transparent || action == KeyAction::No {
+                if action == KeyAction::Transparent {
                     continue;
                 }
 
