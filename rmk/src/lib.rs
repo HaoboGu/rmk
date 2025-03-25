@@ -98,7 +98,7 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
-pub async fn initialize_keymap_and_storage<
+pub async fn initialize_encoder_keymap_and_storage<
     'a,
     F: AsyncNorFlash,
     const ROW: usize,
@@ -115,17 +115,45 @@ pub async fn initialize_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>,
 ) {
-    let mut storage =
-        Storage::new(flash, default_keymap, default_encoder_map, storage_config).await;
+    let mut storage = Storage::new(
+        flash,
+        default_keymap,
+        &Some(default_encoder_map),
+        storage_config,
+    )
+    .await;
 
     let keymap = RefCell::new(
         KeyMap::new_from_storage(
             default_keymap,
-            default_encoder_map,
+            Some(default_encoder_map),
             Some(&mut storage),
             behavior_config,
         )
         .await,
+    );
+    (keymap, storage)
+}
+
+pub async fn initialize_keymap_and_storage<
+    'a,
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+>(
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    flash: F,
+    storage_config: config::StorageConfig,
+    behavior_config: config::BehaviorConfig,
+) -> (
+    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
+    Storage<F, ROW, COL, NUM_LAYER, 0>,
+) {
+    let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
+
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await,
     );
     (keymap, storage)
 }

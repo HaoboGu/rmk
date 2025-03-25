@@ -487,7 +487,7 @@ impl<
     pub async fn new(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
         config: StorageConfig,
     ) -> Self {
         // Check storage setting
@@ -732,7 +732,7 @@ impl<
     pub(crate) async fn read_keymap(
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
     ) -> Result<(), ()> {
         let mut storage_cache = NoCache::new();
         if let Ok(mut key_iterator) = fetch_all_items::<u32, _, _>(
@@ -755,8 +755,10 @@ impl<
                         }
                     }
                     StorageData::EncoderConfig(encoder) => {
-                        if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODERS {
-                            encoder_map[encoder.layer][encoder.idx] = encoder.action;
+                        if let Some(ref mut map) = encoder_map {
+                            if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODERS {
+                                map[encoder.layer][encoder.idx] = encoder.action;
+                            }
                         }
                     }
                     _ => continue,
@@ -815,7 +817,7 @@ impl<
     async fn initialize_storage_with_config(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
@@ -877,7 +879,7 @@ impl<
         }
 
         // Save encoder configurations
-        if NUM_ENCODERS > 0 {
+        if let Some(encoder_map) = encoder_map {
             for (layer, layer_data) in encoder_map.iter().enumerate() {
                 for (idx, action) in layer_data.iter().enumerate() {
                     let item = StorageData::EncoderConfig(EncoderConfig {

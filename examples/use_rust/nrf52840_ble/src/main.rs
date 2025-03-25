@@ -19,7 +19,6 @@ use embassy_nrf::{
 };
 use keymap::{COL, NUM_ENCODER, NUM_LAYER, ROW};
 use panic_probe as _;
-use rmk::input_device::rotary_encoder::E8H7Phase;
 use rmk::{
     ble::SOFTWARE_VBUS,
     channel::EVENT_CHANNEL,
@@ -28,9 +27,9 @@ use rmk::{
     },
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join4,
-    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
+    initialize_encoder_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{
-        rotary_encoder::{RotaryEncoder, RotaryEncoderProcessor},
+        rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
         Runnable,
     },
     keyboard::Keyboard,
@@ -126,7 +125,7 @@ async fn main(spawner: Spawner) {
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut default_encoder_map = keymap::get_default_encoder_map();
-    let (keymap, storage) = initialize_keymap_and_storage(
+    let (keymap, storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut default_encoder_map,
         flash,

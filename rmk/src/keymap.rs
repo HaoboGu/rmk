@@ -27,7 +27,7 @@ pub struct KeyMap<
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
-    pub(crate) encoders: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+    pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -47,7 +47,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 {
     pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
         behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
@@ -67,10 +67,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             behavior,
         }
     }
-    
+
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER],
+        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
         behavior: BehaviorConfig,
     ) -> Self {
@@ -84,7 +84,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if {
                 Ok(())
                     // Read keymap to `action_map`
-                    .and(storage.read_keymap(action_map, encoder_map).await)
+                    .and(storage.read_keymap(action_map, &mut encoder_map).await)
                     // Read macro cache
                     .and(storage.read_macro_cache(&mut macro_cache).await)
                     // Read combo cache
@@ -263,7 +263,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         encoder_event: RotaryEncoderEvent,
     ) -> Option<&EncoderAction> {
         let layer = self.get_activated_layer();
-        self.encoders[layer as usize].get(encoder_event.id as usize)
+        if let Some(encoders) = &self.encoders {
+            encoders[layer as usize].get(encoder_event.id as usize)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn get_activated_layer(&self) -> u8 {

@@ -188,7 +188,6 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
             Err(_) => return Direction::None,
         }
 
-        info!("s: {:b}", s);
         // move new state in
         self.state = s >> 2;
 
