@@ -1,13 +1,14 @@
 use crate::{
-    action::{EncoderAction, KeyAction},
-    boot::reboot_keyboard,
+    action::KeyAction,
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::{KeyEvent, RotaryEncoderEvent},
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    storage::Storage,
 };
+#[cfg(feature = "storage")]
+use crate::{boot::reboot_keyboard, storage::Storage};
+#[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
 use num_enum::FromPrimitive;
 
@@ -67,7 +68,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             behavior,
         }
     }
-
+    #[cfg(feature = "storage")]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,

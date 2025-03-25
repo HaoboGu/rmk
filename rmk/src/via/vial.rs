@@ -5,12 +5,17 @@ use num_enum::FromPrimitive;
 
 use crate::{
     action::KeyAction,
-    channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM},
+    combo::{Combo, COMBO_MAX_NUM},
     keymap::KeyMap,
-    storage::{ComboData, FlashOperationMessage},
     usb::descriptor::ViaReport,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
+    via::keycode_convert::to_via_keycode,
+};
+#[cfg(feature = "storage")]
+use crate::{
+    channel::FLASH_CHANNEL,
+    combo::COMBO_MAX_LENGTH,
+    storage::{ComboData, FlashOperationMessage},
+    via::keycode_convert::from_via_keycode,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -160,6 +165,7 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialComboSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
+                    #[cfg(feature = "storage")]
                     let (real_idx, actions, output) = {
                         // Drop combos to release the borrowed keymap, avoid potential run-time panics
                         let combo_idx = report.output_data[3] as usize;
@@ -194,6 +200,7 @@ pub(crate) async fn process_vial<
 
                         (real_idx, actions, output)
                     };
+                    #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::WriteCombo(ComboData {
                             idx: real_idx,
