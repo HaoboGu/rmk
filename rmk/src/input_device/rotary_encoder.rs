@@ -64,7 +64,7 @@ impl Phase for DefaultPhase {
     }
 }
 
-//// Phase implementation for E8H7 encoder
+/// Phase implementation for E8H7 encoder
 pub struct E8H7Phase;
 impl Phase for E8H7Phase {
     fn direction(&mut self, s: u8) -> Direction {

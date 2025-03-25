@@ -29,7 +29,7 @@ use core::{
     future::Future,
     sync::atomic::{AtomicBool, AtomicU8},
 };
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
@@ -37,9 +37,7 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_time::Timer;
 use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
-use embedded_hal;
 use embedded_hal::digital::OutputPin;
-use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 pub use futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
@@ -48,7 +46,6 @@ use matrix::MatrixTrait;
 #[cfg(feature = "_nrf_ble")]
 use nrf_softdevice::Softdevice;
 pub use rmk_macro as macros;
-use storage::Storage;
 use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
@@ -57,6 +54,11 @@ use {
     crate::usb::descriptor::{CompositeReport, KeyboardReport},
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
     crate::via::UsbVialReaderWriter,
+};
+#[cfg(feature = "storage")]
+use {
+    embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
+    storage::Storage,
 };
 
 pub use heapless;
@@ -84,6 +86,7 @@ pub mod light;
 pub mod matrix;
 #[cfg(feature = "split")]
 pub mod split;
+#[cfg(feature = "storage")]
 pub mod storage;
 pub(crate) mod usb;
 pub mod via;
@@ -96,7 +99,14 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// Whether the connection is ready.
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
+pub async fn initialize_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    behavior_config: config::BehaviorConfig,
+) -> RefCell<KeyMap<ROW, COL, NUM_LAYER>> {
+    RefCell::new(KeyMap::new(default_keymap, behavior_config).await)
+}
 
+#[cfg(feature = "storage")]
 pub async fn initialize_keymap_and_storage<
     F: AsyncNorFlash,
     const ROW: usize,
@@ -122,7 +132,7 @@ pub async fn initialize_keymap_and_storage<
 #[allow(unreachable_code)]
 pub async fn run_rmk<
     'a,
-    F: AsyncNorFlash,
+    #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
@@ -131,7 +141,7 @@ pub async fn run_rmk<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    mut storage: Storage<F, ROW, COL, NUM_LAYER>,
+    #[cfg(feature = "storage")] mut storage: Storage<F, ROW, COL, NUM_LAYER>,
     mut light_controller: LightController<Out>,
     rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
@@ -178,6 +188,7 @@ pub async fn run_rmk<
         loop {
             run_keyboard(
                 keymap,
+                #[cfg(feature = "storage")]
                 &mut storage,
                 run_usb_device(&mut usb_device),
                 &mut light_controller,
@@ -200,14 +211,14 @@ pub(crate) async fn run_keyboard<
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     Fu: Future<Output = ()>,
-    F: AsyncNorFlash,
+    #[cfg(feature = "storage")] F: AsyncNorFlash,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
     communication_task: Fu,
     light_controller: &mut LightController<Out>,
     led_reader: R,
@@ -224,13 +235,17 @@ pub(crate) async fn run_keyboard<
     let led_fut = light_service.run();
     let via_fut = vial_service.run();
 
+    #[cfg(feature = "storage")]
     #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
     let storage_fut = storage.run();
 
     match select4(
         communication_task,
         #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
+        #[cfg(feature = "storage")]
         select(storage_fut, via_fut),
+        #[cfg(not(feature = "storage"))]
+        via_fut,
         #[cfg(all(not(feature = "_ble"), feature = "_no_external_storage"))]
         via_fut,
         led_fut,
