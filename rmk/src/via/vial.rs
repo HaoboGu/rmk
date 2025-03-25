@@ -8,14 +8,13 @@ use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     keymap::KeyMap,
     usb::descriptor::ViaReport,
-    via::keycode_convert::to_via_keycode,
+    via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
     combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
-    via::keycode_convert::from_via_keycode,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -255,7 +254,7 @@ pub(crate) async fn process_vial<
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            let encoder = if let Some(ref mut encoder_map) = &mut keymap.borrow_mut().encoders {
+            let _encoder = if let Some(ref mut encoder_map) = &mut keymap.borrow_mut().encoders {
                 if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
                     if let Some(encoder) = encoder_layer.get_mut(index as usize) {
                         if clockwise == 1 {
@@ -280,8 +279,9 @@ pub(crate) async fn process_vial<
                 None
             };
 
+            #[cfg(feature = "storage")]
             // Save the encoder action to the storage after the RefCell is released
-            if let Some(encoder) = encoder {
+            if let Some(encoder) = _encoder {
                 // Save the encoder action to the storage
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::EncoderKey {

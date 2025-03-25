@@ -445,7 +445,7 @@ pub struct Storage<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
-    const NUM_ENCODERS: usize = 0,
+    const NUM_ENCODER: usize = 0,
 > {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
@@ -481,13 +481,13 @@ impl<
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-        const NUM_ENCODERS: usize,
-    > Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>
+        const NUM_ENCODER: usize,
+    > Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
+        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         config: StorageConfig,
     ) -> Self {
         // Check storage setting
@@ -666,7 +666,7 @@ impl<
                         layer: layer as usize,
                         action,
                     });
-                    let key = get_encoder_config_key::<NUM_ENCODERS>(idx as usize, layer as usize);
+                    let key = get_encoder_config_key::<NUM_ENCODER>(idx as usize, layer as usize);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -732,7 +732,7 @@ impl<
     pub(crate) async fn read_keymap(
         &mut self,
         keymap: &mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
+        encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     ) -> Result<(), ()> {
         let mut storage_cache = NoCache::new();
         if let Ok(mut key_iterator) = fetch_all_items::<u32, _, _>(
@@ -756,7 +756,7 @@ impl<
                     }
                     StorageData::EncoderConfig(encoder) => {
                         if let Some(ref mut map) = encoder_map {
-                            if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODERS {
+                            if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
                                 map[encoder.layer][encoder.idx] = encoder.action;
                             }
                         }
@@ -817,7 +817,7 @@ impl<
     async fn initialize_storage_with_config(
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
+        encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
@@ -888,7 +888,7 @@ impl<
                         action: *action,
                     });
 
-                    let key = get_encoder_config_key::<NUM_ENCODERS>(idx, layer);
+                    let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);
 
                     store_item(
                         &mut self.flash,

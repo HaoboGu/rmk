@@ -1,5 +1,5 @@
 use crate::{
-    action::KeyAction,
+    action::{EncoderAction, KeyAction},
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::{KeyEvent, RotaryEncoderEvent},
@@ -23,12 +23,12 @@ pub struct KeyMap<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
-    const NUM_ENCODERS: usize = 0,
+    const NUM_ENCODER: usize = 0,
 > {
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
-    pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
+    pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -43,12 +43,12 @@ pub struct KeyMap<
     pub(crate) behavior: BehaviorConfig,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODERS: usize>
-    KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODERS>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
+        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
@@ -71,8 +71,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     #[cfg(feature = "storage")]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODERS]; NUM_LAYER]>,
-        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODERS>>,
+        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
