@@ -109,9 +109,9 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
 /// Parse the key string at a single position
 pub(crate) fn parse_key(key: String) -> TokenStream2 {
     if !key.is_empty() && key.trim_start_matches("_").is_empty() {
-        return quote! { ::rmk::a!(No) };
-    } else if !key.is_empty() && key.trim_start_matches(".").is_empty() {
         return quote! { ::rmk::a!(Transparent) };
+    } else if !key.is_empty() && key == "No" {
+        return quote! { ::rmk::a!(No) };
     }
 
     match key {

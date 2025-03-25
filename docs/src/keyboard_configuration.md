@@ -140,9 +140,9 @@ The key string should follow several rules:
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
-2. For no-key (`KeyAction::No`), use `"_"` or `"__"` (you can put any number of `_`)
+2. For no-key (`KeyAction::No`), use `"No"`
 
-3. For transparent key (`KeyAction::Transparent`), use `"."` or `".."` (you can put any number of `.`)
+3. For transparent key (`KeyAction::Transparent`), use `"_"` or `"__"` (you can put any number of `_`)
 
 4. RMK supports many advanced layer operations:
     1. Use `"DF(n)"` to create a switch default layer actiov, `n` is the layer number
