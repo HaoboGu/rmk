@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 rmk = { path = "../../../rmk", features = [
     "_ble",
     "async_matrix",
+    "trouble_ble",
 ] }
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
@@ -50,8 +51,11 @@ defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 static_cell = "2"
 
+once_cell = { version = "1.19", features = [
+    "atomic-polyfill",
+], default-features = false }
 rand = { version = "0.8.4", default-features = false }
-rand_core = { version = "0.6"}
+rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]

@@ -1044,6 +1044,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
+ "defmt",
  "hash32 0.3.1",
  "stable_deref_trait",
 ]
@@ -1361,6 +1362,10 @@ name = "once_cell"
 version = "1.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75b0bedcc4fe52caa0e03d9f1151a323e4aa5e2d78ba3580400cd3c9e2bc4bc"
+dependencies = [
+ "critical-section",
+ "portable-atomic",
+]
 
 [[package]]
 name = "p256"
@@ -1671,6 +1676,7 @@ dependencies = [
  "json",
  "nrf-mpsl",
  "nrf-sdc",
+ "once_cell",
  "panic-probe",
  "rand",
  "rand_chacha",

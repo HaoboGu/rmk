@@ -68,7 +68,7 @@ embassy-nrf = { version = "0.3.1", features = [
 
 trouble-host = { path = "/Users/haobogu/Projects/rust/trouble/host", features = [
 # trouble-host = { git = "https://github.com/embassy-rs/trouble", features = [
-    "log",
+    # "log",
     "gatt",
     "scan",
     "derive",
@@ -139,6 +139,7 @@ defmt = [
     "nrf-softdevice?/defmt",
     "postcard/use-defmt",
     "trouble-host?/defmt",
+    "heapless/defmt-03",
 ]
 
 log = [

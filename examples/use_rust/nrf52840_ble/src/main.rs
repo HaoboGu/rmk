@@ -110,7 +110,7 @@ async fn main(spawner: Spawner) {
         2806,
     );
     let storage_config = StorageConfig {
-        start_addr: 0,
+        start_addr: 0x78000,
         num_sectors: 6,
         ..Default::default()
     };
@@ -140,8 +140,8 @@ async fn main(spawner: Spawner) {
     let mut keyboard: Keyboard<'_, ROW, COL, NUM_LAYER> =
         Keyboard::new(&keymap, rmk_config.behavior_config.clone());
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    // let mut matrix = TestMatrix::<ROW, COL>::new();
+    // let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut matrix = TestMatrix::<ROW, COL>::new();
 
     // Initialize the light controller
     let light_controller: LightController<Output> =

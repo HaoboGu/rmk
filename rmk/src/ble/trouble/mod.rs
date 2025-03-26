@@ -1,11 +1,11 @@
 use crate::ble::led::BleLedReader;
 use crate::channel::{FLASH_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
-use crate::hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
+use crate::hid::RunnableHidWriter;
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
 use crate::storage::Storage;
-use crate::{run_keyboard, LightService, VialService, CONNECTION_STATE};
+use crate::{LightService, VialService};
 use ble_server::{BleHidServer, BleViaServer, Server};
 use core::cell::RefCell;
 use core::sync::atomic::AtomicU8;
@@ -17,8 +17,8 @@ use embedded_hal::digital::OutputPin;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
-use trouble_host::{prelude::*, BondInformation, LongTermKey};
-use usbd_hid::descriptor::{MediaKeyboardReport, SerializedDescriptor};
+use trouble_host::prelude::*;
+use usbd_hid::descriptor::MediaKeyboardReport;
 
 pub(crate) mod ble_server;
 pub(crate) mod bonder;
@@ -74,12 +74,6 @@ pub async fn run<
         }
     }
 
-    info!(
-        "Loaded {} bond information: {:?}",
-        bond_info.len(),
-        bond_info
-    );
-
     let Host {
         mut peripheral,
         runner,
@@ -97,7 +91,7 @@ pub async fn run<
         loop {
             match advertise(rmk_config.usb_config.product_name, &mut peripheral, &server).await {
                 Ok(conn) => {
-                    CONNECTION_STATE.store(true, core::sync::atomic::Ordering::SeqCst);
+                    info!("connected");
                     let mut ble_hid_server = BleHidServer::new(&server, &conn);
                     let ble_via_server = BleViaServer::new(&server, &conn);
                     let ble_led_reader = BleLedReader {};
@@ -107,7 +101,6 @@ pub async fn run<
                     let led_fut = light_service.run();
                     let via_fut = vial_service.run();
 
-                    #[cfg(any(feature = "_ble", not(feature = "_no_external_storage")))]
                     let storage_fut = storage.run();
                     select4(
                         gatt_events_task(&server, &conn, &stack),
@@ -116,16 +109,6 @@ pub async fn run<
                         ble_hid_server.run_writer(),
                     )
                     .await;
-                    let bond_info = stack.get_bond_information();
-                    info!("saving bond_info: {:?}", bond_info);
-                    FLASH_CHANNEL
-                        .send(crate::storage::FlashOperationMessage::TroubleBondInfo(
-                            bonder::BondInfo {
-                                slot_num: 0,
-                                info: bond_info[0].clone(),
-                            },
-                        ))
-                        .await;
                 }
                 Err(e) => {
                     panic!("[adv] error: {:?}", e);
@@ -186,15 +169,28 @@ async fn gatt_events_task<C: Controller>(
                 info!("[gatt] disconnected: {:?}", reason);
                 let bond_info = stack.get_bond_information();
                 info!("saving bond_info: {:?}", bond_info);
+                if bond_info.len() >= 1 {
+                    FLASH_CHANNEL
+                        .send(crate::storage::FlashOperationMessage::TroubleBondInfo(
+                            bonder::BondInfo {
+                                slot_num: 0,
+                                info: bond_info[0].clone(),
+                            },
+                        ))
+                        .await;
+                }
+                break;
+            }
+            GattConnectionEvent::Bonded { bond_info } => {
+                info!("[gatt] bonded: {:?}", bond_info);
                 FLASH_CHANNEL
                     .send(crate::storage::FlashOperationMessage::TroubleBondInfo(
                         bonder::BondInfo {
                             slot_num: 0,
-                            info: bond_info[0].clone(),
+                            info: bond_info,
                         },
                     ))
                     .await;
-                break;
             }
             GattConnectionEvent::Gatt { event } => {
                 match event {
@@ -386,7 +382,10 @@ async fn custom_task<C: Controller, F: AsyncNorFlash>(
                 buf[0..16].copy_from_slice(&ltk);
                 buf[16..22].copy_from_slice(address.raw());
                 if let Err(e) = storage.write(0, &buf).await {
-                    info!("[custom_task] error writing bond info: {:?}", e);
+                    info!(
+                        "[custom_task] error writing {} bond info",
+                        last_bond_info.len()
+                    );
                 }
                 // Saving bond info
                 info!("Saving Bond information: {:?}", last_bond_info);
