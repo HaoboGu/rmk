@@ -6,8 +6,8 @@ pub use embassy_sync::channel;
 use embassy_sync::channel::Channel;
 pub use embassy_sync::zerocopy_channel;
 
-#[cfg(feature = "_nrf_ble")]
-use crate::ble::nrf::profile::BleProfileAction;
+#[cfg(any(feature = "_nrf_ble", feature = "trouble_ble"))]
+use crate::ble::trouble::profile::BleProfileAction;
 use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
 use crate::storage::FlashOperationMessage;
@@ -29,5 +29,5 @@ pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZ
 pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], 4> = Channel::new();
 // Sync messages from server to flash
 pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, 4> = Channel::new();
-#[cfg(feature = "_nrf_ble")]
+#[cfg(any(feature = "_nrf_ble", feature = "trouble_ble"))]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();

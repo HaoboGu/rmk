@@ -24,7 +24,7 @@ use {crate::ble::nrf::bonder::BondInfo, core::mem};
 #[cfg(feature = "trouble_ble")]
 use {
     crate::ble::trouble::bonder::BondInfo,
-    trouble_host::{prelude::*, LongTermKey, BondInformation},
+    trouble_host::{prelude::*, BondInformation, LongTermKey},
 };
 
 use crate::keyboard_macro::MACRO_SPACE_SIZE;
@@ -838,21 +838,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     async fn check_enable(&mut self) -> bool {
-        return true;
-        // if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
-        //     &mut self.flash,
-        //     self.storage_range.clone(),
-        //     &mut NoCache::new(),
-        //     &mut self.buffer,
-        //     &(StorageKeys::StorageConfig as u32),
-        // )
-        // .await
-        // {
-        //     if config.enable && config.build_hash == BUILD_HASH {
-        //         return true;
-        //     }
-        // }
-        // false
+        if let Ok(Some(StorageData::StorageConfig(config))) = fetch_item::<u32, StorageData, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &(StorageKeys::StorageConfig as u32),
+        )
+        .await
+        {
+            // if config.enable && config.build_hash == BUILD_HASH {
+            if config.enable {
+                return true;
+            }
+        }
+        false
     }
 
     #[cfg(feature = "trouble_ble")]
@@ -880,7 +880,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
 fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
     match e {
-        SSError::Storage { value: _ } => error!("Flash error"),
+        #[cfg(feature = "defmt")]
+        SSError::Storage { value: e } => error!("Flash error: {:?}", defmt::Debug2Format(&e)),
+        #[cfg(not(feature = "defmt"))]
+        SSError::Storage { value: _e } => error!("Flash error"),
         SSError::FullStorage => error!("Storage is full"),
         SSError::Corrupted {} => error!("Storage is corrupted"),
         SSError::BufferTooBig => error!("Buffer too big"),

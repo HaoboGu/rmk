@@ -1,18 +1,15 @@
 //! Manage BLE profiles
-//!
 
 use core::sync::atomic::Ordering;
 
 use embassy_futures::yield_now;
 
 use crate::{
-    ble::nrf::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
+    ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
     channel::{BLE_PROFILE_CHANNEL, FLASH_CHANNEL},
     storage::FlashOperationMessage,
     CONNECTION_TYPE,
 };
-
-use super::bonder::MultiBonder;
 
 /// BLE profile switch action
 pub(crate) enum BleProfileAction {
@@ -24,7 +21,7 @@ pub(crate) enum BleProfileAction {
 }
 
 // Wait for profile switch action and update the active profile
-pub(crate) async fn update_profile(bonder: &MultiBonder) {
+pub(crate) async fn update_profile() {
     // Wait until there's a profile switch action
     loop {
         match BLE_PROFILE_CHANNEL.receive().await {
@@ -61,7 +58,6 @@ pub(crate) async fn update_profile(bonder: &MultiBonder) {
             }
             BleProfileAction::ClearProfile => {
                 let profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
-                bonder.clear_bonded(profile);
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::ClearSlot(profile))
                     .await;

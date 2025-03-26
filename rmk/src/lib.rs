@@ -18,16 +18,12 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-#[cfg(feature = "_esp_ble")]
-use crate::ble::esp::run_esp_ble_keyboard;
-#[cfg(feature = "_nrf_ble")]
-pub use crate::ble::nrf::initialize_nrf_sd_and_flash;
 use crate::light::LightController;
 use config::{RmkConfig, VialConfig};
 use core::{
     cell::RefCell,
     future::Future,
-    sync::atomic::{AtomicBool, AtomicU8},
+    sync::atomic::{AtomicBool, AtomicU8, Ordering},
 };
 use embassy_futures::select::{select, select4, Either4};
 #[cfg(not(any(cortex_m)))]
@@ -47,21 +43,23 @@ use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
 #[cfg(feature = "_nrf_ble")]
 use nrf_softdevice::Softdevice;
+#[cfg(feature = "trouble_ble")]
+use rand_core::{CryptoRng, RngCore};
 pub use rmk_macro as macros;
 use storage::Storage;
+#[cfg(feature = "trouble_ble")]
+use trouble_host::prelude::*;
 use usb::descriptor::ViaReport;
+#[cfg(not(feature = "trouble_ble"))]
+use usb::descriptor::{CompositeReport, KeyboardReport};
+#[cfg(not(feature = "trouble_ble"))]
+use via::UsbVialReaderWriter;
 use via::VialService;
 #[cfg(all(not(feature = "_nrf_ble"), not(feature = "_no_usb")))]
 use {
     crate::light::UsbLedReader,
-    crate::usb::descriptor::{CompositeReport, KeyboardReport},
     crate::usb::{new_usb_builder, UsbKeyboardWriter},
-    crate::via::UsbVialReaderWriter,
 };
-#[cfg(feature = "trouble_ble")]
-use rand_core::{CryptoRng, RngCore};
-#[cfg(feature = "trouble_ble")]
-use trouble_host::prelude::*;
 
 pub use heapless;
 #[cfg(not(feature = "_no_usb"))]
@@ -101,6 +99,22 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
 
+#[repr(u8)]
+pub(crate) enum ConnectionType {
+    Usb = 0,
+    Ble = 1,
+}
+
+impl ConnectionType {
+    pub fn current() -> Self {
+        match CONNECTION_TYPE.load(Ordering::Acquire) as u8 {
+            0 => Self::Usb,
+            1 => Self::Ble,
+            _ => unreachable!("Invalid connection type"),
+        }
+    }
+}
+
 pub async fn initialize_keymap_and_storage<
     F: AsyncNorFlash,
     const ROW: usize,
@@ -127,12 +141,9 @@ pub async fn initialize_keymap_and_storage<
 pub async fn run_rmk<
     'a,
     F: AsyncNorFlash,
-    #[cfg(feature = "trouble_ble")]
-    C: Controller,
-    #[cfg(feature = "trouble_ble")]
-    RNG: RngCore + CryptoRng,
-    #[cfg(not(feature = "_no_usb"))]
-    D: Driver<'static>,
+    #[cfg(feature = "trouble_ble")] C: Controller,
+    #[cfg(feature = "trouble_ble")] RNG: RngCore + CryptoRng,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,
@@ -141,38 +152,13 @@ pub async fn run_rmk<
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     mut storage: Storage<F, ROW, COL, NUM_LAYER>,
-    #[cfg(feature = "trouble_ble")]
-    controller: C,
-    #[cfg(feature = "trouble_ble")]
-    random_generator: &mut RNG,
+    #[cfg(feature = "trouble_ble")] controller: C,
+    #[cfg(feature = "trouble_ble")] random_generator: &mut RNG,
     mut light_controller: LightController<Out>,
     rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
 ) -> ! {
     // Dispatch the keyboard runner
-    #[cfg(feature = "_nrf_ble")]
-    crate::ble::nrf::run_nrf_ble_keyboard(
-        keymap,
-        &mut storage,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        &mut light_controller,
-        rmk_config,
-        sd,
-    )
-    .await;
-
-    #[cfg(feature = "_esp_ble")]
-    run_esp_ble_keyboard(
-        keymap,
-        &mut storage,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        &mut light_controller,
-        rmk_config,
-    )
-    .await;
-
     #[cfg(feature = "trouble_ble")]
     crate::ble::trouble::run(
         keymap,

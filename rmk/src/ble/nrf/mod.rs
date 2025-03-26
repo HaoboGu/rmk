@@ -544,23 +544,7 @@ pub(crate) async fn set_conn_params(conn: &Connection) {
     }
 }
 
-// Dummy keyboard service is used to monitoring keys when there's no actual connection.
-// It's useful for functions like switching active profiles when there's no connection.
-pub(crate) async fn run_dummy_keyboard<
-    'a,
-    'b,
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
->(
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-) {
-    CONNECTION_STATE.store(false, Ordering::Release);
-    let storage_fut = storage.run();
-    let mut dummy_writer = DummyWriter {};
-    select(storage_fut, dummy_writer.run_writer()).await;
-}
+
 
 #[cfg(not(feature = "_no_usb"))]
 // Wait for USB enabled or BLE state changed

@@ -54,7 +54,6 @@ once_cell = { version = "1.19", features = [
     "atomic-polyfill",
 ], default-features = false, optional = true }
 nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "b53991e", features = [
-
     "ble-peripheral",
     "critical-section-impl",
     "ble-gatt-server",
@@ -66,26 +65,14 @@ embassy-nrf = { version = "0.3.1", features = [
     "time",
 ], optional = true }
 
-trouble-host = { path = "/Users/haobogu/Projects/rust/trouble/host", features = [
-# trouble-host = { git = "https://github.com/embassy-rs/trouble", features = [
-    # "log",
+# BLE dependencies
+trouble-host = { version = "0.1.0", features = [
     "gatt",
     "scan",
     "derive",
     "security",
-    # "gatt-client-notification-max-subscribers-8",
-    # "gatt-client-notification-queue-size-4",
-    # "l2cap-tx-packet-pool-size-64",
-    # "l2cap-rx-packet-pool-size-64",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-
-# Espressif dependencies
-# esp32-nimble = { version = "0.10", optional = true }
-# esp-idf-svc = { version = "0.51", default-features = false, features = [
-#     "embedded-storage",
-#     "experimental",
-# ], optional = true }
 
 # RP2040 dependencies
 embassy-rp = { version = "0.4", optional = true }
@@ -142,10 +129,7 @@ defmt = [
     "heapless/defmt-03",
 ]
 
-log = [
-    "dep:log",
-    "trouble-host?/log",
-]
+log = ["dep:log", "trouble-host?/log"]
 
 ## Add std feature for testing
 std = [
@@ -223,17 +207,10 @@ _esp_ble = [
     "_no_usb",      # ESP doesn't have USB support right now
     "trouble-host",
     "rand_core",
-    # "ssmarshal/std",
-    # "dep:esp32-nimble",
-    # "dep:esp-idf-svc",
 ]
 
 ## Enable feature if you want to use trouble BLE stack
-trouble_ble = [
-    "_ble",
-    "trouble-host",
-    "rand_core",
-]
+trouble_ble = ["_ble", "trouble-host", "rand_core"]
 
 _nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
 _ble = ["_no_external_storage"]
