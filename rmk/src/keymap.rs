@@ -1,13 +1,14 @@
 use crate::{
-    action::KeyAction,
-    boot::reboot_keyboard,
+    action::{EncoderAction, KeyAction},
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
-    event::KeyEvent,
+    event::{KeyEvent, RotaryEncoderEvent},
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
-    storage::Storage,
 };
+#[cfg(feature = "storage")]
+use crate::{boot::reboot_keyboard, storage::Storage};
+#[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
 use num_enum::FromPrimitive;
 
@@ -17,11 +18,17 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct KeyMap<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize = 0,
+> {
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    // TODO: Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
-    // pub(crate) encoders: Option<&'a mut [[(KeyAction, KeyAction); 2]; NUM_LAYER]>,
+    /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
+    pub(crate) encoders: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     /// Current state of each layer
     layer_state: [bool; NUM_LAYER],
     /// Default layer number, max: 32
@@ -36,19 +43,23 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) behavior: BehaviorConfig,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    KeyMap<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+        encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         behavior: BehaviorConfig,
     ) -> Self {
+        // If the storage is initialized, read keymap from storage
         let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
         for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
+
         KeyMap {
             layers: action_map,
+            encoders: encoder_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
@@ -57,10 +68,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             behavior,
         }
     }
-
+    #[cfg(feature = "storage")]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
-        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER>>,
+        mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
@@ -73,7 +85,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             if {
                 Ok(())
                     // Read keymap to `action_map`
-                    .and(storage.read_keymap(action_map).await)
+                    .and(storage.read_keymap(action_map, &mut encoder_map).await)
                     // Read macro cache
                     .and(storage.read_macro_cache(&mut macro_cache).await)
                     // Read combo cache
@@ -92,6 +104,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
         KeyMap {
             layers: action_map,
+            encoders: encoder_map,
             layer_state: [false; NUM_LAYER],
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
@@ -244,6 +257,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
 
         KeyAction::No
+    }
+
+    pub(crate) fn get_encoder_with_layer_cache(
+        &self,
+        encoder_event: RotaryEncoderEvent,
+    ) -> Option<&EncoderAction> {
+        let layer = self.get_activated_layer();
+        if let Some(encoders) = &self.encoders {
+            encoders[layer as usize].get(encoder_event.id as usize)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn get_activated_layer(&self) -> u8 {

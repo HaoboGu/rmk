@@ -29,11 +29,12 @@ pub(crate) async fn run_esp_ble_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    _keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    _storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
-    _light_controller: &mut LightController<Out>,
-    _rmk_config: RmkConfig<'static>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    light_controller: &mut LightController<Out>,
+    rmk_config: RmkConfig<'static>,
 ) -> ! {
     // esp32c3 doesn't have USB device, so there is no usb here
     loop {
