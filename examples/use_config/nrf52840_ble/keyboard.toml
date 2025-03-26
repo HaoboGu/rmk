@@ -70,3 +70,28 @@ combos = [
   # Three-key combo, press A, S, and D keys to output "X"
   { actions = ["A", "S", "D"], output = "X" }
 ]
+
+[behavior.fork]
+forks = [
+  # Shift + '.' output ':' key
+  { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
+
+  # Shift + ',' output ';' key but only if no Alt is pressed
+  { trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift", match_none = "LAlt|RAlt" },  
+  
+  # left bracket outputs by default '{', with shifts pressed outputs '['  
+  { trigger = "LeftBracket", negative_output = "WM(LeftBracket, LShift)", positive_output = "LeftBracket", match_any = "LShift|RShift" },
+
+  # flip the effect of shift on 'x'/'X'
+  { trigger = "X", negative_output = "WM(X, LShift)", positive_output = "X", match_any = "LShift|RShift" },
+
+  # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro 
+  { trigger = "F24", negative_output = "A", positive_output = "Macro1", match_any = "LShift|LCtrl" },
+
+  # swap Z and Y keys if MouseBtn1 is pressed (on the keyboard)  
+  { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1" },
+  { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1" },
+
+  # Shift + Backspace output Delete key (inside a layer tap/hold)
+  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" }
+]

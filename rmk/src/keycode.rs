@@ -3,6 +3,8 @@ use core::ops::BitOr;
 use bitfield_struct::bitfield;
 use num_enum::FromPrimitive;
 
+use crate::hid_state::HidModifiers;
+
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
 ///
@@ -46,36 +48,20 @@ impl ModifierCombination {
     }
 
     /// Get modifier hid report bits from modifier combination
-    pub(crate) fn to_hid_modifier_bits(self) -> u8 {
-        let mut hid_modifier_bits = 0;
+    pub(crate) fn to_hid_modifiers(self) -> HidModifiers {
         if !self.right() {
-            if self.ctrl() {
-                hid_modifier_bits |= HidModifierBit::RCtrl as u8;
-            }
-            if self.shift() {
-                hid_modifier_bits |= HidModifierBit::RShift as u8;
-            }
-            if self.alt() {
-                hid_modifier_bits |= HidModifierBit::RAlt as u8;
-            }
-            if self.gui() {
-                hid_modifier_bits |= HidModifierBit::RGui as u8;
-            }
+            HidModifiers::new()
+                .with_left_ctrl(self.ctrl())
+                .with_left_shift(self.shift())
+                .with_left_alt(self.alt())
+                .with_left_gui(self.gui())
         } else {
-            if self.ctrl() {
-                hid_modifier_bits |= HidModifierBit::LCtrl as u8;
-            }
-            if self.shift() {
-                hid_modifier_bits |= HidModifierBit::LShift as u8;
-            }
-            if self.alt() {
-                hid_modifier_bits |= HidModifierBit::LAlt as u8;
-            }
-            if self.gui() {
-                hid_modifier_bits |= HidModifierBit::LGui as u8;
-            }
+            HidModifiers::new()
+                .with_right_ctrl(self.ctrl())
+                .with_right_shift(self.shift())
+                .with_right_alt(self.alt())
+                .with_right_gui(self.gui())
         }
-        hid_modifier_bits
     }
 }
 
@@ -894,17 +880,17 @@ impl KeyCode {
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
-    pub(crate) fn to_hid_modifier_bit(self) -> u8 {
+    pub(crate) fn to_hid_modifiers(self) -> HidModifiers {
         match self {
-            KeyCode::LCtrl => HidModifierBit::LCtrl as u8,
-            KeyCode::LShift => HidModifierBit::LShift as u8,
-            KeyCode::LAlt => HidModifierBit::LAlt as u8,
-            KeyCode::LGui => HidModifierBit::LGui as u8,
-            KeyCode::RCtrl => HidModifierBit::RCtrl as u8,
-            KeyCode::RShift => HidModifierBit::RShift as u8,
-            KeyCode::RAlt => HidModifierBit::RAlt as u8,
-            KeyCode::RGui => HidModifierBit::RGui as u8,
-            _ => 0,
+            KeyCode::LCtrl => HidModifiers::new().with_left_ctrl(true),
+            KeyCode::LShift => HidModifiers::new().with_left_shift(true),
+            KeyCode::LAlt => HidModifiers::new().with_left_alt(true),
+            KeyCode::LGui => HidModifiers::new().with_left_gui(true),
+            KeyCode::RCtrl => HidModifiers::new().with_right_ctrl(true),
+            KeyCode::RShift => HidModifiers::new().with_right_shift(true),
+            KeyCode::RAlt => HidModifiers::new().with_right_alt(true),
+            KeyCode::RGui => HidModifiers::new().with_right_gui(true),
+            _ => HidModifiers::new(),
         }
     }
 
@@ -1158,17 +1144,4 @@ impl KeyCode {
             _ => (KeyCode::No, false),
         }
     }
-}
-
-#[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum HidModifierBit {
-    LCtrl = 1 << 0,
-    LShift = 1 << 1,
-    LAlt = 1 << 2,
-    LGui = 1 << 3,
-    RCtrl = 1 << 4,
-    RShift = 1 << 5,
-    RAlt = 1 << 6,
-    RGui = 1 << 7,
 }

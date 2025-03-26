@@ -8,6 +8,8 @@ use crate::input_device::Runnable;
 use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
+    fork::{StateBits, FORK_MAX_NUM},
+    hid_state::{HidLeds, HidModifiers, HidMouseButtons},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
@@ -89,10 +91,18 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     behavior: BehaviorConfig,
 
     /// One shot modifier state
-    osm_state: OneShotState<ModifierCombination>,
+    osm_state: OneShotState<HidModifiers>,
 
     /// One shot layer state
     osl_state: OneShotState<u8>,
+
+    /// the real state before fork activations is stored here
+    fork_states: [Option<KeyAction>; FORK_MAX_NUM], //chosen replacement key of the currently triggered forks
+    fork_keep_mask: HidModifiers, //aggregate here the modifiers pressed after fork activations
+
+    /// Macro text typing state (affects the effective modifiers)
+    macro_texting: bool,
+    macro_caps: bool,
 
     /// Registered key position
     registered_keys: [Option<(u8, u8)>; 6],
@@ -152,6 +162,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             behavior,
             osm_state: OneShotState::default(),
             osl_state: OneShotState::default(),
+            fork_states: [None; FORK_MAX_NUM],
+            fork_keep_mask: HidModifiers::default(),
+            macro_texting: false,
+            macro_caps: false,
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
             report: KeyboardReport::default(),
@@ -257,7 +271,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    async fn process_key_action(&mut self, key_action: KeyAction, key_event: KeyEvent) {
+    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) {
+        let key_action = self.process_forks(original_key_action, key_event);
+
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_event).await,
@@ -285,9 +301,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
         }
 
-        // Record release of current key, which will be used in tap/hold processing
         if !key_event.pressed {
-            // Check key release only
+            // Record release of current key, which will be used in tap/hold processing
             let mut is_mod = false;
             if let KeyAction::Single(Action::Key(k)) = key_action {
                 if k.is_modifier() {
@@ -296,6 +311,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             }
             // Record the last release event
             self.last_release = (key_event, is_mod, Some(Instant::now()));
+
+            // Release of forked key must deactivate the fork:
+            // modifier suppressing effect will be stopped only here,
+            // AFTER the release hid report is already sent.
+            let mut i = 0;
+            for fork in &self.keymap.borrow().forks {
+                if self.fork_states[i].is_some() && fork.trigger == original_key_action {
+                    // if the originating key of a fork is released the replacement decision is not valid anymore
+                    self.fork_states[i] = None;
+                }
+                i += 1;
+            }
         }
     }
 
@@ -413,7 +440,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                     self.unregister_modifiers(modifiers);
                 }
                 //report the modifier press/release in its own hid report
-                self.send_keyboard_report().await;
+                self.send_keyboard_report_with_resolved_modifiers(key_event.pressed)
+                    .await;
                 self.update_osl(key_event);
             }
         }
@@ -634,7 +662,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     /// Process one shot action.
     async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
         match oneshot_action {
-            Action::Modifier(m) => self.process_action_osm(m, key_event).await,
+            Action::Modifier(m) => {
+                self.process_action_osm(m.to_hid_modifiers(), key_event)
+                    .await
+            }
             Action::LayerOn(l) => self.process_action_osl(l, key_event).await,
             _ => {
                 self.process_key_action_normal(oneshot_action, key_event)
@@ -643,7 +674,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    async fn process_action_osm(&mut self, modifiers: ModifierCombination, key_event: KeyEvent) {
+    async fn process_action_osm(&mut self, modifiers: HidModifiers, key_event: KeyEvent) {
         // Update one shot state
         if key_event.pressed {
             // Add new modifier combination to existing one shot or init if none
@@ -683,8 +714,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
                     // This sends a separate hid report with the
                     // currently registered modifiers except the
-                    // one shoot modifies this way "releasing" them.
-                    self.send_keyboard_report().await;
+                    // one shoot modifiers -> this way "releasing" them.
+                    self.send_keyboard_report_with_resolved_modifiers(key_event.pressed)
+                        .await;
                 }
                 _ => (),
             };
@@ -737,6 +769,69 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                 _ => (),
             };
         }
+    }
+
+    /// Replaces the incoming key_action if a fork is configured for that key
+    /// the replacement decision is made at key_press time, and the decision
+    /// is kept until the key is released
+    fn process_forks(&mut self, key_action: KeyAction, key_event: KeyEvent) -> KeyAction {
+        if self.keymap.borrow().forks.len() < 1 {
+            return key_action;
+        }
+
+        if !key_event.pressed {
+            let mut i = 0;
+            for fork in &self.keymap.borrow().forks {
+                if fork.trigger == key_action {
+                    if let Some(replacement) = self.fork_states[i] {
+                        // if the originating key of a fork is released, simply release the replacement key
+                        // the fork deactivation is delayed, will happen after the release hid report is sent
+                        return replacement;
+                    }
+                }
+                i += 1;
+            }
+            return key_action;
+        }
+
+        let decision_state = StateBits {
+            // resolve_modifiers includes the effect of one-shot modifiers, active forks
+            modifiers: self.resolve_modifiers(
+                HidModifiers::from_bits(self.report.modifier),
+                key_event.pressed,
+            ),
+            leds: HidLeds::from_bits(self.report.leds),
+            mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
+        };
+
+        let mut i = 0;
+        for fork in &self.keymap.borrow().forks {
+            if self.fork_states[i].is_none() && fork.trigger == key_action {
+                let decision = (fork.match_any & decision_state) != StateBits::default()
+                    && (fork.match_none & decision_state) == StateBits::default();
+
+                let replacement = if decision {
+                    fork.positive_output
+                } else {
+                    fork.negative_output
+                };
+
+                self.fork_states[i] = Some(replacement);
+
+                // reduce the previously aggregated keeps with the match_any mask
+                // (since this is the expected behavior in most cases)
+                self.fork_keep_mask &= !fork.match_any.modifiers;
+
+                // then add the user defined keeps (if any)
+                self.fork_keep_mask |= fork.kept_modifiers;
+
+                return replacement;
+            }
+
+            i += 1;
+        }
+
+        key_action
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
@@ -796,35 +891,84 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         }
     }
 
-    // precess a basic keypress/release and also take care of applying one shot modifiers
+    /// calculates the combined effect of:
+    /// - registered modifiers
+    /// - one-shot modifiers
+    /// - possible fork related modifier suppressions
+    /// - text macro related modifier suppressions + capitalization
+    pub fn resolve_modifiers(
+        &self,
+        registered_modifiers: HidModifiers,
+        pressed: bool,
+    ) -> HidModifiers {
+        if self.macro_texting {
+            if self.macro_caps {
+                return HidModifiers::new().with_left_shift(true);
+            } else {
+                return HidModifiers::new();
+            }
+        }
+
+        // if one-shot modifier is active, decorate the hid report of keypress with those modifiers
+        let mut result = registered_modifiers;
+
+        // OneShotState::Held keeps the temporary modifiers active until the key is released
+        if pressed {
+            if let Some(osm) = self.osm_state.value() {
+                result |= *osm;
+            }
+        } else if let OneShotState::Held(osm) = self.osm_state {
+            // One shot modifiers usually "released" together with the key release,
+            // except when one-shoot is in "held mode" (to allow Alt+Tab like use cases)
+            // In this later case Held -> None state change will report
+            // the "modifier released" change in a separate hid report
+            result |= osm;
+        };
+
+        // the triggered forks suppress the 'match_any' modifiers automatically
+        // unless they are listed as the 'kept_modifiers'
+        let mut fork_suppress = HidModifiers::default();
+        let mut i = 0;
+        for fork in &self.keymap.borrow().forks {
+            if self.fork_states[i].is_some() {
+                fork_suppress |= fork.match_any.modifiers & (!fork.kept_modifiers);
+            }
+            i += 1;
+        }
+
+        // some of these suppressions may be canceled after the fork activation
+        // by modifier key presses
+        fork_suppress &= !self.fork_keep_mask;
+
+        // execute the remaining suppressions
+        result &= !fork_suppress;
+
+        result
+    }
+
+    async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
+        let registered_state_backup = self.report.modifier;
+
+        // one shot modifiers, fork modifiers and macro modifiers take temporary effect here:
+        self.report.modifier = self
+            .resolve_modifiers(HidModifiers::from_bits(self.report.modifier), pressed)
+            .into_bits();
+
+        self.send_keyboard_report().await;
+
+        self.report.modifier = registered_state_backup;
+    }
+
+    // process a basic keypress/release and also take care of applying one shot modifiers
     async fn process_basic(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key_event.pressed {
             self.register_key(key, key_event);
-            //if one shot modifier is active, decorate the hid report of keypress with those modifiers
-            if let Some(modifiers) = self.osm_state.value() {
-                let old = self.report.modifier;
-                self.report.modifier |= modifiers.to_hid_modifier_bits();
-                self.send_keyboard_report().await;
-                self.report.modifier = old;
-            } else {
-                self.send_keyboard_report().await;
-            }
         } else {
-            // One shot modifiers are "released" together key release,
-            // except when in one shoot is in "held mode" (to allow Alt+Tab like use cases)
-            // In that later case Held -> None state change will report
-            // the "modifier released" change in a separate hid report
             self.unregister_key(key, key_event);
-            if let OneShotState::Held(modifiers) = self.osm_state {
-                // OneShotState::Held keeps the temporary modifiers active
-                let old = self.report.modifier;
-                self.report.modifier |= modifiers.to_hid_modifier_bits();
-                self.send_keyboard_report().await;
-                self.report.modifier = old;
-            } else {
-                self.send_keyboard_report().await;
-            }
         }
+
+        self.send_keyboard_report_with_resolved_modifiers(key_event.pressed)
+            .await;
     }
 
     /// Process layer switch action.
@@ -883,7 +1027,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
             // Check whether the key is held, or it's released within the time interval
             if let Some((pressed, last_tick)) = self.last_mouse_tick.get(&key) {
                 if !pressed && last_tick.elapsed().as_millis() <= 30 {
-                    // The key is just released, ignore the key event, ues a slightly longer time interval
+                    // The key is just released, ignore the key event, use a slightly longer time interval
                     self.last_mouse_tick.remove(&key);
                     return;
                 }
@@ -1014,45 +1158,55 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
                         .keymap
                         .borrow()
                         .get_next_macro_operation(macro_start_idx, offset);
+
                     // Execute the operation
                     match operation {
                         MacroOperation::Press(k) => {
+                            self.macro_texting = false;
                             self.register_key(k, key_event);
+                            self.send_keyboard_report_with_resolved_modifiers(true)
+                                .await;
                         }
                         MacroOperation::Release(k) => {
+                            self.macro_texting = false;
                             self.unregister_key(k, key_event);
+                            self.send_keyboard_report_with_resolved_modifiers(false)
+                                .await;
                         }
                         MacroOperation::Tap(k) => {
+                            self.macro_texting = false;
                             self.register_key(k, key_event);
-                            self.send_keyboard_report().await;
+                            self.send_keyboard_report_with_resolved_modifiers(true)
+                                .await;
                             embassy_time::Timer::after_millis(2).await;
                             self.unregister_key(k, key_event);
+                            self.send_keyboard_report_with_resolved_modifiers(false)
+                                .await;
                         }
                         MacroOperation::Text(k, is_cap) => {
-                            if is_cap {
-                                // If it's a capital letter, send the pressed report with a shift modifier included
-                                self.register_modifier_key(KeyCode::LShift);
-                            }
+                            self.macro_texting = true;
+                            self.macro_caps = is_cap;
                             self.register_keycode(k, key_event);
-                            self.send_keyboard_report().await;
+                            self.send_keyboard_report_with_resolved_modifiers(true)
+                                .await;
                             embassy_time::Timer::after_millis(2).await;
                             self.unregister_keycode(k, key_event);
-                            if is_cap {
-                                // If it was a capital letter, send the release report with the shift modifier released too
-                                self.unregister_modifier_key(KeyCode::LShift);
-                            }
+                            self.send_keyboard_report_with_resolved_modifiers(false)
+                                .await;
                         }
                         MacroOperation::Delay(t) => {
                             embassy_time::Timer::after_millis(t as u64).await;
                         }
                         MacroOperation::End => {
-                            self.send_keyboard_report().await;
+                            if self.macro_texting {
+                                //restore the state of the keyboard (held modifiers, etc.) after text typing
+                                self.send_keyboard_report_with_resolved_modifiers(false)
+                                    .await;
+                                self.macro_texting = false;
+                            }
                             break;
                         }
                     };
-
-                    // Send the item in the macro sequence
-                    self.send_keyboard_report().await;
 
                     offset = new_offset;
                     if offset > self.keymap.borrow().macro_cache.len() {
@@ -1135,22 +1289,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
 
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier |= key.to_hid_modifier_bit();
+        self.report.modifier |= key.to_hid_modifiers().into_bits();
+
+        // if a modifier key arrives after fork activation, it should be kept
+        self.fork_keep_mask |= key.to_hid_modifiers();
     }
 
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier &= !{ key.to_hid_modifier_bit() };
+        self.report.modifier &= !key.to_hid_modifiers().into_bits();
     }
 
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.report.modifier |= modifiers.to_hid_modifier_bits();
+        self.report.modifier |= modifiers.to_hid_modifiers().into_bits();
+
+        // if a modifier key arrives after fork activation, it should be kept
+        self.fork_keep_mask |= modifiers.to_hid_modifiers();
     }
 
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.report.modifier &= !modifiers.to_hid_modifier_bits();
+        self.report.modifier &= !modifiers.to_hid_modifiers().into_bits();
     }
 }
 

@@ -18,6 +18,7 @@ use crate::storage::FlashOperationMessage;
 use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     event::{Event, KeyEvent},
+    fork::{Fork, FORK_MAX_NUM},
     hid::Report,
     light::LedIndicator,
     RawMutex,
@@ -126,6 +127,7 @@ pub struct BehaviorConfig {
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
+    pub fork: ForksConfig,
 }
 
 /// Configurations for tap hold behavior
@@ -175,6 +177,18 @@ impl Default for CombosConfig {
             timeout: Duration::from_millis(50),
             combos: Vec::new(),
         }
+    }
+}
+
+/// Config for fork behavior
+#[derive(Clone, Debug)]
+pub struct ForksConfig {
+    pub forks: Vec<Fork, FORK_MAX_NUM>,
+}
+
+impl Default for ForksConfig {
+    fn default() -> Self {
+        Self { forks: Vec::new() }
     }
 }
 

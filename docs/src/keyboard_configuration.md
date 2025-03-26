@@ -241,6 +241,63 @@ combos = [
 ]
 ```
 
+#### Fork
+
+In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule:
+If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However with `kept_modifiers` some of them can be kept instead of automatic suppression.
+
+Fork configuration includes the following parameters:
+
+- `forks`: An array containing all defined forks. Each fork configuration is an object containing the following attributes:
+  - `trigger`: Defines the triggering key.
+  - `negative_output`: A string defining the output action to be triggered when the conditions are not met
+  - `positive_output`: A string defining the output action to be triggered when the conditions are met
+  - `match_any`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
+  - `match_none`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
+  - `kept_modifiers`: A strings defining a combination of modifier keys, which should not be 'suppressed' form the keyboard state for the time the replacement action is executed. (optional)
+  
+For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"): 
+  - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of 'one-shot modifiers' too) 
+  - `CapsLock`, `ScrollLock`, `NumLock`, 
+  - `MouseBtn1` .. `MouseBtn8`
+
+Here is a sample of fork configuration with random examples:
+
+```toml
+[behavior.fork]
+forks = [
+  # Shift + '.' output ':' key
+  { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
+
+  # Shift + ',' output ';' key but only if no Alt is pressed
+  { trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift", match_none = "LAlt|RAlt" },  
+  
+  # left bracket outputs by default '{', with shifts pressed outputs '['  
+  { trigger = "LeftBracket", negative_output = "WM(LeftBracket, LShift)", positive_output = "LeftBracket", match_any = "LShift|RShift" },
+
+  # flip the effect of shift on 'x'/'X'
+  { trigger = "X", negative_output = "WM(X, LShift)", positive_output = "X", match_any = "LShift|RShift" },
+
+  # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro 
+  { trigger = "F24", negative_output = "A", positive_output = "Macro1", match_any = "LShift|LCtrl" },
+
+  # swap Z and Y keys if MouseBtn1 is pressed (on the keyboard)  
+  { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1" },
+  { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1" },
+
+  # Shift + Backspace output Delete key (inside a layer tap/hold)
+  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" }
+]
+```
+
+Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
+For example if `LT(2,Backspace)` is in your keymap, then trigger = `Backspace` will NOT work, you should "replace" the full key and use `trigger = "LT(2,Backspace)` instead, like in the last example above.
+You may want to include "F24" or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
+
+Chaining several fork conditions is not possible yet (but planned).
+
+Vial does not support fork configuration yet.
+
 ### `[light]`
 
 `[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
