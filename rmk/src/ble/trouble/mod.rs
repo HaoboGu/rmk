@@ -11,7 +11,7 @@ use ble_server::{BleHidServer, BleViaServer, Server};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_futures::join::join;
-use embassy_futures::select::select;
+use embassy_futures::select::{select, Either};
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::UPDATED_PROFILE;
@@ -540,6 +540,10 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(
         let e = defmt::Debug2Format(&e);
         error!("[set_conn_params] 2nd time error: {:?}", e);
     }
+
+    // Wait forever. This is because we want the conn params setting can be interrupted when the connection is lost.
+    // So this task shouldn't quit after setting the conn params.
+    core::future::pending::<()>().await;
 }
 
 /// Run BLE keyboard with connected device
@@ -569,13 +573,14 @@ async fn run_ble_keyboard<
     let ble_led_reader = BleLedReader {};
 
     let communication_task = async {
-        if let (_, Err(e)) = join(
-            set_conn_params(&stack, &conn),
+        match select(
             gatt_events_task(&server, &conn, &stack),
+            set_conn_params(&stack, &conn),
         )
         .await
         {
-            error!("[gatt_events_task] error: {:?}", e);
+            Either::First(e) => error!("[gatt_events_task] end: {:?}", e),
+            Either::Second(_) => {}
         }
     };
 

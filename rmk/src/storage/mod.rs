@@ -12,6 +12,7 @@ use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
 use embassy_embedded_hal::adapter::BlockingAsync;
+use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
@@ -33,6 +34,10 @@ use crate::{
 };
 
 use self::eeconfig::EeKeymapConfig;
+
+/// Signal to synchronize the flash operation status, usually used outside of the flash task.
+/// True if the flash operation is finished correctly, false if the flash operation is finished with error.
+pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
 #[derive(Clone, Debug)]
@@ -118,6 +123,7 @@ impl StorageKeys {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
@@ -357,7 +363,12 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 #[cfg(feature = "_ble")]
-                StorageKeys::ActiveBleProfile => Ok(StorageData::ActiveBleProfile(buffer[1])),
+                StorageKeys::ActiveBleProfile => {
+                    if buffer.len() < 2 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
+                    Ok(StorageData::ActiveBleProfile(buffer[1]))
+                }
                 #[cfg(feature = "_ble")]
                 StorageKeys::BleBondInfo => {
                     if buffer.len() < 23 {
@@ -463,7 +474,7 @@ pub struct Storage<
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
-macro_rules! write_storage {
+macro_rules! update_storage_field {
     ($f: expr, $buf: expr, $cache:expr, $key:ident, $field:ident, $range:expr) => {
         if let Ok(Some(StorageData::$key(mut saved))) =
             fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32))
@@ -584,7 +595,7 @@ impl<
             if let Err(e) = match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
-                    write_storage!(
+                    update_storage_field!(
                         &mut self.flash,
                         &mut self.buffer,
                         &mut storage_cache,
@@ -598,7 +609,7 @@ impl<
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
-                    write_storage!(
+                    update_storage_field!(
                         &mut self.flash,
                         &mut self.buffer,
                         &mut storage_cache,
@@ -734,6 +745,9 @@ impl<
                 _ => Ok(()),
             } {
                 print_storage_error::<F>(e);
+                FLASH_OPERATION_FINISHED.signal(false);
+            } else {
+                FLASH_OPERATION_FINISHED.signal(true);
             }
         }
     }

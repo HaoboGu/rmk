@@ -2,10 +2,7 @@
 
 use core::sync::atomic::Ordering;
 
-use embassy_futures::{
-    select::{select, Either},
-    yield_now,
-};
+use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
 use trouble_host::{prelude::*, BondInformation, LongTermKey};
 
@@ -13,6 +10,7 @@ use crate::{
     ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
     channel::BLE_PROFILE_CHANNEL,
     state::CONNECTION_TYPE,
+    storage::FLASH_OPERATION_FINISHED,
 };
 
 #[cfg(feature = "storage")]
@@ -209,7 +207,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
             ))
             .await;
 
-        info!("Switch to BLE profile: {}", profile);
+        info!("Switched to BLE profile: {}", profile);
         true
     }
 
@@ -223,6 +221,9 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         loop {
             match select(BLE_PROFILE_CHANNEL.receive(), UPDATED_PROFILE.wait()).await {
                 Either::First(action) => {
+                    if FLASH_OPERATION_FINISHED.signaled() {
+                        FLASH_OPERATION_FINISHED.reset();
+                    }
                     match action {
                         BleProfileAction::SwitchProfile(profile) => {
                             if !self.switch_profile(profile).await {
@@ -256,7 +257,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                                 .await;
                         }
                     }
-                    yield_now().await;
+                    FLASH_OPERATION_FINISHED.wait().await;
                     info!("Update profile done");
                     break;
                 }
