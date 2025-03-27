@@ -1183,7 +1183,7 @@ mod test {
             ]),
             layer!([
                 [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
-                [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
+                [a!(No), a!(Transparent), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
                 [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
                 [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
                 [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
@@ -1300,6 +1300,41 @@ mod test {
             assert!(keyboard.report.keycodes.iter().all(|&k| k == 0));
         };
 
+        block_on(main);
+    }
+
+    #[test]
+    fn test_key_action_transparent() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Activate layer 1
+            keyboard.process_action_layer_switch(1, key_event(0, 0, true));
+
+            // Press Transparent key (Q on lower layer)
+            keyboard.process_inner(key_event(1, 1, true)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x14); // Q key's HID code is 0x14
+
+            // Release Transparent key
+            keyboard.process_inner(key_event(1, 1, false)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_key_action_no() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Press No key
+            keyboard.process_inner(key_event(4, 3, true)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+
+            // Release No key
+            keyboard.process_inner(key_event(4, 3, false)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+        };
         block_on(main);
     }
 }

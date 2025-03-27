@@ -16,7 +16,7 @@ def text_to_lookup(text):
 
 qmk_key_to_rmk = text_to_lookup('''
 KC_NO,XXXXXXX	No
-KC_TRANSPARENT,KC_TRNS,_______	No
+KC_TRANSPARENT,KC_TRNS,_______	Transparent
 KC_A	A
 KC_B	B
 KC_C	C
@@ -359,12 +359,14 @@ class Converter:
     def convert_key(self, key):
         rmk_key = self.get_rmk_keycode(key)
         if self.output_rust:
-            if rmk_key == 'No':
+            if rmk_key == 'No' or rmk_key == 'Transparent':
                 return f'a!({rmk_key})'
             else:
                 return f'k!({rmk_key})'
         else:
             if rmk_key == 'No':
+                return '"No"'
+            elif rmk_key == 'Transparent':
                 return '"__"'
             else:
                 return f'"{rmk_key}"'
