@@ -754,38 +754,42 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
         } else if key.is_user() {
-            #[cfg(feature = "_nrf_ble")]
-            use {crate::ble::nrf::profile::BleProfileAction, crate::channel::BLE_PROFILE_CHANNEL};
-            #[cfg(feature = "_nrf_ble")]
-            if !key_event.pressed {
-                // Get user key id
-                let id = key as u8 - KeyCode::User0 as u8;
-                if id < 8 {
-                    info!("Switch to profile: {}", id);
-                    // User0~7: Swtich to the specific profile
-                    BLE_PROFILE_CHANNEL
-                        .send(BleProfileAction::SwitchProfile(id))
-                        .await;
-                } else if id == 8 {
-                    // User8: Next profile
-                    BLE_PROFILE_CHANNEL
-                        .send(BleProfileAction::NextProfile)
-                        .await;
-                } else if id == 9 {
-                    // User9: Previous profile
-                    BLE_PROFILE_CHANNEL
-                        .send(BleProfileAction::PreviousProfile)
-                        .await;
-                } else if id == 10 {
-                    // User10: Clear profile
-                    BLE_PROFILE_CHANNEL
-                        .send(BleProfileAction::ClearProfile)
-                        .await;
-                } else if id == 11 {
-                    // User11:
-                    BLE_PROFILE_CHANNEL
-                        .send(BleProfileAction::ToggleConnection)
-                        .await;
+            #[cfg(feature = "_ble")]
+            {
+                use {
+                    crate::ble::trouble::profile::BleProfileAction,
+                    crate::channel::BLE_PROFILE_CHANNEL,
+                };
+                if !key_event.pressed {
+                    // Get user key id
+                    let id = key as u8 - KeyCode::User0 as u8;
+                    if id < 8 {
+                        info!("Switch to profile: {}", id);
+                        // User0~7: Swtich to the specific profile
+                        BLE_PROFILE_CHANNEL
+                            .send(BleProfileAction::SwitchProfile(id))
+                            .await;
+                    } else if id == 8 {
+                        // User8: Next profile
+                        BLE_PROFILE_CHANNEL
+                            .send(BleProfileAction::NextProfile)
+                            .await;
+                    } else if id == 9 {
+                        // User9: Previous profile
+                        BLE_PROFILE_CHANNEL
+                            .send(BleProfileAction::PreviousProfile)
+                            .await;
+                    } else if id == 10 {
+                        // User10: Clear profile
+                        BLE_PROFILE_CHANNEL
+                            .send(BleProfileAction::ClearProfile)
+                            .await;
+                    } else if id == 11 {
+                        // User11:
+                        BLE_PROFILE_CHANNEL
+                            .send(BleProfileAction::ToggleConnection)
+                            .await;
+                    }
                 }
             }
         } else if key.is_basic() {

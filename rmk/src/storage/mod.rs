@@ -20,9 +20,7 @@ use sequential_storage::{
     map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
     Error as SSError,
 };
-#[cfg(feature = "_nrf_ble")]
-use {crate::ble::nrf::bonder::BondInfo, core::mem};
-#[cfg(feature = "trouble_ble")]
+#[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::bonder::BondInfo,
     trouble_host::{prelude::*, BondInformation, LongTermKey},
@@ -41,12 +39,10 @@ use self::eeconfig::EeKeymapConfig;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
     // Bond info to be saved
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     BondInfo(BondInfo),
-    #[cfg(feature = "trouble_ble")]
-    TroubleBondInfo(BondInfo),
     // Current active BLE profile number
-    #[cfg(any(feature = "_nrf_ble", feature = "trouble_ble"))]
+    #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
     // Clear the storage
     Reset,
@@ -93,12 +89,10 @@ pub(crate) enum StorageKeys {
     ComboData,
     ConnectionType,
     EncoderKeys,
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     ActiveBleProfile = 0xEE,
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     BleBondInfo = 0xEF,
-    #[cfg(feature = "trouble_ble")]
-    TroubleBleBondInfo = 0xF0,
 }
 
 impl StorageKeys {
@@ -114,12 +108,10 @@ impl StorageKeys {
             7 => Some(StorageKeys::ComboData),
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             0xEE => Some(StorageKeys::ActiveBleProfile),
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
-            #[cfg(feature = "trouble_ble")]
-            0xF0 => Some(StorageKeys::TroubleBleBondInfo),
             _ => None,
         }
     }
@@ -136,12 +128,10 @@ pub(crate) enum StorageData {
     MacroData([u8; MACRO_SPACE_SIZE]),
     ComboData(ComboData),
     ConnectionType(u8),
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     BondInfo(BondInfo),
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
-    #[cfg(feature = "trouble_ble")]
-    TroubleBondInfo(BondInfo),
 }
 
 /// Get the key to retrieve the keymap key from the storage.
@@ -247,31 +237,18 @@ impl Value<'_> for StorageData {
                 buffer[1] = *ty;
                 Ok(2)
             }
-            #[cfg(feature = "_nrf_ble")]
-            StorageData::BondInfo(b) => {
-                if buffer.len() < 121 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-
-                // Must be 120
-                // info!("size of BondInfo: {}", size_of_val(self));
-                buffer[0] = StorageKeys::BleBondInfo as u8;
-                let buf: [u8; 120] = unsafe { mem::transmute_copy(b) };
-                buffer[1..121].copy_from_slice(&buf);
-                Ok(121)
-            }
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(slot_num) => {
                 buffer[0] = StorageKeys::ActiveBleProfile as u8;
                 buffer[1] = *slot_num;
                 Ok(2)
             }
-            #[cfg(feature = "trouble_ble")]
-            StorageData::TroubleBondInfo(b) => {
+            #[cfg(feature = "_ble")]
+            StorageData::BondInfo(b) => {
                 if buffer.len() < 23 {
                     return Err(SerializationError::BufferTooSmall);
                 }
-                buffer[0] = StorageKeys::TroubleBleBondInfo as u8;
+                buffer[0] = StorageKeys::BleBondInfo as u8;
                 let ltk = b.info.ltk.to_le_bytes();
                 let address = b.info.address;
                 buffer[1] = b.slot_num;
@@ -379,27 +356,19 @@ impl Value<'_> for StorageData {
                         action: EncoderAction::new(clockwise, counter_clockwise),
                     }))
                 }
-                #[cfg(feature = "_nrf_ble")]
-                StorageKeys::BleBondInfo => {
-                    // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
-                    let mut buf = [0_u8; 120];
-                    buf.copy_from_slice(&buffer[1..121]);
-                    let info: BondInfo = unsafe { mem::transmute_copy(&buf) };
-
-                    Ok(StorageData::BondInfo(info))
-                }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 StorageKeys::ActiveBleProfile => Ok(StorageData::ActiveBleProfile(buffer[1])),
-                #[cfg(feature = "trouble_ble")]
-                StorageKeys::TroubleBleBondInfo => {
+                #[cfg(feature = "_ble")]
+                StorageKeys::BleBondInfo => {
                     if buffer.len() < 23 {
                         return Err(SerializationError::BufferTooSmall);
                     }
                     let slot_num = buffer[1];
                     let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
                     let address = BdAddr::new(buffer[18..24].try_into().unwrap());
-                    Ok(StorageData::TroubleBondInfo(BondInfo {
+                    Ok(StorageData::BondInfo(BondInfo {
                         slot_num,
+                        removed: false,
                         info: BondInformation::new(address, ltk),
                     }))
                 }
@@ -427,12 +396,10 @@ impl StorageData {
                 panic!("To get combo key for ComboData, use `get_combo_key` instead");
             }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
-            #[cfg(feature = "_nrf_ble")]
-            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
-            #[cfg(feature = "trouble_ble")]
-            StorageData::TroubleBondInfo(b) => get_bond_info_key(b.slot_num),
+            #[cfg(feature = "_ble")]
+            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
         }
     }
 }
@@ -540,14 +507,14 @@ impl<
 
         // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
-        #[cfg(feature = "_nrf_ble")]
+        #[cfg(feature = "_ble")]
         let start_addr = if config.start_addr == 0 {
             0x0006_0000
         } else {
             config.start_addr
         };
 
-        #[cfg(not(feature = "_nrf_ble"))]
+        #[cfg(not(feature = "_ble"))]
         let start_addr = config.start_addr;
 
         // Check storage setting
@@ -719,7 +686,7 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::ActiveBleProfile(profile) => {
                     let data = StorageData::ActiveBleProfile(profile);
                     store_item::<u32, StorageData, _>(
@@ -732,7 +699,7 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
@@ -749,7 +716,7 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::BondInfo(b) => {
                     info!("Saving bond info: {:?}", b);
                     let data = StorageData::BondInfo(b);
@@ -763,21 +730,7 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "trouble_ble")]
-                FlashOperationMessage::TroubleBondInfo(b) => {
-                    info!("Saving trouble bond info: {:?}", b);
-                    let data = StorageData::TroubleBondInfo(b);
-                    store_item::<u32, StorageData, _>(
-                        &mut self.flash,
-                        self.storage_range.clone(),
-                        &mut storage_cache,
-                        &mut self.buffer,
-                        &data.key(),
-                        &data,
-                    )
-                    .await
-                }
-                #[cfg(not(feature = "_nrf_ble"))]
+                #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
                 print_storage_error::<F>(e);
@@ -981,7 +934,7 @@ impl<
         false
     }
 
-    #[cfg(feature = "trouble_ble")]
+    #[cfg(feature = "_ble")]
     pub(crate) async fn read_trouble_bond_info(
         &mut self,
         slot_num: u8,
@@ -996,7 +949,7 @@ impl<
         .await
         .map_err(|e| print_storage_error::<F>(e))?;
 
-        if let Some(StorageData::TroubleBondInfo(info)) = read_data {
+        if let Some(StorageData::BondInfo(info)) = read_data {
             Ok(Some(info))
         } else {
             Ok(None)

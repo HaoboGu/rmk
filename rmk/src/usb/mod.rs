@@ -1,6 +1,7 @@
 pub mod descriptor;
 
 use core::sync::atomic::{AtomicU8, Ordering};
+use embassy_sync::signal::Signal;
 use embassy_time::Timer;
 use embassy_usb::{
     class::hid::{HidWriter, ReportId, RequestHandler},
@@ -15,6 +16,7 @@ use crate::{
     channel::KEYBOARD_REPORT_CHANNEL,
     config::KeyboardUsbConfig,
     hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
+    state::ConnectionState,
     usb::descriptor::CompositeReportType,
     CONNECTION_STATE,
 };
@@ -55,17 +57,11 @@ pub(crate) async fn wait_for_usb_suspend() {
     }
 }
 
-/// Wait for USB connected(but USB might not be configured yet)
+// /// Wait for USB connected(but USB might not be configured yet)
 pub(crate) async fn wait_for_usb_enabled() {
-    loop {
-        // Check usb enable state every 500ms
-        Timer::after_millis(500).await;
-
-        let usb_state: UsbState = USB_STATE.load(Ordering::Acquire).into();
-        if usb_state == UsbState::Enabled {
-            break;
-        }
-    }
+    panic!(
+        "no longer need"
+    )
 }
 
 pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
@@ -254,14 +250,20 @@ impl UsbDeviceHandler {
     }
 }
 
+pub(crate) static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
+pub(crate) static USB_SUSPENDED: Signal<crate::RawMutex, ()> = Signal::new();
+pub(crate) static USB_DISABLED: Signal<crate::RawMutex, ()> = Signal::new();
+
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
             info!("Device enabled");
+            USB_ENABLED.signal(());
         } else {
             USB_STATE.store(UsbState::Disabled as u8, Ordering::Relaxed);
             info!("Device disabled");
+            USB_DISABLED.signal(());
         }
     }
 
@@ -278,7 +280,7 @@ impl Handler for UsbDeviceHandler {
     fn configured(&mut self, configured: bool) {
         if configured {
             USB_STATE.store(UsbState::Configured as u8, Ordering::Relaxed);
-            CONNECTION_STATE.store(true, Ordering::Release);
+            CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {
             USB_STATE.store(UsbState::Enabled as u8, Ordering::Relaxed);
@@ -289,6 +291,7 @@ impl Handler for UsbDeviceHandler {
     fn suspended(&mut self, suspended: bool) {
         USB_STATE.store(UsbState::Enabled as u8, Ordering::Release);
         if suspended {
+            USB_SUSPENDED.signal(());
             info!("Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
         } else {
             info!("Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");

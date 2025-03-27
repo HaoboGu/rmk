@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 rmk = { path = "../../../rmk", features = [
     "_ble",
     "async_matrix",
-    "trouble_ble",
+    "nrf52840_ble",
 ] }
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",

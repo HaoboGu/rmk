@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["_no_external_storage"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt", "storage"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
 py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "7260371", features = [
     "py32f072c1b", 

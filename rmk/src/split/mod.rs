@@ -3,15 +3,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::{Event, KeyEvent};
 
+#[cfg(feature = "_ble")]
+pub mod ble;
 pub mod central;
 /// Common abstraction layer of split driver
 pub(crate) mod driver;
-#[cfg(feature = "_nrf_ble")]
-pub mod nrf;
 pub mod peripheral;
 #[cfg(feature = "rp2040_pio")]
 pub mod rp;
-#[cfg(not(feature = "_nrf_ble"))]
+#[cfg(not(feature = "_ble"))]
 pub mod serial;
 
 /// Maximum size of a split message

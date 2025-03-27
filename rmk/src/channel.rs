@@ -1,19 +1,20 @@
 //! Exposed channels which can be used to share data across devices & processors
-//!
+
+use crate::event::{Event, KeyEvent};
+use crate::hid::Report;
+#[cfg(feature = "storage")]
+use crate::storage::FlashOperationMessage;
 use crate::RawMutex;
 pub use embassy_sync::blocking_mutex;
 pub use embassy_sync::channel;
 use embassy_sync::channel::Channel;
 pub use embassy_sync::zerocopy_channel;
-
-#[cfg(any(feature = "_nrf_ble", feature = "trouble_ble"))]
-use crate::ble::trouble::profile::BleProfileAction;
-use crate::event::{Event, KeyEvent};
-use crate::hid::Report;
-#[cfg(feature = "storage")]
-use crate::storage::FlashOperationMessage;
 #[cfg(feature = "_ble")]
-use {crate::light::LedIndicator, embassy_sync::signal::Signal};
+use {
+    crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator,
+    embassy_sync::signal::Signal,
+};
+
 pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;
 
@@ -31,5 +32,5 @@ pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], 4> = Channel::n
 // Sync messages from server to flash
 #[cfg(feature = "storage")]
 pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, 4> = Channel::new();
-#[cfg(any(feature = "_nrf_ble", feature = "trouble_ble"))]
+#[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();

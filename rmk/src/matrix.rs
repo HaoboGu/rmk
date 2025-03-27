@@ -2,9 +2,10 @@ use crate::{
     debounce::{DebounceState, DebouncerTrait},
     event::{Event, KeyEvent},
     input_device::InputDevice,
+    state::ConnectionState,
     CONNECTION_STATE,
 };
-use core::future::Future;
+use core::{future::Future, sync::atomic::Ordering};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -22,7 +23,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected as u8 {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");

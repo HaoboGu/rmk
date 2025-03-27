@@ -301,7 +301,7 @@ pub(crate) async fn run_nrf_ble_keyboard<
             if USB_STATE.load(Ordering::SeqCst) != UsbState::Disabled as u8 {
                 let usb_fut = run_keyboard(
                     keymap,
-                    #[cfg(any(feature = "_nrf_ble", not(feature = "_no_external_storage")))]
+                    #[cfg(feature = "storage")]
                     storage,
                     run_usb_device(&mut usb_device),
                     light_controller,

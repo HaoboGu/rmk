@@ -10,16 +10,6 @@ use nrf_softdevice::ble::{
     SecurityMode,
 };
 
-// Bond info which will be stored in flash
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct BondInfo {
-    pub(crate) slot_num: u8,
-    pub(crate) peer: Peer,
-    sys_attr: SystemAttribute,
-    pub(crate) removed: bool,
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

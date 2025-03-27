@@ -1,7 +1,7 @@
 /// Traits and types for HID message reporting and listening.
 use core::{future::Future, sync::atomic::Ordering};
 
-use crate::{channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport, CONNECTION_STATE};
+use crate::{channel::KEYBOARD_REPORT_CHANNEL, state::ConnectionState, usb::descriptor::KeyboardReport, CONNECTION_STATE};
 use embassy_usb::{class::hid::ReadError, driver::EndpointError};
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -58,7 +58,7 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Get report to send
                 let report = self.get_report().await;
                 // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                if CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Connected as u8 {
                     match self.write_report(report).await {
                         Ok(_) => continue,
                         Err(e) => error!("Failed to send report: {:?}", e),
@@ -94,7 +94,7 @@ impl HidWriterTrait for DummyWriter {
 impl RunnableHidWriter for DummyWriter {
     async fn run_writer(&mut self) {
         // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-        CONNECTION_STATE.store(true, Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
         loop {
             let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }

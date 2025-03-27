@@ -1,13 +1,13 @@
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
-#[cfg(not(feature = "_nrf_ble"))]
+#[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::CONNECTION_STATE;
-#[cfg(feature = "_nrf_ble")]
+#[cfg(feature = "_ble")]
 use embassy_executor::Spawner;
 use embassy_futures::select::select3;
-#[cfg(not(feature = "_nrf_ble"))]
+#[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 
 /// Run the split peripheral service.
@@ -19,13 +19,13 @@ use embedded_io_async::{Read, Write};
 /// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_nrf_ble"))] S: Write + Read>(
-    #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
-    #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
-    #[cfg(not(feature = "_nrf_ble"))] serial: S,
-    #[cfg(feature = "_nrf_ble")] spawner: Spawner,
+pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_ble"))] S: Write + Read>(
+    #[cfg(feature = "_ble")] central_addr: [u8; 6],
+    #[cfg(feature = "_ble")] peripheral_addr: [u8; 6],
+    #[cfg(not(feature = "_ble"))] serial: S,
+    #[cfg(feature = "_ble")] spawner: Spawner,
 ) {
-    #[cfg(not(feature = "_nrf_ble"))]
+    #[cfg(not(feature = "_ble"))]
     {
         let mut peripheral = SplitPeripheral::new(SerialSplitDriver::new(serial));
         loop {
@@ -33,8 +33,8 @@ pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_nrf_ble"))] S: Write
         }
     }
 
-    #[cfg(feature = "_nrf_ble")]
-    crate::split::nrf::peripheral::initialize_nrf_ble_split_peripheral_and_run(
+    #[cfg(feature = "_ble")]
+    crate::split::nrf::peripheral::initialize_ble_split_peripheral_and_run(
         central_addr,
         peripheral_addr,
         spawner,

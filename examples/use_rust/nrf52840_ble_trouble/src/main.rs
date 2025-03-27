@@ -44,6 +44,7 @@ use rmk::{
     config::{ControllerConfig, RmkConfig, VialConfig},
     initialize_keymap_and_storage,
     keyboard::Keyboard,
+    config::BleBatteryConfig,
     light::LightController,
 };
 use static_cell::StaticCell;
@@ -139,16 +140,13 @@ async fn main(spawner: Spawner) {
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
     // Usb config
-    let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
+    let vbus = HardwareVbusDetect::new(Irqs);
+    let driver = Driver::new(p.USBD, Irqs, vbus);
 
+    
     // Initialize the ADC. We are only using one channel for detecting battery level
-    let adc_pin = p.P0_04.degrade_saadc();
-    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
-    let charging_led = Output::new(
-        AnyPin::from(p.P0_08),
-        embassy_nrf::gpio::Level::Low,
-        embassy_nrf::gpio::OutputDrive::Standard,
-    );
+    let adc_pin = p.P0_05.degrade_saadc();
+    let is_charging_pin = Input::new(AnyPin::from(p.P1_09), embassy_nrf::gpio::Pull::Up);
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
@@ -158,19 +156,19 @@ async fn main(spawner: Spawner) {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
-        product_name: "RMK Keyboard",
+        product_name: "Corne adjustment",
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    // let ble_battery_config = BleBatteryConfig::new(
-    //     Some(is_charging_pin),
-    //     true,
-    //     Some(charging_led),
-    //     false,
-    //     Some(saadc),
-    //     2000,
-    //     2806,
-    // );
+    let ble_battery_config = BleBatteryConfig::new(
+        Some(is_charging_pin),
+        true,
+        None,
+        false,
+        Some(saadc),
+        2000,
+        2806,
+    );
     let storage_config = StorageConfig {
         start_addr: 0x70000,
         num_sectors: 6,
@@ -179,14 +177,13 @@ async fn main(spawner: Spawner) {
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
         vial_config,
-        // ble_battery_config,
+        ble_battery_config,
         storage_config,
         ..Default::default()
     };
 
     // Use internal flash to emulate eeprom
     let flash = Flash::take(mpsl, p.NVMC);
-    // let flash = async_flash_wrapper(embassy_nrf::nvmc::Nvmc::new(p.NVMC));
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
@@ -199,13 +196,23 @@ async fn main(spawner: Spawner) {
     .await;
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_11, P1_10, P0_03, P0_28, P1_13], output:  [P0_30, P0_31, P0_29, P0_02, P0_05, P1_09, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_04, P1_06]);
+    
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_02], output:  [P0_28, P0_03, P1_10, P1_11, P1_13, P0_09, P0_10]);
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
+    let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
+    // P0_13 as output pin
+    let rgb_en = Output::new(
+        AnyPin::from(p.P0_13),
+        embassy_nrf::gpio::Level::Low,
+        embassy_nrf::gpio::OutputDrive::Standard,
+    );
 
     // Initialize the light controller
     let mut light_controller: LightController<Output> =
@@ -216,7 +223,7 @@ async fn main(spawner: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        rmk::ble::trouble::run::<_, _, _, _, _, ROW, COL, NUM_LAYER>(
+        rmk::ble::trouble::run::<_, _, _, _, _, ROW, COL, NUM_LAYER, 0>(
             &keymap,
             &mut storage,
             driver,

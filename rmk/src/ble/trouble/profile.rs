@@ -7,8 +7,8 @@ use embassy_futures::yield_now;
 use crate::{
     ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
     channel::{BLE_PROFILE_CHANNEL, FLASH_CHANNEL},
+    state::CONNECTION_TYPE,
     storage::FlashOperationMessage,
-    CONNECTION_TYPE,
 };
 
 /// BLE profile switch action
