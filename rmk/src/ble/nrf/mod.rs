@@ -233,9 +233,10 @@ pub(crate) async fn run_nrf_ble_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
@@ -401,8 +402,9 @@ pub(crate) async fn load_keyboard_states<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let mut buf: [u8; 128] = [0; 128];
 
@@ -437,8 +439,9 @@ pub(crate) async fn load_bond_info<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) -> FnvIndexMap<u8, BondInfo, BONDED_DEVICE_NUM> {
     let mut buf: [u8; 128] = [0; 128];
     // Get all saved bond info, config BLE bonder
@@ -460,9 +463,10 @@ async fn run_ble_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     vial_config: VialConfig<'static>,
     ble_battery_config: &mut BleBatteryConfig<'static>,
@@ -553,8 +557,9 @@ pub(crate) async fn run_dummy_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     CONNECTION_STATE.store(false, Ordering::Release);
     let storage_fut = storage.run();

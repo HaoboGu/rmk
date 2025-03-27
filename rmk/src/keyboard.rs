@@ -45,8 +45,8 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
-    for Keyboard<'_, ROW, COL, NUM_LAYER>
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> Runnable
+    for Keyboard<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
@@ -71,9 +71,15 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
     }
 }
 
-pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct Keyboard<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize = 0,
+> {
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
@@ -139,11 +145,11 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     combo_on: bool,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
@@ -1343,7 +1349,7 @@ mod test {
             ]),
             layer!([
                 [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
-                [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
+                [a!(No), a!(Transparent), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
                 [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
                 [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
                 [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
@@ -1356,7 +1362,7 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, BehaviorConfig::default()));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, BehaviorConfig::default()));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
@@ -1460,6 +1466,41 @@ mod test {
             assert!(keyboard.report.keycodes.iter().all(|&k| k == 0));
         };
 
+        block_on(main);
+    }
+
+    #[test]
+    fn test_key_action_transparent() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Activate layer 1
+            keyboard.process_action_layer_switch(1, key_event(0, 0, true));
+
+            // Press Transparent key (Q on lower layer)
+            keyboard.process_inner(key_event(1, 1, true)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x14); // Q key's HID code is 0x14
+
+            // Release Transparent key
+            keyboard.process_inner(key_event(1, 1, false)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_key_action_no() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+
+            // Press No key
+            keyboard.process_inner(key_event(4, 3, true)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+
+            // Release No key
+            keyboard.process_inner(key_event(4, 3, false)).await;
+            assert_eq!(keyboard.report.keycodes[0], 0x00);
+        };
         block_on(main);
     }
 }

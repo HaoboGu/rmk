@@ -64,7 +64,14 @@ pub enum ProcessResult {
 /// Take the normal keyboard as the example:
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub trait InputProcessor<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize = 0,
+>
+{
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///
@@ -79,7 +86,7 @@ pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER
     }
 
     /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>;
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>;
 }
 
 /// Macro to bind input devices to event channels and run all of them.

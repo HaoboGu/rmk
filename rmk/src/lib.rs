@@ -57,7 +57,9 @@ use {
 };
 #[cfg(feature = "storage")]
 use {
-    embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
+    action::{EncoderAction, KeyAction},
+    embassy_futures::select::select,
+    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };
 
@@ -101,32 +103,86 @@ pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
 /// Whether the connection is ready.
 /// After the connection is ready, the matrix starts scanning
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
+
 pub async fn initialize_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: config::BehaviorConfig,
 ) -> RefCell<KeyMap<ROW, COL, NUM_LAYER>> {
-    RefCell::new(KeyMap::new(default_keymap, behavior_config).await)
+    RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await)
+}
+
+pub async fn initialize_encoder_keymap<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
+    default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    default_encoder_map: &'a mut [[action::EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    behavior_config: config::BehaviorConfig,
+) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
+    RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config).await)
+}
+
+#[cfg(feature = "storage")]
+pub async fn initialize_encoder_keymap_and_storage<
+    'a,
+    F: AsyncNorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    flash: F,
+    storage_config: config::StorageConfig,
+    behavior_config: config::BehaviorConfig,
+) -> (
+    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+) {
+    let mut storage = Storage::new(
+        flash,
+        default_keymap,
+        &Some(default_encoder_map),
+        storage_config,
+    )
+    .await;
+
+    let keymap = RefCell::new(
+        KeyMap::new_from_storage(
+            default_keymap,
+            Some(default_encoder_map),
+            Some(&mut storage),
+            behavior_config,
+        )
+        .await,
+    );
+    (keymap, storage)
 }
 
 #[cfg(feature = "storage")]
 pub async fn initialize_keymap_and_storage<
+    'a,
     F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
 >(
-    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     flash: F,
     storage_config: config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
-    RefCell<KeyMap<ROW, COL, NUM_LAYER>>,
-    Storage<F, ROW, COL, NUM_LAYER>,
+    RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
+    Storage<F, ROW, COL, NUM_LAYER, 0>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, storage_config).await;
+    let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
 
     let keymap = RefCell::new(
-        KeyMap::new_from_storage(default_keymap, Some(&mut storage), behavior_config).await,
+        KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await,
     );
     (keymap, storage)
 }
@@ -140,10 +196,11 @@ pub async fn run_rmk<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "storage")] mut storage: Storage<F, ROW, COL, NUM_LAYER>,
+    #[cfg(feature = "storage")] mut storage: Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     mut light_controller: LightController<Out>,
     rmk_config: RmkConfig<'static>,
     #[cfg(feature = "_nrf_ble")] sd: &mut Softdevice,
@@ -218,9 +275,10 @@ pub(crate) async fn run_keyboard<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
-    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     communication_task: Fu,
     light_controller: &mut LightController<Out>,
     led_reader: R,

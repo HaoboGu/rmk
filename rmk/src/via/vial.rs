@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use num_enum::FromPrimitive;
 
 use crate::{
@@ -8,14 +8,13 @@ use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     keymap::KeyMap,
     usb::descriptor::ViaReport,
-    via::keycode_convert::to_via_keycode,
+    via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
     combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
-    via::keycode_convert::from_via_keycode,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -61,11 +60,16 @@ const VIAL_EP_SIZE: usize = 32;
 const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
 /// Note: vial uses little endian, while via uses big endian
-pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub(crate) async fn process_vial<
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
     report: &mut ViaReport,
     vial_keyboard_Id: &[u8],
     vial_keyboard_def: &[u8],
-    keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER>>,
+    keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
@@ -225,18 +229,19 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
                 "Received Vial - GetEncoder, encoder idx: {} at layer: {}",
                 index, layer
             );
+
             // Get encoder value
-            // if let Some(encoders) = &keymap.borrow().encoders {
-            //     if let Some(encoder_layer) = encoders.get(layer as usize) {
-            //         if let Some(encoder) = encoder_layer.get(index as usize) {
-            //             let clockwise = to_via_keycode(encoder.0);
-            //             BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
-            //             let counter_clockwise = to_via_keycode(encoder.1);
-            //             BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
-            //             return;
-            //         }
-            //     }
-            // }
+            if let Some(encoder_map) = &keymap.borrow().encoders {
+                if let Some(encoder_layer) = encoder_map.get(layer as usize) {
+                    if let Some(encoder) = encoder_layer.get(index as usize) {
+                        let clockwise = to_via_keycode(encoder.clockwise());
+                        BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
+                        let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
+                        BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
+                        return;
+                    }
+                }
+            }
 
             // Clear returned value, aka `KeyAction::No`
             report.input_data.fill(0x0);
@@ -249,24 +254,43 @@ pub(crate) async fn process_vial<const ROW: usize, const COL: usize, const NUM_L
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            // if let Some(&mut mut encoders) = keymap.borrow_mut().encoders {
-            //     if let Some(&mut mut encoder_layer) = encoders.get_mut(layer as usize) {
-            //         if let Some(&mut mut encoder) = encoder_layer.get_mut(index as usize) {
-            //             if clockwise == 1 {
-            //                 let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-            //                 let action = from_via_keycode(keycode);
-            //                 info!("Setting clockwise action: {}", action);
-            //                 encoder.0 = action
-            //             } else {
-            //                 let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-            //                 let action = from_via_keycode(keycode);
-            //                 info!("Setting counter-clockwise action: {}", action);
-            //                 encoder.1 = action
-            //             }
-            //         }
-            //     }
-            // }
-            debug!("Received Vial - SetEncoder, data: {:?}", report.output_data);
+            let _encoder = if let Some(ref mut encoder_map) = &mut keymap.borrow_mut().encoders {
+                if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
+                    if let Some(encoder) = encoder_layer.get_mut(index as usize) {
+                        if clockwise == 1 {
+                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                            let action = from_via_keycode(keycode);
+                            info!("Setting clockwise action: {:?}", action);
+                            encoder.set_clockwise(action);
+                        } else {
+                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                            let action = from_via_keycode(keycode);
+                            info!("Setting counter-clockwise action: {:?}", action);
+                            encoder.set_counter_clockwise(action);
+                        }
+                        Some(encoder.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            #[cfg(feature = "storage")]
+            // Save the encoder action to the storage after the RefCell is released
+            if let Some(encoder) = _encoder {
+                // Save the encoder action to the storage
+                FLASH_CHANNEL
+                    .send(FlashOperationMessage::EncoderKey {
+                        idx: index,
+                        layer,
+                        action: encoder,
+                    })
+                    .await;
+            }
         }
         _ => (),
     }
