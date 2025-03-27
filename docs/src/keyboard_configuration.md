@@ -259,7 +259,7 @@ Fork configuration includes the following parameters:
   - `kept_modifiers`: A strings defining a combination of modifier keys, which should not be 'suppressed' form the keyboard state for the time the replacement action is executed. (optional)
   
 For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"): 
-  - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of 'one-shot modifiers' too) 
+  - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too) 
   - `CapsLock`, `ScrollLock`, `NumLock`, 
   - `MouseBtn1` .. `MouseBtn8`
 
@@ -294,7 +294,7 @@ forks = [
 
 Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
 For example if `LT(2,Backspace)` is in your keymap, then trigger = `Backspace` will NOT work, you should "replace" the full key and use `trigger = "LT(2,Backspace)` instead, like in the last example above.
-You may want to include "F24" or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
+You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Chaining several fork conditions is not possible yet (but planned).
 
