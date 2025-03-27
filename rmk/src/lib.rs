@@ -22,14 +22,12 @@ use crate::light::LightController;
 use crate::state::ConnectionState;
 use config::{RmkConfig, VialConfig};
 use core::{cell::RefCell, future::Future, sync::atomic::Ordering};
-use embassy_futures::select::{select, select4, Either4};
+use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
-use embassy_time::Timer;
 use embassy_usb::driver::Driver;
-use embassy_usb::UsbDevice;
 use embedded_hal::digital::OutputPin;
 pub use futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
@@ -38,7 +36,7 @@ use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
 pub use rmk_macro as macros;
 use state::CONNECTION_STATE;
-use usb::{descriptor::ViaReport, UsbState, USB_STATE, USB_SUSPENDED};
+use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_ble"), not(feature = "_no_usb")))]
 use {
@@ -48,6 +46,7 @@ use {
 #[cfg(feature = "storage")]
 use {
     action::{EncoderAction, KeyAction},
+    embassy_futures::select::select,
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };

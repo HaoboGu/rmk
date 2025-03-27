@@ -4,14 +4,14 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-use crate::state::{get_connection_type, ConnectionState, ConnectionType, CONNECTION_TYPE};
+use crate::state::{get_connection_type, ConnectionState, ConnectionType};
 use crate::storage::Storage;
-use crate::usb::{wait_for_usb_enabled, USB_DISABLED, USB_ENABLED, USB_SUSPENDED};
+use crate::usb::{USB_DISABLED, USB_ENABLED};
 use crate::{LightService, VialService, CONNECTION_STATE};
 use ble_server::{BleHidServer, BleViaServer, Server};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicU8, Ordering};
-use embassy_futures::join::{join, join3};
+use embassy_futures::join::join3;
 use embassy_futures::select::{select, select4, Either4};
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
@@ -27,8 +27,8 @@ use {
     crate::light::UsbLedReader,
     crate::run_keyboard,
     crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
+    crate::usb::UsbKeyboardWriter,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
-    crate::usb::{wait_for_usb_suspend, UsbKeyboardWriter, UsbState, USB_STATE},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{select3, Either3},
     embassy_usb::driver::Driver,
@@ -138,14 +138,8 @@ pub async fn run<
             // USB + BLE dual mode
             #[cfg(not(feature = "_no_usb"))]
             {
-                debug!(
-                    "usb state: {}, connection type: {}",
-                    USB_STATE.load(Ordering::SeqCst),
-                    CONNECTION_TYPE.load(Ordering::Acquire)
-                );
                 match get_connection_type() {
                     ConnectionType::Usb => {
-                        // USB priority mode
                         info!("USB priority mode, waiting for USB enabled or BLE connection");
                         match select4(
                             USB_ENABLED.wait(),
@@ -156,7 +150,6 @@ pub async fn run<
                         .await
                         {
                             Either4::First(_) => {
-                                // USB resumed, run USB keyboard
                                 info!("USB enabled, run USB keyboard");
                                 let usb_fut = run_keyboard(
                                     keymap,
@@ -208,7 +201,6 @@ pub async fn run<
                         }
                     }
                     ConnectionType::Ble => {
-                        // BLE priority mode, try to connect to the BLE device while running USB keyboard
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
                             keymap,
@@ -222,7 +214,6 @@ pub async fn run<
                         );
                         match select3(adv_fut, usb_fut, update_profile()).await {
                             Either3::First(Ok(conn)) => {
-                                // BLE connected
                                 info!("BLE connected, running BLE keyboard");
                                 let ble_fut = async {
                                     let mut ble_hid_server = BleHidServer::new(&server, &conn);
@@ -595,18 +586,4 @@ pub(crate) async fn run_dummy_keyboard<
     let storage_fut = storage.run();
     let mut dummy_writer = DummyWriter {};
     select(storage_fut, dummy_writer.run_writer()).await;
-}
-
-#[cfg(not(feature = "_no_usb"))]
-// Wait for USB enabled or BLE state changed
-pub(crate) async fn wait_for_status_change() {
-    use crate::usb::wait_for_usb_enabled;
-
-    if CONNECTION_TYPE.load(Ordering::Relaxed) == 0 {
-        // Connection type is USB, USB has higher priority
-        select(wait_for_usb_enabled(), update_profile()).await;
-    } else {
-        // Connection type is BLE, so we don't consider USB
-        update_profile().await;
-    }
 }
