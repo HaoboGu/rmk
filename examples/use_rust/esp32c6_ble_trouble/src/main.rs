@@ -23,7 +23,7 @@ use rmk::{
     keyboard::Keyboard,
     light::LightController,
     matrix::TestMatrix,
-    storage::{async_flash_wrapper, Storage},
+    storage::async_flash_wrapper,
 };
 use {esp_alloc as _, esp_backtrace as _};
 
@@ -67,6 +67,7 @@ async fn main(_s: Spawner) {
     };
 
     let mut matrix: TestMatrix<ROW, COL> = TestMatrix::new();
+
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let (keymap, mut storage) = initialize_keymap_and_storage(
@@ -88,7 +89,7 @@ async fn main(_s: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        rmk::ble::trouble::run::<_, _, _, _, ROW, COL, NUM_LAYER>(
+        rmk::ble::trouble::run(
             &keymap,
             &mut storage,
             controller,

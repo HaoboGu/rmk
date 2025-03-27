@@ -30,8 +30,7 @@ pub enum HidError {
     UsbPartialRead,
     BufferOverflow,
     ReportSerializeError,
-    BleDisconnected,
-    BleRawError,
+    BleError,
 }
 
 /// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.

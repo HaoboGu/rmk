@@ -22,7 +22,7 @@ use sequential_storage::{
 };
 #[cfg(feature = "_ble")]
 use {
-    crate::ble::trouble::bonder::BondInfo,
+    crate::ble::trouble::profile::ProfileInfo,
     trouble_host::{prelude::*, BondInformation, LongTermKey},
 };
 
@@ -38,11 +38,11 @@ use self::eeconfig::EeKeymapConfig;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
-    // Bond info to be saved
     #[cfg(feature = "_ble")]
-    BondInfo(BondInfo),
+    // BLE profile info to be saved
+    ProfileInfo(ProfileInfo),
+    #[cfg(feature = "_ble")]
     // Current active BLE profile number
-    #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
     // Clear the storage
     Reset,
@@ -129,7 +129,7 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     #[cfg(feature = "_ble")]
-    BondInfo(BondInfo),
+    BondInfo(ProfileInfo),
     #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
 }
@@ -366,7 +366,7 @@ impl Value<'_> for StorageData {
                     let slot_num = buffer[1];
                     let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
                     let address = BdAddr::new(buffer[18..24].try_into().unwrap());
-                    Ok(StorageData::BondInfo(BondInfo {
+                    Ok(StorageData::BondInfo(ProfileInfo {
                         slot_num,
                         removed: false,
                         info: BondInformation::new(address, ltk),
@@ -703,7 +703,7 @@ impl<
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
-                    let mut empty = BondInfo::default();
+                    let mut empty = ProfileInfo::default();
                     empty.removed = true;
                     let data = StorageData::BondInfo(empty);
                     store_item::<u32, StorageData, _>(
@@ -717,7 +717,7 @@ impl<
                     .await
                 }
                 #[cfg(feature = "_ble")]
-                FlashOperationMessage::BondInfo(b) => {
+                FlashOperationMessage::ProfileInfo(b) => {
                     info!("Saving bond info: {:?}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData, _>(
@@ -938,7 +938,7 @@ impl<
     pub(crate) async fn read_trouble_bond_info(
         &mut self,
         slot_num: u8,
-    ) -> Result<Option<BondInfo>, ()> {
+    ) -> Result<Option<ProfileInfo>, ()> {
         let read_data = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
             self.storage_range.clone(),
@@ -985,3 +985,20 @@ const fn get_buffer_size() -> usize {
     // Efficiently round up to the nearest multiple of 32 using bit manipulation.
     (buffer_size + 31) & !31
 }
+
+#[macro_export]
+/// Helper macro for reading storage config
+macro_rules! read_storage {
+    ($storage: ident, $key: expr, $buf: expr) => {
+        ::sequential_storage::map::fetch_item::<u32, $crate::storage::StorageData, _>(
+            &mut $storage.flash,
+            $storage.storage_range.clone(),
+            &mut sequential_storage::cache::NoCache::new(),
+            &mut $buf,
+            $key,
+        )
+        .await
+    };
+}
+
+// pub(crate) use read_storage;

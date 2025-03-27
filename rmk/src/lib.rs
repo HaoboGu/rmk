@@ -27,6 +27,7 @@ use embassy_futures::select::{select4, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
+#[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::OutputPin;
 pub use futures;
@@ -38,11 +39,12 @@ pub use rmk_macro as macros;
 use state::CONNECTION_STATE;
 use usb::descriptor::ViaReport;
 use via::VialService;
-#[cfg(all(not(feature = "_ble"), not(feature = "_no_usb")))]
+#[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer, UsbKeyboardWriter},
 };
+
 #[cfg(feature = "storage")]
 use {
     action::{EncoderAction, KeyAction},
@@ -198,6 +200,7 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")]
     crate::ble::trouble::run(
         keymap,
+        #[cfg(feature = "storage")]
         &mut storage,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
@@ -285,9 +288,10 @@ pub(crate) async fn run_keyboard<
     )
     .await
     {
-        Either4::First(_) => error!("Communication or keyboard task has died"),
-        Either4::Second(_) => error!("Storage or vial task has died"),
-        Either4::Third(_) => error!("Led task has died"),
-        Either4::Fourth(_) => error!("Matrix or writer task has died"),
+        Either4::First(_) => error!("Communication task has ended"),
+        Either4::Second(_) => error!("Storage or vial task has ended"),
+        Either4::Third(_) => error!("Led task has ended"),
+        Either4::Fourth(_) => error!("Keyboard writer task has ended"),
     }
+    CONNECTION_STATE.store(ConnectionState::Disconnected as u8, Ordering::Release);
 }

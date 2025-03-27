@@ -8,13 +8,10 @@
     //"rust-analyzer.cargo.target": "thumbv6m-none-eabi",
     //"rust-analyzer.cargo.target": "thumbv7m-none-eabi",
     // "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
-    //"rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
+    // "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
     //"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
     //"rust-analyzer.cargo.target": "riscv32imafc-unknown-none-elf",
-    // "rust-analyzer.cargo.target": "riscv32imc-esp-espidf",
-    "rust-analyzer.cargo.target": "riscv32imac-esp-espidf",
-    //"rust-analyzer.cargo.target": "xtensa-esp32s3-espidf",
-    //"rust-analyzer.cargo.target": "riscv32imafc-unknown-none-elf",
+    "rust-analyzer.cargo.target": "riscv32imafc-unknown-none-elf",
     "rust-analyzer.cargo.features": [
         // Comment out these features when working on the examples. Most example crates do not have any cargo features.
         // "stm32f446re",
@@ -35,7 +32,7 @@
         // "examples/use_rust/esp32s3_ble/Cargo.toml",
         // "examples/use_rust/hpm5300/Cargo.toml",
         // "examples/use_rust/nef52832_ble/Cargo.toml",
-        // "examples/use_rust/nrf52840_ble/Cargo.toml",
+        // "examples/use_rust/nrf52840_ble_trouble/Cargo.toml",
         // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
         // "examples/use_rust/py32f07x/Cargo.toml",
         // "examples/use_rust/rp2040/Cargo.toml"

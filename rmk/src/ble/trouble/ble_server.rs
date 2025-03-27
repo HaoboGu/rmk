@@ -111,28 +111,52 @@ impl HidWriterTrait for BleHidServer<'_, '_, '_> {
                 let mut buf = [0u8; 8];
                 let n = serialize(&mut buf, &keyboard_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
-                self.input_keyboard.notify(self.conn, &buf).await.unwrap();
+                self.input_keyboard
+                    .notify(self.conn, &buf)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to notify keyboard report: {:?}", e);
+                        HidError::BleError
+                    })?;
                 Ok(n)
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf = [0u8; 5];
                 let n = serialize(&mut buf, &mouse_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
-                self.mouse_report.notify(self.conn, &buf).await.unwrap();
+                self.mouse_report
+                    .notify(self.conn, &buf)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to notify mouse report: {:?}", e);
+                        HidError::BleError
+                    })?;
                 Ok(n)
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf = [0u8; 2];
                 let n = serialize(&mut buf, &media_keyboard_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
-                self.media_report.notify(self.conn, &buf).await.unwrap();
+                self.media_report
+                    .notify(self.conn, &buf)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to notify media report: {:?}", e);
+                        HidError::BleError
+                    })?;
                 Ok(n)
             }
             Report::SystemControlReport(system_control_report) => {
                 let mut buf = [0u8; 1];
                 let n = serialize(&mut buf, &system_control_report)
                     .map_err(|_| HidError::ReportSerializeError)?;
-                self.system_report.notify(self.conn, &buf).await.unwrap();
+                self.system_report
+                    .notify(self.conn, &buf)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to notify system report: {:?}", e);
+                        HidError::BleError
+                    })?;
                 Ok(n)
             }
         }
@@ -167,7 +191,10 @@ impl HidWriterTrait for BleViaServer<'_, '_, '_> {
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buf = [0u8; 32];
         let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
-        self.input_via.notify(self.conn, &buf).await.unwrap();
+        self.input_via.notify(self.conn, &buf).await.map_err(|e| {
+            error!("Failed to notify via report: {:?}", e);
+            HidError::BleError
+        })?;
         Ok(n)
     }
 }

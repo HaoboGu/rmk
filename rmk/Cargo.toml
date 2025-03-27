@@ -53,7 +53,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.1.0", features = [
+trouble-host = { version = "0.1.0", path = "/Users/haobogu/Projects/rust/trouble/host", features = [
     "gatt",
     "scan",
     "derive",

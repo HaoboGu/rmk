@@ -18,19 +18,16 @@ async fn main(_s: Spawner) {
     });
     esp_alloc::heap_allocator!(72 * 1024);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-
     let mut rng = esp_hal::rng::Trng::new(peripherals.RNG, peripherals.ADC1);
-
     let init = esp_wifi::init(timg0.timer0, rng.rng.clone(), peripherals.RADIO_CLK).unwrap();
-
     let systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
     esp_hal_embassy::init(systimer.alarm0);
-
-
     let bluetooth = peripherals.BT;
     let connector = BleConnector::new(&init, bluetooth);
     let controller: ExternalController<_, 20> = ExternalController::new(connector);
-
     const L2CAP_MTU: usize = 255;
+
+    
+
     rmk::ble::trouble::run::<_, _, { L2CAP_MTU }>(controller, &mut rng).await;
 }

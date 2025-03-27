@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "esp32c6_ble", "log"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "esp32c6_ble", "log", "storage"] }
 embassy-executor = { version = "0.7.0", features = ["task-arena-size-65536"] }
 esp-backtrace = { version = "0.15", features = [
     "esp32c6",

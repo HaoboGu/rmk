@@ -1685,6 +1685,8 @@ dependencies = [
  "embassy-usb",
  "embedded-hal 1.0.0",
  "embedded-io-async",
+ "embedded-storage",
+ "embedded-storage-async",
  "futures",
  "heapless 0.8.0",
  "log",
@@ -2003,8 +2005,6 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b31abacc7bd8bc686160f6de3347a3b7669ae4a31e4eef9a306466e97d297cea"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2027,8 +2027,6 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2798a58a818bdf9d98f5283cc7ac647f11ecbd1e5ff4cdc45a2a13c31bf86fd"
 dependencies = [
  "Inflector",
  "darling",

@@ -1,5 +1,5 @@
 [target.'cfg(all(any(target_arch = "riscv32", target_arch = "xtensa"), target_os = "none"))']
-runner = "espflash flash --monitor --port /dev/cu.usbmodem211201"
+runner = "espflash flash --monitor --port /dev/cu.usbmodem211401"
 
 [build]
 target = "riscv32imac-unknown-none-elf"
