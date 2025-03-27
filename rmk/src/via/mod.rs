@@ -28,9 +28,10 @@ pub(crate) struct VialService<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 > {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     // Vial config
     vial_config: VialConfig<'static>,
@@ -45,12 +46,13 @@ impl<
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > VialService<'a, RW, ROW, COL, NUM_LAYER>
+        const NUM_ENCODER: usize,
+    > VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         vial_config: VialConfig<'static>,
         reader_writer: RW,
     ) -> Self {
@@ -87,7 +89,7 @@ impl<
     async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) {
         let command_id = report.output_data[0];
 

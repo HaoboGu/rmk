@@ -140,3 +140,11 @@ macro_rules! shifted {
         )
     };
 }
+
+/// Create an encoder action, the first argument is the clockwise action, the second is the counter-clockwise action
+#[macro_export]
+macro_rules! encoder {
+    ($clockwise: expr, $counter_clockwise: expr) => {
+        $crate::action::EncoderAction::new($clockwise, $counter_clockwise)
+    };
+}

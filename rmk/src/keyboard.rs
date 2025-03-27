@@ -43,8 +43,8 @@ impl<T> OneShotState<T> {
     }
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
-    for Keyboard<'_, ROW, COL, NUM_LAYER>
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> Runnable
+    for Keyboard<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     /// Main keyboard processing task, it receives input devices result, processes keys.
     /// The report is sent using `send_report`.
@@ -69,9 +69,15 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> Runnable
     }
 }
 
-pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
+pub struct Keyboard<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize = 0,
+> {
     /// Keymap
-    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
@@ -129,11 +135,11 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     combo_on: bool,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    Keyboard<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         behavior: BehaviorConfig,
     ) -> Self {
         Keyboard {
@@ -1196,7 +1202,7 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, BehaviorConfig::default()));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, BehaviorConfig::default()));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
