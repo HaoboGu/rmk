@@ -7,11 +7,11 @@ use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
 use crate::state::{ConnectionState, CONNECTION_TYPE};
 use crate::{read_storage, run_keyboard, CONNECTION_STATE};
-use ble_server::{BleHidServer, BleViaServer, Server};
+use ble_server::{BleBatteryServer, BleHidServer, BleViaServer, Server};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_futures::join::join;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::UPDATED_PROFILE;
@@ -487,23 +487,34 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(
     embassy_time::Timer::after_secs(5).await;
 
     // Setting the conn param the second time ensures that we have best performance on all platforms
-    if let Err(e) = conn
-        .raw()
-        .update_connection_params(
-            &stack,
-            &ConnectParams {
-                min_connection_interval: Duration::from_micros(7500),
-                max_connection_interval: Duration::from_micros(7500),
-                max_latency: 99,
-                event_length: Duration::from_secs(0),
-                supervision_timeout: Duration::from_secs(5),
-            },
-        )
-        .await
-    {
-        #[cfg(feature = "defmt")]
-        let e = defmt::Debug2Format(&e);
-        error!("[set_conn_params] 2nd time error: {:?}", e);
+    loop {
+        match conn
+            .raw()
+            .update_connection_params(
+                &stack,
+                &ConnectParams {
+                    min_connection_interval: Duration::from_micros(7500),
+                    max_connection_interval: Duration::from_micros(7500),
+                    max_latency: 99,
+                    event_length: Duration::from_secs(0),
+                    supervision_timeout: Duration::from_secs(5),
+                },
+            )
+            .await
+        {
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x2A == error.to_status().into_inner() {
+                    // Retry
+                    continue;
+                } else {
+                    #[cfg(feature = "defmt")]
+                    let e = defmt::Debug2Format(&e);
+                    error!("[set_conn_params] 2nd time HCI error: {:?}", error);
+                    break;
+                }
+            }
+            _ => break,
+        };
     }
 
     // Wait forever. This is because we want the conn params setting can be interrupted when the connection is lost.
@@ -536,16 +547,18 @@ async fn run_ble_keyboard<
     let ble_hid_server = BleHidServer::new(&server, &conn);
     let ble_via_server = BleViaServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
+    let ble_battery_server = BleBatteryServer::new(&server, &conn);
 
     let communication_task = async {
-        match select(
+        match select3(
             gatt_events_task(&server, &conn),
             set_conn_params(&stack, &conn),
+            ble_battery_server.run(),
         )
         .await
         {
-            Either::First(e) => error!("[gatt_events_task] end: {:?}", e),
-            Either::Second(_) => {}
+            Either3::First(e) => error!("[gatt_events_task] end: {:?}", e),
+            _ => {}
         }
     };
 

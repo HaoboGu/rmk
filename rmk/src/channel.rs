@@ -34,3 +34,8 @@ pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], 4> = Channel::n
 pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, 4> = Channel::new();
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
+
+
+#[cfg(feature = "_ble")]
+/// Channel for battery level
+pub(crate) static BATTERY_READ_CHANNEL: Channel<RawMutex, u8, 1> = Channel::new();

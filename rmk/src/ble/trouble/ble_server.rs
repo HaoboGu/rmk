@@ -1,5 +1,5 @@
 use crate::{
-    channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL},
+    channel::{BATTERY_READ_CHANNEL, KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL},
     hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
     usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport},
 };
@@ -21,7 +21,7 @@ pub(crate) struct Server {
 pub(crate) struct BatteryService {
     /// Battery Level
     #[descriptor(uuid = descriptors::VALID_RANGE, read, value = [0, 100])]
-    #[characteristic(uuid = characteristic::BATTERY_LEVEL, read, notify, value = 10)]
+    #[characteristic(uuid = characteristic::BATTERY_LEVEL, read, notify)]
     pub(crate) level: u8,
 }
 
@@ -208,5 +208,34 @@ impl HidReaderTrait for BleViaServer<'_, '_, '_> {
             input_data: [0u8; 32],
             output_data: v,
         })
+    }
+}
+
+pub(crate) struct BleBatteryServer<'stack, 'server, 'conn> {
+    pub(crate) battery_level: Characteristic<u8>,
+    pub(crate) conn: &'conn GattConnection<'stack, 'server>,
+}
+
+impl<'stack, 'server, 'conn> BleBatteryServer<'stack, 'server, 'conn> {
+    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server>) -> Self {
+        Self {
+            battery_level: server.battery_service.level,
+            conn,
+        }
+    }
+}
+
+impl BleBatteryServer<'_, '_, '_> {
+    pub(crate) async fn run(&self) {
+        loop {
+            let v = BATTERY_READ_CHANNEL.receive().await;
+            match self.battery_level.notify(self.conn, &v).await {
+                Ok(_) => {}
+                Err(_) => {
+                    error!("Failed to notify battery level");
+                    break;
+                }
+            }
+        }
     }
 }
