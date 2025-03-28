@@ -287,33 +287,15 @@ async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
 ///
 /// This function will handle the GATT events and process them.
 /// This is how we interact with read and write requests.
-async fn gatt_events_task<C: Controller>(
-    server: &Server<'_>,
-    conn: &GattConnection<'_, '_>,
-    stack: &Stack<'_, C>,
-) -> Result<(), Error> {
+async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) -> Result<(), Error> {
     let level = server.battery_service.level;
-    let input_keyboard = server.hid_service.input_keyboard;
     let output_keyboard = server.hid_service.output_keyboard;
-    let input_via = server.via_service.input_via;
     let output_via = server.via_service.output_via;
     CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
     loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {
                 info!("[gatt] disconnected: {:?}", reason);
-                let bond_info_list = stack.get_bond_information();
-                info!("saving bond_info: {:?}", bond_info_list);
-                if bond_info_list.len() >= 1 {
-                    let profile_info = ProfileInfo {
-                        slot_num: ACTIVE_PROFILE.load(Ordering::SeqCst),
-                        info: bond_info_list[0].clone(),
-                        removed: false,
-                    };
-                    UPDATED_PROFILE.signal(profile_info);
-                }
-                // Wait for 100ms to ensure the profile is updated
-                embassy_time::Timer::after_millis(100).await;
                 break;
             }
             GattConnectionEvent::Bonded { bond_info } => {
@@ -333,18 +315,6 @@ async fn gatt_events_task<C: Controller>(
                                 if event.handle() == level.handle {
                                     let value = server.get(&level);
                                     info!("[gatt] Read Event to Level: {:?}", value);
-                                } else if event.handle() == input_keyboard.handle {
-                                    let value = server.get(&input_keyboard);
-                                    info!("[gatt] Read Event to Input Keyboard  {:?}", value);
-                                } else if event.handle() == output_keyboard.handle {
-                                    let value = server.get(&output_keyboard);
-                                    info!("[gatt] Read Event to Output Keyboard: {:?}", value);
-                                } else if event.handle() == input_via.handle {
-                                    let value = server.get(&input_via);
-                                    info!("[gatt] Read Event to Input Via : {:?}", value);
-                                } else if event.handle() == output_via.handle {
-                                    let value = server.get(&output_via);
-                                    info!("[gatt] Read Event to Output Via : {:?}", value);
                                 } else {
                                     info!("[gatt] Read Event to Unknown : {:?}", event.handle());
                                 }
@@ -356,14 +326,9 @@ async fn gatt_events_task<C: Controller>(
                                 }
                             }
                             GattEvent::Write(event) => {
-                                if event.handle() == level.handle {
-                                    info!("[gatt] Write Event to Level: {:?}", event.data());
-                                } else if event.handle() == output_keyboard.handle {
-                                    info!(
-                                        "[gatt] Write Event to Output Keyboard: {:?}",
-                                        event.data()
-                                    );
+                                if event.handle() == output_keyboard.handle {
                                     let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                                    info!("Read keyboard state: {:?}", led_indicator);
                                     LED_SIGNAL.signal(led_indicator);
                                 } else if event.handle() == output_via.handle {
                                     info!("[gatt] Write Event to Output Via: {:?}", event.data());
@@ -574,7 +539,7 @@ async fn run_ble_keyboard<
 
     let communication_task = async {
         match select(
-            gatt_events_task(&server, &conn, &stack),
+            gatt_events_task(&server, &conn),
             set_conn_params(&stack, &conn),
         )
         .await
