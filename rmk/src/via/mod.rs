@@ -1,14 +1,14 @@
 use crate::{
     boot,
-    channel::FLASH_CHANNEL,
     config::VialConfig,
     hid::{HidError, HidReaderTrait, HidWriterTrait},
-    keyboard_macro::{MACRO_SPACE_SIZE, NUM_MACRO},
+    keyboard_macro::MACRO_SPACE_SIZE,
     keymap::KeyMap,
-    storage::FlashOperationMessage,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
 };
+#[cfg(feature = "storage")]
+use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOperationMessage};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use core::cell::RefCell;
 use embassy_time::Instant;
@@ -28,9 +28,10 @@ pub(crate) struct VialService<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
 > {
     // VialService holds a reference of keymap, for updating
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     // Vial config
     vial_config: VialConfig<'static>,
@@ -45,12 +46,13 @@ impl<
         const ROW: usize,
         const COL: usize,
         const NUM_LAYER: usize,
-    > VialService<'a, RW, ROW, COL, NUM_LAYER>
+        const NUM_ENCODER: usize,
+    > VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
     pub(crate) fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
         vial_config: VialConfig<'static>,
         reader_writer: RW,
     ) -> Self {
@@ -87,7 +89,7 @@ impl<
     async fn process_via_packet(
         &self,
         report: &mut ViaReport,
-        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) {
         let command_id = report.output_data[0];
 
@@ -130,6 +132,7 @@ impl<
                 // Check the second u8
                 match ViaKeyboardInfo::try_from_primitive(report.output_data[1]) {
                     Ok(v) => match v {
+                        #[cfg(feature = "storage")]
                         ViaKeyboardInfo::LayoutOptions => {
                             let layout_option = BigEndian::read_u32(&report.output_data[2..6]);
                             FLASH_CHANNEL
@@ -173,6 +176,7 @@ impl<
                     layer as usize,
                     action,
                 );
+                #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::KeymapKey {
                         layer,
@@ -199,6 +203,7 @@ impl<
             }
             ViaCommand::EepromReset => {
                 warn!("Reseting storage..");
+                #[cfg(feature = "storage")]
                 FLASH_CHANNEL.send(FlashOperationMessage::Reset).await
                 // TODO: Reboot after a eeprom reset?
             }
@@ -252,7 +257,9 @@ impl<
 
                 // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
                 // Then flush macros to storage
+                #[cfg(feature = "storage")]
                 let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
+                #[cfg(feature = "storage")]
                 if size < 28 || num_zero >= NUM_MACRO {
                     let buf = self.keymap.borrow_mut().macro_cache;
                     FLASH_CHANNEL
@@ -315,6 +322,7 @@ impl<
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
                         );
+                        #[cfg(feature = "storage")]
                         if let Err(_e) = FLASH_CHANNEL.try_send(FlashOperationMessage::KeymapKey {
                             layer: layer as u8,
                             col: col as u8,

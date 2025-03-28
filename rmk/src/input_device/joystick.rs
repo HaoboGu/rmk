@@ -14,23 +14,30 @@ pub struct JoystickProcessor<
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
     const N: usize,
 > {
     transform: [[i16; N]; N],
     bias: [i16; N],
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     record: [i16; N],
     resolution: u16,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: usize>
-    JoystickProcessor<'a, ROW, COL, NUM_LAYER, N>
+impl<
+        'a,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+        const NUM_ENCODER: usize,
+        const N: usize,
+    > JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
 {
     pub fn new(
         transform: [[i16; N]; N],
         bias: [i16; N],
         resolution: u16,
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) -> Self {
         Self {
             transform,
@@ -75,8 +82,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: us
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER> for JoystickProcessor<'a, ROW, COL, NUM_LAYER, N>
+impl<
+        'a,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+        const NUM_ENCODER: usize,
+        const N: usize,
+    > InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    for JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         embassy_time::Timer::after_millis(5).await;
@@ -99,7 +113,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const N: us
     }
 
     /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
         self.keymap
     }
 }

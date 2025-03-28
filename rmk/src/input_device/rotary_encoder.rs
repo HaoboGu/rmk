@@ -8,12 +8,15 @@ use embedded_hal::digital::InputPin;
 use embedded_hal_async::digital::Wait;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
-use usbd_hid::descriptor::{MediaKey, MediaKeyboardReport};
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport};
 
+use crate::action::{Action, KeyAction};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
+use crate::keycode::{ConsumerKey, KeyCode};
 use crate::keymap::KeyMap;
+use crate::usb::descriptor::KeyboardReport;
 
 use super::{InputDevice, InputProcessor, ProcessResult};
 
@@ -64,7 +67,7 @@ impl Phase for DefaultPhase {
     }
 }
 
-//// Phase implementation for E8H7 encoder
+/// Phase implementation for E8H7 encoder
 pub struct E8H7Phase;
 impl Phase for E8H7Phase {
     fn direction(&mut self, s: u8) -> Direction {
@@ -73,6 +76,49 @@ impl Phase for E8H7Phase {
             0b0001 | 0b1110 => Direction::CounterClockwise,
             _ => Direction::None,
         }
+    }
+}
+
+/// Phase implementation based on configurable resolution
+pub struct ResolutionPhase {
+    resolution: u8,
+    lut: [i8; 16],
+    pulses: i8,
+}
+
+impl ResolutionPhase {
+    pub fn new(resolution: u8, reverse: bool) -> Self {
+        // This lookup table is based on the QMK implementation
+        // Each entry corresponds to a state transition and provides +1, -1, or 0 pulse
+        let mut lut = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
+        if reverse {
+            lut = lut.map(|x| x * -1);
+        }
+        Self {
+            resolution,
+            lut,
+            pulses: 0,
+        }
+    }
+}
+
+impl Phase for ResolutionPhase {
+    fn direction(&mut self, s: u8) -> Direction {
+        // Only proceed if there was a state change
+        if (s & 0xC) != (s & 0x3) {
+            // Add pulse value from the lookup table
+            self.pulses += self.lut[s as usize & 0xF];
+            // Check if we've reached the resolution threshold
+            if self.pulses >= self.resolution as i8 {
+                self.pulses %= self.resolution as i8;
+                return Direction::CounterClockwise;
+            } else if self.pulses <= -(self.resolution as i8) {
+                self.pulses %= self.resolution as i8;
+                return Direction::Clockwise;
+            }
+        }
+
+        Direction::None
     }
 }
 
@@ -88,6 +134,24 @@ where
             pin_b,
             state: 0u8,
             phase: DefaultPhase,
+            id,
+        }
+    }
+}
+
+/// Create a resolution-based rotary encoder
+impl<A, B> RotaryEncoder<A, B, ResolutionPhase>
+where
+    A: InputPin,
+    B: InputPin,
+{
+    /// Creates a new encoder with the specified resolution
+    pub fn with_resolution(pin_a: A, pin_b: B, resolution: u8, reverse: bool, id: u8) -> Self {
+        Self {
+            pin_a,
+            pin_b,
+            state: 0u8,
+            phase: ResolutionPhase::new(resolution, reverse),
             id,
         }
     }
@@ -126,6 +190,8 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
 
         // move new state in
         self.state = s >> 2;
+
+        // Use the phase implementation
         self.phase.direction(s)
     }
 
@@ -184,52 +250,134 @@ impl<
 }
 
 /// Rotary encoder event processor
-pub struct RotaryEncoderProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+pub struct RotaryEncoderProcessor<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> {
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>) -> Self {
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Self { keymap }
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER> for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER>
+// FIXME: now the encoder cannot process complicate key actions, because it's not worth to re-implement them again for encoders.
+// The solution might be separate `Keyboard` to the `Keyboard` device part and a `KeyManager`
+// The `Keyboard` part is responsible for getting `KeyAction`, and the `KeyManager` is responsible for processing all the key actions, from `Keyboard`, `Encoder`, etc.
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    for RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
-            Event::RotaryEncoder(RotaryEncoderEvent { id, direction }) => {
-                // TODO: Use Vial and shared keymap for encoders
-                // TODO: Merge the keyboard report sender, avoid KeyboardReport override each other
-                match direction {
-                    Direction::Clockwise => {
-                        debug!("Encoder {} - Clockwise", id);
-                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-                            usage_id: MediaKey::VolumeIncrement as u16,
-                        }))
-                        .await;
-                        embassy_time::Timer::after_millis(2).await;
-                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-                            usage_id: 0,
-                        }))
-                        .await;
+            Event::RotaryEncoder(e) => {
+                let action = if let Some(encoder_action) =
+                    self.get_keymap().borrow().get_encoder_with_layer_cache(e)
+                {
+                    match e.direction {
+                        Direction::Clockwise => encoder_action.clockwise(),
+                        Direction::CounterClockwise => encoder_action.counter_clockwise(),
+                        Direction::None => return ProcessResult::Stop,
                     }
-                    Direction::CounterClockwise => {
-                        debug!("Encoder {} - CounterClockwise", id);
-                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-                            usage_id: MediaKey::VolumeDecrement as u16,
-                        }))
-                        .await;
-                        embassy_time::Timer::after_millis(2).await;
-                        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-                            usage_id: 0,
-                        }))
-                        .await;
+                } else {
+                    return ProcessResult::Stop;
+                };
+
+                // Accept only limited keys for rotary encoder
+                if let KeyAction::Single(Action::Key(keycode)) = action {
+                    match keycode {
+                        k if keycode.is_consumer() => {
+                            self.tap_media_key(k.as_consumer_control_usage_id()).await;
+                        }
+                        KeyCode::MouseWheelUp => {
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 1,
+                                pan: 0,
+                            }))
+                            .await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: 0,
+                            }))
+                            .await;
+                        }
+                        KeyCode::MouseWheelDown => {
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: -1,
+                                pan: 0,
+                            }))
+                            .await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: 0,
+                            }))
+                            .await;
+                        }
+                        // Horizontal scrolling
+                        KeyCode::MouseWheelLeft => {
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: -1,
+                            }))
+                            .await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: 0,
+                            }))
+                            .await;
+                        }
+                        KeyCode::MouseWheelRight => {
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: 1,
+                            }))
+                            .await;
+                            embassy_time::Timer::after_millis(2).await;
+                            self.send_report(Report::MouseReport(MouseReport {
+                                buttons: 0,
+                                x: 0,
+                                y: 0,
+                                wheel: 0,
+                                pan: 0,
+                            }))
+                            .await;
+                        }
+                        k if keycode.is_basic() => {
+                            self.tap_key(k).await;
+                        }
+                        _ => (),
                     }
-                    Direction::None => (),
                 }
 
                 ProcessResult::Stop
@@ -242,7 +390,87 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
         self.keymap
+    }
+}
+
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    RotaryEncoderProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    async fn tap_media_key(&self, media: ConsumerKey) {
+        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+            usage_id: media as u16,
+        }))
+        .await;
+        embassy_time::Timer::after_millis(2).await;
+        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
+            usage_id: 0,
+        }))
+        .await;
+    }
+
+    // Send a keycode report for a single key
+    async fn tap_key(&self, keycode: KeyCode) {
+        self.send_report(Report::KeyboardReport(KeyboardReport {
+            modifier: 0,
+            reserved: 0,
+            leds: 0,
+            keycodes: [keycode as u8, 0, 0, 0, 0, 0],
+        }))
+        .await;
+        embassy_time::Timer::after_millis(2).await;
+        self.send_report(Report::KeyboardReport(KeyboardReport {
+            modifier: 0,
+            reserved: 0,
+            leds: 0,
+            keycodes: [0u8; 6],
+        }))
+        .await;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // Init logger for tests
+
+    #[ctor::ctor]
+    fn init_log() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+    }
+
+    #[test]
+    fn test_resolutin_phase() {
+        // Check with E8H7 phase
+        let mut default_phase = E8H7Phase {};
+        let mut resolution_phase = ResolutionPhase::new(2, true);
+        // Clockwise sequence
+        for item in [0b100, 0b1101, 0b1011, 0b10] {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
+        // Counterclockwise sequence
+        for item in [0b1000, 0b1110, 0b111, 0b1] {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
+
+        // Check with default phase
+        let mut default_phase = DefaultPhase {};
+        let mut resolution_phase = ResolutionPhase::new(1, false);
+        for item in 0u8..16 {
+            let d = default_phase.direction(item);
+            let d2 = resolution_phase.direction(item);
+            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            assert_eq!(d, d2);
+        }
     }
 }

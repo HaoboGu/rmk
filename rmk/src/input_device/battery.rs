@@ -3,19 +3,25 @@ use core::cell::RefCell;
 
 use super::InputProcessor;
 
-pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize> {
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+pub struct BatteryProcessor<
+    'a,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> {
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    BatteryProcessor<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub fn new(
         adc_divider_measured: u32,
         adc_divider_total: u32,
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>,
+        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) -> Self {
         BatteryProcessor {
             keymap,
@@ -61,8 +67,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 }
 
-impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER> for BatteryProcessor<'a, ROW, COL, NUM_LAYER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
@@ -78,7 +85,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>
     }
 
     /// Get the current keymap
-    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
-        return &self.keymap;
+    fn get_keymap(&self) -> &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
+        return self.keymap;
     }
 }
