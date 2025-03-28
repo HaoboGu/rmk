@@ -65,7 +65,7 @@ async fn main(_s: Spawner) {
     let flash = async_flash_wrapper(flash);
 
     // Initialize the IO pins
-    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals, input: [GPIO2, GPIO3, GPIO4, GPIO5], output: [GPIO7, GPIO8, GPIO9]);
+    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals, input: [GPIO6, GPIO7, GPIO20, GPIO21], output: [GPIO3, GPIO4, GPIO5]);
 
     // RMK config
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
