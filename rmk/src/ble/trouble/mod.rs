@@ -26,6 +26,7 @@ use {
 #[cfg(feature = "storage")]
 use {
     crate::storage::{Storage, StorageData, StorageKeys},
+    crate::{read_storage, state::CONNECTION_TYPE},
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
 };
 
@@ -36,8 +37,8 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-use crate::state::{ConnectionState, CONNECTION_TYPE};
-use crate::{read_storage, run_keyboard, CONNECTION_STATE};
+use crate::state::ConnectionState;
+use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod ble_server;
 pub(crate) mod profile;
@@ -162,7 +163,10 @@ pub(crate) async fn run<
                         match select4(
                             USB_ENABLED.wait(),
                             adv_fut,
+                            #[cfg(feature = "storage")]
                             run_dummy_keyboard(storage),
+                            #[cfg(not(feature = "storage"))]
+                            run_dummy_keyboard(),
                             profile_manager.update_profile(),
                         )
                         .await
@@ -171,6 +175,7 @@ pub(crate) async fn run<
                                 info!("USB enabled, run USB keyboard");
                                 let usb_fut = run_keyboard(
                                     keymap,
+                                    #[cfg(feature = "storage")]
                                     storage,
                                     USB_DISABLED.wait(),
                                     light_controller,
@@ -190,6 +195,7 @@ pub(crate) async fn run<
                                     light_controller,
                                     keymap,
                                     &rmk_config,
+                                    #[cfg(feature = "storage")]
                                     storage,
                                 );
                                 select(ble_fut, profile_manager.update_profile()).await;
@@ -202,6 +208,7 @@ pub(crate) async fn run<
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
                             keymap,
+                            #[cfg(feature = "storage")]
                             storage,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             light_controller,
@@ -221,6 +228,7 @@ pub(crate) async fn run<
                                         light_controller,
                                         keymap,
                                         &rmk_config,
+                                        #[cfg(feature = "storage")]
                                         storage,
                                     ),
                                     profile_manager.update_profile(),
@@ -421,13 +429,11 @@ async fn advertise<'a, 'b, C: Controller>(
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
 // It's useful for functions like switching active profiles when there's no connection.
 pub(crate) async fn run_dummy_keyboard<
-    'a,
-    'b,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(feature = "storage")] const ROW: usize,
+    #[cfg(feature = "storage")] const COL: usize,
+    #[cfg(feature = "storage")] const NUM_LAYER: usize,
+    #[cfg(feature = "storage")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {

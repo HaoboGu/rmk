@@ -174,7 +174,7 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] C: Controller,
     #[cfg(feature = "_ble")] RNG: RngCore + CryptoRng,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,

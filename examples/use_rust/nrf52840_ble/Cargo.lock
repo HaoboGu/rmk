@@ -1593,7 +1593,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-nrf52840-trouble"
+name = "rmk-nrf52840"
 version = "0.2.0"
 dependencies = [
  "bt-hci",

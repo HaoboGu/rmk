@@ -164,14 +164,13 @@ nrf52810_ble = ["_nrf_ble", "_no_usb"]
 _nrf_ble = ["_ble", "dep:embassy-nrf"]
 
 ## Enable feature if you want to use ESP32C3 with BLE.
-esp32c3_ble = ["_esp_ble"]
+esp32c3_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32C6 with BLE.
-esp32c6_ble = ["_esp_ble"]
+esp32c6_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
 _esp_ble = [
     "_ble",
-    "_no_usb", # ESP doesn't have USB support right now
 ]
 
 ## Enable feature if you want to use trouble BLE stack

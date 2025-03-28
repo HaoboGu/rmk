@@ -7,12 +7,14 @@ use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
-use {crate::channel::FLASH_CHANNEL, crate::storage::FlashOperationMessage};
+use {
+    crate::channel::FLASH_CHANNEL,
+    crate::storage::{FlashOperationMessage, FLASH_OPERATION_FINISHED},
+};
 
 use crate::ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM};
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
-use crate::storage::FLASH_OPERATION_FINISHED;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 
@@ -217,6 +219,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         loop {
             match select(BLE_PROFILE_CHANNEL.receive(), UPDATED_PROFILE.wait()).await {
                 Either::First(action) => {
+                    #[cfg(feature = "storage")]
                     if FLASH_OPERATION_FINISHED.signaled() {
                         FLASH_OPERATION_FINISHED.reset();
                     }
@@ -251,6 +254,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }
                     }
+                    #[cfg(feature = "storage")]
                     FLASH_OPERATION_FINISHED.wait().await;
                     info!("Update profile done");
                     break;

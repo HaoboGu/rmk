@@ -20,8 +20,8 @@ use embassy_nrf::saadc::AnyInput;
 use embassy_nrf::saadc::Input as _;
 use embassy_nrf::saadc::{self, Saadc};
 use embassy_nrf::usb;
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::{bind_interrupts, rng};
 use keymap::COL;
 use keymap::ROW;
@@ -35,10 +35,10 @@ use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConf
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::initialize_encoder_keymap_and_storage;
+use rmk::input_device::Runnable;
 use rmk::input_device::rotary_encoder::E8H7Phase;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::input_device::rotary_encoder::RotaryEncoderProcessor;
-use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
@@ -102,7 +102,7 @@ fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello RMK BLE!");
-    // Initialize the peripherals, sdc and mpsl
+    // Initialize the peripherals and nrf-sdc controller
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.dcdc.reg0_voltage = Some(embassy_nrf::config::Reg0Voltage::_3v3);
     nrf_config.dcdc.reg0 = true;
