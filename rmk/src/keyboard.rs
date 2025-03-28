@@ -1412,7 +1412,7 @@ mod test {
         let main = async {
             let mut keyboard = create_test_keyboard();
             keyboard.register_key(KeyCode::A, key_event(2, 1, true));
-            assert_eq!(keyboard.report.keycodes[0], 0x04);
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
         };
         block_on(main);
     }
@@ -1424,11 +1424,11 @@ mod test {
 
             // Press A key
             keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x04); // A key's HID code is 0x04
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
 
             // Release A key
             keyboard.process_inner(key_event(2, 1, false)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x00);
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
         };
         block_on(main);
     }
@@ -1440,11 +1440,11 @@ mod test {
 
             // Press Shift key
             keyboard.register_key(KeyCode::LShift, key_event(3, 0, true));
-            assert_eq!(keyboard.report.modifier, 0x02); // Left Shift's modifier bit is 0x02
+            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
 
             // Release Shift key
             keyboard.unregister_key(KeyCode::LShift, key_event(3, 0, false));
-            assert_eq!(keyboard.report.modifier, 0x00);
+            assert_eq!(keyboard.held_modifiers, HidModifiers::new());
         };
         block_on(main);
     }
@@ -1464,19 +1464,21 @@ mod test {
             keyboard
                 .process_key_action(tap_hold_action.clone(), key_event(2, 1, false))
                 .await;
-            assert_eq!(keyboard.report.keycodes[0], 0x00); // A should be released
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should be released
+            assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should not held
 
             // Hold
             keyboard
                 .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
                 .await;
             Timer::after(Duration::from_millis(200)).await; // wait for hold timeout
-            assert_eq!(keyboard.report.modifier, 0x02); // should activate Shift modifier
+            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // should activate Shift modifier
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should not be pressed
 
             keyboard
                 .process_key_action(tap_hold_action, key_event(2, 1, false))
                 .await;
-            assert_eq!(keyboard.report.modifier, 0x00); // Shift should be released
+            assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should be released
         };
         block_on(main);
     }
@@ -1487,17 +1489,17 @@ mod test {
             let mut keyboard = create_test_keyboard();
 
             keyboard.process_inner(key_event(2, 1, true)).await;
-            assert!(keyboard.report.keycodes.contains(&0x04));
+            assert!(keyboard.held_keycodes.contains(&KeyCode::A));
 
             keyboard.process_inner(key_event(3, 5, true)).await;
-            assert!(keyboard.report.keycodes.contains(&0x05));
+            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && keyboard.held_keycodes.contains(&KeyCode::B));
 
             keyboard.process_inner(key_event(3, 5, false)).await;
-            assert!(!keyboard.report.keycodes.contains(&0x05));
+            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && !keyboard.held_keycodes.contains(&KeyCode::B));
 
             keyboard.process_inner(key_event(2, 1, false)).await;
-            assert!(!keyboard.report.keycodes.contains(&0x04));
-            assert!(keyboard.report.keycodes.iter().all(|&k| k == 0));
+            assert!(!keyboard.held_keycodes.contains(&KeyCode::A));
+            assert!(keyboard.held_keycodes.iter().all(|&k| k == KeyCode::No));
         };
 
         block_on(main);
@@ -1513,11 +1515,11 @@ mod test {
 
             // Press Transparent key (Q on lower layer)
             keyboard.process_inner(key_event(1, 1, true)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x14); // Q key's HID code is 0x14
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::Q); // Q key's HID code is 0x14
 
             // Release Transparent key
             keyboard.process_inner(key_event(1, 1, false)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x00);
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
         };
         block_on(main);
     }
@@ -1529,11 +1531,11 @@ mod test {
 
             // Press No key
             keyboard.process_inner(key_event(4, 3, true)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x00);
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
             // Release No key
             keyboard.process_inner(key_event(4, 3, false)).await;
-            assert_eq!(keyboard.report.keycodes[0], 0x00);
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
         };
         block_on(main);
     }
