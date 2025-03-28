@@ -4,13 +4,15 @@ use crate::{
     hid::{HidError, HidReaderTrait, HidWriterTrait},
     keyboard_macro::MACRO_SPACE_SIZE,
     keymap::KeyMap,
+    state::ConnectionState,
     usb::descriptor::ViaReport,
     via::keycode_convert::{from_via_keycode, to_via_keycode},
+    CONNECTION_STATE,
 };
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOperationMessage};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use core::cell::RefCell;
+use core::{cell::RefCell, sync::atomic::Ordering};
 use embassy_time::Instant;
 use embassy_time::Timer;
 use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
@@ -68,8 +70,14 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    error!("Process vial error: {:?}", e);
-                    Timer::after_millis(500).await
+                    if CONNECTION_STATE.load(Ordering::Relaxed)
+                        == ConnectionState::Disconnected as u8
+                    {
+                        Timer::after_millis(1000).await;
+                    } else {
+                        error!("Process vial error: {:?}", e);
+                        Timer::after_millis(10000).await;
+                    }
                 }
             }
         }

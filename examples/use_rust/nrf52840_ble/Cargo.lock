@@ -1190,6 +1190,7 @@ dependencies = [
  "serde",
  "ssmarshal",
  "static_cell",
+ "trouble-host",
  "usbd-hid",
 ]
 
@@ -1444,6 +1445,22 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "trouble-host"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble/?rev=d9d2e80#d9d2e80b6b2ed6c3aeae1de534de557906353522"
+dependencies = [
+ "bt-hci",
+ "defmt",
+ "embassy-futures",
+ "embassy-sync 0.6.0",
+ "embassy-time",
+ "embedded-io",
+ "embedded-io-async",
+ "futures",
+ "heapless 0.8.0",
 ]
 
 [[package]]

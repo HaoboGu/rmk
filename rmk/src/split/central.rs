@@ -1,5 +1,3 @@
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{Event, KeyEvent};
 use crate::input_device::InputDevice;
@@ -8,7 +6,7 @@ use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-#[cfg(not(feature = "_nrf_ble"))]
+#[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 
 /// Run central's peripheral manager task.
@@ -22,19 +20,19 @@ pub async fn run_peripheral_manager<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    #[cfg(not(feature = "_nrf_ble"))] S: Read + Write,
+    #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,
-    #[cfg(feature = "_nrf_ble")] addr: [u8; 6],
-    #[cfg(not(feature = "_nrf_ble"))] receiver: S,
+    #[cfg(feature = "_ble")] addr: [u8; 6],
+    #[cfg(not(feature = "_ble"))] receiver: S,
 ) {
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     {
-        use crate::split::nrf::central::run_ble_peripheral_manager;
+        use crate::split::ble::central::run_ble_peripheral_manager;
         run_ble_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
     };
 
-    #[cfg(not(feature = "_nrf_ble"))]
+    #[cfg(not(feature = "_ble"))]
     {
         use crate::split::serial::run_serial_peripheral_manager;
         run_serial_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;

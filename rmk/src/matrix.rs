@@ -2,9 +2,10 @@ use crate::{
     debounce::{DebounceState, DebouncerTrait},
     event::{Event, KeyEvent},
     input_device::InputDevice,
+    state::ConnectionState,
     CONNECTION_STATE,
 };
-use core::future::Future;
+use core::{future::Future, sync::atomic::Ordering};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
@@ -22,7 +23,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected as u8 {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");
@@ -202,6 +203,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use core::pin::pin;
+
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
             if start_time.elapsed().as_millis() <= 1 {
@@ -220,7 +223,7 @@ impl<
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-        let _ = select_slice(futs.as_mut_slice()).await;
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
@@ -263,7 +266,7 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
             embassy_time::Timer::after_secs(5).await;
         }
         self.last = !self.last;
-        info!("Read event: {:?}", self.last);
+        // info!("Read event: {:?}", self.last);
         Event::Key(KeyEvent {
             row: 0,
             col: 0,

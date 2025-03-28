@@ -106,7 +106,7 @@ async fn main(spawner: Spawner) {
         2806,
     );
     let storage_config = StorageConfig {
-        start_addr: 0,
+        start_addr: 0x78000,
         num_sectors: 6,
         ..Default::default()
     };
