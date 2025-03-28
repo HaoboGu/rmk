@@ -113,11 +113,17 @@ pub struct Keyboard<
     fork_states: [Option<KeyAction>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
 
+    /// the held keys for the keyboard hid report, except the modifiers
+    held_modifiers: HidModifiers,
+
+    /// led states for the keyboard hid report
+    led_states: HidLeds, //TODO LightController should fill this also, when receiving new LedIndicator hid report -> so the forks will be able to use it.
+
+    /// the held keys for the keyboard hid report, except the modifiers
+    held_keycodes: [KeyCode; 6],
+
     /// Registered key position
     registered_keys: [Option<(u8, u8)>; 6],
-
-    /// Keyboard internal hid report buf
-    report: KeyboardReport,
 
     /// Internal mouse report buf
     mouse_report: MouseReport,
@@ -178,7 +184,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
-            report: KeyboardReport::default(),
+            held_modifiers: HidModifiers::default(),
+            led_states: HidLeds::default(),
+            held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
                 buttons: 0,
                 x: 0,
@@ -226,19 +234,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    // pub(crate) async fn send_keyboard_report(&mut self) {
-    //     self.send_report(Report::KeyboardReport(self.report)).await;
-    //     // Yield once after sending the report to channel
-    //     yield_now().await;
-    // }
-
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed).into_bits();
 
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers,
-            ..self.report
+            reserved: 0,
+            leds: self.led_states.into_bits(),
+            keycodes: self.held_keycodes.map(|k| k as u8),
         }))
         .await;
 
@@ -366,7 +370,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let decision_state = StateBits {
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(key_event.pressed),
-            leds: HidLeds::from_bits(self.report.leds),
+            leds: self.led_states,
             mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
         };
 
@@ -930,7 +934,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - one-shot modifiers
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> HidModifiers {
         // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
-        let mut result = HidModifiers::from_bits(self.report.modifier);
+        let mut result = self.held_modifiers;
 
         // OneShotState::Held keeps the temporary modifiers active until the key is released
         if pressed {
@@ -1287,12 +1291,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // If the slot is found, update the key in the slot
         if let Some(index) = slot {
-            self.report.keycodes[index] = key as u8;
+            self.held_keycodes[index] = key;
             self.registered_keys[index] = Some((key_event.row, key_event.col));
         } else {
             // Otherwise, find the first free slot
-            if let Some(index) = self.report.keycodes.iter().position(|&k| k == 0) {
-                self.report.keycodes[index] = key as u8;
+            if let Some(index) = self.held_keycodes.iter().position(|&k| k == KeyCode::No) {
+                self.held_keycodes[index] = key;
                 self.registered_keys[index] = Some((key_event.row, key_event.col));
             }
         }
@@ -1312,12 +1316,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // If the slot is found, update the key in the slot
         if let Some(index) = slot {
-            self.report.keycodes[index] = 0;
+            self.held_keycodes[index] = KeyCode::No;
             self.registered_keys[index] = None;
         } else {
             // Otherwise, release the first same key
-            if let Some(index) = self.report.keycodes.iter().position(|&k| k == key as u8) {
-                self.report.keycodes[index] = 0;
+            if let Some(index) = self.held_keycodes.iter().position(|&k| k == key) {
+                self.held_keycodes[index] = KeyCode::No;
                 self.registered_keys[index] = None;
             }
         }
@@ -1325,7 +1329,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier |= key.to_hid_modifiers().into_bits();
+        self.held_modifiers |= key.to_hid_modifiers();
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -1333,12 +1337,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
-        self.report.modifier &= !key.to_hid_modifiers().into_bits();
+        self.held_modifiers &= !key.to_hid_modifiers();
     }
 
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.report.modifier |= modifiers.to_hid_modifiers().into_bits();
+        self.held_modifiers |= modifiers.to_hid_modifiers();
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers.to_hid_modifiers();
@@ -1346,7 +1350,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.report.modifier &= !modifiers.to_hid_modifiers().into_bits();
+        self.held_modifiers &= !modifiers.to_hid_modifiers();
     }
 }
 
