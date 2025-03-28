@@ -151,6 +151,10 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
             .iter()
             .position(|info| info.slot_num == profile_info.slot_num)
         {
+            if self.bonded_devices[index].info == profile_info.info {
+                info!("Skip saving same bonding info");
+                return ;
+            }
             // If the bonding information with the same slot number exists, update it
             self.bonded_devices[index] = profile_info.clone();
         } else {
