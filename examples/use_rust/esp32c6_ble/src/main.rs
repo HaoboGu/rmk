@@ -1,83 +1,102 @@
-#![feature(type_alias_impl_trait)]
+#![no_std]
+#![no_main]
 
-#[macro_use]
-mod macros;
 mod keymap;
+mod macros;
 mod vial;
 
+use crate::keymap::*;
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use defmt::info;
-use esp_idf_svc::{
-    hal::{gpio::*, peripherals::Peripherals, task::block_on},
-    partition::EspPartition,
-};
-use esp_println as _;
-use keymap::{COL, ROW};
+use bt_hci::controller::ExternalController;
+use embassy_executor::Spawner;
+use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
+use esp_storage::FlashStorage;
+use esp_wifi::ble::controller::BleConnector;
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::StorageConfig;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::run_devices;
 use rmk::{
-    channel::EVENT_CHANNEL,
     config::{ControllerConfig, RmkConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
     initialize_keymap_and_storage,
-    input_device::Runnable,
     keyboard::Keyboard,
     light::LightController,
-    matrix::Matrix,
-    run_devices, run_rmk,
+    matrix::TestMatrix,
     storage::async_flash_wrapper,
 };
+use {esp_alloc as _, esp_backtrace as _};
 
-fn main() {
-    esp_idf_svc::sys::link_patches();
+#[esp_hal_embassy::main]
+async fn main(_s: Spawner) {
+    esp_println::logger::init_logger_from_env();
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
 
-    // Bind the log crate to the ESP Logging facilities
-    esp_idf_svc::log::EspLogger::initialize_default();
+    let flash = FlashStorage::new();
+    let flash = async_flash_wrapper(flash);
 
-    info!("Hello ESP BLE!");
-    let peripherals = Peripherals::take().unwrap();
+    esp_alloc::heap_allocator!(64 * 1024);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
 
-    // Pin config
-    // WARNING: Some gpio pins shouldn't be used, the initial state is error.
-    // reference: table 2-3 in https://www.espressif.com.cn/sites/default/files/documentation/esp32-c3_datasheet_en.pdf
-    let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals , input: [gpio6, gpio7, gpio20, gpio21], output: [gpio3, gpio4, gpio5]);
+    let mut rng = esp_hal::rng::Trng::new(peripherals.RNG, peripherals.ADC1);
 
-    // Keyboard config
+    let init = esp_wifi::init(timg0.timer0, rng.rng.clone(), peripherals.RADIO_CLK).unwrap();
+
+    let systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
+    esp_hal_embassy::init(systimer.alarm0);
+
+    let bluetooth = peripherals.BT;
+    let connector = BleConnector::new(&init, bluetooth);
+    let controller: ExternalController<_, 64> = ExternalController::new(connector);
+
+    // RMK config
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let storage_config = StorageConfig {
+        start_addr: 0x3f0000,
+        num_sectors: 16,
+        ..Default::default()
+    };
     let rmk_config = RmkConfig {
         vial_config,
+        storage_config,
         ..Default::default()
     };
 
-    let flash = async_flash_wrapper(unsafe {
-        EspPartition::new("rmk")
-            .expect("Create storage partition error")
-            .expect("Empty partition")
-    });
+    let mut matrix: TestMatrix<ROW, COL> = TestMatrix::new();
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let (keymap, storage) = block_on(initialize_keymap_and_storage(
+    let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut default_keymap,
         flash,
         rmk_config.storage_config,
         rmk_config.behavior_config.clone(),
-    ));
+    )
+    .await;
 
-    // Initialize the matrix + keyboard
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
-    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    use esp_hal::gpio::Output;
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
-
     // Initialize the light controller
-    let light_controller: LightController<PinDriver<AnyOutputPin, Output>> =
+    let mut light_controller: LightController<Output> =
         LightController::new(ControllerConfig::default().light_config);
 
-    // Start
-    block_on(join3(
+    join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        run_rmk(&keymap, storage, light_controller, rmk_config),
-    ));
+        rmk::ble::trouble::run(
+            &keymap,
+            &mut storage,
+            controller,
+            &mut rng,
+            &mut light_controller,
+            rmk_config,
+        ),
+    )
+    .await;
 }

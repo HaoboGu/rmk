@@ -7,18 +7,19 @@ use xz2::read::XzEncoder;
 
 fn main() {
     // Generate vial config at the root of project
+    println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();
 
     // ESP IDE system env
-    embuild::espidf::sysenv::output();
+    println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
+    // embuild::espidf::sysenv::output();
 
     // Set the extra linker script from defmt
-    println!("cargo:rustc-link-arg=-Tdefmt.x");
+    // println!("cargo:rustc-link-arg=-Tdefmt.x");
 }
 
 fn generate_vial_config() {
     // Generated vial config file
-    println!("cargo:rerun-if-changed=vial.json");
     let out_file = Path::new(&env::var_os("OUT_DIR").unwrap()).join("config_generated.rs");
 
     let p = Path::new("vial.json");

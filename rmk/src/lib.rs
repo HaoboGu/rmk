@@ -131,13 +131,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    let mut storage = Storage::new(
-        flash,
-        default_keymap,
-        &Some(default_encoder_map),
-        storage_config,
-    )
-    .await;
+    let mut storage = Storage::new(flash, default_keymap, &Some(default_encoder_map), storage_config).await;
 
     let keymap = RefCell::new(
         KeyMap::new_from_storage(
@@ -169,9 +163,8 @@ pub async fn initialize_keymap_and_storage<
 ) {
     let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
 
-    let keymap = RefCell::new(
-        KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await,
-    );
+    let keymap =
+        RefCell::new(KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await);
     (keymap, storage)
 }
 
@@ -192,23 +185,23 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] ble_controller: C,
     #[cfg(feature = "_ble")] random_generator: &mut RNG,
-    #[cfg(feature = "storage")] mut storage: Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    mut light_controller: LightController<Out>,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+    light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
     crate::ble::trouble::run(
         keymap,
-        #[cfg(feature = "storage")]
-        &mut storage,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         #[cfg(feature = "_ble")]
         ble_controller,
         #[cfg(feature = "_ble")]
         random_generator,
-        &mut light_controller,
+        #[cfg(feature = "storage")]
+        storage,
+        light_controller,
         rmk_config,
     )
     .await;
@@ -216,8 +209,7 @@ pub async fn run_rmk<
     // USB keyboard
     #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
     {
-        let mut usb_builder: embassy_usb::Builder<'_, D> =
-            new_usb_builder(usb_driver, rmk_config.usb_config);
+        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let mut other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -230,7 +222,7 @@ pub async fn run_rmk<
                 #[cfg(feature = "storage")]
                 &mut storage,
                 async { usb_device.run().await },
-                &mut light_controller,
+                light_controller,
                 UsbLedReader::new(&mut keyboard_reader),
                 UsbVialReaderWriter::new(&mut vial_reader_writer),
                 UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),

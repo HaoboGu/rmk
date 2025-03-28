@@ -6,26 +6,24 @@ mod vial;
 mod macros;
 mod keymap;
 
+use defmt::info;
 use defmt::unwrap;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::AnyPin;
 use embassy_nrf::gpio::Input;
 use embassy_nrf::gpio::Output;
+use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::RNG;
+use embassy_nrf::peripherals::SAADC;
 use embassy_nrf::peripherals::USBD;
 use embassy_nrf::saadc::AnyInput;
 use embassy_nrf::saadc::Input as _;
+use embassy_nrf::saadc::{self, Saadc};
 use embassy_nrf::usb;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
 use embassy_nrf::{bind_interrupts, rng};
-use embassy_nrf::{
-    interrupt::{self, InterruptExt},
-    peripherals::SAADC,
-    saadc::{self, Saadc},
-};
 use keymap::COL;
-use keymap::NUM_LAYER;
 use keymap::ROW;
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
@@ -33,20 +31,20 @@ use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::KeyboardUsbConfig;
-use rmk::config::StorageConfig;
+use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
+use rmk::futures::future::join4;
+use rmk::initialize_encoder_keymap_and_storage;
+use rmk::input_device::rotary_encoder::E8H7Phase;
+use rmk::input_device::rotary_encoder::RotaryEncoder;
+use rmk::input_device::rotary_encoder::RotaryEncoderProcessor;
 use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::run_devices;
-use rmk::{
-    config::{ControllerConfig, RmkConfig, VialConfig},
-    initialize_keymap_and_storage,
-    keyboard::Keyboard,
-    config::BleBatteryConfig,
-    light::LightController,
-};
+use rmk::run_processor_chain;
+use rmk::run_rmk;
 use static_cell::StaticCell;
 use vial::VIAL_KEYBOARD_DEF;
 use vial::VIAL_KEYBOARD_ID;
@@ -90,6 +88,7 @@ fn build_sdc<'d, const N: usize>(
         .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
         .build(p, rng, mpsl, mem)
 }
+
 /// Initializes the SAADC peripheral in single-ended mode on the given pin.
 fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
     // Then we initialize the ADC. We are only using one channel in this example.
@@ -102,13 +101,14 @@ fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    info!("Hello RMK BLE!");
+    // Initialize the peripherals, sdc and mpsl
     let mut nrf_config = embassy_nrf::config::Config::default();
     nrf_config.dcdc.reg0_voltage = Some(embassy_nrf::config::Reg0Voltage::_3v3);
     nrf_config.dcdc.reg0 = true;
     nrf_config.dcdc.reg1 = true;
     let p = embassy_nrf::init(nrf_config);
-    let mpsl_p =
-        mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
+    let mpsl_p = mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
         source: mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
         rc_ctiv: mpsl::raw::MPSL_RECOMMENDED_RC_CTIV as u8,
@@ -118,33 +118,33 @@ async fn main(spawner: Spawner) {
     };
     static MPSL: StaticCell<MultiprotocolServiceLayer> = StaticCell::new();
     static SESSION_MEM: StaticCell<mpsl::SessionMem<1>> = StaticCell::new();
-
     let mpsl = MPSL.init(unwrap!(mpsl::MultiprotocolServiceLayer::with_timeslots(
         mpsl_p,
         Irqs,
         lfclk_cfg,
         SESSION_MEM.init(mpsl::SessionMem::new())
     )));
-
     spawner.must_spawn(mpsl_task(&*mpsl));
-
     let sdc_p = sdc::Peripherals::new(
-        p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22, p.PPI_CH23, p.PPI_CH24,
-        p.PPI_CH25, p.PPI_CH26, p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
+        p.PPI_CH17, p.PPI_CH18, p.PPI_CH20, p.PPI_CH21, p.PPI_CH22, p.PPI_CH23, p.PPI_CH24, p.PPI_CH25, p.PPI_CH26,
+        p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
-
     let mut rng = rng::Rng::new(p.RNG, Irqs);
-    let mut rng_2 = ChaCha12Rng::from_rng(&mut rng).unwrap();
-
+    let mut rng_generator = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<4096>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
-    // Usb config
-    let vbus = HardwareVbusDetect::new(Irqs);
-    let driver = Driver::new(p.USBD, Irqs, vbus);
+    // Initialize usb driver
+    let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
 
-    
-    // Initialize the ADC. We are only using one channel for detecting battery level
+    // Initialize flash
+    let flash = Flash::take(mpsl, p.NVMC);
+
+    // Initialize IO Pins
+    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_27, P1_13], output:  [P0_28, P0_03, P1_10, P0_02, P0_06, P1_11, P0_13, P0_24, P0_09, P0_10, P1_00, P1_02, P1_03, P1_05]);
+
+    // Initialize the ADC.
+    // We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
     let is_charging_pin = Input::new(AnyPin::from(p.P1_09), embassy_nrf::gpio::Pull::Up);
     let saadc = init_adc(adc_pin, p.SAADC);
@@ -156,23 +156,15 @@ async fn main(spawner: Spawner) {
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
-        product_name: "Corne adjustment",
+        product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(
-        Some(is_charging_pin),
-        true,
-        None,
-        false,
-        Some(saadc),
-        2000,
-        2806,
-    );
+    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false, Some(saadc), 2000, 2806);
     let storage_config = StorageConfig {
-        start_addr: 0x70000,
+        start_addr: 0xA0000, // FIXME: use 0x70000 after we can build without softdevice controller
         num_sectors: 6,
-        clear_storage: true,
+        ..Default::default()
     };
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,
@@ -182,53 +174,48 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    // Use internal flash to emulate eeprom
-    let flash = Flash::take(mpsl, p.NVMC);
-
+    // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let (keymap, mut storage) = initialize_keymap_and_storage(
+    let mut encoder_map = keymap::get_default_encoder_map();
+    let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
+        &mut encoder_map,
         flash,
         rmk_config.storage_config,
         rmk_config.behavior_config.clone(),
     )
     .await;
 
-    // Pin config
-    
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_30, P0_31, P0_29, P0_02], output:  [P0_28, P0_03, P1_10, P1_11, P1_13, P0_09, P0_10]);
-
-    // Initialize the matrix + keyboard
+    // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
+    // Initialize the encoder
     let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
     let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
-    // P0_13 as output pin
-    let rgb_en = Output::new(
-        AnyPin::from(p.P0_13),
-        embassy_nrf::gpio::Level::Low,
-        embassy_nrf::gpio::OutputDrive::Standard,
-    );
+    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, E8H7Phase, 0);
+    let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
     // Initialize the light controller
-    let mut light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
-    join3(
+    join4(
         run_devices! (
-            (matrix) => EVENT_CHANNEL,
+            (matrix, encoder) => EVENT_CHANNEL,
         ),
-        keyboard.run(),
-        rmk::ble::trouble::run::<_, _, _, _, _, ROW, COL, NUM_LAYER, 0>(
+        run_processor_chain! {
+            EVENT_CHANNEL => [encoder_processor],
+        },
+        keyboard.run(), // Keyboard is special
+        run_rmk(
             &keymap,
-            &mut storage,
             driver,
             sdc,
-            &mut rng_2,
+            &mut rng_generator,
+            &mut storage,
             &mut light_controller,
             rmk_config,
         ),
