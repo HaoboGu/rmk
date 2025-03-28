@@ -1,10 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-use crate::{
-    keyboard_config::{CommunicationConfig, KeyboardConfig},
-    ChipSeries,
-};
+use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
+use crate::ChipSeries;
 
 // Default implementations of ble configuration.
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
@@ -98,12 +96,10 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         let charging_state_low_active = #low_active;
                     });
                 } else {
-                    ble_config_tokens.extend(
-                        quote! {
-                            let charging_state_low_active = false;
-                            let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_>> = None;
-                        }
-                    )
+                    ble_config_tokens.extend(quote! {
+                        let charging_state_low_active = false;
+                        let is_charging_pin: ::core::option::Option<::embassy_nrf::gpio::Input<'_>> = None;
+                    })
                 }
 
                 if let Some(charging_led_config) = ble.charge_led.clone() {
@@ -119,12 +115,10 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         let charge_led_low_active = #charging_led_low_active;
                     });
                 } else {
-                    ble_config_tokens.extend(
-                        quote! {
-                            let charge_led_low_active = false;
-                            let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_>>  = None;
-                        }
-                    )
+                    ble_config_tokens.extend(quote! {
+                        let charge_led_low_active = false;
+                        let charge_led_pin: ::core::option::Option<::embassy_nrf::gpio::Output<'_>>  = None;
+                    })
                 }
 
                 ble_config_tokens.extend(

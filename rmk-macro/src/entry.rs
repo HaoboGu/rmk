@@ -3,16 +3,11 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{ItemFn, ItemMod};
 
-use crate::{
-    keyboard::Overwritten,
-    keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig},
-    ChipSeries,
-};
+use crate::keyboard::Overwritten;
+use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
+use crate::ChipSeries;
 
-pub(crate) fn expand_rmk_entry(
-    keyboard_config: &KeyboardConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_rmk_entry(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(entry)]`, override the entry
     if let Some((_, items)) = &item_mod.content {
         items
@@ -20,9 +15,7 @@ pub(crate) fn expand_rmk_entry(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Entry) =
-                            Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
+                        if let Ok(Overwritten::Entry) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
                             return Some(override_rmk_entry(item_fn));
                         }
                     }
@@ -64,23 +57,26 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                         .serial
                         .clone()
                         .expect("No serial defined for central");
-                    split_config
-                        .peripheral
-                        .iter()
-                        .enumerate()
-                        .for_each(|(idx, p)| {
-                            let row = p.rows;
-                            let col = p.cols;
-                            let row_offset = p.row_offset;
-                            let col_offset = p.col_offset;
-                            let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
-                            tasks.push(quote! {
-                                ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                                    #idx,
-                                    #uart_instance,
-                                )
-                            });
+                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
+                        let uart_instance = format_ident!(
+                            "{}",
+                            central_serials
+                                .get(idx)
+                                .expect("No or not enough serial defined for peripheral in central")
+                                .instance
+                                .to_lowercase()
+                        );
+                        tasks.push(quote! {
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
+                                #idx,
+                                #uart_instance,
+                            )
                         });
+                    });
                     join_all_tasks(tasks)
                 }
                 ChipSeries::Nrf52 => {
@@ -89,10 +85,10 @@ pub(crate) fn rmk_entry_select(keyboard_config: &KeyboardConfig) -> TokenStream2
                     };
                     let mut tasks = vec![matrix_task, rmk_task, keyboard_task];
                     split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                        let row = p.rows ;
-                        let col = p.cols ;
-                        let row_offset = p.row_offset ;
-                        let col_offset = p.col_offset ;
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
                         let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
                         tasks.push(quote! {
                             ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset>(

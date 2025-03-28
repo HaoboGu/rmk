@@ -2,16 +2,13 @@
 //!
 use quote::quote;
 
-use crate::{
-    config::MatrixType,
-    feature::is_feature_enabled,
-    gpio_config::{
-        convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
-        convert_output_pins_to_initializers,
-    },
-    keyboard_config::{BoardConfig, KeyboardConfig},
-    ChipModel, ChipSeries,
+use crate::config::MatrixType;
+use crate::feature::is_feature_enabled;
+use crate::gpio_config::{
+    convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
 };
+use crate::keyboard_config::{BoardConfig, KeyboardConfig};
+use crate::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,
@@ -110,11 +107,7 @@ pub(crate) fn expand_matrix_input_output_pins(
         quote! {}
     };
     // Initialize input pins
-    pin_initialization.extend(convert_input_pins_to_initializers(
-        &chip,
-        input_pins,
-        async_matrix,
-    ));
+    pin_initialization.extend(convert_input_pins_to_initializers(&chip, input_pins, async_matrix));
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(&chip, output_pins));
 

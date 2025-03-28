@@ -18,10 +18,11 @@ include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 // This mod MUST go first, so that the others see its macros.
 pub(crate) mod fmt;
 
-use crate::light::LightController;
-use crate::state::ConnectionState;
+use core::cell::RefCell;
+use core::future::Future;
+use core::sync::atomic::Ordering;
+
 use config::{RmkConfig, VialConfig};
-use core::{cell::RefCell, future::Future, sync::atomic::Ordering};
 use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
@@ -30,12 +31,10 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
 use embedded_hal::digital::OutputPin;
-pub use futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
-pub use rmk_macro as macros;
 use state::CONNECTION_STATE;
 use usb::descriptor::ViaReport;
 use via::VialService;
@@ -44,7 +43,6 @@ use {
     crate::light::UsbLedReader,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer, UsbKeyboardWriter},
 };
-
 #[cfg(feature = "storage")]
 use {
     action::{EncoderAction, KeyAction},
@@ -52,6 +50,7 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };
+pub use {futures, heapless, rmk_macro as macros};
 #[cfg(feature = "_ble")]
 use {
     rand_core::{CryptoRng, RngCore},
@@ -63,7 +62,8 @@ use {
     via::UsbVialReaderWriter,
 };
 
-pub use heapless;
+use crate::light::LightController;
+use crate::state::ConnectionState;
 
 pub mod action;
 #[cfg(feature = "_ble")]

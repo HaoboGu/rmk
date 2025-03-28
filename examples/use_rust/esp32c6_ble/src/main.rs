@@ -5,27 +5,25 @@ mod keymap;
 mod macros;
 mod vial;
 
-use crate::keymap::*;
-use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
-use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
+use esp_hal::clock::CpuClock;
+use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::StorageConfig;
+use rmk::config::{ControllerConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
-use rmk::run_devices;
-use rmk::{
-    config::{ControllerConfig, RmkConfig, VialConfig},
-    initialize_keymap_and_storage,
-    keyboard::Keyboard,
-    light::LightController,
-    matrix::TestMatrix,
-    storage::async_flash_wrapper,
-};
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::TestMatrix;
+use rmk::storage::async_flash_wrapper;
+use rmk::{initialize_keymap_and_storage, run_devices};
 use {esp_alloc as _, esp_backtrace as _};
+
+use crate::keymap::*;
+use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 #[esp_hal_embassy::main]
 async fn main(_s: Spawner) {
@@ -81,8 +79,7 @@ async fn main(_s: Spawner) {
     use esp_hal::gpio::Output;
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
     // Initialize the light controller
-    let mut light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     join3(
         run_devices! (

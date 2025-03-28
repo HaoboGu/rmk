@@ -1,24 +1,21 @@
 pub mod descriptor;
 
 use core::sync::atomic::Ordering;
+
 use embassy_sync::signal::Signal;
-use embassy_usb::{
-    class::hid::{HidWriter, ReportId, RequestHandler},
-    control::OutResponse,
-    driver::Driver,
-    Builder, Handler,
-};
+use embassy_usb::class::hid::{HidWriter, ReportId, RequestHandler};
+use embassy_usb::control::OutResponse;
+use embassy_usb::driver::Driver;
+use embassy_usb::{Builder, Handler};
 use ssmarshal::serialize;
 use static_cell::StaticCell;
 
-use crate::{
-    channel::KEYBOARD_REPORT_CHANNEL,
-    config::KeyboardUsbConfig,
-    hid::{HidError, HidWriterTrait, Report, RunnableHidWriter},
-    state::ConnectionState,
-    usb::descriptor::CompositeReportType,
-    CONNECTION_STATE,
-};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::config::KeyboardUsbConfig;
+use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
+use crate::state::ConnectionState;
+use crate::usb::descriptor::CompositeReportType;
+use crate::CONNECTION_STATE;
 
 /// USB state
 #[repr(u8)]
@@ -48,10 +45,7 @@ pub(crate) struct UsbKeyboardWriter<'a, 'd, D: Driver<'d>> {
     pub(crate) other_writer: &'a mut HidWriter<'d, D, 9>,
 }
 impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
-    pub(crate) fn new(
-        keyboard_writer: &'a mut HidWriter<'d, D, 8>,
-        other_writer: &'a mut HidWriter<'d, D, 9>,
-    ) -> Self {
+    pub(crate) fn new(keyboard_writer: &'a mut HidWriter<'d, D, 8>, other_writer: &'a mut HidWriter<'d, D, 9>) -> Self {
         Self {
             keyboard_writer,
             other_writer,
@@ -81,8 +75,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::MouseReport(mouse_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Mouse as u8;
-                let n = serialize(&mut buf[1..], &mouse_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
+                let n = serialize(&mut buf[1..], &mouse_report).map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -92,8 +85,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Media as u8;
-                let n = serialize(&mut buf[1..], &media_keyboard_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
+                let n = serialize(&mut buf[1..], &media_keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -103,8 +95,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
             Report::SystemControlReport(system_control_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::System as u8;
-                let n = serialize(&mut buf[1..], &system_control_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
+                let n = serialize(&mut buf[1..], &system_control_report).map_err(|_| HidError::ReportSerializeError)?;
                 self.other_writer
                     .write(&buf[0..n + 1])
                     .await
@@ -115,10 +106,7 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
     }
 }
 
-pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
-    driver: D,
-    keyboard_config: KeyboardUsbConfig<'d>,
-) -> Builder<'d, D> {
+pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: KeyboardUsbConfig<'d>) -> Builder<'d, D> {
     // Create embassy-usb Config
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);

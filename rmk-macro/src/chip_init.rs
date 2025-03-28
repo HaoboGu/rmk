@@ -3,7 +3,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
-use crate::{keyboard::Overwritten, keyboard_config::KeyboardConfig, ChipModel, ChipSeries};
+use crate::keyboard::Overwritten;
+use crate::keyboard_config::KeyboardConfig;
+use crate::{ChipModel, ChipSeries};
 
 // Default implementations of chip initialization
 pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
@@ -50,10 +52,7 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
     }
 }
 
-pub(crate) fn expand_chip_init(
-    keyboard_config: &KeyboardConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_chip_init(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
         items
@@ -61,9 +60,7 @@ pub(crate) fn expand_chip_init(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) =
-                            Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
+                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
                             return Some(override_chip_init(&keyboard_config.chip, item_fn));
                         }
                     }

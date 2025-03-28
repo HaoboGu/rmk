@@ -19,12 +19,14 @@ mod split;
 #[rustfmt::skip]
 mod usb_interrupt_map;
 
-use crate::keyboard::parse_keyboard_mod;
-use darling::{ast::NestedMeta, FromMeta};
+use darling::ast::NestedMeta;
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;
 use usb_interrupt_map::get_usb_info;
+
+use crate::keyboard::parse_keyboard_mod;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum ChipSeries {

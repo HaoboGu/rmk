@@ -1,39 +1,32 @@
 pub mod dummy_flash;
 mod eeconfig;
 
-use crate::{
-    action::EncoderAction,
-    channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_LENGTH},
-    config::StorageConfig,
-    BUILD_HASH,
-};
-use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
+
+use byteorder::{BigEndian, ByteOrder};
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use sequential_storage::{
-    cache::NoCache,
-    map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
-    Error as SSError,
-};
+use sequential_storage::cache::NoCache;
+use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
+use sequential_storage::Error as SSError;
 #[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::profile::ProfileInfo,
     trouble_host::{prelude::*, BondInformation, LongTermKey},
 };
 
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
-use crate::{
-    action::KeyAction,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
-};
-
 use self::eeconfig::EeKeymapConfig;
+use crate::action::{EncoderAction, KeyAction};
+use crate::channel::FLASH_CHANNEL;
+use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::config::StorageConfig;
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
+use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::BUILD_HASH;
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -205,10 +198,7 @@ impl Value<'_> for StorageData {
             StorageData::EncoderConfig(e) => {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(
-                    &mut buffer[3..5],
-                    to_via_keycode(e.action.counter_clockwise()),
-                );
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
                 buffer[5] = e.idx as u8;
                 buffer[6] = e.layer as u8;
                 Ok(7)
@@ -227,10 +217,7 @@ impl Value<'_> for StorageData {
                 }
                 buffer[0] = StorageKeys::ComboData as u8;
                 for i in 0..COMBO_MAX_LENGTH {
-                    BigEndian::write_u16(
-                        &mut buffer[1 + i * 2..3 + i * 2],
-                        to_via_keycode(combo.actions[i]),
-                    );
+                    BigEndian::write_u16(&mut buffer[1 + i * 2..3 + i * 2], to_via_keycode(combo.actions[i]));
                 }
                 BigEndian::write_u16(
                     &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
@@ -295,9 +282,9 @@ impl Value<'_> for StorageData {
                 }
                 StorageKeys::LedLightConfig => Err(SerializationError::Custom(0)),
                 StorageKeys::RgbLightConfig => Err(SerializationError::Custom(0)),
-                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(
-                    EeKeymapConfig::from_bits(BigEndian::read_u16(&buffer[1..3])),
-                )),
+                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(EeKeymapConfig::from_bits(
+                    BigEndian::read_u16(&buffer[1..3]),
+                ))),
                 StorageKeys::LayoutConfig => {
                     let default_layer = buffer[1];
                     let layout_option = BigEndian::read_u32(&buffer[2..6]);
@@ -334,8 +321,7 @@ impl Value<'_> for StorageData {
                     }
                     let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
                     for i in 0..COMBO_MAX_LENGTH {
-                        actions[i] =
-                            from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
+                        actions[i] = from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
                     }
                     let output = from_via_keycode(BigEndian::read_u16(
                         &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
@@ -477,8 +463,7 @@ pub struct Storage<
 macro_rules! update_storage_field {
     ($f: expr, $buf: expr, $cache:expr, $key:ident, $field:ident, $range:expr) => {
         if let Ok(Some(StorageData::$key(mut saved))) =
-            fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32))
-                .await
+            fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32)).await
         {
             saved.$field = $field;
             store_item::<u32, StorageData, _>(
@@ -496,13 +481,8 @@ macro_rules! update_storage_field {
     };
 }
 
-impl<
-        F: AsyncNorFlash,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    > Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
         flash: F,
@@ -518,14 +498,14 @@ impl<
 
         // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
-        #[cfg(feature = "_ble")]
+        #[cfg(feature = "_nrf_ble")]
         let start_addr = if config.start_addr == 0 {
             0x0006_0000
         } else {
             config.start_addr
         };
 
-        #[cfg(not(feature = "_ble"))]
+        #[cfg(not(feature = "_nrf_ble"))]
         let start_addr = config.start_addr;
 
         // Check storage setting
@@ -536,9 +516,9 @@ impl<
             config.num_sectors,
             config.start_addr,
         );
+
         let storage_range = if start_addr == 0 {
-            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
-                ..flash.capacity() as u32
+            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32..flash.capacity() as u32
         } else {
             assert!(
                 start_addr % F::ERASE_SIZE == 0,
@@ -554,12 +534,10 @@ impl<
         };
 
         // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await {
+        if !storage.check_enable().await || config.clear_storage {
             // Clear storage first
             debug!("Clearing storage!");
-            let _ =
-                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
-                    .await;
+            let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
 
             // Initialize storage from keymap and config
             if storage
@@ -642,11 +620,7 @@ impl<
                         layer: layer as usize,
                         action,
                     });
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(
-                        row as usize,
-                        col as usize,
-                        layer as usize,
-                    );
+                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row as usize, col as usize, layer as usize);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -767,10 +741,7 @@ impl<
         .await
         {
             // Iterator the storage, read all keymap keys and encoder configs
-            while let Ok(Some((_key, item))) = key_iterator
-                .next::<u32, StorageData>(&mut self.buffer)
-                .await
-            {
+            while let Ok(Some((_key, item))) = key_iterator.next::<u32, StorageData>(&mut self.buffer).await {
                 match item {
                     StorageData::KeymapKey(key) => {
                         if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
@@ -949,10 +920,7 @@ impl<
     }
 
     #[cfg(feature = "_ble")]
-    pub(crate) async fn read_trouble_bond_info(
-        &mut self,
-        slot_num: u8,
-    ) -> Result<Option<ProfileInfo>, ()> {
+    pub(crate) async fn read_trouble_bond_info(&mut self, slot_num: u8) -> Result<Option<ProfileInfo>, ()> {
         let read_data = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
             self.storage_range.clone(),

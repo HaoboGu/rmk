@@ -1,24 +1,24 @@
-use crate::{
-    boot,
-    config::VialConfig,
-    hid::{HidError, HidReaderTrait, HidWriterTrait},
-    keyboard_macro::MACRO_SPACE_SIZE,
-    keymap::KeyMap,
-    state::ConnectionState,
-    usb::descriptor::ViaReport,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
-    CONNECTION_STATE,
-};
-#[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOperationMessage};
+use core::cell::RefCell;
+use core::sync::atomic::Ordering;
+
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use core::{cell::RefCell, sync::atomic::Ordering};
-use embassy_time::Instant;
-use embassy_time::Timer;
-use embassy_usb::{class::hid::HidReaderWriter, driver::Driver};
+use embassy_time::{Instant, Timer};
+use embassy_usb::class::hid::HidReaderWriter;
+use embassy_usb::driver::Driver;
 use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
 use vial::process_vial;
+
+use crate::config::VialConfig;
+use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
+use crate::keymap::KeyMap;
+use crate::state::ConnectionState;
+use crate::usb::descriptor::ViaReport;
+use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::{boot, CONNECTION_STATE};
+#[cfg(feature = "storage")]
+use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOperationMessage};
 
 pub(crate) mod keycode_convert;
 mod protocol;
@@ -70,9 +70,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if CONNECTION_STATE.load(Ordering::Relaxed)
-                        == ConnectionState::Disconnected as u8
-                    {
+                    if CONNECTION_STATE.load(Ordering::Relaxed) == ConnectionState::Disconnected as u8 {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
@@ -126,10 +124,7 @@ impl<
                             warn!("GetKeyboardValue - SwitchMatrixState")
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
-                            BigEndian::write_u32(
-                                &mut report.input_data[2..6],
-                                VIA_FIRMWARE_VERSION,
-                            );
+                            BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
                         }
                         _ => (),
                     },
@@ -162,10 +157,7 @@ impl<
                 let col = report.output_data[3] as usize;
                 let action = keymap.borrow_mut().get_action_at(row, col, layer);
                 let keycode = to_via_keycode(action);
-                info!(
-                    "Getting keycode: {:02X} at ({},{}), layer {}",
-                    keycode, row, col, layer
-                );
+                info!("Getting keycode: {:02X} at ({},{}), layer {}", keycode, row, col, layer);
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
             }
             ViaCommand::DynamicKeymapSetKeyCode => {
@@ -178,12 +170,9 @@ impl<
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
-                keymap.borrow_mut().set_action_at(
-                    row as usize,
-                    col as usize,
-                    layer as usize,
-                    action,
-                );
+                keymap
+                    .borrow_mut()
+                    .set_action_at(row as usize, col as usize, layer as usize, action);
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::KeymapKey {
@@ -234,10 +223,7 @@ impl<
                 if size <= 28 {
                     report.input_data[4..4 + size]
                         .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
-                    debug!(
-                        "Get macro buffer: offset: {}, data: {:?}",
-                        offset, report.input_data
-                    );
+                    debug!("Get macro buffer: offset: {}, data: {:?}", offset, report.input_data);
                 } else {
                     report.input_data[0] = 0xFF;
                 }
@@ -270,9 +256,7 @@ impl<
                 #[cfg(feature = "storage")]
                 if size < 28 || num_zero >= NUM_MACRO {
                     let buf = self.keymap.borrow_mut().macro_cache;
-                    FLASH_CHANNEL
-                        .send(FlashOperationMessage::WriteMacro(buf))
-                        .await;
+                    FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
                     info!("Flush macros to storage")
                 }
             }
@@ -324,8 +308,7 @@ impl<
                         *a = action;
                         idx += 2;
                         let current_offset = offset as usize + i;
-                        let (row, col, layer) =
-                            get_position_from_offset(current_offset, row_num, col_num);
+                        let (row, col, layer) = get_position_from_offset(current_offset, row_num, col_num);
                         info!(
                             "Setting keymap buffer of offset: {}, row,col,layer: {},{},{}",
                             offset, row, col, layer
@@ -364,11 +347,7 @@ impl<
     }
 }
 
-fn get_position_from_offset(
-    offset: usize,
-    max_row: usize,
-    max_col: usize,
-) -> (usize, usize, usize) {
+fn get_position_from_offset(offset: usize, max_row: usize, max_col: usize) -> (usize, usize, usize) {
     let layer = offset / (max_col * max_row);
     let current_layer_offset = offset % (max_col * max_row);
     let row = current_layer_offset / max_col;

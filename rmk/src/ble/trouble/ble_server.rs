@@ -1,11 +1,10 @@
-use crate::{
-    channel::{BATTERY_READ_CHANNEL, KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL},
-    hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter},
-    usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport},
-};
 use ssmarshal::serialize;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
+
+use crate::channel::{BATTERY_READ_CHANNEL, KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
+use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
+use crate::usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
 
 // GATT Server definition
 #[gatt_server]
@@ -109,54 +108,38 @@ impl HidWriterTrait for BleHidServer<'_, '_, '_> {
         match report {
             Report::KeyboardReport(keyboard_report) => {
                 let mut buf = [0u8; 8];
-                let n = serialize(&mut buf, &keyboard_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.input_keyboard
-                    .notify(self.conn, &buf)
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to notify keyboard report: {:?}", e);
-                        HidError::BleError
-                    })?;
+                let n = serialize(&mut buf, &keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                self.input_keyboard.notify(self.conn, &buf).await.map_err(|e| {
+                    error!("Failed to notify keyboard report: {:?}", e);
+                    HidError::BleError
+                })?;
                 Ok(n)
             }
             Report::MouseReport(mouse_report) => {
                 let mut buf = [0u8; 5];
-                let n = serialize(&mut buf, &mouse_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.mouse_report
-                    .notify(self.conn, &buf)
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to notify mouse report: {:?}", e);
-                        HidError::BleError
-                    })?;
+                let n = serialize(&mut buf, &mouse_report).map_err(|_| HidError::ReportSerializeError)?;
+                self.mouse_report.notify(self.conn, &buf).await.map_err(|e| {
+                    error!("Failed to notify mouse report: {:?}", e);
+                    HidError::BleError
+                })?;
                 Ok(n)
             }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf = [0u8; 2];
-                let n = serialize(&mut buf, &media_keyboard_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.media_report
-                    .notify(self.conn, &buf)
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to notify media report: {:?}", e);
-                        HidError::BleError
-                    })?;
+                let n = serialize(&mut buf, &media_keyboard_report).map_err(|_| HidError::ReportSerializeError)?;
+                self.media_report.notify(self.conn, &buf).await.map_err(|e| {
+                    error!("Failed to notify media report: {:?}", e);
+                    HidError::BleError
+                })?;
                 Ok(n)
             }
             Report::SystemControlReport(system_control_report) => {
                 let mut buf = [0u8; 1];
-                let n = serialize(&mut buf, &system_control_report)
-                    .map_err(|_| HidError::ReportSerializeError)?;
-                self.system_report
-                    .notify(self.conn, &buf)
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to notify system report: {:?}", e);
-                        HidError::BleError
-                    })?;
+                let n = serialize(&mut buf, &system_control_report).map_err(|_| HidError::ReportSerializeError)?;
+                self.system_report.notify(self.conn, &buf).await.map_err(|e| {
+                    error!("Failed to notify system report: {:?}", e);
+                    HidError::BleError
+                })?;
                 Ok(n)
             }
         }

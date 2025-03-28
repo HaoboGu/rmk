@@ -2,24 +2,18 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::ItemMod;
 
-use crate::{
-    chip_init::expand_chip_init,
-    config::{MatrixType, SplitBoardConfig},
-    entry::join_all_tasks,
-    feature::{get_rmk_features, is_feature_enabled},
-    import::expand_imports,
-    keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
-    matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
-    split::central::expand_serial_init,
-    ChipModel, ChipSeries,
-};
+use crate::chip_init::expand_chip_init;
+use crate::config::{MatrixType, SplitBoardConfig};
+use crate::entry::join_all_tasks;
+use crate::feature::{get_rmk_features, is_feature_enabled};
+use crate::import::expand_imports;
+use crate::keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig};
+use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
+use crate::split::central::expand_serial_init;
+use crate::{ChipModel, ChipSeries};
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
-pub(crate) fn parse_split_peripheral_mod(
-    id: usize,
-    _attr: proc_macro::TokenStream,
-    item_mod: ItemMod,
-) -> TokenStream2 {
+pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
     if !is_feature_enabled(&rmk_features, "split") {
         return quote! {
@@ -80,10 +74,7 @@ fn expand_split_peripheral(
         }
     };
 
-    let peripheral_config = split_config
-        .peripheral
-        .get(id)
-        .expect("Missing peripheral config");
+    let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
 
     let central_config = &split_config.central;
 
@@ -155,8 +146,7 @@ fn expand_split_peripheral(
         }
     }
 
-    let run_rmk_peripheral =
-        expand_split_peripheral_entry(&keyboard_config.chip, peripheral_config, &central_config);
+    let run_rmk_peripheral = expand_split_peripheral_entry(&keyboard_config.chip, peripheral_config, &central_config);
 
     quote! {
         #imports
@@ -175,12 +165,10 @@ fn expand_split_peripheral_entry(
     };
     match chip.series {
         ChipSeries::Nrf52 => {
-            let central_addr = central_config
+            let central_addr = central_config.ble_addr.expect("Missing central ble address");
+            let peripheral_addr = peripheral_config
                 .ble_addr
-                .expect("Missing central ble address");
-            let peripheral_addr = peripheral_config.ble_addr.expect(
-                "Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`",
-            );
+                .expect("Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`");
             let peripheral_run = quote! {
                 ::rmk::split::peripheral::run_rmk_split_peripheral(
                     [#(#central_addr), *],

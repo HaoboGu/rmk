@@ -5,20 +5,19 @@
 mod macros;
 
 use defmt::*;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_nrf::{
-    self as _, bind_interrupts,
-    gpio::{AnyPin, Input, Output},
-    interrupt::{self, InterruptExt, Priority},
-    peripherals::SAADC,
-    saadc::{self, AnyInput, Input as _, Saadc},
-};
-use panic_probe as _;
-use rmk::{
-    channel::EVENT_CHANNEL, debounce::default_debouncer::DefaultDebouncer, futures::future::join,
-    matrix::Matrix, run_devices, split::peripheral::run_rmk_split_peripheral,
-};
+use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::interrupt::{self, InterruptExt, Priority};
+use embassy_nrf::peripherals::SAADC;
+use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
+use embassy_nrf::{self as _, bind_interrupts};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join;
+use rmk::matrix::Matrix;
+use rmk::run_devices;
+use rmk::split::peripheral::run_rmk_split_peripheral;
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     SAADC => saadc::InterruptHandler;

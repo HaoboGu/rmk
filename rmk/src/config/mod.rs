@@ -4,24 +4,21 @@ mod esp_config;
 mod nrf_config;
 
 use ::heapless::Vec;
+use embassy_sync::channel::Channel;
+use embassy_time::Duration;
+use embedded_hal::digital::OutputPin;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use embassy_sync::channel::Channel;
-use embassy_time::Duration;
-use embedded_hal::digital::OutputPin;
-
+use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::event::{Event, KeyEvent};
+use crate::hid::Report;
+use crate::light::LedIndicator;
 #[cfg(feature = "storage")]
 use crate::storage::FlashOperationMessage;
-use crate::{
-    combo::{Combo, COMBO_MAX_NUM},
-    event::{Event, KeyEvent},
-    hid::Report,
-    light::LedIndicator,
-    RawMutex,
-};
+use crate::RawMutex;
 
 /// The config struct for RMK keyboard.
 ///
@@ -60,11 +57,8 @@ pub struct ChannelConfig<
     pub(crate) vial_read_channel: Channel<RawMutex, [u8; 32], 4>,
 }
 
-impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > Default for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize> Default
+    for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     fn default() -> Self {
         Self {
@@ -79,11 +73,8 @@ impl<
     }
 }
 
-impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize>
+    ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     pub fn new() -> Self {
         Self::default()

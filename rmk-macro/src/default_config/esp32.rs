@@ -1,9 +1,6 @@
 use crate::config::{BleConfig, StorageConfig};
-
-use crate::{
-    keyboard_config::{CommunicationConfig, KeyboardConfig},
-    ChipModel,
-};
+use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
+use crate::ChipModel;
 
 // Default config for esp32
 pub(crate) fn default_esp32(chip: ChipModel) -> KeyboardConfig {

@@ -1,10 +1,9 @@
 #[path = "./build_common.rs"]
 mod common;
 
-use std::env;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::{env, fs};
 
 fn main() {
     // Set the compilation config

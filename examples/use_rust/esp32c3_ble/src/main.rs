@@ -5,27 +5,25 @@ mod macros;
 mod keymap;
 mod vial;
 
-use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use defmt::info;
-use esp_idf_svc::{
-    hal::{gpio::*, peripherals::Peripherals, task::block_on},
-    partition::EspPartition,
-};
+use esp_idf_svc::hal::gpio::*;
+use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::task::block_on;
+use esp_idf_svc::partition::EspPartition;
 use esp_println as _;
 use keymap::{COL, ROW};
-use rmk::{
-    channel::EVENT_CHANNEL,
-    config::{ControllerConfig, RmkConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
-    initialize_keymap_and_storage,
-    input_device::Runnable,
-    keyboard::Keyboard,
-    light::LightController,
-    matrix::Matrix,
-    run_devices, run_rmk,
-    storage::async_flash_wrapper,
-};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::storage::async_flash_wrapper;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
+
+use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 fn main() {
     esp_idf_svc::sys::link_patches();

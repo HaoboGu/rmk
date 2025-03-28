@@ -1,13 +1,14 @@
-use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyEvent};
-use crate::input_device::InputDevice;
-use crate::matrix::{KeyState, MatrixTrait};
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::matrix::{KeyState, MatrixTrait};
 
 /// Run central's peripheral manager task.
 ///
@@ -73,8 +74,7 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > InputDevice
-    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > InputDevice for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     async fn read_event(&mut self) -> Event {
         loop {
@@ -153,8 +153,7 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > MatrixTrait
-    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > MatrixTrait for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     #[cfg(feature = "col2row")]
     const ROW: usize = INPUT_PIN_NUM;
@@ -212,11 +211,7 @@ impl<
     > CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Initialization of central
-    pub fn new(
-        input_pins: [In; INPUT_PIN_NUM],
-        output_pins: [Out; OUTPUT_PIN_NUM],
-        debouncer: D,
-    ) -> Self {
+    pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
         CentralMatrix {
             input_pins,
             output_pins,

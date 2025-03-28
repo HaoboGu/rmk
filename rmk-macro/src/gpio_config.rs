@@ -1,10 +1,8 @@
-use crate::{ChipModel, ChipSeries};
 use quote::{format_ident, quote};
 
-pub(crate) fn convert_output_pins_to_initializers(
-    chip: &ChipModel,
-    pins: Vec<String>,
-) -> proc_macro2::TokenStream {
+use crate::{ChipModel, ChipSeries};
+
+pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
     let mut idents = vec![];
     let pin_initializers = pins
@@ -30,12 +28,7 @@ pub(crate) fn convert_input_pins_to_initializers(
     let mut idents = vec![];
     let pin_initializers = pins
         .into_iter()
-        .map(|p| {
-            (
-                p.clone(),
-                convert_gpio_str_to_input_pin(chip, p, async_matrix, false),
-            )
-        })
+        .map(|p| (p.clone(), convert_gpio_str_to_input_pin(chip, p, async_matrix, false)))
         .map(|(p, ts)| {
             let ident_name = format_ident!("{}", p.to_lowercase());
             idents.push(ident_name.clone());

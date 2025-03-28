@@ -1,15 +1,15 @@
-use crate::ble::nrf::initialize_nrf_sd_and_flash;
-use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
-use crate::split::peripheral::SplitPeripheral;
-use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use embassy_executor::Spawner;
 use embassy_futures::block_on;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::{Channel, Receiver};
 use nrf_softdevice::ble::gatt_server::set_sys_attrs;
 use nrf_softdevice::ble::peripheral::{advertise_connectable, ConnectableAdvertisement};
-use nrf_softdevice::ble::{gatt_server, Connection, PhySet, PhyUpdateError};
-use nrf_softdevice::ble::{Address, AddressType};
+use nrf_softdevice::ble::{gatt_server, Address, AddressType, Connection, PhySet, PhyUpdateError};
+
+use crate::ble::nrf::initialize_nrf_sd_and_flash;
+use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
+use crate::split::peripheral::SplitPeripheral;
+use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 
 /// Gatt service used in split peripheral to send split message to central
 #[nrf_softdevice::gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -40,11 +40,7 @@ impl<'a> BleSplitPeripheralDriver<'a> {
         conn: &'a Connection,
         receiver: Receiver<'a, ThreadModeRawMutex, SplitMessage, 4>,
     ) -> Self {
-        Self {
-            server,
-            conn,
-            receiver,
-        }
+        Self { server, conn, receiver }
     }
 }
 
@@ -62,15 +58,12 @@ impl<'a> SplitWriter for BleSplitPeripheralDriver<'a> {
             SplitDriverError::SerializeError
         })?;
         info!("Writing split message to central: {:?}", message);
-        gatt_server::notify_value(
-            &self.conn,
-            self.server.service.message_to_central_value_handle,
-            bytes,
-        )
-        .map_err(|e| {
-            error!("BLE notify error: {:?}", e);
-            SplitDriverError::BleError(1)
-        })?;
+        gatt_server::notify_value(&self.conn, self.server.service.message_to_central_value_handle, bytes).map_err(
+            |e| {
+                error!("BLE notify error: {:?}", e);
+                SplitDriverError::BleError(1)
+            },
+        )?;
         Ok(bytes.len())
     }
 }
@@ -90,25 +83,20 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run(
     use embassy_futures::select::select;
     use nrf_softdevice::ble::gatt_server;
 
-    use crate::{
-        split::nrf::peripheral::{
-            BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent,
-            SplitBleServiceEvent,
-        },
-        CONNECTION_STATE,
+    use crate::split::nrf::peripheral::{
+        BleSplitPeripheralDriver, BleSplitPeripheralServer, BleSplitPeripheralServerEvent, SplitBleServiceEvent,
     };
+    use crate::CONNECTION_STATE;
 
     let (sd, _) = initialize_nrf_sd_and_flash("rmk_split_peri", spawner, Some(peripheral_addr));
 
-    let server =
-        BleSplitPeripheralServer::new(sd).expect("Failed to start BLE split peripheral server");
+    let server = BleSplitPeripheralServer::new(sd).expect("Failed to start BLE split peripheral server");
 
     loop {
         CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-        let advertisement: ConnectableAdvertisement<'_> =
-            ConnectableAdvertisement::NonscannableDirected {
-                peer: Address::new(AddressType::RandomStatic, central_addr),
-            };
+        let advertisement: ConnectableAdvertisement<'_> = ConnectableAdvertisement::NonscannableDirected {
+            peer: Address::new(AddressType::RandomStatic, central_addr),
+        };
         let mut conn = match advertise_connectable(sd, advertisement, &Default::default()).await {
             Ok(conn) => conn,
             Err(e) => {
@@ -159,8 +147,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run(
             },
         });
 
-        let mut peripheral =
-            SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn, receiver));
+        let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn, receiver));
         let peripheral_fut = peripheral.run();
         select(server_fut, peripheral_fut).await;
     }

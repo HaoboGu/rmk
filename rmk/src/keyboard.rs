@@ -1,3 +1,12 @@
+use core::cell::RefCell;
+
+use embassy_futures::select::select;
+use embassy_futures::yield_now;
+use embassy_time::{Instant, Timer};
+use heapless::{Deque, FnvIndexMap, Vec};
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+
+use crate::action::{Action, KeyAction};
 use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
@@ -5,19 +14,10 @@ use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::hid::Report;
 use crate::input_device::Runnable;
-use crate::usb::descriptor::KeyboardReport;
-use crate::{
-    action::{Action, KeyAction},
-    keyboard_macro::{MacroOperation, NUM_MACRO},
-    keycode::{KeyCode, ModifierCombination},
-    keymap::KeyMap,
-    usb::descriptor::ViaReport,
-};
-use core::cell::RefCell;
-use embassy_futures::{select::select, yield_now};
-use embassy_time::{Instant, Timer};
-use heapless::{Deque, FnvIndexMap, Vec};
-use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use crate::keyboard_macro::{MacroOperation, NUM_MACRO};
+use crate::keycode::{KeyCode, ModifierCombination};
+use crate::keymap::KeyMap;
+use crate::usb::descriptor::{KeyboardReport, ViaReport};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -69,13 +69,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     }
 }
 
-pub struct Keyboard<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize = 0,
-> {
+pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Keymap
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
@@ -138,10 +132,7 @@ pub struct Keyboard<
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    pub fn new(
-        keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-        behavior: BehaviorConfig,
-    ) -> Self {
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>, behavior: BehaviorConfig) -> Self {
         Keyboard {
             keymap,
             timer: [[None; ROW]; COL],
@@ -194,10 +185,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Process key
-        let key_action = self
-            .keymap
-            .borrow_mut()
-            .get_action_with_layer_cache(key_event);
+        let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
 
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
@@ -224,8 +212,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Send media report if needed
     pub(crate) async fn send_media_report(&mut self) {
-        self.send_report(Report::MediaKeyboardReport(self.media_report))
-            .await;
+        self.send_report(Report::MediaKeyboardReport(self.media_report)).await;
         self.media_report.usage_id = 0;
         yield_now().await;
     }
@@ -233,8 +220,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Send mouse report if needed
     pub(crate) async fn send_mouse_report(&mut self) {
         // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.send_report(Report::MouseReport(self.mouse_report))
-            .await;
+        self.send_report(Report::MouseReport(self.mouse_report)).await;
         yield_now().await;
     }
 
@@ -267,18 +253,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => self.process_key_action_normal(a, key_event).await,
-            KeyAction::WithModifier(a, m) => {
-                self.process_key_action_with_modifier(a, m, key_event).await
-            }
+            KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_event).await,
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_event).await,
             KeyAction::TapHold(tap_action, hold_action) => {
                 self.process_key_action_tap_hold(tap_action, hold_action, key_event)
                     .await;
             }
-            KeyAction::OneShot(oneshot_action) => {
-                self.process_key_action_oneshot(oneshot_action, key_event)
-                    .await
-            }
+            KeyAction::OneShot(oneshot_action) => self.process_key_action_oneshot(oneshot_action, key_event).await,
             KeyAction::LayerTapHold(tap_action, layer_num) => {
                 let layer_action = Action::LayerOn(layer_num);
                 self.process_key_action_tap_hold(tap_action, layer_action, key_event)
@@ -305,11 +286,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_combo(
-        &mut self,
-        key_action: KeyAction,
-        key_event: KeyEvent,
-    ) -> Option<KeyAction> {
+    async fn process_combo(&mut self, key_action: KeyAction, key_event: KeyEvent) -> Option<KeyAction> {
         let mut is_combo_action = false;
         let current_layer = self.keymap.borrow().get_activated_layer();
         for combo in self.keymap.borrow_mut().combos.iter_mut() {
@@ -317,11 +294,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         if key_event.pressed && is_combo_action {
-            if self
-                .combo_actions_buffer
-                .push_back((key_action, key_event))
-                .is_err()
-            {
+            if self.combo_actions_buffer.push_back((key_action, key_event)).is_err() {
                 error!("Combo actions buffer overflowed! This is a bug and should not happen!");
             }
 
@@ -335,13 +308,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if next_action.is_some() {
                 self.combo_actions_buffer.clear();
             } else {
-                let timeout =
-                    embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
+                let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
                 match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                     embassy_futures::select::Either::First(_) => self.dispatch_combos().await,
-                    embassy_futures::select::Either::Second(event) => {
-                        self.unprocessed_events.push(event).unwrap()
-                    }
+                    embassy_futures::select::Either::Second(event) => self.unprocessed_events.push(event).unwrap(),
                 }
             }
             next_action
@@ -482,27 +452,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - When the next key is releasing
     /// - When current tap/hold key is releasing
     /// - When tap/hold key is expired
-    async fn process_key_action_tap_hold(
-        &mut self,
-        tap_action: Action,
-        hold_action: Action,
-        key_event: KeyEvent,
-    ) {
+    async fn process_key_action_tap_hold(&mut self, tap_action: Action, hold_action: Action, key_event: KeyEvent) {
         if self.keymap.borrow().behavior.tap_hold.enable_hrm {
             // If HRM is enabled, check whether it's a different key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
                 if key_event.pressed {
-                    if last_release_time.elapsed()
-                        < self.keymap.borrow().behavior.tap_hold.prior_idle_time
-                        && !(key_event.row == self.last_release.0.row
-                            && key_event.col == self.last_release.0.col)
+                    if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+                        && !(key_event.row == self.last_release.0.row && key_event.col == self.last_release.0.col)
                     {
                         // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
                         self.process_key_action_tap(tap_action, key_event).await;
                         return;
-                    } else if last_release_time.elapsed()
-                        < self.keymap.borrow().behavior.tap_hold.hold_timeout
+                    } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
                         && key_event.row == self.last_release.0.row
                         && key_event.col == self.last_release.0.col
                     {
@@ -524,14 +486,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // Press
             self.timer[col][row] = Some(Instant::now());
 
-            let hold_timeout = embassy_time::Timer::after_millis(
-                self.keymap
-                    .borrow()
-                    .behavior
-                    .tap_hold
-                    .hold_timeout
-                    .as_millis(),
-            );
+            let hold_timeout =
+                embassy_time::Timer::after_millis(self.keymap.borrow().behavior.tap_hold.hold_timeout.as_millis());
             match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
                 embassy_futures::select::Either::First(_) => {
                     // Timeout, trigger hold
@@ -609,12 +565,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 };
 
                 let wait_timeout = embassy_time::Timer::after_millis(
-                    self.keymap
-                        .borrow()
-                        .behavior
-                        .tap_hold
-                        .post_wait_time
-                        .as_millis(),
+                    self.keymap.borrow().behavior.tap_hold.post_wait_time.as_millis(),
                 );
                 match select(wait_timeout, wait_release).await {
                     embassy_futures::select::Either::First(_) => {
@@ -642,10 +593,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match oneshot_action {
             Action::Modifier(m) => self.process_action_osm(m, key_event).await,
             Action::LayerOn(l) => self.process_action_osl(l, key_event).await,
-            _ => {
-                self.process_key_action_normal(oneshot_action, key_event)
-                    .await
-            }
+            _ => self.process_key_action_normal(oneshot_action, key_event).await,
         }
     }
 
@@ -666,8 +614,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout =
-                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
+                    let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, release modifiers
@@ -720,8 +667,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(l) | OneShotState::Single(l) => {
                     self.osl_state = OneShotState::Single(l);
 
-                    let timeout =
-                        embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
+                    let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         embassy_futures::select::Either::First(_) => {
                             // Timeout, deactivate layer
@@ -756,39 +702,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key.is_user() {
             #[cfg(feature = "_ble")]
             {
-                use {
-                    crate::ble::trouble::profile::BleProfileAction,
-                    crate::channel::BLE_PROFILE_CHANNEL,
-                };
+                use crate::ble::trouble::profile::BleProfileAction;
+                use crate::channel::BLE_PROFILE_CHANNEL;
                 if !key_event.pressed {
                     // Get user key id
                     let id = key as u8 - KeyCode::User0 as u8;
                     if id < 8 {
                         info!("Switch to profile: {}", id);
                         // User0~7: Swtich to the specific profile
-                        BLE_PROFILE_CHANNEL
-                            .send(BleProfileAction::SwitchProfile(id))
-                            .await;
+                        BLE_PROFILE_CHANNEL.send(BleProfileAction::SwitchProfile(id)).await;
                     } else if id == 8 {
                         // User8: Next profile
-                        BLE_PROFILE_CHANNEL
-                            .send(BleProfileAction::NextProfile)
-                            .await;
+                        BLE_PROFILE_CHANNEL.send(BleProfileAction::NextProfile).await;
                     } else if id == 9 {
                         // User9: Previous profile
-                        BLE_PROFILE_CHANNEL
-                            .send(BleProfileAction::PreviousProfile)
-                            .await;
+                        BLE_PROFILE_CHANNEL.send(BleProfileAction::PreviousProfile).await;
                     } else if id == 10 {
                         // User10: Clear profile
-                        BLE_PROFILE_CHANNEL
-                            .send(BleProfileAction::ClearProfile)
-                            .await;
+                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearProfile).await;
                     } else if id == 11 {
                         // User11:
-                        BLE_PROFILE_CHANNEL
-                            .send(BleProfileAction::ToggleConnection)
-                            .await;
+                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
                     }
                 }
             }
@@ -1020,10 +954,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let mut offset = 0;
                 loop {
                     // First, get the next macro operation
-                    let (operation, new_offset) = self
-                        .keymap
-                        .borrow()
-                        .get_next_macro_operation(macro_start_idx, offset);
+                    let (operation, new_offset) =
+                        self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
                     // Execute the operation
                     match operation {
                         MacroOperation::Press(k) => {
@@ -1166,11 +1098,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+    use embassy_futures::block_on;
+    use embassy_time::{Duration, Timer};
+
     use super::*;
     use crate::action::KeyAction;
     use crate::{a, k, layer, mo};
-    use embassy_futures::block_on;
-    use embassy_time::{Duration, Timer};
 
     // Init logger for tests
     #[ctor::ctor]
@@ -1263,8 +1196,7 @@ mod test {
     fn test_tap_hold_key() {
         let main = async {
             let mut keyboard = create_test_keyboard();
-            let tap_hold_action =
-                KeyAction::TapHold(Action::Key(KeyCode::A), Action::Key(KeyCode::LShift));
+            let tap_hold_action = KeyAction::TapHold(Action::Key(KeyCode::A), Action::Key(KeyCode::LShift));
 
             // Tap
             keyboard

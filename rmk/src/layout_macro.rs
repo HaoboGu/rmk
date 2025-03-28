@@ -18,10 +18,7 @@ macro_rules! k {
 #[macro_export]
 macro_rules! wm {
     ($x: ident, $m: expr) => {
-        $crate::action::KeyAction::WithModifier(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$x),
-            $m,
-        )
+        $crate::action::KeyAction::WithModifier($crate::action::Action::Key($crate::keycode::KeyCode::$x), $m)
     };
 }
 
@@ -53,10 +50,7 @@ macro_rules! lm {
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
-        $crate::action::KeyAction::LayerTapHold(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $x,
-        )
+        $crate::action::KeyAction::LayerTapHold($crate::action::Action::Key($crate::keycode::KeyCode::$k), $x)
     };
 }
 
@@ -64,10 +58,7 @@ macro_rules! lt {
 #[macro_export]
 macro_rules! mt {
     ($k: ident, $m: expr) => {
-        $crate::action::KeyAction::ModifierTapHold(
-            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $m,
-        )
+        $crate::action::KeyAction::ModifierTapHold($crate::action::Action::Key($crate::keycode::KeyCode::$k), $m)
     };
 }
 

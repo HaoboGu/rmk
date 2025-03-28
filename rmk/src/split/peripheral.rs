@@ -1,14 +1,15 @@
+#[cfg(feature = "_ble")]
+use embassy_executor::Spawner;
+use embassy_futures::select::select3;
+#[cfg(not(feature = "_ble"))]
+use embedded_io_async::{Read, Write};
+
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::CONNECTION_STATE;
-#[cfg(feature = "_ble")]
-use embassy_executor::Spawner;
-use embassy_futures::select::select3;
-#[cfg(not(feature = "_ble"))]
-use embedded_io_async::{Read, Write};
 
 /// Run the split peripheral service.
 ///
@@ -34,12 +35,8 @@ pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_ble"))] S: Write + R
     }
 
     #[cfg(feature = "_ble")]
-    crate::split::nrf::peripheral::initialize_ble_split_peripheral_and_run(
-        central_addr,
-        peripheral_addr,
-        spawner,
-    )
-    .await;
+    crate::split::nrf::peripheral::initialize_ble_split_peripheral_and_run(central_addr, peripheral_addr, spawner)
+        .await;
 }
 
 /// The split peripheral instance.

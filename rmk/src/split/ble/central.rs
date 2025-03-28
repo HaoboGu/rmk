@@ -1,16 +1,13 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use embassy_futures::{join::join, select::select};
+use embassy_futures::join::join;
+use embassy_futures::select::select;
 use embassy_sync::channel::{Channel, Receiver, Sender};
 use nrf_softdevice::ble::{central, gatt_client, Address, AddressType};
 
-use crate::{
-    split::{
-        driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter},
-        SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
-    },
-    RawMutex, CONNECTION_STATE,
-};
+use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
+use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
+use crate::{RawMutex, CONNECTION_STATE};
 
 /// Gatt client used in split central to receive split message from peripherals
 #[nrf_softdevice::gatt_client(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -49,8 +46,7 @@ pub(crate) async fn run_ble_peripheral_manager<
     };
 
     // Create peripheral manager instance
-    let peripheral_manager =
-        PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+    let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
 
     info!("Running peripheral manager {}", id);
 
@@ -83,9 +79,7 @@ pub(crate) async fn run_ble_client(
         };
         config.scan_config.whitelist = Some(addrs);
         let conn = loop {
-            if let Ok(_) =
-                CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            {
+            if let Ok(_) = CONNECTING_CLIENT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
                 info!("Starting connect to {:?}", addrs);
                 let conn = match central::connect(sd, &config).await {
                     Ok(conn) => conn,

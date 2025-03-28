@@ -11,16 +11,13 @@ mod macros;
 mod dummy_flash;
 mod vial;
 
-use defmt_rtt as _;
 use embassy_executor::Spawner;
 use hpm_hal::flash::Flash;
 use hpm_hal::{bind_interrupts, peripherals};
-use riscv_rt as _;
-use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    run_rmk,
-};
+use rmk::config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::run_rmk;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, riscv_rt as _};
 
 bind_interrupts!(struct Irqs {
     USB0 => hpm_hal::usb::InterruptHandler<peripherals::USB0>;
@@ -38,7 +35,8 @@ async fn main(spawner: Spawner) {
     let flash: Flash<_, FLASH_SIZE> = Flash::new(p.XPI0, flash_config).unwrap();
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_hpm!(peripherals: p, input: [PA31, PA28, PA29, PA27], output: [PB10, PB11, PA09]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_hpm!(peripherals: p, input: [PA31, PA28, PA29, PA27], output: [PB10, PB11, PA09]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,

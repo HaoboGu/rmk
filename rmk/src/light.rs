@@ -1,11 +1,11 @@
-use crate::{
-    config::{LightConfig, LightPinConfig},
-    hid::{HidError, HidReaderTrait},
-};
 use bitfield_struct::bitfield;
-use embassy_usb::{class::hid::HidReader, driver::Driver};
+use embassy_usb::class::hid::HidReader;
+use embassy_usb::driver::Driver;
 use embedded_hal::digital::{Error, OutputPin, PinState};
 use serde::{Deserialize, Serialize};
+
+use crate::config::{LightConfig, LightPinConfig};
+use crate::hid::{HidError, HidReaderTrait};
 
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
@@ -96,11 +96,7 @@ struct SingleLed<P: OutputPin> {
 
 impl<P: OutputPin> SingleLed<P> {
     fn new(p: LightPinConfig<P>) -> Self {
-        let on_state = if p.low_active {
-            PinState::Low
-        } else {
-            PinState::High
-        };
+        let on_state = if p.low_active { PinState::Low } else { PinState::High };
         Self {
             state: false,
             on_state,
@@ -145,10 +141,7 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         let mut buf = [0u8; 1];
-        self.hid_reader
-            .read(&mut buf)
-            .await
-            .map_err(HidError::UsbReadError)?;
+        self.hid_reader.read(&mut buf).await.map_err(HidError::UsbReadError)?;
 
         Ok(LedIndicator::from_bits(buf[0]))
     }

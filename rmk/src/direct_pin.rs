@@ -1,20 +1,16 @@
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::debounce::DebounceState;
-use crate::debounce::DebouncerTrait;
-use crate::event::Event;
-use crate::event::KeyEvent;
-use crate::input_device::InputDevice;
-
-use crate::matrix::KeyState;
-use crate::MatrixTrait;
-
-use embassy_time::Instant;
-use embassy_time::Timer;
+use embassy_time::{Instant, Timer};
 use embedded_hal;
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::matrix::KeyState;
+use crate::MatrixTrait;
 
 /// DirectPinMartex only has input pins.
 pub struct DirectPinMatrix<

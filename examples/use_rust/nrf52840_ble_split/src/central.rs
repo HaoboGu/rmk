@@ -7,37 +7,27 @@ mod keymap;
 mod vial;
 
 use defmt::info;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_nrf::{
-    self as _, bind_interrupts,
-    gpio::{AnyPin, Input, Output},
-    interrupt::{self, InterruptExt, Priority},
-    peripherals::{self, SAADC},
-    saadc::{self, AnyInput, Input as _, Saadc},
-    usb::{self, vbus_detect::SoftwareVbusDetect, Driver},
-};
-use panic_probe as _;
-use rmk::{
-    ble::SOFTWARE_VBUS,
-    channel::EVENT_CHANNEL,
-    config::{
-        BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
-    },
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::{join, join4},
-    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
-    input_device::{
-        rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
-        Runnable,
-    },
-    keyboard::Keyboard,
-    light::LightController,
-    run_devices, run_processor_chain, run_rmk,
-    split::central::{run_peripheral_manager, CentralMatrix},
-};
-
+use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::interrupt::{self, InterruptExt, Priority};
+use embassy_nrf::peripherals::{self, SAADC};
+use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
+use embassy_nrf::usb::vbus_detect::SoftwareVbusDetect;
+use embassy_nrf::usb::{self, Driver};
+use embassy_nrf::{self as _, bind_interrupts};
+use rmk::ble::SOFTWARE_VBUS;
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::{join, join4};
+use rmk::input_device::rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor};
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::split::central::{run_peripheral_manager, CentralMatrix};
+use rmk::{initialize_keymap_and_storage, initialize_nrf_sd_and_flash, run_devices, run_processor_chain, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBD => usb::InterruptHandler<peripherals::USBD>;
@@ -120,11 +110,7 @@ async fn main(spawner: Spawner) {
     // Initialize the Softdevice and flash
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
     let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
-    let (sd, flash) = initialize_nrf_sd_and_flash(
-        rmk_config.usb_config.product_name,
-        spawner,
-        Some(central_addr),
-    );
+    let (sd, flash) = initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, Some(central_addr));
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
@@ -146,8 +132,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
     // Initialize the light controller
-    let light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 

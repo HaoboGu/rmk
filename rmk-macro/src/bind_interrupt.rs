@@ -9,10 +9,7 @@ use crate::config::BleConfig;
 use crate::keyboard_config::KeyboardConfig;
 
 // Expand `bind_interrupt!` stuffs
-pub(crate) fn expand_bind_interrupt(
-    keyboard_config: &KeyboardConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
         items

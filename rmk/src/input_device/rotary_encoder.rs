@@ -10,6 +10,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport};
 
+use super::{InputDevice, InputProcessor, ProcessResult};
 use crate::action::{Action, KeyAction};
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::{Event, RotaryEncoderEvent};
@@ -17,8 +18,6 @@ use crate::hid::Report;
 use crate::keycode::{ConsumerKey, KeyCode};
 use crate::keymap::KeyMap;
 use crate::usb::descriptor::KeyboardReport;
-
-use super::{InputDevice, InputProcessor, ProcessResult};
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]
@@ -230,20 +229,13 @@ impl<
             #[cfg(feature = "async_matrix")]
             {
                 let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(
-                    pin_a.wait_for_any_edge(),
-                    pin_b.wait_for_any_edge(),
-                )
-                .await;
+                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
             }
 
             let direction = self.update();
 
             if direction != Direction::None {
-                return Event::RotaryEncoder(RotaryEncoderEvent {
-                    id: self.id,
-                    direction,
-                });
+                return Event::RotaryEncoder(RotaryEncoderEvent { id: self.id, direction });
             }
         }
     }
@@ -278,9 +270,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
             Event::RotaryEncoder(e) => {
-                let action = if let Some(encoder_action) =
-                    self.get_keymap().borrow().get_encoder_with_layer_cache(e)
-                {
+                let action = if let Some(encoder_action) = self.get_keymap().borrow().get_encoder_with_layer_cache(e) {
                     match e.direction {
                         Direction::Clockwise => encoder_action.clockwise(),
                         Direction::CounterClockwise => encoder_action.counter_clockwise(),
@@ -404,10 +394,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }))
         .await;
         embassy_time::Timer::after_millis(2).await;
-        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-            usage_id: 0,
-        }))
-        .await;
+        self.send_report(Report::MediaKeyboardReport(MediaKeyboardReport { usage_id: 0 }))
+            .await;
     }
 
     // Send a keycode report for a single key

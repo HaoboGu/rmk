@@ -3,27 +3,24 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::ItemMod;
 
-use crate::{
-    behavior::expand_behavior_config,
-    bind_interrupt::expand_bind_interrupt,
-    ble::expand_ble_config,
-    chip_init::expand_chip_init,
-    comm::expand_usb_init,
-    config::MatrixType,
-    entry::expand_rmk_entry,
-    feature::{get_rmk_features, is_feature_enabled},
-    flash::expand_flash_init,
-    import::expand_imports,
-    keyboard_config::{
-        expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig,
-        KeyboardConfig,
-    },
-    layout::expand_default_keymap,
-    light::expand_light_config,
-    matrix::expand_matrix_config,
-    split::central::expand_split_central_config,
-    ChipSeries,
+use crate::behavior::expand_behavior_config;
+use crate::bind_interrupt::expand_bind_interrupt;
+use crate::ble::expand_ble_config;
+use crate::chip_init::expand_chip_init;
+use crate::comm::expand_usb_init;
+use crate::config::MatrixType;
+use crate::entry::expand_rmk_entry;
+use crate::feature::{get_rmk_features, is_feature_enabled};
+use crate::flash::expand_flash_init;
+use crate::import::expand_imports;
+use crate::keyboard_config::{
+    expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig, KeyboardConfig,
 };
+use crate::layout::expand_default_keymap;
+use crate::light::expand_light_config;
+use crate::matrix::expand_matrix_config;
+use crate::split::central::expand_split_central_config;
+use crate::ChipSeries;
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
@@ -274,8 +271,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
                 },
                 MatrixType::direct_pin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
-                    let size =
-                        split_config.central.rows as usize * split_config.central.cols as usize;
+                    let size = split_config.central.rows as usize * split_config.central.cols as usize;
                     quote! {
                         let debouncer = #debouncer_type::<COL, ROW>::new();
                         let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);

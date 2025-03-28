@@ -1,15 +1,16 @@
-use crate::{
-    debounce::{DebounceState, DebouncerTrait},
-    event::{Event, KeyEvent},
-    input_device::InputDevice,
-    state::ConnectionState,
-    CONNECTION_STATE,
-};
-use core::{future::Future, sync::atomic::Ordering};
+use core::future::Future;
+use core::sync::atomic::Ordering;
+
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::state::ConnectionState;
+use crate::CONNECTION_STATE;
 
 /// MatrixTrait is the trait for keyboard matrix.
 ///
@@ -101,11 +102,7 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub fn new(
-        input_pins: [In; INPUT_PIN_NUM],
-        output_pins: [Out; OUTPUT_PIN_NUM],
-        debouncer: D,
-    ) -> Self {
+    pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
         Matrix {
             input_pins,
             output_pins,
@@ -152,11 +149,9 @@ impl<
                     if let DebounceState::Debounced = debounce_state {
                         self.key_states[out_idx][in_idx].toggle_pressed();
                         #[cfg(feature = "col2row")]
-                        let (row, col, key_state) =
-                            (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                        let (row, col, key_state) = (in_idx, out_idx, self.key_states[out_idx][in_idx]);
                         #[cfg(not(feature = "col2row"))]
-                        let (row, col, key_state) =
-                            (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+                        let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
                         self.scan_pos = (out_idx, in_idx);
                         return Event::Key(KeyEvent {

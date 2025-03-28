@@ -1,16 +1,15 @@
-use crate::{
-    action::{EncoderAction, KeyAction},
-    combo::{Combo, COMBO_MAX_NUM},
-    config::BehaviorConfig,
-    event::{KeyEvent, RotaryEncoderEvent},
-    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
-    keycode::KeyCode,
-};
-#[cfg(feature = "storage")]
-use crate::{boot::reboot_keyboard, storage::Storage};
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
 use num_enum::FromPrimitive;
+
+use crate::action::{EncoderAction, KeyAction};
+use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::config::BehaviorConfig;
+use crate::event::{KeyEvent, RotaryEncoderEvent};
+use crate::keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE};
+use crate::keycode::KeyCode;
+#[cfg(feature = "storage")]
+use crate::{boot::reboot_keyboard, storage::Storage};
 
 /// Keymap represents the stack of layers.
 ///
@@ -18,13 +17,7 @@ use num_enum::FromPrimitive;
 ///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
-pub struct KeyMap<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize = 0,
-> {
+pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Layers
     pub(crate) layers: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     /// Rotary encoders, each rotary encoder is represented as (Clockwise, CounterClockwise)
@@ -130,11 +123,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Get the next macro operation starting from given index and offset
     /// Return current macro operation and the next operations's offset
-    pub(crate) fn get_next_macro_operation(
-        &self,
-        macro_start_idx: usize,
-        offset: usize,
-    ) -> (MacroOperation, usize) {
+    pub(crate) fn get_next_macro_operation(&self, macro_start_idx: usize, offset: usize) -> (MacroOperation, usize) {
         let idx = macro_start_idx + offset;
         if idx >= self.macro_cache.len() - 1 {
             return (MacroOperation::End, offset);
@@ -171,8 +160,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             (1, 4) => {
                 // SS_QMK_PREFIX + SS_DELAY_CODE
                 if idx + 3 < self.macro_cache.len() {
-                    let delay_ms = (self.macro_cache[idx + 2] as u16 - 1)
-                        + (self.macro_cache[idx + 3] as u16 - 1) * 255;
+                    let delay_ms =
+                        (self.macro_cache[idx + 2] as u16 - 1) + (self.macro_cache[idx + 3] as u16 - 1) * 255;
                     (MacroOperation::Delay(delay_ms), offset + 4)
                 } else {
                     (MacroOperation::End, offset + 4)
@@ -210,13 +199,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    pub(crate) fn set_action_at(
-        &mut self,
-        row: usize,
-        col: usize,
-        layer_num: usize,
-        action: KeyAction,
-    ) {
+    pub(crate) fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {
         self.layers[layer_num][row][col] = action;
     }
 
@@ -259,10 +242,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KeyAction::No
     }
 
-    pub(crate) fn get_encoder_with_layer_cache(
-        &self,
-        encoder_event: RotaryEncoderEvent,
-    ) -> Option<&EncoderAction> {
+    pub(crate) fn get_encoder_with_layer_cache(&self, encoder_event: RotaryEncoderEvent) -> Option<&EncoderAction> {
         let layer = self.get_activated_layer();
         if let Some(encoders) = &self.encoders {
             encoders[layer as usize].get(encoder_event.id as usize)

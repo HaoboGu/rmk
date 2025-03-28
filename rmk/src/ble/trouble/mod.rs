@@ -1,32 +1,16 @@
-use crate::ble::led::BleLedReader;
-use crate::ble::trouble::profile::{ProfileInfo, ProfileManager};
-use crate::channel::{LED_SIGNAL, VIAL_READ_CHANNEL};
-use crate::config::RmkConfig;
-use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::keymap::KeyMap;
-use crate::light::{LedIndicator, LightController};
-use crate::state::{ConnectionState, CONNECTION_TYPE};
-use crate::{read_storage, run_keyboard, CONNECTION_STATE};
-use ble_server::{BleBatteryServer, BleHidServer, BleViaServer, Server};
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicU8, Ordering};
+
+use ble_server::{BleBatteryServer, BleHidServer, BleViaServer, Server};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::UPDATED_PROFILE;
-
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-
-#[cfg(feature = "storage")]
-use {
-    crate::storage::{Storage, StorageData, StorageKeys},
-    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
-};
-
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::light::UsbLedReader,
@@ -36,10 +20,24 @@ use {
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
     crate::usb::{USB_DISABLED, USB_ENABLED},
     crate::via::UsbVialReaderWriter,
-    embassy_futures::select::{select3, Either3},
     embassy_futures::select::{select4, Either4},
     embassy_usb::driver::Driver,
 };
+#[cfg(feature = "storage")]
+use {
+    crate::storage::{Storage, StorageData, StorageKeys},
+    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
+};
+
+use crate::ble::led::BleLedReader;
+use crate::ble::trouble::profile::{ProfileInfo, ProfileManager};
+use crate::channel::{LED_SIGNAL, VIAL_READ_CHANNEL};
+use crate::config::RmkConfig;
+use crate::hid::{DummyWriter, RunnableHidWriter};
+use crate::keymap::KeyMap;
+use crate::light::{LedIndicator, LightController};
+use crate::state::{ConnectionState, CONNECTION_TYPE};
+use crate::{read_storage, run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod ble_server;
 pub(crate) mod profile;
@@ -57,7 +55,7 @@ const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 2; // Signal + att
 
 /// Run the BLE stack.
-pub async fn run<
+pub(crate) async fn run<
     'a,
     C: Controller,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
@@ -70,24 +68,17 @@ pub async fn run<
     const NUM_ENCODER: usize,
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     controller: C,
     random_generator: &mut RNG,
+    #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) {
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (
-        mut usb_device,
-        mut keyboard_reader,
-        mut keyboard_writer,
-        mut other_writer,
-        mut vial_reader_writer,
-    ) = {
-        let mut usb_builder: embassy_usb::Builder<'_, D> =
-            new_usb_builder(usb_driver, rmk_config.usb_config);
+    let (mut usb_device, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
+        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -108,8 +99,7 @@ pub async fn run<
     info!("Our address = {}", address);
 
     // Initialize trouble host stack
-    let mut resources: HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 255> =
-        HostResources::new();
+    let mut resources: HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 255> = HostResources::new();
     let stack = trouble_host::new(controller, &mut resources)
         .set_random_address(address)
         .set_random_generator_seed(random_generator);
@@ -143,9 +133,7 @@ pub async fn run<
 
     // Build trouble host stack
     let Host {
-        mut peripheral,
-        runner,
-        ..
+        mut peripheral, runner, ..
     } = stack.build();
 
     // Set conn param
@@ -332,8 +320,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                                     LED_SIGNAL.signal(led_indicator);
                                 } else if event.handle() == output_via.handle {
                                     info!("[gatt] Write Event to Output Via: {:?}", event.data());
-                                    let data =
-                                        unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                     VIAL_READ_CHANNEL.send(data).await;
                                 } else {
                                     info!("[gatt] Write Event to Unknown: {:?}", event.handle());
@@ -396,10 +383,7 @@ async fn advertise<'a, 'b, C: Controller>(
     AdStructure::encode_slice(
         &[
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-            AdStructure::ServiceUuids16(&[
-                BATTERY.to_le_bytes(),
-                HUMAN_INTERFACE_DEVICE.to_le_bytes(),
-            ]),
+            AdStructure::ServiceUuids16(&[BATTERY.to_le_bytes(), HUMAN_INTERFACE_DEVICE.to_le_bytes()]),
             AdStructure::CompleteLocalName(name.as_bytes()),
             AdStructure::Unknown {
                 ty: 0x19, // Appearance
@@ -414,8 +398,8 @@ async fn advertise<'a, 'b, C: Controller>(
         secondary_phy: PhyKind::Le2M,
         tx_power: TxPower::Plus8dBm,
         timeout: Some(Duration::from_secs(120)),
-        interval_min: Duration::from_millis(500),
-        interval_max: Duration::from_millis(500),
+        interval_min: Duration::from_millis(200),
+        interval_max: Duration::from_millis(200),
         ..Default::default()
     };
 
@@ -457,10 +441,7 @@ pub(crate) async fn run_dummy_keyboard<
     dummy_writer.run_writer().await;
 }
 
-pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(
-    stack: &Stack<'_, C>,
-    conn: &GattConnection<'a, 'b>,
-) {
+pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(stack: &Stack<'_, C>, conn: &GattConnection<'a, 'b>) {
     // Wait for 5 seconds before setting connection parameters to avoid connection drop
     embassy_time::Timer::after_secs(5).await;
 
@@ -504,11 +485,9 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(
         {
             Err(BleHostError::BleHost(Error::Hci(error))) => {
                 if 0x2A == error.to_status().into_inner() {
-                    // Retry
+                    // Busy, retry
                     continue;
                 } else {
-                    #[cfg(feature = "defmt")]
-                    let e = defmt::Debug2Format(&e);
                     error!("[set_conn_params] 2nd time HCI error: {:?}", error);
                     break;
                 }

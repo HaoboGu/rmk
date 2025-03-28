@@ -7,29 +7,22 @@ mod keymap;
 mod vial;
 
 use defmt::info;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_nrf::{
-    self as _,
-    gpio::{AnyPin, Input, Output},
-    interrupt::Priority,
-};
+use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::interrupt::Priority;
+use embassy_nrf::{self as _};
 use keymap::{COL, ROW};
-use panic_probe as _;
-use rmk::{
-    channel::EVENT_CHANNEL,
-    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
-    initialize_keymap_and_storage, initialize_nrf_sd_and_flash,
-    input_device::Runnable,
-    keyboard::Keyboard,
-    light::LightController,
-    matrix::Matrix,
-    run_devices, run_rmk,
-};
-
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::{initialize_keymap_and_storage, initialize_nrf_sd_and_flash, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -41,7 +34,8 @@ async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(nrf_config);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P0_03, P0_04, P0_28, P0_29], output: [P0_07, P0_11, P0_27]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_nrf!(peripherals: p, input: [P0_03, P0_04, P0_28, P0_29], output: [P0_07, P0_11, P0_27]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,
@@ -66,8 +60,7 @@ async fn main(spawner: Spawner) {
     };
 
     // Initialize the Softdevice and flash
-    let (sd, flash) =
-        initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
+    let (sd, flash) = initialize_nrf_sd_and_flash(rmk_config.usb_config.product_name, spawner, None);
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
@@ -86,8 +79,7 @@ async fn main(spawner: Spawner) {
     // let mut matrix = TestMatrix::<ROW, COL>::new();
 
     // Initialize the light controller
-    let light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     // Start
     join3(

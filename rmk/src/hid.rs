@@ -1,13 +1,15 @@
 /// Traits and types for HID message reporting and listening.
 use core::{future::Future, sync::atomic::Ordering};
 
-use crate::{
-    channel::KEYBOARD_REPORT_CHANNEL, state::ConnectionState, usb::descriptor::KeyboardReport,
-    CONNECTION_STATE,
-};
-use embassy_usb::{class::hid::ReadError, driver::EndpointError};
+use embassy_usb::class::hid::ReadError;
+use embassy_usb::driver::EndpointError;
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
+
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::state::ConnectionState;
+use crate::usb::descriptor::KeyboardReport;
+use crate::CONNECTION_STATE;
 
 #[derive(Serialize, Debug)]
 pub enum Report {
@@ -42,10 +44,7 @@ pub trait HidWriterTrait {
     type ReportType: AsInputReport;
 
     /// Write report to the host, return the number of bytes written if success.
-    fn write_report(
-        &mut self,
-        report: Self::ReportType,
-    ) -> impl Future<Output = Result<usize, HidError>>;
+    fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
 /// Runnable writer

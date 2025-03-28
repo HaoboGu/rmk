@@ -4,17 +4,15 @@ use core::sync::atomic::Ordering;
 
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
-use trouble_host::{prelude::*, BondInformation, LongTermKey};
-
-use crate::{
-    ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM},
-    channel::BLE_PROFILE_CHANNEL,
-    state::CONNECTION_TYPE,
-    storage::FLASH_OPERATION_FINISHED,
-};
-
+use trouble_host::prelude::*;
+use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
 use {crate::channel::FLASH_CHANNEL, crate::storage::FlashOperationMessage};
+
+use crate::ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM};
+use crate::channel::BLE_PROFILE_CHANNEL;
+use crate::state::CONNECTION_TYPE;
+use crate::storage::FLASH_OPERATION_FINISHED;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 
@@ -86,10 +84,8 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         &mut self,
         storage: &mut crate::storage::Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     ) {
-        use crate::{
-            read_storage,
-            storage::{StorageData, StorageKeys},
-        };
+        use crate::read_storage;
+        use crate::storage::{StorageData, StorageKeys};
 
         self.bonded_devices.clear();
         for slot_num in 0..BONDED_DEVICE_NUM {
@@ -167,9 +163,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         #[cfg(feature = "storage")]
         // Send bonding information to the flash task for saving
         FLASH_CHANNEL
-            .send(crate::storage::FlashOperationMessage::ProfileInfo(
-                profile_info,
-            ))
+            .send(crate::storage::FlashOperationMessage::ProfileInfo(profile_info))
             .await;
     }
 
@@ -206,9 +200,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
 
         #[cfg(feature = "storage")]
         FLASH_CHANNEL
-            .send(crate::storage::FlashOperationMessage::ActiveBleProfile(
-                profile,
-            ))
+            .send(crate::storage::FlashOperationMessage::ActiveBleProfile(profile))
             .await;
 
         info!("Switched to BLE profile: {}", profile);
@@ -256,9 +248,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                             let updated = 1 - current;
                             CONNECTION_TYPE.store(updated, Ordering::SeqCst);
                             #[cfg(feature = "storage")]
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::ConnectionType(updated))
-                                .await;
+                            FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }
                     }
                     FLASH_OPERATION_FINISHED.wait().await;
