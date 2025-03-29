@@ -24,7 +24,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected as u8 {
+            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected.into() {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");

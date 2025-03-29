@@ -243,7 +243,7 @@ impl Handler for UsbDeviceHandler {
 
     fn configured(&mut self, configured: bool) {
         if configured {
-            CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
+            CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
             USB_ENABLED.signal(());
             info!("Device configured, it may now draw up to the configured current from Vbus.")
         } else {

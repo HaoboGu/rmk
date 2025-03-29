@@ -259,7 +259,7 @@ pub(crate) async fn run_keyboard<
     vial_config: VialConfig<'static>,
 ) {
     // The state will be changed to true after the keyboard starts running
-    CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
+    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
     let mut light_service = LightService::new(light_controller, led_reader);
     let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
@@ -285,5 +285,5 @@ pub(crate) async fn run_keyboard<
         Either4::Third(_) => error!("Led task has ended"),
         Either4::Fourth(_) => error!("Keyboard writer task has ended"),
     }
-    CONNECTION_STATE.store(ConnectionState::Disconnected as u8, Ordering::Release);
+    CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
 }

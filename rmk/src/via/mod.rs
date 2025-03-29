@@ -70,7 +70,7 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if CONNECTION_STATE.load(Ordering::Relaxed) == ConnectionState::Disconnected as u8 {
+                    if CONNECTION_STATE.load(Ordering::Relaxed) == ConnectionState::Disconnected.into() {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);

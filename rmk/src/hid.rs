@@ -59,7 +59,7 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Get report to send
                 let report = self.get_report().await;
                 // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Connected as u8 {
+                if CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Connected.into() {
                     match self.write_report(report).await {
                         Ok(_) => continue,
                         Err(e) => error!("Failed to send report: {:?}", e),
@@ -95,7 +95,7 @@ impl HidWriterTrait for DummyWriter {
 impl RunnableHidWriter for DummyWriter {
     async fn run_writer(&mut self) {
         // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-        CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
         loop {
             let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }

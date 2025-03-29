@@ -14,7 +14,7 @@ use trouble_host::prelude::*;
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::light::UsbLedReader,
-    crate::state::{get_connection_type, ConnectionType},
+    crate::state::get_connection_type,
     crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
@@ -37,7 +37,7 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-use crate::state::ConnectionState;
+use crate::state::{ConnectionState, ConnectionType};
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod ble_server;
@@ -116,9 +116,9 @@ pub(crate) async fn run<
         } else {
             // If no saved connection type, return default value
             #[cfg(feature = "_no_usb")]
-            CONNECTION_TYPE.store(1, Ordering::SeqCst);
+            CONNECTION_TYPE.store(ConnectionType::Ble.into(), Ordering::SeqCst);
             #[cfg(not(feature = "_no_usb"))]
-            CONNECTION_TYPE.store(0, Ordering::SeqCst);
+            CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
     }
 
@@ -291,7 +291,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
     let output_via = server.via_service.output_via;
-    CONNECTION_STATE.store(ConnectionState::Connected as u8, Ordering::Release);
+    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {
@@ -441,7 +441,7 @@ pub(crate) async fn run_dummy_keyboard<
 >(
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    CONNECTION_STATE.store(ConnectionState::Disconnected as u8, Ordering::Release);
+    CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
     let mut dummy_writer = DummyWriter {};
