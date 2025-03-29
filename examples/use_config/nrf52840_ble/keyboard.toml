@@ -70,3 +70,43 @@ combos = [
   # Three-key combo, press A, S, and D keys to output "X"
   { actions = ["A", "S", "D"], output = "X" }
 ]
+
+[behavior.fork]
+forks = [
+    # Shift + '.' output ':' key
+  { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
+
+  # Shift + ',' output ';' key but only if no Alt is pressed
+  { trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift", match_none = "LAlt|RAlt" },  
+  
+  # left bracket outputs by default '{', with shifts pressed outputs '['  
+  { trigger = "LeftBracket", negative_output = "WM(LeftBracket, LShift)", positive_output = "LeftBracket", match_any = "LShift|RShift" },
+
+  # Flip the effect of shift on 'x'/'X'
+  { trigger = "X", negative_output = "WM(X, LShift)", positive_output = "X", match_any = "LShift|RShift" },
+
+  # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro 
+  { trigger = "F24", negative_output = "A", positive_output = "Macro1", match_any = "LShift|LCtrl" },
+
+  # Swap Z and Y keys if MouseBtn1 is pressed (on the keyboard) (Note that these must not be bindable to avoid infinite fork loops!) 
+  { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1", bindable = false },
+  { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1", bindable = false },
+
+  # Shift + Backspace output Delete key (inside a layer tap/hold)
+  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" },
+
+  # Ctrl + play/pause will send next track. MediaPlayPause -> MediaNextTrack
+  # Ctrl + Shift + play/pause will send previous track. MediaPlayPause -> MediaPrevTrack
+  # Alt + play/pause will send volume up. MediaPlayPause -> AudioVolUp
+  # Alt + Shift + play/pause will send volume down. MediaPlayPause -> AudioVolDown
+  # Ctrl + Alt + play/pause will send brightness up. MediaPlayPause -> BrightnessUp
+  # Ctrl + Alt + Shift + play/pause will send brightness down. MediaPlayPause -> BrightnessDown
+  # ( Note that the trigger and immediate trigger keys of the fork chain could be 'virtual keys', 
+  #   which will never output, like F23, but here multiple overrides demonstrated.)
+  { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "MediaNextTrack", match_any = "LCtrl|RCtrl", bindable = true },
+  { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "BrightnessUp", match_any = "LAlt|RAlt", bindable = true },
+  { trigger = "BrightnessUp", negative_output = "BrightnessUp", positive_output = "BrightnessDown", match_any = "LShift|RShift", bindable = false },
+  { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "MediaPrevTrack", match_any = "LShift|RShift", match_none = "LAlt|RAlt", bindable = false},
+  { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "AudioVolUp", match_any = "LAlt|RAlt", match_none = "LCtrl|RCtrl", bindable = true },
+  { trigger = "AudioVolUp", negative_output = "AudioVolUp", positive_output = "AudioVolDown", match_any = "LShift|RShift", match_none = "LCtrl|RCtrl", bindable = false } 
+]
