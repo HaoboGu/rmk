@@ -266,6 +266,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
                 let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
+                let bindable = fork.bindable.unwrap_or(false);
 
                 if match_any.is_empty() && match_none.is_empty() {
                     return quote! {
@@ -273,7 +274,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
                     };
                 }
 
-                quote! { ::rmk::fork::Fork::new_ex(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept) }
+                quote! { ::rmk::fork::Fork::new_ex(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept, #bindable) }
             });
             
             quote! {

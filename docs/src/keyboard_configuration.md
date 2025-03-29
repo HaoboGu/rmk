@@ -257,6 +257,7 @@ Fork configuration includes the following parameters:
   - `match_any`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
   - `match_none`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
   - `kept_modifiers`: A strings defining a combination of modifier keys, which should not be 'suppressed' form the keyboard state for the time the replacement action is executed. (optional)
+  - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option. (optional)
   
 For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"): 
   - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too) 
@@ -277,26 +278,39 @@ forks = [
   # left bracket outputs by default '{', with shifts pressed outputs '['  
   { trigger = "LeftBracket", negative_output = "WM(LeftBracket, LShift)", positive_output = "LeftBracket", match_any = "LShift|RShift" },
 
-  # flip the effect of shift on 'x'/'X'
+  # Flip the effect of shift on 'x'/'X'
   { trigger = "X", negative_output = "WM(X, LShift)", positive_output = "X", match_any = "LShift|RShift" },
 
   # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro 
   { trigger = "F24", negative_output = "A", positive_output = "Macro1", match_any = "LShift|LCtrl" },
 
-  # swap Z and Y keys if MouseBtn1 is pressed (on the keyboard)  
-  { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1" },
-  { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1" },
+  # Swap Z and Y keys if MouseBtn1 is pressed (on the keyboard) (Note that these must not be bindable to avoid infinite fork loops!) 
+  { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1", bindable = false },
+  { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1", bindable = false },
 
   # Shift + Backspace output Delete key (inside a layer tap/hold)
-  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" }
+  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" },
+
+  # Ctrl + play/pause will send next track. MediaPlayPause -> MediaNextTrack
+  # Ctrl + Shift + play/pause will send previous track. MediaPlayPause -> MediaPrevTrack
+  # Alt + play/pause will send volume up. MediaPlayPause -> AudioVolUp
+  # Alt + Shift + play/pause will send volume down. MediaPlayPause -> AudioVolDown
+  # Ctrl + Alt + play/pause will send brightness up. MediaPlayPause -> BrightnessUp
+  # Ctrl + Alt + Shift + play/pause will send brightness down. MediaPlayPause -> BrightnessDown
+  # ( Note that the trigger and immediate trigger keys of the fork chain could be 'virtual keys', 
+  #   which will never output, like F23, but here multiple overrides demonstrated.)
+    { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "MediaNextTrack", match_any = "LCtrl|RCtrl", bindable = true },
+  { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "BrightnessUp", match_any = "LAlt|RAlt", bindable = true },
+  { trigger = "BrightnessUp", negative_output = "BrightnessUp", positive_output = "BrightnessDown", match_any = "LShift|RShift", bindable = false },
+  { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "MediaPrevTrack", match_any = "LShift|RShift", match_none = "LAlt|RAlt", bindable = false},
+  { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "AudioVolUp", match_any = "LAlt|RAlt", match_none = "LCtrl|RCtrl", bindable = true },
+  { trigger = "AudioVolUp", negative_output = "AudioVolUp", positive_output = "AudioVolDown", match_any = "LShift|RShift", match_none = "LCtrl|RCtrl", bindable = false } 
 ]
 ```
 
 Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
 For example if `LT(2,Backspace)` is in your keymap, then trigger = `Backspace` will NOT work, you should "replace" the full key and use `trigger = "LT(2,Backspace)` instead, like in the last example above.
 You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
-
-Chaining several fork conditions is not possible yet (but planned).
 
 Vial does not support fork configuration yet.
 

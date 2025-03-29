@@ -8,7 +8,7 @@ use crate::input_device::Runnable;
 use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
-    fork::{StateBits, FORK_MAX_NUM},
+    fork::{ActiveFork, StateBits, FORK_MAX_NUM},
     hid_state::{HidLeds, HidModifiers, HidMouseButtons},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
@@ -110,7 +110,7 @@ pub struct Keyboard<
     macro_caps: bool,
 
     /// The real state before fork activations is stored here
-    fork_states: [Option<KeyAction>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks
+    fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
 
     /// the held keys for the keyboard hid report, except the modifiers
@@ -356,10 +356,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let mut i = 0;
             for fork in &self.keymap.borrow().forks {
                 if fork.trigger == key_action {
-                    if let Some(replacement) = self.fork_states[i] {
-                        // if the originating key of a fork is released, simply release the replacement key
-                        // the fork deactivation is delayed, will happen after the release hid report is sent
-                        return replacement;
+                    if let Some(active) = self.fork_states[i] {
+                        // If the originating key of a fork is released, simply release the replacement key
+                        // (The fork deactivation is delayed, will happen after the release hid report is sent)
+                        return active.replacement;
                     }
                 }
                 i += 1;
@@ -367,51 +367,94 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             return key_action;
         }
 
-        let decision_state = StateBits {
+        let mut decision_state = StateBits {
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(key_event.pressed),
             leds: self.led_states,
             mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
         };
 
-        let mut i = 0;
-        for fork in &self.keymap.borrow().forks {
-            if self.fork_states[i].is_none() && fork.trigger == key_action {
-                let decision = (fork.match_any & decision_state) != StateBits::default()
-                    && (fork.match_none & decision_state) == StateBits::default();
+        let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
+        let mut chain_starter: Option<usize> = None;
+        let mut combined_suppress = HidModifiers::default();
+        let mut replacement = key_action;
 
-                let replacement = if decision {
-                    fork.positive_output
-                } else {
-                    fork.negative_output
-                };
+        'bind: loop {
+            let mut i = 0;
+            for fork in &self.keymap.borrow().forks {
+                if !triggered_forks[i]
+                    && self.fork_states[i].is_none()
+                    && fork.trigger == replacement
+                {
+                    let decision = (fork.match_any & decision_state) != StateBits::default()
+                        && (fork.match_none & decision_state) == StateBits::default();
 
-                self.fork_states[i] = Some(replacement);
+                    replacement = if decision {
+                        fork.positive_output
+                    } else {
+                        fork.negative_output
+                    };
 
-                // suppress the previously activated KeyAction::WithModifiers
-                // (even if they held for a long time, a new keypress arrived
-                // since then, which breaks the key repeat, so losing their
-                // effect likely will not cause problem...)
-                self.with_modifiers &= !(fork.match_any.modifiers & !fork.kept_modifiers);
+                    let suppress = fork.match_any.modifiers & !fork.kept_modifiers;
 
-                // reduce the previously aggregated keeps with the match_any mask
-                // (since this is the expected behavior in most cases)
-                self.fork_keep_mask &= !fork.match_any.modifiers;
+                    combined_suppress |= suppress;
 
-                // then add the user defined keeps (if any)
-                self.fork_keep_mask |= fork.kept_modifiers;
+                    // Suppress the previously activated KeyAction::WithModifiers
+                    // (even if they held for a long time, a new keypress arrived
+                    // since then, which breaks the key repeat, so losing their
+                    // effect likely will not cause problem...)
+                    self.with_modifiers &= !suppress;
 
-                return replacement;
+                    // Reduce the previously aggregated keeps with the match_any mask
+                    // (since this is the expected behavior in most cases)
+                    self.fork_keep_mask &= !fork.match_any.modifiers;
+
+                    // Then add the user defined keeps (if any)
+                    self.fork_keep_mask |= fork.kept_modifiers;
+
+                    if chain_starter.is_none() {
+                        chain_starter = Some(i);
+                    }
+
+                    if fork.bindable {
+                        // If this fork is bindable look for other not yet activated forks, 
+                        // which can be triggered by that the current replacement key
+                        triggered_forks[i] = true; // Avoid triggering the same fork again -> no infinite loops either
+
+                        // For the next fork evaluations, update the decision state
+                        // with the suppressed modifiers
+                        decision_state.modifiers &= !suppress;
+                        continue 'bind;
+                    }
+
+                    //return final decision is ready
+                    break 'bind;
+                }
+
+                i += 1;
             }
 
-            i += 1;
+            // No (more) forks were triggered, so we are done
+            break 'bind;
         }
 
-        key_action
+        if let Some(initial) = chain_starter {
+            // After the initial fork triggered, we have switched to "bind mode".
+            // The later triggered forks will not really activate, only update
+            // the replacement decision and modifier suppressions of the initially
+            // triggered fork, which is here marked as active:
+            self.fork_states[initial] = Some(ActiveFork {
+                replacement,
+                suppress: combined_suppress,
+            });
+        }
+
+        // No (or no more) forks were triggered, so we are done
+        replacement
     }
 
-    // Release of forked key must deactivate the fork:
-    // explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent
+    // Release of forked key must deactivate the fork
+    // (explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent)
     fn try_finish_forks(&mut self, original_key_action: KeyAction, key_event: KeyEvent) {
         if !key_event.pressed {
             let mut i = 0;
@@ -975,12 +1018,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // The triggered forks suppress the 'match_any' modifiers automatically
         // unless they are configured as the 'kept_modifiers'
         let mut fork_suppress = HidModifiers::default();
-        let mut i = 0;
-        for fork in &self.keymap.borrow().forks {
-            if self.fork_states[i].is_some() {
-                fork_suppress |= fork.match_any.modifiers & (!fork.kept_modifiers);
+        for fork_state in &self.fork_states {
+            if let Some(active) = fork_state {
+                fork_suppress |= active.suppress;
             }
-            i += 1;
         }
 
         // Some of these suppressions could have been canceled after the fork activation
@@ -1440,7 +1481,10 @@ mod test {
 
             // Press Shift key
             keyboard.register_key(KeyCode::LShift, key_event(3, 0, true));
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
+            assert_eq!(
+                keyboard.held_modifiers,
+                HidModifiers::new().with_left_shift(true)
+            ); // Left Shift's modifier bit is 0x02
 
             // Release Shift key
             keyboard.unregister_key(KeyCode::LShift, key_event(3, 0, false));
@@ -1472,7 +1516,10 @@ mod test {
                 .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
                 .await;
             Timer::after(Duration::from_millis(200)).await; // wait for hold timeout
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // should activate Shift modifier
+            assert_eq!(
+                keyboard.held_modifiers,
+                HidModifiers::new().with_left_shift(true)
+            ); // should activate Shift modifier
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should not be pressed
 
             keyboard
@@ -1492,10 +1539,16 @@ mod test {
             assert!(keyboard.held_keycodes.contains(&KeyCode::A));
 
             keyboard.process_inner(key_event(3, 5, true)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && keyboard.held_keycodes.contains(&KeyCode::B));
+            assert!(
+                keyboard.held_keycodes.contains(&KeyCode::A)
+                    && keyboard.held_keycodes.contains(&KeyCode::B)
+            );
 
             keyboard.process_inner(key_event(3, 5, false)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && !keyboard.held_keycodes.contains(&KeyCode::B));
+            assert!(
+                keyboard.held_keycodes.contains(&KeyCode::A)
+                    && !keyboard.held_keycodes.contains(&KeyCode::B)
+            );
 
             keyboard.process_inner(key_event(2, 1, false)).await;
             assert!(!keyboard.held_keycodes.contains(&KeyCode::A));

@@ -208,7 +208,8 @@ pub struct ForkConfig {
     pub positive_output: String,
     pub match_any: Option<String>,
     pub match_none: Option<String>,
-    pub kept_modifiers: Option<String>
+    pub kept_modifiers: Option<String>,
+    pub bindable: Option<bool>,
 }
 
 /// Configurations for split keyboards

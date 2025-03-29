@@ -66,6 +66,7 @@ pub struct Fork {
     pub(crate) match_any: StateBits,
     pub(crate) match_none: StateBits,
     pub(crate) kept_modifiers: HidModifiers,
+    pub(crate) bindable: bool,
 }
 
 impl Default for Fork {
@@ -82,6 +83,7 @@ impl Fork {
         match_any: StateBits,
         match_none: StateBits,
         kept_modifiers: HidModifiers,
+        bindable: bool,
     ) -> Self {
         Self {
             trigger,
@@ -90,6 +92,7 @@ impl Fork {
             match_any,
             match_none,
             kept_modifiers,
+            bindable,
         }
     }
 
@@ -100,6 +103,7 @@ impl Fork {
         match_any: StateBits,
         match_none: StateBits,
         kept: StateBits,
+        bindable: bool,
     ) -> Self {
         Self {
             trigger,
@@ -108,6 +112,7 @@ impl Fork {
             match_any,
             match_none,
             kept_modifiers: kept.modifiers,
+            bindable,
         }
     }
 
@@ -119,6 +124,13 @@ impl Fork {
             StateBits::default(),
             StateBits::default(),
             HidModifiers::default(),
+            false,
         )
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ActiveFork {
+    pub(crate) replacement: KeyAction, // the final replacement decision of the full fork chain
+    pub(crate) suppress: HidModifiers, // aggregate the chain's match_any modifiers here
 }

@@ -261,7 +261,8 @@ impl Value<'_> for StorageData {
                     &mut buffer[11..15],
                     fork.match_any.modifiers.into_bits() as u32
                         | (fork.match_none.modifiers.into_bits() as u32) << 8
-                        | (fork.kept_modifiers.into_bits() as u32) << 16,
+                        | (fork.kept_modifiers.into_bits() as u32) << 16
+                        | if fork.bindable { 1 << 24 } else { 0 },
                 );
                 Ok(15)
             }
@@ -413,6 +414,7 @@ impl Value<'_> for StorageData {
                     };
                     let kept_modifiers =
                         HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let bindable = (modifier_masks & (1 << 24)) != 0;
 
                     Ok(StorageData::ForkData(ForkData {
                         idx: 0,
@@ -422,6 +424,7 @@ impl Value<'_> for StorageData {
                         match_any,
                         match_none,
                         kept_modifiers,
+                        bindable,
                     }))
                 }
                 #[cfg(feature = "_nrf_ble")]
@@ -521,6 +524,7 @@ pub(crate) struct ForkData {
     pub(crate) match_any: StateBits,
     pub(crate) match_none: StateBits,
     pub(crate) kept_modifiers: HidModifiers,
+    pub(crate) bindable: bool,
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -934,6 +938,7 @@ impl<
                     fork.match_any,
                     fork.match_none,
                     fork.kept_modifiers,
+                    fork.bindable,
                 );
             }
         }
