@@ -7,10 +7,6 @@ rustflags = [
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code
   "-C", "force-frame-pointers",
-
-  # LLD
-  # "-C", "link-arg=-Tlinkall.x",
-  # "-C", "linker=rust-lld",
 ]
 
 
