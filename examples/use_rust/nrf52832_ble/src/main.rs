@@ -6,16 +6,12 @@ mod vial;
 mod macros;
 mod keymap;
 
-use defmt::info;
-use defmt::unwrap;
+use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::AnyPin;
-use embassy_nrf::gpio::Input;
-use embassy_nrf::gpio::Output;
+use embassy_nrf::gpio::{AnyPin, Input, Output};
 use embassy_nrf::peripherals::RNG;
 use embassy_nrf::{bind_interrupts, rng};
-use keymap::COL;
-use keymap::ROW;
+use keymap::{COL, ROW};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -25,16 +21,13 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
-use rmk::initialize_keymap_and_storage;
 use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::run_devices;
-use rmk::run_rmk;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
-use vial::VIAL_KEYBOARD_DEF;
-use vial::VIAL_KEYBOARD_ID;
+use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
