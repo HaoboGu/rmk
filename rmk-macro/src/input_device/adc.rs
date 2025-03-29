@@ -16,6 +16,9 @@ pub(crate) fn expand_adc_device(
             let mut adc_type = vec![];
             let mut processor_name = vec![];
             let mut config = TokenStream::new();
+            let mut default_polling_interval = 1200u16; // default 1200 ms
+            let mut light_sleep: Option<u16> = None;
+            // TODO: deep sleep
 
             if let Some(ble) = ble_config {
                 if ble.enabled {
@@ -44,6 +47,12 @@ pub(crate) fn expand_adc_device(
                         processor_name.push(quote!(#bat_ident));
                     }
                 }
+            }
+
+            // polling interval with joystick
+            if !joystick_config.is_empty() {
+                default_polling_interval = 20;
+                light_sleep = Some(350);
             }
 
             for joystick in joystick_config {
@@ -76,6 +85,11 @@ pub(crate) fn expand_adc_device(
             }
 
             if !processor_name.is_empty() {
+                let light_sleep_param = if let Some(light_sleep_interval) = light_sleep {
+                    quote! {Some(#light_sleep_interval)}
+                } else {
+                    quote! {None}
+                };
                 config.extend(quote! {
                     let mut adc_device = {
                         use embassy_nrf::saadc::{self, Input as _};
@@ -88,7 +102,8 @@ pub(crate) fn expand_adc_device(
                         rmk::input_device::adc::NrfAdc::new(
                                 adc,
                                 [#(#adc_type),*],
-                                20,
+                                #default_polling_interval,
+                                #light_sleep_param,
                             )};
                 });
                 (config, processor_name)

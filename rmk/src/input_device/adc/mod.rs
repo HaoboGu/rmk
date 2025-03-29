@@ -8,3 +8,10 @@ pub enum AnalogEventType {
     Joystick(u8),
     Battery,
 }
+
+#[derive(PartialEq)]
+pub enum AdcState {
+    Active,
+    LightSleep,
+    // DeepSleep,
+}
