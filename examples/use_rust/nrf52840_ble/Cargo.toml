@@ -10,16 +10,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = [
-    "_ble",
-    "async_matrix",
-    "nrf52840_ble",
-] }
+rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble"] }
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
     "peripheral",
     "nrf52840",
-    "central",
 ] }
 nrf-mpsl = { version = "0.1.0", default-features = false, features = [
     "defmt",
@@ -42,7 +37,6 @@ embassy-nrf = { version = "0.3.1", features = [
 ] }
 embassy-executor = { version = "0.7", features = [
     "defmt",
-    "task-arena-size-32768",
     "arch-cortex-m",
     "executor-thread",
 ] }
@@ -59,14 +53,9 @@ rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]
-# embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
-# embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "4f2b137" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "4f2b137" }
-# embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
-# embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
-# embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
-# embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "d6a8dce6eef22564160bf25b20528b8b78ec63b8" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
 nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "551a95436e999b4290b4a33383aa3d6747b63dd9" }
 nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "551a95436e999b4290b4a33383aa3d6747b63dd9" }
 # bt-hci = { git = "https://github.com/embassy-rs/bt-hci.git", rev = "3755da87d0ef8660c5f9d4694b928ad7f679299a" }
@@ -92,6 +81,6 @@ panic = 'unwind'
 [profile.release]
 codegen-units = 1       # better optimizations
 debug = true            # no overhead for bare-metal
-opt-level = 2           # optimize for binary size
+opt-level = "z"         # optimize for binary size
 overflow-checks = false
 lto = "fat"

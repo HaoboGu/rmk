@@ -220,7 +220,7 @@ pub async fn run_rmk<
             run_keyboard(
                 keymap,
                 #[cfg(feature = "storage")]
-                &mut storage,
+                storage,
                 async { usb_device.run().await },
                 light_controller,
                 UsbLedReader::new(&mut keyboard_reader),

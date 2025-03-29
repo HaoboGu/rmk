@@ -260,7 +260,11 @@ pub(crate) async fn run<
                     )
                     .await;
                 }
-                Err(e) => error!("Advertise error: {:?}", e),
+                Err(e) => {
+                    #[cfg(feature = "defmt")]
+                    let e = defmt::Debug2Format(&e);
+                    error!("Advertise error: {:?}", e);
+                }
             }
 
             // Retry after 200 ms
