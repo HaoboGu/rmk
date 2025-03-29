@@ -25,6 +25,9 @@
 - [Binary size optimization](binary_size_optimization.md)
 - [Use Rust API](use_rust_api.md)
 
+# Input Devices
+- [Joystick](input_devices/joystick.md)
+
 # Development
 - [Roadmap](roadmap.md)
 - [How to contribute](how_to_contribute.md)

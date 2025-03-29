@@ -4,8 +4,9 @@ use serde::Deserialize;
 use std::fs;
 
 use crate::config::{
-    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
-    LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+    BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo,
+    KeyboardTomlConfig, LayoutConfig, LightConfig, MatrixConfig, MatrixType, SplitConfig,
+    StorageConfig,
 };
 use crate::{
     default_config::{
@@ -89,14 +90,19 @@ pub(crate) struct KeyboardConfig {
 
 #[derive(Clone, Debug)]
 pub(crate) enum BoardConfig {
-    Normal(MatrixConfig),
     Split(SplitConfig),
-    DirectPin(MatrixConfig),
+    UniBody(UniBodyConfig),
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct UniBodyConfig {
+    pub(crate) matrix: MatrixConfig,
+    pub(crate) input_device: InputDeviceConfig,
 }
 
 impl Default for BoardConfig {
     fn default() -> Self {
-        BoardConfig::Normal(MatrixConfig::default())
+        BoardConfig::UniBody(UniBodyConfig::default())
     }
 }
 
@@ -167,7 +173,11 @@ impl KeyboardConfig {
         config.basic = Self::get_basic_info(config.basic, toml_config.keyboard);
 
         // Board config
-        config.board = Self::get_board_config(toml_config.matrix, toml_config.split)?;
+        config.board = Self::get_board_config(
+            toml_config.matrix,
+            toml_config.split,
+            toml_config.input_device,
+        )?;
 
         // Layout config
         config.layout = Self::get_layout_from_toml(toml_config.layout)?;
@@ -343,6 +353,7 @@ impl KeyboardConfig {
     fn get_board_config(
         matrix: Option<MatrixConfig>,
         split: Option<SplitConfig>,
+        input_device: Option<InputDeviceConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
             (None, Some(s)) => {
@@ -353,20 +364,19 @@ impl KeyboardConfig {
                     MatrixType::normal => {
                         if m.input_pins == None || m.output_pins == None {
                             rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
-                        }
-                        else {
-                            Ok(BoardConfig::Normal(m))
+                        } else {
+                            Ok(())
                         }
                     },
                     MatrixType::direct_pin => {
                         if m.direct_pins == None {
                             rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
-                        }
-                        else {
-                            Ok(BoardConfig::DirectPin(m))
+                        } else {
+                            Ok(())
                         }
                     },
-                }
+                }?;
+                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
             _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),

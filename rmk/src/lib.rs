@@ -39,6 +39,7 @@ use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
 use embedded_hal::digital::OutputPin;
 pub use futures;
+pub use embassy_futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};

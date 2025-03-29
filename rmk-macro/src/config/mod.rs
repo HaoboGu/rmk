@@ -273,6 +273,24 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
 pub struct InputDeviceConfig {
     pub encoder: Option<Vec<EncoderConfig>>,
     pub pointing: Option<Vec<PointingDeviceConfig>>,
+    pub joystick: Option<Vec<JoystickConfig>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[allow(unused)]
+#[serde(deny_unknown_fields)]
+pub struct JoystickConfig {
+    // Name of the joystick
+    pub name: String,
+    // Pin a of the joystick
+    pub pin_x: String,
+    // Pin b of the joystick
+    pub pin_y: String,
+    // Pin z of the joystick
+    pub pin_z: String,
+    pub transform: Vec<Vec<i16>>,
+    pub bias: Vec<i16>,
+    pub resolution: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

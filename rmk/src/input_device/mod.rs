@@ -6,6 +6,9 @@ use core::cell::RefCell;
 
 use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report, keymap::KeyMap};
 
+pub mod adc;
+pub mod battery;
+pub mod joystick;
 pub mod rotary_encoder;
 
 /// The trait for runnable input devices and processors.
@@ -77,7 +80,7 @@ pub trait InputProcessor<
     ///
     /// Note there might be mulitple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
-    /// The input processor implementor should be aware of this.  
+    /// The input processor implementor should be aware of this.
     async fn process(&mut self, event: Event) -> ProcessResult;
 
     /// Send the processed report.
