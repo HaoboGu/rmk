@@ -218,22 +218,18 @@ impl UsbDeviceHandler {
 }
 
 pub(crate) static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
-pub(crate) static USB_DISABLED: Signal<crate::RawMutex, ()> = Signal::new();
+pub(crate) static USB_SUSPENDED: Signal<crate::RawMutex, ()> = Signal::new();
 
 impl Handler for UsbDeviceHandler {
     fn enabled(&mut self, enabled: bool) {
         if enabled {
             info!("Device enabled");
-            if USB_DISABLED.signaled() {
-                USB_DISABLED.reset();
-            }
             USB_ENABLED.signal(());
         } else {
             info!("Device disabled");
             if USB_ENABLED.signaled() {
                 USB_ENABLED.reset();
             }
-            USB_DISABLED.signal(());
         }
     }
 
@@ -258,8 +254,10 @@ impl Handler for UsbDeviceHandler {
     fn suspended(&mut self, suspended: bool) {
         if suspended {
             info!("Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
+            USB_SUSPENDED.signal(());
         } else {
             info!("Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
+            USB_SUSPENDED.reset();
         }
     }
 }

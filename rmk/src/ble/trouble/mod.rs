@@ -18,7 +18,7 @@ use {
     crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
-    crate::usb::{USB_DISABLED, USB_ENABLED},
+    crate::usb::{USB_ENABLED, USB_SUSPENDED},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{select4, Either4},
     embassy_usb::driver::Driver,
@@ -177,7 +177,7 @@ pub(crate) async fn run<
                                     keymap,
                                     #[cfg(feature = "storage")]
                                     storage,
-                                    USB_DISABLED.wait(),
+                                    USB_SUSPENDED.wait(),
                                     light_controller,
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbVialReaderWriter::new(&mut vial_reader_writer),
@@ -198,7 +198,7 @@ pub(crate) async fn run<
                                     #[cfg(feature = "storage")]
                                     storage,
                                 );
-                                select(ble_fut, profile_manager.update_profile()).await;
+                                select3(ble_fut, USB_SUSPENDED.wait(), profile_manager.update_profile()).await;
                                 continue;
                             }
                             _ => {}
