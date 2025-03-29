@@ -7,6 +7,7 @@
     2. Only Nrf is supported now.
 </div>
 
+TODO:
 - [ ] a more intuitive way to configure the joystick via `rmk-gui`
 - [ ] more functions besides mouse
 
@@ -79,6 +80,8 @@ resolution = 6
 ## `rust` configuration
 Because the `joystick` and `battery` use the same ADC peripheral, they actually use the same `NrfAdc` `input_device`.
 
+If the `light_sleep` is not `None`, the `NrfAdc` will enter light sleep mode when no event is generated after 1200ms, and the polling interval will be reduced to the value assigned.
+
 ```rust
 let saadc_config = saadc::Config::default();
 let adc = saadc::SAADC::new(p.SAADC, Irqs, saadc_config,
@@ -89,7 +92,7 @@ let adc = saadc::SAADC::new(p.SAADC, Irqs, saadc_config,
     ],
 );
 saadc.calibrate().await;
-let mut adc_dev = NrfAdc::new(adc, [AnalogEventType::Battery, AnalogEventType::Joystick(2)], 20 /* polling interval */);
+let mut adc_dev = NrfAdc::new(adc, [AnalogEventType::Battery, AnalogEventType::Joystick(2)], 20 /* polling interval */, Some(350)/* light sleep interval */);
 let mut batt_proc = BatteryProcessor::new(1, 5, &keymap);
 let mut joy_proc = JoystickProcessor::new([[80, 0], [0, 80]], [29130, 29365], 6, &keymap);
 ...
