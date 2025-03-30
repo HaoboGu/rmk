@@ -127,8 +127,8 @@ async fn main(spawner: Spawner) {
 
     // Initialize the peripheral matrix
     let debouncer = DefaultDebouncer::<4, 7>::new();
-    // let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
-    let mut matrix = rmk::matrix::TestMatrix::<4, 7>::new();
+    let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
+    // let mut matrix = rmk::matrix::TestMatrix::<4, 7>::new();
 
     // Start
     join(

@@ -52,10 +52,10 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
 }
 
 /// How many outgoing L2CAP buffers per link
-const L2CAP_TXQ: u8 = 8;
+const L2CAP_TXQ: u8 = 4;
 
 /// How many incoming L2CAP buffers per link
-const L2CAP_RXQ: u8 = 8;
+const L2CAP_RXQ: u8 = 4;
 
 /// Size of L2CAP packets
 const L2CAP_MTU: usize = 255;
@@ -69,10 +69,10 @@ fn build_sdc<'d, const N: usize>(
     sdc::Builder::new()?
         .support_scan()?
         .support_central()?
+        .support_adv()?
+        .support_peripheral()?
         .central_count(1)?
-        // .support_adv()?
-        // .support_peripheral()?
-        // .peripheral_count(1)?
+        .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
         .build(p, rng, mpsl, mem)
 }
@@ -204,10 +204,10 @@ async fn main(spawner: Spawner) {
             EVENT_CHANNEL => [encoder_processor],
         },
         keyboard.run(),
-        // join(
-        run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addr, &stack),
-        // run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
-        // ),
+        join(
+            run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addr, &stack),
+            run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+        ),
     )
     .await;
 }

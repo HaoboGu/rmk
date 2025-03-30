@@ -5,27 +5,28 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::ble_task;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 
-/// Gatt service used in split peripheral to send split message to central
-#[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
-pub(crate) struct SplitBleService {
-    #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
-    pub(crate) message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
+const L2CAP_MTU: usize = 255;
 
-    #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write_without_response)]
-    pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
+/// Gatt service used in split central to send split message to peripheral
+#[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
+struct SplitBleCentralService {
+    #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
+    message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
+
+    #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write_without_response, read, notify)]
+    message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
 }
 
 /// Gatt server in split peripheral
 #[gatt_server]
-pub(crate) struct BleSplitPeripheralServer {
-    pub(crate) service: SplitBleService,
+struct BleSplitCentralServer {
+    service: SplitBleCentralService,
 }
 
 pub(crate) async fn run_ble_peripheral_manager<
@@ -40,9 +41,7 @@ pub(crate) async fn run_ble_peripheral_manager<
     addr: [u8; 6],
     stack: &'a Stack<'a, C>,
 ) {
-    let Host {
-        mut central, runner, ..
-    } = stack.build();
+    let Host { mut central, .. } = stack.build();
     let address: Address = Address::random(addr);
     info!("Peer address: {:?}", address);
     let config = ConnectConfig {
@@ -58,26 +57,20 @@ pub(crate) async fn run_ble_peripheral_manager<
             ..Default::default()
         },
     };
-    // wait_for_stack_started().await;
-    embassy_futures::join::join(ble_task(runner), async {
-        loop {
-            info!("Connecting peripheral");
-            if let Err(e) = connect_and_run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(
-                id,
-                stack,
-                &mut central,
-                &config,
-            )
-            .await
-            {
-                #[cfg(feature = "defmt")]
-                let e = defmt::Debug2Format(&e);
-                error!("BLE central error: {:?}", e);
-                embassy_time::Timer::after_millis(1000).await;
-            }
+    wait_for_stack_started().await;
+    loop {
+        info!("Connecting peripheral");
+        if let Err(e) =
+            connect_and_run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, stack, &mut central, &config)
+                .await
+        {
+            #[cfg(feature = "defmt")]
+            let e = defmt::Debug2Format(&e);
+            error!("BLE central error: {:?}", e);
+            // Reconnect after 500ms
+            embassy_time::Timer::after_millis(500).await;
         }
-    })
-    .await;
+    }
 }
 
 async fn connect_and_run_peripheral_manager<
@@ -94,13 +87,18 @@ async fn connect_and_run_peripheral_manager<
     config: &ConnectConfig<'_>,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
-
+    info!("Connected to peripheral");
     // GattConnection is used for notification
-    let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
+    let server = BleSplitCentralServer::new_with_config(GapConfig::Central(CentralConfig {
+        name: "rmk".into(),
+        appearance: &appearance::UNKNOWN,
+    }))
+    .unwrap();
+
     let gatt_conn = conn.clone().with_attribute_server(&server)?;
 
-    info!("Connected to peripheral");
-    let client = GattClient::<C, 10, 255>::new(&stack, &conn).await.unwrap();
+    let client = GattClient::<C, 10, L2CAP_MTU>::new(&stack, &conn).await?;
+
     match select(
         client.task(),
         run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, gatt_conn, &client),
@@ -124,7 +122,7 @@ async fn run_peripheral_manager<
 >(
     id: usize,
     gatt_conn: GattConnection<'a, '_>,
-    client: &GattClient<'_, C, 10, 255>,
+    client: &GattClient<'_, C, 10, L2CAP_MTU>,
 ) -> Result<(), BleHostError<C::Error>> {
     let services = client
         .services_by_uuid(&Uuid::new_long([
@@ -171,7 +169,7 @@ async fn run_peripheral_manager<
 /// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c> {
     // Listener for split message from peripheral
-    listener: NotificationListener<'c, 255>,
+    listener: NotificationListener<'c, L2CAP_MTU>,
     // Characteristic to send split message to peripheral
     message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
     // Cached connection state
@@ -182,7 +180,7 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> BleSplitCentralDriver<'a, 'b, 'c> {
     pub(crate) fn new(
-        listener: NotificationListener<'c, 255>,
+        listener: NotificationListener<'c, L2CAP_MTU>,
         message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
         conn: &'b GattConnection<'a, 'b>,
     ) -> Self {
