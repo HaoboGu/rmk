@@ -12,9 +12,9 @@
     //"rust-analyzer.cargo.target": "thumbv6m-none-eabi",
     //"rust-analyzer.cargo.target": "thumbv7m-none-eabi",
     // "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
-    // "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
+    "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
     //"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
-    "rust-analyzer.cargo.target": "riscv32imc-unknown-none-elf", // for esp32c3
+    // "rust-analyzer.cargo.target": "riscv32imc-unknown-none-elf", // for esp32c3
     // "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf", // for esp32c6
     "rust-analyzer.linkedProjects": [
         "rmk-macro/Cargo.toml",
@@ -23,13 +23,13 @@
         // then uncomment ONE line below to select the chip you want to work on.
         // This makes rust-analyzer work on the example crate and all its dependencies.
         // "examples/use_rust/ch32v307/Cargo.toml",
-        "examples/use_rust/esp32c3_ble/Cargo.toml",
+        // "examples/use_rust/esp32c3_ble/Cargo.toml",
         // "examples/use_rust/esp32c6_ble/Cargo.toml",
         // "examples/use_rust/esp32s3_ble/Cargo.toml",
         // "examples/use_rust/hpm5300/Cargo.toml",
         // "examples/use_rust/nef52832_ble/Cargo.toml",
         // "examples/use_rust/nrf52840_ble/Cargo.toml",
-        // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
+        "examples/use_rust/nrf52840_ble_split/Cargo.toml",
         // "examples/use_rust/py32f07x/Cargo.toml",
         // "examples/use_rust/rp2040/Cargo.toml"
         // "examples/use_rust/rp2040_direct_pin/Cargo.toml"

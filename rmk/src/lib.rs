@@ -36,6 +36,10 @@ use keymap::KeyMap;
 use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
 use state::CONNECTION_STATE;
+#[cfg(feature = "_ble")]
+pub use trouble_host::prelude::HostResources;
+#[cfg(feature = "_ble")]
+use trouble_host::prelude::*;
 use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
@@ -51,11 +55,6 @@ use {
     storage::Storage,
 };
 pub use {futures, heapless, rmk_macro as macros};
-#[cfg(feature = "_ble")]
-use {
-    rand_core::{CryptoRng, RngCore},
-    trouble_host::prelude::*,
-};
 #[cfg(not(feature = "_ble"))]
 use {
     usb::descriptor::{CompositeReport, KeyboardReport},
@@ -172,7 +171,6 @@ pub async fn initialize_keymap_and_storage<
 pub async fn run_rmk<
     'a,
     #[cfg(feature = "_ble")] C: Controller,
-    #[cfg(feature = "_ble")] RNG: RngCore + CryptoRng,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
     Out: OutputPin,
@@ -183,22 +181,19 @@ pub async fn run_rmk<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "_ble")] ble_controller: C,
-    #[cfg(feature = "_ble")] random_generator: &mut RNG,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
-    crate::ble::trouble::run(
+    crate::ble::trouble::run_ble(
         keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
         #[cfg(feature = "_ble")]
-        ble_controller,
-        #[cfg(feature = "_ble")]
-        random_generator,
+        stack,
         #[cfg(feature = "storage")]
         storage,
         light_controller,

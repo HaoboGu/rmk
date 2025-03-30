@@ -1,8 +1,9 @@
-use rmk::action::KeyAction;
-use rmk::{a, k, mo};
+use rmk::action::{EncoderAction, KeyAction};
+use rmk::{a, encoder, k, mo};
 pub(crate) const COL: usize = 7;
 pub(crate) const ROW: usize = 8;
 pub(crate) const NUM_LAYER: usize = 4;
+pub(crate) const NUM_ENCODER: usize = 1;
 #[rustfmt::skip]
 pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
@@ -46,5 +47,14 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)]
         ],
+    ]
+}
+
+pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+    [
+        [encoder!(k!(KbVolumeUp), k!(KbVolumeDown))],
+        [encoder!(k!(KbVolumeUp), k!(KbVolumeDown))],
+        [encoder!(k!(KbVolumeUp), k!(KbVolumeDown))],
+        [encoder!(k!(KbVolumeUp), k!(KbVolumeDown))],
     ]
 }

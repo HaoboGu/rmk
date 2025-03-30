@@ -1,8 +1,7 @@
-#[cfg(feature = "_ble")]
-use embassy_executor::Spawner;
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+use trouble_host::prelude::*;
 
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
@@ -20,11 +19,14 @@ use crate::CONNECTION_STATE;
 /// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
 /// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
-pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_ble"))] S: Write + Read>(
+pub async fn run_rmk_split_peripheral<
+    'a,
+    #[cfg(feature = "_ble")] C: Controller,
+    #[cfg(not(feature = "_ble"))] S: Write + Read,
+>(
     #[cfg(feature = "_ble")] central_addr: [u8; 6],
-    #[cfg(feature = "_ble")] peripheral_addr: [u8; 6],
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
     #[cfg(not(feature = "_ble"))] serial: S,
-    #[cfg(feature = "_ble")] spawner: Spawner,
 ) {
     #[cfg(not(feature = "_ble"))]
     {
@@ -35,8 +37,7 @@ pub async fn run_rmk_split_peripheral<#[cfg(not(feature = "_ble"))] S: Write + R
     }
 
     #[cfg(feature = "_ble")]
-    crate::split::nrf::peripheral::initialize_ble_split_peripheral_and_run(central_addr, peripheral_addr, spawner)
-        .await;
+    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(central_addr, stack).await;
 }
 
 /// The split peripheral instance.
@@ -53,7 +54,8 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     ///
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
-    pub(crate) async fn run(&mut self) -> ! {
+    pub(crate) async fn run(&mut self) {
+        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
         loop {
             match select3(
                 self.split_driver.read(),
@@ -73,6 +75,12 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     },
                     Err(e) => {
                         error!("Split message read error: {:?}", e);
+                        match e {
+                            crate::split::driver::SplitDriverError::Disconnected => {
+                                break;
+                            }
+                            _ => (),
+                        }
                     }
                 },
                 embassy_futures::select::Either3::Second(e) => {

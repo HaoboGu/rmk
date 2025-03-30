@@ -50,17 +50,34 @@ pub const BONDED_DEVICE_NUM: usize = 8;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-const CONNECTIONS_MAX: usize = 1;
+const CONNECTIONS_MAX: usize = 4;
 
 /// Max number of L2CAP channels.
-const L2CAP_CHANNELS_MAX: usize = 2; // Signal + att
+const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+
+/// Build the BLE stack.
+pub async fn build_ble_stack<'a, C: Controller, RNG: RngCore + CryptoRng>(
+    controller: C,
+    host_address: [u8; 6],
+    random_generator: &mut RNG,
+    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 255>,
+) -> Stack<'a, C> {
+    // Using a fixed "random" address can be useful for testing. In real scenarios, one would
+    // use e.g. the MAC 6 byte array as the address (how to get that varies by the platform).
+    let address: Address = Address::random(host_address);
+
+    // Initialize trouble host stack
+    trouble_host::new(controller, resources)
+        .set_random_address(address)
+        .set_random_generator_seed(random_generator)
+}
 
 /// Run the BLE stack.
-pub(crate) async fn run<
+pub(crate) async fn run_ble<
     'a,
+    'b,
     C: Controller,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    RNG: RngCore + CryptoRng,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
@@ -70,8 +87,7 @@ pub(crate) async fn run<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    controller: C,
-    random_generator: &mut RNG,
+    stack: &'b Stack<'b, C>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
@@ -93,17 +109,6 @@ pub(crate) async fn run<
             vial_reader_writer,
         )
     };
-
-    // Using a fixed "random" address can be useful for testing. In real scenarios, one would
-    // use e.g. the MAC 6 byte array as the address (how to get that varies by the platform).
-    let address: Address = Address::random([0xff, 0x8f, 0x11, 0x05, 0xe4, 0xff]);
-    info!("Our address = {}", address);
-
-    // Initialize trouble host stack
-    let mut resources: HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 255> = HostResources::new();
-    let stack = trouble_host::new(controller, &mut resources)
-        .set_random_address(address)
-        .set_random_generator_seed(random_generator);
 
     // Load current connection type
     #[cfg(feature = "storage")]
@@ -128,7 +133,6 @@ pub(crate) async fn run<
     #[cfg(feature = "storage")]
     // Load saved bonding information
     profile_manager.load_bonded_devices(storage).await;
-
     // Update bonding information in the stack
     profile_manager.update_stack_bonds();
 
@@ -275,8 +279,12 @@ pub(crate) async fn run<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
+pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
     loop {
+        // Signal to indicate the stack is started
+        #[cfg(feature = "split")]
+        crate::split::ble::central::STACK_STARTED.signal(true);
+
         if let Err(e) = runner.run().await {
             panic!("[ble_task] error: {:?}", e);
         }
