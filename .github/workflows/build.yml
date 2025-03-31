@@ -73,6 +73,8 @@ jobs:
         run: cargo binstall ldproxy espup -y
       - name: Install esp toolchain
         run: espup install
+      - name: export esp
+        run: . ~/export-esp.sh
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
         run: cargo +esp build --release 

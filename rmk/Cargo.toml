@@ -53,7 +53,6 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-# trouble-host = { version = "0.1.0", path = "/Users/haobogu/Projects/rust/trouble/host", features = [
 trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "71543be", features = [
     "gatt",
     "scan",
@@ -83,7 +82,7 @@ critical-section = { version = "1.2", optional = true }
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
-# rmk = { path = ".", default-features = false, features = ["std", "log"] }
+rmk = { path = ".", default-features = false, features = ["std", "log"] }
 env_logger = "0.11"
 ctor = "0.4.1"
 
@@ -171,9 +170,7 @@ esp32c3_ble = ["_esp_ble", "_no_usb"]
 esp32c6_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
-_esp_ble = [
-    "_ble",
-]
+_esp_ble = ["_ble"]
 
 ## Enable feature if you want to use trouble BLE stack
 _ble = ["dep:trouble-host", "dep:rand_core"]
