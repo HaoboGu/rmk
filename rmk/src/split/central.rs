@@ -1,3 +1,4 @@
+#[cfg(feature = "async_matrix")]
 use core::pin::pin;
 
 use embassy_time::{Instant, Timer};

@@ -119,9 +119,10 @@ pub(crate) fn rmk_entry_select(
                         let col_offset = p.col_offset;
                         let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
                         tasks.push(quote! {
-                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset>(
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                                 #idx,
                                 [#(#peripheral_ble_addr), *],
+                                &stack,
                             )
                         });
                     });

@@ -1,6 +1,7 @@
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+#[cfg(feature = "_ble")]
 use trouble_host::prelude::*;
 
 use super::driver::{SplitReader, SplitWriter};

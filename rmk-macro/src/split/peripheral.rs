@@ -33,6 +33,48 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 
     let main_function = expand_split_peripheral(id, &keyboard_config, item_mod, &rmk_features);
 
+    let bind_interrupts = if keyboard_config.chip.series == ChipSeries::Nrf52 {
+        quote! {
+            use ::embassy_nrf::bind_interrupts;
+            bind_interrupts!(struct Irqs {
+                CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler;
+                RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
+                EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;
+                RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+            });
+
+            #[::embassy_executor::task]
+            async fn mpsl_task(mpsl: &'static ::nrf_sdc::mpsl::MultiprotocolServiceLayer<'static>) -> ! {
+                mpsl.run().await
+            }
+            /// How many outgoing L2CAP buffers per link
+            const L2CAP_TXQ: u8 = 3;
+
+            /// How many incoming L2CAP buffers per link
+            const L2CAP_RXQ: u8 = 3;
+
+            /// Size of L2CAP packets
+            const L2CAP_MTU: usize = 72;
+            fn build_sdc<'d, const N: usize>(
+                p: ::nrf_sdc::Peripherals<'d>,
+                rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG>,
+                mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
+                mem: &'d mut ::nrf_sdc::Mem<N>,
+            ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
+                ::nrf_sdc::Builder::new()?
+                    .support_adv()?
+                    .support_peripheral()?
+                    .peripheral_count(1)?
+                    .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
+                    .build(p, rng, mpsl, mem)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
             use {esp_alloc as _, esp_backtrace as _};
@@ -41,6 +83,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         }
     } else {
         quote! {
+            #bind_interrupts
             #[::embassy_executor::main]
             async fn main(spawner: ::embassy_executor::Spawner)
         }
@@ -79,7 +122,11 @@ fn expand_split_peripheral(
 
     let imports = expand_imports(&item_mod);
     let chip_init = expand_chip_init(keyboard_config, &item_mod);
+    // TODO: use same bind_interrupts for central and peripheral
 
+    // let peripheral_addr = peripheral_config
+    // .ble_addr
+    // .expect("Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`");
     // Debouncer config
     let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
     let col2row_enabled = is_feature_enabled(rmk_features, "col2row");
@@ -154,6 +201,7 @@ fn expand_split_peripheral(
         #run_rmk_peripheral
     }
 }
+
 fn expand_split_peripheral_entry(
     chip: &ChipModel,
     peripheral_config: &SplitBoardConfig,
@@ -165,14 +213,11 @@ fn expand_split_peripheral_entry(
     match chip.series {
         ChipSeries::Nrf52 => {
             let central_addr = central_config.ble_addr.expect("Missing central ble address");
-            let peripheral_addr = peripheral_config
-                .ble_addr
-                .expect("Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`");
+
             let peripheral_run = quote! {
                 ::rmk::split::peripheral::run_rmk_split_peripheral(
                     [#(#central_addr), *],
-                    [#(#peripheral_addr), *],
-                    spawner,
+                    &stack,
                 )
             };
             join_all_tasks(vec![peripheral_matrix_task, peripheral_run])

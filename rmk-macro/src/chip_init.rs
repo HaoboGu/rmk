@@ -4,18 +4,18 @@ use quote::{quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::KeyboardConfig;
+use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
 use crate::{ChipModel, ChipSeries};
 
 // Default implementations of chip initialization
-pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
-    match chip.series {
+pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    match keyboard_config.chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
-            let dcdc_config = if chip.chip == "nrf52840" {
+            let dcdc_config = if keyboard_config.chip.chip == "nrf52840" {
                 quote! {
                     config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
                     config.dcdc.reg0 = true;
@@ -24,12 +24,10 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
             } else {
                 quote! {}
             };
-            quote! {
-                    use embassy_nrf::interrupt::InterruptExt;
-                    let mut config = ::embassy_nrf::config::Config::default();
-                    #dcdc_config
-                    ::embassy_nrf::interrupt::CLOCK_POWER.set_priority(::embassy_nrf::interrupt::Priority::P2);
-                    let p = ::embassy_nrf::init(config);
+            let ble_addr = get_ble_addr(keyboard_config).expect("No BLE address defined for nRF52");
+            let ble_init = match &keyboard_config.communication {
+                CommunicationConfig::Usb(_) => quote! {},
+                CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
                     let mpsl_p = ::nrf_sdc::mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
                     let lfclk_cfg = ::nrf_sdc::mpsl::raw::mpsl_clock_lfclk_cfg_t {
                         source: ::nrf_sdc::mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
@@ -56,10 +54,18 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
                     let mut sdc_mem = ::nrf_sdc::Mem::<4096>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
-                    // TODO: use central addr from config
-                    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+                    let central_addr = [#(#ble_addr), *];
                     let mut host_resources = ::rmk::HostResources::new();
                     let stack = ::rmk::ble::trouble::build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+                },
+                CommunicationConfig::None => quote! {},
+            };
+            quote! {
+                    use embassy_nrf::interrupt::InterruptExt;
+                    let mut config = ::embassy_nrf::config::Config::default();
+                    #dcdc_config
+                    let p = ::embassy_nrf::init(config);
+                    #ble_init
             }
         }
         ChipSeries::Rp2040 => {
@@ -68,26 +74,29 @@ pub(crate) fn chip_init_default(chip: &ChipModel) -> TokenStream2 {
                 let p = ::embassy_rp::init(config);
             }
         }
-        ChipSeries::Esp32 => quote! {
-            ::esp_println::logger::init_logger_from_env();
-            let p = ::esp_hal::init({
-                let mut config = ::esp_hal::Config::default();
-                config.cpu_clock = ::esp_hal::clock::CpuClock::max();
-                config
-            });
-            ::esp_alloc::heap_allocator!(72 * 1024);
-            let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
-            let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
-            let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone(), p.RADIO_CLK).unwrap();
-            let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
-            ::esp_hal_embassy::init(systimer.alarm0);
-            let bluetooth = p.BT;
-            let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
-            let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
-            let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
-            let mut host_resources = ::rmk::HostResources::new();
-            let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
-        },
+        ChipSeries::Esp32 => {
+            let ble_addr = get_ble_addr(keyboard_config).expect("No BLE address defined for ESP32");
+            quote! {
+                ::esp_println::logger::init_logger_from_env();
+                let p = ::esp_hal::init({
+                    let mut config = ::esp_hal::Config::default();
+                    config.cpu_clock = ::esp_hal::clock::CpuClock::max();
+                    config
+                });
+                ::esp_alloc::heap_allocator!(72 * 1024);
+                let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
+                let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
+                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone(), p.RADIO_CLK).unwrap();
+                let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
+                ::esp_hal_embassy::init(systimer.alarm0);
+                let bluetooth = p.BT;
+                let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
+                let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
+                let central_addr = [#(#ble_addr), *];
+                let mut host_resources = ::rmk::HostResources::new();
+                let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+            }
+        }
     }
 }
 
@@ -106,9 +115,9 @@ pub(crate) fn expand_chip_init(keyboard_config: &KeyboardConfig, item_mod: &Item
                 }
                 None
             })
-            .unwrap_or(chip_init_default(&keyboard_config.chip))
+            .unwrap_or(chip_init_default(&keyboard_config))
     } else {
-        chip_init_default(&keyboard_config.chip)
+        chip_init_default(&keyboard_config)
     }
 }
 
@@ -137,4 +146,13 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     }
 
     initialization_tokens
+}
+
+fn get_ble_addr(keyboard_config: &KeyboardConfig) -> Option<[u8; 6]> {
+    if let BoardConfig::Split(split_config) = &keyboard_config.board {
+        split_config.central.ble_addr
+    } else {
+        // Default BLE random static address
+        Some([0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7])
+    }
 }
