@@ -87,29 +87,36 @@ async fn connect_and_run_peripheral_manager<
     config: &ConnectConfig<'_>,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
+
     info!("Connected to peripheral");
-    // GattConnection is used for notification
-    let server = BleSplitCentralServer::new_with_config(GapConfig::Central(CentralConfig {
-        name: "rmk".into(),
-        appearance: &appearance::UNKNOWN,
-    }))
-    .unwrap();
-
-    let gatt_conn = conn.clone().with_attribute_server(&server)?;
-
     let client = GattClient::<C, 10, L2CAP_MTU>::new(&stack, &conn).await?;
-
     match select(
-        client.task(),
-        run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, gatt_conn, &client),
+        ble_central_task(&client, &conn),
+        run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
     )
     .await
     {
-        Either::First(e) => e?,
-        Either::Second(e) => e?,
+        Either::First(e) => e,
+        Either::Second(e) => e,
     }
+}
 
-    Ok(())
+async fn ble_central_task<'a, C: Controller>(
+    client: &GattClient<'a, C, 10, L2CAP_MTU>,
+    conn: &Connection<'a>,
+) -> Result<(), BleHostError<C::Error>> {
+    let conn_check = async {
+        while conn.is_connected() {
+            embassy_time::Timer::after_secs(1).await;
+        }
+    };
+    match select(client.task(), conn_check).await {
+        Either::First(e) => e,
+        Either::Second(_) => {
+            info!("Connection lost");
+            Ok(())
+        }
+    }
 }
 
 async fn run_peripheral_manager<
@@ -121,7 +128,6 @@ async fn run_peripheral_manager<
     const COL_OFFSET: usize,
 >(
     id: usize,
-    gatt_conn: GattConnection<'a, '_>,
     client: &GattClient<'a, C, 10, L2CAP_MTU>,
 ) -> Result<(), BleHostError<C::Error>> {
     let services = client
@@ -154,9 +160,10 @@ async fn run_peripheral_manager<
             .await?;
         info!("Subscribing notifications");
         let listener = client.subscribe(&message_to_central, false).await?;
-        let split_ble_driver = BleSplitCentralDriver::new(listener, message_to_peripheral, client, &gatt_conn);
+        let split_ble_driver = BleSplitCentralDriver::new(listener, message_to_peripheral, client);
         let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
         peripheral_manager.run().await;
+        info!("Peripheral manager stopped");
     };
     Ok(())
 }
@@ -167,7 +174,7 @@ async fn run_peripheral_manager<
 /// The BLE service should keep running, it processes the split message in the callback, which is not async.
 /// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
 /// so we need this wrapper to forward split message to channel.
-pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, 'd, C: Controller> {
+pub(crate) struct BleSplitCentralDriver<'a, 'c, 'd, C: Controller> {
     // Listener for split message from peripheral
     listener: NotificationListener<'c, L2CAP_MTU>,
     // Characteristic to send split message to peripheral
@@ -176,28 +183,24 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, 'd, C: Controller> {
     client: &'d GattClient<'a, C, 10, L2CAP_MTU>,
     // Cached connection state
     connection_state: bool,
-    // Connection
-    conn: &'b GattConnection<'a, 'b>,
 }
 
-impl<'a, 'b, 'c, 'd, C: Controller> BleSplitCentralDriver<'a, 'b, 'c, 'd, C> {
+impl<'a, 'c, 'd, C: Controller> BleSplitCentralDriver<'a, 'c, 'd, C> {
     pub(crate) fn new(
         listener: NotificationListener<'c, L2CAP_MTU>,
         message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
         client: &'d GattClient<'a, C, 10, L2CAP_MTU>,
-        conn: &'b GattConnection<'a, 'b>,
     ) -> Self {
         Self {
             listener,
             message_to_peripheral,
             client,
             connection_state: CONNECTION_STATE.load(Ordering::Acquire),
-            conn,
         }
     }
 }
 
-impl<'a, 'b, 'c, 'd, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'b, 'c, 'd, C> {
+impl<'a, 'c, 'd, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'c, 'd, C> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         let data = self.listener.next().await;
         let message = postcard::from_bytes(&data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
@@ -206,7 +209,7 @@ impl<'a, 'b, 'c, 'd, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'b
     }
 }
 
-impl<'a, 'b, 'c, 'd, C: Controller> SplitWriter for BleSplitCentralDriver<'a, 'b, 'c, 'd, C> {
+impl<'a, 'c, 'd, C: Controller> SplitWriter for BleSplitCentralDriver<'a, 'c, 'd, C> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         if let SplitMessage::ConnectionState(state) = message {
             // ConnectionState changed, update cached state and notify peripheral
@@ -223,6 +226,10 @@ impl<'a, 'b, 'c, 'd, C: Controller> SplitWriter for BleSplitCentralDriver<'a, 'b
                     .write_characteristic_without_response(&self.message_to_peripheral, &buf)
                     .await
                 {
+                    if let BleHostError::BleHost(Error::NotFound) = e {
+                        error!("Peripheral disconnected");
+                        return Err(SplitDriverError::Disconnected);
+                    }
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
                     error!("BLE message_to_peripheral_write error: {:?}", e);

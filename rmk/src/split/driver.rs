@@ -68,12 +68,15 @@ impl<
     ///
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
-    pub(crate) async fn run(mut self) -> ! {
+    pub(crate) async fn run(mut self) {
         CONNECTION_STATE.store(true, Ordering::Release);
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
         if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
-            error!("SplitDriver write error: {:?}", e);
+            match e {
+                SplitDriverError::Disconnected => return,
+                _ => error!("SplitDriver write error: {:?}", e),
+            }
         }
 
         let mut last_sync_time = Instant::now();
@@ -100,7 +103,10 @@ impl<
                     CONNECTION_STATE.store(true, Ordering::Release);
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
-                        error!("SplitDriver write error: {:?}", e);
+                        match e {
+                            SplitDriverError::Disconnected => return,
+                            _ => error!("SplitDriver write error: {:?}", e),
+                        }
                     }
                     last_sync_time = Instant::now();
                 }
