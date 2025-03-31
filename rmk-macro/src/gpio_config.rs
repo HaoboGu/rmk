@@ -17,7 +17,9 @@ pub(crate) fn convert_output_pins_to_initializers(
         });
 
     initializers.extend(pin_initializers);
-    initializers.extend(quote! {let output_pins = [#(#idents), *];});
+    let output_pin_type = get_output_pin_type(chip);
+    let len = idents.len();
+    initializers.extend(quote! {let output_pins: [#output_pin_type; #len] = [#(#idents), *];});
     initializers
 }
 
@@ -42,8 +44,35 @@ pub(crate) fn convert_input_pins_to_initializers(
             quote! { let #ident_name = #ts;}
         });
     initializers.extend(pin_initializers);
-    initializers.extend(quote! {let input_pins = [#(#idents), *];});
+    let input_pin_type = get_input_pin_type(chip, async_matrix);
+    let len = idents.len();
+    initializers.extend(quote! {let input_pins: [#input_pin_type; #len] = [#(#idents), *];});
     initializers
+}
+
+
+pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_macro2::TokenStream {
+    match chip.series {
+        ChipSeries::Stm32 => {
+            if async_matrix {
+                quote! {::embassy_stm32::exti::ExtiInput}
+            } else {
+                quote! {::embassy_stm32::gpio::Input}
+            }
+        }
+        ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Input},
+        ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Input},
+        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyIOPin, ::esp_idf_svc::hal::gpio::Input>},
+    }
+}
+
+pub(crate) fn get_output_pin_type(chip: &ChipModel) -> proc_macro2::TokenStream {
+    match chip.series {
+        ChipSeries::Stm32 => quote! {::embassy_stm32::gpio::Output},
+        ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Output},
+        ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Output},
+        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>},
+    }
 }
 
 pub(crate) fn convert_direct_pins_to_initializers(
