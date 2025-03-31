@@ -7,7 +7,7 @@ use crate::{
     feature::is_feature_enabled,
     gpio_config::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
-        convert_output_pins_to_initializers,
+        convert_output_pins_to_initializers, get_input_pin_type, get_output_pin_type,
     },
     keyboard_config::{BoardConfig, KeyboardConfig},
     ChipModel, ChipSeries,
@@ -78,6 +78,14 @@ pub(crate) fn expand_matrix_direct_pins(
     low_active: bool,
 ) -> proc_macro2::TokenStream {
     let mut pin_initialization = proc_macro2::TokenStream::new();
+    // Get input pin type
+    let input_pin_type = get_input_pin_type(chip, async_matrix);
+    let rows = direct_pins.len();
+    let cols = if direct_pins.len() == 0 {
+            0
+    } else {
+        direct_pins[0].len()
+    };
     // Initialize input pins
     pin_initialization.extend(convert_direct_pins_to_initializers(
         &chip,
@@ -86,8 +94,9 @@ pub(crate) fn expand_matrix_direct_pins(
         low_active,
     ));
     // Generate a macro that does pin matrix config
+
     quote! {
-        let direct_pins = {
+        let direct_pins: [[Option<#input_pin_type>; #cols]; #rows] = {
             #pin_initialization
             direct_pins
         };
@@ -109,6 +118,13 @@ pub(crate) fn expand_matrix_input_output_pins(
     } else {
         quote! {}
     };
+    let input_pin_len = input_pins.len();
+    let output_pin_len = output_pins.len();
+    
+    // Get pin types
+    let input_pin_type = get_input_pin_type(chip, async_matrix);
+    let output_pin_type = get_output_pin_type(chip);
+    
     // Initialize input pins
     pin_initialization.extend(convert_input_pins_to_initializers(
         &chip,
@@ -117,11 +133,10 @@ pub(crate) fn expand_matrix_input_output_pins(
     ));
     // Initialize output pins
     pin_initialization.extend(convert_output_pins_to_initializers(&chip, output_pins));
-
     // Generate a macro that does pin matrix config
     quote! {
         #extra_import
-        let (input_pins, output_pins) = {
+        let (input_pins, output_pins): ([ #input_pin_type; #input_pin_len], [ #output_pin_type; #output_pin_len]) = {
             #pin_initialization
             (input_pins, output_pins)
         };
