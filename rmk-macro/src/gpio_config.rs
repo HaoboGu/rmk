@@ -62,7 +62,7 @@ pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_m
         }
         ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Input},
         ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Input},
-        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver::input},
+        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyIOPin, ::esp_idf_svc::hal::gpio::Input>},
     }
 }
 
