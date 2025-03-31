@@ -197,7 +197,7 @@ pub struct ComboConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ForksConfig {
-    pub forks: Vec<ForkConfig>
+    pub forks: Vec<ForkConfig>,
 }
 
 /// Configurations for fork

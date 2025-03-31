@@ -1,10 +1,10 @@
 //! Initialize behavior config boilerplate of RMK
 //!
 
-use proc_macro2::TokenStream as TokenStream2;
 use crate::config::{CombosConfig, ForksConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
 use crate::layout::parse_key;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
@@ -118,10 +118,8 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-
-
 #[derive(PartialEq, Eq, Default)]
-struct StateBitsMacro {    
+struct StateBitsMacro {
     modifiers_left_ctrl: bool,
     modifiers_left_shift: bool,
     modifiers_left_alt: bool,
@@ -132,14 +130,10 @@ struct StateBitsMacro {
     modifiers_right_gui: bool,
 
     leds_num_lock: bool,
-    leds_caps_lock : bool,
+    leds_caps_lock: bool,
     leds_scroll_lock: bool,
-    //leds_compose: bool,
-    //leds_kana: bool,
-    //leds_power: bool,
-    //leds_shift: bool,
-    //leds_do_not_disturb: bool,
-    //leds_mute: bool,
+    leds_compose: bool,
+    leds_kana: bool,
 
     mouse_button1: bool,
     mouse_button2: bool,
@@ -153,7 +147,7 @@ struct StateBitsMacro {
 
 impl StateBitsMacro {
     fn new() -> Self {
-        Self{
+        Self {
             modifiers_left_ctrl: false,
             modifiers_left_shift: false,
             modifiers_left_alt: false,
@@ -164,9 +158,11 @@ impl StateBitsMacro {
             modifiers_right_gui: false,
 
             leds_num_lock: false,
-            leds_caps_lock : false,
+            leds_caps_lock: false,
             leds_scroll_lock: false,
-            
+            leds_compose: false,
+            leds_kana: false,
+
             mouse_button1: false,
             mouse_button2: false,
             mouse_button3: false,
@@ -174,16 +170,32 @@ impl StateBitsMacro {
             mouse_button5: false,
             mouse_button6: false,
             mouse_button7: false,
-            mouse_button8: false
+            mouse_button8: false,
         }
     }
 
     fn is_empty(&self) -> bool {
-        !(self.modifiers_left_ctrl || self.modifiers_left_shift || self.modifiers_left_alt || self.modifiers_left_gui ||
-        self.modifiers_right_ctrl || self.modifiers_right_shift || self.modifiers_right_alt || self.modifiers_right_gui ||
-        self.leds_num_lock || self.leds_caps_lock || self.leds_scroll_lock ||
-        self.mouse_button1 || self.mouse_button2 || self.mouse_button3 || self.mouse_button4 || self.mouse_button5 ||
-        self.mouse_button6 || self.mouse_button7 || self.mouse_button8)        
+        !(self.modifiers_left_ctrl
+            || self.modifiers_left_shift
+            || self.modifiers_left_alt
+            || self.modifiers_left_gui
+            || self.modifiers_right_ctrl
+            || self.modifiers_right_shift
+            || self.modifiers_right_alt
+            || self.modifiers_right_gui
+            || self.leds_num_lock
+            || self.leds_caps_lock
+            || self.leds_scroll_lock
+            || self.leds_compose
+            || self.leds_kana
+            || self.mouse_button1
+            || self.mouse_button2
+            || self.mouse_button3
+            || self.mouse_button4
+            || self.mouse_button5
+            || self.mouse_button6
+            || self.mouse_button7
+            || self.mouse_button8)
     }
 }
 // Allows to use `#modifiers` in the quote
@@ -201,7 +213,9 @@ impl quote::ToTokens for StateBitsMacro {
         let num_lock = self.leds_num_lock;
         let caps_lock = self.leds_caps_lock;
         let scroll_lock = self.leds_scroll_lock;
-    
+        let compose = self.leds_compose;
+        let kana = self.leds_kana;
+
         let button1 = self.mouse_button1;
         let button2 = self.mouse_button2;
         let button3 = self.mouse_button3;
@@ -214,7 +228,7 @@ impl quote::ToTokens for StateBitsMacro {
         tokens.extend(quote! {
             ::rmk::fork::StateBits::new_from(
                 ::rmk::hid_state::HidModifiers::new_from(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
-                ::rmk::hid_state::HidLeds::new_from(#num_lock, #caps_lock, #scroll_lock),
+                ::rmk::light::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
                 ::rmk::hid_state::HidMouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
         });
     }
@@ -239,7 +253,9 @@ fn parse_state_combination(states_str: &str) -> StateBitsMacro {
             "NumLock" => combination.leds_num_lock = true,
             "CapsLock" => combination.leds_caps_lock = true,
             "ScrollLock" => combination.leds_scroll_lock = true,
-            
+            "Compose" => combination.leds_compose = true,
+            "Kana" => combination.leds_kana = true,
+
             "MouseBtn1" => combination.mouse_button1 = true,
             "MouseBtn2" => combination.mouse_button2 = true,
             "MouseBtn3" => combination.mouse_button3 = true,
@@ -276,7 +292,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 
                 quote! { ::rmk::fork::Fork::new_ex(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept, #bindable) }
             });
-            
+
             quote! {
                 ::rmk::config::ForksConfig {
                     forks: ::rmk::heapless::Vec::from_iter([#(#forks_def),*]),

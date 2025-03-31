@@ -7,7 +7,8 @@ use crate::{
     combo::{Combo, COMBO_MAX_LENGTH},
     config::StorageConfig,
     fork::{Fork, StateBits},
-    hid_state::{HidLeds, HidModifiers, HidMouseButtons},
+    hid_state::{HidModifiers, HidMouseButtons},
+    light::LedIndicator,
     BUILD_HASH,
 };
 use byteorder::{BigEndian, ByteOrder};
@@ -404,12 +405,12 @@ impl Value<'_> for StorageData {
 
                     let match_any = StateBits {
                         modifiers: HidModifiers::from_bits((modifier_masks & 0xFF) as u8),
-                        leds: HidLeds::from_bits((led_masks & 0xFF) as u8),
+                        leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
                         mouse: HidMouseButtons::from_bits((mouse_masks & 0xFF) as u8),
                     };
                     let match_none = StateBits {
                         modifiers: HidModifiers::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
-                        leds: HidLeds::from_bits(((led_masks >> 8) & 0xFF) as u8),
+                        leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
                         mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
                     };
                     let kept_modifiers =

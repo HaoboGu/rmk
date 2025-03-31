@@ -9,10 +9,11 @@ use crate::usb::descriptor::KeyboardReport;
 use crate::{
     action::{Action, KeyAction},
     fork::{ActiveFork, StateBits, FORK_MAX_NUM},
-    hid_state::{HidLeds, HidModifiers, HidMouseButtons},
+    hid_state::{HidModifiers, HidMouseButtons},
     keyboard_macro::{MacroOperation, NUM_MACRO},
     keycode::{KeyCode, ModifierCombination},
     keymap::KeyMap,
+    light::LedIndicator,
     usb::descriptor::ViaReport,
 };
 use core::cell::RefCell;
@@ -71,6 +72,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     }
 }
 
+/// led states for the keyboard hid report (its value is also received in a hid report by the light service)
+/// LedIndicator type would be nicer, but that does not have const expr default constructor
+pub(crate) static mut LOCK_LED_STATES: u8 = 0; //no need for mutex since a single byte is atomic.
+
 pub struct Keyboard<
     'a,
     const ROW: usize,
@@ -115,9 +120,6 @@ pub struct Keyboard<
 
     /// the held keys for the keyboard hid report, except the modifiers
     held_modifiers: HidModifiers,
-
-    /// led states for the keyboard hid report
-    led_states: HidLeds, //TODO LightController should fill this also, when receiving new LedIndicator hid report -> so the forks will be able to use it.
 
     /// the held keys for the keyboard hid report, except the modifiers
     held_keycodes: [KeyCode; 6],
@@ -185,7 +187,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
             held_modifiers: HidModifiers::default(),
-            led_states: HidLeds::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
                 buttons: 0,
@@ -241,7 +242,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers,
             reserved: 0,
-            leds: self.led_states.into_bits(),
+            leds: unsafe { LOCK_LED_STATES }, //a single byte, so atomic
             keycodes: self.held_keycodes.map(|k| k as u8),
         }))
         .await;
@@ -370,7 +371,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut decision_state = StateBits {
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(key_event.pressed),
-            leds: self.led_states,
+            leds: LedIndicator::from_bits(unsafe { LOCK_LED_STATES }), //a single byte, so atomic
             mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
         };
 
@@ -417,7 +418,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
 
                     if fork.bindable {
-                        // If this fork is bindable look for other not yet activated forks, 
+                        // If this fork is bindable look for other not yet activated forks,
                         // which can be triggered by that the current replacement key
                         triggered_forks[i] = true; // Avoid triggering the same fork again -> no infinite loops either
 

@@ -261,7 +261,7 @@ Fork configuration includes the following parameters:
   
 For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"): 
   - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too) 
-  - `CapsLock`, `ScrollLock`, `NumLock`, 
+  - `CapsLock`, `ScrollLock`, `NumLock`, `Compose`, `Kana`
   - `MouseBtn1` .. `MouseBtn8`
 
 Here is a sample of fork configuration with random examples:

@@ -1,5 +1,6 @@
 use crate::action::KeyAction;
-use crate::hid_state::{HidLeds, HidModifiers, HidMouseButtons};
+use crate::hid_state::{HidModifiers, HidMouseButtons};
+use crate::light::LedIndicator;
 use core::ops::{BitAnd, BitOr, Not};
 
 // Max number of fork behaviors
@@ -9,7 +10,7 @@ pub(crate) const FORK_MAX_NUM: usize = 16;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
     pub(crate) modifiers: HidModifiers,
-    pub(crate) leds: HidLeds,
+    pub(crate) leds: LedIndicator,
     pub(crate) mouse: HidMouseButtons,
     // note: layer active states could be added too if needed
 }
@@ -49,7 +50,11 @@ impl Not for StateBits {
 }
 
 impl StateBits {
-    pub const fn new_from(modifiers: HidModifiers, leds: HidLeds, mouse: HidMouseButtons) -> Self {
+    pub const fn new_from(
+        modifiers: HidModifiers,
+        leds: LedIndicator,
+        mouse: HidMouseButtons,
+    ) -> Self {
         StateBits {
             modifiers: modifiers,
             leds: leds,

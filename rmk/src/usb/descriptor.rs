@@ -26,7 +26,7 @@ use usbd_hid::descriptor::generator_prelude::*;
 pub struct KeyboardReport {
     pub modifier: u8, //HidModifiers
     pub reserved: u8,
-    pub leds: u8, //HidLeds
+    pub leds: u8, //LedIndicator
     pub keycodes: [u8; 6],
 }
 
