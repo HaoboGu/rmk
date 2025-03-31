@@ -54,7 +54,7 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };
-pub use {futures, heapless, rmk_macro as macros};
+pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 #[cfg(not(feature = "_ble"))]
 use {
     usb::descriptor::{CompositeReport, KeyboardReport},

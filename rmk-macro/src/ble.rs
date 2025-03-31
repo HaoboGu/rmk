@@ -31,6 +31,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();
                 // Adc config
+                /*
                 if let Some(adc_pin) = ble.battery_adc_pin.clone() {
                     // Tokens for adc pin
                     let adc_pin_def = if adc_pin == "vddh" {
@@ -82,6 +83,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         let adc_divider_total = 1;
                     });
                 };
+                */
 
                 if let Some(charging_state_config) = ble.charge_state.clone() {
                     let charging_state_pin = format_ident!("{}", charging_state_config.pin);
@@ -123,7 +125,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
 
                 ble_config_tokens.extend(
                     quote! {
-                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active, saadc_option, adc_divider_measured, adc_divider_total);
+                        let ble_battery_config = ::rmk::config::BleBatteryConfig::new(is_charging_pin, charging_state_low_active, charge_led_pin, charge_led_low_active);
                     }
                 );
 

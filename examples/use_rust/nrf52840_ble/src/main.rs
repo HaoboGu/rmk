@@ -182,6 +182,10 @@ async fn main(spawner: Spawner) {
     let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
     let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, E8H7Phase, 0);
+
+    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
+    let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
+
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
     // Initialize the light controller
@@ -189,10 +193,10 @@ async fn main(spawner: Spawner) {
 
     join4(
         run_devices! (
-            (matrix, encoder) => EVENT_CHANNEL,
+            (matrix, encoder, adc_device) => EVENT_CHANNEL,
         ),
         run_processor_chain! {
-            EVENT_CHANNEL => [encoder_processor],
+            EVENT_CHANNEL => [encoder_processor, batt_proc],
         },
         keyboard.run(), // Keyboard is special
         run_rmk(
