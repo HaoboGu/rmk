@@ -17,6 +17,8 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
+use rmk::HostResources;
+use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -94,9 +96,12 @@ async fn main(spawner: Spawner) {
         p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
     let mut rng = rng::Rng::new(p.RNG, Irqs);
-    let mut rng_generator = ChaCha12Rng::from_rng(&mut rng).unwrap();
+    let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<3072>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
+    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let mut host_resources = HostResources::new();
+    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
 
     // Initialize flash
     let flash = Flash::take(mpsl, p.NVMC);
@@ -151,14 +156,7 @@ async fn main(spawner: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(
-            &keymap,
-            sdc,
-            &mut rng_generator,
-            &mut storage,
-            &mut light_controller,
-            rmk_config,
-        ),
+        run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

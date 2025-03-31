@@ -25,12 +25,16 @@ riscv = { version = "0.11.1", features = ["critical-section-single-hart"] }
 embassy-executor = { version = "0.7", features = [
     "defmt",
     "nightly",
-    "task-arena-size-32768",
     "executor-thread",
     "arch-riscv32",
 ] }
 defmt = "0.3"
 defmt-rtt = "0.4"
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
 
 [build-dependencies]
 xz2 = "0.1.7"

@@ -1862,6 +1862,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71543be#71543be65679e1999d55ba80ec327223626479a6"
 dependencies = [
  "aes",
  "bt-hci",
@@ -1884,6 +1885,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71543be#71543be65679e1999d55ba80ec327223626479a6"
 dependencies = [
  "Inflector",
  "darling",

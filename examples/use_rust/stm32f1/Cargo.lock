@@ -535,8 +535,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90327bcc66333a507f89ecc4e2d911b265c45f5c9bc241f98eee076752d35ac6"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=954d155#954d1554d4c04a245adadb5ebd97205d1442635e"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -548,8 +547,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor-macros"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3577b1e9446f61381179a330fc5324b01d511624c55f25e3c66c9e3c626dbecf"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=954d155#954d1554d4c04a245adadb5ebd97205d1442635e"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -560,8 +558,7 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=954d155#954d1554d4c04a245adadb5ebd97205d1442635e"
 dependencies = [
  "defmt",
 ]
@@ -679,8 +676,7 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2c8cdff05a7a51ba0087489ea44b0b1d97a296ca6b1d6d1a33ea7423d34049"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=954d155#954d1554d4c04a245adadb5ebd97205d1442635e"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -1770,6 +1766,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71543be#71543be65679e1999d55ba80ec327223626479a6"
 dependencies = [
  "aes",
  "bt-hci",
@@ -1792,6 +1789,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71543be#71543be65679e1999d55ba80ec327223626479a6"
 dependencies = [
  "Inflector",
  "darling",
