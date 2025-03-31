@@ -14,9 +14,10 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     flash::expand_flash_init,
     import::expand_imports,
+    input_device::expand_input_device_config,
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig,
-        KeyboardConfig,
+        KeyboardConfig, UniBodyConfig,
     },
     layout::expand_default_keymap,
     light::expand_light_config,
@@ -128,9 +129,10 @@ fn expand_main(
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
+    let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
     let controller = expand_controller_init(keyboard_config);
-    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod);
+    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors);
 
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
@@ -195,6 +197,9 @@ fn expand_main(
             // Initialize the matrix + keyboard, as `matrix` and `keyboard`
             #matrix_and_keyboard
 
+            // Initialize input device config as `input_device_config` and processor as `processor`
+            #input_device_config
+
             // TODO: Initialize other devices and processors
 
             // Start
@@ -245,17 +250,26 @@ pub(crate) fn expand_matrix_and_keyboard_init(
     };
 
     let matrix = match &keyboard_config.board {
-        BoardConfig::Normal(_matrix_config) => quote! {
-            let debouncer = #debouncer_type::<#input_output_num>::new();
-            let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
-        },
-        BoardConfig::DirectPin(matrix_config) => {
-            let low_active = matrix_config.direct_pin_low_active;
-            quote! {
-                let debouncer = #debouncer_type::<COL, ROW>::new();
-                let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
+        BoardConfig::UniBody(UniBodyConfig {
+            matrix: matrix_config,
+            input_device: _,
+        }) => match matrix_config.matrix_type {
+            MatrixType::normal => {
+                quote! {
+                let debouncer = #debouncer_type::<#input_output_num>::new();
+                let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
+
+
+                    }
             }
-        }
+            MatrixType::direct_pin => {
+                let low_active = matrix_config.direct_pin_low_active;
+                quote! {
+                    let debouncer = #debouncer_type::<COL, ROW>::new();
+                    let mut matrix = ::rmk::direct_pin::DirectPinMatrix::<_, _, #input_output_num, SIZE>::new(direct_pins, debouncer, #low_active);
+                }
+            }
+        },
         BoardConfig::Split(split_config) => {
             // Matrix config for split central
             let central_row = split_config.central.rows;

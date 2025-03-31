@@ -29,6 +29,8 @@ use rmk::{
     futures::future::join4,
     initialize_encoder_keymap_and_storage, initialize_nrf_sd_and_flash,
     input_device::{
+        adc::{AnalogEventType, NrfAdc},
+        battery::BatteryProcessor,
         rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
         Runnable,
     },
@@ -96,15 +98,8 @@ async fn main(spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(
-        Some(is_charging_pin),
-        true,
-        Some(charging_led),
-        false,
-        Some(saadc),
-        2000,
-        2806,
-    );
+    let ble_battery_config =
+        BleBatteryConfig::new(Some(is_charging_pin), true, Some(charging_led), false);
     let storage_config = StorageConfig {
         start_addr: 0,
         num_sectors: 6,
@@ -149,15 +144,18 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, E8H7Phase, 0);
 
+    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
+    let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
+
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
     // Start
     join4(
         run_devices! (
-            (matrix, encoder) => EVENT_CHANNEL,
+            (matrix, encoder, adc_device) => EVENT_CHANNEL,
         ),
         run_processor_chain! {
-            EVENT_CHANNEL => [encoder_processor],
+            EVENT_CHANNEL => [encoder_processor, batt_proc],
         },
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),

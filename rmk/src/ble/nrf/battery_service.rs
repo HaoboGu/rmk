@@ -44,38 +44,29 @@ impl<'a> BatteryService {
         BatteryService::check_charging_state(battery_config);
 
         loop {
-            if let Some(ref mut saadc) = battery_config.saadc {
-                let mut buf = [0i16; 1];
-                saadc.sample(&mut buf).await;
-                // We only sampled one ADC channel.
-                let val: u8 = self.get_battery_percent(buf[0], battery_config);
-                match self.battery_level_notify(conn, &val) {
-                    Ok(_) => info!("Battery value: {}", val),
-                    Err(e) => match self.battery_level_set(&val) {
-                        Ok(_) => info!("Battery value set: {}", val),
-                        Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
-                    },
+            let val = crate::channel::BATTERY_CHANNEL.receive().await;
+            match self.battery_level_notify(conn, &val) {
+                Ok(_) => info!("Battery value: {}", val),
+                Err(e) => match self.battery_level_set(&val) {
+                    Ok(_) => info!("Battery value set: {}", val),
+                    Err(e2) => error!("Battery value notify error: {}, set error: {}", e, e2),
+                },
+            }
+            if val < 10 {
+                // The battery is low, blink the led!
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    charge_led.toggle();
                 }
-                if val < 10 {
-                    // The battery is low, blink the led!
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        charge_led.toggle();
-                    }
-                    Timer::after_secs(200).await;
-                    continue;
-                } else {
-                    // Turn off the led
-                    if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-                        if battery_config.charge_led_low_active {
-                            charge_led.set_high();
-                        } else {
-                            charge_led.set_low();
-                        }
-                    }
-                }
+                Timer::after_secs(200).await;
             } else {
-                // No SAADC, skip battery check
-                Timer::after_secs(u32::MAX as u64).await;
+                // Turn off the led
+                if let Some(ref mut charge_led) = battery_config.charge_led_pin {
+                    if battery_config.charge_led_low_active {
+                        charge_led.set_high();
+                    } else {
+                        charge_led.set_low();
+                    }
+                }
             }
 
             // Check charging state
@@ -83,42 +74,6 @@ impl<'a> BatteryService {
 
             // Sample every 120s
             Timer::after_secs(120).await
-        }
-    }
-
-    fn get_battery_percent(&self, val: i16, battery_config: &BleBatteryConfig<'a>) -> u8 {
-        info!("Detected adc value: {:?}", val);
-        // Avoid overflow
-        let val = val as i32;
-
-        // According to nRF52840's datasheet, for single_ended saadc:
-        // val = v_adc * (gain / reference) * 2^(resolution)
-        //
-        // When using default setting, gain = 1/6, reference = 0.6v, resolution = 12bits, so:
-        // val = v_adc * 1137.8
-        //
-        // For example, rmk-ble-keyboard uses two resistors 820K and 2M adjusting the v_adc, then,
-        // v_adc = v_bat * measured / total => val = v_bat * 1137.8 * measured / total
-        //
-        // If the battery voltage range is 3.6v ~ 4.2v, the adc val range should be (4096 ~ 4755) * measured / total
-        let mut measured = battery_config.adc_divider_measured as i32;
-        let mut total = battery_config.adc_divider_total as i32;
-        if 500 < val && val < 1000 {
-            // Thing becomes different when using vddh as reference
-            // The adc value for vddh pin is actually vddh/5,
-            // so we use this rough range to detect vddh
-            measured = 1;
-            total = 5;
-        }
-        if val > 4755_i32 * measured / total {
-            // 4755 ~= 4.2v * 1137.8
-            100_u8
-        } else if val < 4055_i32 * measured / total {
-            // 4096 ~= 3.6v * 1137.8
-            // To simplify the calculation, we use 4055 here
-            0_u8
-        } else {
-            ((val * total / measured - 4055) / 7) as u8
         }
     }
 }

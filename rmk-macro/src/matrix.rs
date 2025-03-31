@@ -9,7 +9,7 @@ use crate::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers,
         convert_output_pins_to_initializers, get_input_pin_type, get_output_pin_type,
     },
-    keyboard_config::{BoardConfig, KeyboardConfig},
+    keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig},
     ChipModel, ChipSeries,
 };
 
@@ -20,36 +20,39 @@ pub(crate) fn expand_matrix_config(
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &keyboard_config.board {
-        BoardConfig::Normal(matrix) => {
-            matrix_config.extend(expand_matrix_input_output_pins(
-                &keyboard_config.chip,
-                matrix.input_pins.clone().unwrap(),
-                matrix.output_pins.clone().unwrap(),
-                async_matrix,
-            ));
-        }
-        BoardConfig::DirectPin(matrix) => {
-            matrix_config.extend(expand_matrix_direct_pins(
-                &keyboard_config.chip,
-                matrix.direct_pins.clone().unwrap(),
-                async_matrix,
-                matrix.direct_pin_low_active,
-            ));
-            // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
-            // So we need to declaring them in advance.
-            let rows = keyboard_config.layout.rows as usize;
-            let cols = keyboard_config.layout.cols as usize;
-            let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
-            let layers = keyboard_config.layout.layers as usize;
-            let low_active = matrix.direct_pin_low_active;
-            matrix_config.extend(quote! {
-                pub(crate) const ROW: usize = #rows;
-                pub(crate) const COL: usize = #cols;
-                pub(crate) const SIZE: usize = #size;
-                pub(crate) const LAYER_NUM: usize = #layers;
-                let low_active = #low_active;
-            });
-        }
+        BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
+            MatrixType::normal => {
+                matrix_config.extend(expand_matrix_input_output_pins(
+                    &keyboard_config.chip,
+                    matrix.input_pins.clone().unwrap(),
+                    matrix.output_pins.clone().unwrap(),
+                    async_matrix,
+                ));
+            }
+            MatrixType::direct_pin => {
+                matrix_config.extend(expand_matrix_direct_pins(
+                    &keyboard_config.chip,
+                    matrix.direct_pins.clone().unwrap(),
+                    async_matrix,
+                    matrix.direct_pin_low_active,
+                ));
+                // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
+                // So we need to declaring them in advance.
+                let rows = keyboard_config.layout.rows as usize;
+                let cols = keyboard_config.layout.cols as usize;
+                let size =
+                    keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
+                let layers = keyboard_config.layout.layers as usize;
+                let low_active = matrix.direct_pin_low_active;
+                matrix_config.extend(quote! {
+                    pub(crate) const ROW: usize = #rows;
+                    pub(crate) const COL: usize = #cols;
+                    pub(crate) const SIZE: usize = #size;
+                    pub(crate) const LAYER_NUM: usize = #layers;
+                    let low_active = #low_active;
+                });
+            }
+        },
         BoardConfig::Split(split_config) => {
             // Matrix config for split central
             match split_config.central.matrix.matrix_type {

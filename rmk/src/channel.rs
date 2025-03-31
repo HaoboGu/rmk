@@ -20,6 +20,8 @@ pub const REPORT_CHANNEL_SIZE: usize = 16;
 /// Signal for control led indicator, it's used only in BLE keyboards, since BLE receiving is not async
 #[cfg(feature = "_ble")]
 pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
+/// Channel for battery level updates
+pub static BATTERY_CHANNEL: Channel<RawMutex, u8, 2> = Channel::new();
 /// Channel for key events only
 pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for all other events
