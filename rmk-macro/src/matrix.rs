@@ -10,10 +10,9 @@ use crate::{
         convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
         get_input_pin_type, get_output_pin_type,
     },
-    keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig},
+    keyboard_config::UniBodyConfig,
     ChipModel, ChipSeries,
 };
-use crate::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,

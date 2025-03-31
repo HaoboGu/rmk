@@ -25,6 +25,8 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
+use rmk::input_device::adc::{AnalogEventType, NrfAdc};
+use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor};
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;

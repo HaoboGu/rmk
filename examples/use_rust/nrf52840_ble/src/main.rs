@@ -12,8 +12,8 @@ use embassy_nrf::gpio::{AnyPin, Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::usb::Driver;
 use embassy_nrf::{bind_interrupts, rng, usb};
 use keymap::{COL, ROW};
 use nrf_mpsl::Flash;
@@ -21,16 +21,19 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
+use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
-use rmk::input_device::Runnable;
+use rmk::input_device::adc::{AnalogEventType, NrfAdc};
+use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor};
+use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
+use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -115,9 +118,12 @@ async fn main(spawner: Spawner) {
         p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
     let mut rng = rng::Rng::new(p.RNG, Irqs);
-    let mut rng_generator = ChaCha12Rng::from_rng(&mut rng).unwrap();
+    let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<4096>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
+    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let mut host_resources = HostResources::new();
+    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
 
     // Initialize usb driver
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
@@ -145,7 +151,7 @@ async fn main(spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
-    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false, Some(saadc), 2000, 2806);
+    let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
         start_addr: 0xA0000, // FIXME: use 0x70000 after we can build without softdevice controller
         num_sectors: 6,
@@ -199,15 +205,7 @@ async fn main(spawner: Spawner) {
             EVENT_CHANNEL => [encoder_processor, batt_proc],
         },
         keyboard.run(), // Keyboard is special
-        run_rmk(
-            &keymap,
-            driver,
-            sdc,
-            &mut rng_generator,
-            &mut storage,
-            &mut light_controller,
-            rmk_config,
-        ),
+        run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

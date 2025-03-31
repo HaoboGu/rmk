@@ -15,14 +15,6 @@ use crate::default_config::nrf52840::default_nrf52840;
 use crate::default_config::rp2040::default_rp2040;
 use crate::default_config::stm32::default_stm32;
 use crate::usb_interrupt_map::{get_usb_info, UsbInfo};
-use crate::{
-    default_config::{
-        esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832, nrf52840::default_nrf52840,
-        rp2040::default_rp2040, stm32::default_stm32,
-    },
-    usb_interrupt_map::{get_usb_info, UsbInfo},
-    ChipModel, ChipSeries,
-};
 use crate::{ChipModel, ChipSeries};
 
 macro_rules! rmk_compile_error {

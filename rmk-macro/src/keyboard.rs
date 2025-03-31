@@ -23,11 +23,6 @@ use crate::{
     keyboard_config::{
         expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig, KeyboardConfig, UniBodyConfig,
     },
-    layout::expand_default_keymap,
-    light::expand_light_config,
-    matrix::expand_matrix_config,
-    split::central::expand_split_central_config,
-    ChipSeries,
 };
 
 /// List of functions that can be overwritten
