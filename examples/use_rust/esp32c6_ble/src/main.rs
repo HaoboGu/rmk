@@ -13,6 +13,8 @@ use esp_hal::gpio::{Input, Level, Output, Pull};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
+use rmk::HostResources;
+use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{ControllerConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -46,6 +48,9 @@ async fn main(_s: Spawner) {
     let bluetooth = peripherals.BT;
     let connector = BleConnector::new(&init, bluetooth);
     let controller: ExternalController<_, 64> = ExternalController::new(connector);
+    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    let mut host_resources = HostResources::new();
+    let stack = build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
 
     // Initialize the flash
     let flash = FlashStorage::new();
@@ -92,14 +97,7 @@ async fn main(_s: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(
-            &keymap,
-            controller,
-            &mut rng,
-            &mut storage,
-            &mut light_controller,
-            rmk_config,
-        ),
+        run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }
