@@ -71,7 +71,7 @@ pub(crate) fn rmk_entry_select(
             match keyboard_config.chip.series {
                 ChipSeries::Stm32 | ChipSeries::Rp2040 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+                        ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
@@ -106,7 +106,7 @@ pub(crate) fn rmk_entry_select(
                 }
                 ChipSeries::Nrf52 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+                        ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
@@ -155,21 +155,21 @@ pub(crate) fn rmk_entry_default(
         ChipSeries::Nrf52 => match keyboard_config.communication {
             CommunicationConfig::Usb(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
+                    ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Ble(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config, sd)
+                    ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Both(_, _) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd)
+                    ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
@@ -178,19 +178,14 @@ pub(crate) fn rmk_entry_default(
         },
         ChipSeries::Esp32 => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config),
+                ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
             };
             tasks.push(rmk_task);
-            let all_tasks = expand_tasks(tasks);
-            quote! {
-                ::esp_idf_svc::hal::task::block_on(
-                    #all_tasks
-                );
-            }
+            join_all_tasks(tasks)
         }
         _ => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

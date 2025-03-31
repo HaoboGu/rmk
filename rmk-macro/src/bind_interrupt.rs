@@ -72,7 +72,12 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                     quote! {
                         #interrupt_name => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::#peripheral_name>;
                         #saadc_interrupt
-                        CLOCK_POWER => ::embassy_nrf::usb::vbus_detect::InterruptHandler;
+                        RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
+                        EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;
+                        CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler, ::embassy_nrf::usb::vbus_detect::InterruptHandler;
+                        RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                        TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                        RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     }
                 } else {
                     quote! { #saadc_interrupt }
@@ -82,6 +87,32 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                     bind_interrupts!(struct Irqs {
                         #interrupt_binding
                     });
+
+                    #[::embassy_executor::task]
+                    async fn mpsl_task(mpsl: &'static ::nrf_sdc::mpsl::MultiprotocolServiceLayer<'static>) -> ! {
+                        mpsl.run().await
+                    }
+                    /// How many outgoing L2CAP buffers per link
+                    const L2CAP_TXQ: u8 = 3;
+
+                    /// How many incoming L2CAP buffers per link
+                    const L2CAP_RXQ: u8 = 3;
+
+                    /// Size of L2CAP packets
+                    const L2CAP_MTU: usize = 72;
+                    fn build_sdc<'d, const N: usize>(
+                        p: ::nrf_sdc::Peripherals<'d>,
+                        rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG>,
+                        mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
+                        mem: &'d mut ::nrf_sdc::Mem<N>,
+                    ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
+                        ::nrf_sdc::Builder::new()?
+                            .support_adv()?
+                            .support_peripheral()?
+                            .peripheral_count(1)?
+                            .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
+                            .build(p, rng, mpsl, mem)
+                    }
                 }
             }
             crate::ChipSeries::Rp2040 => {

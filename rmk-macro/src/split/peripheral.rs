@@ -35,9 +35,9 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
-            use ::esp_idf_svc::hal::gpio::*;
-            use esp_println as _;
-            fn main()
+            use {esp_alloc as _, esp_backtrace as _};
+            #[esp_hal_embassy::main]
+            async fn main(_s: Spawner)
         }
     } else {
         quote! {
@@ -51,8 +51,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         use panic_probe as _;
 
         #main_function_sig {
-            ::defmt::info!("RMK start!");
-
+            // ::defmt::info!("RMK start!");
             #main_function
         }
     }

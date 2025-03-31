@@ -135,9 +135,9 @@ fn expand_main(
 
     let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
         quote! {
-            use ::esp_idf_svc::hal::gpio::*;
-            use esp_println as _;
-            fn main()
+            use {esp_alloc as _, esp_backtrace as _};
+            #[esp_hal_embassy::main]
+            async fn main(_s: ::embassy_executor::Spawner)
         }
     } else {
         quote! {
@@ -152,7 +152,7 @@ fn expand_main(
         #bind_interrupt
 
         #main_function_sig {
-            ::defmt::info!("RMK start!");
+            // ::defmt::info!("RMK start!");
 
             // Initialize peripherals as `p`
             #chip_init
@@ -207,7 +207,8 @@ fn expand_main(
     }
 }
 
-pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+pub(crate) fn expand_keymap_and_storage(_keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    // TODO: Add encoder support
     let keymap_storage_init = quote! {
         ::rmk::initialize_keymap_and_storage(
             &mut default_keymap,
@@ -216,17 +217,9 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardConfig) -> Tok
             rmk_config.behavior_config.clone(),
         )
     };
-    match keyboard_config.chip.series {
-        ChipSeries::Esp32 => {
-            quote! {
-                let mut default_keymap = get_default_keymap();
-                let (keymap, storage) =  ::esp_idf_svc::hal::task::block_on(#keymap_storage_init);
-            }
-        }
-        _ => quote! {
-            let mut default_keymap = get_default_keymap();
-            let (keymap, storage) = #keymap_storage_init.await;
-        },
+    quote! {
+        let mut default_keymap = get_default_keymap();
+        let (keymap, mut storage) =  #keymap_storage_init.await;
     }
 }
 
@@ -255,11 +248,9 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }) => match matrix_config.matrix_type {
             MatrixType::normal => {
                 quote! {
-                let debouncer = #debouncer_type::<#input_output_num>::new();
-                let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
-
-
-                    }
+                    let debouncer = #debouncer_type::<#input_output_num>::new();
+                    let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
+                }
             }
             MatrixType::direct_pin => {
                 let low_active = matrix_config.direct_pin_low_active;
@@ -305,18 +296,10 @@ pub(crate) fn expand_matrix_and_keyboard_init(
 fn expand_controller_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     // TODO: Initialization for other controllers
     let output_pin_type = match keyboard_config.chip.series {
-        ChipSeries::Esp32 => quote! {
-            ::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>
-        },
-        ChipSeries::Stm32 => quote! {
-            ::embassy_stm32::gpio::Output
-        },
-        ChipSeries::Nrf52 => quote! {
-            ::embassy_nrf::gpio::Output
-        },
-        ChipSeries::Rp2040 => quote! {
-            ::embassy_rp::gpio::Output
-        },
+        ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Output },
+        ChipSeries::Stm32 => quote! { ::embassy_stm32::gpio::Output },
+        ChipSeries::Nrf52 => quote! { ::embassy_nrf::gpio::Output },
+        ChipSeries::Rp2040 => quote! { ::embassy_rp::gpio::Output },
     };
 
     quote! {

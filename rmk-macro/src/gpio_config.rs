@@ -43,7 +43,6 @@ pub(crate) fn convert_input_pins_to_initializers(
     initializers
 }
 
-
 pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_macro2::TokenStream {
     match chip.series {
         ChipSeries::Stm32 => {
@@ -53,9 +52,9 @@ pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_m
                 quote! {::embassy_stm32::gpio::Input}
             }
         }
-        ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Input},
-        ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Input},
-        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyIOPin, ::esp_idf_svc::hal::gpio::Input>},
+        ChipSeries::Nrf52 => quote! { ::embassy_nrf::gpio::Input },
+        ChipSeries::Rp2040 => quote! { ::embassy_rp::gpio::Input },
+        ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Input },
     }
 }
 
@@ -64,7 +63,7 @@ pub(crate) fn get_output_pin_type(chip: &ChipModel) -> proc_macro2::TokenStream 
         ChipSeries::Stm32 => quote! {::embassy_stm32::gpio::Output},
         ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Output},
         ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Output},
-        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>},
+        ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Output },
     }
 }
 
@@ -136,7 +135,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
         }
         ChipSeries::Esp32 => {
             quote! {
-                ::esp_idf_svc::hal::gpio::PinDriver::output(p.pins.#gpio_ident.downgrade_output()).unwrap()
+                ::esp_hal::gpio::Output::new(p.#gpio_ident, ::esp_hal::gpio::Level::#default_level_ident)
             }
         }
     }
@@ -189,8 +188,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
         ChipSeries::Esp32 => {
             quote! {
                 {
-                    let mut pin = ::esp_idf_svc::hal::gpio::PinDriver::input(p.pins.#gpio_ident.downgrade()).unwrap();
-                    pin.set_pull(::esp_idf_svc::hal::gpio::Pull::#default_pull_ident).unwrap();
+                    let mut pin = ::esp_hal::gpio::Input::new(p.#gpio_ident, ::esp_hal::gpio::Pull::#default_pull_ident);
                     pin
                 }
             }

@@ -64,20 +64,10 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardConfig) -> TokenStrea
                     }
                 }
             }
-            ChipSeries::Nrf52 => {
-                if keyboard_config.communication.ble_enabled() {
-                    // Both BLE + USB, software vbus is used
-                    quote! {
-                        let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
-                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
-                    }
-                } else {
-                    // USB only, use hardware vbus
-                    quote! {
-                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
-                    }
-                }
-            }
+            ChipSeries::Nrf52 => quote! {
+                // use hardware vbus
+                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
+            },
             ChipSeries::Rp2040 => quote! {
                 let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
             },
