@@ -74,7 +74,7 @@ jobs:
       - name: Install esp toolchain
         run: espup install
       - name: export esp
-        run: . ~/export-esp.sh
+        run: . /home/runner/export-esp.sh
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
         run: cargo +esp build --release 
