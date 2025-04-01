@@ -43,10 +43,20 @@ usb_enable = true
 
 ### `[matrix]`
 
-`[matrix]` section defines the key matrix information of the keyboard, aka input/output pins. 
+`[matrix]` section defines the [key matrix](https://docs.qmk.fm/how_a_matrix_works) information of the keyboard, aka input/output pins. 
 
 <div class="warning">
 For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[split]` section.
+</div>
+
+In order to identify the IO pins take a look at your keyboard's schematic: The pin going to the [diode](https://en.wikipedia.org/wiki/Diode) (called anode) is an output pin, the pin coming out (called cathode) is an input pin:
+```
+output_pin =>   >|   => input_pin
+                 ↑
+              diode(be aware of it's direction)
+```
+<div class="warning">
+Per default RMK assumes that your pins are `col2row`, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to [change the configuration to `row2col`](https://haobogu.github.io/rmk/faq.html#my-matrix-is-row2col-the-matrix-doesnt-work)
 </div>
 
 IO pins are represented with an array of string, the string value should be the **GPIO peripheral name** of the chip. For example, if you're using stm32h750xb, you can go to <https://docs.embassy.dev/embassy-stm32/git/stm32h750xb/peripherals/index.html> to get the valid GPIO peripheral name:
