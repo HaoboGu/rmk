@@ -73,11 +73,9 @@ jobs:
         run: cargo binstall ldproxy espup -y
       - name: Install esp toolchain
         run: espup install
-      - name: export esp
-        run: . /home/runner/export-esp.sh
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
-        run: cargo +esp build --release 
+        run: . /home/runner/export-esp.sh && cargo +esp build --release 
   binary-size:
     # Copied from sequential-storage: https://github.com/tweedegolf/sequential-storage/blob/master/.github/workflows/ci.yaml
     runs-on: ubuntu-latest
