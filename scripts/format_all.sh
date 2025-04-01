@@ -21,7 +21,6 @@ cd examples/use_config/esp32s3_ble && cargo +esp fmt && cd ../../..
 cd examples/use_config/nrf52832_ble && cargo +nightly fmt && cd ../../.. 
 cd examples/use_config/nrf52840_ble && cargo +nightly fmt && cd ../../.. 
 cd examples/use_config/nrf52840_ble_split && cargo +nightly fmt && cd ../../.. 
-cd examples/use_config/nrf52840_usb && cargo +nightly fmt && cd ../../.. 
 cd examples/use_config/rp2040 && cargo +nightly fmt && cd ../../.. 
 cd examples/use_config/rp2040_direct_pin && cargo +nightly fmt && cd ../../..
 cd examples/use_config/rp2040_split && cargo +nightly fmt && cd ../../.. 

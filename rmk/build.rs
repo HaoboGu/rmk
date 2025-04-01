@@ -12,7 +12,7 @@ fn main() {
 
     // Ensure build.rs is re-run if files change
     // println!("cargo:rerun-if-changed=NEVER_EXISTS");
-    println!("cargo:rerun-if-changed=.git/HEAD");
+    // println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
 
     // Get the short hash of the latest Git commit. If it fails, use "unknown"

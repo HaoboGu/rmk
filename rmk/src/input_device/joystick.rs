@@ -1,13 +1,12 @@
+use core::cell::RefCell;
+
 use usbd_hid::descriptor::MouseReport;
 
-use crate::{
-    channel::KEYBOARD_REPORT_CHANNEL,
-    event::Event,
-    hid::Report,
-    input_device::{InputProcessor, ProcessResult},
-    keymap::KeyMap,
-};
-use core::cell::RefCell;
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::Event;
+use crate::hid::Report;
+use crate::input_device::{InputProcessor, ProcessResult};
+use crate::keymap::KeyMap;
 
 pub struct JoystickProcessor<
     'a,
@@ -24,14 +23,8 @@ pub struct JoystickProcessor<
     resolution: u16,
 }
 
-impl<
-        'a,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-        const N: usize,
-    > JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
+    JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
 {
     pub fn new(
         transform: [[i16; N]; N],
@@ -50,10 +43,7 @@ impl<
     async fn generate_report(&mut self) {
         let mut report = [0i16; N];
 
-        debug!(
-            "JoystickProcessor::generate_report: record = {:?}",
-            self.record
-        );
+        debug!("JoystickProcessor::generate_report: record = {:?}", self.record);
         for (rec, b) in self.record.iter_mut().zip(self.bias.iter()) {
             *rec = rec.saturating_add(*b);
         }
@@ -82,14 +72,8 @@ impl<
     }
 }
 
-impl<
-        'a,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-        const N: usize,
-    > InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
     for JoystickProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER, N>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {

@@ -2,17 +2,14 @@
 //!
 use quote::quote;
 
-use crate::keyboard_config::{BoardConfig, KeyboardConfig};
-use crate::{
-    config::MatrixType,
-    feature::is_feature_enabled,
-    gpio_config::{
-        convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
-        get_input_pin_type, get_output_pin_type,
-    },
-    keyboard_config::UniBodyConfig,
-    ChipModel, ChipSeries,
+use crate::config::MatrixType;
+use crate::feature::is_feature_enabled;
+use crate::gpio_config::{
+    convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
+    get_input_pin_type, get_output_pin_type,
 };
+use crate::keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig};
+use crate::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,

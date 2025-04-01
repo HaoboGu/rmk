@@ -13,7 +13,6 @@ use esp_hal::gpio::{Input, Level, Output, Pull};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
-use rmk::HostResources;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{ControllerConfig, RmkConfig, StorageConfig, VialConfig};
@@ -24,7 +23,7 @@ use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;

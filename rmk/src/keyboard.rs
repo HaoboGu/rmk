@@ -8,8 +8,8 @@ use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport
 
 use crate::action::{Action, KeyAction};
 use crate::boot;
-use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use crate::combo::{COMBO_MAX_LENGTH, Combo};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::hid::Report;

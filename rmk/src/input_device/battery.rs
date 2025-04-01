@@ -1,15 +1,11 @@
-use crate::{event::Event, input_device::ProcessResult, KeyMap};
 use core::cell::RefCell;
 
 use super::InputProcessor;
+use crate::event::Event;
+use crate::input_device::ProcessResult;
+use crate::KeyMap;
 
-pub struct BatteryProcessor<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> {
+pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
@@ -68,8 +64,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-    for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {

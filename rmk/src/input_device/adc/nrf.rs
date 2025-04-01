@@ -1,10 +1,9 @@
-use super::{AdcState, AnalogEventType};
-use crate::{
-    event::{Axis, AxisEvent, AxisValType, Event},
-    input_device::InputDevice,
-};
 use embassy_nrf::saadc::Saadc;
 use embassy_time::Instant;
+
+use super::{AdcState, AnalogEventType};
+use crate::event::{Axis, AxisEvent, AxisValType, Event};
+use crate::input_device::InputDevice;
 
 pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
@@ -43,9 +42,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
     }
 }
 
-impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
-    for NrfAdc<'a, PIN_NUM, EVENT_NUM>
-{
+impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
     async fn read_event(&mut self) -> Event {
         if let Some(light_sleep) = self.light_sleep {
             if self.adc_state == AdcState::LightSleep {
@@ -87,11 +84,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
             self.event_state = 0;
         }
 
-        let buf = if self.buf_state {
-            &self.buf[0]
-        } else {
-            &self.buf[1]
-        };
+        let buf = if self.buf_state { &self.buf[0] } else { &self.buf[1] };
 
         let ret_e = match self.event_type[self.event_state as usize] {
             AnalogEventType::Joystick(sz) => {
@@ -116,8 +109,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice
                     error!("Joystick with more than 3 dimensions or empty is not supported. Skip this event");
                 } else {
                     for i in 0..core::cmp::min(sz, 2) {
-                        e[i as usize].value =
-                            (buf[self.channel_state as usize] + i16::MIN / 2).saturating_mul(2);
+                        e[i as usize].value = (buf[self.channel_state as usize] + i16::MIN / 2).saturating_mul(2);
                         self.channel_state += 1;
                     }
                 }
