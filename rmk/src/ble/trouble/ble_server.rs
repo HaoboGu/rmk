@@ -28,8 +28,8 @@ pub(crate) struct BatteryService {
 pub(crate) struct HidService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
     pub(crate) hid_info: [u8; 4],
-    #[characteristic(uuid = "2a4b", read, value = unsafe { *(KeyboardReport::desc().as_ptr() as *const [u8; 69]) } )]
-    pub(crate) report_map: [u8; 69],
+    #[characteristic(uuid = "2a4b", read, value = KeyboardReport::desc().try_into().expect("Failed to convert KeyboardReport to [u8; 67]"))]
+    pub(crate) report_map: [u8; 67],
     #[characteristic(uuid = "2a4c", write_without_response)]
     pub(crate) hid_control_point: u8,
     #[characteristic(uuid = "2a4e", read, write_without_response, value = 1)]
@@ -46,7 +46,7 @@ pub(crate) struct HidService {
 pub(crate) struct CompositeService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
     pub(crate) hid_info: [u8; 4],
-    #[characteristic(uuid = "2a4b", read, value = unsafe { *(CompositeReport::desc().as_ptr() as *const [u8; 111]) } )]
+    #[characteristic(uuid = "2a4b", read, value = CompositeReport::desc().try_into().expect("Failed to convert CompositeReport to [u8; 111]"))]
     pub(crate) report_map: [u8; 111],
     #[characteristic(uuid = "2a4c", write_without_response)]
     pub(crate) hid_control_point: u8,
@@ -67,7 +67,7 @@ pub(crate) struct CompositeService {
 pub(crate) struct ViaService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
     pub(crate) hid_info: [u8; 4],
-    #[characteristic(uuid = "2a4b", read, value = unsafe { *(ViaReport::desc().as_ptr() as *const [u8; 27]) } )]
+    #[characteristic(uuid = "2a4b", read, value = ViaReport::desc().try_into().expect("Failed to convert ViaReport to [u8; 27]"))]
     pub(crate) report_map: [u8; 27],
     #[characteristic(uuid = "2a4c", write_without_response)]
     pub(crate) hid_control_point: u8,
