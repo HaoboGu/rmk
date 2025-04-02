@@ -31,7 +31,7 @@ use rmk::{
     input_device::{
         adc::{AnalogEventType, NrfAdc},
         battery::BatteryProcessor,
-        rotary_encoder::{E8H7Phase, RotaryEncoder, RotaryEncoderProcessor},
+        rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor},
         Runnable,
     },
     keyboard::Keyboard,
@@ -142,7 +142,7 @@ async fn main(spawner: Spawner) {
 
     let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
     let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
-    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, E8H7Phase, 0);
+    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
 
     let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
