@@ -256,7 +256,7 @@ pub enum KeyCode {
     Right = 0x004F,
     Left = 0x0050,
     Down = 0x0051,
-    UP = 0x0052,
+    Up = 0x0052,
     NumLock = 0x0053,
     KpSlash = 0x0054,
     KpAsterisk = 0x0055,
