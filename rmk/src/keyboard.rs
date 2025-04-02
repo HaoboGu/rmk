@@ -72,9 +72,10 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     }
 }
 
-/// led states for the keyboard hid report (its value is also received in a hid report by the light service)
-/// LedIndicator type would be nicer, but that does not have const expr default constructor
-pub(crate) static mut LOCK_LED_STATES: u8 = 0; //no need for mutex since a single byte is atomic.
+/// led states for the keyboard hid report (its value is received by by the light service in a hid report)
+/// LedIndicator type would be nicer, but that does not have const expr constructor
+pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 =
+    core::sync::atomic::AtomicU8::new(0u8);
 
 pub struct Keyboard<
     'a,
@@ -242,7 +243,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers,
             reserved: 0,
-            leds: unsafe { LOCK_LED_STATES }, //a single byte, so atomic
+            leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
             keycodes: self.held_keycodes.map(|k| k as u8),
         }))
         .await;
@@ -371,7 +372,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut decision_state = StateBits {
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(key_event.pressed),
-            leds: LedIndicator::from_bits(unsafe { LOCK_LED_STATES }), //a single byte, so atomic
+            leds: LedIndicator::from_bits(
+                LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
+            ),
             mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
         };
 

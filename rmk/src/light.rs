@@ -199,9 +199,7 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
             .await
             .map_err(HidError::UsbReadError)?;
 
-        unsafe {
-            LOCK_LED_STATES = buf[0]; //a single byte, so atomic
-        }
+        LOCK_LED_STATES.store(buf[0], core::sync::atomic::Ordering::Relaxed);
         Ok(LedIndicator::from_bits(buf[0]))
     }
 }
