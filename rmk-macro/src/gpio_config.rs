@@ -35,7 +35,7 @@ pub(crate) fn convert_input_pins_to_initializers(
         .map(|p| {
             (
                 p.clone(),
-                convert_gpio_str_to_input_pin(chip, p, async_matrix, false),
+                convert_gpio_str_to_input_pin(chip, p, async_matrix, Some(false)), // low active = false == pull down
             )
         })
         .map(|(p, ts)| {
@@ -50,7 +50,6 @@ pub(crate) fn convert_input_pins_to_initializers(
     initializers
 }
 
-
 pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_macro2::TokenStream {
     match chip.series {
         ChipSeries::Stm32 => {
@@ -62,7 +61,9 @@ pub(crate) fn get_input_pin_type(chip: &ChipModel, async_matrix: bool) -> proc_m
         }
         ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Input},
         ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Input},
-        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyIOPin, ::esp_idf_svc::hal::gpio::Input>},
+        ChipSeries::Esp32 => {
+            quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyIOPin, ::esp_idf_svc::hal::gpio::Input>}
+        }
     }
 }
 
@@ -71,7 +72,9 @@ pub(crate) fn get_output_pin_type(chip: &ChipModel) -> proc_macro2::TokenStream 
         ChipSeries::Stm32 => quote! {::embassy_stm32::gpio::Output},
         ChipSeries::Nrf52 => quote! {::embassy_nrf::gpio::Output},
         ChipSeries::Rp2040 => quote! {::embassy_rp::gpio::Output},
-        ChipSeries::Esp32 => quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>},
+        ChipSeries::Esp32 => {
+            quote! {::esp_idf_svc::hal::gpio::PinDriver<::esp_idf_svc::hal::gpio::AnyOutputPin, ::esp_idf_svc::hal::gpio::Output>}
+        }
     }
 }
 
@@ -92,7 +95,7 @@ pub(crate) fn convert_direct_pins_to_initializers(
             col_idents.push(ident_name.clone());
             if p != "_" {
                 // Convert pin to Some(pin) when it's not "_"
-                let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, low_active);
+                let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, Some(low_active)); // low active = false == pull down
                 quote! { let #ident_name = Some(#pin); }
             } else {
                 quote! { let #ident_name = None; }
@@ -153,13 +156,13 @@ pub(crate) fn convert_gpio_str_to_input_pin(
     chip: &ChipModel,
     gpio_name: String,
     async_matrix: bool,
-    low_active: bool,
+    pull: Option<bool>,
 ) -> proc_macro2::TokenStream {
     let gpio_ident = format_ident!("{}", gpio_name);
-    let default_pull_ident = if low_active {
-        format_ident!("Up")
-    } else {
-        format_ident!("Down")
+    let default_pull_ident = match pull {
+        Some(true) => format_ident!("Up"),
+        Some(false) => format_ident!("Down"),
+        None => format_ident!("None"),
     };
     match chip.series {
         ChipSeries::Stm32 => {
