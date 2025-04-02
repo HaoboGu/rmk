@@ -301,13 +301,16 @@ pub struct EncoderConfig {
     pub pin_a: String,
     // Pin b of the encoder
     pub pin_b: String,
-    // Press button position in the keyboard matrix
-    // TODO: direct pin support?
-    pub btn_pos: Option<(u8, u8)>,
+    // Phase is the working mode of the rotary encoders.
+    // Available mode: 
+    // - default: EC11 compatible, resolution = 1
+    // - e8h7: resolution = 2, reverse = true
+    // - resolution: customized resolution, the resolution value and reverse should be specified
+    pub phase: Option<String>,
     // Resolution
     pub resolution: Option<u8>,
-    pub clockwise_pos: (u8, u8),
-    pub counter_clockwise_pos: (u8, u8),
+    // Whether the direction of the rotary encoder is reversed.
+    pub reverse: Option<bool>,
 }
 
 /// Pointing device config
