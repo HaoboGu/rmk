@@ -201,6 +201,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                debug!(
+                    "Process key action after combo: {:?}, {:?}",
+                    key_action, key_event
+                );
                 self.process_key_action(key_action, key_event).await;
             }
         } else {
@@ -325,15 +329,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 error!("Combo actions buffer overflowed! This is a bug and should not happen!");
             }
 
+            //FIXME last combo is not checked
             let next_action = self
                 .keymap
                 .borrow_mut()
                 .combos
-                .iter()
-                .find_map(|combo| combo.done().then_some(combo.output));
+                .iter_mut()
+                .find_map(|combo| (combo.satisfy() && !combo.done()).then_some(combo.mark_done()));
 
             if next_action.is_some() {
                 self.combo_actions_buffer.clear();
+                debug!(
+                    "Combo action {:?} matched:: clearing combo buffer",
+                    next_action
+                );
             } else {
                 let timeout =
                     embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
@@ -362,6 +371,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn dispatch_combos(&mut self) {
         while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
+            debug!("Dispatching combo action: {:?}", action);
             self.process_key_action(action, event).await;
         }
 
@@ -1164,9 +1174,125 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use super::*;
     use crate::action::KeyAction;
+    use crate::config::CombosConfig;
     use crate::{a, k, layer, mo};
     use embassy_futures::block_on;
+    use embassy_futures::select::select;
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
     use embassy_time::{Duration, Timer};
+    use futures::{join, FutureExt};
+
+    #[derive(Debug, Clone)]
+    struct TestKeyPress {
+        row: u8,
+        col: u8,
+        pressed: bool,
+        delay: u64, // Delay before this key event in milliseconds
+    }
+
+    async fn run_key_sequence_test<const N: usize>(
+        keyboard: &mut Keyboard<'_, 5, 14, 2>,
+        key_sequence: &[TestKeyPress],
+        expected_reports: Vec<KeyboardReport, N>,
+    ) {
+        static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
+
+        KEY_EVENT_CHANNEL.clear();
+        KEYBOARD_REPORT_CHANNEL.clear();
+
+        join!(
+            // Run keyboard until all reports are received
+            async {
+                select(keyboard.run(), async {
+                    select(
+                        Timer::after(Duration::from_secs(5)).then(|_| async {
+                            panic!("Test timed out");
+                        }),
+                        async {
+                            while !*REPORTS_DONE.lock().await {
+                                Timer::after(Duration::from_millis(10)).await;
+                            }
+                        },
+                    )
+                    .await;
+                })
+                .await;
+            },
+            // Send all key events with delays
+            async {
+                for key in key_sequence {
+                    Timer::after(Duration::from_millis(key.delay)).await;
+                    KEY_EVENT_CHANNEL
+                        .send(KeyEvent {
+                            row: key.row,
+                            col: key.col,
+                            pressed: key.pressed,
+                        })
+                        .await;
+                }
+            },
+            // Verify reports
+            async {
+                for expected in expected_reports {
+                    match KEYBOARD_REPORT_CHANNEL.receive().await {
+                        Report::KeyboardReport(report) => {
+                            assert_eq!(
+                                report, expected,
+                                "Expected {:?} but actually {:?}",
+                                expected, report
+                            );
+
+                            println!("Received expected key report: {:?}", report);
+                        }
+                        _ => panic!("Expected a KeyboardReport"),
+                    }
+                }
+                // Set done flag after all reports are verified
+                *REPORTS_DONE.lock().await = true;
+            }
+        );
+
+        // Reset the done flag for next test
+        *REPORTS_DONE.lock().await = false;
+    }
+
+    macro_rules! key_sequence {
+    ($([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?) => {
+        vec![
+            $(
+                TestKeyPress {
+                    row: $row,
+                    col: $col,
+                    pressed: $pressed,
+                    delay: $delay,
+                },
+            )*
+        ]
+    };
+    }
+
+    macro_rules! key_report {
+    ( $([$modifier:expr, $keys:expr]),* $(,)? ) => {{
+        // Count the number of elements at compile time
+
+        const N: usize = {
+            let arr = [$((($modifier, $keys)),)*];
+            arr.len()
+        };
+
+
+        let mut reports: Vec<KeyboardReport, N> = Vec::new();
+        $(
+            reports.push(KeyboardReport {
+                modifier: $modifier,
+                keycodes: $keys,
+                leds: 0,
+                reserved: 0,
+            }).unwrap();
+        )*
+        reports
+    }};
+    }
 
     // Init logger for tests
     #[ctor::ctor]
@@ -1197,16 +1323,47 @@ mod test {
         ]
     }
 
+    fn get_combos_config() -> CombosConfig {
+        // Define the function to return the appropriate combo configuration
+        CombosConfig {
+            combos: Vec::from_iter([
+                Combo::new(
+                    [
+                        k!(V), //3,4
+                        k!(B), //3,5
+                    ]
+                    .to_vec(),
+                    k!(LShift),
+                    Some(0),
+                ),
+                Combo::new(
+                    [
+                        k!(R), //1,4
+                        k!(T), //1,5
+                    ]
+                    .to_vec(),
+                    k!(LAlt),
+                    Some(0),
+                ),
+            ]),
+            timeout: Duration::from_millis(100),
+        }
+    }
+
     fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
+        return create_test_keyboard_custom(BehaviorConfig::default());
+    }
+
+    fn create_test_keyboard_custom(customConfig: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
         // Box::leak is acceptable in tests
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, BehaviorConfig::default()));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, customConfig.clone()));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
-        Keyboard::new(keymap_ref, BehaviorConfig::default())
+        Keyboard::new(keymap_ref, customConfig)
     }
 
     fn key_event(row: u8, col: u8, pressed: bool) -> KeyEvent {
@@ -1284,6 +1441,67 @@ mod test {
                 .await;
             assert_eq!(keyboard.report.modifier, 0x00); // Shift should be released
         };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_combo_with_mod_then_mod_timeout() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_custom(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
+            let sequence = key_sequence![
+                [3, 4, true, 10], // Press V
+                [3, 5, true, 10], // Press B
+                [1, 4, true, 50], // Press R
+                [1, 4, false, 90], // Release R
+                [3, 4, false, 150], // Release V
+                [3, 5, false, 170], // Release B
+            ];
+
+            let expected_reports = key_report![
+                [KC_LSHIFT, [0; 6]],
+                [KC_LSHIFT, [KeyCode::R as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0; 6]],
+                [0, [0; 6]],
+            ];
+
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
+
+        block_on(main);
+    }
+
+    const KC_LSHIFT: u8 = 1 << 1;
+
+    #[test]
+    fn test_combo_with_mod() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_custom(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
+
+            let sequence = key_sequence![
+                [3, 4, true, 10],   // Press V
+                [3, 5, true, 10],   // Press B
+                [3, 6, true, 50],   // Press N
+                [3, 6, false, 70],  // Release N
+                [3, 4, false, 100], // Release V
+                [3, 5, false, 110], // Release B
+            ];
+
+            let expected_reports = key_report![
+                [KC_LSHIFT, [0; 6]],
+                [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0; 6]],
+                [0, [0; 6]],
+            ];
+
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
+
         block_on(main);
     }
 
