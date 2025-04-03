@@ -302,7 +302,7 @@ pub struct EncoderConfig {
     // Pin b of the encoder
     pub pin_b: String,
     // Phase is the working mode of the rotary encoders.
-    // Available mode: 
+    // Available mode:
     // - default: EC11 compatible, resolution = 1
     // - e8h7: resolution = 2, reverse = true
     // - resolution: customized resolution, the resolution value and reverse should be specified
