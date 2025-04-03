@@ -1,9 +1,9 @@
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+
 use crate::config::EncoderConfig;
 use crate::gpio_config::convert_gpio_str_to_input_pin;
 use crate::ChipModel;
-use proc_macro2::Ident;
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
 
 pub(crate) fn expand_encoder_device(
     encoder_config: Vec<EncoderConfig>,

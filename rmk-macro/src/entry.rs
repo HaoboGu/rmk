@@ -3,11 +3,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{ItemFn, ItemMod};
 
-use crate::{
-    keyboard::Overwritten,
-    keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig},
-    ChipSeries,
-};
+use crate::keyboard::Overwritten;
+use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
+use crate::ChipSeries;
 
 pub(crate) fn expand_rmk_entry(
     keyboard_config: &KeyboardConfig,
@@ -22,9 +20,7 @@ pub(crate) fn expand_rmk_entry(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Entry) =
-                            Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
+                        if let Ok(Overwritten::Entry) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
                             return Some(override_rmk_entry(item_fn));
                         }
                     }
@@ -75,7 +71,7 @@ pub(crate) fn rmk_entry_select(
             match keyboard_config.chip.series {
                 ChipSeries::Stm32 | ChipSeries::Rp2040 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+                        ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
@@ -86,43 +82,47 @@ pub(crate) fn rmk_entry_select(
                         .serial
                         .clone()
                         .expect("No serial defined for central");
-                    split_config
-                        .peripheral
-                        .iter()
-                        .enumerate()
-                        .for_each(|(idx, p)| {
-                            let row = p.rows;
-                            let col = p.cols;
-                            let row_offset = p.row_offset;
-                            let col_offset = p.col_offset;
-                            let uart_instance = format_ident!("{}", central_serials.get(idx).expect("No or not enough serial defined for peripheral in central").instance.to_lowercase());
-                            tasks.push(quote! {
-                                ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                                    #idx,
-                                    #uart_instance,
-                                )
-                            });
+                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
+                        let uart_instance = format_ident!(
+                            "{}",
+                            central_serials
+                                .get(idx)
+                                .expect("No or not enough serial defined for peripheral in central")
+                                .instance
+                                .to_lowercase()
+                        );
+                        tasks.push(quote! {
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
+                                #idx,
+                                #uart_instance,
+                            )
                         });
+                    });
                     join_all_tasks(tasks)
                 }
                 ChipSeries::Nrf52 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+                        ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
                         tasks.push(processors_task);
                     };
                     split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                        let row = p.rows ;
-                        let col = p.cols ;
-                        let row_offset = p.row_offset ;
-                        let col_offset = p.col_offset ;
+                        let row = p.rows;
+                        let col = p.cols;
+                        let row_offset = p.row_offset;
+                        let col_offset = p.col_offset;
                         let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
                         tasks.push(quote! {
-                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset>(
+                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                                 #idx,
                                 [#(#peripheral_ble_addr), *],
+                                &stack,
                             )
                         });
                     });
@@ -131,9 +131,7 @@ pub(crate) fn rmk_entry_select(
                 ChipSeries::Esp32 => panic!("Split for esp32 isn't implemented yet"),
             }
         }
-        BoardConfig::UniBody(_) => {
-            rmk_entry_default(keyboard_config, devices_task, processors_task)
-        }
+        BoardConfig::UniBody(_) => rmk_entry_default(keyboard_config, devices_task, processors_task),
     };
     quote! {
         use ::rmk::input_device::Runnable;
@@ -158,21 +156,21 @@ pub(crate) fn rmk_entry_default(
         ChipSeries::Nrf52 => match keyboard_config.communication {
             CommunicationConfig::Usb(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
+                    ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Ble(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config, sd)
+                    ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Both(_, _) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd)
+                    ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
@@ -181,19 +179,14 @@ pub(crate) fn rmk_entry_default(
         },
         ChipSeries::Esp32 => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, storage, light_controller, rmk_config),
+                ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
             };
             tasks.push(rmk_task);
-            let all_tasks = expand_tasks(tasks);
-            quote! {
-                ::esp_idf_svc::hal::task::block_on(
-                    #all_tasks
-                );
-            }
+            join_all_tasks(tasks)
         }
         _ => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, storage, light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

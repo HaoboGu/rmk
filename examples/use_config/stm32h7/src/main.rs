@@ -8,11 +8,13 @@ use rmk::macros::rmk_keyboard;
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
-    use embassy_stm32::{time::Hertz, usb::Driver, Config};
-    use rmk::{
-        channel::EVENT_CHANNEL, futures::future::join3, input_device::Runnable, run_devices,
-        run_rmk,
-    };
+    use embassy_stm32::time::Hertz;
+    use embassy_stm32::usb::Driver;
+    use embassy_stm32::Config;
+    use rmk::channel::EVENT_CHANNEL;
+    use rmk::futures::future::join3;
+    use rmk::input_device::Runnable;
+    use rmk::{run_devices, run_rmk};
     use static_cell::StaticCell;
 
     // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
@@ -32,9 +34,7 @@ mod my_keyboard {
             config.rcc.hsi = Some(HSIPrescaler::DIV1);
             config.rcc.csi = true;
             // Needed for USB
-            config.rcc.hsi48 = Some(Hsi48Config {
-                sync_from_usb: true,
-            });
+            config.rcc.hsi48 = Some(Hsi48Config { sync_from_usb: true });
             // External oscillator 25MHZ
             config.rcc.hse = Some(Hse {
                 freq: Hertz(25_000_000),
@@ -83,7 +83,7 @@ mod my_keyboard {
         join3(
             run_devices!((matrix) => EVENT_CHANNEL),
             keyboard.run(),
-            run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+            run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
         )
         .await;
     }

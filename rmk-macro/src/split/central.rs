@@ -1,12 +1,11 @@
 use core::panic;
 
-use crate::{
-    config::{SerialConfig, SplitConfig},
-    keyboard_config::{BoardConfig, KeyboardConfig},
-    ChipModel, ChipSeries,
-};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+
+use crate::config::{SerialConfig, SplitConfig};
+use crate::keyboard_config::{BoardConfig, KeyboardConfig};
+use crate::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_split_central_config(config: &KeyboardConfig) -> proc_macro2::TokenStream {
     if let BoardConfig::Split(split_config) = &config.board {
@@ -20,10 +19,7 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
     match &split_config.connection[..] {
         "ble" => {
             // We need to create addrs for BLE
-            let central_addr = split_config
-                .central
-                .ble_addr
-                .expect("central.ble_addr is required");
+            let central_addr = split_config.central.ble_addr.expect("central.ble_addr is required");
             let mut peripheral_addrs = proc_macro2::TokenStream::new();
             split_config
                 .peripheral
@@ -42,11 +38,8 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
         }
         "serial" => {
             // We need to initialize serial instance for serial
-            let serial_config: Vec<SerialConfig> = split_config
-                .central
-                .serial
-                .clone()
-                .expect("central.serial is required");
+            let serial_config: Vec<SerialConfig> =
+                split_config.central.serial.clone().expect("central.serial is required");
             expand_serial_init(chip, serial_config)
         }
         _ => panic!("Invalid connection type for split"),

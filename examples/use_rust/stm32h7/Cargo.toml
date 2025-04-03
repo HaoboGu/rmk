@@ -23,7 +23,6 @@ embassy-stm32 = { version = "0.2", features = [
 embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
-    "task-arena-size-32768",
     "executor-thread",
 ] }
 static_cell = "2"
@@ -31,6 +30,10 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
 
 [build-dependencies]
 xz2 = "0.1.7"

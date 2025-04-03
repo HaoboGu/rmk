@@ -6,12 +6,11 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
-use crate::{keyboard::Overwritten, keyboard_config::KeyboardConfig, ChipSeries};
+use crate::keyboard::Overwritten;
+use crate::keyboard_config::KeyboardConfig;
+use crate::ChipSeries;
 
-pub(crate) fn expand_usb_init(
-    keyboard_config: &KeyboardConfig,
-    item_mod: &ItemMod,
-) -> TokenStream2 {
+pub(crate) fn expand_usb_init(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
         items
@@ -19,8 +18,7 @@ pub(crate) fn expand_usb_init(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::Usb) = Overwritten::from_meta(&item_fn.attrs[0].meta)
-                        {
+                        if let Ok(Overwritten::Usb) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
                             return Some(override_usb_init(item_fn));
                         }
                     }
@@ -66,20 +64,10 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardConfig) -> TokenStrea
                     }
                 }
             }
-            ChipSeries::Nrf52 => {
-                if keyboard_config.communication.ble_enabled() {
-                    // Both BLE + USB, software vbus is used
-                    quote! {
-                        let software_vbus = ::rmk::ble::SOFTWARE_VBUS.get_or_init(|| ::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect::new(true, false));
-                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, software_vbus);
-                    }
-                } else {
-                    // USB only, use hardware vbus
-                    quote! {
-                        let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
-                    }
-                }
-            }
+            ChipSeries::Nrf52 => quote! {
+                // use hardware vbus
+                let driver = ::embassy_nrf::usb::Driver::new(p.#peripheral_name, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
+            },
             ChipSeries::Rp2040 => quote! {
                 let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
             },

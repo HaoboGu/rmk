@@ -1,20 +1,16 @@
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::debounce::DebounceState;
-use crate::debounce::DebouncerTrait;
-use crate::event::Event;
-use crate::event::KeyEvent;
-use crate::input_device::InputDevice;
-
-use crate::matrix::KeyState;
-use crate::MatrixTrait;
-
-use embassy_time::Instant;
-use embassy_time::Timer;
+use embassy_time::{Instant, Timer};
 use embedded_hal;
 use embedded_hal::digital::InputPin;
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+
+#[cfg(feature = "rapid_debouncer")]
+use crate::debounce::fast_debouncer::RapidDebouncer;
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::matrix::KeyState;
+use crate::MatrixTrait;
 
 /// DirectPinMartex only has input pins.
 pub struct DirectPinMatrix<
@@ -139,6 +135,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use core::pin::pin;
+
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
             if start_time.elapsed().as_millis() <= 1 {
@@ -159,7 +157,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
@@ -169,7 +167,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         }
         self.scan_start = Some(Instant::now());
     }

@@ -1,10 +1,7 @@
 use crate::config::StorageConfig;
-
-use crate::{
-    keyboard_config::{CommunicationConfig, KeyboardConfig},
-    usb_interrupt_map::get_usb_info,
-    ChipModel,
-};
+use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
+use crate::usb_interrupt_map::get_usb_info;
+use crate::ChipModel;
 // Default config for stm32
 pub(crate) fn default_stm32(chip: ChipModel) -> KeyboardConfig {
     let chip_name = chip.chip.clone();

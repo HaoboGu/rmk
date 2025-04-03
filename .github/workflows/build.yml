@@ -21,7 +21,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_examples:
+  build-examples:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -35,6 +35,8 @@ jobs:
           - stm32f1
           - stm32f4
           - stm32h7
+          - esp32c3_ble
+          - esp32c6_ble
         example_type:
           - use_rust
           - use_config
@@ -47,13 +49,33 @@ jobs:
       - name: Install cargo-make and flip-link
         run: cargo binstall cargo-make flip-link
       - name: Install target
-        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
       - name: Build example
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo build --release
       - name: Build example uf2
+        if: ${{ matrix.example != 'esp32c3_ble' && matrix.example != 'esp32c6_ble' }}
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: cargo make uf2 --release
+  build-esp32s3:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chip:
+          - esp32s3
+        example_type:
+          - use_rust
+          - use_config
+    steps:
+      - uses: cargo-bins/cargo-binstall@main
+      - uses: actions/checkout@v3
+      - name: Install ldproxy and espup
+        run: cargo binstall ldproxy espup -y
+      - name: Install esp toolchain
+        run: espup install
+      - name: Build
+        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
+        run: . /home/runner/export-esp.sh && cargo +esp build --release 
   binary-size:
     # Copied from sequential-storage: https://github.com/tweedegolf/sequential-storage/blob/master/.github/workflows/ci.yaml
     runs-on: ubuntu-latest

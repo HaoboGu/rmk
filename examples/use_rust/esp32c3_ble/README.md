@@ -6,13 +6,13 @@ To run the example, make sure that you have esp-idf environment, `ldproxy` and `
 
 ```
 cd examples/use_rust/esp32c3_ble
-cargo run --release
+cargo +esp run --release
 ```
 
 If everything is good, you'll see the log as the following:
 
 ```shell
-cargo run --release  
+cargo +esp run --release  
     Compiling ...
     ...
     ...

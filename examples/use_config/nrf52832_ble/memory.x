@@ -1,6 +1,9 @@
 MEMORY
 {
-  /* nRF52832 s132 7.3.0 */
-  FLASH : ORIGIN = 0x26000,    LENGTH = 360K
-  RAM : ORIGIN = 0x20007af8, LENGTH = 64K - 30K
+  FLASH : ORIGIN = 0x00000000, LENGTH = 512K
+  RAM : ORIGIN = 0x20000000, LENGTH = 64K
+
+  /* These values correspond to the nRF52832 WITH Adafruit nRF52 bootloader */
+  /* FLASH : ORIGIN = 0x00001000, LENGTH = 508K */
+  /* RAM : ORIGIN = 0x20000008, LENGTH = 63K */
 }

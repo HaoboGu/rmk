@@ -22,7 +22,6 @@ embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
-    "task-arena-size-32768",
 ] }
 embassy-futures = { version = "0.1", features = ["defmt"] }
 cortex-m-rt = "0.7.5"
@@ -31,6 +30,11 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 static_cell = "2"
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
 
 # [features]
 # avoid having to use --allow-multiple-definition linker flag

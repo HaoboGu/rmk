@@ -16,6 +16,15 @@
 
 # Features
 - [Keyboard Configuration](keyboard_configuration.md)
+    - [Keyboard and matrix](configuration/matrix.md)
+    - [Layout](configuration/layout.md)
+    - [Split keyboard](configuration/split.md)
+    - [Storage](configuration/storage.md)
+    - [Behavior](configuration/behavior.md)
+    - [Input device](configuration/input_device.md)
+    - [Wireless/Bluetooth](configuration/wireless.md)
+    - [Light](configuration/light.md)
+    - [Appendix](configuration/appendix.md)
 - [Keymap](keymap.md)
 - [Vial support](vial_support.md)
 - [Wireless](wireless.md)

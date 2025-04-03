@@ -1,14 +1,16 @@
-use crate::{
-    debounce::{DebounceState, DebouncerTrait},
-    event::{Event, KeyEvent},
-    input_device::InputDevice,
-    CONNECTION_STATE,
-};
 use core::future::Future;
+use core::sync::atomic::Ordering;
+
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
+
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::state::ConnectionState;
+use crate::CONNECTION_STATE;
 
 /// MatrixTrait is the trait for keyboard matrix.
 ///
@@ -22,7 +24,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while !CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected.into() {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");
@@ -100,11 +102,7 @@ impl<
     > Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Create a matrix from input and output pins.
-    pub fn new(
-        input_pins: [In; INPUT_PIN_NUM],
-        output_pins: [Out; OUTPUT_PIN_NUM],
-        debouncer: D,
-    ) -> Self {
+    pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
         Matrix {
             input_pins,
             output_pins,
@@ -151,11 +149,9 @@ impl<
                     if let DebounceState::Debounced = debounce_state {
                         self.key_states[out_idx][in_idx].toggle_pressed();
                         #[cfg(feature = "col2row")]
-                        let (row, col, key_state) =
-                            (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                        let (row, col, key_state) = (in_idx, out_idx, self.key_states[out_idx][in_idx]);
                         #[cfg(not(feature = "col2row"))]
-                        let (row, col, key_state) =
-                            (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+                        let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
                         self.scan_pos = (out_idx, in_idx);
                         return Event::Key(KeyEvent {
@@ -202,6 +198,8 @@ impl<
 
     #[cfg(feature = "async_matrix")]
     async fn wait_for_key(&mut self) {
+        use core::pin::pin;
+
         if let Some(start_time) = self.scan_start {
             // If no key press over 1ms, stop scanning and wait for interupt
             if start_time.elapsed().as_millis() <= 1 {
@@ -220,7 +218,7 @@ impl<
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-        let _ = select_slice(futs.as_mut_slice()).await;
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
@@ -263,7 +261,7 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
             embassy_time::Timer::after_secs(5).await;
         }
         self.last = !self.last;
-        info!("Read event: {:?}", self.last);
+        // info!("Read event: {:?}", self.last);
         Event::Key(KeyEvent {
             row: 0,
             col: 0,

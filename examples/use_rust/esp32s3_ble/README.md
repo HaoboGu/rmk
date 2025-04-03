@@ -6,25 +6,25 @@ To run the example, make sure that you have esp-idf environment, `ldproxy` and `
 
 ```
 cd examples/use_rust/esp32s3_ble
-cargo run --release
+cargo +esp run --release
 ```
 
 If everything is good, you'll see the log as the following:
 
 ```shell
-cargo run --release  
+cargo +esp run --release  
     Compiling ...
     ...
     ...
     Finished `release` profile [optimized + debuginfo] target(s) in 51.39s
-     Running `espflash flash --monitor --log-format defmt target/xtensa-esp32s3-espidf/release/rmk-esp32s3`
+     Running `espflash flash --monitor --log-format defmt target/riscv32imc-esp-espidf/release/rmk-esp32c3`
 [2024-04-07T12:49:21Z INFO ] Detected 2 serial ports
 [2024-04-07T12:49:21Z INFO ] Ports which match a known common dev board are highlighted
 [2024-04-07T12:49:21Z INFO ] Please select a port
 [2024-04-07T12:50:24Z INFO ] Serial port: '/dev/cu/xx'
 [2024-04-07T12:50:24Z INFO ] Connecting...
 [2024-04-07T12:50:24Z INFO ] Using flash stub
-Chip type:         esp32s3 (revision v0.4)
+Chip type:         esp32c3 (revision v0.4)
 Crystal frequency: 40 MHz
 Flash size:        4MB
 Features:          WiFi, BLE
@@ -42,5 +42,5 @@ If you want to get some insight of segments of your binary, [`espsegs`](https://
 cargo install --git https://github.com/bjoernQ/espsegs
 
 # Check all segments
-espsegs target/xtensa-esp32s3-espidf/release/rmk-esp32s3 --chip esp32s3
+espsegs target/riscv32imc-esp-espidf/release/rmk-esp32c3 --chip esp32c3
 ```
