@@ -3,6 +3,7 @@ use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::{KeyEvent, RotaryEncoderEvent},
+    fork::{Fork, FORK_MAX_NUM},
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
     keycode::KeyCode,
 };
@@ -39,6 +40,8 @@ pub struct KeyMap<
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
     /// Combos
     pub(crate) combos: [Combo; COMBO_MAX_NUM],
+    /// Forks
+    pub(crate) forks: [Fork; FORK_MAX_NUM],
     /// Options for configurable action behavior
     pub(crate) behavior: BehaviorConfig,
 }
@@ -56,6 +59,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
+        let mut forks: [Fork; FORK_MAX_NUM] = Default::default();
+        for (i, fork) in behavior.fork.forks.iter().enumerate() {
+            forks[i] = fork.clone();
+        }
 
         KeyMap {
             layers: action_map,
@@ -65,6 +72,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             macro_cache: [0; MACRO_SPACE_SIZE],
             combos,
+            forks,
             behavior,
         }
     }
@@ -81,6 +89,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
+        let mut forks: [Fork; FORK_MAX_NUM] = Default::default();
+        for (i, fork) in behavior.fork.forks.iter().enumerate() {
+            forks[i] = fork.clone();
+        }
         if let Some(storage) = storage {
             if {
                 Ok(())
@@ -90,6 +102,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_macro_cache(&mut macro_cache).await)
                     // Read combo cache
                     .and(storage.read_combos(&mut combos).await)
+                    // Read fork cache
+                    .and(storage.read_forks(&mut forks).await)
             }
             .is_err()
             {
@@ -110,6 +124,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             layer_cache: [[0; COL]; ROW],
             macro_cache,
             combos,
+            forks,
             behavior,
         }
     }

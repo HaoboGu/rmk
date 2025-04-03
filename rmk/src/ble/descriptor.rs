@@ -76,9 +76,9 @@ pub(crate) enum BleCompositeReportType {
 )]
 #[allow(dead_code)]
 pub(crate) struct BleKeyboardReport {
-    pub(crate) modifier: u8,
+    pub(crate) modifier: u8, // HidModifiers
     pub(crate) reserved: u8,
-    pub(crate) leds: u8,
+    pub(crate) leds: u8, // LedIndicator
     pub(crate) keycodes: [u8; 6],
     pub(crate) buttons: u8,
     pub(crate) x: i8,

@@ -6,6 +6,9 @@ use crate::{
     channel::FLASH_CHANNEL,
     combo::{Combo, COMBO_MAX_LENGTH},
     config::StorageConfig,
+    fork::{Fork, StateBits},
+    hid_state::{HidModifiers, HidMouseButtons},
+    light::LedIndicator,
     BUILD_HASH,
 };
 use byteorder::{BigEndian, ByteOrder};
@@ -68,6 +71,8 @@ pub(crate) enum FlashOperationMessage {
     ConnectionType(u8),
     // Write combo
     WriteCombo(ComboData),
+    // Write fork
+    WriteFork(ForkData),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -86,6 +91,7 @@ pub(crate) enum StorageKeys {
     ComboData,
     ConnectionType,
     EncoderKeys,
+    ForkData,
     #[cfg(feature = "_nrf_ble")]
     ActiveBleProfile = 0xEE,
     #[cfg(feature = "_nrf_ble")]
@@ -105,6 +111,7 @@ impl StorageKeys {
             7 => Some(StorageKeys::ComboData),
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
+            10 => Some(StorageKeys::ForkData),
             #[cfg(feature = "_nrf_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
             _ => None,
@@ -124,6 +131,7 @@ pub(crate) enum StorageData {
     MacroData([u8; MACRO_SPACE_SIZE]),
     ComboData(ComboData),
     ConnectionType(u8),
+    ForkData(ForkData),
     #[cfg(feature = "_nrf_ble")]
     BondInfo(BondInfo),
     #[cfg(feature = "_nrf_ble")]
@@ -147,6 +155,9 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
 /// Get the key to retrieve the combo from the storage.
 pub(crate) fn get_combo_key(idx: usize) -> u32 {
     (0x3000 + idx) as u32
+}
+pub(crate) fn get_fork_key(idx: usize) -> u32 {
+    (0x4000 + idx) as u32
 }
 
 /// Get the key to retrieve the encoder config from the storage.
@@ -227,6 +238,34 @@ impl Value<'_> for StorageData {
                     to_via_keycode(combo.output),
                 );
                 Ok(3 + COMBO_MAX_LENGTH * 2)
+            }
+            StorageData::ForkData(fork) => {
+                if buffer.len() < 13 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::ForkData as u8;
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.trigger));
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.negative_output));
+                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.positive_output));
+
+                BigEndian::write_u16(
+                    &mut buffer[7..9],
+                    fork.match_any.leds.into_bits() as u16
+                        | (fork.match_none.leds.into_bits() as u16) << 8,
+                );
+                BigEndian::write_u16(
+                    &mut buffer[9..11],
+                    fork.match_any.mouse.into_bits() as u16
+                        | (fork.match_none.mouse.into_bits() as u16) << 8,
+                );
+                BigEndian::write_u32(
+                    &mut buffer[11..15],
+                    fork.match_any.modifiers.into_bits() as u32
+                        | (fork.match_none.modifiers.into_bits() as u32) << 8
+                        | (fork.kept_modifiers.into_bits() as u32) << 16
+                        | if fork.bindable { 1 << 24 } else { 0 },
+                );
+                Ok(15)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -352,6 +391,43 @@ impl Value<'_> for StorageData {
                         action: EncoderAction::new(clockwise, counter_clockwise),
                     }))
                 }
+                StorageKeys::ForkData => {
+                    if buffer.len() < 15 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let trigger = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
+                    let negative_output = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
+                    let positive_output = from_via_keycode(BigEndian::read_u16(&buffer[5..7]));
+
+                    let led_masks = BigEndian::read_u16(&buffer[7..9]);
+                    let mouse_masks = BigEndian::read_u16(&buffer[9..11]);
+                    let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
+
+                    let match_any = StateBits {
+                        modifiers: HidModifiers::from_bits((modifier_masks & 0xFF) as u8),
+                        leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
+                        mouse: HidMouseButtons::from_bits((mouse_masks & 0xFF) as u8),
+                    };
+                    let match_none = StateBits {
+                        modifiers: HidModifiers::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
+                        leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
+                        mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
+                    };
+                    let kept_modifiers =
+                        HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let bindable = (modifier_masks & (1 << 24)) != 0;
+
+                    Ok(StorageData::ForkData(ForkData {
+                        idx: 0,
+                        trigger,
+                        negative_output,
+                        positive_output,
+                        match_any,
+                        match_none,
+                        kept_modifiers,
+                        bindable,
+                    }))
+                }
                 #[cfg(feature = "_nrf_ble")]
                 StorageKeys::BleBondInfo => {
                     // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
@@ -387,6 +463,9 @@ impl StorageData {
                 panic!("To get combo key for ComboData, use `get_combo_key` instead");
             }
             StorageData::ConnectionType(_) => StorageKeys::ConnectionType as u32,
+            StorageData::ForkData(_) => {
+                panic!("To get fork key for ForkData, use `get_fork_key` instead");
+            }
             #[cfg(feature = "_nrf_ble")]
             StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
             #[cfg(feature = "_nrf_ble")]
@@ -434,6 +513,19 @@ pub(crate) struct ComboData {
     pub(crate) idx: usize,
     pub(crate) actions: [KeyAction; COMBO_MAX_LENGTH],
     pub(crate) output: KeyAction,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct ForkData {
+    pub(crate) idx: usize,
+    pub(crate) trigger: KeyAction,
+    pub(crate) negative_output: KeyAction,
+    pub(crate) positive_output: KeyAction,
+    pub(crate) match_any: StateBits,
+    pub(crate) match_none: StateBits,
+    pub(crate) kept_modifiers: HidModifiers,
+    pub(crate) bindable: bool,
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -677,6 +769,18 @@ impl<
                     )
                     .await
                 }
+                FlashOperationMessage::WriteFork(fork) => {
+                    let key = get_fork_key(fork.idx);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &StorageData::ForkData(fork),
+                    )
+                    .await
+                }
                 #[cfg(feature = "_nrf_ble")]
                 FlashOperationMessage::ActiveBleProfile(profile) => {
                     let data = StorageData::ActiveBleProfile(profile);
@@ -808,6 +912,35 @@ impl<
                     let _ = actions.push(action);
                 }
                 *item = Combo::new(actions, combo.output, item.layer);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn read_forks(&mut self, forks: &mut [Fork]) -> Result<(), ()> {
+        for (i, item) in forks.iter_mut().enumerate() {
+            let key = get_fork_key(i);
+            let read_data = fetch_item::<u32, StorageData, _>(
+                &mut self.flash,
+                self.storage_range.clone(),
+                &mut NoCache::new(),
+                &mut self.buffer,
+                &key,
+            )
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?;
+
+            if let Some(StorageData::ForkData(fork)) = read_data {
+                *item = Fork::new(
+                    fork.trigger,
+                    fork.negative_output,
+                    fork.positive_output,
+                    fork.match_any,
+                    fork.match_none,
+                    fork.kept_modifiers,
+                    fork.bindable,
+                );
             }
         }
 

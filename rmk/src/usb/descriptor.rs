@@ -24,9 +24,9 @@ use usbd_hid::descriptor::generator_prelude::*;
 #[derive(Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardReport {
-    pub modifier: u8,
+    pub modifier: u8, //HidModifiers
     pub reserved: u8,
-    pub leds: u8,
+    pub leds: u8, //LedIndicator
     pub keycodes: [u8; 6],
 }
 
@@ -116,7 +116,7 @@ impl CompositeReportType {
 )]
 #[derive(Default, Serialize)]
 pub struct CompositeReport {
-    pub(crate) buttons: u8,
+    pub(crate) buttons: u8, // HidMouseButtons
     pub(crate) x: i8,
     pub(crate) y: i8,
     pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units
