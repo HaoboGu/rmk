@@ -1,4 +1,5 @@
 use adc::expand_adc_device;
+use encoder::expand_encoder_device;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -6,6 +7,7 @@ use crate::config::InputDeviceConfig;
 use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig, UniBodyConfig};
 
 mod adc;
+mod encoder;
 
 pub(crate) fn expand_input_device_config(
     keyboard_config: &KeyboardConfig,
@@ -43,8 +45,29 @@ pub(crate) fn expand_input_device_config(
     }
     processors.extend(adc_processors);
 
-    // TODO
-    // config.extend(expand_encoder_config())
+    // generate encoder configuration
+    let (encoder_config, encoder_processors, encoder_names) = match &keyboard_config.board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            expand_encoder_device(input_device.clone().encoder.unwrap_or(Vec::new()), &keyboard_config.chip)
+        }
+        BoardConfig::Split(split_config) => expand_encoder_device(
+            split_config
+                .central
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .encoder
+                .unwrap_or(Vec::new()),
+            &keyboard_config.chip,
+        ),
+    };
+    config.extend(encoder_config);
+    if !encoder_processors.is_empty() {
+        for encoder_name in encoder_names {
+            devices.push(quote! {#encoder_name});
+        }
+    }
+    processors.extend(encoder_processors);
 
     (config, devices, processors)
 }

@@ -1,0 +1,57 @@
+[package]
+name = "rmk-stm32g4"
+version = "0.2.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", default-features = false, features = ["defmt", "col2row"]}
+cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
+cortex-m-rt = "0.7.5"
+embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
+embassy-stm32 = { version = "0.2", features = [
+    "stm32g431rb",
+    "defmt",
+    "memory-x",
+    "time-driver-any",
+] }
+embassy-executor = { version = "0.7", features = [
+    "defmt",
+    "arch-cortex-m",
+    "executor-thread",
+    "task-arena-size-16384",
+] }
+defmt = "0.3"
+defmt-rtt = "0.4"
+panic-halt = "1.0"
+
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+
+[[bin]]
+name = "rmk-stm32g4"
+test = false
+bench = false
+
+[profile.dev]
+codegen-units = 1      # better optimizations
+debug = true
+opt-level = "s"
+overflow-checks = true
+lto = "fat"
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1       # better optimizations
+debug = true            # no overhead for bare-metal
+opt-level = "z"         # optimize for binary size
+overflow-checks = false
+lto = "fat"
