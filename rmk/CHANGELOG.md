@@ -7,9 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-04-06
+
 ### Added
 
+- Input device support
+- Rotary encoder and joystick are supported
+- Bootloader jumping for nRF52 and RP2040
+- Artificial pull up resistor to pio tx line
+- Shifted key support
 - Clear the storage by checking build hash after flashing a new firmware
+
+### Changed
+
+- Make `storage` a feature, enabled by default
+
+### Fixed
+
+- Wrong ESP32 BLE serial number
+- Wrong col/row when using direct pin
+- Error when there's empty IO pin list in the config
+- Many other minor fixes
 
 ## [0.5.2] - 2025-01-22
 
