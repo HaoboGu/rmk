@@ -51,9 +51,10 @@ pub(crate) fn expand_input_device_config(
 
     // generate encoder configuration
     let (encoder_config, encoder_processors, encoder_names) = match &keyboard_config.board {
-        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
-            expand_encoder_device(input_device.clone().encoder.unwrap_or(Vec::new()), &keyboard_config.chip)
-        }
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_encoder_device(
+            input_device.clone().encoder.unwrap_or(Vec::new()),
+            &keyboard_config.chip,
+        ),
         BoardConfig::Split(split_config) => expand_encoder_device(
             split_config
                 .central

@@ -29,6 +29,7 @@ use core::{
     future::Future,
     sync::atomic::{AtomicBool, AtomicU8},
 };
+pub use embassy_futures;
 use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
@@ -39,7 +40,6 @@ use embassy_usb::driver::Driver;
 use embassy_usb::UsbDevice;
 use embedded_hal::digital::OutputPin;
 pub use futures;
-pub use embassy_futures;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::{LedIndicator, LightService};
