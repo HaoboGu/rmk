@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-04-06
+
+### Added
+
+- `SHIFTED` key
+- Transperant key
+- Rotary encoder config
+- Joystick config
+- Fork behavior config
+- Add keycode alias
+
+### Changed
+
+- Change `UP` key to `Up`
+- Deny unknown fields by default
+
+### Fixed
+
+- Wrong config for esp32 + direct pin
+- Compilation error when the pin list is empty
+
 ## [0.4.2] - 2025-01-22
 
 ### Changed
