@@ -26,7 +26,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     fn get_battery_percent(&self, val: u16) -> u8 {
         // Avoid overflow
         let val = val as i32;
@@ -70,9 +70,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match event {
             Event::Battery(val) => {
                 info!("Detected battery ADC value: {:?}", val);
-                // failing to send is permitted, because the update frequency is not critical
-                #[cfg(feature = "_nrf_ble")]
-                let _ = crate::channel::BATTERY_CHANNEL.try_send(self.get_battery_percent(val));
+
+                #[cfg(feature = "_ble")]
+                crate::ble::trouble::battery_service::BATTERY_LEVEL
+                    .store(self.get_battery_percent(val), core::sync::atomic::Ordering::Relaxed);
                 ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),

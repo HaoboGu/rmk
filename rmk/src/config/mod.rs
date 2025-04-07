@@ -108,7 +108,7 @@ pub struct RmkConfig<'a> {
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
     #[cfg(feature = "_esp_ble")]
-    pub ble_battery_config: BleBatteryConfig,
+    pub ble_battery_config: BleBatteryConfig<'a>,
 }
 
 /// Config for configurable action behavior

@@ -552,7 +552,7 @@ async fn run_ble_keyboard<
         match select3(
             gatt_events_task(&server, &conn),
             set_conn_params(&stack, &conn),
-            ble_battery_server.run(&mut rmk_config.ble_battery_config),
+            ble_battery_server.run(),
         )
         .await
         {
