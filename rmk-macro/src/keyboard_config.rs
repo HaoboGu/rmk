@@ -28,6 +28,9 @@ pub const COMBO_MAX_NUM: usize = 8;
 // Max size of combos
 pub const COMBO_MAX_LENGTH: usize = 4;
 
+// Max number of forks
+pub const FORK_MAX_NUM: usize = 16;
+
 /// Keyboard's basic info
 #[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
@@ -455,6 +458,13 @@ impl KeyboardConfig {
                                 ));
                             }
                         }
+                    }
+                }
+
+                behavior.fork = behavior.fork.or(default.fork);
+                if let Some(fork) = &behavior.fork {
+                    if fork.forks.len() > FORK_MAX_NUM {
+                        return rmk_compile_error!(format!("keyboard.toml: number of forks is greater than [behavior.fork.max_num]"));
                     }
                 }
 

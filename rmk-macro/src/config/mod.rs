@@ -148,6 +148,7 @@ pub struct BehaviorConfig {
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
+    pub fork: Option<ForksConfig>,
 }
 
 /// Configurations for tap hold
@@ -190,6 +191,25 @@ pub struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
     pub layer: Option<u8>,
+}
+
+/// Configurations for forks
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ForksConfig {
+    pub forks: Vec<ForkConfig>,
+}
+
+/// Configurations for fork
+#[derive(Clone, Debug, Deserialize)]
+pub struct ForkConfig {
+    pub trigger: String,
+    pub negative_output: String,
+    pub positive_output: String,
+    pub match_any: Option<String>,
+    pub match_none: Option<String>,
+    pub kept_modifiers: Option<String>,
+    pub bindable: Option<bool>,
 }
 
 /// Configurations for split keyboards
