@@ -258,7 +258,7 @@ pub(crate) async fn run_ble<
                             &stack,
                             light_controller,
                             keymap,
-                            &rmk_config,
+                            &mut rmk_config,
                             #[cfg(feature = "storage")]
                             storage,
                         ),

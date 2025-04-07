@@ -24,7 +24,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
             } else {
                 quote! {}
             };
-            let ble_addr = get_ble_addr(keyboard_config).expect("No BLE address defined for nRF52");
+            let ble_addr = get_ble_addr(keyboard_config);
             let ble_init = match &keyboard_config.communication {
                 CommunicationConfig::Usb(_) => quote! {},
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
@@ -54,7 +54,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
                     let mut sdc_mem = ::nrf_sdc::Mem::<4096>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
-                    let central_addr = [#(#ble_addr), *];
+                    let central_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
                     let stack = ::rmk::ble::trouble::build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
                 },
@@ -75,7 +75,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
             }
         }
         ChipSeries::Esp32 => {
-            let ble_addr = get_ble_addr(keyboard_config).expect("No BLE address defined for ESP32");
+            let ble_addr = get_ble_addr(keyboard_config);
             quote! {
                 ::esp_println::logger::init_logger_from_env();
                 let p = ::esp_hal::init({
@@ -92,7 +92,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 let bluetooth = p.BT;
                 let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
-                let central_addr = [#(#ble_addr), *];
+                let central_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
                 let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
             }
@@ -148,11 +148,30 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     initialization_tokens
 }
 
-fn get_ble_addr(keyboard_config: &KeyboardConfig) -> Option<[u8; 6]> {
+fn get_ble_addr(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     if let BoardConfig::Split(split_config) = &keyboard_config.board {
-        split_config.central.ble_addr
+        let addr = split_config
+            .central
+            .ble_addr
+            .expect("No BLE address defined for BLE split keyboard");
+        quote! {
+            [#(#addr), *]
+        }
+    } else if keyboard_config.chip.series == ChipSeries::Nrf52 {
+        quote! {
+            {
+                let ficr = ::embassy_nrf::pac::FICR;
+                let high = u64::from(ficr.deviceid(1).read());
+                let addr = high << 32 | u64::from(ficr.deviceid(0).read());
+                let addr = addr | 0x0000_c000_0000_0000;
+                let ble_addr = addr.to_le_bytes()[..6].try_into().expect("Failed to read BLE address from FICR");
+                ble_addr
+            }
+        }
     } else {
         // Default BLE random static address
-        Some([0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7])
+        quote! {
+            [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
+        }
     }
 }
