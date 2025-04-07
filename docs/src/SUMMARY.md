@@ -16,7 +16,7 @@
 
 # Features
 - [Keyboard Configuration](keyboard_configuration.md)
-    - [Keyboard and matrix](configuration/matrix.md)
+    - [Keyboard and matrix](configuration/keyboard_matrix.md)
     - [Layout](configuration/layout.md)
     - [Split keyboard](configuration/split.md)
     - [Storage](configuration/storage.md)
