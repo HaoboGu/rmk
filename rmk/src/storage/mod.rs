@@ -24,7 +24,10 @@ use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::StorageConfig;
+use crate::fork::{Fork, StateBits};
+use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::keyboard_macro::MACRO_SPACE_SIZE;
+use crate::light::LedIndicator;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::BUILD_HASH;
 

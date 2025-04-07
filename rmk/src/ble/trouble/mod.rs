@@ -1,7 +1,8 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicU8, Ordering};
 
-use ble_server::{BleBatteryServer, BleHidServer, BleViaServer, Server};
+use battery_service::BleBatteryServer;
+use ble_server::{BleHidServer, BleViaServer, Server};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{Duration, Timer};
@@ -40,6 +41,7 @@ use crate::light::{LedIndicator, LightController};
 use crate::state::{ConnectionState, ConnectionType};
 use crate::{run_keyboard, CONNECTION_STATE};
 
+pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod profile;
 
@@ -90,7 +92,7 @@ pub(crate) async fn run_ble<
     stack: &'b Stack<'b, C>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
-    rmk_config: RmkConfig<'static>,
+    mut rmk_config: RmkConfig<'static>,
 ) {
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
@@ -198,7 +200,7 @@ pub(crate) async fn run_ble<
                                     &stack,
                                     light_controller,
                                     keymap,
-                                    &rmk_config,
+                                    &mut rmk_config,
                                     #[cfg(feature = "storage")]
                                     storage,
                                 );
@@ -231,7 +233,7 @@ pub(crate) async fn run_ble<
                                         &stack,
                                         light_controller,
                                         keymap,
-                                        &rmk_config,
+                                        &mut rmk_config,
                                         #[cfg(feature = "storage")]
                                         storage,
                                     ),
@@ -538,19 +540,19 @@ async fn run_ble_keyboard<
     stack: &Stack<'_, C>,
     light_controller: &mut LightController<Out>,
     keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    rmk_config: &'d RmkConfig<'static>,
+    rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(&server, &conn);
     let ble_via_server = BleViaServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
-    let ble_battery_server = BleBatteryServer::new(&server, &conn);
+    let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
 
     let communication_task = async {
         match select3(
             gatt_events_task(&server, &conn),
             set_conn_params(&stack, &conn),
-            ble_battery_server.run(),
+            ble_battery_server.run(&mut rmk_config.ble_battery_config),
         )
         .await
         {

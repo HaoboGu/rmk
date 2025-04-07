@@ -12,24 +12,15 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
+use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
 use crate::hid::Report;
+use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
-use crate::usb::descriptor::KeyboardReport;
-use crate::{
-    action::{Action, KeyAction},
-    fork::{ActiveFork, StateBits, FORK_MAX_NUM},
-    hid_state::{HidModifiers, HidMouseButtons},
-    keyboard_macro::{MacroOperation, NUM_MACRO},
-    keycode::{KeyCode, ModifierCombination},
-    keymap::KeyMap,
-    light::LedIndicator,
-    usb::descriptor::ViaReport,
-};
-use core::cell::RefCell;
-use embassy_futures::{select::select, yield_now};
-use embassy_time::{Instant, Timer};
-use heapless::{Deque, FnvIndexMap, Vec};
-use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use crate::keyboard_macro::{MacroOperation, NUM_MACRO};
+use crate::keycode::{KeyCode, ModifierCombination};
+use crate::keymap::KeyMap;
+use crate::light::LedIndicator;
+use crate::usb::descriptor::{KeyboardReport, ViaReport};
 
 /// State machine for one shot keys
 #[derive(Default)]

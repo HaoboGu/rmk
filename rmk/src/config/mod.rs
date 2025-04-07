@@ -14,6 +14,7 @@ pub use nrf_config::BleBatteryConfig;
 
 use crate::combo::{Combo, COMBO_MAX_NUM};
 use crate::event::{Event, KeyEvent};
+use crate::fork::{Fork, FORK_MAX_NUM};
 use crate::hid::Report;
 use crate::light::LedIndicator;
 #[cfg(feature = "storage")]

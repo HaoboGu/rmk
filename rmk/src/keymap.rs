@@ -6,6 +6,7 @@ use crate::action::{EncoderAction, KeyAction};
 use crate::combo::{Combo, COMBO_MAX_NUM};
 use crate::config::BehaviorConfig;
 use crate::event::{KeyEvent, RotaryEncoderEvent};
+use crate::fork::{Fork, FORK_MAX_NUM};
 use crate::keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE};
 use crate::keycode::KeyCode;
 #[cfg(feature = "storage")]

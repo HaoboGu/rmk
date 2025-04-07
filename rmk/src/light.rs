@@ -1,3 +1,5 @@
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+
 use bitfield_struct::bitfield;
 use embassy_usb::class::hid::HidReader;
 use embassy_usb::driver::Driver;
@@ -6,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{LightConfig, LightPinConfig};
 use crate::hid::{HidError, HidReaderTrait};
+use crate::keyboard::LOCK_LED_STATES;
 
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
