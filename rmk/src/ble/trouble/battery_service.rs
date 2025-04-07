@@ -64,11 +64,13 @@ impl<'a> BleBatteryServer<'_, '_, '_> {
 
         loop {
             let val = BATTERY_LEVEL.load(Ordering::Relaxed);
-            match self.battery_level.notify(self.conn, &val).await {
-                Ok(_) => {}
-                Err(_) => {
-                    error!("Failed to notify battery level");
-                    break;
+            if val < 100 {
+                match self.battery_level.notify(self.conn, &val).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        error!("Failed to notify battery level");
+                        break;
+                    }
                 }
             }
             // if val < 10 {
