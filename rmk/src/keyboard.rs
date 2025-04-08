@@ -503,7 +503,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .combos
                 .iter_mut()
                 .find_map(|combo| {
-                    (combo.is_all_pressed() && !combo.is_dispatched())
+                    (combo.is_all_pressed() && !combo.is_triggered())
                         .then_some(combo.trigger())
                 });
 
@@ -527,7 +527,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else {
             if !key_event.pressed {
                 for combo in self.keymap.borrow_mut().combos.iter_mut() {
-                    if combo.is_dispatched() && combo.actions.contains(&key_action) {
+                    if combo.is_triggered() && combo.actions.contains(&key_action) {
                         combo.reset();
                         return Some(combo.output);
                     }
@@ -550,7 +550,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .borrow_mut()
             .combos
             .iter_mut()
-            .filter(|combo| !combo.is_dispatched())
+            .filter(|combo| !combo.is_triggered())
             .for_each(Combo::reset);
     }
 

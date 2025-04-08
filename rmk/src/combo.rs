@@ -21,8 +21,8 @@ impl Default for Combo {
     }
 }
 
-// magic code for marking the combo as dispatched
-const COMBO_DISPATCHED: u8 = u8::MAX;
+// magic code for marking the combo as triggered 
+const COMBO_TRIGGERED: u8 = u8::MAX;
 
 impl Combo {
     pub fn new<I: IntoIterator<Item = KeyAction>>(
@@ -52,7 +52,7 @@ impl Combo {
         key_event: KeyEvent,
         active_layer: u8,
     ) -> bool {
-        if !key_event.pressed || self.actions.len() == 0 || self.state == COMBO_DISPATCHED {
+        if !key_event.pressed || self.actions.len() == 0 || self.state == COMBO_TRIGGERED {
             //ignore combo that without actions
             return false;
         }
@@ -80,7 +80,7 @@ impl Combo {
 
     /// Mark the combo as done, if all actions are satisfied
     pub(crate) fn trigger(&mut self) -> KeyAction {
-        if self.is_dispatched() {
+        if self.is_triggered() {
             return self.output;
         }
 
@@ -89,15 +89,15 @@ impl Combo {
         }
 
         if self.is_all_pressed() {
-            self.state = COMBO_DISPATCHED;
-            debug!("combo {:?} mark done, updated state: {}", self.output, self.state);
+            self.state = COMBO_TRIGGERED;
+            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
         }
         self.output
     }
 
     // Check if the combo is dispatched into key event
-    pub(crate) fn is_dispatched(&self) -> bool {
-        return self.state == COMBO_DISPATCHED;
+    pub(crate) fn is_triggered(&self) -> bool {
+        return self.state == COMBO_TRIGGERED;
     }
 
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
