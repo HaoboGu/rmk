@@ -130,12 +130,12 @@ pub(crate) fn convert_gpio_str_to_output_pin(
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Level::#default_level_ident, ::embassy_nrf::gpio::OutputDrive::Standard)
+                ::embassy_nrf::gpio::Output::new(p.#gpio_ident, ::embassy_nrf::gpio::Level::#default_level_ident, ::embassy_nrf::gpio::OutputDrive::Standard)
             }
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Output::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Level::#default_level_ident)
+                ::embassy_rp::gpio::Output::new(p.#gpio_ident, ::embassy_rp::gpio::Level::#default_level_ident)
             }
         }
         ChipSeries::Esp32 => {
@@ -182,12 +182,12 @@ pub(crate) fn convert_gpio_str_to_input_pin(
         }
         ChipSeries::Nrf52 => {
             quote! {
-                ::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#gpio_ident), ::embassy_nrf::gpio::Pull::#default_pull_ident)
+                ::embassy_nrf::gpio::Input::new(p.#gpio_ident, ::embassy_nrf::gpio::Pull::#default_pull_ident)
             }
         }
         ChipSeries::Rp2040 => {
             quote! {
-                ::embassy_rp::gpio::Input::new(::embassy_rp::gpio::AnyPin::from(p.#gpio_ident), ::embassy_rp::gpio::Pull::#default_pull_ident)
+                ::embassy_rp::gpio::Input::new(p.#gpio_ident, ::embassy_rp::gpio::Pull::#default_pull_ident)
             }
         }
         ChipSeries::Esp32 => {

@@ -8,7 +8,7 @@ mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::peripherals::RNG;
 use embassy_nrf::{bind_interrupts, rng};
 use keymap::{COL, ROW};

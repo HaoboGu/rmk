@@ -2,11 +2,10 @@ use ssmarshal::serialize;
 use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
+use super::battery_service::BatteryService;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
 use crate::usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
-
-use super::battery_service::BatteryService;
 
 // GATT Server definition
 #[gatt_server]

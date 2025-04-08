@@ -11,7 +11,7 @@ use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::flash::{Async, Flash};
-use embassy_rp::gpio::{AnyPin, Input, Output};
+use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use keymap::{COL, ROW};

@@ -8,7 +8,7 @@ mod vial;
 
 use defmt::info;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::InterruptExt;
 use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;

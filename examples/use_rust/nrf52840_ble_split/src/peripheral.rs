@@ -8,10 +8,11 @@ mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
+use embassy_nrf::Peri;
 use embassy_nrf::{bind_interrupts, rng, usb};
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -67,7 +68,7 @@ fn build_sdc<'d, const N: usize>(
 }
 
 /// Initializes the SAADC peripheral in single-ended mode on the given pin.
-fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
+fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     // Then we initialize the ADC. We are only using one channel in this example.
     let config = saadc::Config::default();
     let channel_cfg = saadc::ChannelConfig::single_ended(adc_pin.degrade_saadc());

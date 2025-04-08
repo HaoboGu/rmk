@@ -464,7 +464,9 @@ impl KeyboardConfig {
                 behavior.fork = behavior.fork.or(default.fork);
                 if let Some(fork) = &behavior.fork {
                     if fork.forks.len() > FORK_MAX_NUM {
-                        return rmk_compile_error!(format!("keyboard.toml: number of forks is greater than [behavior.fork.max_num]"));
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of forks is greater than [behavior.fork.max_num]"
+                        ));
                     }
                 }
 

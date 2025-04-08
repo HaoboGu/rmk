@@ -39,7 +39,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         quote! { ::embassy_nrf::gpio::Pull::Down }
                     };
                     ble_config_tokens.extend(quote! {
-                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_state_pin), #pull));
+                        let is_charging_pin = Some(::embassy_nrf::gpio::Input::new(p.#charging_state_pin, #pull));
                         let charging_state_low_active = #low_active;
                     });
                 } else {
@@ -58,7 +58,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
                         quote! { ::embassy_nrf::gpio::Level::Low }
                     };
                     ble_config_tokens.extend(quote! {
-                        let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(::embassy_nrf::gpio::AnyPin::from(p.#charging_led_pin), #default_level, ::embassy_nrf::gpio::OutputDrive::Standard));
+                        let charge_led_pin = Some(::embassy_nrf::gpio::Output::new(p.#charging_led_pin, #default_level, ::embassy_nrf::gpio::OutputDrive::Standard));
                         let charge_led_low_active = #charging_led_low_active;
                     });
                 } else {

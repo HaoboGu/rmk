@@ -32,9 +32,9 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
 
 [build-dependencies]
 xz2 = "0.1.7"

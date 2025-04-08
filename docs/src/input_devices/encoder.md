@@ -47,8 +47,8 @@ With Rust, you can define a rotary encoder as the following:
 ```rust
     use rmk::input_device::rotary_encoder::RotaryEncoder;
     use rmk::input_device::rotary_encoder::DefaultPhase;
-    let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
-    let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
+    let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
+    let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, encoder_id);
 ```
 
@@ -56,8 +56,8 @@ You can also use the resolution based phase:
 
 ```rust
     use rmk::input_device::rotary_encoder::RotaryEncoder;
-    let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
-    let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
+    let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
+    let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     // Create an encoder with resolution = 2, reversed = false
     let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 2, false, encoder_id)
 ```

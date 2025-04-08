@@ -24,12 +24,12 @@ esp-backtrace = { version = "0.15", features = [
     "println",
 ] }
 esp-storage = { version = "0.5.0", features = ["esp32c6", "nor-flash"] }
-esp-hal = { version = "0.23.1", features = ["esp32c6", "unstable"] }
-esp-hal-embassy = { version = "0.6.0", features = ["esp32c6"] }
-esp-alloc = { version = "0.6.0" }
+esp-hal = { version = "1.0.0-beta.0", features = ["esp32c6", "unstable"] }
+esp-hal-embassy = { version = "0.7.0", features = ["esp32c6"] }
+esp-alloc = { version = "0.7.0" }
 esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.12.0", features = ["esp32c6", "ble"] }
-bt-hci = { version = "0.2" }
+esp-wifi = { version = "0.13.0", features = ["esp32c6", "ble"] }
+bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 
 [build-dependencies]
@@ -62,12 +62,12 @@ opt-level = 3
 overflow-checks = false
 
 [patch.crates-io]
-esp-wifi = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-esp-println = { git = "https://github.com/esp-rs/esp-hal.git", rev = "5d0145eca901f42cbebe1e41cde10e79afba3af8" }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+esp-wifi = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }

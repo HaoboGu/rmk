@@ -32,9 +32,9 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 static_cell = "2"
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "954d155" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
 
 # [features]
 # avoid having to use --allow-multiple-definition linker flag

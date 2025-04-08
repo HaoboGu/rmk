@@ -8,12 +8,13 @@ mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{AnyPin, Input, Output};
+use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
+use embassy_nrf::Peri;
 use embassy_nrf::{bind_interrupts, rng, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
@@ -80,7 +81,7 @@ fn build_sdc<'d, const N: usize>(
 }
 
 /// Initializes the SAADC peripheral in single-ended mode on the given pin.
-fn init_adc(adc_pin: AnyInput, adc: SAADC) -> Saadc<'static, 1> {
+fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     // Then we initialize the ADC. We are only using one channel in this example.
     let config = saadc::Config::default();
     let channel_cfg = saadc::ChannelConfig::single_ended(adc_pin.degrade_saadc());
@@ -140,7 +141,7 @@ async fn main(spawner: Spawner) {
     // Initialize the ADC.
     // We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
-    let is_charging_pin = Input::new(AnyPin::from(p.P0_07), embassy_nrf::gpio::Pull::Up);
+    let is_charging_pin = Input::new(p.P0_07, embassy_nrf::gpio::Pull::Up);
     let saadc = init_adc(adc_pin, p.SAADC);
     // Wait for ADC calibration.
     saadc.calibrate().await;
@@ -181,8 +182,8 @@ async fn main(spawner: Spawner) {
     )
     .await;
 
-    let pin_a = Input::new(AnyPin::from(p.P1_06), embassy_nrf::gpio::Pull::None);
-    let pin_b = Input::new(AnyPin::from(p.P1_04), embassy_nrf::gpio::Pull::None);
+    let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
+    let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
 
     // Initialize the matrix and keyboard

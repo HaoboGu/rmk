@@ -14,7 +14,7 @@ use embassy_rp::{
     bind_interrupts,
     block::ImageDef,
     flash::{Async, Flash},
-    gpio::{AnyPin, Input, Output},
+    gpio::{Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
 };

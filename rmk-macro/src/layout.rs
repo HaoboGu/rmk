@@ -4,7 +4,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-use crate::{keyboard_config::KeyboardConfig, keycode_alias::KEYCODE_ALIAS};
+use crate::keyboard_config::KeyboardConfig;
+use crate::keycode_alias::KEYCODE_ALIAS;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {

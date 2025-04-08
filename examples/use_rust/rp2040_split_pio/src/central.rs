@@ -13,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_rp::{
     bind_interrupts,
     flash::{Async, Flash},
-    gpio::{AnyPin, Input, Output},
+    gpio::{Input, Output},
     peripherals::{PIO0, USB},
     usb::{Driver, InterruptHandler},
 };
