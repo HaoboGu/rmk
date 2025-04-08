@@ -797,8 +797,8 @@ pub enum KeyCode {
     AutocorrectToggle = 0x776,
     TriLayerLower = 0x777,
     TriLayerUpper = 0x778,
-    RepeatKey = 0x779,
-    AltRepeatKey = 0x77A,
+    RepeatKey = 0x7C79,
+    AltRepeatKey = 0x7C7A,
     // Kb keycodes, use 0x800 ~ 0x81F
     Kb0 = 0x800,
     Kb1 = 0x801,

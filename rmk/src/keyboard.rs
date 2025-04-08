@@ -925,7 +925,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a single keycode, typically a basic key or a modifier key.
     async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
-        if key == KeyCode::Again {
+        if key == KeyCode::RepeatKey {
             key = self.last_key_code;
         } else {
             self.last_key_code = key;
