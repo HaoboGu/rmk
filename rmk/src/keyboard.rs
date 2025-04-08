@@ -925,7 +925,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a single keycode, typically a basic key or a modifier key.
     async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
-        if key == KeyCode::RepeatKey {
+        // set to Again until https://github.com/HaoboGu/rmk/issues/317 is fixed
+        // if key == KeyCode::RepeatKey {
+        if key == KeyCode::Again {
             key = self.last_key_code;
         } else {
             self.last_key_code = key;
@@ -1587,7 +1589,8 @@ mod test {
                 0,
                 0,
                 0,
-                KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+                // KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+                KeyAction::Single(Action::Key(KeyCode::Again)),
             );
 
             // first press ever of the RepeatKey issues KeyCode:No
@@ -1629,7 +1632,8 @@ mod test {
                 0,
                 0,
                 0,
-                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
+                // KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
+                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
             );
 
             // first press ever of the RepeatKey issues KeyCode:No
