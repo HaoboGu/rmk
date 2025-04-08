@@ -79,8 +79,8 @@ impl Combo {
     }
 
     /// Mark the combo as done, if all actions are satisfied
-    pub(crate) fn mark_dispatched(&mut self) -> KeyAction {
-        if self.dispatched() {
+    pub(crate) fn trigger(&mut self) -> KeyAction {
+        if self.is_dispatched() {
             return self.output;
         }
 
@@ -96,7 +96,7 @@ impl Combo {
     }
 
     // Check if the combo is dispatched into key event
-    pub(crate) fn dispatched(&self) -> bool {
+    pub(crate) fn is_dispatched(&self) -> bool {
         return self.state == COMBO_DISPATCHED;
     }
 
