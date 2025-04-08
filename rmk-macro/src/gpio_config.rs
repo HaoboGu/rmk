@@ -140,7 +140,7 @@ pub(crate) fn convert_gpio_str_to_output_pin(
         }
         ChipSeries::Esp32 => {
             quote! {
-                ::esp_hal::gpio::Output::new(p.#gpio_ident, ::esp_hal::gpio::Level::#default_level_ident)
+                ::esp_hal::gpio::Output::new(p.#gpio_ident, ::esp_hal::gpio::Level::#default_level_ident, ::esp_hal::gpio::OutputConfig::default())
             }
         }
     }
@@ -193,7 +193,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
         ChipSeries::Esp32 => {
             quote! {
                 {
-                    let mut pin = ::esp_hal::gpio::Input::new(p.#gpio_ident, ::esp_hal::gpio::Pull::#default_pull_ident);
+                    let mut pin = ::esp_hal::gpio::Input::new(p.#gpio_ident, ::esp_hal::gpio::InputConfig::default().with_pull(::esp_hal::gpio::Pull::#default_pull_ident));
                     pin
                 }
             }

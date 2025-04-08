@@ -12,7 +12,7 @@ use embassy_executor::Spawner;
 use keymap::{COL, ROW};
 use py32_hal::bind_interrupts;
 use py32_hal::flash::Flash;
-use py32_hal::gpio::{AnyPin, Input, Output};
+use py32_hal::gpio::{Input, Output};
 use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
 use py32_hal::usb::{Driver, InterruptHandler};
 use rmk::channel::EVENT_CHANNEL;

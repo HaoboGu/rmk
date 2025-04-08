@@ -78,12 +78,8 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
             let ble_addr = get_ble_addr(keyboard_config);
             quote! {
                 ::esp_println::logger::init_logger_from_env();
-                let p = ::esp_hal::init({
-                    let mut config = ::esp_hal::Config::default();
-                    config.cpu_clock = ::esp_hal::clock::CpuClock::max();
-                    config
-                });
-                ::esp_alloc::heap_allocator!(72 * 1024);
+                let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
+                ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
                 let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone(), p.RADIO_CLK).unwrap();
@@ -137,11 +133,7 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
             let mut p = ::embassy_rp::init(config);
         }),
         ChipSeries::Esp32 => initialization_tokens.extend(quote! {
-            let p = ::esp_hal::init({
-                let mut config = ::esp_hal::Config::default();
-                config.cpu_clock = ::esp_hal::CpuClock::max();
-                config
-            });
+            let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
         }),
     }
 

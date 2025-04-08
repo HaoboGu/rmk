@@ -11,9 +11,9 @@ use core::ptr::addr_of_mut;
 use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{Input, Level, Output, Pull};
-use esp_hal::otg_fs::asynch::{Config, Driver};
+use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::otg_fs::Usb;
+use esp_hal::otg_fs::asynch::{Config, Driver};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
@@ -27,7 +27,7 @@ use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
@@ -37,12 +37,8 @@ use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 async fn main(_s: Spawner) {
     // Initialize the peripherals and bluetooth controller
     esp_println::logger::init_logger_from_env();
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
-    esp_alloc::heap_allocator!(72 * 1024);
+    let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
+    esp_alloc::heap_allocator!(size: 72 * 1024);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let mut rng = esp_hal::rng::Trng::new(peripherals.RNG, peripherals.ADC1);
     let init = esp_wifi::init(timg0.timer0, rng.rng.clone(), peripherals.RADIO_CLK).unwrap();
