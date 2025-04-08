@@ -46,6 +46,11 @@ pub struct KeyMap<
     pub(crate) behavior: BehaviorConfig,
 }
 
+fn _reorder_combos(combos: &mut [Combo; COMBO_MAX_NUM]) {
+    // Sort the combos by their length
+    combos.sort_unstable_by(|c1, c2| c2.actions.len().cmp(&c1.actions.len()))
+}
+
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
@@ -59,6 +64,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }
+
+        //reorder the combos
+        _reorder_combos(&mut combos);
+
         let mut forks: [Fork; FORK_MAX_NUM] = Default::default();
         for (i, fork) in behavior.fork.forks.iter().enumerate() {
             forks[i] = fork.clone();
@@ -356,5 +365,57 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
+    }
+
+    //order combos by their actions length
+    pub(crate) fn reorder_combos(&mut self) {
+        _reorder_combos(&mut self.combos);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::combo::COMBO_MAX_NUM;
+    use crate::k;
+    use crate::{action::KeyAction, keycode::KeyCode};
+
+    use super::{Combo, _reorder_combos};
+
+    #[test]
+    fn test_combo_reordering() {
+        let combos_raw = vec![
+            Combo::new([k!(A), k!(B), k!(C), k!(D)], k!(Z), None),
+            Combo::new([k!(A), k!(B)], k!(X), None),
+            Combo::new([k!(A), k!(B), k!(C)], k!(Y), None),
+        ];
+        // trans combos from vec to array
+        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        for (i, combo) in combos_raw.clone().into_iter().enumerate() {
+            combos[i] = combo;
+        }
+
+        _reorder_combos(&mut combos);
+
+        let result: Vec<u16> = combos
+            .iter()
+            .enumerate()
+            .map(|(_, c)| match c.output {
+                KeyAction::Single(k) => k.to_action_code(),
+                _ => KeyCode::No as u16,
+            })
+            .collect();
+        assert_eq!(
+            result,
+            vec![
+                KeyCode::Z as u16,
+                KeyCode::Y as u16,
+                KeyCode::X as u16,
+                0,
+                0,
+                0,
+                0,
+                0
+            ]
+        );
     }
 }

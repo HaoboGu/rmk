@@ -1417,7 +1417,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use super::*;
     use crate::action::KeyAction;
-    use crate::config::{BehaviorConfig, ForksConfig, CombosConfig};
+    use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
     use crate::{a, k, layer, mo};
