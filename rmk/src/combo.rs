@@ -63,17 +63,17 @@ impl Combo {
             }
         }
 
-        debug!("combo {:?} search key action {:?} ", self, key_action);
+        debug!("combo {:?} search key action {:?} ", self.output, key_action);
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
             debug!(
                 "combo {:?} found index {} updated state: {}",
-                self, i, self.state
+                self.output, i, self.state
             );
         } else if !self.is_all_pressed() {
             self.reset();
-            debug!("combo {:?} reset state: {}", self, self.state);
+            debug!("combo {:?} reset state: {}", self.output, self.state);
         }
         action_idx.is_some()
     }
@@ -90,7 +90,7 @@ impl Combo {
 
         if self.is_all_pressed() {
             self.state = COMBO_DISPATCHED;
-            debug!("combo {:?} mark done, updated state: {}", self, self.state);
+            debug!("combo {:?} mark done, updated state: {}", self.output, self.state);
         }
         self.output
     }
