@@ -556,11 +556,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
         match action {
-            Action::Key(key) => {
-                self.process_action_keycode(key, key_event).await;
-                self.update_osm(key_event);
-                self.update_osl(key_event);
-            }
+            Action::Key(key) => self.process_action_key(key, key_event).await,
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, key_event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
@@ -1068,6 +1064,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         self.send_keyboard_report_with_resolved_modifiers(key_event.pressed)
             .await;
+    }
+
+    // process action key
+    async fn process_action_key(&mut self, key: KeyCode, key_event: KeyEvent) {
+        let key = match key {
+            KeyCode::GraveEscape => {
+                if self.held_modifiers.into_bits() == 0 {
+                    KeyCode::Escape
+                } else {
+                    KeyCode::Grave
+                }
+            },
+            _ => key
+        };
+
+        self.process_action_keycode(key, key_event).await;
+        self.update_osm(key_event);
+        self.update_osl(key_event);
     }
 
     /// Process layer switch action.
