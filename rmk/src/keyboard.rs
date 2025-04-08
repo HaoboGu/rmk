@@ -140,6 +140,9 @@ pub struct Keyboard<
     /// Via report
     via_report: ViaReport,
 
+    /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
+    last_key_code: KeyCode,
+
     /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
     /// `last_mouse_tick` tracks at most 8 mouse keys, with its recent state.
     /// It can be used to control the mouse report rate and release mouse key properly.
@@ -202,6 +205,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 input_data: [0; 32],
                 output_data: [0; 32],
             },
+            last_key_code: KeyCode::No,
             last_mouse_tick: FnvIndexMap::new(),
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
@@ -920,7 +924,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
-    async fn process_action_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+    async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
+        if key == KeyCode::Again {
+            key = self.last_key_code;
+        } else {
+            self.last_key_code = key;
+        }
+
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_event).await;
         } else if key.is_system() {
@@ -1566,6 +1576,93 @@ mod test {
             assert!(keyboard.held_keycodes.iter().all(|&k| k == KeyCode::No));
         };
 
+        block_on(main);
+    }
+
+    #[test]
+    fn test_repeat_key_single() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            keyboard.keymap.borrow_mut().set_action_at(
+                0,
+                0,
+                0,
+                KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+            );
+
+            // first press ever of the RepeatKey issues KeyCode:No
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press A key
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // Release A key
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // releasing the repeat key
+            keyboard.process_inner(key_event(0, 0, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press S key
+            keyboard.process_inner(key_event(2, 2, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+        };
+        block_on(main);
+    }
+
+    #[test]
+    fn test_repeat_key_th() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            keyboard.keymap.borrow_mut().set_action_at(
+                0,
+                0,
+                0,
+                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
+            );
+
+            // first press ever of the RepeatKey issues KeyCode:No
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            keyboard
+                .send_keyboard_report_with_resolved_modifiers(true)
+                .await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press A key
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // Release A key
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // releasing the repeat key
+            keyboard.process_inner(key_event(0, 0, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press S key
+            keyboard.process_inner(key_event(2, 2, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+        };
         block_on(main);
     }
 
