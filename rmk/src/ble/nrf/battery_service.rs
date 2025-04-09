@@ -11,7 +11,7 @@ pub(crate) struct BatteryService {
 }
 
 // Global static variable, store the current battery level
-static CURRENT_BATTERY_LEVEL: AtomicU8 = AtomicU8::new(0);
+static CURRENT_BATTERY_LEVEL: AtomicU8 = AtomicU8::new(255);
 
 impl<'a> BatteryService {
     pub(crate) async fn run(
@@ -38,14 +38,13 @@ impl<'a> BatteryService {
                 // Control the LED based on the charging state and battery level
                 if let Some(ref mut charge_led) = battery_config.charge_led_pin {
                     if is_charging {
-                        info!("Charging!");
                         // If the device is charging, the LED is always on
                         if battery_config.charge_led_low_active {
                             charge_led.set_low();
                         } else {
                             charge_led.set_high();
                         }
-                    } else if current_battery_level < 10 {
+                    } else if current_battery_level < 50 {
                         // If the device is not charging and the battery level is less than 10%, the LED will blink
                         charge_led.toggle();
                         Timer::after_millis(200).await;
@@ -61,14 +60,14 @@ impl<'a> BatteryService {
 
                 // If there is no blinking operation, wait for a while before checking again
                 if !(is_charging == false && current_battery_level < 10) {
-                    Timer::after_millis(500).await;
+                    Timer::after_secs(30).await;
                 }
             }
         };
 
         let report_battery_level = async {
             loop {
-                let val = crate::channel::BATTERY_CHANNEL.receive().await;
+                let val = crate::channel::BATTERY_LEVEL_SIGNAL.wait().await;
 
                 // Update the battery level
                 CURRENT_BATTERY_LEVEL.store(val, Ordering::Relaxed);
