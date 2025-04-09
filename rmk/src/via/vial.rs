@@ -168,7 +168,8 @@ pub(crate) async fn process_vial<
                     let (real_idx, actions, output) = {
                         // Drop combos to release the borrowed keymap, avoid potential run-time panics
                         let combo_idx = report.output_data[3] as usize;
-                        let combos = &mut keymap.borrow_mut().combos;
+                        let km = &mut keymap.borrow_mut();
+                        let combos = &mut km.combos;
                         let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
                             return;
                         };
@@ -196,6 +197,9 @@ pub(crate) async fn process_vial<
                         combo.actions.clear();
                         let _ = combo.actions.extend_from_slice(&actions[0..n]);
                         combo.output = output;
+
+                        //reordering combo order
+                        km.reorder_combos();
 
                         (real_idx, actions, output)
                     };
