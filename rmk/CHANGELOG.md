@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Internal pull-up config for encoders
+
+### Fixed
+
+- Wrong gpio pulls for stm32
+
 ## [0.6.0] - 2025-04-06
 
 ### Added
