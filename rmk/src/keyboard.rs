@@ -507,8 +507,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .combos
                 .iter_mut()
                 .find_map(|combo| {
-                    (combo.is_all_pressed() && !combo.is_triggered())
-                        .then_some(combo.trigger())
+                    (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger())
                 });
 
             if next_action.is_some() {
@@ -935,9 +934,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a single keycode, typically a basic key or a modifier key.
     async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
-        // set to Again until https://github.com/HaoboGu/rmk/issues/317 is fixed
-        // if key == KeyCode::RepeatKey {
-        if key == KeyCode::Again {
+        if key == KeyCode::RepeatKey {
             key = self.last_key_code;
         } else {
             self.last_key_code = key;
@@ -1087,8 +1084,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 } else {
                     KeyCode::Grave
                 }
-            },
-            _ => key
+            }
+            _ => key,
         };
 
         self.process_action_keycode(key, key_event).await;
