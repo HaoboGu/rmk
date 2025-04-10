@@ -4,16 +4,17 @@ use crate::RawMutex;
 pub use embassy_sync::blocking_mutex;
 pub use embassy_sync::channel;
 use embassy_sync::channel::Channel;
+use embassy_sync::signal::Signal;
 pub use embassy_sync::zerocopy_channel;
 
 #[cfg(feature = "_nrf_ble")]
 use crate::ble::nrf::profile::BleProfileAction;
 use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
+#[cfg(feature = "_ble")]
+use crate::light::LedIndicator;
 #[cfg(feature = "storage")]
 use crate::storage::FlashOperationMessage;
-#[cfg(feature = "_ble")]
-use {crate::light::LedIndicator, embassy_sync::signal::Signal};
 pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;
 
@@ -21,7 +22,7 @@ pub const REPORT_CHANNEL_SIZE: usize = 16;
 #[cfg(feature = "_ble")]
 pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 /// Channel for battery level updates
-pub static BATTERY_CHANNEL: Channel<RawMutex, u8, 2> = Channel::new();
+pub static BATTERY_LEVEL_SIGNAL: Signal<RawMutex, u8> = Signal::new();
 /// Channel for key events only
 pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for all other events
