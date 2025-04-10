@@ -1339,9 +1339,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
-    use embassy_futures::block_on;
-    use embassy_time::{Duration, Timer};
-
     use super::*;
     use crate::action::KeyAction;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
