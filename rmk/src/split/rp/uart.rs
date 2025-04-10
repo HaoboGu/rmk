@@ -319,7 +319,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         self.sm_rx.set_enable(true);
     }
 
-    fn set_pin_tx(&mut self){
+    fn set_pin_tx(&mut self) {
         self.sm_tx.set_pin_dirs(Direction::Out, &[&self.pin_rx]);
         // OEOVER set to INVERT, Direction::Out inverted to Direction:In
         self.sm_tx.set_pins(Level::Low, &[&self.pin_rx]);
@@ -329,7 +329,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         pin_tx.set_drive_strength(Drive::_12mA);
     }
 
-    fn set_pin_rx(&mut self){
+    fn set_pin_rx(&mut self) {
         // The rp2040 has weak pull up resistors, from 80k to 50k. This does not provide enough
         // current to provide fast rise times at high baud rates with any moderately high
         // capacitance, even as little capacitance as can be found with long traces, a few vias, or

@@ -9,7 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Internal pull-up config for encoders
+
+### Fixed
+
+- Wrong gpio pulls for stm32
+
+## [0.6.0] - 2025-04-06
+
+### Added
+
+- Input device support
+- Rotary encoder and joystick are supported
+- State fork behavior
+- Bootloader jumping for nRF52 and RP2040
+- Artificial pull up resistor to pio tx line
+- Shifted key and transparent key support in toml config
 - Clear the storage by checking build hash after flashing a new firmware
+- stm32g4 example without storage feature
+
+### Changed
+
+- Make `storage` a feature, enabled by default
+- Documentation improvement
+- Remove unnecessary pio-proc dependency
+- Improve modifier reporting
+
+### Fixed
+
+- Wrong ESP32 BLE serial number
+- Wrong col/row when using direct pin
+- Error when there's empty IO pin list in the config
+- Many other minor fixes
 
 ## [0.5.2] - 2025-01-22
 

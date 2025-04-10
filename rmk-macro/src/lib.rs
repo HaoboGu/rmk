@@ -13,6 +13,7 @@ mod import;
 mod input_device;
 mod keyboard;
 mod keyboard_config;
+mod keycode_alias;
 mod layout;
 mod light;
 mod matrix;

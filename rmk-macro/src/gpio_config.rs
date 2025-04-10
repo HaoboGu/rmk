@@ -172,7 +172,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                     Some(pin_num) => {
                         let pin_num_ident = format_ident!("EXTI{}", pin_num);
                         quote! {
-                            ::embassy_stm32::exti::ExtiInput::new(p.#gpio_ident, p.#pin_num_ident, ::embassy_stm32::gpio::Pull::Down)
+                            ::embassy_stm32::exti::ExtiInput::new(p.#gpio_ident, p.#pin_num_ident, ::embassy_stm32::gpio::Pull::#default_pull_ident)
                         }
                     }
                     None => {
@@ -182,7 +182,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                 }
             } else {
                 quote! {
-                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::Down)
+                    ::embassy_stm32::gpio::Input::new(p.#gpio_ident, ::embassy_stm32::gpio::Pull::#default_pull_ident)
                 }
             }
         }

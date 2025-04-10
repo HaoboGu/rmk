@@ -85,7 +85,7 @@ pub(crate) fn expand_matrix_direct_pins(
     let input_pin_type = get_input_pin_type(chip, async_matrix);
     let rows = direct_pins.len();
     let cols = if direct_pins.len() == 0 {
-            0
+        0
     } else {
         direct_pins[0].len()
     };
@@ -123,11 +123,11 @@ pub(crate) fn expand_matrix_input_output_pins(
     };
     let input_pin_len = input_pins.len();
     let output_pin_len = output_pins.len();
-    
+
     // Get pin types
     let input_pin_type = get_input_pin_type(chip, async_matrix);
     let output_pin_type = get_output_pin_type(chip);
-    
+
     // Initialize input pins
     pin_initialization.extend(convert_input_pins_to_initializers(
         &chip,

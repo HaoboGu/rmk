@@ -21,6 +21,9 @@ impl Default for Combo {
     }
 }
 
+// magic code for marking the combo as triggered 
+const COMBO_TRIGGERED: u8 = u8::MAX;
+
 impl Combo {
     pub fn new<I: IntoIterator<Item = KeyAction>>(
         actions: I,
@@ -49,7 +52,8 @@ impl Combo {
         key_event: KeyEvent,
         active_layer: u8,
     ) -> bool {
-        if !key_event.pressed || key_action == KeyAction::No {
+        if !key_event.pressed || self.actions.len() == 0 || self.state == COMBO_TRIGGERED {
+            //ignore combo that without actions
             return false;
         }
 
@@ -59,17 +63,46 @@ impl Combo {
             }
         }
 
+        debug!("combo {:?} search key action {:?} ", self.output, key_action);
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
-        } else if !self.done() {
+            debug!(
+                "combo {:?} found index {} updated state: {}",
+                self.output, i, self.state
+            );
+        } else if !self.is_all_pressed() {
             self.reset();
+            debug!("combo {:?} reset state: {}", self.output, self.state);
         }
         action_idx.is_some()
     }
 
-    pub(crate) fn done(&self) -> bool {
-        self.started() && self.keys_pressed() == self.actions.len() as u32
+    /// Mark the combo as done, if all actions are satisfied
+    pub(crate) fn trigger(&mut self) -> KeyAction {
+        if self.is_triggered() {
+            return self.output;
+        }
+
+        if self.output == KeyAction::No {
+            return self.output;
+        }
+
+        if self.is_all_pressed() {
+            self.state = COMBO_TRIGGERED;
+            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
+        }
+        self.output
+    }
+
+    // Check if the combo is dispatched into key event
+    pub(crate) fn is_triggered(&self) -> bool {
+        return self.state == COMBO_TRIGGERED;
+    }
+
+    // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
+    pub(crate) fn is_all_pressed(&self) -> bool {
+        self.actions.len() > 0 && self.keys_pressed() == self.actions.len() as u32
     }
 
     pub(crate) fn started(&self) -> bool {

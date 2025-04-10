@@ -322,7 +322,7 @@ pub struct EncoderConfig {
     // Pin b of the encoder
     pub pin_b: String,
     // Phase is the working mode of the rotary encoders.
-    // Available mode: 
+    // Available mode:
     // - default: EC11 compatible, resolution = 1
     // - e8h7: resolution = 2, reverse = true
     // - resolution: customized resolution, the resolution value and reverse should be specified
@@ -331,6 +331,9 @@ pub struct EncoderConfig {
     pub resolution: Option<u8>,
     // Whether the direction of the rotary encoder is reversed.
     pub reverse: Option<bool>,
+    // Use MCU's internal pull-up resistor or not
+    #[serde(default = "default_false")]
+    pub internal_pullup: bool,
 }
 
 /// Pointing device config
