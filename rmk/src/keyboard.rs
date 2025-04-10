@@ -1642,6 +1642,7 @@ mod test {
         KeyEvent { row, col, pressed }
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_register_key() {
         let main = async {
@@ -1651,7 +1652,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_basic_key_press_release() {
         let main = async {
@@ -1667,7 +1669,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_modifier_key() {
         let main = async {
@@ -1686,7 +1689,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_tap_hold_key() {
         let main = async {
@@ -1723,30 +1727,30 @@ mod test {
         };
         block_on(main);
     }
-
+    }
     rusty_fork_test! {
-        #[test]
-        fn test_combo_timeout_and_ignore() {
-            let main = async {
-                let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    combo: get_combos_config(),
-                    ..Default::default()
-                });
+    #[test]
+    fn test_combo_timeout_and_ignore() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
 
-                let sequence = key_sequence![
-                    [3, 4, true, 10],   // Press V
-                    [3, 4, false, 100], // Release V
-                ];
+            let sequence = key_sequence![
+                [3, 4, true, 10],   // Press V
+                [3, 4, false, 100], // Release V
+            ];
 
-                let expected_reports = key_report![
-                    [0, [KeyCode::V as u8, 0, 0, 0, 0, 0]],
-                ];
+            let expected_reports = key_report![
+                [0, [KeyCode::V as u8, 0, 0, 0, 0, 0]],
+            ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-            };
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
 
-            block_on(main);
-        }
+        block_on(main);
+    }
     }
     rusty_fork_test! {
     #[test]
@@ -1780,37 +1784,38 @@ mod test {
     }
 
     rusty_fork_test! {
-        #[test]
-        fn test_combo_with_mod() {
-            let main = async {
-                let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    combo: get_combos_config(),
-                    ..Default::default()
-                });
+    #[test]
+    fn test_combo_with_mod() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
 
-                let sequence = key_sequence![
-                    [3, 4, true, 10],   // Press V
-                    [3, 5, true, 10],   // Press B
-                    [3, 6, true, 50],   // Press N
-                    [3, 6, false, 70],  // Release N
-                    [3, 4, false, 100], // Release V
-                    [3, 5, false, 110], // Release B
-                ];
+            let sequence = key_sequence![
+                [3, 4, true, 10],   // Press V
+                [3, 5, true, 10],   // Press B
+                [3, 6, true, 50],   // Press N
+                [3, 6, false, 70],  // Release N
+                [3, 4, false, 100], // Release V
+                [3, 5, false, 110], // Release B
+            ];
 
-                let expected_reports = key_report![
-                    [KC_LSHIFT, [0; 6]],
-                    [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [0; 6]],
-                    [0, [0; 6]],
-                ];
+            let expected_reports = key_report![
+                [KC_LSHIFT, [0; 6]],
+                [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0; 6]],
+                [0, [0; 6]],
+            ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-            };
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
 
-            block_on(main);
-        }
+        block_on(main);
+    }
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_multiple_keys() {
         let main = async {
@@ -1838,7 +1843,8 @@ mod test {
 
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_repeat_key_single() {
         let main = async {
@@ -1881,7 +1887,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_repeat_key_th() {
         let main = async {
@@ -1927,7 +1934,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_key_action_transparent() {
         let main = async {
@@ -1946,7 +1954,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_key_action_no() {
         let main = async {
@@ -1962,6 +1971,7 @@ mod test {
         };
         block_on(main);
     }
+    }
 
     fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static, 5, 14, 2> {
         let mut cfg = ForksConfig::default();
@@ -1973,6 +1983,7 @@ mod test {
         })
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_modifier() {
         let main = async {
@@ -2079,7 +2090,8 @@ mod test {
 
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_mouse_button() {
         let main = async {
@@ -2203,5 +2215,6 @@ mod test {
         };
 
         block_on(main);
+    }
     }
 }
