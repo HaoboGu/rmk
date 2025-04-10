@@ -110,12 +110,13 @@ rows = 5
 cols = 4
 layers = 3
 matrix_map = """
-    ...# Your matrix => configuration mapping is described here ...
+    ... the mapping between the "electronic matrix" of your keyboard 
+        and your key map configuration is described here ...
 """
 ```
 
-The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see above even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the "big unified" matrix of all split parts.
-This way, the configuration of non-regular key matrices can be intuitively arranged. 
+The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see above, even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts.
+With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. 
 (Triple quote mark `"""` is used to limit multi-line strings in toml.)
 
 ```toml
@@ -154,7 +155,7 @@ NumLock KpSlash KpAsterisk KpMinus
 Kp7     Kp8     Kp9        KpPlus
 Kp4     Kp5     Kp6
 Kp1     Kp2     Kp3        Enter
-Kp0             KpDot
+    Kp0         KpDot
 """
 
 # layer 1:
@@ -165,7 +166,7 @@ TO(base_layer)   @my_cut    @my_copy         @my_paste
 MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
 MouseLeft        MouseBtn4  MouseRight
 MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
-MouseBtn1                   MouseBtn12
+       MouseBtn1            MouseBtn12
 """
 ```
 
