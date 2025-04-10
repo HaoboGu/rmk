@@ -114,7 +114,7 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map.
+The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see above even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the "big unified" matrix of all split parts.
 This way, the configuration of non-regular key matrices can be intuitively arranged. 
 (Triple quote mark `"""` is used to limit multi-line strings in toml.)
 
@@ -161,7 +161,7 @@ Kp0             KpDot
 [[layer]]
 name = "mouse_navigation" #optional name for the layer
 keys = """
-TO(base_layer)   @MyCut     @MyCopy          @MyPaste
+TO(base_layer)   @my_cut    @my_copy         @my_paste
 MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
 MouseLeft        MouseBtn4  MouseRight
 MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
@@ -184,10 +184,11 @@ The `layer.keys` string should follow several rules:
 1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
 
     For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile!
+    However to make things easier a number of [alternative key names](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/keycode_alias.rs) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
-    You may use aliases, prefixed with `@`, like `@MyCopy` in the above example. The definition of aliases is described below.
+    You may use aliases, prefixed with `@`, like `@my_copy` in the above example. The definition of aliases is described below.
 
     You may use layer names instead of layer numbers, like `TO(base_layer)` in the above example.
     <div class="warning"> 
@@ -224,9 +225,9 @@ The `layer.keys` string should follow several rules:
 ```toml
 # here are the aliases for the example above
 [aliases]
-MyCut = "WM(x, LCtrl)"
-MyCopy = "WM(C, LCtrl)"
-MyPaste = "WM(V, LCtrl)"
+my_cut = "WM(x, LCtrl)"
+my_copy = "WM(C, LCtrl)"
+my_paste = "WM(V, LCtrl)"
 ```
 
 <div class="warning">
@@ -538,9 +539,9 @@ matrix_map = """
 
 # here are the aliases for the example layer.keys below
 [aliases]
-MyCut = "WM(x, LCtrl)"
-MyCopy = "WM(C, LCtrl)"
-MyPaste = "WM(V, LCtrl)"
+my_cut = "WM(x, LCtrl)"
+my_copy = "WM(C, LCtrl)"
+my_paste = "WM(V, LCtrl)"
 
 # Key map definitions per layer: 
 # The number (and order) of entries on each layer should be 
