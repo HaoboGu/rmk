@@ -15,7 +15,7 @@ pub(crate) fn expand_adc_device(
             let mut adc_type = vec![];
             let mut processor_name = vec![];
             let mut config = TokenStream::new();
-            let mut default_polling_interval = 1200u16; // default 1200 ms
+            let mut default_polling_interval = 30000u16; // default 30s
             let mut light_sleep: Option<u16> = None;
             // TODO: deep sleep
 

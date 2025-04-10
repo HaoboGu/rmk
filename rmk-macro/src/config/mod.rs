@@ -331,6 +331,9 @@ pub struct EncoderConfig {
     pub resolution: Option<u8>,
     // Whether the direction of the rotary encoder is reversed.
     pub reverse: Option<bool>,
+    // Use MCU's internal pull-up resistor or not
+    #[serde(default = "default_false")]
+    pub internal_pullup: bool,
 }
 
 /// Pointing device config

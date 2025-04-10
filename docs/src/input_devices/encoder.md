@@ -9,6 +9,9 @@ You can define a rotary encoder in your `keyboard.toml`. The default type of rot
 pin_a = "P0_30"
 pin_b = "P0_31"
 
+# Whether to use the MCU's internal pull-up resistor, default to false
+internal_pullup = false
+
 # Phase is the working mode of the rotary encoders.
 # Available mode: 
 # - default: EC11 compatible, resolution = 1

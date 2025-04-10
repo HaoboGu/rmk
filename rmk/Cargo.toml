@@ -84,6 +84,7 @@ critical-section = { version = "1.2", optional = true }
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
 env_logger = "0.11"
 ctor = "0.4.1"
+rusty-fork = "0.3.0"
 
 [build-dependencies]
 chrono = "0.4"
