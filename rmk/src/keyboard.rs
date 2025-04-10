@@ -934,7 +934,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process a single keycode, typically a basic key or a modifier key.
     async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
-        if key == KeyCode::RepeatKey {
+        if key == KeyCode::Again {
             key = self.last_key_code;
         } else {
             self.last_key_code = key;
@@ -1853,10 +1853,10 @@ mod test {
                 0,
                 0,
                 0,
-                KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+                KeyAction::Single(Action::Key(KeyCode::Again)),
             );
 
-            // first press ever of the RepeatKey issues KeyCode:No
+            // first press ever of the Again issues KeyCode:No
             keyboard.process_inner(key_event(0, 0, true)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
 
@@ -1896,10 +1896,10 @@ mod test {
                 0,
                 0,
                 0,
-                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
+                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
             );
 
-            // first press ever of the RepeatKey issues KeyCode:No
+            // first press ever of the Again issues KeyCode:No
             keyboard.process_inner(key_event(0, 0, true)).await;
             keyboard
                 .send_keyboard_report_with_resolved_modifiers(true)
