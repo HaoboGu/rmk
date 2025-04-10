@@ -28,9 +28,15 @@ pub(crate) fn expand_encoder_device(
     for (idx, encoder) in encoder_config.iter().enumerate() {
         let encoder_id = idx as u8;
 
+        let pull = if encoder.internal_pullup {
+            Some(true)
+        } else {
+            None
+        };
+
         // Initialize pins
-        let pin_a = convert_gpio_str_to_input_pin(&chip, encoder.pin_a.clone(), false, None);
-        let pin_b = convert_gpio_str_to_input_pin(&chip, encoder.pin_b.clone(), false, None);
+        let pin_a = convert_gpio_str_to_input_pin(&chip, encoder.pin_a.clone(), false, pull);
+        let pin_b = convert_gpio_str_to_input_pin(&chip, encoder.pin_b.clone(), false, pull);
 
         let encoder_name = format_ident!("encoder_{}", encoder_id);
         encoder_names.push(encoder_name.clone());
