@@ -1853,8 +1853,7 @@ mod test {
                 0,
                 0,
                 0,
-                // KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
-                KeyAction::Single(Action::Key(KeyCode::Again)),
+                KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
             );
 
             // first press ever of the RepeatKey issues KeyCode:No
@@ -1897,8 +1896,7 @@ mod test {
                 0,
                 0,
                 0,
-                // KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
-                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
+                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::RepeatKey)),
             );
 
             // first press ever of the RepeatKey issues KeyCode:No
