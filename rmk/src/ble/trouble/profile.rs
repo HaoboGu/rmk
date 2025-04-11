@@ -2,10 +2,12 @@
 
 use core::sync::atomic::Ordering;
 
-use embassy_futures::select::{select, Either};
+use super::ble_server::CCCD_TABLE_SIZE;
+use embassy_futures::select::{select3, Either3};
 use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
+
 #[cfg(feature = "storage")]
 use {
     crate::channel::FLASH_CHANNEL,
@@ -17,6 +19,7 @@ use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
+pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
 
 /// BLE profile info
 #[derive(Clone, Debug)]
@@ -25,6 +28,7 @@ pub struct ProfileInfo {
     pub(crate) slot_num: u8,
     pub(crate) removed: bool,
     pub(crate) info: BondInformation,
+    pub(crate) cccd_table: CccdTable<CCCD_TABLE_SIZE>,
 }
 
 impl Default for ProfileInfo {
@@ -36,6 +40,7 @@ impl Default for ProfileInfo {
                 ltk: LongTermKey(0),
                 address: BdAddr::default(),
             },
+            cccd_table: CccdTable::<CCCD_TABLE_SIZE>::default(),
         }
     }
 }
@@ -169,6 +174,37 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
             .await;
     }
 
+    /// Update CCCD table in the stack
+    pub async fn update_profile_cccd_table(&mut self, table: CccdTable<CCCD_TABLE_SIZE>) {
+        // Get current active profile
+        let active_profile = ACTIVE_PROFILE.load(Ordering::SeqCst);
+
+        // Update profile information in memory
+        if let Some(index) = self
+            .bonded_devices
+            .iter()
+            .position(|info| info.slot_num == active_profile)
+        {
+            // Check whether the cccd table is the same as the current one
+            if self.bonded_devices[index].cccd_table.inner() == table.inner() {
+                info!("Skip updating same cccd table");
+                return;
+            }
+
+            debug!("Updating profile {} cccd table: {:?}", active_profile, table);
+            let mut profile_info = self.bonded_devices[index].clone();
+            profile_info.cccd_table = table;
+            self.bonded_devices[index] = profile_info.clone();
+
+            #[cfg(feature = "storage")]
+            FLASH_CHANNEL
+                .send(crate::storage::FlashOperationMessage::ProfileInfo(profile_info))
+                .await;
+        } else {
+            error!("Failed to update profile cccd table: profile not found");
+        }
+    }
+
     /// Clear bonding information of the specified slot
     pub async fn clear_bond(&mut self, slot_num: u8) {
         // Update bonding information in memory
@@ -217,8 +253,14 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
     pub async fn update_profile(&mut self) {
         // Wait for profile switch or updated profile event
         loop {
-            match select(BLE_PROFILE_CHANNEL.receive(), UPDATED_PROFILE.wait()).await {
-                Either::First(action) => {
+            match select3(
+                BLE_PROFILE_CHANNEL.receive(),
+                UPDATED_PROFILE.wait(),
+                UPDATED_CCCD_TABLE.wait(),
+            )
+            .await
+            {
+                Either3::First(action) => {
                     #[cfg(feature = "storage")]
                     if FLASH_OPERATION_FINISHED.signaled() {
                         FLASH_OPERATION_FINISHED.reset();
@@ -259,8 +301,11 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                     info!("Update profile done");
                     break;
                 }
-                Either::Second(profile_info) => {
+                Either3::Second(profile_info) => {
                     self.add_profile_info(profile_info).await;
+                }
+                Either3::Third(table) => {
+                    self.update_profile_cccd_table(table).await;
                 }
             }
         }

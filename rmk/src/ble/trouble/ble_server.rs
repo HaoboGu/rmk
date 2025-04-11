@@ -7,6 +7,9 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
 use crate::usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
 
+// Used for saving the cccd table
+pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
+
 // GATT Server definition
 #[gatt_server]
 pub(crate) struct Server {

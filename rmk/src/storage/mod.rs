@@ -21,6 +21,7 @@ use {
 
 use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
+use crate::ble::trouble::ble_server::CCCD_TABLE_SIZE;
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::StorageConfig;
@@ -275,7 +276,7 @@ impl Value<'_> for StorageData {
             }
             #[cfg(feature = "_ble")]
             StorageData::BondInfo(b) => {
-                if buffer.len() < 23 {
+                if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::BleBondInfo as u8;
@@ -284,7 +285,21 @@ impl Value<'_> for StorageData {
                 buffer[1] = b.slot_num;
                 buffer[2..18].copy_from_slice(&ltk);
                 buffer[18..24].copy_from_slice(address.raw());
-                Ok(24)
+                let cccd_table = b.cccd_table.inner();
+                for i in 0..CCCD_TABLE_SIZE {
+                    match cccd_table.get(i) {
+                        Some(cccd) => {
+                            let handle: u16 = cccd.0;
+                            let cccd: u16 = cccd.1.raw();
+                            buffer[24 + i * 4..26 + i * 4].copy_from_slice(&handle.to_le_bytes());
+                            buffer[26 + i * 4..28 + i * 4].copy_from_slice(&cccd.to_le_bytes());
+                        }
+                        None => {
+                            buffer[24 + i * 4..28 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
+                        }
+                    };
+                }
+                Ok(24 + CCCD_TABLE_SIZE * 4)
             }
         }
     }
@@ -430,16 +445,23 @@ impl Value<'_> for StorageData {
                 }
                 #[cfg(feature = "_ble")]
                 StorageKeys::BleBondInfo => {
-                    if buffer.len() < 23 {
+                    if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
                         return Err(SerializationError::BufferTooSmall);
                     }
                     let slot_num = buffer[1];
                     let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
                     let address = BdAddr::new(buffer[18..24].try_into().unwrap());
+                    let mut cccd_table_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
+                    for i in 0..CCCD_TABLE_SIZE {
+                        let handle = u16::from_le_bytes(buffer[24 + i * 4..26 + i * 4].try_into().unwrap());
+                        let cccd = u16::from_le_bytes(buffer[26 + i * 4..28 + i * 4].try_into().unwrap());
+                        cccd_table_values[i] = (handle, cccd.into());
+                    }
                     Ok(StorageData::BondInfo(ProfileInfo {
                         slot_num,
                         removed: false,
                         info: BondInformation::new(address, ltk),
+                        cccd_table: CccdTable::new(cccd_table_values),
                     }))
                 }
             }
@@ -805,7 +827,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(feature = "_ble")]
                 FlashOperationMessage::ProfileInfo(b) => {
-                    info!("Saving bond info: {:?}", b);
+                    debug!("Saving profile info: {:?}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,

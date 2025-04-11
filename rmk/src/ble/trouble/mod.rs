@@ -7,7 +7,7 @@ use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{Duration, Timer};
 use embedded_hal::digital::OutputPin;
-use profile::UPDATED_PROFILE;
+use profile::{UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -300,7 +300,14 @@ pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
 async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) -> Result<(), Error> {
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
+    let input_keyboard = server.hid_service.input_keyboard;
     let output_via = server.via_service.output_via;
+    let input_via = server.via_service.input_via;
+    let battery_level = server.battery_service.level;
+    let mouse = server.composite_service.mouse_report;
+    let media = server.composite_service.media_report;
+    let system_control = server.composite_service.system_report;
+
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     loop {
         match conn.next().await {
@@ -314,19 +321,21 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                     slot_num: ACTIVE_PROFILE.load(Ordering::SeqCst),
                     info: bond_info,
                     removed: false,
+                    cccd_table: server.get_cccd_table(conn.raw()).unwrap_or_default(),
                 };
                 UPDATED_PROFILE.signal(profile_info);
             }
             GattConnectionEvent::Gatt { event } => {
                 match event {
                     Ok(event) => {
+                        let mut cccd_updated = false;
                         let result = match &event {
                             GattEvent::Read(event) => {
                                 if event.handle() == level.handle {
                                     let value = server.get(&level);
-                                    info!("[gatt] Read Event to Level: {:?}", value);
+                                    debug!("Read GATT Event to Level: {:?}", value);
                                 } else {
-                                    info!("[gatt] Read Event to Unknown : {:?}", event.handle());
+                                    debug!("Read GATT Event to Unknown: {:?}", event.handle());
                                 }
 
                                 if conn.raw().encrypted() {
@@ -338,15 +347,26 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                             GattEvent::Write(event) => {
                                 if event.handle() == output_keyboard.handle {
                                     let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                                    info!("Read keyboard state: {:?}", led_indicator);
+                                    debug!("Got keyboard state: {:?}", led_indicator);
                                     LED_SIGNAL.signal(led_indicator);
                                 } else if event.handle() == output_via.handle {
-                                    info!("[gatt] Write Event to Output Via: {:?}", event.data());
+                                    debug!("Got via packet: {:?}", event.data());
                                     let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                     VIAL_READ_CHANNEL.send(data).await;
                                 } else {
-                                    info!("[gatt] Write Event to Unknown: {:?}", event.handle());
+                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
                                 }
+
+                                if event.handle() == input_keyboard.cccd_handle.expect("No cccd for input keyboard")
+                                    || event.handle() == input_via.cccd_handle.expect("No cccd for input via")
+                                    || event.handle() == mouse.cccd_handle.expect("No cccd for mouse report")
+                                    || event.handle() == media.cccd_handle.expect("No cccd for media report")
+                                    || event.handle() == system_control.cccd_handle.expect("No cccd for system report")
+                                    || event.handle() == battery_level.cccd_handle.expect("No cccd for battery level")
+                                {
+                                    cccd_updated = true;
+                                }
+
                                 if conn.raw().encrypted() {
                                     None
                                 } else {
@@ -368,6 +388,14 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                             }
                             Err(e) => {
                                 warn!("[gatt] error sending response: {:?}", e);
+                            }
+                        }
+
+                        // Update CCCD table after processing the event
+                        if cccd_updated {
+                            if let Some(table) = server.get_cccd_table(conn.raw()) {
+                                info!("Updated profile cccd table: {:?}", table);
+                                UPDATED_CCCD_TABLE.signal(table);
                             }
                         }
                     }
@@ -547,6 +575,18 @@ async fn run_ble_keyboard<
     let ble_via_server = BleViaServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
+
+    // Load cccd table from storage
+    #[cfg(feature = "storage")]
+    if let Ok(Some(bond_info)) = storage
+        .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
+        .await
+    {
+        if bond_info.info.address == conn.raw().peer_address() {
+            info!("Loading cccd table from storage: {:?}", bond_info.cccd_table);
+            server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
+        }
+    }
 
     let communication_task = async {
         match select3(
