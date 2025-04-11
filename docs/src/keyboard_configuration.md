@@ -189,11 +189,11 @@ The `layer.keys` string should follow several rules:
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
-    You may use aliases, prefixed with `@`, like `@my_copy` in the above example. The definition of aliases is described below.
+    You may use aliases, prefixed with `@`, like `@my_copy` in the above example. The alias names are case sensitive. The definition of aliases is described below.
 
     You may use layer names instead of layer numbers, like `TO(base_layer)` in the above example.
     <div class="warning"> 
-    Please note that layer name if used like this, may not contain white spaces and may not be a number.
+    Please note that layer name if used like this, may not contain white spaces and may not be a number. Layer names are case sensitive.
     </div>
 
 2. For no-key (`KeyAction::No`), use `No`
@@ -206,7 +206,7 @@ The `layer.keys` string should follow several rules:
     3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
     4. Use `LT(n, key)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html)
     5. Use `OSL(n)` to create a one-shot layer action, `n` is the layer number
-    6. Use `"OSM(modifier)"` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
+    6. Use `OSM(modifier)` to create a one-shot modifier action. The modifier can be chained in the same way as `WM`
     7. Use `TT(n)` to create a layer activate or tap toggle action, `n` is the layer number
     8. Use `TG(n)` to create a layer toggle action, `n` is the layer number
     9. Use `TO(n)` to create a layer toggle only action (activate layer `n` and deactivate all other layers), `n` is the layer number
@@ -232,7 +232,7 @@ my_paste = "WM(V, LCtrl)"
 ```
 
 <div class="warning">
-Please note that alias names may not contain white spaces.
+Please note that alias names may not contain white spaces and they are case sensitive.
 <div>
 
 ### `[behavior]`
