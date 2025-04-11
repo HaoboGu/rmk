@@ -42,7 +42,7 @@ pub struct KeyMap<
     pub(crate) behavior: BehaviorConfig,
 }
 
-fn _reorder_combos(combos: &mut [Combo; COMBO_MAX_NUM]) {
+fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
     // Sort the combos by their length
     combos.sort_unstable_by(|c1, c2| c2.actions.len().cmp(&c1.actions.len()))
 }
@@ -56,7 +56,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
-        let mut combos: [Combo; COMBO_MAX_NUM] = Default::default();
+        let mut combos: heapless::Vec<Combo, COMBO_MAX_NUM> = Default::default();
         for (i, combo) in behavior.combo.combos.iter().enumerate() {
             combos[i] = combo.clone();
         }

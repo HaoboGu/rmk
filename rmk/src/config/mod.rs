@@ -167,7 +167,7 @@ impl Default for OneShotConfig {
 /// Config for combo behavior
 #[derive(Clone, Debug)]
 pub struct CombosConfig {
-    pub combos: [Combo; COMBO_MAX_NUM],
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
     pub timeout: Duration,
 }
 
@@ -175,7 +175,7 @@ impl Default for CombosConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_millis(50),
-            combos: Vec::<Combo, COMBO_MAX_NUM>::new().into_array().unwrap(),
+            combos: Vec::new(),
         }
     }
 }

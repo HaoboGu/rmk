@@ -300,7 +300,7 @@ pub(crate) async fn process_vial<
     }
 }
 
-fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Combo)> {
+fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &Combo)> {
     combos
         .iter()
         .enumerate()
@@ -309,7 +309,10 @@ fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Co
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-fn vial_combo_mut(combos: &mut [Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &mut Combo)> {
+fn vial_combo_mut(
+    combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>,
+    idx: usize,
+) -> Option<(usize, &mut Combo)> {
     combos
         .iter_mut()
         .enumerate()
