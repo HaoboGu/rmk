@@ -91,12 +91,6 @@ pub(crate) struct KeyboardConfig {
     pub(crate) chip: ChipModel,
     // Board config, normal or split
     pub(crate) board: BoardConfig,
-
-    // // Aliases for key maps
-    // pub (crate) aliases: HashMap<String, String>,
-    // // Layers of key maps
-    // pub (crate) layers: Vec<String>,
-
     // Layout config
     pub(crate) layout: LayoutConfig,
     // Behavior Config
