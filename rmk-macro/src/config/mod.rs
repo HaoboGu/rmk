@@ -334,6 +334,7 @@ pub struct JoystickConfig {
     pub transform: Vec<Vec<i16>>,
     pub bias: Vec<i16>,
     pub resolution: u16,
+    pub map_to: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

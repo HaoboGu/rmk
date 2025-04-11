@@ -3,13 +3,35 @@ use core::{future::Future, sync::atomic::Ordering};
 
 use embassy_usb::class::hid::ReadError;
 use embassy_usb::driver::EndpointError;
-use serde::Serialize;
-use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
+use serde::{ser::SerializeTuple, Serialize, Serializer};
+use usbd_hid::descriptor::{
+    AsInputReport, MediaKeyboardReport, MouseReport, SerializedDescriptor, SystemControlReport,
+};
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::state::ConnectionState;
 use crate::usb::descriptor::KeyboardReport;
 use crate::CONNECTION_STATE;
+use usbd_hid_macros::gen_hid_descriptor;
+
+/// Describes a report for Joystick, which can be used to send joystick movement
+/// and button presses to the host.
+#[gen_hid_descriptor(
+    (collection = APPLICATION, usage_page = GENERIC_DESKTOP, usage = JOYSTICK) = {
+        (collection = APPLICATION, usage = POINTER) = {
+            (usage = X,) = {
+                #[item_settings data, variable, absolute] x = input;
+            };
+            (usage = Y,) = {
+                #[item_settings data, variable, absolute] y = input;
+            };
+        };
+    }
+)]
+pub struct JoystickReport {
+    pub x: i8,
+    pub y: i8,
+}
 
 #[derive(Serialize, Debug)]
 pub enum Report {
@@ -17,6 +39,8 @@ pub enum Report {
     KeyboardReport(KeyboardReport),
     /// Mouse hid report
     MouseReport(MouseReport),
+    // Joystick report
+    JoystickReport(JoystickReport),
     /// Media keyboard report
     MediaKeyboardReport(MediaKeyboardReport),
     /// System control report

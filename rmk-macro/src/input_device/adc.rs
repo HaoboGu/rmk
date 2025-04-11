@@ -72,14 +72,24 @@ pub(crate) fn expand_adc_device(
                 });
                 let joy_ident = format_ident!("joystick_processor_{}", joystick.name);
                 processor_name.push(quote!(#joy_ident));
+
+                let map_to = match joystick.map_to.unwrap_or("mouse".into()).as_str() {
+                    "mouse" => quote! { rmk::input_device::joystick::MapTo::Mouse },
+                    "joystick" => quote! { rmk::input_device::joystick::MapTo::Joystick },
+                    unsupported => {
+                        panic!("Unsupported map_to type: {}", unsupported)
+                    }
+                };
+
                 let JoystickConfig {
                     transform,
                     bias,
                     resolution,
                     ..
                 } = joystick;
+
                 config.extend(quote! {
-                    let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new([#([#(#transform),*]),*], [#(#bias),*], #resolution, &keymap);
+                    let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new([#([#(#transform),*]),*], [#(#bias),*], #resolution, #map_to, &keymap);
                 });
             }
 
