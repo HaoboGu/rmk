@@ -10,29 +10,30 @@ If you're using macOS, an error might appear, you can safely ignore it.
 
 ### Tips for nRF52840
 
-For nRF52840, there are several widely used UF2 bootloaders, they require slight different configs.
-
-First, you should check the used softdevice version of your bootloader. Enter bootloader mode, there will be an USB driver shown in your computer. Open `INFO_UF2.TXT` in the USB driver, the content of `INFO_UF2.TXT` should be like:
+For nRF52840, you need to check whether your have a UF2 bootloader flashed to your board. If you can enter bootloader mode, there will be an USB drive shown in your computer. If there's `INFO_UF2.TXT` in the USB drive, you have it! Then check the `memory.x`, ensure that the flash origin starts with 0x00001000:
 
 ```
-UF2 Bootloader 0.6.0 lib/nrfx (v2.0.0) lib/tinyusb (0.10.1-41-gdf0cda2d) lib/uf2 (remotes/origin/configupdate-9-gadbb8c7)
-Model: nice!nano
-Board-ID: nRF52840-nicenano
-SoftDevice: S140 version 6.1.1
-Date: Jun 19 2021
-```
-
-As you can see, the version of softdevice is `S140 version 6.1.1`. For nRF52840, RMK supports S140 version 6.X and 7.X. The `memory.x` config is slightly different for softdevice 6.X and 7.X:
-
-```ld
 MEMORY
 {
-  /* These values correspond to the NRF52840 with Softdevices S140 6.1.1 */
-  /* FLASH : ORIGIN = 0x00026000, LENGTH = 824K */
+  /* NOTE 1 K = 1 KiB = 1024 bytes */
+  /* These values correspond to the nRF52840 WITH Adafruit nRF52 bootloader */
+  FLASH : ORIGIN = 0x00001000, LENGTH = 1020K
+  RAM : ORIGIN = 0x20000008, LENGTH = 255K
 
-  /* These values correspond to the NRF52840 with Softdevices S140 7.3.0 */
-  FLASH : ORIGIN = 0x00027000, LENGTH = 820K
-  RAM : ORIGIN = 0x20020000, LENGTH = 128K
+  /* These values correspond to the nRF52840 */
+  /* FLASH : ORIGIN = 0x00000000, LENGTH = 1024K */
+  /* RAM : ORIGIN = 0x20000000, LENGTH = 256K */
+}
+```
+
+If you have a debug probe and don't want to use the bootloader, use the following `memory.x` config:
+
+```
+{
+  /* NOTE 1 K = 1 KiB = 1024 bytes */
+  /* These values correspond to the nRF52840 */
+  FLASH : ORIGIN = 0x00000000, LENGTH = 1024K
+  RAM : ORIGIN = 0x20000000, LENGTH = 256K
 }
 ```
 

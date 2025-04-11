@@ -101,7 +101,7 @@ The [Keyboard Configuration](../keyboard_configuration.md) section has full inst
 
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM to your microcontroller.
 
-If you're using **nRF52840**, generally you have to change start address in `memory.x` to 0x27000 or 0x26000, according to your softdevice version. For example, softdevice v6.1.x should use 0x00026000 and v7.3.0 should be 0x00027000
+If you're using **nRF52840**, ensure that you have [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) flashed to your board. Most nice!nano compatible boards have it already. As long as you can open a USB drive for your board and update uf2 firmware by dragging and dropping, you're all set.
 
 You can either checkout your microcontroller's datasheet or an existing Rust project of your microcontroller for it.
 

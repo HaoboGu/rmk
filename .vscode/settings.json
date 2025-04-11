@@ -1,4 +1,8 @@
 {
+    "[rust]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "file",
+    },
     "cortex-debug.variableUseNaturalFormat": false,
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.noDefaultFeatures": true,
@@ -7,44 +11,17 @@
     // Uncomment the target of your chip.
     //"rust-analyzer.cargo.target": "thumbv6m-none-eabi",
     //"rust-analyzer.cargo.target": "thumbv7m-none-eabi",
-    "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
-    //"rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
+    // "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
+    // "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
     //"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
-    //"rust-analyzer.cargo.target": "riscv32imafc-unknown-none-elf",
-    //"rust-analyzer.cargo.target": "riscv32imc-esp-espidf",
-    //"rust-analyzer.cargo.target": "riscv32imac-esp-espidf",
-    //"rust-analyzer.cargo.target": "xtensa-esp32s3-espidf",
-    //"rust-analyzer.cargo.target": "riscv32imafc-unknown-none-elf",
-    "rust-analyzer.cargo.features": [
-        // Comment out these features when working on the examples. Most example crates do not have any cargo features.
-        // "stm32f446re",
-        // "time-driver-any",
-        // "unstable-pac",
-        // "exti",
-        // "rt",
-    ],
+    // "rust-analyzer.cargo.target": "riscv32imc-unknown-none-elf", // for esp32c3
+    // "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf", // for esp32c6
     "rust-analyzer.linkedProjects": [
         "rmk-macro/Cargo.toml",
         "rmk/Cargo.toml",
         // To work on the examples, comment the line above and all of the cargo.features lines,
         // then uncomment ONE line below to select the chip you want to work on.
         // This makes rust-analyzer work on the example crate and all its dependencies.
-        // "examples/use_rust/ch32v307/Cargo.toml",
-        // "examples/use_rust/esp32c3_ble/Cargo.toml",
-        // "examples/use_rust/esp32c6_ble/Cargo.toml",
-        // "examples/use_rust/esp32s3_ble/Cargo.toml",
-        // "examples/use_rust/hpm5300/Cargo.toml",
-        // "examples/use_rust/nef52832_ble/Cargo.toml",
-        // "examples/use_rust/nrf52840_ble/Cargo.toml",
-        // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
-        // "examples/use_rust/py32f07x/Cargo.toml",
-        // "examples/use_rust/rp2040/Cargo.toml"
-        // "examples/use_rust/rp2040_direct_pin/Cargo.toml"
-        // "examples/use_rust/rp2040_split/Cargo.toml"
-        // "examples/use_rust/rp2350/Cargo.toml"
-        // "examples/use_rust/stm32f1/Cargo.toml",
-        // "examples/use_rust/stm32f4/Cargo.toml",
-        // "examples/use_rust/stm32h7/Cargo.toml",
         // "examples/use_config/esp32c3_ble/Cargo.toml",
         // "examples/use_config/esp32c6_ble/Cargo.toml",
         // "examples/use_config/esp32s3_ble/Cargo.toml",
@@ -52,12 +29,30 @@
         // "examples/use_config/nrf52840_ble/Cargo.toml",
         // "examples/use_config/nrf52840_ble_split/Cargo.toml",
         // "examples/use_config/nrf52840_ble_split_direct_pin/Cargo.toml",
-        // "examples/use_config/nrf52840_usb/Cargo.toml",
         // "examples/use_config/rp2040/Cargo.toml"
         // "examples/use_config/rp2040_direct_pin/Cargo.toml"
         // "examples/use_config/rp2040_split/Cargo.toml"
+        // "examples/use_config/rp2040_split_pio/Cargo.toml"
         // "examples/use_config/stm32f1/Cargo.toml",
         // "examples/use_config/stm32f4/Cargo.toml",
         // "examples/use_config/stm32h7/Cargo.toml",
+        // "examples/use_rust/ch32v307/Cargo.toml",
+        // "examples/use_rust/esp32c3_ble/Cargo.toml",
+        // "examples/use_rust/esp32c6_ble/Cargo.toml",
+        // "examples/use_rust/esp32s3_ble/Cargo.toml",
+        // "examples/use_rust/hpm5300/Cargo.toml",
+        // "examples/use_rust/nef52832_ble/Cargo.toml",
+        // "examples/use_rust/nrf52840/Cargo.toml",
+        // "examples/use_rust/nrf52840_ble/Cargo.toml",
+        // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
+        // "examples/use_rust/py32f07x/Cargo.toml",
+        // "examples/use_rust/rp2040/Cargo.toml"
+        // "examples/use_rust/rp2040_direct_pin/Cargo.toml"
+        // "examples/use_rust/rp2040_split/Cargo.toml"
+        // "examples/use_rust/rp2040_split_pio/Cargo.toml"
+        // "examples/use_rust/rp2350/Cargo.toml"
+        // "examples/use_rust/stm32f1/Cargo.toml",
+        // "examples/use_rust/stm32f4/Cargo.toml",
+        // "examples/use_rust/stm32h7/Cargo.toml",
     ],
 }

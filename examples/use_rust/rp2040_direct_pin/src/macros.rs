@@ -22,9 +22,6 @@ macro_rules! config_matrix_pin_rp {
     };
 
     (@pin $p:ident, $pin:ident) => {
-        Some(Input::new(
-            AnyPin::from($p.$pin),
-            embassy_rp::gpio::Pull::Up,
-        ))
+        Some(Input::new($p.$pin, embassy_rp::gpio::Pull::Up))
     };
 }

@@ -1,4 +1,5 @@
-#![feature(type_alias_impl_trait)]
+#![no_std]
+#![no_main]
 
 use rmk::macros::rmk_keyboard;
 

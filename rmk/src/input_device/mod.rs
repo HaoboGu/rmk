@@ -4,7 +4,10 @@
 //! The `InputDevice` trait provides the interface for individual input devices, and the macros facilitate their concurrent execution.
 use core::cell::RefCell;
 
-use crate::{channel::KEYBOARD_REPORT_CHANNEL, event::Event, hid::Report, keymap::KeyMap};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::Event;
+use crate::hid::Report;
+use crate::keymap::KeyMap;
 
 pub mod adc;
 pub mod battery;
@@ -67,14 +70,7 @@ pub enum ProcessResult {
 /// Take the normal keyboard as the example:
 ///
 /// The [`crate::matrix::Matrix`] is actually an input device and the [`crate::keyboard::Keyboard`] is actually an input processor.
-pub trait InputProcessor<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize = 0,
->
-{
+pub trait InputProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Process the incoming events, convert them to HID report [`Report`],
     /// then send the report to the USB/BLE.
     ///

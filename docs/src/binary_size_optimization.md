@@ -31,8 +31,8 @@ By default, RMK uses `panic-probe` to print error messages if panic occurs. But 
 ```diff
 # In your binary's Cargo.toml
 
-- panic-probe = { version = "0.3", features = ["print-defmt"] }
-+ panic-halt = "0.2"
+- panic-probe = { version = "1.0", features = ["print-defmt"] }
++ panic-halt = "1.0"
 ```
 
 The in `main.rs`, use `panic-halt` instead:
@@ -51,7 +51,7 @@ You can also remove the entire defmt-rtt logger to save flash.
 
 ```diff
 # In your binary's Cargo.toml 
-- defmt-rtt = "0.4"
+- defmt-rtt = "1.0"
 ```
 
 In this case, you have to implement an empty defmt logger.

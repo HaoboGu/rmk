@@ -1,12 +1,10 @@
-use crate::{
-    config::InputDeviceConfig,
-    keyboard_config::{BoardConfig, KeyboardConfig},
-    keyboard_config::{CommunicationConfig, UniBodyConfig},
-};
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
 use proc_macro2::TokenStream;
 use quote::quote;
+
+use crate::config::InputDeviceConfig;
+use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig, UniBodyConfig};
 
 mod adc;
 mod encoder;
@@ -20,9 +18,7 @@ pub(crate) fn expand_input_device_config(
 
     // generate ADC configuration
     let ble_config = match &keyboard_config.communication {
-        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
-            Some(ble_config.clone())
-        }
+        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
         _ => None,
     };
     let (adc_config, adc_processors) = match &keyboard_config.board {

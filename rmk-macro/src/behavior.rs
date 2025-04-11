@@ -1,11 +1,11 @@
 //! Initialize behavior config boilerplate of RMK
 //!
 
+use quote::quote;
+
 use crate::config::{CombosConfig, ForksConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
 use crate::layout::parse_key;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -200,7 +200,7 @@ impl StateBitsMacro {
 }
 // Allows to use `#modifiers` in the quote
 impl quote::ToTokens for StateBitsMacro {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let left_ctrl = self.modifiers_left_ctrl;
         let left_shift = self.modifiers_left_shift;
         let left_alt = self.modifiers_left_alt;

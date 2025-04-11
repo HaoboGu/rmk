@@ -1,6 +1,7 @@
 use heapless::Vec;
 
-use crate::{action::KeyAction, event::KeyEvent};
+use crate::action::KeyAction;
+use crate::event::KeyEvent;
 
 // Max number of combos
 pub(crate) const COMBO_MAX_NUM: usize = 8;
@@ -21,15 +22,11 @@ impl Default for Combo {
     }
 }
 
-// magic code for marking the combo as triggered 
+// magic code for marking the combo as triggered
 const COMBO_TRIGGERED: u8 = u8::MAX;
 
 impl Combo {
-    pub fn new<I: IntoIterator<Item = KeyAction>>(
-        actions: I,
-        output: KeyAction,
-        layer: Option<u8>,
-    ) -> Self {
+    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         Self {
             actions: Vec::from_iter(actions),
             output,
@@ -39,19 +36,10 @@ impl Combo {
     }
 
     pub fn empty() -> Self {
-        Self::new(
-            Vec::<KeyAction, COMBO_MAX_LENGTH>::new(),
-            KeyAction::No,
-            None,
-        )
+        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
     }
 
-    pub(crate) fn update(
-        &mut self,
-        key_action: KeyAction,
-        key_event: KeyEvent,
-        active_layer: u8,
-    ) -> bool {
+    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.len() == 0 || self.state == COMBO_TRIGGERED {
             //ignore combo that without actions
             return false;

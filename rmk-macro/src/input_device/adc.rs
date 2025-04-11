@@ -1,9 +1,8 @@
-use crate::{
-    config::{BleConfig, JoystickConfig},
-    ChipSeries,
-};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+
+use crate::config::{BleConfig, JoystickConfig};
+use crate::ChipSeries;
 
 pub(crate) fn expand_adc_device(
     joystick_config: Vec<JoystickConfig>,

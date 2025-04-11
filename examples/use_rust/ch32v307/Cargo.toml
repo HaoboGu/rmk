@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["_no_external_storage"] }
+rmk = { path = "../../../rmk", default-features = false,  features = ["col2row", "defmt", "storage"]}
 ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "3ccf0c8", features = [
     "ch32v307vct6",
     "memory-x",
@@ -15,23 +15,27 @@ ch32-hal = { git = "https://github.com/ch32-rs/ch32-hal", rev = "3ccf0c8", featu
 ] }
 embassy-executor = { version = "0.7.0", features = [
     "arch-spin",
-    "task-arena-size-32768",
     "executor-thread",
 ] }
 static_cell = "2"
 critical-section = "1.2.0"
 
 embassy-time = "0.4"
-embassy-usb = "0.3.0"
+embassy-usb = "0.4.0"
 nb = "1.1.0"
 
 qingke = { version = "0.5.0", features = ["unsafe-trust-wch-atomics"] }
 qingke-rt = "0.5.0"
 
 # Not working for now
-defmt = "0.3"
+defmt = "1.0"
 
-panic-halt = "1.0.0"
+panic-halt = "1.0"
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
 
 [build-dependencies]
 xz2 = "0.1.7"

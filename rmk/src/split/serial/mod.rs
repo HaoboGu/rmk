@@ -1,11 +1,8 @@
 use embedded_io_async::{Read, Write};
 
-use crate::split::{
-    driver::{PeripheralManager, SplitReader, SplitWriter},
-    SplitMessage, SPLIT_MESSAGE_MAX_SIZE,
-};
-
 use super::driver::SplitDriverError;
+use crate::split::driver::{PeripheralManager, SplitReader, SplitWriter};
+use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 
 // Receive split message from peripheral via serial and process it
 ///
@@ -26,8 +23,7 @@ pub(crate) async fn run_serial_peripheral_manager<
     receiver: S,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let peripheral_manager =
-        PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
+    let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_serial_driver, id);
     info!("Running peripheral manager {}", id);
 
     peripheral_manager.run().await;
@@ -72,19 +68,18 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
             }
         }
 
-        let (result, n_bytes_unused) = match postcard::take_from_bytes_cobs::<SplitMessage>(
-            &mut self.buffer.clone()[..self.n_bytes_part],
-        ) {
-            Ok((message, unused_bytes)) => (Ok(message), unused_bytes.len()),
-            Err(e) => {
-                error!("Postcard deserialize split message error: {}", e);
-                let n_bytes_unused = self.buffer[..self.n_bytes_part]
-                    .iter()
-                    .position(|&x| x == SENTINEL)
-                    .map_or(0, |index| self.n_bytes_part - index - 1);
-                (Err(SplitDriverError::SerializeError), n_bytes_unused)
-            }
-        };
+        let (result, n_bytes_unused) =
+            match postcard::take_from_bytes_cobs::<SplitMessage>(&mut self.buffer.clone()[..self.n_bytes_part]) {
+                Ok((message, unused_bytes)) => (Ok(message), unused_bytes.len()),
+                Err(e) => {
+                    error!("Postcard deserialize split message error: {}", e);
+                    let n_bytes_unused = self.buffer[..self.n_bytes_part]
+                        .iter()
+                        .position(|&x| x == SENTINEL)
+                        .map_or(0, |index| self.n_bytes_part - index - 1);
+                    (Err(SplitDriverError::SerializeError), n_bytes_unused)
+                }
+            };
 
         self.buffer
             .copy_within(self.n_bytes_part - n_bytes_unused..self.n_bytes_part, 0);

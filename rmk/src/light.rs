@@ -1,13 +1,14 @@
-use crate::{
-    config::{LightConfig, LightPinConfig},
-    hid::{HidError, HidReaderTrait},
-    keyboard::LOCK_LED_STATES,
-};
-use bitfield_struct::bitfield;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
-use embassy_usb::{class::hid::HidReader, driver::Driver};
+
+use bitfield_struct::bitfield;
+use embassy_usb::class::hid::HidReader;
+use embassy_usb::driver::Driver;
 use embedded_hal::digital::{Error, OutputPin, PinState};
 use serde::{Deserialize, Serialize};
+
+use crate::config::{LightConfig, LightPinConfig};
+use crate::hid::{HidError, HidReaderTrait};
+use crate::keyboard::LOCK_LED_STATES;
 
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
@@ -60,13 +61,7 @@ impl BitOrAssign for LedIndicator {
 }
 
 impl LedIndicator {
-    pub const fn new_from(
-        num_lock: bool,
-        caps_lock: bool,
-        scroll_lock: bool,
-        compose: bool,
-        kana: bool,
-    ) -> Self {
+    pub const fn new_from(num_lock: bool, caps_lock: bool, scroll_lock: bool, compose: bool, kana: bool) -> Self {
         Self::new()
             .with_num_lock(num_lock)
             .with_caps_lock(caps_lock)
@@ -145,11 +140,7 @@ struct SingleLed<P: OutputPin> {
 
 impl<P: OutputPin> SingleLed<P> {
     fn new(p: LightPinConfig<P>) -> Self {
-        let on_state = if p.low_active {
-            PinState::Low
-        } else {
-            PinState::High
-        };
+        let on_state = if p.low_active { PinState::Low } else { PinState::High };
         Self {
             state: false,
             on_state,
@@ -194,10 +185,7 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         let mut buf = [0u8; 1];
-        self.hid_reader
-            .read(&mut buf)
-            .await
-            .map_err(HidError::UsbReadError)?;
+        self.hid_reader.read(&mut buf).await.map_err(HidError::UsbReadError)?;
 
         LOCK_LED_STATES.store(buf[0], core::sync::atomic::Ordering::Relaxed);
         Ok(LedIndicator::from_bits(buf[0]))

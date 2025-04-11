@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["_no_external_storage"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt", "storage"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
 py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "7260371", features = [
     "py32f072c1b", 
@@ -23,13 +23,17 @@ embassy-executor = { version = "0.7", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
-    "task-arena-size-12288", # py32f072 has only 16K RAM
 ] }
 cortex-m-rt = "0.7.5"
-portable-atomic = { version = "1.10", features = ["critical-section"] }
-defmt = "0.3"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+portable-atomic = { version = "1.11", features = ["critical-section"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
 
 [build-dependencies]
 xz2 = "0.1.7"

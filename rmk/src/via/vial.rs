@@ -3,13 +3,11 @@ use core::cell::RefCell;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use num_enum::FromPrimitive;
 
-use crate::{
-    action::KeyAction,
-    combo::{Combo, COMBO_MAX_NUM},
-    keymap::KeyMap,
-    usb::descriptor::ViaReport,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
-};
+use crate::action::KeyAction;
+use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::keymap::KeyMap;
+use crate::usb::descriptor::ViaReport;
+use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
@@ -96,12 +94,9 @@ pub(crate) async fn process_vial<
             if end > vial_keyboard_def.len() {
                 end = vial_keyboard_def.len();
             }
-            vial_keyboard_def[start..end]
-                .iter()
-                .enumerate()
-                .for_each(|(i, v)| {
-                    report.input_data[i] = *v;
-                });
+            vial_keyboard_def[start..end].iter().enumerate().for_each(|(i, v)| {
+                report.input_data[i] = *v;
+            });
             debug!(
                 "Vial return: page:{} start:{} end: {}, data: {:?}",
                 page, start, end, report.input_data
@@ -152,8 +147,7 @@ pub(crate) async fn process_vial<
                             );
                         }
                         LittleEndian::write_u16(
-                            &mut report.input_data
-                                [1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
+                            &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
                             to_via_keycode(combo.output),
                         );
                     } else {
@@ -177,9 +171,8 @@ pub(crate) async fn process_vial<
                         let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
                         let mut n: usize = 0;
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
-                            let action = from_via_keycode(LittleEndian::read_u16(
-                                &report.output_data[4 + i * 2..6 + i * 2],
-                            ));
+                            let action =
+                                from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
                             if action != KeyAction::No {
                                 if n >= COMBO_MAX_LENGTH {
                                     //fail if the combo action buffer is too small
@@ -190,8 +183,7 @@ pub(crate) async fn process_vial<
                             }
                         }
                         let output = from_via_keycode(LittleEndian::read_u16(
-                            &report.output_data
-                                [4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                            &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
                         ));
 
                         combo.actions.clear();
@@ -229,10 +221,7 @@ pub(crate) async fn process_vial<
         VialCommand::GetEncoder => {
             let layer = report.output_data[2];
             let index = report.output_data[3];
-            debug!(
-                "Received Vial - GetEncoder, encoder idx: {} at layer: {}",
-                index, layer
-            );
+            debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
 
             // Get encoder value
             if let Some(encoder_map) = &keymap.borrow().encoders {

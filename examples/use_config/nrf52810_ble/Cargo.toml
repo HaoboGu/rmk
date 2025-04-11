@@ -24,13 +24,17 @@ embassy-nrf = { version = "0.3.1", features = [
 ] }
 embassy-executor = { version = "0.7", features = [
     "defmt",
-    "task-arena-size-8192",
     "arch-cortex-m",
     "executor-thread",
 ] }
-defmt = "0.3"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
 
 [build-dependencies]
 xz2 = "0.1.7"
