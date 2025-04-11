@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Repeat key support
 - Internal pull-up config for encoders
+
 
 ### Fixed
 
-- Wrong gpio pulls for stm32
+- Wrong GPIO pulls for stm32
+- Combo cannot be triggered correctly when there's overlap between combos 
 
 ## [0.6.0] - 2025-04-06
 

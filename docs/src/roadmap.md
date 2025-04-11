@@ -20,9 +20,9 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] async key detection and report sending
   - [x] 🔵 split keyboard support
   - [x] Direct pin
+  - [x] 🟢 encoder
+  - [x] 🔵 Input device
   - [ ] 🔴 RGB
-  - [ ] 🟢 encoder
-  - [ ] 🔵 Input device
   - [ ] 🔵 display support
 
 #### Wireless
@@ -31,15 +31,15 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] battery service from ADC
   - [x] 🔴 BLE support - esp32c3 and esp32s3
   - [x] sleep mode to save battery
-  - [ ] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP
-  - [ ] stablizing BLE feature gate/API
-  - [ ] BLE support - ch58x/ch59x
+  - [x] 🔵 universal BLE wrapper, including BLE management, battery management, supports both nRF and ESP
+  - [x] stablizing BLE feature gate/API
+  - [ ] support more MCUs, such as cyw(used in rp2040w/rp2350w)
 
 #### User experience
   - [x] vial support
   - [x] easy keyboard configuration with good default, support different MCUs
+  - [x] CLI and GUI tool for project generation, firmware compilation, etc
   - [ ] Versioned documentation site, better documentation
-  - [ ] CLI and GUI tool for project generation, firmware compilation, etc
   - [ ] making vial and default keymap consistent automatically
   - [ ] 🔴🔵 GUI keymap configurator which supports windows/macos/linux/web
   - [ ] default bootloader
