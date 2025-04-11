@@ -20,6 +20,8 @@ prettyplease = "0.2"
 darling = "0.20"
 once_cell = "1.19"
 cargo_toml = "0.21"
+pest = "2.8"
+pest_derive = "2.8"
 
 [lib]
 proc-macro = true
