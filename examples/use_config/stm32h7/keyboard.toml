@@ -50,6 +50,6 @@ scrolllock.low_active = false
 
 [ble]
 enabled = true
-battery_pin = "PA0"
+battery_adc_pin = "PA0"
 charge_state.pin = "PA0"
 charge_state.low_active = true

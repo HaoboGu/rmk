@@ -1,20 +1,23 @@
 use num_enum::FromPrimitive;
 
-use crate::{
-    action::{Action, KeyAction},
-    keycode::{KeyCode, ModifierCombination},
-};
+use crate::action::{Action, KeyAction};
+use crate::keycode::{KeyCode, ModifierCombination};
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
         KeyAction::No => 0x0000,
         KeyAction::Transparent => 0x0001,
         KeyAction::Single(a) => match a {
+            Action::Key(KeyCode::GraveEscape) => 0x7c16,
+            Action::Key(KeyCode::RepeatKey) => 0x7c79,
             Action::Key(k) => {
                 if k.is_macro() {
                     k as u16 & 0xFF | 0x7700
                 } else if k.is_user() {
                     k as u16 & 0xF | 0x7E00
+                } else if k.is_combo() || k.is_boot() {
+                    // is_rmk() 's subset
+                    k as u16 & 0xFF | 0x7C00
                 } else {
                     k as u16
                 }
@@ -72,10 +75,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             0x2000 | ((m.into_bits() as u16) << 8) | keycode
         }
         KeyAction::TapHold(tap, hold) => {
-            warn!(
-                "Tap hold action is not supported: tap: {:?}, hold: {:?}",
-                tap, hold
-            );
+            warn!("Tap hold action is not supported: tap: {:?}, hold: {:?}", tap, hold);
             0
         }
     }
@@ -153,6 +153,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x7700..=0x770F => {
+            // Macro
             let keycode = via_keycode & 0xFF | 0x500;
             KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
         }
@@ -161,6 +162,16 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("Backlight and RGB configuration key not supported");
             KeyAction::No
         }
+        // boot related | combo related
+        0x7C00..=0x7C01 | 0x7C50..=0x7C52 => {
+            // is_rmk() 's related
+            let keycode = via_keycode & 0xFF | 0x700;
+            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
+        }
+        // GraveEscape
+        0x7C16 => KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
+        // RepeatKey
+        0x7C79 => KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
         0x7C00..=0x7C5F => {
             // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [GESC](https://docs.qmk.fm/#/feature_grave_esc)
@@ -205,17 +216,11 @@ mod test {
 
         // Mo(3)
         let via_keycode = 0x5223;
-        assert_eq!(
-            KeyAction::Single(Action::LayerOn(3)),
-            from_via_keycode(via_keycode)
-        );
+        assert_eq!(KeyAction::Single(Action::LayerOn(3)), from_via_keycode(via_keycode));
 
         // OSL(3)
         let via_keycode = 0x5283;
-        assert_eq!(
-            KeyAction::OneShot(Action::LayerOn(3)),
-            from_via_keycode(via_keycode)
-        );
+        assert_eq!(KeyAction::OneShot(Action::LayerOn(3)), from_via_keycode(via_keycode));
 
         // OSM RCtrl
         let via_keycode = 0x52B1;
@@ -319,6 +324,27 @@ mod test {
             ),
             from_via_keycode(via_keycode)
         );
+
+        // ComboOff
+        let via_keycode = 0x7C51;
+        assert_eq!(
+            KeyAction::Single(Action::Key(KeyCode::ComboOff)),
+            from_via_keycode(via_keycode)
+        );
+
+        // GraveEscape
+        let via_keycode = 0x7C16;
+        assert_eq!(
+            KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
+            from_via_keycode(via_keycode)
+        );
+
+        // RepeatKey
+        let via_keycode = 0x7C79;
+        assert_eq!(
+            KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+            from_via_keycode(via_keycode)
+        );
     }
 
     #[test]
@@ -408,5 +434,17 @@ mod test {
             ModifierCombination::new_from(false, false, true, true, true),
         );
         assert_eq!(0x2704, to_via_keycode(a));
+
+        // ComboOff
+        let a = KeyAction::Single(Action::Key(KeyCode::ComboOff));
+        assert_eq!(0x7C51, to_via_keycode(a));
+
+        // GraveEscape
+        let a = KeyAction::Single(Action::Key(KeyCode::GraveEscape));
+        assert_eq!(0x7C16, to_via_keycode(a));
+
+        // RepeatKey
+        let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
+        assert_eq!(0x7C79, to_via_keycode(a));
     }
 }

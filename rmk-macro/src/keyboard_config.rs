@@ -1,20 +1,21 @@
+use std::fs;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use serde::Deserialize;
-use std::fs;
 
 use crate::config::{
-    BehaviorConfig, BleConfig, DependencyConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
+    BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo, KeyboardTomlConfig, LayoutConfig,
     LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
-use crate::{
-    default_config::{
-        esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,
-        nrf52840::default_nrf52840, rp2040::default_rp2040, stm32::default_stm32,
-    },
-    usb_interrupt_map::{get_usb_info, UsbInfo},
-    ChipModel, ChipSeries,
-};
+use crate::default_config::esp32::default_esp32;
+use crate::default_config::nrf52810::default_nrf52810;
+use crate::default_config::nrf52832::default_nrf52832;
+use crate::default_config::nrf52840::default_nrf52840;
+use crate::default_config::rp2040::default_rp2040;
+use crate::default_config::stm32::default_stm32;
+use crate::usb_interrupt_map::{get_usb_info, UsbInfo};
+use crate::{ChipModel, ChipSeries};
 
 macro_rules! rmk_compile_error {
     ($msg:expr) => {
@@ -22,9 +23,18 @@ macro_rules! rmk_compile_error {
     };
 }
 
+// Max number of combos
+pub const COMBO_MAX_NUM: usize = 8;
+// Max size of combos
+pub const COMBO_MAX_LENGTH: usize = 4;
+
+// Max number of forks
+pub const FORK_MAX_NUM: usize = 16;
+
 /// Keyboard's basic info
 #[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Basic {
     /// Keyboard name
     pub name: String,
@@ -83,14 +93,19 @@ pub(crate) struct KeyboardConfig {
 
 #[derive(Clone, Debug)]
 pub(crate) enum BoardConfig {
-    Normal(MatrixConfig),
     Split(SplitConfig),
-    DirectPin(MatrixConfig),
+    UniBody(UniBodyConfig),
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct UniBodyConfig {
+    pub(crate) matrix: MatrixConfig,
+    pub(crate) input_device: InputDeviceConfig,
 }
 
 impl Default for BoardConfig {
     fn default() -> Self {
-        BoardConfig::Normal(MatrixConfig::default())
+        BoardConfig::UniBody(UniBodyConfig::default())
     }
 }
 
@@ -123,18 +138,14 @@ impl CommunicationConfig {
 
     pub(crate) fn get_ble_config(&self) -> Option<BleConfig> {
         match self {
-            CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
-                Some(ble_config.clone())
-            }
+            CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
             _ => None,
         }
     }
 
     pub(crate) fn get_usb_info(&self) -> Option<UsbInfo> {
         match self {
-            CommunicationConfig::Usb(usb_info) | CommunicationConfig::Both(usb_info, _) => {
-                Some(usb_info.clone())
-            }
+            CommunicationConfig::Usb(usb_info) | CommunicationConfig::Both(usb_info, _) => Some(usb_info.clone()),
             _ => None,
         }
     }
@@ -161,14 +172,13 @@ impl KeyboardConfig {
         config.basic = Self::get_basic_info(config.basic, toml_config.keyboard);
 
         // Board config
-        config.board = Self::get_board_config(toml_config.matrix, toml_config.split)?;
+        config.board = Self::get_board_config(toml_config.matrix, toml_config.split, toml_config.input_device)?;
 
         // Layout config
         config.layout = Self::get_layout_from_toml(toml_config.layout)?;
 
         // Behavior config
-        config.behavior =
-            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
+        config.behavior = Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -187,9 +197,7 @@ impl KeyboardConfig {
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
         if config.keyboard.board.is_none() == config.keyboard.chip.is_none() {
-            let message = format!(
-                "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both"
-            );
+            let message = format!("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both");
             return rmk_compile_error!(message);
         }
 
@@ -263,7 +271,10 @@ impl KeyboardConfig {
             s if s.starts_with("stm32") => default_stm32(chip),
             s if s.starts_with("esp32") => default_esp32(chip),
             _ => {
-                let message = format!("No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues", chip.chip);
+                let message = format!(
+                    "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
+                    chip.chip
+                );
                 return rmk_compile_error!(message);
             }
         };
@@ -290,24 +301,18 @@ impl KeyboardConfig {
     ) -> Result<CommunicationConfig, TokenStream2> {
         // Get usb config
         let usb_enabled = { usb_enabled.unwrap_or(default_setting.usb_enabled()) };
-        let usb_info = if usb_enabled {
-            get_usb_info(&chip.chip)
-        } else {
-            None
-        };
+        let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };
 
         // Get ble config
         let ble_config = match (default_setting, ble_config) {
-            (CommunicationConfig::Ble(default), None)
-            | (CommunicationConfig::Both(_, default), None) => Some(default),
+            (CommunicationConfig::Ble(default), None) | (CommunicationConfig::Both(_, default), None) => Some(default),
             (CommunicationConfig::Ble(default), Some(mut config))
             | (CommunicationConfig::Both(_, default), Some(mut config)) => {
                 // Use default setting if the corresponding field is not set
                 config.battery_adc_pin = config.battery_adc_pin.or(default.battery_adc_pin);
                 config.charge_state = config.charge_state.or(default.charge_state);
                 config.charge_led = config.charge_led.or(default.charge_led);
-                config.adc_divider_measured =
-                    config.adc_divider_measured.or(default.adc_divider_measured);
+                config.adc_divider_measured = config.adc_divider_measured.or(default.adc_divider_measured);
                 config.adc_divider_total = config.adc_divider_total.or(default.adc_divider_total);
                 Some(config)
             }
@@ -337,6 +342,7 @@ impl KeyboardConfig {
     fn get_board_config(
         matrix: Option<MatrixConfig>,
         split: Option<SplitConfig>,
+        input_device: Option<InputDeviceConfig>,
     ) -> Result<BoardConfig, TokenStream2> {
         match (matrix, split) {
             (None, Some(s)) => {
@@ -347,20 +353,19 @@ impl KeyboardConfig {
                     MatrixType::normal => {
                         if m.input_pins == None || m.output_pins == None {
                             rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
-                        }
-                        else {
-                            Ok(BoardConfig::Normal(m))
+                        } else {
+                            Ok(())
                         }
                     },
                     MatrixType::direct_pin => {
                         if m.direct_pins == None {
                             rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
-                        }
-                        else {
-                            Ok(BoardConfig::DirectPin(m))
+                        } else {
+                            Ok(())
                         }
                     },
-                }
+                }?;
+                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
             _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
@@ -374,10 +379,9 @@ impl KeyboardConfig {
             // Fill the rest with empty keys
             for _ in layout.keymap.len()..layout.layers as usize {
                 // Add 2D vector of empty keys
-                layout.keymap.push(vec![
-                    vec!["_".to_string(); layout.cols as usize];
-                    layout.rows as usize
-                ]);
+                layout
+                    .keymap
+                    .push(vec![vec!["_".to_string(); layout.cols as usize]; layout.rows as usize]);
             }
         } else {
             return rmk_compile_error!(
@@ -386,12 +390,7 @@ impl KeyboardConfig {
         }
 
         // Row
-        if let Some(_) = layout
-            .keymap
-            .iter()
-            .map(|r| r.len())
-            .find(|l| *l as u8 != layout.rows)
-        {
+        if let Some(_) = layout.keymap.iter().map(|r| r.len()).find(|l| *l as u8 != layout.rows) {
             return rmk_compile_error!(
                 "keyboard.toml: Row number in keymap doesn't match with [layout.row]".to_string()
             );
@@ -423,13 +422,9 @@ impl KeyboardConfig {
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
                         if tri_layer.upper >= layout.layers {
-                            return rmk_compile_error!(
-                                "keyboard.toml: Tri layer upper is larger than [layout.layers]"
-                            );
+                            return rmk_compile_error!("keyboard.toml: Tri layer upper is larger than [layout.layers]");
                         } else if tri_layer.lower >= layout.layers {
-                            return rmk_compile_error!(
-                                "keyboard.toml: Tri layer lower is larger than [layout.layers]"
-                            );
+                            return rmk_compile_error!("keyboard.toml: Tri layer lower is larger than [layout.layers]");
                         } else if tri_layer.adjust >= layout.layers {
                             return rmk_compile_error!(
                                 "keyboard.toml: Tri layer adjust is larger than [layout.layers]"
@@ -442,6 +437,38 @@ impl KeyboardConfig {
 
                 behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
+
+                behavior.combo = behavior.combo.or(default.combo);
+                if let Some(combo) = &behavior.combo {
+                    if combo.combos.len() > COMBO_MAX_NUM {
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of combos is greater than [behavior.combo.max_num]"
+                        ));
+                    }
+
+                    for (i, c) in combo.combos.iter().enumerate() {
+                        if c.actions.len() > COMBO_MAX_LENGTH {
+                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
+                        }
+
+                        if let Some(layer) = c.layer {
+                            if layer >= layout.layers {
+                                return rmk_compile_error!(format!(
+                                    "keyboard.toml: layer in combo #{i} is greater than [layout.layers]"
+                                ));
+                            }
+                        }
+                    }
+                }
+
+                behavior.fork = behavior.fork.or(default.fork);
+                if let Some(fork) = &behavior.fork {
+                    if fork.forks.len() > FORK_MAX_NUM {
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of forks is greater than [behavior.fork.max_num]"
+                        ));
+                    }
+                }
 
                 Ok(behavior)
             }

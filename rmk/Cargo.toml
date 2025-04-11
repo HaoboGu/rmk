@@ -1,6 +1,6 @@
 [package]
 name = "rmk"
-version = "0.5.2"
+version = "0.6.1"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
@@ -11,12 +11,13 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
-rmk-macro = { version = "=0.4.2", path = "../rmk-macro" }
+rmk-macro = { version = "=0.5.1", path = "../rmk-macro" }
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0", optional = true }
 embedded-io-async = { version = "0.6" }
-embedded-storage = "0.3"
-embedded-storage-async = "0.4"
+embedded-storage = { version = "0.3", optional = true }
+embedded-storage-async = { version = "0.4", optional = true }
+
 embassy-embedded-hal = { version = "0.3" }
 embassy-time = { version = "0.4" }
 embassy-usb = { version = "0.4", features = [
@@ -24,61 +25,76 @@ embassy-usb = { version = "0.4", features = [
     "max-interface-count-8",
     "max-handler-count-8",
 ] }
-heapless = "0.8.0"
 embassy-sync = { version = "0.6" }
 embassy-futures = { version = "0.1" }
 embassy-executor = { version = "0.7" }
 
-usbd-hid = { version = "0.8.2" }
-ssmarshal = { version = "1.0", default-features = false }
-defmt = { version = "0.3", optional = true }
-log = { version = "0.4", optional = true }
-static_cell = "2"
-num_enum = { version = "0.7", default-features = false }
-bitfield-struct = "0.10"
-byteorder = { version = "1", default-features = false }
-futures = { version = "0.3", default-features = false }
-sequential-storage = { version = "4.0.0" }
+futures = { version = "0.3", default-features = false, features = [
+    "async-await",
+] }
 
+heapless = "0.8.0"
+usbd-hid = "0.8.2"
+bitfield-struct = "0.10"
+static_cell = "2"
+sequential-storage = "4.0.1"
+
+defmt = { version = "1.0", optional = true }
+log = { version = "0.4", optional = true }
+num_enum = { version = "0.7", default-features = false }
+byteorder = { version = "1", default-features = false }
+ssmarshal = { version = "1.0", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", features = ["experimental-derive"] }
 
 # Used in macro
 paste = "1"
 
-
 # Optional dependencies
-# nRF dependencies
-once_cell = { version = "1.19", features = [
-    "atomic-polyfill",
-], default-features = false, optional = true }
-nrf-softdevice = { version = "0.1.0", git = "https://github.com/embassy-rs/nrf-softdevice", rev = "b53991e", features = [
-    "defmt",
-    "ble-peripheral",
-    "critical-section-impl",
-    "ble-gatt-server",
-    "ble-gatt-client",
-    "ble-sec",
+# BLE dependencies
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "3d77c0b", features = [
+    "gatt",
+    "scan",
+    "derive",
+    "security",
 ], optional = true }
+rand_core = { version = "0.6", optional = true }
+
+# nRF dependencies
 embassy-nrf = { version = "0.3.1", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
-# Espressif dependencies
-esp32-nimble = { version = "0.10", optional = true }
-esp-idf-svc = { version = "0.51", default-features = false, features = [
-    "embedded-storage",
-    "experimental",
-], optional = true }
+# RP2040 dependencies
+embassy-rp = { version = "0.4", optional = true }
+embassy-hal-internal = { version = "0.2.0", optional = true }
+rp-pac = { version = "7.0.0", optional = true }
+pio = { version = "0.3.0", optional = true }
+fixed = { version = "1.28.0", optional = true }
+
+# ESP32 dependencies
+esp-hal = { version = "1.0.0-beta.0", optional = true }
 
 # Document feature
 document-features = "0.2"
+
+# Used in testing
+critical-section = { version = "1.2", optional = true }
+
+[dev-dependencies]
+# A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
+rmk = { path = ".", default-features = false, features = ["std", "log"] }
+env_logger = "0.11"
+ctor = "0.4.1"
+rusty-fork = "0.3.0"
 
 [build-dependencies]
 toml = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
+chrono = "0.4"
+crc32fast = "1.3"
 
 [package.metadata.docs.rs]
 features = ["split"]
@@ -88,9 +104,12 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt"]
+default = ["col2row", "defmt", "storage"]
 
-## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature.
+## the storage is optional to save memory
+storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
+
+## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
 ## Enable defmt feature
@@ -107,8 +126,21 @@ defmt = [
     "usbd-hid/defmt",
     "sequential-storage/defmt-03",
     "embassy-nrf?/defmt",
-    "nrf-softdevice?/defmt",
     "postcard/use-defmt",
+    "trouble-host?/defmt",
+    "heapless/defmt-03",
+]
+
+log = ["dep:log", "trouble-host?/log"]
+
+## Add std feature for testing
+std = [
+    "embassy-executor/arch-std",
+    "embassy-executor/executor-thread",
+    "embassy-executor/task-arena-size-32768",
+    "embassy-time/std",
+    "embassy-time/generic-queue-128",
+    "critical-section?/std",
 ]
 
 ## Enable async matrix scan
@@ -123,61 +155,47 @@ split = []
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
-## Internal feature that indicates no storage available, or it's unnecessary to pass storage to the main RMK API
-_no_external_storage = []
-
 #! ### BLE feature flags
-#! 
+#!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
 ## Enable feature if you want to use nRF52840 with BLE.
-nrf52840_ble = [
-    "_nrf_ble",
-    "nrf-softdevice/nrf52840",
-    "nrf-softdevice/s140",
-    "nrf-softdevice/ble-central",
-]
+nrf52840_ble = ["_nrf_ble"]
 ## Enable feature if you want to use nRF52833 with BLE.
-nrf52833_ble = [
-    "_nrf_ble",
-    "nrf-softdevice/nrf52833",
-    "nrf-softdevice/s140",
-    "nrf-softdevice/ble-central",
-]
+nrf52833_ble = ["_nrf_ble"]
 ## Enable feature if you want to use nRF52832 with BLE.
-nrf52832_ble = [
-    "_nrf_ble",
-    "_no_usb",
-    "nrf-softdevice/nrf52832",
-    "nrf-softdevice/ble-central",
-    "nrf-softdevice/s132",
-]
+nrf52832_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52811 with BLE.
-nrf52811_ble = [
-    "_nrf_ble",
-    "_no_usb",
-    "nrf-softdevice/nrf52811",
-    "nrf-softdevice/s112",
-]
+nrf52811_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52810 with BLE.
-nrf52810_ble = [
-    "_nrf_ble",
-    "_no_usb",
-    "nrf-softdevice/nrf52810",
-    "nrf-softdevice/s112",
-]
+nrf52810_ble = ["_nrf_ble", "_no_usb"]
+_nrf_ble = ["_ble", "dep:embassy-nrf"]
 
 ## Enable feature if you want to use ESP32C3 with BLE.
-esp32c3_ble = ["_esp_ble"]
+esp32c3_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32C6 with BLE.
-esp32c6_ble = ["_esp_ble"]
+esp32c6_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
-_esp_ble = [
-    "_ble",
-    "_no_usb",          # ESP doesn't have USB support right now
-    "ssmarshal/std",
-    "dep:esp32-nimble",
-    "dep:esp-idf-svc",
+_esp_ble = ["_ble", "dep:esp-hal"]
+
+## Enable feature if you want to use trouble BLE stack
+_ble = ["dep:trouble-host", "dep:rand_core"]
+
+## Enable feature if you want to use RP2040 PIO UART
+rp2040_pio = [
+    "dep:embassy-rp",
+    "dep:embassy-hal-internal",
+    "dep:rp-pac",
+    "dep:pio",
+    "dep:fixed",
 ]
-_nrf_ble = ["_ble", "dep:nrf-softdevice", "dep:embassy-nrf", "dep:once_cell"]
-_ble = ["_no_external_storage"]
+
+## Enable feature if you want rp2040 bootloader jumping key
+rp2040_bl = ["dep:embassy-rp"]
+
+## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
+adafruit_bl = ["_nrf_ble"]
+
+[lib]
+# Don't run doctest for lib
+doctest = false

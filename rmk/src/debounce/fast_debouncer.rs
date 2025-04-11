@@ -1,8 +1,7 @@
 use embassy_time::Instant;
 
-use crate::matrix::KeyState;
-
 use super::{DebounceState, DebouncerTrait, DEBOUNCE_THRESHOLD};
+use crate::matrix::KeyState;
 
 /// Fast per-key debouncer.
 /// The debouncing algorithm is similar as QMK's [asym eager defer pk debouncer](https://github.com/qmk/qmk_firmware/blob/2fd56317763e8b3b73f0db7488ef42a70f5b946e/quantum/debounce/asym_eager_defer_pk.c)
@@ -11,17 +10,27 @@ pub struct RapidDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usiz
     debouncing: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
     for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
     /// Create a rapid debouncer
-    fn new() -> Self {
+    pub fn new() -> Self {
         RapidDebouncer {
             debouncing: [[false; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             last_ms: Instant::now(),
         }
     }
+}
 
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
+    for RapidDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+{
     /// Per-key fast debounce
     fn detect_change_with_debounce(
         &mut self,
@@ -43,7 +52,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DebouncerTrait
             }
         } else if key_state.pressed != pin_state {
             // If current key isn't in debouncing state, and a key change is detected
-            // Trigger the key imeediately and record current tick
+            // Trigger the key immediately and record current tick
             self.last_ms = Instant::now();
             // Change debouncing state
             self.debouncing[out_idx][in_idx] = true;

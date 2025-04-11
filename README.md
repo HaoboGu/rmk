@@ -51,6 +51,8 @@ You can use [rmkit](https://github.com/HaoboGu/rmkit) to initialize your project
 
 ```shell
 cargo install rmkit flip-link
+# If you have problems installing rmkit on Windows, try the following command to install rmkit:
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 

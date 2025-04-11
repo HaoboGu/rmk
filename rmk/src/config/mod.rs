@@ -3,22 +3,23 @@ mod esp_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
+use ::heapless::Vec;
+use embassy_sync::channel::Channel;
+use embassy_time::Duration;
+use embedded_hal::digital::OutputPin;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use embassy_sync::channel::Channel;
-use embassy_time::Duration;
-use embedded_hal::digital::OutputPin;
-
-use crate::{
-    event::{Event, KeyEvent},
-    hid::Report,
-    light::LedIndicator,
-    storage::FlashOperationMessage,
-    RawMutex,
-};
+use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::event::{Event, KeyEvent};
+use crate::fork::{Fork, FORK_MAX_NUM};
+use crate::hid::Report;
+use crate::light::LedIndicator;
+#[cfg(feature = "storage")]
+use crate::storage::FlashOperationMessage;
+use crate::RawMutex;
 
 /// The config struct for RMK keyboard.
 ///
@@ -26,14 +27,13 @@ use crate::{
 /// 1. `ChannelConfig`: Configurations for channels used in RMK.
 /// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
 /// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
-
 pub struct KeyboardConfig<'a, O: OutputPin> {
     pub channel_config: ChannelConfig,
     pub controller_config: ControllerConfig<O>,
     pub rmk_config: RmkConfig<'a>,
 }
 
-impl<'a, O: OutputPin> Default for KeyboardConfig<'a, O> {
+impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
     fn default() -> Self {
         Self {
             channel_config: ChannelConfig::default(),
@@ -52,22 +52,21 @@ pub struct ChannelConfig<
     pub key_event_channel: Channel<RawMutex, KeyEvent, KEY_EVENT_CHANNEL_SIZE>,
     pub event_channel: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE>,
     pub keyboard_report_channel: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>,
+    #[cfg(feature = "storage")]
     pub(crate) flash_channel: Channel<RawMutex, FlashOperationMessage, 4>,
     pub(crate) led_channel: Channel<RawMutex, LedIndicator, 4>,
     pub(crate) vial_read_channel: Channel<RawMutex, [u8; 32], 4>,
 }
 
-impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > Default for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize> Default
+    for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     fn default() -> Self {
         Self {
             key_event_channel: Channel::new(),
             event_channel: Channel::new(),
             keyboard_report_channel: Channel::new(),
+            #[cfg(feature = "storage")]
             flash_channel: Channel::new(),
             led_channel: Channel::new(),
             vial_read_channel: Channel::new(),
@@ -75,11 +74,8 @@ impl<
     }
 }
 
-impl<
-        const KEY_EVENT_CHANNEL_SIZE: usize,
-        const EVENT_CHANNEL_SIZE: usize,
-        const REPORT_CHANNEL_SIZE: usize,
-    > ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
+impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize>
+    ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
 {
     pub fn new() -> Self {
         Self::default()
@@ -102,6 +98,7 @@ impl<O: OutputPin> Default for ControllerConfig<O> {
 }
 
 /// Internal configurations for RMK keyboard.
+#[derive(Default)]
 pub struct RmkConfig<'a> {
     pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
@@ -111,29 +108,17 @@ pub struct RmkConfig<'a> {
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
     #[cfg(feature = "_esp_ble")]
-    pub ble_battery_config: BleBatteryConfig,
-}
-
-impl<'a> Default for RmkConfig<'a> {
-    fn default() -> Self {
-        Self {
-            mouse_config: MouseConfig::default(),
-            usb_config: KeyboardUsbConfig::default(),
-            vial_config: VialConfig::default(),
-            storage_config: StorageConfig::default(),
-            behavior_config: BehaviorConfig::default(),
-            #[cfg(any(feature = "_nrf_ble", feature = "_esp_ble"))]
-            ble_battery_config: BleBatteryConfig::default(),
-        }
-    }
+    pub ble_battery_config: BleBatteryConfig<'a>,
 }
 
 /// Config for configurable action behavior
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
+    pub combo: CombosConfig,
+    pub fork: ForksConfig,
 }
 
 /// Configurations for tap hold behavior
@@ -167,6 +152,34 @@ impl Default for OneShotConfig {
         Self {
             timeout: Duration::from_secs(1),
         }
+    }
+}
+
+/// Config for combo behavior
+#[derive(Clone, Debug)]
+pub struct CombosConfig {
+    pub combos: Vec<Combo, COMBO_MAX_NUM>,
+    pub timeout: Duration,
+}
+
+impl Default for CombosConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_millis(50),
+            combos: Vec::new(),
+        }
+    }
+}
+
+/// Config for fork behavior
+#[derive(Clone, Debug)]
+pub struct ForksConfig {
+    pub forks: Vec<Fork, FORK_MAX_NUM>,
+}
+
+impl Default for ForksConfig {
+    fn default() -> Self {
+        Self { forks: Vec::new() }
     }
 }
 
@@ -280,7 +293,7 @@ pub struct KeyboardUsbConfig<'a> {
     pub serial_number: &'a str,
 }
 
-impl<'a> Default for KeyboardUsbConfig<'a> {
+impl Default for KeyboardUsbConfig<'_> {
     fn default() -> Self {
         Self {
             vid: 0x4c4b,

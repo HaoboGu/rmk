@@ -9,7 +9,8 @@ use crate::input_device::rotary_encoder::Direction;
 /// The input processors receives it, processes it,
 /// and then converts it to the final keyboard/mouse report.
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     /// Keyboard event
     Key(KeyEvent),
@@ -19,16 +20,20 @@ pub enum Event {
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
     Joystick([AxisEvent; 3]),
-    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Eos`] event.
+    /// An AxisEvent in a stream of events. The receiver should keep receiving events until it receives [`Event::Eos`] event.
     AxisEventStream(AxisEvent),
+    /// Battery percentage event
+    Battery(u16),
     /// End of the event sequence
     ///
-    /// This is used with [`AxisEventStream`] to indicate the end of the event sequence.
+    /// This is used with [`Event::AxisEventStream`] to indicate the end of the event sequence.
     Eos,
+    /// Custom event
+    Custom([u8; 16]),
 }
 
 /// Event for rotary encoder
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RotaryEncoderEvent {
     /// The id of the rotary encoder
@@ -38,7 +43,7 @@ pub struct RotaryEncoderEvent {
 }
 
 /// Event for multi-touch touchpad
-#[derive(Serialize, Deserialize, Clone, Debug, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TouchpadEvent {
     /// Finger slot

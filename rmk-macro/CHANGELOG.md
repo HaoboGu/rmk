@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-04-11
+
+### Added
+
+- Internal pull-up resistor config for rotary encoders
+
+### Changed
+
+- Default polling interval of battery ADC
+
+### Fixed
+
+- Wrong GPIO pull for stm32 
+
+## [0.5.0] - 2025-04-06
+
+### Added
+
+- `SHIFTED` key
+- Transperant key
+- Rotary encoder config
+- Joystick config
+- Fork behavior config
+- Add keycode alias
+
+### Changed
+
+- Change `UP` key to `Up`
+- Deny unknown fields by default
+
+### Fixed
+
+- Wrong config for esp32 + direct pin
+- Compilation error when the pin list is empty
+
 ## [0.4.2] - 2025-01-22
 
 ### Changed
@@ -116,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support more nRF chips: nRF52833, nRF52810, nRF52811
-- Set default GPIO level according to `keybaord.toml`
+- Set default GPIO level according to `keyboard.toml`
 
 ## [0.1.5] - 2024-06-08
 

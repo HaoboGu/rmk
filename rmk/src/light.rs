@@ -1,30 +1,74 @@
-use crate::{
-    config::{LightConfig, LightPinConfig},
-    hid::{HidError, HidReaderTrait},
-};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+
 use bitfield_struct::bitfield;
-use embassy_usb::{class::hid::HidReader, driver::Driver};
+use embassy_usb::class::hid::HidReader;
+use embassy_usb::driver::Driver;
 use embedded_hal::digital::{Error, OutputPin, PinState};
 use serde::{Deserialize, Serialize};
+
+use crate::config::{LightConfig, LightPinConfig};
+use crate::hid::{HidError, HidReaderTrait};
+use crate::keyboard::LOCK_LED_STATES;
 
 #[bitfield(u8)]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LedIndicator {
     #[bits(1)]
-    numslock: bool,
+    num_lock: bool,
     #[bits(1)]
-    capslock: bool,
+    caps_lock: bool,
     #[bits(1)]
-    scrolllock: bool,
+    scroll_lock: bool,
     #[bits(1)]
     compose: bool,
     #[bits(1)]
     kana: bool,
-    #[bits(1)]
-    shift: bool,
-    #[bits(2)]
+    #[bits(3)]
     _reserved: u8,
+}
+
+impl BitOr for LedIndicator {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self::from_bits(self.into_bits() | rhs.into_bits())
+    }
+}
+impl BitAnd for LedIndicator {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::from_bits(self.into_bits() & rhs.into_bits())
+    }
+}
+impl Not for LedIndicator {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self::from_bits(!self.into_bits())
+    }
+}
+impl BitAndAssign for LedIndicator {
+    fn bitand_assign(&mut self, rhs: Self) {
+        *self = *self & rhs;
+    }
+}
+impl BitOrAssign for LedIndicator {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs;
+    }
+}
+
+impl LedIndicator {
+    pub const fn new_from(num_lock: bool, caps_lock: bool, scroll_lock: bool, compose: bool, kana: bool) -> Self {
+        Self::new()
+            .with_num_lock(num_lock)
+            .with_caps_lock(caps_lock)
+            .with_scroll_lock(scroll_lock)
+            .with_compose(compose)
+            .with_kana(kana)
+    }
 }
 
 pub(crate) struct LightService<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> {
@@ -68,7 +112,7 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
     }
 }
 
-pub(crate) struct LightController<P: OutputPin> {
+pub struct LightController<P: OutputPin> {
     capslock: Option<SingleLed<P>>,
     scrolllock: Option<SingleLed<P>>,
     numslock: Option<SingleLed<P>>,
@@ -96,11 +140,7 @@ struct SingleLed<P: OutputPin> {
 
 impl<P: OutputPin> SingleLed<P> {
     fn new(p: LightPinConfig<P>) -> Self {
-        let on_state = if p.low_active {
-            PinState::Low
-        } else {
-            PinState::High
-        };
+        let on_state = if p.low_active { PinState::Low } else { PinState::High };
         Self {
             state: false,
             on_state,
@@ -140,16 +180,14 @@ impl<'a, 'd, D: Driver<'d>> UsbLedReader<'a, 'd, D> {
     }
 }
 
-impl<'a, 'd, D: Driver<'d>> HidReaderTrait for UsbLedReader<'a, 'd, D> {
+impl<'d, D: Driver<'d>> HidReaderTrait for UsbLedReader<'_, 'd, D> {
     type ReportType = LedIndicator;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
         let mut buf = [0u8; 1];
-        self.hid_reader
-            .read(&mut buf)
-            .await
-            .map_err(|e| HidError::UsbReadError(e))?;
+        self.hid_reader.read(&mut buf).await.map_err(HidError::UsbReadError)?;
 
+        LOCK_LED_STATES.store(buf[0], core::sync::atomic::Ordering::Relaxed);
         Ok(LedIndicator::from_bits(buf[0]))
     }
 }
@@ -171,7 +209,7 @@ macro_rules! impl_led_on_off {
 }
 
 impl<P: OutputPin> LightController<P> {
-    pub(crate) fn new(light_config: LightConfig<P>) -> Self {
+    pub fn new(light_config: LightConfig<P>) -> Self {
         Self {
             capslock: light_config.capslock.map(|p| SingleLed::new(p)),
             scrolllock: light_config.scrolllock.map(|p| SingleLed::new(p)),
@@ -184,9 +222,9 @@ impl<P: OutputPin> LightController<P> {
     impl_led_on_off!(numslock, set_numslock);
 
     pub(crate) fn set_leds(&mut self, led_indicator: LedIndicator) -> Result<(), P::Error> {
-        self.set_capslock(led_indicator.capslock())?;
-        self.set_numslock(led_indicator.numslock())?;
-        self.set_scrolllock(led_indicator.scrolllock())?;
+        self.set_capslock(led_indicator.caps_lock())?;
+        self.set_numslock(led_indicator.num_lock())?;
+        self.set_scrolllock(led_indicator.scroll_lock())?;
 
         Ok(())
     }

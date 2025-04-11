@@ -7,23 +7,25 @@ mod keymap;
 mod macros;
 mod vial;
 
-use defmt::*;
-use defmt_rtt as _;
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_rp::{
-    bind_interrupts,
-    flash::{Async, Flash},
-    gpio::{AnyPin, Input, Output},
-    peripherals::USB,
-    usb::{Driver, InterruptHandler},
-};
-// use embassy_rp::flash::Blocking;
-use panic_probe as _;
-use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    run_rmk_with_async_flash,
-};
+use embassy_rp::bind_interrupts;
+use embassy_rp::flash::{Async, Flash};
+use embassy_rp::gpio::{Input, Output};
+use embassy_rp::peripherals::USB;
+use embassy_rp::usb::{Driver, InterruptHandler};
+use keymap::{COL, ROW};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -32,7 +34,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -41,7 +43,8 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_rp!(peripherals: p, input: [PIN_6, PIN_7, PIN_8, PIN_9], output: [PIN_19, PIN_20, PIN_21]);
 
     // Use internal flash to emulate eeprom
     // Both blocking and async flash are support, use different API
@@ -64,21 +67,31 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
-
-    // Start serving
-    // Use `run_rmk` for blocking flash
-    run_rmk_with_async_flash(
-        input_pins,
-        output_pins,
-        driver,
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
         flash,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // Initialize the light controller
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    join3(
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
+        ),
+        keyboard.run(),
+        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

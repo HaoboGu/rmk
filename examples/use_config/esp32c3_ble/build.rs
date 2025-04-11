@@ -1,22 +1,22 @@
-use const_gen::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::{env, fs};
+
+use const_gen::*;
 use xz2::read::XzEncoder;
 
 fn main() {
+    println!("cargo:rerun-if-changed=keyboard.toml");
+
     // Generate vial config at the root of project
     println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();
 
-    // ESP IDE system env
-    embuild::espidf::sysenv::output();
-
-    println!("cargo:rerun-if-changed=keyboard.toml");
+    println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
 
     // Set the extra linker script from defmt
-    println!("cargo:rustc-link-arg=-Tdefmt.x");
+    // println!("cargo:rustc-link-arg=-Tdefmt.x");
 }
 
 fn generate_vial_config() {
@@ -27,8 +27,7 @@ fn generate_vial_config() {
     let mut content = String::new();
     match File::open(p) {
         Ok(mut file) => {
-            file.read_to_string(&mut content)
-                .expect("Cannot read vial.json");
+            file.read_to_string(&mut content).expect("Cannot read vial.json");
         }
         Err(e) => println!("Cannot find vial.json {:?}: {}", p, e),
     };

@@ -1,6 +1,5 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-#runner = "probe-rs run --chip RP2040"
-runner = "probe-rs run --probe 0d28:0204:000100011A5A5CC60000000000051D66A5A5A5A597969908 --chip rp2040"
+runner = "probe-rs run --chip RP2040"
 # runner = "elf2uf2-rs -d"
 
 [build]

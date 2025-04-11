@@ -1,6 +1,6 @@
 [package]
 name = "rmk-macro"
-version = "0.4.2"
+version = "0.5.1"
 edition = "2021"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Proc-macro crate of RMK"

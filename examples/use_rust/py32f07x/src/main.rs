@@ -8,33 +8,36 @@ mod keymap;
 mod macros;
 mod vial;
 
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use py32_hal::{
-    bind_interrupts,
-    gpio::{AnyPin, Input, Output},
-    rcc::{Pll, PllMul, PllSource, Sysclk},
-    time::Hertz,
-    usb::{Driver, InterruptHandler},
-};
-// use py32_hal::flash::Blocking;
-use panic_probe as _;
-use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    run_rmk,
-};
+use keymap::{COL, ROW};
+use py32_hal::bind_interrupts;
+use py32_hal::flash::Flash;
+use py32_hal::gpio::{Input, Output};
+use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
+use py32_hal::usb::{Driver, InterruptHandler};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::storage::async_flash_wrapper;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USB => InterruptHandler<py32_hal::peripherals::USB>;
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let mut cfg: py32_hal::Config = Default::default();
 
     // PY32 USB uses PLL as the clock source and can only run at 48Mhz.
-    cfg.rcc.hsi = Some(Hertz::mhz(16));
+    cfg.rcc.hsi = Some(HsiFs::HSI_16MHZ);
     cfg.rcc.pll = Some(Pll {
         src: PllSource::HSI,
         mul: PllMul::MUL3,
@@ -46,7 +49,8 @@ async fn main(spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,
@@ -64,22 +68,31 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    // Keyboard config
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
+    let f = Flash::new_blocking(p.FLASH);
 
-    // Start serving
-    // Use `run_rmk` for blocking flash
-    run_rmk(
-        input_pins,
-        output_pins,
-        driver,
-        // flash,
-        &mut keymap::get_default_keymap(),
-        keyboard_config,
-        spawner,
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        async_flash_wrapper(f),
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // Initialize the light controller
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    join3(
+        run_devices!((matrix) => EVENT_CHANNEL),
+        keyboard.run(),
+        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

@@ -7,30 +7,27 @@ mod keymap;
 mod macros;
 mod vial;
 
-use crate::keymap::{COL, NUM_LAYER, ROW};
-use defmt::*;
-use defmt_rtt as _;
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
-use embassy_rp::{
-    bind_interrupts,
-    flash::{Async, Flash},
-    gpio::{AnyPin, Input, Output},
-    peripherals::{self, UART0, USB},
-    uart::{self, BufferedUart},
-    usb::{Driver, InterruptHandler},
-};
-// use embassy_rp::flash::Blocking;
-use panic_probe as _;
-use rmk::{
-    config::{KeyboardConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    split::{
-        central::{run_peripheral_monitor, run_rmk_split_central},
-        SPLIT_MESSAGE_MAX_SIZE,
-    },
-};
+use embassy_rp::bind_interrupts;
+use embassy_rp::flash::{Async, Flash};
+use embassy_rp::gpio::{Input, Output};
+use embassy_rp::peripherals::{UART0, USB};
+use embassy_rp::uart::{self, BufferedUart};
+use embassy_rp::usb::{Driver, InterruptHandler};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join4;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::split::central::{run_peripheral_manager, CentralMatrix};
+use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -40,7 +37,7 @@ bind_interrupts!(struct Irqs {
 const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     info!("RMK start!");
     // Initialize peripherals
     let p = embassy_rp::init(Default::default());
@@ -73,49 +70,38 @@ async fn main(spawner: Spawner) {
         ..Default::default()
     };
 
-    let keyboard_config = KeyboardConfig {
-        rmk_config,
-        ..Default::default()
-    };
-
     static TX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_receiver = BufferedUart::new(
-        p.UART0,
-        Irqs,
-        p.PIN_0,
-        p.PIN_1,
-        tx_buf,
-        rx_buf,
-        uart::Config::default(),
-    );
+    let uart_receiver = BufferedUart::new(p.UART0, Irqs, p.PIN_0, p.PIN_1, tx_buf, rx_buf, uart::Config::default());
 
-    // Start serving
-    join(
-        run_rmk_split_central::<
-            Input<'_>,
-            Output<'_>,
-            Driver<'_, USB>,
-            Flash<peripherals::FLASH, Async, FLASH_SIZE>,
-            ROW,
-            COL,
-            2,
-            2,
-            0,
-            0,
-            NUM_LAYER,
-        >(
-            input_pins,
-            output_pins,
-            driver,
-            flash,
-            &mut keymap::get_default_keymap(),
-            keyboard_config,
-            spawner,
+    // Initialize the storage and keymap
+    let mut default_keymap = keymap::get_default_keymap();
+    let (keymap, mut storage) = initialize_keymap_and_storage(
+        &mut default_keymap,
+        flash,
+        rmk_config.storage_config,
+        rmk_config.behavior_config.clone(),
+    )
+    .await;
+
+    // Initialize the matrix + keyboard
+    let debouncer = DefaultDebouncer::<2, 2>::new();
+    let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
+    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+
+    // Initialize the light controller
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
+
+    // Start
+    join4(
+        run_devices! (
+            (matrix) => EVENT_CHANNEL,
         ),
-        run_peripheral_monitor::<2, 1, 2, 2, _>(0, uart_receiver),
+        keyboard.run(),
+        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
+        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

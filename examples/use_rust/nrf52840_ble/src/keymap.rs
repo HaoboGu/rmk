@@ -1,12 +1,12 @@
-use rmk::action::KeyAction;
-use rmk::{a, k, layer, mo};
+use rmk::action::{EncoderAction, KeyAction};
+use rmk::{a, encoder, k, layer, mo};
 pub(crate) const COL: usize = 14;
 pub(crate) const ROW: usize = 5;
 pub(crate) const NUM_LAYER: usize = 8;
-// pub(crate) const NUM_ENCODER: usize = 2;
+pub(crate) const NUM_ENCODER: usize = 2;
 
 #[rustfmt::skip]
-pub fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
+pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         layer!([
             [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
@@ -19,87 +19,87 @@ pub fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(UP)],
+            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
     ]
 }
 
-// pub fn get_default_encoder_map() -> [[(KeyAction, KeyAction); NUM_ENCODER]; NUM_LAYER] {
-//     [
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//         [
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//             (k!(KbVolumeUp), k!(KbVolumeDown)),
-//         ],
-//     ]
-// }
+pub const fn get_default_encoder_map() -> [[EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+    [
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+        [
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+            encoder!(k!(KbVolumeUp), k!(KbVolumeDown)),
+        ],
+    ]
+}

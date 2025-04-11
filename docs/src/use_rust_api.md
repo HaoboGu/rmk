@@ -8,7 +8,8 @@ By default, the generated project uses `keyboard.toml` to config the RMK keyboar
 
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM to your microcontroller.
 
-If you're using **nRF52840**, generally you have to change start address in `memory.x` to 0x27000 or 0x26000, according to your softdevice version. For example, softdevice v6.1.x should use 0x00026000 and v7.1.x should be 0x00027000
+If you're using **nRF52840**, ensure that you have [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) flashed to your board. Most nice!nano compatible boards have it already. As long as you can open a USB drive for your board and update uf2 firmware by dragging and dropping, you're all set.
+
 
 You can either checkout your microcontroller's datasheet or existing Rust project of your microcontroller for it.
 
@@ -50,6 +51,8 @@ in `src/keymap.rs`, update keyboard matrix constants and add a `get_default_keym
 RMK provides a bunch of
 useful [macros](https://docs.rs/rmk/latest/rmk/#macros) helping you define your keymap. Check
 out [keymap_configuration](../keymap.md) chapter for more details. You can also check `src/keymap.rs` files under <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
+
+Some `KeyAction`s are not supported by the macros, plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Kc1), Action::Key(KeyCode::Kc2))`
 
 ### Define your matrix
 

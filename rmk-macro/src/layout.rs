@@ -5,15 +5,16 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
 use crate::keyboard_config::KeyboardConfig;
+use crate::keycode_alias::KEYCODE_ALIAS;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
-pub(crate) fn expand_layout_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     let mut layers = vec![];
     for layer in keyboard_config.layout.keymap.clone() {
         layers.push(expand_layer(layer));
     }
     return quote! {
-        pub fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+        pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
     };
@@ -107,18 +108,16 @@ fn parse_modifiers(modifiers_str: &str) -> ModifierCombinationMacro {
 }
 
 /// Parse the key string at a single position
-fn parse_key(key: String) -> TokenStream2 {
-    if key.len() < 5 {
-        return if key.len() > 0 && key.trim_start_matches("_").len() == 0 {
-            quote! { ::rmk::a!(No) }
-        } else {
-            let ident = format_ident!("{}", key);
-            quote! { ::rmk::k!(#ident) }
-        };
+pub(crate) fn parse_key(key: String) -> TokenStream2 {
+    if !key.is_empty() && key.trim_start_matches("_").is_empty() {
+        return quote! { ::rmk::a!(Transparent) };
+    } else if !key.is_empty() && key == "No" {
+        return quote! { ::rmk::a!(No) };
     }
-    match &key[0..3] {
-        "WM(" => {
-            if let Some(internal) = key.trim_start_matches("WM(").strip_suffix(")") {
+
+    match key {
+        s if s.starts_with("WM(") => {
+            if let Some(internal) = s.trim_start_matches("WM(").strip_suffix(")") {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
@@ -126,7 +125,7 @@ fn parse_key(key: String) -> TokenStream2 {
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
-                        compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                        compile_error!("keyboard.toml: WM(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                     };
                 }
 
@@ -148,20 +147,20 @@ fn parse_key(key: String) -> TokenStream2 {
                 };
             }
         }
-        "MO(" => {
-            let layer = get_layer(key, "MO(", ")");
+        s if s.starts_with("MO(") => {
+            let layer = get_layer(s, "MO(", ")");
             quote! {
                 ::rmk::mo!(#layer)
             }
         }
-        "OSL" => {
-            let layer = get_layer(key, "OSL(", ")");
+        s if s.starts_with("OSL(") => {
+            let layer = get_layer(s, "OSL(", ")");
             quote! {
                 ::rmk::osl!(#layer)
             }
         }
-        "OSM" => {
-            if let Some(internal) = key.trim_start_matches("OSM(").strip_suffix(")") {
+        s if s.starts_with("OSM(") => {
+            if let Some(internal) = s.trim_start_matches("OSM(").strip_suffix(")") {
                 let modifiers = parse_modifiers(internal);
 
                 if modifiers.is_empty() {
@@ -178,8 +177,8 @@ fn parse_key(key: String) -> TokenStream2 {
                 }
             }
         }
-        "LM(" => {
-            if let Some(internal) = key.trim_start_matches("LM(").strip_suffix(")") {
+        s if s.starts_with("LM(") => {
+            if let Some(internal) = s.trim_start_matches("LM(").strip_suffix(")") {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
@@ -208,8 +207,8 @@ fn parse_key(key: String) -> TokenStream2 {
                 };
             }
         }
-        "LT(" => {
-            let keys: Vec<&str> = key
+        s if s.starts_with("LT(") => {
+            let keys: Vec<&str> = s
                 .trim_start_matches("LT(")
                 .trim_end_matches(")")
                 .split_terminator(",")
@@ -227,32 +226,32 @@ fn parse_key(key: String) -> TokenStream2 {
                 ::rmk::lt!(#layer, #key)
             }
         }
-        "TT(" => {
-            let layer = get_layer(key, "TT(", ")");
+        s if s.starts_with("TT(") => {
+            let layer = get_layer(s, "TT(", ")");
             quote! {
                 ::rmk::tt!(#layer)
             }
         }
-        "TG(" => {
-            let layer = get_layer(key, "TG(", ")");
+        s if s.starts_with("TG(") => {
+            let layer = get_layer(s, "TG(", ")");
             quote! {
                 ::rmk::tg!(#layer)
             }
         }
-        "TO(" => {
-            let layer = get_layer(key, "TO(", ")");
+        s if s.starts_with("TO(") => {
+            let layer = get_layer(s, "TO(", ")");
             quote! {
                 ::rmk::to!(#layer)
             }
         }
-        "DF(" => {
-            let layer = get_layer(key, "DF(", ")");
+        s if s.starts_with("DF(") => {
+            let layer = get_layer(s, "DF(", ")");
             quote! {
                 ::rmk::df!(#layer)
             }
         }
-        "MT(" => {
-            if let Some(internal) = key.trim_start_matches("MT(").strip_suffix(")") {
+        s if s.starts_with("MT(") => {
+            if let Some(internal) = s.trim_start_matches("MT(").strip_suffix(")") {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
@@ -280,8 +279,8 @@ fn parse_key(key: String) -> TokenStream2 {
                 };
             }
         }
-        "TH(" => {
-            if let Some(internal) = key.trim_start_matches("TH(").strip_suffix(")") {
+        s if s.starts_with("TH(") => {
+            if let Some(internal) = s.trim_start_matches("TH(").strip_suffix(")") {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
@@ -304,10 +303,22 @@ fn parse_key(key: String) -> TokenStream2 {
                 };
             }
         }
-        _ => {
-            let ident = format_ident!("{}", key);
-            quote! {::rmk::k!(#ident) }
+        s if s.starts_with("SHIFTED(") => {
+            if let Some(internal) = s.trim_start_matches("SHIFTED(").strip_suffix(")") {
+                if internal.is_empty() {
+                    return quote! {
+                        compile_error!("keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                    };
+                }
+                let ident = format_ident!("{}", internal);
+                quote! { ::rmk::shifted!(#ident) }
+            } else {
+                return quote! {
+                    compile_error!("keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
+                };
+            }
         }
+        _ => get_key_with_alias(key),
     }
 }
 
@@ -316,4 +327,13 @@ fn parse_key(key: String) -> TokenStream2 {
 fn get_layer(key: String, prefix: &str, suffix: &str) -> u8 {
     let layer_str = key.trim_start_matches(prefix).trim_end_matches(suffix);
     layer_str.parse::<u8>().unwrap()
+}
+
+fn get_key_with_alias(key: String) -> TokenStream2 {
+    let key = match KEYCODE_ALIAS.get(key.to_lowercase().as_str()) {
+        Some(k) => *k,
+        None => key.as_str(),
+    };
+    let ident = format_ident!("{}", key);
+    quote! { ::rmk::k!(#ident) }
 }
