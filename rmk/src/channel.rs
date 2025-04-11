@@ -1,14 +1,15 @@
 //! Exposed channels which can be used to share data across devices & processors
 
+use embassy_sync::channel::Channel;
+pub use embassy_sync::{blocking_mutex, channel, zerocopy_channel};
+#[cfg(feature = "_ble")]
+use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
+
 use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
 #[cfg(feature = "storage")]
 use crate::storage::FlashOperationMessage;
 use crate::RawMutex;
-use embassy_sync::channel::Channel;
-pub use embassy_sync::{blocking_mutex, channel, zerocopy_channel};
-#[cfg(feature = "_ble")]
-use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
 
 pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;

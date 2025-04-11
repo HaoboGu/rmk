@@ -1339,18 +1339,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+    use embassy_futures::block_on;
+    use embassy_futures::select::select;
+    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    use embassy_sync::mutex::Mutex;
+    use embassy_time::{Duration, Timer};
+    use futures::{join, FutureExt};
+    use rusty_fork::rusty_fork_test;
+
     use super::*;
     use crate::action::KeyAction;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
     use crate::{a, k, layer, mo};
-    use embassy_futures::block_on;
-    use embassy_futures::select::select;
-    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
-    use embassy_time::{Duration, Timer};
-    use futures::{join, FutureExt};
-    use rusty_fork::rusty_fork_test;
 
     // mod key values
     const KC_LSHIFT: u8 = 1 << 1;

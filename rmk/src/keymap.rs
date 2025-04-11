@@ -355,11 +355,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+    use super::{Combo, _reorder_combos};
+    use crate::action::KeyAction;
     use crate::combo::COMBO_MAX_NUM;
     use crate::k;
-    use crate::{action::KeyAction, keycode::KeyCode};
-
-    use super::{Combo, _reorder_combos};
+    use crate::keycode::KeyCode;
 
     #[test]
     fn test_combo_reordering() {
@@ -386,16 +386,7 @@ mod test {
             .collect();
         assert_eq!(
             result,
-            vec![
-                KeyCode::Z as u16,
-                KeyCode::Y as u16,
-                KeyCode::X as u16,
-                0,
-                0,
-                0,
-                0,
-                0
-            ]
+            vec![KeyCode::Z as u16, KeyCode::Y as u16, KeyCode::X as u16, 0, 0, 0, 0, 0]
         );
     }
 }

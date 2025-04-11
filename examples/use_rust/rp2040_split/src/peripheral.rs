@@ -16,8 +16,8 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::run_devices;
-use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::peripheral::run_rmk_split_peripheral;
+use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 

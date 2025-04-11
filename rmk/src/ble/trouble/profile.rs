@@ -2,18 +2,17 @@
 
 use core::sync::atomic::Ordering;
 
-use super::ble_server::CCCD_TABLE_SIZE;
 use embassy_futures::select::{select3, Either3};
 use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
-
 #[cfg(feature = "storage")]
 use {
     crate::channel::FLASH_CHANNEL,
     crate::storage::{FlashOperationMessage, FLASH_OPERATION_FINISHED},
 };
 
+use super::ble_server::CCCD_TABLE_SIZE;
 use crate::ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM};
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
