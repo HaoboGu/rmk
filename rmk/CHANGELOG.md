@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.6.1] - 2025-04-11
+
 ### Added
 
 - Repeat key support
+- Basic GraveEscape support
 - Internal pull-up config for encoders
 
 
@@ -17,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Wrong GPIO pulls for stm32
 - Combo cannot be triggered correctly when there's overlap between combos 
+- Battery level led indicator failure
 
 ## [0.6.0] - 2025-04-06
 
