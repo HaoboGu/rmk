@@ -12,6 +12,9 @@ TODO:
 - [ ] more functions besides mouse
 
 ## `toml` configuration
+
+Example configuration:
+
 ```toml
 [[input_device.joystick]]
 name = "default"
@@ -21,6 +24,7 @@ pin_z = "_"
 transform = [[80, 0], [0, 80]]
 bias = [29130, 29365]
 resolution = 6
+map_to = "mouse"
 # func = "mouse | n-direction key" # TODO: only mouse is supported now
 ```
 
@@ -32,6 +36,7 @@ resolution = 6
 - `transform`: the transformation matrix of the joystick
 - `bias`: the bias of each axis
 - `resolution`: the resolution of each axis
+- `map_to`: the device that the joystick will be mapped to. `mouse` for mouse and `joystick` for joystick
 
 > #### Axis:
 >
