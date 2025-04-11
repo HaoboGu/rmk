@@ -26,6 +26,7 @@
 - [Use Rust API](use_rust_api.md)
 
 # Input Devices
+- [Rotary encoder](input_devices/encoder.md)
 - [Joystick](input_devices/joystick.md)
 
 # Development
