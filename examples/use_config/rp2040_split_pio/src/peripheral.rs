@@ -4,4 +4,4 @@
 use rmk::macros::rmk_peripheral;
 
 #[rmk_peripheral(id = 0)]
-mod keybaord_central {}
+mod keyboard_central {}
