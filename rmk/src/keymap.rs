@@ -38,10 +38,6 @@ pub struct KeyMap<
     layer_cache: [[u8; COL]; ROW],
     /// Macro cache
     pub(crate) macro_cache: [u8; MACRO_SPACE_SIZE],
-    /// Combos
-    pub(crate) combos: [Combo; COMBO_MAX_NUM],
-    /// Forks
-    pub(crate) forks: [Fork; FORK_MAX_NUM],
     /// Options for configurable action behavior
     pub(crate) behavior: BehaviorConfig,
 }
@@ -80,8 +76,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache: [0; MACRO_SPACE_SIZE],
-            combos,
-            forks,
             behavior,
         }
     }
@@ -132,8 +126,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             macro_cache,
-            combos,
-            forks,
             behavior,
         }
     }
@@ -369,7 +361,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     //order combos by their actions length
     pub(crate) fn reorder_combos(&mut self) {
-        _reorder_combos(&mut self.combos);
+        _reorder_combos(&mut self.behavior.combo.combos);
     }
 }
 
