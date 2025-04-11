@@ -77,7 +77,7 @@ pub(crate) fn expand_adc_device(
                     "mouse" => quote! { rmk::input_device::joystick::MapTo::Mouse },
                     "joystick" => quote! { rmk::input_device::joystick::MapTo::Joystick },
                     unsupported => {
-                        panic!("Unsupported map_to type: {}", unsupported)
+                        panic!("Unsupported joystick.map_to type: {}", unsupported)
                     }
                 };
 
