@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-04-11
+
+### Added
+
+- Internal pull-up resistor config for rotary encoders
+
+### Changed
+
+- Default polling interval of battery ADC
+
+### Fixed
+
+- Wrong GPIO pull for stm32 
+
 ## [0.5.0] - 2025-04-06
 
 ### Added
