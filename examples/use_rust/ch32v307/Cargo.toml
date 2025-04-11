@@ -21,16 +21,16 @@ static_cell = "2"
 critical-section = "1.2.0"
 
 embassy-time = "0.4"
-embassy-usb = "0.3.0"
+embassy-usb = "0.4.0"
 nb = "1.1.0"
 
 qingke = { version = "0.5.0", features = ["unsafe-trust-wch-atomics"] }
 qingke-rt = "0.5.0"
 
 # Not working for now
-defmt = "0.3"
+defmt = "1.0"
 
-panic-halt = "1.0.0"
+panic-halt = "1.0"
 
 [patch.crates-io]
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }

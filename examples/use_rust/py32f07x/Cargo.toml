@@ -25,10 +25,10 @@ embassy-executor = { version = "0.7", features = [
     "executor-thread",
 ] }
 cortex-m-rt = "0.7.5"
-portable-atomic = { version = "1.10", features = ["critical-section"] }
-defmt = "0.3"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+portable-atomic = { version = "1.11", features = ["critical-section"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
 
 [patch.crates-io]
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }

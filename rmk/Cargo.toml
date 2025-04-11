@@ -39,7 +39,7 @@ bitfield-struct = "0.10"
 static_cell = "2"
 sequential-storage = "4.0.1"
 
-defmt = { version = "0.3", optional = true }
+defmt = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 num_enum = { version = "0.7", default-features = false }
 byteorder = { version = "1", default-features = false }
@@ -52,7 +52,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "596fa58", features = [
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "3d77c0b", features = [
     "gatt",
     "scan",
     "derive",
@@ -72,6 +72,9 @@ embassy-hal-internal = { version = "0.2.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
 fixed = { version = "1.28.0", optional = true }
+
+# ESP32 dependencies
+esp-hal = { version = "1.0.0-beta.0", optional = true }
 
 # Document feature
 document-features = "0.2"
@@ -170,7 +173,7 @@ esp32c3_ble = ["_esp_ble", "_no_usb"]
 esp32c6_ble = ["_esp_ble", "_no_usb"]
 ## Enable feature if you want to use ESP32S3 with BLE.
 esp32s3_ble = ["_esp_ble"]
-_esp_ble = ["_ble"]
+_esp_ble = ["_ble", "dep:esp-hal"]
 
 ## Enable feature if you want to use trouble BLE stack
 _ble = ["dep:trouble-host", "dep:rand_core"]

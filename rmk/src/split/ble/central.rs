@@ -5,13 +5,12 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use trouble_host::prelude::*;
 
+use crate::ble::trouble::L2CAP_MTU;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
-
-const L2CAP_MTU: usize = 255;
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -174,22 +173,22 @@ async fn run_peripheral_manager<
 /// The BLE service should keep running, it processes the split message in the callback, which is not async.
 /// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
 /// so we need this wrapper to forward split message to channel.
-pub(crate) struct BleSplitCentralDriver<'a, 'c, 'd, C: Controller> {
+pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller> {
     // Listener for split message from peripheral
-    listener: NotificationListener<'c, L2CAP_MTU>,
+    listener: NotificationListener<'b, L2CAP_MTU>,
     // Characteristic to send split message to peripheral
     message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
     // Client
-    client: &'d GattClient<'a, C, 10, L2CAP_MTU>,
+    client: &'c GattClient<'a, C, 10, L2CAP_MTU>,
     // Cached connection state
     connection_state: bool,
 }
 
-impl<'a, 'c, 'd, C: Controller> BleSplitCentralDriver<'a, 'c, 'd, C> {
+impl<'a, 'b, 'c, C: Controller> BleSplitCentralDriver<'a, 'b, 'c, C> {
     pub(crate) fn new(
-        listener: NotificationListener<'c, L2CAP_MTU>,
+        listener: NotificationListener<'b, L2CAP_MTU>,
         message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
-        client: &'d GattClient<'a, C, 10, L2CAP_MTU>,
+        client: &'c GattClient<'a, C, 10, L2CAP_MTU>,
     ) -> Self {
         Self {
             listener,
@@ -200,7 +199,7 @@ impl<'a, 'c, 'd, C: Controller> BleSplitCentralDriver<'a, 'c, 'd, C> {
     }
 }
 
-impl<'a, 'c, 'd, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'c, 'd, C> {
+impl<'a, 'b, 'c, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'b, 'c, C> {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
         let data = self.listener.next().await;
         let message = postcard::from_bytes(&data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
@@ -209,7 +208,7 @@ impl<'a, 'c, 'd, C: Controller> SplitReader for BleSplitCentralDriver<'a, 'c, 'd
     }
 }
 
-impl<'a, 'c, 'd, C: Controller> SplitWriter for BleSplitCentralDriver<'a, 'c, 'd, C> {
+impl<'a, 'b, 'c, C: Controller> SplitWriter for BleSplitCentralDriver<'a, 'b, 'c, C> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
         if let SplitMessage::ConnectionState(state) = message {
             // ConnectionState changed, update cached state and notify peripheral

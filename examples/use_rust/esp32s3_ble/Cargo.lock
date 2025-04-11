@@ -1737,6 +1737,7 @@ dependencies = [
  "embedded-io-async",
  "embedded-storage",
  "embedded-storage-async",
+ "esp-hal",
  "futures",
  "heapless 0.8.0",
  "log",
@@ -2101,6 +2102,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=3d77c0b#3d77c0bad07aa278f72754119320169688614328"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2123,6 +2125,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=3d77c0b#3d77c0bad07aa278f72754119320169688614328"
 dependencies = [
  "Inflector",
  "darling",

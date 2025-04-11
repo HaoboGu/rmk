@@ -27,6 +27,6 @@ pub(crate) fn reboot_keyboard() {
     ))]
     cortex_m::peripheral::SCB::sys_reset();
 
-    // #[cfg(feature = "_esp_ble")]
-    // esp_idf_svc::hal::reset::restart();
+    #[cfg(feature = "_esp_ble")]
+    esp_hal::system::software_reset();
 }

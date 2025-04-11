@@ -14,6 +14,7 @@ rmk = { path = "../../../rmk", features = [
     "nrf52840_ble",
     "split",
     "async_matrix",
+    "adafruit_bl",
 ] }
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
@@ -45,9 +46,9 @@ embassy-executor = { version = "0.7", features = [
     "arch-cortex-m",
     "executor-thread",
 ] }
-defmt = "0.3"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
 static_cell = "2"
 
 rand = { version = "0.8.4", default-features = false }

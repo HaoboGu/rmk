@@ -184,13 +184,13 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
             .iter()
             .position(|info| info.slot_num == active_profile)
         {
-            // Check whether the cccd table is the same as the current one
+            // Check whether the CCCD table is the same as the current one
             if self.bonded_devices[index].cccd_table.inner() == table.inner() {
-                info!("Skip updating same cccd table");
+                info!("Skip updating same CCCD table");
                 return;
             }
 
-            debug!("Updating profile {} cccd table: {:?}", active_profile, table);
+            debug!("Updating profile {} CCCD table: {:?}", active_profile, table);
             let mut profile_info = self.bonded_devices[index].clone();
             profile_info.cccd_table = table;
             self.bonded_devices[index] = profile_info.clone();
@@ -200,7 +200,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                 .send(crate::storage::FlashOperationMessage::ProfileInfo(profile_info))
                 .await;
         } else {
-            error!("Failed to update profile cccd table: profile not found");
+            error!("Failed to update profile CCCD table: profile not found");
         }
     }
 

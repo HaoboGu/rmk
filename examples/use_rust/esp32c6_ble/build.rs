@@ -11,9 +11,7 @@ fn main() {
     println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();
 
-    // ESP IDE system env
     println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
-    // embuild::espidf::sysenv::output();
 
     // Set the extra linker script from defmt
     // println!("cargo:rustc-link-arg=-Tdefmt.x");

@@ -7,13 +7,13 @@ use const_gen::*;
 use xz2::read::XzEncoder;
 
 fn main() {
+    println!("cargo:rerun-if-changed=keyboard.toml");
+
     // Generate vial config at the root of project
     println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();
 
-    // ESP IDE system env
     println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
-    // embuild::espidf::sysenv::output();
 
     // Set the extra linker script from defmt
     // println!("cargo:rustc-link-arg=-Tdefmt.x");

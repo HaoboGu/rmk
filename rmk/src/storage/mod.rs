@@ -15,13 +15,13 @@ use sequential_storage::map::{fetch_all_items, fetch_item, store_item, Serializa
 use sequential_storage::Error as SSError;
 #[cfg(feature = "_ble")]
 use {
+    crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
     trouble_host::{prelude::*, BondInformation, LongTermKey},
 };
 
 use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
-use crate::ble::trouble::ble_server::CCCD_TABLE_SIZE;
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::StorageConfig;
@@ -1135,5 +1135,3 @@ macro_rules! read_storage {
         .await
     };
 }
-
-// pub(crate) use read_storage;

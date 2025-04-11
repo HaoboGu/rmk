@@ -19,6 +19,8 @@ use const_gen::*;
 use xz2::read::XzEncoder;
 
 fn main() {
+    println!("cargo:rerun-if-changed=keyboard.toml");
+
     // Generate vial config at the root of project
     println!("cargo:rerun-if-changed=vial.json");
     generate_vial_config();

@@ -54,23 +54,22 @@ pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 /// Max number of connections
 const CONNECTIONS_MAX: usize = 4;
 
-/// Max number of L2CAP channels.
+/// Max number of L2CAP channels
 const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+
+/// L2CAP MTU size
+pub(crate) const L2CAP_MTU: usize = 255;
 
 /// Build the BLE stack.
 pub async fn build_ble_stack<'a, C: Controller, RNG: RngCore + CryptoRng>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 255>,
+    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
 ) -> Stack<'a, C> {
-    // Using a fixed "random" address can be useful for testing. In real scenarios, one would
-    // use e.g. the MAC 6 byte array as the address (how to get that varies by the platform).
-    let address: Address = Address::random(host_address);
-
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
-        .set_random_address(address)
+        .set_random_address(Address::random(host_address))
         .set_random_generator_seed(random_generator)
 }
 
@@ -353,18 +352,18 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                                     debug!("Got via packet: {:?}", event.data());
                                     let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
                                     VIAL_READ_CHANNEL.send(data).await;
+                                } else if event.handle()
+                                    == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
+                                    || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
+                                    || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
+                                    || event.handle() == media.cccd_handle.expect("No CCCD for media report")
+                                    || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
+                                    || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
+                                {
+                                    // CCCD write event
+                                    cccd_updated = true;
                                 } else {
                                     debug!("Write GATT Event to Unknown: {:?}", event.handle());
-                                }
-
-                                if event.handle() == input_keyboard.cccd_handle.expect("No cccd for input keyboard")
-                                    || event.handle() == input_via.cccd_handle.expect("No cccd for input via")
-                                    || event.handle() == mouse.cccd_handle.expect("No cccd for mouse report")
-                                    || event.handle() == media.cccd_handle.expect("No cccd for media report")
-                                    || event.handle() == system_control.cccd_handle.expect("No cccd for system report")
-                                    || event.handle() == battery_level.cccd_handle.expect("No cccd for battery level")
-                                {
-                                    cccd_updated = true;
                                 }
 
                                 if conn.raw().encrypted() {
@@ -394,7 +393,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                         // Update CCCD table after processing the event
                         if cccd_updated {
                             if let Some(table) = server.get_cccd_table(conn.raw()) {
-                                info!("Updated profile cccd table: {:?}", table);
+                                info!("Updated profile CCCD table: {:?}", table);
                                 UPDATED_CCCD_TABLE.signal(table);
                             }
                         }
@@ -576,14 +575,14 @@ async fn run_ble_keyboard<
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
 
-    // Load cccd table from storage
+    // Load CCCD table from storage
     #[cfg(feature = "storage")]
     if let Ok(Some(bond_info)) = storage
         .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
         .await
     {
         if bond_info.info.address == conn.raw().peer_address() {
-            info!("Loading cccd table from storage: {:?}", bond_info.cccd_table);
+            info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
             server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
         }
     }
