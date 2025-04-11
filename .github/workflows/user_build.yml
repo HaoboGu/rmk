@@ -54,6 +54,9 @@ jobs:
         run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
       - name: Build firmware
         working-directory: ./rmk
+        run: cargo build --release
+      - name: Build uf2 firmware
+        working-directory: ./rmk
         run: cargo make uf2 --release
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -133,6 +133,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Via report
     via_report: ViaReport,
 
+    /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
+    last_key_code: KeyCode,
+
     /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
     /// `last_mouse_tick` tracks at most 8 mouse keys, with its recent state.
     /// It can be used to control the mouse report rate and release mouse key properly.
@@ -192,6 +195,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 input_data: [0; 32],
                 output_data: [0; 32],
             },
+            last_key_code: KeyCode::No,
             last_mouse_tick: FnvIndexMap::new(),
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
@@ -858,7 +862,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     // Process a single keycode, typically a basic key or a modifier key.
-    async fn process_action_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
+    async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
+        if key == KeyCode::Again {
+            key = self.last_key_code;
+        } else {
+            self.last_key_code = key;
+        }
+
         if key.is_consumer() {
             self.process_action_consumer_control(key, key_event).await;
         } else if key.is_system() {
@@ -1541,6 +1551,7 @@ mod test {
         KeyEvent { row, col, pressed }
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_register_key() {
         let main = async {
@@ -1550,7 +1561,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_basic_key_press_release() {
         let main = async {
@@ -1566,7 +1578,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_modifier_key() {
         let main = async {
@@ -1582,7 +1595,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_tap_hold_key() {
         let main = async {
@@ -1615,30 +1629,30 @@ mod test {
         };
         block_on(main);
     }
-
+    }
     rusty_fork_test! {
-        #[test]
-        fn test_combo_timeout_and_ignore() {
-            let main = async {
-                let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    combo: get_combos_config(),
-                    ..Default::default()
-                });
+    #[test]
+    fn test_combo_timeout_and_ignore() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
 
-                let sequence = key_sequence![
-                    [3, 4, true, 10],   // Press V
-                    [3, 4, false, 100], // Release V
-                ];
+            let sequence = key_sequence![
+                [3, 4, true, 10],   // Press V
+                [3, 4, false, 100], // Release V
+            ];
 
-                let expected_reports = key_report![
-                    [0, [KeyCode::V as u8, 0, 0, 0, 0, 0]],
-                ];
+            let expected_reports = key_report![
+                [0, [KeyCode::V as u8, 0, 0, 0, 0, 0]],
+            ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-            };
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
 
-            block_on(main);
-        }
+        block_on(main);
+    }
     }
     rusty_fork_test! {
     #[test]
@@ -1672,37 +1686,38 @@ mod test {
     }
 
     rusty_fork_test! {
-        #[test]
-        fn test_combo_with_mod() {
-            let main = async {
-                let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    combo: get_combos_config(),
-                    ..Default::default()
-                });
+    #[test]
+    fn test_combo_with_mod() {
+        let main = async {
+            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
+                combo: get_combos_config(),
+                ..Default::default()
+            });
 
-                let sequence = key_sequence![
-                    [3, 4, true, 10],   // Press V
-                    [3, 5, true, 10],   // Press B
-                    [3, 6, true, 50],   // Press N
-                    [3, 6, false, 70],  // Release N
-                    [3, 4, false, 100], // Release V
-                    [3, 5, false, 110], // Release B
-                ];
+            let sequence = key_sequence![
+                [3, 4, true, 10],   // Press V
+                [3, 5, true, 10],   // Press B
+                [3, 6, true, 50],   // Press N
+                [3, 6, false, 70],  // Release N
+                [3, 4, false, 100], // Release V
+                [3, 5, false, 110], // Release B
+            ];
 
-                let expected_reports = key_report![
-                    [KC_LSHIFT, [0; 6]],
-                    [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [0; 6]],
-                    [0, [0; 6]],
-                ];
+            let expected_reports = key_report![
+                [KC_LSHIFT, [0; 6]],
+                [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0; 6]],
+                [0, [0; 6]],
+            ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-            };
+            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+        };
 
-            block_on(main);
-        }
+        block_on(main);
+    }
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_multiple_keys() {
         let main = async {
@@ -1724,7 +1739,97 @@ mod test {
 
         block_on(main);
     }
+    }
+    rusty_fork_test! {
+    #[test]
+    fn test_repeat_key_single() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            keyboard.keymap.borrow_mut().set_action_at(
+                0,
+                0,
+                0,
+                KeyAction::Single(Action::Key(KeyCode::Again)),
+            );
 
+            // first press ever of the Again issues KeyCode:No
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press A key
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // Release A key
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // releasing the repeat key
+            keyboard.process_inner(key_event(0, 0, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press S key
+            keyboard.process_inner(key_event(2, 2, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+        };
+        block_on(main);
+    }
+    }
+    rusty_fork_test! {
+    #[test]
+    fn test_repeat_key_th() {
+        let main = async {
+            let mut keyboard = create_test_keyboard();
+            keyboard.keymap.borrow_mut().set_action_at(
+                0,
+                0,
+                0,
+                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
+            );
+
+            // first press ever of the Again issues KeyCode:No
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            keyboard
+                .send_keyboard_report_with_resolved_modifiers(true)
+                .await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press A key
+            keyboard.process_inner(key_event(2, 1, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // Release A key
+            keyboard.process_inner(key_event(2, 1, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+            // releasing the repeat key
+            keyboard.process_inner(key_event(0, 0, false)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+            // Press S key
+            keyboard.process_inner(key_event(2, 2, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+
+            // after another key is pressed, that key is repeated
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+        };
+        block_on(main);
+    }
+    }
+    rusty_fork_test! {
     #[test]
     fn test_key_action_transparent() {
         let main = async {
@@ -1743,7 +1848,8 @@ mod test {
         };
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_key_action_no() {
         let main = async {
@@ -1759,6 +1865,7 @@ mod test {
         };
         block_on(main);
     }
+    }
 
     fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static, 5, 14, 2> {
         let mut cfg = ForksConfig::default();
@@ -1770,6 +1877,7 @@ mod test {
         })
     }
 
+    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_modifier() {
         let main = async {
@@ -1872,7 +1980,8 @@ mod test {
 
         block_on(main);
     }
-
+    }
+    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_mouse_button() {
         let main = async {
@@ -1994,5 +2103,6 @@ mod test {
         };
 
         block_on(main);
+    }
     }
 }
