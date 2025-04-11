@@ -34,7 +34,7 @@ pub enum Report {
     KeyboardReport(KeyboardReport),
     /// Mouse hid report
     MouseReport(MouseReport),
-    // Joystick report
+    /// Joystick report
     JoystickReport(JoystickReport),
     /// Media keyboard report
     MediaKeyboardReport(MediaKeyboardReport),
