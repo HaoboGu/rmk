@@ -57,6 +57,7 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     m.insert("escape", "Escape");
     m.insert("esc", "Escape");
     m.insert("backspace", "Backspace");
+    m.insert("bspc", "Backspace");
     m.insert("bs", "Backspace");
     m.insert("tab", "Tab");
     m.insert("space", "Space");
@@ -114,6 +115,7 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     m.insert("pagedown", "PageDown");
     m.insert("pgdn", "PageDown");
     m.insert("delete", "Delete");
+    m.insert("del", "Delete");
     m.insert("right", "Right");
     m.insert("->", "Right");
     m.insert("→", "Right");
