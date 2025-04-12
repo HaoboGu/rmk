@@ -9,14 +9,29 @@ pub(crate) const MACRO_SPACE_SIZE: usize = 256;
 /// Default number of keyboard macros
 pub(crate) const NUM_MACRO: usize = 8;
 
+/// encoded with the two bytes, content at the third byte
+/// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported
+///
+/// TODO save space: refacter to use 1 byte for encoding and convert to/from vial 2 byte encoding
 #[derive(Clone)]
-pub(crate) enum MacroOperation {
-    Press(KeyCode),
-    Release(KeyCode),
-    Tap(KeyCode),
-    Text(KeyCode, bool), // bool = shifted
-    Delay(u16),
+pub enum MacroOperation {
+    /// 0x00, 1 byte
+    /// Marks the end of a macro sequence
+    /// Don't use it on your own,
+    /// will be automatically removed and added
+    /// by MacroOperations::define_macro_sequences()
     End,
+    /// 0x01 01 + 1 byte keycode
+    Tap(KeyCode),
+    /// 0x01 02 + 1 byte keycode
+    Press(KeyCode),
+    /// 0x01 03 + 1 byte keycode
+    Release(KeyCode),
+    /// 0x01 04 + 2 byte for the delay in ms
+    Delay(u16),
+    /// Anything not covered above (and starting at
+    /// 0x30 (= b'0'), is the 1 byte ascii character.
+    Text(KeyCode, bool), // bool = shifted
 }
 
 impl MacroOperation {
