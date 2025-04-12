@@ -1,6 +1,6 @@
 use num_enum::FromPrimitive;
 
-use crate::keycode::KeyCode;
+use crate::{keycode::KeyCode, via::keycode_convert::from_ascii};
 
 /// Default macro space size
 /// the sum of alll macro elements + number of macro elements
@@ -91,7 +91,7 @@ impl MacroOperation {
             }
             _ => {
                 // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
-                let (keycode, is_caps) = KeyCode::from_ascii(macro_cache[idx]);
+                let (keycode, is_caps) = from_ascii(macro_cache[idx]);
                 (MacroOperation::Text(keycode, is_caps), offset + 1)
             }
         }
