@@ -134,7 +134,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.default_layer = layer_num;
     }
 
-    /// Get the next macro operation starting from given index and offset
+    /// Get the next macro operation starting from given index and offset (=position in the sequence)
     /// Return current macro operation and the next operations's offset
     pub(crate) fn get_next_macro_operation(&self, macro_start_idx: usize, offset: usize) -> (MacroOperation, usize) {
         let idx = macro_start_idx + offset;
