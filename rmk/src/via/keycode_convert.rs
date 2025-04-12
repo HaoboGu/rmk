@@ -414,8 +414,6 @@ pub(crate) fn to_ascii(keycode: KeyCode, shifted: bool) -> u8 {
 
 #[cfg(test)]
 mod test {
-    use crate::shifted;
-
     use super::*;
 
     #[test]
