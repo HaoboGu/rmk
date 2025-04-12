@@ -1,6 +1,15 @@
+use crate::{
+    action::{EncoderAction, KeyAction},
+    combo::{Combo, COMBO_MAX_NUM},
+    config::BehaviorConfig,
+    event::{KeyEvent, RotaryEncoderEvent},
+    fork::{Fork, FORK_MAX_NUM},
+    keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
+};
+#[cfg(feature = "storage")]
+use crate::{boot::reboot_keyboard, storage::Storage};
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
-use num_enum::FromPrimitive;
 
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::{Combo, COMBO_MAX_NUM};
@@ -134,82 +143,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.default_layer = layer_num;
     }
 
-    /// Get the next macro operation starting from given index and offset (=position in the sequence)
-    /// Return current macro operation and the next operations's offset
     pub(crate) fn get_next_macro_operation(&self, macro_start_idx: usize, offset: usize) -> (MacroOperation, usize) {
-        let idx = macro_start_idx + offset;
-        if idx >= self.macro_cache.len() - 1 {
-            return (MacroOperation::End, offset);
-        }
-        match (self.macro_cache[idx], self.macro_cache[idx + 1]) {
-            (0, _) => (MacroOperation::End, offset),
-            (1, 1) => {
-                // SS_QMK_PREFIX + SS_TAP_CODE
-                if idx + 2 < self.macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Tap(keycode), offset + 3)
-                } else {
-                    (MacroOperation::End, offset + 3)
-                }
-            }
-            (1, 2) => {
-                // SS_QMK_PREFIX + SS_DOWN_CODE
-                if idx + 2 < self.macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Press(keycode), offset + 3)
-                } else {
-                    (MacroOperation::End, offset + 3)
-                }
-            }
-            (1, 3) => {
-                // SS_QMK_PREFIX + SS_UP_CODE
-                if idx + 2 < self.macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(self.macro_cache[idx + 2] as u16);
-                    (MacroOperation::Release(keycode), offset + 3)
-                } else {
-                    (MacroOperation::End, offset + 3)
-                }
-            }
-            (1, 4) => {
-                // SS_QMK_PREFIX + SS_DELAY_CODE
-                if idx + 3 < self.macro_cache.len() {
-                    let delay_ms =
-                        (self.macro_cache[idx + 2] as u16 - 1) + (self.macro_cache[idx + 3] as u16 - 1) * 255;
-                    (MacroOperation::Delay(delay_ms), offset + 4)
-                } else {
-                    (MacroOperation::End, offset + 4)
-                }
-            }
-            (1, 5) | (1, 6) | (1, 7) => {
-                warn!("VIAL_MACRO_EXT is not supported");
-                (MacroOperation::Delay(0), offset + 4)
-            }
-            _ => {
-                // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
-                let (keycode, is_caps) = KeyCode::from_ascii(self.macro_cache[idx]);
-                (MacroOperation::Text(keycode, is_caps), offset + 1)
-            }
-        }
+        MacroOperation::get_next_macro_operation(&self.macro_cache, macro_start_idx, offset)
     }
 
-    pub(crate) fn get_macro_start(&self, mut macro_idx: u8) -> Option<usize> {
-        let mut idx = 0;
-        // Find idx until the macro start of given index
-        loop {
-            if macro_idx == 0 || idx >= self.macro_cache.len() {
-                break;
-            }
-            if self.macro_cache[idx] == 0 {
-                macro_idx -= 1;
-            }
-            idx += 1;
-        }
-
-        if idx == self.macro_cache.len() {
-            None
-        } else {
-            Some(idx)
-        }
+    pub(crate) fn get_macro_sequence_start(&self, guessed_macro_start_idx: u8) -> Option<usize> {
+        MacroOperation::get_macro_sequence_start(&self.macro_cache, guessed_macro_start_idx)
     }
 
     pub(crate) fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {

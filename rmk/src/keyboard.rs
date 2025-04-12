@@ -1189,7 +1189,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 return;
             }
             // Read macro operations until the end of the macro
-            let macro_idx = self.keymap.borrow().get_macro_start(macro_idx);
+            let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
             if let Some(macro_start_idx) = macro_idx {
                 let mut offset = 0;
                 loop {
