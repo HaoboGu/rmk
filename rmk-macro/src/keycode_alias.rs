@@ -102,7 +102,8 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     m.insert("print_screen", "PrintScreen");
     m.insert("pscr", "PrintScreen");
     m.insert("scrolllock", "ScrollLock");
-    m.insert("scroll", "ScrollLock");
+    m.insert("scroll_lock", "ScrollLock");
+    m.insert("scrl", "ScrollLock");
     m.insert("pause", "Pause");
     m.insert("insert", "Insert");
     m.insert("ins", "Insert");
