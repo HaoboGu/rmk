@@ -4,9 +4,9 @@ mod eeconfig;
 use crate::{
     action::EncoderAction,
     channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_LENGTH},
+    combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM},
     config::StorageConfig,
-    fork::{Fork, StateBits},
+    fork::{Fork, StateBits, FORK_MAX_NUM},
     hid_state::{HidModifiers, HidMouseButtons},
     light::LedIndicator,
     BUILD_HASH,
@@ -893,7 +893,10 @@ impl<
         Ok(())
     }
 
-    pub(crate) async fn read_combos(&mut self, combos: &mut [Combo]) -> Result<(), ()> {
+    pub(crate) async fn read_combos(
+        &mut self,
+        combos: &mut Vec<Combo, COMBO_MAX_NUM>,
+    ) -> Result<(), ()> {
         for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
@@ -918,7 +921,10 @@ impl<
         Ok(())
     }
 
-    pub(crate) async fn read_forks(&mut self, forks: &mut [Fork]) -> Result<(), ()> {
+    pub(crate) async fn read_forks(
+        &mut self,
+        forks: &mut Vec<Fork, FORK_MAX_NUM>,
+    ) -> Result<(), ()> {
         for (i, item) in forks.iter_mut().enumerate() {
             let key = get_fork_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
