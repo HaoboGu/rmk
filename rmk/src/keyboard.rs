@@ -358,7 +358,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// The replacement decision is made at key_press time, and the decision
     /// is kept until the key is released.
     fn try_start_forks(&mut self, key_action: KeyAction, key_event: KeyEvent) -> KeyAction {
-        if self.keymap.borrow().behavior.fork.forks.len() < 1 {
+        if self.keymap.borrow().behavior.fork.forks.is_empty() {
             return key_action;
         }
 
