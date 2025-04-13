@@ -1,6 +1,9 @@
 use num_enum::FromPrimitive;
 
-use crate::{keycode::KeyCode, via::keycode_convert::from_ascii};
+use crate::{
+    keycode::KeyCode,
+    via::keycode_convert::{from_ascii, to_ascii},
+};
 
 /// Default macro space size
 /// the sum of alll macro elements + number of macro elements
@@ -123,66 +126,253 @@ impl MacroOperation {
     }
 }
 
-// /// serializes macro sequences
-// pub fn define_macro_sequences<const N: usize>(
-//     macro_sequences: &[heapless::Vec<MacroOperation, N>],
-// ) -> [u8; MACRO_SPACE_SIZE] {
-//     let macro_sequences = [
-//         heapless::Vec::from_slice(&[
-//             MacroOperation::Press(KeyCode::LShift),
-//             MacroOperation::Tap(KeyCode::H),
-//             MacroOperation::Release(KeyCode::LShift),
-//             MacroOperation::Tap(KeyCode::E),
-//             MacroOperation::Tap(KeyCode::L),
-//             MacroOperation::Tap(KeyCode::L),
-//             MacroOperation::Tap(KeyCode::O),
-//         ])
-//         .expect("too many elements"),
-//         heapless::Vec::from_slice(&[
-//             MacroOperation::Tap(KeyCode::W),
-//             MacroOperation::Tap(KeyCode::O),
-//             MacroOperation::Tap(KeyCode::R),
-//             MacroOperation::Tap(KeyCode::L),
-//             MacroOperation::Tap(KeyCode::D),
-//             MacroOperation::End,
-//         ])
-//         .expect("too many elements"),
-//         heapless::Vec::from_slice(&[
-//             MacroOperation::Press(KeyCode::LShift),
-//             MacroOperation::Tap(KeyCode::Kc2),
-//             MacroOperation::Release(KeyCode::LShift),
-//         ])
-//         .expect("too many elements"),
-//     ];
+/// serializes macro sequences
+pub fn define_macro_sequences(
+    macro_sequences: &[heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>],
+) -> [u8; MACRO_SPACE_SIZE] {
+    // TODO after binary format is understood and
+    // TEXT is smaller than others,
+    // refactor, exchanging tab for text (as this is shorter),
+    // taking care of press/release LSHIFT and RSHIFT as well
+    const TOO_MANY_ELEMENTS_ERROR_TEXT: &str = "Too many Macro Operations! The sum of all Macro Operations of all Macro Sequences cannot be more than MACRO_SPACE_SIZE";
+    let macro_sequences_binary = macro_sequences
+        .iter()
+        .map(|macro_seqence| {
+            let mut vec_seq = macro_seqence
+                .into_iter()
+                .filter(|macro_operation| matches!(macro_operation, MacroOperation::End))
+                .map(serialize)
+                .fold(
+                    heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(),
+                    |mut acc, e| {
+                        acc.extend_from_slice(&e)
+                            .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+                        // catch_unwind(acc.extend(e)).expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+                        acc
+                    },
+                );
+            vec_seq.push(0x00).expect(TOO_MANY_ELEMENTS_ERROR_TEXT); //= serialize(&MacroOperation::End));
+            vec_seq
+        })
+        .fold(
+            heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(),
+            |mut acc, e| {
+                acc.extend_from_slice(&e)
+                    .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+                acc
+            },
+        )
+        .into_array()
+        .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+    macro_sequences_binary
+}
 
-//     // if macro_sequences
-//     //     .iter()
-//     //     .map(|macro_sequence| macro_sequence.len())
-//     //     .reduce(|acc, e| acc + e)
-//     //     .expect("error converting to len")
-//     //     > MACRO_SPACE_SIZE
-//     // {
-//     //     compile_error!("More macro elements than MACRO_SPACE_SIZE");
-//     // }
+fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
+    match macro_operation {
+        MacroOperation::End => heapless::Vec::from_slice(&[0x00]).unwrap(),
+        MacroOperation::Tap(key_code) => {
+            let mut result = heapless::Vec::from_slice(&[0x01, 0x01]).unwrap();
+            // TODO check is Keycode is correct
+            result
+                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .expect("impossible error");
+            result
+        }
+        MacroOperation::Press(key_code) => {
+            let mut result = heapless::Vec::from_slice(&[0x01, 0x02]).unwrap();
+            // TODO check is Keycode is correct
+            result
+                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .expect("impossible error");
+            result
+        }
+        MacroOperation::Release(key_code) => {
+            let mut result = heapless::Vec::from_slice(&[0x01, 0x03]).unwrap();
+            result
+                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .expect("impossible error");
+            result
+        }
+        MacroOperation::Delay(duration) => {
+            let mut result = heapless::Vec::from_slice(&[0x01, 0x04]).unwrap();
+            result
+                .extend_from_slice(&duration.to_be_bytes())
+                .expect("impossible error");
+            result
+        }
+        // TODO check if key_code this is asccii???
+        MacroOperation::Text(key_code, shifted) => {
+            heapless::Vec::from_slice(&[to_ascii(*key_code, *shifted)]).unwrap()
+        }
+    }
+}
 
-//     let macro_cache = heapless::Vec::<MacroOperation, MACRO_SPACE_SIZE>::new();
+#[cfg(test)]
+mod test {
+    use super::*;
 
-//     // serialize - look into on-the-fly deserialization
-//     for macro_sequence in macro_sequences {
-//         for macro_element in macro_sequence {
-//             if let MacroOperation::End = macro_element {
-//                 continue;
-//             }
-//             macro_cache.push(macro_element);
-//         }
-//         macro_cache.push(MacroOperation::End);
-//     }
-//     // check again if len is ok, as we removed MacroOperation::End and added for each sequence
-//     if macro_cache.len() > MACRO_SPACE_SIZE {
-//         compile_error!("More macro elements than MACRO_SPACE_SIZE");
-//     }
+    #[test]
+    fn test_define_one_macro_sequence_manual() {
+        let macro_sequences = &[heapless::Vec::from_slice(&[
+            MacroOperation::Press(KeyCode::LShift),
+            MacroOperation::Tap(KeyCode::P),
+            MacroOperation::Release(KeyCode::LShift),
+            MacroOperation::Tap(KeyCode::A),
+            MacroOperation::Tap(KeyCode::T),
+        ])
+        .expect("too many elements")];
+        let macro_sequences_binary = define_macro_sequences(macro_sequences);
+        // let result = [0b 0000 0000 0100 1000]
+        let result: [u8; 16] = [
+            0x01, 0x03, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01,
+            0x17, 0x00,
+        ];
+        let mut result_filled = [0; MACRO_SPACE_SIZE];
+        for (i, element) in result.into_iter().enumerate() {
+            result_filled[i] = element
+        }
+        assert_eq!(macro_sequences_binary, result_filled);
+    }
+    #[test]
+    fn test_define_two_macro_sequence_manual() {
+        let macro_sequences_terminated_uneccessarily = [
+            heapless::Vec::from_slice(&[
+                MacroOperation::Text(KeyCode::H, true),
+                MacroOperation::Text(KeyCode::I, false),
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::P),
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::A),
+                MacroOperation::Tap(KeyCode::T),
+            ])
+            .expect("too many elements"),
+        ];
+        let macro_sequences_binary =
+            define_macro_sequences(&macro_sequences_terminated_uneccessarily);
+        // let result = [0b 0000 0000 0100 1000]
+        let result: [u8; 19] = [
+            0x48, 0x69, 0x00, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
+            0x4, 0x01, 0x01, 0x17, 0x00,
+        ];
+        let mut result_filled = [0; MACRO_SPACE_SIZE];
+        for (i, element) in result.into_iter().enumerate() {
+            result_filled[i] = element
+        }
+        assert_eq!(macro_sequences_binary, result_filled);
+    }
 
-//     macro_cache
-//         .into_array()
-//         .expect("could not convert reslt array")
-// }
+    #[test]
+    fn test_define_macro_sequences_clean() {
+        let macro_sequences_clean = [
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::H),
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::E),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::O),
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Tap(KeyCode::W),
+                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Tap(KeyCode::R),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::D),
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::Kc2),
+                MacroOperation::Release(KeyCode::LShift),
+            ])
+            .expect("too many elements"),
+        ];
+        let macro_sequences_binary = define_macro_sequences(&macro_sequences_clean);
+    }
+
+    #[test]
+    fn test_define_macro_sequences_uneccessarily_terminated() {
+        let macro_sequences_terminated_uneccessarily = [
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::H),
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::E),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::End,
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Tap(KeyCode::W),
+                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::Tap(KeyCode::R),
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::End,
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::Kc2),
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::End,
+            ])
+            .expect("too many elements"),
+        ];
+        let macro_sequences_binary =
+            define_macro_sequences(&macro_sequences_terminated_uneccessarily);
+    }
+
+    #[test]
+    fn test_define_macro_sequences_random_end_markers() {
+        let macro_sequences_random_end_markers = [
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::H),
+                MacroOperation::End,
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::E),
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::End,
+                MacroOperation::Tap(KeyCode::L),
+                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::End,
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Tap(KeyCode::W),
+                MacroOperation::Tap(KeyCode::O),
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::Tap(KeyCode::R),
+                MacroOperation::Tap(KeyCode::L),
+            ])
+            .expect("too many elements"),
+            heapless::Vec::from_slice(&[
+                MacroOperation::Press(KeyCode::LShift),
+                MacroOperation::Tap(KeyCode::Kc2),
+                MacroOperation::Release(KeyCode::LShift),
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::End,
+                MacroOperation::End,
+            ])
+            .expect("too many elements"),
+        ];
+        let macro_sequences_binary = define_macro_sequences(&macro_sequences_random_end_markers);
+    }
+
+    #[test]
+    fn test_define_macro_sequences_with_Text() {}
+}

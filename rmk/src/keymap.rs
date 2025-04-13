@@ -5,7 +5,6 @@ use crate::{
     event::{KeyEvent, RotaryEncoderEvent},
     fork::{Fork, FORK_MAX_NUM},
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
-    keycode::KeyCode,
 };
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
