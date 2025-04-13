@@ -1,5 +1,6 @@
 use serde::de;
 use serde_derive::Deserialize;
+use std::collections::HashMap;
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
@@ -9,9 +10,13 @@ pub struct KeyboardTomlConfig {
     pub keyboard: KeyboardInfo,
     /// Matrix of the keyboard, only for non-split keyboards
     pub matrix: Option<MatrixConfig>,
+    // Aliases for key maps
+    pub aliases: Option<HashMap<String, String>>,
+    // Layers of key maps
+    pub layer: Option<Vec<LayerTomlConfig>>,
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
-    pub layout: LayoutConfig,
+    pub layout: LayoutTomlConfig,
     /// Behavior config
     pub behavior: Option<BehaviorConfig>,
     /// Light config
@@ -26,6 +31,24 @@ pub struct KeyboardTomlConfig {
     pub split: Option<SplitConfig>,
     /// Input device config
     pub input_device: Option<InputDeviceConfig>,
+}
+
+/// Configurations for keyboard layout
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+pub struct LayoutTomlConfig {
+    pub rows: u8,
+    pub cols: u8,
+    pub layers: u8,
+    pub keymap: Option<Vec<Vec<Vec<String>>>>, // will be deprecated in the future
+    pub matrix_map: Option<String>, //temporarily allow both matrix_map and keymap to be set
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[allow(unused)]
+pub struct LayerTomlConfig {
+    pub name: Option<String>,
+    pub keys: String,
 }
 
 /// Configurations for keyboard info
