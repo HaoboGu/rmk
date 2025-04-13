@@ -245,7 +245,7 @@ mod test {
         let macro_sequences_binary = define_macro_sequences(macro_sequences);
         // let result = [0b 0000 0000 0100 1000]
         let result: [u8; 16] = [
-            0x01, 0x03, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01,
+            0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01,
             0x17, 0x00,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
@@ -313,9 +313,9 @@ mod test {
             .expect("too many elements"),
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_clean);
-        let result: [u8; 19] = [
-            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
-            0x4, 0x01, 0x01, 0x17, 0x00,
+        let result: [u8; 48] = [
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
+            1, 18, 1, 1, 21, 1, 1, 15, 1, 1, 7, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -356,9 +356,9 @@ mod test {
         ];
         let macro_sequences_binary =
             define_macro_sequences(&macro_sequences_terminated_uneccessarily);
-        let result: [u8; 19] = [
-            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
-            0x4, 0x01, 0x01, 0x17, 0x00,
+        let result: [u8; 45] = [
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
+            1, 18, 1, 1, 21, 1, 1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -409,9 +409,9 @@ mod test {
             .expect("too many elements"),
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_random_end_markers);
-        let result: [u8; 19] = [
-            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
-            0x4, 0x01, 0x01, 0x17, 0x00,
+        let result: [u8; 45] = [
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
+            1, 18, 1, 1, 21, 1, 1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -419,7 +419,4 @@ mod test {
         }
         assert_eq!(macro_sequences_binary, result_filled);
     }
-
-    #[test]
-    fn test_define_macro_sequences_with_Text() {}
 }
