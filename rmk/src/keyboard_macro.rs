@@ -16,7 +16,7 @@ pub(crate) const NUM_MACRO: usize = 8;
 /// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported
 ///
 /// TODO save space: refacter to use 1 byte for encoding and convert to/from vial 2 byte encoding
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum MacroOperation {
     /// 0x00, 1 byte
     /// Marks the end of a macro sequence
@@ -127,6 +127,9 @@ impl MacroOperation {
 }
 
 /// serializes macro sequences
+/// macros are filled up with 0 if shorter than MACRO_SPACE_SIZE
+/// so that it has enough space for macros defined my Vial
+/// panics if the resulting binary macro sequence is longer than MACRO_SPACE_SIZE
 pub fn define_macro_sequences(
     macro_sequences: &[heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>],
 ) -> [u8; MACRO_SPACE_SIZE] {
@@ -134,20 +137,41 @@ pub fn define_macro_sequences(
     // TEXT is smaller than others,
     // refactor, exchanging tab for text (as this is shorter),
     // taking care of press/release LSHIFT and RSHIFT as well
+    let mut macro_sequences_linear = fold_to_binary(macro_sequences);
+
+    let capacity = macro_sequences_linear.capacity();
+    macro_sequences_linear
+        .resize(capacity, 0)
+        .expect("resize did not work!");
+    macro_sequences_linear
+        .into_array()
+        .expect("as we resized the vector, this can't happen!")
+}
+
+/// converts macro sequences [Vec<MacroOperation] binary form and flattens to Vec<u8, MACRO_SPACE_SIZE>
+/// Note that the Vec is still at it's minimal needed length and needs to be etended with zeros to the desired size
+/// (with vec.resize())
+fn fold_to_binary(
+    macro_sequences: &[heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>],
+) -> heapless::Vec<u8, MACRO_SPACE_SIZE> {
+    // TODO after binary format is understood and
+    // TEXT is smaller than others,
+    // refactor, exchanging tab for text (as this is shorter),
+    // taking care of press/release LSHIFT and RSHIFT as well
     const TOO_MANY_ELEMENTS_ERROR_TEXT: &str = "Too many Macro Operations! The sum of all Macro Operations of all Macro Sequences cannot be more than MACRO_SPACE_SIZE";
-    let macro_sequences_binary = macro_sequences
+
+    macro_sequences
         .iter()
-        .map(|macro_seqence| {
-            let mut vec_seq = macro_seqence
+        .map(|macro_sequence| {
+            let mut vec_seq = macro_sequence
                 .into_iter()
-                .filter(|macro_operation| matches!(macro_operation, MacroOperation::End))
+                .filter(|macro_operation| !matches!(macro_operation, MacroOperation::End))
                 .map(serialize)
                 .fold(
                     heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(),
                     |mut acc, e| {
                         acc.extend_from_slice(&e)
                             .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
-                        // catch_unwind(acc.extend(e)).expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
                         acc
                     },
                 );
@@ -162,9 +186,6 @@ pub fn define_macro_sequences(
                 acc
             },
         )
-        .into_array()
-        .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
-    macro_sequences_binary
 }
 
 fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
@@ -174,7 +195,7 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
             let mut result = heapless::Vec::from_slice(&[0x01, 0x01]).unwrap();
             // TODO check is Keycode is correct
             result
-                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .extend_from_slice(&[(*key_code as u16).to_be_bytes()[1]])
                 .expect("impossible error");
             result
         }
@@ -182,14 +203,14 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
             let mut result = heapless::Vec::from_slice(&[0x01, 0x02]).unwrap();
             // TODO check is Keycode is correct
             result
-                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .extend_from_slice(&[(*key_code as u16).to_be_bytes()[1]])
                 .expect("impossible error");
             result
         }
         MacroOperation::Release(key_code) => {
             let mut result = heapless::Vec::from_slice(&[0x01, 0x03]).unwrap();
             result
-                .extend_from_slice(&(*key_code as u16).to_be_bytes())
+                .extend_from_slice(&[(*key_code as u16).to_be_bytes()[1]])
                 .expect("impossible error");
             result
         }
@@ -252,9 +273,8 @@ mod test {
         ];
         let macro_sequences_binary =
             define_macro_sequences(&macro_sequences_terminated_uneccessarily);
-        // let result = [0b 0000 0000 0100 1000]
         let result: [u8; 19] = [
-            0x48, 0x69, 0x00, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
+            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
             0x4, 0x01, 0x01, 0x17, 0x00,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
@@ -293,6 +313,15 @@ mod test {
             .expect("too many elements"),
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_clean);
+        let result: [u8; 19] = [
+            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
+            0x4, 0x01, 0x01, 0x17, 0x00,
+        ];
+        let mut result_filled = [0; MACRO_SPACE_SIZE];
+        for (i, element) in result.into_iter().enumerate() {
+            result_filled[i] = element
+        }
+        assert_eq!(macro_sequences_binary, result_filled);
     }
 
     #[test]
@@ -327,6 +356,15 @@ mod test {
         ];
         let macro_sequences_binary =
             define_macro_sequences(&macro_sequences_terminated_uneccessarily);
+        let result: [u8; 19] = [
+            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
+            0x4, 0x01, 0x01, 0x17, 0x00,
+        ];
+        let mut result_filled = [0; MACRO_SPACE_SIZE];
+        for (i, element) in result.into_iter().enumerate() {
+            result_filled[i] = element
+        }
+        assert_eq!(macro_sequences_binary, result_filled);
     }
 
     #[test]
@@ -371,6 +409,15 @@ mod test {
             .expect("too many elements"),
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_random_end_markers);
+        let result: [u8; 19] = [
+            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
+            0x4, 0x01, 0x01, 0x17, 0x00,
+        ];
+        let mut result_filled = [0; MACRO_SPACE_SIZE];
+        for (i, element) in result.into_iter().enumerate() {
+            result_filled[i] = element
+        }
+        assert_eq!(macro_sequences_binary, result_filled);
     }
 
     #[test]
