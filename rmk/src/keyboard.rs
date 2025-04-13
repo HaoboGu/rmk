@@ -363,8 +363,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         if !key_event.pressed {
-            let mut i = 0;
-            for fork in &self.keymap.borrow().behavior.fork.forks {
+            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks)
+                .into_iter()
+                .enumerate()
+            {
                 if fork.trigger == key_action {
                     if let Some(active) = self.fork_states[i] {
                         // If the originating key of a fork is released, simply release the replacement key
@@ -372,7 +374,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         return active.replacement;
                     }
                 }
-                i += 1;
             }
             return key_action;
         }
@@ -392,8 +393,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut replacement = key_action;
 
         'bind: loop {
-            let mut i = 0;
-            for fork in &self.keymap.borrow().behavior.fork.forks {
+            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks)
+                .into_iter()
+                .enumerate()
+            {
                 if !triggered_forks[i]
                     && self.fork_states[i].is_none()
                     && fork.trigger == replacement
@@ -442,8 +445,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     //return final decision is ready
                     break 'bind;
                 }
-
-                i += 1;
             }
 
             // No (more) forks were triggered, so we are done
@@ -469,13 +470,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // (explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent)
     fn try_finish_forks(&mut self, original_key_action: KeyAction, key_event: KeyEvent) {
         if !key_event.pressed {
-            let mut i = 0;
-            for fork in &self.keymap.borrow().behavior.fork.forks {
+            for (i, fork) in (&self.keymap.borrow().behavior.fork.forks)
+                .into_iter()
+                .enumerate()
+            {
                 if self.fork_states[i].is_some() && fork.trigger == original_key_action {
                     // if the originating key of a fork is released the replacement decision is not valid anymore
                     self.fork_states[i] = None;
                 }
-                i += 1;
             }
         }
     }
