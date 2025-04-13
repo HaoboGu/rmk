@@ -76,7 +76,7 @@ output_pins = ["PD7", "PD8", "PD9"]
 # row2col = true
 ```
 
-If your keys are directly connected to the microcontroller pins, set `matrix_type` to `direct_pin`. (The default value for `matrix_type` is `normal`)
+If your keys are directly connected to the micro-controller pins, set `matrix_type` to `direct_pin`. (The default value for `matrix_type` is `normal`)
 
 `direct_pins` is a two-dimensional array that represents the physical layout of your keys.
 
@@ -185,7 +185,7 @@ The `layer.keys` string should follow several rules:
 1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
 
     For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile!
-    However to make things easier a number of [alternative key names](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/keycode_alias.rs) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
+    However, to make things easier a number of [alternative key names](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/keycode_alias.rs) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
 
     For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
@@ -226,14 +226,14 @@ The `layer.keys` string should follow several rules:
 ```toml
 # here are the aliases for the example above
 [aliases]
-my_cut = "WM(x, LCtrl)"
+my_cut = "WM(X, LCtrl)"
 my_copy = "WM(C, LCtrl)"
 my_paste = "WM(V, LCtrl)"
 ```
 
 <div class="warning">
 Please note that alias names may not contain white spaces and they are case sensitive.
-<div>
+</div>
 
 ### `[behavior]`
 
@@ -320,7 +320,7 @@ combos = [
 #### Fork
 
 In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule:
-If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However with `kept_modifiers` some of them can be kept instead of automatic suppression.
+If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
 Fork configuration includes the following parameters:
 
@@ -363,7 +363,7 @@ forks = [
   { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1", bindable = false },
 
   # Shift + Backspace output Delete key (inside a layer tap/hold)
-  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" },
+  { trigger = "LT(2, Backspace)", negative_output = "LT(2, Backspace)", positive_output = "LT(2, Delete)", match_any = "LShift|RShift" },
 
   # Ctrl + play/pause will send next track. MediaPlayPause -> MediaNextTrack
   # Ctrl + Shift + play/pause will send previous track. MediaPlayPause -> MediaPrevTrack
@@ -383,7 +383,7 @@ forks = [
 ```
 
 Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
-For example if `LT(2,Backspace)` is in your keymap, then trigger = `Backspace` will NOT work, you should "replace" the full key and use `trigger = "LT(2,Backspace)` instead, like in the last example above.
+For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above.
 You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Vial does not support fork configuration yet.
@@ -540,7 +540,7 @@ matrix_map = """
 
 # here are the aliases for the example layer.keys below
 [aliases]
-my_cut = "WM(x, LCtrl)"
+my_cut = "WM(X, LCtrl)"
 my_copy = "WM(C, LCtrl)"
 my_paste = "WM(V, LCtrl)"
 
@@ -559,7 +559,7 @@ NumLock KpSlash KpAsterisk KpMinus
 Kp7     Kp8     Kp9        KpPlus
 Kp4     Kp5     Kp6
 Kp1     Kp2     Kp3        Enter
-Kp0             KpDot
+    Kp0         KpDot
 """
 
 # layer 1: 
@@ -570,7 +570,7 @@ TO(base_layer)   @MyCut     @MyCopy          @MyPaste
 MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
 MouseLeft        MouseBtn4  MouseRight
 MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
-MouseBtn1                   MouseBtn12
+          MouseBtn1         MouseBtn12
 """
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
@@ -585,7 +585,7 @@ one_shot = { timeout = "1s" }
 # LED pins, capslock, scrolllock, numslock. You can safely ignore any of them if you don't have
 capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
-numslock= { pin = "PIN_2", low_active = true }
+numslock = { pin = "PIN_2", low_active = true }
 
 # Storage configuration.
 # To use the default configuration, ignore this section completely
