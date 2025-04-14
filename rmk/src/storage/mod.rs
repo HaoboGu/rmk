@@ -1,7 +1,6 @@
 pub mod dummy_flash;
 mod eeconfig;
 
-use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
 
@@ -24,9 +23,9 @@ use {
 use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
-use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM};
 use crate::config::StorageConfig;
-use crate::fork::{Fork, StateBits};
+use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::light::LedIndicator;
