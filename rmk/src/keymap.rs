@@ -3,22 +3,12 @@ use crate::{
     combo::{Combo, COMBO_MAX_NUM},
     config::BehaviorConfig,
     event::{KeyEvent, RotaryEncoderEvent},
-    fork::{Fork, FORK_MAX_NUM},
     keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE},
 };
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
-
-use crate::action::{EncoderAction, KeyAction};
-use crate::combo::{Combo, COMBO_MAX_NUM};
-use crate::config::BehaviorConfig;
-use crate::event::{KeyEvent, RotaryEncoderEvent};
-use crate::keyboard_macro::{MacroOperation, MACRO_SPACE_SIZE};
-use crate::keycode::KeyCode;
-#[cfg(feature = "storage")]
-use crate::{boot::reboot_keyboard, storage::Storage};
 
 /// Keymap represents the stack of layers.
 ///
