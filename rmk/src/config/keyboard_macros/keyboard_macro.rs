@@ -2,6 +2,7 @@ use num_enum::FromPrimitive;
 
 use crate::{
     keycode::KeyCode,
+    keymap::fill_vec,
     via::keycode_convert::{from_ascii, to_ascii},
 };
 
@@ -130,10 +131,7 @@ pub fn define_macro_sequences(
     // taking care of press/release LSHIFT and RSHIFT as well
     let mut macro_sequences_linear = fold_to_binary(macro_sequences);
 
-    let capacity = macro_sequences_linear.capacity();
-    macro_sequences_linear
-        .resize(capacity, 0)
-        .expect("resize did not work!");
+    fill_vec(&mut macro_sequences_linear);
     macro_sequences_linear
         .into_array()
         .expect("as we resized the vector, this can't happen!")

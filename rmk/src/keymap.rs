@@ -36,12 +36,11 @@ fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
     combos.sort_unstable_by(|c1, c2| c2.actions.len().cmp(&c1.actions.len()))
 }
 
-fn _fill_vec<T: Default, const N: usize>(vector: &mut heapless::Vec<T, N>) {
-    while !vector.is_full() {
-        // push cannot fail, as we checked that the vector is empty
-        // because we don't want require `Debug` we can't simply use `.expect()`
-        unsafe { vector.push(T::default()).unwrap_unchecked() }
-    }
+/// fills up the vector to its capacity
+pub(crate) fn fill_vec<T: Default + Clone, const N: usize>(vector: &mut heapless::Vec<T, N>) {
+    vector
+        .resize(vector.capacity(), T::default())
+        .expect("impossible error, as we resie to the capcacity of the vector!");
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -55,11 +54,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // If the storage is initialized, read keymap from storage
 
         // fill up the empty places so new combos/forks can be configured via Vial
-        _fill_vec(&mut behavior.combo.combos);
+        fill_vec(&mut behavior.combo.combos);
         //reorder the combos
         _reorder_combos(&mut behavior.combo.combos);
 
-        _fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.fork.forks);
 
         KeyMap {
             layers: action_map,
@@ -78,8 +77,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         mut behavior: BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
-        _fill_vec(&mut behavior.combo.combos);
-        _fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.combo.combos);
+        fill_vec(&mut behavior.fork.forks);
 
         if let Some(storage) = storage {
             if {
@@ -273,7 +272,6 @@ mod test {
     use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
     use crate::hid_state::HidModifiers;
     use crate::k;
-    use crate::keymap::_fill_vec;
     use crate::{action::KeyAction, keycode::KeyCode};
 
     #[test]

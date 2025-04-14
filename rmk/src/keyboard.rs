@@ -1533,7 +1533,7 @@ mod test {
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
-        Keyboard::new(keymap_ref, config)
+        Keyboard::new(keymap_ref)
     }
 
     fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
