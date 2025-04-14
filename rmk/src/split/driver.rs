@@ -82,9 +82,9 @@ impl<
         let mut last_sync_time = Instant::now();
 
         loop {
-            // Calculate the time until the next 1000ms sync
+            // Calculate the time until the next 3000ms sync
             let elapsed = last_sync_time.elapsed().as_millis() as u64;
-            let wait_time = if elapsed >= 1000 { 1 } else { 1000 - elapsed };
+            let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
 
             // Read the message from peripheral, or sync the connection state every 1000ms.
             match select(self.read_event(), Timer::after_millis(wait_time)).await {
@@ -102,6 +102,7 @@ impl<
                     // Timer elapsed, sync the connection state
                     CONNECTION_STATE.store(true, Ordering::Release);
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
+                    debug!("Syncing connection state to peripheral: {}", conn_state);
                     if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
                         match e {
                             SplitDriverError::Disconnected => return,

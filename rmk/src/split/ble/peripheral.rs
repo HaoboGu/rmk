@@ -58,10 +58,10 @@ impl<'stack, 'server, 'c> SplitReader for BleSplitPeripheralDriver<'stack, 'serv
                             GattEvent::Write(event) => {
                                 // Write to peripheral
                                 if event.handle() == self.message_to_peripheral.handle {
-                                    info!("Got message from central: {:?}", event.data());
+                                    trace!("Got message from central: {:?}", event.data());
                                     match postcard::from_bytes::<SplitMessage>(&event.data()) {
                                         Ok(message) => {
-                                            info!("Message from central: {:?}", message);
+                                            trace!("Message from central: {:?}", message);
                                             break message;
                                         }
                                         Err(e) => error!("Postcard deserialize split message error: {}", e),

@@ -42,13 +42,13 @@ pub(crate) async fn run_ble_peripheral_manager<
 ) {
     let Host { mut central, .. } = stack.build();
     let address: Address = Address::random(addr);
-    info!("Peer address: {:?}", address);
+    info!("Peripheral peer address: {:?}", address);
     let config = ConnectConfig {
         connect_params: ConnectParams {
-            min_connection_interval: Duration::from_millis(15),
-            max_connection_interval: Duration::from_millis(15),
-            max_latency: 99,
-            supervision_timeout: Duration::from_secs(5),
+            min_connection_interval: Duration::from_micros(7500), // 7.5ms
+            max_connection_interval: Duration::from_micros(7500), // 7.5ms
+            max_latency: 400,                                     // 3s
+            supervision_timeout: Duration::from_secs(7),
             ..Default::default()
         },
         scan_config: ScanConfig {
