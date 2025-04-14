@@ -23,7 +23,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] 🟢 encoder
   - [x] 🔵 Input device
   - [ ] 🔴 Macro support
-    - [ ] 🔴 Macro definition via Rust
+    - [x] 🔴 Macro definition via Rust
     - [ ] 🟢 Macro definition via toml
     - [ ] 🔴 Macro's for umlaute
     - [ ] 🔵 Macro's for unicode
