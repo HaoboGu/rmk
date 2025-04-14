@@ -1,15 +1,11 @@
-use crate::{event::Event, input_device::ProcessResult, KeyMap};
 use core::cell::RefCell;
 
 use super::InputProcessor;
+use crate::event::Event;
+use crate::input_device::ProcessResult;
+use crate::KeyMap;
 
-pub struct BatteryProcessor<
-    'a,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
-> {
+pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
@@ -30,7 +26,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     fn get_battery_percent(&self, val: u16) -> u8 {
         // Avoid overflow
         let val = val as i32;
@@ -68,16 +64,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
-    for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    InputProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER> for BatteryProcessor<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
             Event::Battery(val) => {
                 info!("Detected battery ADC value: {:?}", val);
-                // failing to send is permitted, because the update frequency is not critical
-                #[cfg(feature = "_nrf_ble")]
-                crate::channel::BATTERY_LEVEL_SIGNAL.signal(self.get_battery_percent(val));
+
+                #[cfg(feature = "_ble")]
+                crate::ble::trouble::battery_service::BATTERY_LEVEL
+                    .store(self.get_battery_percent(val), core::sync::atomic::Ordering::Relaxed);
                 ProcessResult::Stop
             }
             _ => ProcessResult::Continue(event),

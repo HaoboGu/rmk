@@ -1,8 +1,6 @@
-use crate::{
-    channel::LED_SIGNAL,
-    hid::{HidError, HidReaderTrait},
-    light::LedIndicator,
-};
+use crate::channel::LED_SIGNAL;
+use crate::hid::{HidError, HidReaderTrait};
+use crate::light::LedIndicator;
 
 pub(crate) struct BleLedReader {}
 

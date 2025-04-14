@@ -1,5 +1,6 @@
-use bitfield_struct::bitfield;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+
+use bitfield_struct::bitfield;
 
 #[bitfield(u8, order = Lsb)]
 #[derive(Eq, PartialEq)]

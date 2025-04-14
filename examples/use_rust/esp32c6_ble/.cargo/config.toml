@@ -1,18 +1,13 @@
+[target.'cfg(all(any(target_arch = "riscv32", target_arch = "xtensa"), target_os = "none"))']
+runner = "espflash flash --monitor"
+
 [build]
-target = "riscv32imac-esp-espidf"
-
-[target.riscv32imac-esp-espidf]
-linker = "ldproxy"
-runner = "espflash flash --monitor --log-format defmt"
-rustflags = [ "--cfg",  "espidf_time64"] # Extending time_t for ESP IDF 5: https://github.com/esp-rs/rust/issues/110
-
-[unstable]
-build-std = ["std", "panic_abort"]
+target = "riscv32imac-unknown-none-elf"
+rustflags = [
+  # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+  # NOTE: May negatively impact performance of produced code
+  "-C", "force-frame-pointers",
+]
 
 [env]
-MCU="esp32c6"
-# Note: this variable is not used by the pio builder (`cargo build --features pio`)
-ESP_IDF_VERSION = "v5.2"
-DEFMT_LOG="debug"
-ESP_IDF_PATH_ISSUES="warn"
-CRATE_CC_NO_DEFAULTS="1"
+ESP_LOG = "trace"

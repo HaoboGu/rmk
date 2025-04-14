@@ -9,7 +9,7 @@ use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_rp::{
     bind_interrupts,
-    gpio::{AnyPin, Input, Output},
+    gpio::{Input, Output},
     peripherals::{PIO0, USB},
     usb::InterruptHandler,
 };
@@ -21,9 +21,9 @@ use rmk::{
     matrix::Matrix,
     run_devices,
     split::{
-        peripheral::{run_rmk_split_peripheral},
-        rp::uart::{BufferedUart, UartInterruptHandler},
         SPLIT_MESSAGE_MAX_SIZE,
+        peripheral::run_rmk_split_peripheral,
+        rp::uart::{BufferedUart, UartInterruptHandler},
     },
 };
 use static_cell::StaticCell;

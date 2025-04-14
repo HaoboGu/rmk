@@ -8,18 +8,17 @@ use std::collections::HashMap;
 use std::fs;
 
 use crate::config::{
-    BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo,
-    KeyboardTomlConfig, LayerTomlConfig, LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig,
-    MatrixType, SplitConfig, StorageConfig,
+    BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo, KeyboardTomlConfig, LayerTomlConfig,
+    LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
-use crate::{
-    default_config::{
-        esp32::default_esp32, nrf52810::default_nrf52810, nrf52832::default_nrf52832,
-        nrf52840::default_nrf52840, rp2040::default_rp2040, stm32::default_stm32,
-    },
-    usb_interrupt_map::{get_usb_info, UsbInfo},
-    ChipModel, ChipSeries,
-};
+use crate::default_config::esp32::default_esp32;
+use crate::default_config::nrf52810::default_nrf52810;
+use crate::default_config::nrf52832::default_nrf52832;
+use crate::default_config::nrf52840::default_nrf52840;
+use crate::default_config::rp2040::default_rp2040;
+use crate::default_config::stm32::default_stm32;
+use crate::usb_interrupt_map::{get_usb_info, UsbInfo};
+use crate::{ChipModel, ChipSeries};
 
 // Pest parser using the grammar files
 #[derive(Parser)]
@@ -150,18 +149,14 @@ impl CommunicationConfig {
 
     pub(crate) fn get_ble_config(&self) -> Option<BleConfig> {
         match self {
-            CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => {
-                Some(ble_config.clone())
-            }
+            CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
             _ => None,
         }
     }
 
     pub(crate) fn get_usb_info(&self) -> Option<UsbInfo> {
         match self {
-            CommunicationConfig::Usb(usb_info) | CommunicationConfig::Both(usb_info, _) => {
-                Some(usb_info.clone())
-            }
+            CommunicationConfig::Usb(usb_info) | CommunicationConfig::Both(usb_info, _) => Some(usb_info.clone()),
             _ => None,
         }
     }
@@ -188,11 +183,7 @@ impl KeyboardConfig {
         config.basic = Self::get_basic_info(config.basic, toml_config.keyboard);
 
         // Board config
-        config.board = Self::get_board_config(
-            toml_config.matrix,
-            toml_config.split,
-            toml_config.input_device,
-        )?;
+        config.board = Self::get_board_config(toml_config.matrix, toml_config.split, toml_config.input_device)?;
 
         // Layout config
         config.layout = Self::get_layout_from_toml(
@@ -202,8 +193,7 @@ impl KeyboardConfig {
         )?;
 
         // Behavior config
-        config.behavior =
-            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
+        config.behavior = Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -222,9 +212,7 @@ impl KeyboardConfig {
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
         if config.keyboard.board.is_none() == config.keyboard.chip.is_none() {
-            let message = format!(
-                "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both"
-            );
+            let message = format!("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both");
             return rmk_compile_error!(message);
         }
 
@@ -298,7 +286,10 @@ impl KeyboardConfig {
             s if s.starts_with("stm32") => default_stm32(chip),
             s if s.starts_with("esp32") => default_esp32(chip),
             _ => {
-                let message = format!("No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues", chip.chip);
+                let message = format!(
+                    "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
+                    chip.chip
+                );
                 return rmk_compile_error!(message);
             }
         };
@@ -325,24 +316,18 @@ impl KeyboardConfig {
     ) -> Result<CommunicationConfig, TokenStream2> {
         // Get usb config
         let usb_enabled = { usb_enabled.unwrap_or(default_setting.usb_enabled()) };
-        let usb_info = if usb_enabled {
-            get_usb_info(&chip.chip)
-        } else {
-            None
-        };
+        let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };
 
         // Get ble config
         let ble_config = match (default_setting, ble_config) {
-            (CommunicationConfig::Ble(default), None)
-            | (CommunicationConfig::Both(_, default), None) => Some(default),
+            (CommunicationConfig::Ble(default), None) | (CommunicationConfig::Both(_, default), None) => Some(default),
             (CommunicationConfig::Ble(default), Some(mut config))
             | (CommunicationConfig::Both(_, default), Some(mut config)) => {
                 // Use default setting if the corresponding field is not set
                 config.battery_adc_pin = config.battery_adc_pin.or(default.battery_adc_pin);
                 config.charge_state = config.charge_state.or(default.charge_state);
                 config.charge_led = config.charge_led.or(default.charge_led);
-                config.adc_divider_measured =
-                    config.adc_divider_measured.or(default.adc_divider_measured);
+                config.adc_divider_measured = config.adc_divider_measured.or(default.adc_divider_measured);
                 config.adc_divider_total = config.adc_divider_total.or(default.adc_divider_total);
                 Some(config)
             }
@@ -417,21 +402,15 @@ impl KeyboardConfig {
                                 Rule::coordinate => {
                                     let mut coord_parts = inner_pair.into_inner(); // Should contain two 'number' pairs
 
-                                    let row_str = coord_parts
-                                        .next()
-                                        .ok_or("Missing row coordinate")?
-                                        .as_str();
-                                    let col_str = coord_parts
-                                        .next()
-                                        .ok_or("Missing col coordinate")?
-                                        .as_str();
+                                    let row_str = coord_parts.next().ok_or("Missing row coordinate")?.as_str();
+                                    let col_str = coord_parts.next().ok_or("Missing col coordinate")?.as_str();
 
-                                    let row = row_str.parse::<u8>().map_err(|e| {
-                                        format!("Failed to parse row '{}': {}", row_str, e)
-                                    })?;
-                                    let col = col_str.parse::<u8>().map_err(|e| {
-                                        format!("Failed to parse col '{}': {}", col_str, e)
-                                    })?;
+                                    let row = row_str
+                                        .parse::<u8>()
+                                        .map_err(|e| format!("Failed to parse row '{}': {}", row_str, e))?;
+                                    let col = col_str
+                                        .parse::<u8>()
+                                        .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
 
                                     coordinates.push((row, col));
                                 }
@@ -517,7 +496,8 @@ impl KeyboardConfig {
             if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
                 return Err(format!(
                     "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
-                    MAX_ALIAS_RESOLUTION_DEPTH, keys)); // Show original keys for context
+                    MAX_ALIAS_RESOLUTION_DEPTH, keys
+                )); // Show original keys for context
             }
 
             if !made_replacement {
@@ -616,32 +596,17 @@ impl KeyboardConfig {
 
                                 //layer actions:
                                 Rule::df_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "DF",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("DF", inner_pair, layer_names)?);
                                 }
                                 Rule::mo_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "MO",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("MO", inner_pair, layer_names)?);
                                 }
                                 Rule::lm_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "LM",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("LM", inner_pair, layer_names)?);
                                 }
                                 Rule::lt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "LT",
-                                        inner_pair,
-                                        layer_names,
-                                    )?); //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
+                                    key_action_sequence.push(Self::layer_name_resolver("LT", inner_pair, layer_names)?);
+                                    //"LT(".to_owned() + &Self::layer_name_resolver(inner_pair, layer_names)? + ")");
                                 }
                                 Rule::osl_action => {
                                     key_action_sequence.push(Self::layer_name_resolver(
@@ -651,25 +616,13 @@ impl KeyboardConfig {
                                     )?);
                                 }
                                 Rule::tt_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "TT",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TT", inner_pair, layer_names)?);
                                 }
                                 Rule::tg_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "TG",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TG", inner_pair, layer_names)?);
                                 }
                                 Rule::to_action => {
-                                    key_action_sequence.push(Self::layer_name_resolver(
-                                        "TO",
-                                        inner_pair,
-                                        layer_names,
-                                    )?);
+                                    key_action_sequence.push(Self::layer_name_resolver("TO", inner_pair, layer_names)?);
                                 }
 
                                 //tap-hold actions:
@@ -759,16 +712,14 @@ impl KeyboardConfig {
                 }
                 Err(parse_err) => {
                     // Pest error already includes details about the invalid format
-                    let error_message =
-                        format!("keyboard.toml: Error in `layout.matrix_map`: {}", parse_err);
+                    let error_message = format!("keyboard.toml: Error in `layout.matrix_map`: {}", parse_err);
                     return rmk_compile_error!(error_message);
                 }
             }
         } else {
             if layers.len() > 0 {
                 return rmk_compile_error!(
-                    "layout.matrix_map is need to be defined to process [[layer]] based key maps"
-                        .to_string()
+                    "layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string()
                 );
             }
         }
@@ -792,8 +743,7 @@ impl KeyboardConfig {
             }
             if layer_names.len() >= layout.layers as usize {
                 return rmk_compile_error!(
-                    "keyboard.toml: Number of [[layer]] entries is larger than layout.layers"
-                        .to_string()
+                    "keyboard.toml: Number of [[layer]] entries is larger than layout.layers".to_string()
                 );
             }
 
@@ -807,10 +757,8 @@ impl KeyboardConfig {
                 // their number and order should match the number and order of the above parsed matrix map
                 match Self::keymap_parser(&layer.keys, &aliases, &layer_names) {
                     Ok(key_action_sequence) => {
-                        let mut legacy_keymap = vec![
-                            vec!["No".to_string(); layout.cols as usize];
-                            layout.rows as usize
-                        ];
+                        let mut legacy_keymap =
+                            vec![vec!["No".to_string(); layout.cols as usize]; layout.rows as usize];
 
                         let mut sequence_number: usize = 0;
                         for key_action in key_action_sequence {
@@ -829,8 +777,7 @@ impl KeyboardConfig {
 
                     Err(parse_err) => {
                         // Pest error already includes details about the invalid format
-                        let error_message =
-                            format!("keyboard.toml: Error in `layout.keymap`: {}", parse_err);
+                        let error_message = format!("keyboard.toml: Error in `layout.keymap`: {}", parse_err);
                         return rmk_compile_error!(error_message);
                     }
                 }
@@ -848,10 +795,7 @@ impl KeyboardConfig {
         if final_layers.len() <= layout.layers as usize {
             for _ in final_layers.len()..layout.layers as usize {
                 // Add 2D vector of empty keys
-                final_layers.push(vec![
-                    vec!["_".to_string(); layout.cols as usize];
-                    layout.rows as usize
-                ]);
+                final_layers.push(vec![vec!["_".to_string(); layout.cols as usize]; layout.rows as usize]);
             }
         } else {
             return rmk_compile_error!(
@@ -860,11 +804,7 @@ impl KeyboardConfig {
         }
 
         // Row
-        if let Some(_) = final_layers
-            .iter()
-            .map(|r| r.len())
-            .find(|l| *l as u8 != layout.rows)
-        {
+        if let Some(_) = final_layers.iter().map(|r| r.len()).find(|l| *l as u8 != layout.rows) {
             return rmk_compile_error!(
                 "keyboard.toml: Row number in keymap doesn't match with [layout.row]".to_string()
             );
@@ -900,13 +840,9 @@ impl KeyboardConfig {
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
                         if tri_layer.upper >= layout.layers {
-                            return rmk_compile_error!(
-                                "keyboard.toml: Tri layer upper is larger than [layout.layers]"
-                            );
+                            return rmk_compile_error!("keyboard.toml: Tri layer upper is larger than [layout.layers]");
                         } else if tri_layer.lower >= layout.layers {
-                            return rmk_compile_error!(
-                                "keyboard.toml: Tri layer lower is larger than [layout.layers]"
-                            );
+                            return rmk_compile_error!("keyboard.toml: Tri layer lower is larger than [layout.layers]");
                         } else if tri_layer.adjust >= layout.layers {
                             return rmk_compile_error!(
                                 "keyboard.toml: Tri layer adjust is larger than [layout.layers]"
@@ -923,7 +859,9 @@ impl KeyboardConfig {
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
                     if combo.combos.len() > COMBO_MAX_NUM {
-                        return rmk_compile_error!(format!("keyboard.toml: number of combos is greater than [behavior.combo.max_num]"));
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of combos is greater than [behavior.combo.max_num]"
+                        ));
                     }
 
                     for (i, c) in combo.combos.iter().enumerate() {
@@ -933,7 +871,9 @@ impl KeyboardConfig {
 
                         if let Some(layer) = c.layer {
                             if layer >= layout.layers {
-                                return rmk_compile_error!(format!("keyboard.toml: layer in combo #{i} is greater than [layout.layers]"));
+                                return rmk_compile_error!(format!(
+                                    "keyboard.toml: layer in combo #{i} is greater than [layout.layers]"
+                                ));
                             }
                         }
                     }
@@ -942,7 +882,9 @@ impl KeyboardConfig {
                 behavior.fork = behavior.fork.or(default.fork);
                 if let Some(fork) = &behavior.fork {
                     if fork.forks.len() > FORK_MAX_NUM {
-                        return rmk_compile_error!(format!("keyboard.toml: number of forks is greater than [behavior.fork.max_num]"));
+                        return rmk_compile_error!(format!(
+                            "keyboard.toml: number of forks is greater than [behavior.fork.max_num]"
+                        ));
                     }
                 }
 

@@ -1,6 +1,6 @@
 # nrf52840 BLE split example
 
-RMK supports [nice!nano](https://nicekeyboards.com/) as well as any custom nrf52840 board you have. 
+RMK supports [nice!nano](https://nicekeyboards.com/nice-nano) as well as any custom nrf52840 board you have. 
 
 ## Build firmware
 
@@ -16,7 +16,7 @@ cargo build --release --bin peripheral
 
 ## Nice!nano support
 
-nice!nano has a bootloader built-in, which supports .uf2 firmware format. That means you don't need any debugging probe to flash your firmware. RMK uses `cargo-make` tool to generate .uf2 firmware, then generation processing is defined in `Makefile.toml`
+nice!nano has the [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader) built-in, which supports .uf2 firmware format. That means you don't need any debugging probe to flash your firmware. RMK uses `cargo-make` tool to generate .uf2 firmware, then generation processing is defined in `Makefile.toml`
 
 The following are steps of how to get .uf2 firmware work in RMK:
 
@@ -36,24 +36,39 @@ Note that RMK will switch to USB mode if an USB cable is connected. Remember to 
 
 You can also check the instruction [here](https://nicekeyboards.com/docs/nice-nano/) for more info about nice!nano.
 
-## With debug probe
-With a debug probe, you can have the full control of you hardware. To use RMK you should have [nrf s140 softdevice 7.3.0](https://www.nordicsemi.com/Products/Development-software/s140/download) flashed to nrf52840 first. 
+## With debugging probe
 
-The following are the detailed steps for flashing both nrf's softdevice and RMK firmware:
+With a debugging probe, you can have the full control of you hardware. To use RMK you should check whether the bootloader is flashed to your board first. To use RMK with existing bootloader such as [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader), check `memory.x` in the project root, ensure that the flash starts from 0x00001000
+
+```
+MEMORY
+{
+  /* NOTE 1 K = 1 KiB = 1024 bytes */
+  /* These values correspond to the nRF52840 WITH Adafruit nRF52 bootloader */
+  FLASH : ORIGIN = 0x00001000, LENGTH = 1020K
+  RAM : ORIGIN = 0x20000008, LENGTH = 255K
+}
+```
+
+Or you can use RMK without bootloader:
+
+```
+MEMORY
+{
+  /* NOTE 1 K = 1 KiB = 1024 bytes */
+  /* These values correspond to the nRF52840 */
+  FLASH : ORIGIN = 0x00000000, LENGTH = 1024K
+  RAM : ORIGIN = 0x20000000, LENGTH = 256K
+}
+```
+
+After you have `memory.x` set, use `cargo run --release` to flash the RMK firmware to your board:
 
 1. Enter example folder:
    ```shell
-   cd examples/use_rust/nrf52840_ble
+   cd examples/use_rust/nrf52840_ble_split
    ```
-2. Erase the flash:
-   ```shell
-   probe-rs erase --chip nrf52840_xxAA
-   ```
-3. Flash softdevice firmware to flash:
-   ```shell
-   probe-rs download --verify --format hex --chip nRF52840_xxAA s140_nrf52_7.3.0_softdevice.hex
-   ```
-4. Compile, flash and run the example
+2. Compile, flash and run the example
    ```shell
    # Run central firmware
    cargo run --release --bin central

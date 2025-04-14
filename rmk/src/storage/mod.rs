@@ -1,48 +1,50 @@
 pub mod dummy_flash;
 mod eeconfig;
 
-use crate::{
-    action::EncoderAction,
-    channel::FLASH_CHANNEL,
-    combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM},
-    config::StorageConfig,
-    fork::{Fork, StateBits, FORK_MAX_NUM},
-    hid_state::{HidModifiers, HidMouseButtons},
-    light::LedIndicator,
-    BUILD_HASH,
-};
-use byteorder::{BigEndian, ByteOrder};
 use core::fmt::Debug;
 use core::ops::Range;
+
+use byteorder::{BigEndian, ByteOrder};
 use embassy_embedded_hal::adapter::BlockingAsync;
+use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use sequential_storage::{
-    cache::NoCache,
-    map::{fetch_all_items, fetch_item, store_item, SerializationError, Value},
-    Error as SSError,
-};
-#[cfg(feature = "_nrf_ble")]
-use {crate::ble::nrf::bonder::BondInfo, core::mem};
-
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
-use crate::{
-    action::KeyAction,
-    via::keycode_convert::{from_via_keycode, to_via_keycode},
+use sequential_storage::cache::NoCache;
+use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
+use sequential_storage::Error as SSError;
+#[cfg(feature = "_ble")]
+use {
+    crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
+    crate::ble::trouble::profile::ProfileInfo,
+    trouble_host::{prelude::*, BondInformation, LongTermKey},
 };
 
 use self::eeconfig::EeKeymapConfig;
+use crate::action::{EncoderAction, KeyAction};
+use crate::channel::FLASH_CHANNEL;
+use crate::combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM};
+use crate::config::StorageConfig;
+use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
+use crate::hid_state::{HidModifiers, HidMouseButtons};
+use crate::keyboard_macro::MACRO_SPACE_SIZE;
+use crate::light::LedIndicator;
+use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::BUILD_HASH;
+
+/// Signal to synchronize the flash operation status, usually used outside of the flash task.
+/// True if the flash operation is finished correctly, false if the flash operation is finished with error.
+pub(crate) static FLASH_OPERATION_FINISHED: Signal<crate::RawMutex, bool> = Signal::new();
 
 // Message send from bonder to flash task, which will do saving or clearing operation
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum FlashOperationMessage {
-    // Bond info to be saved
-    #[cfg(feature = "_nrf_ble")]
-    BondInfo(BondInfo),
+    #[cfg(feature = "_ble")]
+    // BLE profile info to be saved
+    ProfileInfo(ProfileInfo),
+    #[cfg(feature = "_ble")]
     // Current active BLE profile number
-    #[cfg(feature = "_nrf_ble")]
     ActiveBleProfile(u8),
     // Clear the storage
     Reset,
@@ -92,9 +94,9 @@ pub(crate) enum StorageKeys {
     ConnectionType,
     EncoderKeys,
     ForkData,
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     ActiveBleProfile = 0xEE,
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     BleBondInfo = 0xEF,
 }
 
@@ -112,15 +114,17 @@ impl StorageKeys {
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
             10 => Some(StorageKeys::ForkData),
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
+            0xEE => Some(StorageKeys::ActiveBleProfile),
+            #[cfg(feature = "_ble")]
             0xEF => Some(StorageKeys::BleBondInfo),
             _ => None,
         }
     }
 }
 
-/// The data stored in the storage.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
@@ -132,9 +136,9 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
-    #[cfg(feature = "_nrf_ble")]
-    BondInfo(BondInfo),
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
+    BondInfo(ProfileInfo),
+    #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
 }
 
@@ -206,10 +210,7 @@ impl Value<'_> for StorageData {
             StorageData::EncoderConfig(e) => {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(
-                    &mut buffer[3..5],
-                    to_via_keycode(e.action.counter_clockwise()),
-                );
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
                 buffer[5] = e.idx as u8;
                 buffer[6] = e.layer as u8;
                 Ok(7)
@@ -228,10 +229,7 @@ impl Value<'_> for StorageData {
                 }
                 buffer[0] = StorageKeys::ComboData as u8;
                 for i in 0..COMBO_MAX_LENGTH {
-                    BigEndian::write_u16(
-                        &mut buffer[1 + i * 2..3 + i * 2],
-                        to_via_keycode(combo.actions[i]),
-                    );
+                    BigEndian::write_u16(&mut buffer[1 + i * 2..3 + i * 2], to_via_keycode(combo.actions[i]));
                 }
                 BigEndian::write_u16(
                     &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
@@ -250,13 +248,11 @@ impl Value<'_> for StorageData {
 
                 BigEndian::write_u16(
                     &mut buffer[7..9],
-                    fork.match_any.leds.into_bits() as u16
-                        | (fork.match_none.leds.into_bits() as u16) << 8,
+                    fork.match_any.leds.into_bits() as u16 | (fork.match_none.leds.into_bits() as u16) << 8,
                 );
                 BigEndian::write_u16(
                     &mut buffer[9..11],
-                    fork.match_any.mouse.into_bits() as u16
-                        | (fork.match_none.mouse.into_bits() as u16) << 8,
+                    fork.match_any.mouse.into_bits() as u16 | (fork.match_none.mouse.into_bits() as u16) << 8,
                 );
                 BigEndian::write_u32(
                     &mut buffer[11..15],
@@ -272,24 +268,38 @@ impl Value<'_> for StorageData {
                 buffer[1] = *ty;
                 Ok(2)
             }
-            #[cfg(feature = "_nrf_ble")]
-            StorageData::BondInfo(b) => {
-                if buffer.len() < 121 {
-                    return Err(SerializationError::BufferTooSmall);
-                }
-
-                // Must be 120
-                // info!("size of BondInfo: {}", size_of_val(self));
-                buffer[0] = StorageKeys::BleBondInfo as u8;
-                let buf: [u8; 120] = unsafe { mem::transmute_copy(b) };
-                buffer[1..121].copy_from_slice(&buf);
-                Ok(121)
-            }
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(slot_num) => {
                 buffer[0] = StorageKeys::ActiveBleProfile as u8;
                 buffer[1] = *slot_num;
                 Ok(2)
+            }
+            #[cfg(feature = "_ble")]
+            StorageData::BondInfo(b) => {
+                if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::BleBondInfo as u8;
+                let ltk = b.info.ltk.to_le_bytes();
+                let address = b.info.address;
+                buffer[1] = b.slot_num;
+                buffer[2..18].copy_from_slice(&ltk);
+                buffer[18..24].copy_from_slice(address.raw());
+                let cccd_table = b.cccd_table.inner();
+                for i in 0..CCCD_TABLE_SIZE {
+                    match cccd_table.get(i) {
+                        Some(cccd) => {
+                            let handle: u16 = cccd.0;
+                            let cccd: u16 = cccd.1.raw();
+                            buffer[24 + i * 4..26 + i * 4].copy_from_slice(&handle.to_le_bytes());
+                            buffer[26 + i * 4..28 + i * 4].copy_from_slice(&cccd.to_le_bytes());
+                        }
+                        None => {
+                            buffer[24 + i * 4..28 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
+                        }
+                    };
+                }
+                Ok(24 + CCCD_TABLE_SIZE * 4)
             }
         }
     }
@@ -324,9 +334,9 @@ impl Value<'_> for StorageData {
                 }
                 StorageKeys::LedLightConfig => Err(SerializationError::Custom(0)),
                 StorageKeys::RgbLightConfig => Err(SerializationError::Custom(0)),
-                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(
-                    EeKeymapConfig::from_bits(BigEndian::read_u16(&buffer[1..3])),
-                )),
+                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(EeKeymapConfig::from_bits(
+                    BigEndian::read_u16(&buffer[1..3]),
+                ))),
                 StorageKeys::LayoutConfig => {
                     let default_layer = buffer[1];
                     let layout_option = BigEndian::read_u32(&buffer[2..6]);
@@ -363,8 +373,7 @@ impl Value<'_> for StorageData {
                     }
                     let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
                     for i in 0..COMBO_MAX_LENGTH {
-                        actions[i] =
-                            from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
+                        actions[i] = from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
                     }
                     let output = from_via_keycode(BigEndian::read_u16(
                         &buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
@@ -413,8 +422,7 @@ impl Value<'_> for StorageData {
                         leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
                         mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
                     };
-                    let kept_modifiers =
-                        HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let kept_modifiers = HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
                     let bindable = (modifier_masks & (1 << 24)) != 0;
 
                     Ok(StorageData::ForkData(ForkData {
@@ -428,17 +436,34 @@ impl Value<'_> for StorageData {
                         bindable,
                     }))
                 }
-                #[cfg(feature = "_nrf_ble")]
-                StorageKeys::BleBondInfo => {
-                    // Make `transmute_copy` happy, because the compiler doesn't know the size of buffer
-                    let mut buf = [0_u8; 120];
-                    buf.copy_from_slice(&buffer[1..121]);
-                    let info: BondInfo = unsafe { mem::transmute_copy(&buf) };
-
-                    Ok(StorageData::BondInfo(info))
+                #[cfg(feature = "_ble")]
+                StorageKeys::ActiveBleProfile => {
+                    if buffer.len() < 2 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
+                    Ok(StorageData::ActiveBleProfile(buffer[1]))
                 }
-                #[cfg(feature = "_nrf_ble")]
-                StorageKeys::ActiveBleProfile => Ok(StorageData::ActiveBleProfile(buffer[1])),
+                #[cfg(feature = "_ble")]
+                StorageKeys::BleBondInfo => {
+                    if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
+                    let slot_num = buffer[1];
+                    let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
+                    let address = BdAddr::new(buffer[18..24].try_into().unwrap());
+                    let mut cccd_table_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
+                    for i in 0..CCCD_TABLE_SIZE {
+                        let handle = u16::from_le_bytes(buffer[24 + i * 4..26 + i * 4].try_into().unwrap());
+                        let cccd = u16::from_le_bytes(buffer[26 + i * 4..28 + i * 4].try_into().unwrap());
+                        cccd_table_values[i] = (handle, cccd.into());
+                    }
+                    Ok(StorageData::BondInfo(ProfileInfo {
+                        slot_num,
+                        removed: false,
+                        info: BondInformation::new(address, ltk),
+                        cccd_table: CccdTable::new(cccd_table_values),
+                    }))
+                }
             }
         } else {
             Err(SerializationError::Custom(1))
@@ -466,10 +491,10 @@ impl StorageData {
             StorageData::ForkData(_) => {
                 panic!("To get fork key for ForkData, use `get_fork_key` instead");
             }
-            #[cfg(feature = "_nrf_ble")]
-            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
-            #[cfg(feature = "_nrf_ble")]
+            #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
+            #[cfg(feature = "_ble")]
+            StorageData::BondInfo(b) => get_bond_info_key(b.slot_num),
         }
     }
 }
@@ -546,11 +571,10 @@ pub struct Storage<
 
 /// Read out storage config, update and then save back.
 /// This macro applies to only some of the configs.
-macro_rules! write_storage {
+macro_rules! update_storage_field {
     ($f: expr, $buf: expr, $cache:expr, $key:ident, $field:ident, $range:expr) => {
         if let Ok(Some(StorageData::$key(mut saved))) =
-            fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32))
-                .await
+            fetch_item::<u32, StorageData, _>($f, $range, $cache, $buf, &(StorageKeys::$key as u32)).await
         {
             saved.$field = $field;
             store_item::<u32, StorageData, _>(
@@ -568,13 +592,8 @@ macro_rules! write_storage {
     };
 }
 
-impl<
-        F: AsyncNorFlash,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    > Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     pub async fn new(
         flash: F,
@@ -608,9 +627,9 @@ impl<
             config.num_sectors,
             config.start_addr,
         );
+
         let storage_range = if start_addr == 0 {
-            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32
-                ..flash.capacity() as u32
+            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32..flash.capacity() as u32
         } else {
             assert!(
                 start_addr % F::ERASE_SIZE == 0,
@@ -626,12 +645,10 @@ impl<
         };
 
         // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await {
+        if !storage.check_enable().await || config.clear_storage {
             // Clear storage first
             debug!("Clearing storage!");
-            let _ =
-                sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone())
-                    .await;
+            let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
 
             // Initialize storage from keymap and config
             if storage
@@ -667,7 +684,7 @@ impl<
             if let Err(e) = match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
-                    write_storage!(
+                    update_storage_field!(
                         &mut self.flash,
                         &mut self.buffer,
                         &mut storage_cache,
@@ -681,7 +698,7 @@ impl<
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
-                    write_storage!(
+                    update_storage_field!(
                         &mut self.flash,
                         &mut self.buffer,
                         &mut storage_cache,
@@ -714,11 +731,7 @@ impl<
                         layer: layer as usize,
                         action,
                     });
-                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(
-                        row as usize,
-                        col as usize,
-                        layer as usize,
-                    );
+                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row as usize, col as usize, layer as usize);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -769,6 +782,7 @@ impl<
                     )
                     .await
                 }
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::WriteFork(fork) => {
                     let key = get_fork_key(fork.idx);
                     store_item(
@@ -781,7 +795,7 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::ActiveBleProfile(profile) => {
                     let data = StorageData::ActiveBleProfile(profile);
                     store_item::<u32, StorageData, _>(
@@ -794,11 +808,11 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
+                #[cfg(feature = "_ble")]
                 FlashOperationMessage::ClearSlot(key) => {
                     info!("Clearing bond info slot_num: {}", key);
                     // Remove item in `sequential-storage` is quite expensive, so just override the item with `removed = true`
-                    let mut empty = BondInfo::default();
+                    let mut empty = ProfileInfo::default();
                     empty.removed = true;
                     let data = StorageData::BondInfo(empty);
                     store_item::<u32, StorageData, _>(
@@ -811,9 +825,9 @@ impl<
                     )
                     .await
                 }
-                #[cfg(feature = "_nrf_ble")]
-                FlashOperationMessage::BondInfo(b) => {
-                    info!("Saving bond info: {:?}", b);
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::ProfileInfo(b) => {
+                    debug!("Saving profile info: {:?}", b);
                     let data = StorageData::BondInfo(b);
                     store_item::<u32, StorageData, _>(
                         &mut self.flash,
@@ -825,10 +839,13 @@ impl<
                     )
                     .await
                 }
-                #[cfg(not(feature = "_nrf_ble"))]
+                #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
                 print_storage_error::<F>(e);
+                FLASH_OPERATION_FINISHED.signal(false);
+            } else {
+                FLASH_OPERATION_FINISHED.signal(true);
             }
         }
     }
@@ -848,10 +865,7 @@ impl<
         .await
         {
             // Iterator the storage, read all keymap keys and encoder configs
-            while let Ok(Some((_key, item))) = key_iterator
-                .next::<u32, StorageData>(&mut self.buffer)
-                .await
-            {
+            while let Ok(Some((_key, item))) = key_iterator.next::<u32, StorageData>(&mut self.buffer).await {
                 match item {
                     StorageData::KeymapKey(key) => {
                         if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
@@ -893,10 +907,7 @@ impl<
         Ok(())
     }
 
-    pub(crate) async fn read_combos(
-        &mut self,
-        combos: &mut Vec<Combo, COMBO_MAX_NUM>,
-    ) -> Result<(), ()> {
+    pub(crate) async fn read_combos(&mut self, combos: &mut Vec<Combo, COMBO_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in combos.iter_mut().enumerate() {
             let key = get_combo_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
@@ -921,10 +932,7 @@ impl<
         Ok(())
     }
 
-    pub(crate) async fn read_forks(
-        &mut self,
-        forks: &mut Vec<Fork, FORK_MAX_NUM>,
-    ) -> Result<(), ()> {
+    pub(crate) async fn read_forks(&mut self, forks: &mut Vec<Fork, FORK_MAX_NUM>) -> Result<(), ()> {
         for (i, item) in forks.iter_mut().enumerate() {
             let key = get_fork_key(i);
             let read_data = fetch_item::<u32, StorageData, _>(
@@ -1056,17 +1064,40 @@ impl<
         )
         .await
         {
-            if config.enable && config.build_hash == BUILD_HASH {
+            // if config.enable && config.build_hash == BUILD_HASH {
+            if config.enable {
                 return true;
             }
         }
         false
     }
+
+    #[cfg(feature = "_ble")]
+    pub(crate) async fn read_trouble_bond_info(&mut self, slot_num: u8) -> Result<Option<ProfileInfo>, ()> {
+        let read_data = fetch_item::<u32, StorageData, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &get_bond_info_key(slot_num),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::BondInfo(info)) = read_data {
+            Ok(Some(info))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
     match e {
-        SSError::Storage { value: _ } => error!("Flash error"),
+        #[cfg(feature = "defmt")]
+        SSError::Storage { value: e } => error!("Flash error: {:?}", defmt::Debug2Format(&e)),
+        #[cfg(not(feature = "defmt"))]
+        SSError::Storage { value: _e } => error!("Flash error"),
         SSError::FullStorage => error!("Storage is full"),
         SSError::Corrupted {} => error!("Storage is corrupted"),
         SSError::BufferTooBig => error!("Buffer too big"),
@@ -1088,4 +1119,19 @@ const fn get_buffer_size() -> usize {
 
     // Efficiently round up to the nearest multiple of 32 using bit manipulation.
     (buffer_size + 31) & !31
+}
+
+#[macro_export]
+/// Helper macro for reading storage config
+macro_rules! read_storage {
+    ($storage: ident, $key: expr, $buf: expr) => {
+        ::sequential_storage::map::fetch_item::<u32, $crate::storage::StorageData, _>(
+            &mut $storage.flash,
+            $storage.storage_range.clone(),
+            &mut sequential_storage::cache::NoCache::new(),
+            &mut $buf,
+            $key,
+        )
+        .await
+    };
 }

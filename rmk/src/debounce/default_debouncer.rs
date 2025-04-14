@@ -1,8 +1,7 @@
 use embassy_time::Instant;
 
-use crate::matrix::KeyState;
-
 use super::{DebounceState, DebouncerTrait, DEBOUNCE_THRESHOLD};
+use crate::matrix::KeyState;
 
 /// Debounce counter info for each key.
 #[derive(Copy, Clone, Debug)]
@@ -41,9 +40,7 @@ impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> Default
     }
 }
 
-impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize>
-    DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM>
-{
+impl<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> DefaultDebouncer<INPUT_PIN_NUM, OUTPUT_PIN_NUM> {
     /// Create a default debouncer
     pub fn new() -> Self {
         DefaultDebouncer {

@@ -1,15 +1,19 @@
-#[cfg(feature = "rapid_debouncer")]
-use crate::debounce::fast_debouncer::RapidDebouncer;
-use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyEvent};
-use crate::input_device::InputDevice;
-use crate::matrix::{KeyState, MatrixTrait};
+#[cfg(feature = "async_matrix")]
+use core::pin::pin;
+
 use embassy_time::{Instant, Timer};
 use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(feature = "async_matrix")]
 use embedded_hal_async::digital::Wait;
-#[cfg(not(feature = "_nrf_ble"))]
+#[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+#[cfg(feature = "_ble")]
+use trouble_host::prelude::*;
+
+use crate::debounce::{DebounceState, DebouncerTrait};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::matrix::{KeyState, MatrixTrait};
 
 /// Run central's peripheral manager task.
 ///
@@ -18,23 +22,26 @@ use embedded_io_async::{Read, Write};
 /// * `addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
 pub async fn run_peripheral_manager<
+    'a,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    #[cfg(not(feature = "_nrf_ble"))] S: Read + Write,
+    #[cfg(feature = "_ble")] C: Controller,
+    #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,
-    #[cfg(feature = "_nrf_ble")] addr: [u8; 6],
-    #[cfg(not(feature = "_nrf_ble"))] receiver: S,
+    #[cfg(feature = "_ble")] addr: [u8; 6],
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(not(feature = "_ble"))] receiver: S,
 ) {
-    #[cfg(feature = "_nrf_ble")]
+    #[cfg(feature = "_ble")]
     {
-        use crate::split::nrf::central::run_ble_peripheral_manager;
-        run_ble_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr).await;
+        use crate::split::ble::central::run_ble_peripheral_manager;
+        run_ble_peripheral_manager::<C, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr, stack).await;
     };
 
-    #[cfg(not(feature = "_nrf_ble"))]
+    #[cfg(not(feature = "_ble"))]
     {
         use crate::split::serial::run_serial_peripheral_manager;
         run_serial_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
@@ -75,8 +82,7 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > InputDevice
-    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > InputDevice for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     async fn read_event(&mut self) -> Event {
         loop {
@@ -155,8 +161,7 @@ impl<
         const COL_OFFSET: usize,
         const INPUT_PIN_NUM: usize,
         const OUTPUT_PIN_NUM: usize,
-    > MatrixTrait
-    for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    > MatrixTrait for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     #[cfg(feature = "col2row")]
     const ROW: usize = INPUT_PIN_NUM;
@@ -191,7 +196,7 @@ impl<
             .iter_mut()
             .map(|input_pin| input_pin.wait_for_high())
             .collect();
-        let _ = select_slice(futs.as_mut_slice()).await;
+        let _ = select_slice(pin!(futs.as_mut_slice())).await;
 
         // Set all output pins back to low
         for out in self.output_pins.iter_mut() {
@@ -214,11 +219,7 @@ impl<
     > CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Initialization of central
-    pub fn new(
-        input_pins: [In; INPUT_PIN_NUM],
-        output_pins: [Out; OUTPUT_PIN_NUM],
-        debouncer: D,
-    ) -> Self {
+    pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
         CentralMatrix {
             input_pins,
             output_pins,
@@ -389,7 +390,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         } else {
             let mut futs: Vec<_, SIZE> = Vec::new();
             for direct_pins_row in self.direct_pins.iter_mut() {
@@ -399,7 +400,7 @@ impl<
                     }
                 }
             }
-            let _ = select_slice(futs.as_mut_slice()).await;
+            let _ = select_slice(pin!(futs.as_mut_slice())).await;
         }
         self.scan_start = Some(Instant::now());
     }

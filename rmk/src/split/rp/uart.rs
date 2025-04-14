@@ -2,21 +2,17 @@ use core::cell::RefCell;
 use core::future::{poll_fn, Future};
 use core::marker::PhantomData;
 use core::task::Poll;
+
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
-use embassy_rp::Peripheral;
-use embassy_rp::{
-    clocks::clk_sys_freq,
-    gpio::{Drive, Level, Pull, SlewRate},
-    interrupt::{
-        typelevel::{Binding, Handler, Interrupt},
-        Priority,
-    },
-    pio::{
-        Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin,
-        ShiftDirection, StateMachine,
-    },
-    uart::Error,
+use embassy_rp::clocks::clk_sys_freq;
+use embassy_rp::gpio::{Drive, Level, Pull, SlewRate};
+use embassy_rp::interrupt::typelevel::{Binding, Handler, Interrupt};
+use embassy_rp::interrupt::Priority;
+use embassy_rp::pio::{
+    Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin, ShiftDirection, StateMachine,
 };
+use embassy_rp::uart::Error;
+use embassy_rp::Peripheral;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::waitqueue::AtomicWaker;
@@ -292,10 +288,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
 
     async fn enable_sm_tx(&mut self) {
         while !PIO::uart_buffer().idle_line.lock(|b| *b.borrow()) {
-            Timer::after(Duration::from_micros(
-                ((1_000_000u32 * 1) / BAUD_RATE) as u64,
-            ))
-            .await;
+            Timer::after(Duration::from_micros(((1_000_000u32 * 1) / BAUD_RATE) as u64)).await;
         }
         self.sm_rx.set_enable(false);
         self.set_pin_tx();
@@ -305,17 +298,12 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
 
     async fn enable_sm_rx(&mut self) {
         while !self.sm_tx.tx().empty() {}
-        Timer::after(Duration::from_micros(
-            ((1_000_000u32 * 11) / BAUD_RATE) as u64,
-        ))
-        .await;
+        Timer::after(Duration::from_micros(((1_000_000u32 * 11) / BAUD_RATE) as u64)).await;
         self.sm_tx.set_enable(false);
 
         self.set_pin_rx();
 
-        PIO::uart_buffer()
-            .idle_line
-            .lock(|b| *b.borrow_mut() = true);
+        PIO::uart_buffer().idle_line.lock(|b| *b.borrow_mut() = true);
         self.sm_rx.set_enable(true);
     }
 
@@ -343,10 +331,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         self.sm_rx.set_pin_dirs(Direction::In, &[&self.pin_rx]);
     }
 
-    fn read_buffer<'c>(
-        &'c self,
-        buf: &'c mut [u8],
-    ) -> impl Future<Output = Result<usize, Error>> + 'c {
+    fn read_buffer<'c>(&'c self, buf: &'c mut [u8]) -> impl Future<Output = Result<usize, Error>> + 'c {
         poll_fn(move |cx| {
             if let Poll::Ready(r) = self.try_read(buf) {
                 return Poll::Ready(r);
@@ -381,10 +366,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
         }
         if self.full_duplex {
             let result = self.write_ring(buf);
-            PIO::regs()
-                .irqs(0)
-                .inte()
-                .modify(|i| i.set_sm0_txnfull(true));
+            PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(true));
             return result;
         } else {
             if !self.sm_tx.is_enabled() {
@@ -417,10 +399,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
             if self.sm_tx.tx().try_push(byte) {
                 return Poll::Ready(());
             }
-            PIO::regs()
-                .irqs(0)
-                .inte()
-                .modify(|i| i.set_sm0_txnfull(true));
+            PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(true));
             PIO::uart_buffer().waker_tx.register(cx.waker());
             Poll::Pending
         })
@@ -429,10 +408,7 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     async fn flush(&mut self) -> Result<(), Error> {
         if !self.sm_tx.tx().empty() {
             while !self.sm_tx.tx().empty() {}
-            Timer::after(Duration::from_micros(
-                ((1_000_000u32 * 11) / BAUD_RATE) as u64,
-            ))
-            .await;
+            Timer::after(Duration::from_micros(((1_000_000u32 * 11) / BAUD_RATE) as u64)).await;
         }
         Ok(())
     }
@@ -481,17 +457,11 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
                     reader.pop_done(n);
                 }
                 if PIO::uart_buffer().buf_tx.is_empty() {
-                    PIO::regs()
-                        .irqs(0)
-                        .inte()
-                        .modify(|i| i.set_sm0_txnfull(false));
+                    PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
                 }
             } else {
                 // Half-Duplex Mode
-                PIO::regs()
-                    .irqs(0)
-                    .inte()
-                    .modify(|i| i.set_sm0_txnfull(false));
+                PIO::regs().irqs(0).inte().modify(|i| i.set_sm0_txnfull(false));
                 PIO::uart_buffer().waker_tx.wake();
             }
         }
@@ -502,17 +472,13 @@ impl<PIO: Instance + UartPioAccess> Handler<PIO::Interrupt> for UartInterruptHan
         }
         if ints & StatusBit::SM_IRQ1 != 0 {
             // Line Non-Idle Toogle Raised IRQ 1
-            PIO::uart_buffer()
-                .idle_line
-                .lock(|b| *b.borrow_mut() = false);
+            PIO::uart_buffer().idle_line.lock(|b| *b.borrow_mut() = false);
             pio.irq().write(|f| f.set_irq(IrqBit::IRQ1));
             PIO::Interrupt::unpend();
         }
         if ints & StatusBit::SM_IRQ2 != 0 {
             // Line Idle Toogle Raised IRQ 2
-            PIO::uart_buffer()
-                .idle_line
-                .lock(|b| *b.borrow_mut() = true);
+            PIO::uart_buffer().idle_line.lock(|b| *b.borrow_mut() = true);
             pio.irq().write(|f| f.set_irq(IrqBit::IRQ2));
             PIO::Interrupt::unpend();
         }

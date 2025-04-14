@@ -1,6 +1,7 @@
 use heapless::Vec;
 
-use crate::{action::KeyAction, event::KeyEvent};
+use crate::action::KeyAction;
+use crate::event::KeyEvent;
 
 // Max number of combos
 pub(crate) const COMBO_MAX_NUM: usize = 8;
@@ -25,11 +26,7 @@ impl Default for Combo {
 const COMBO_TRIGGERED: u8 = u8::MAX;
 
 impl Combo {
-    pub fn new<I: IntoIterator<Item = KeyAction>>(
-        actions: I,
-        output: KeyAction,
-        layer: Option<u8>,
-    ) -> Self {
+    pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         Self {
             actions: Vec::from_iter(actions),
             output,
@@ -39,19 +36,10 @@ impl Combo {
     }
 
     pub fn empty() -> Self {
-        Self::new(
-            Vec::<KeyAction, COMBO_MAX_LENGTH>::new(),
-            KeyAction::No,
-            None,
-        )
+        Self::new(Vec::<KeyAction, COMBO_MAX_LENGTH>::new(), KeyAction::No, None)
     }
 
-    pub(crate) fn update(
-        &mut self,
-        key_action: KeyAction,
-        key_event: KeyEvent,
-        active_layer: u8,
-    ) -> bool {
+    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.is_empty() || self.state == COMBO_TRIGGERED {
             //ignore combo that without actions
             return false;
@@ -63,10 +51,7 @@ impl Combo {
             }
         }
 
-        debug!(
-            "combo {:?} search key action {:?} ",
-            self.output, key_action
-        );
+        debug!("combo {:?} search key action {:?} ", self.output, key_action);
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
@@ -93,10 +78,7 @@ impl Combo {
 
         if self.is_all_pressed() {
             self.state = COMBO_TRIGGERED;
-            debug!(
-                "combo {:?} mark triggered, updated state: {}",
-                self.output, self.state
-            );
+            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
         }
         self.output
     }

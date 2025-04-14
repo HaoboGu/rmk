@@ -8,31 +8,25 @@ mod keymap;
 mod macros;
 mod vial;
 
-use defmt_rtt as _;
 use embassy_executor::Spawner;
 use keymap::{COL, ROW};
-use panic_probe as _;
+use py32_hal::bind_interrupts;
 use py32_hal::flash::Flash;
-use py32_hal::{
-    bind_interrupts,
-    gpio::{AnyPin, Input, Output},
-    rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk},
-    usb::{Driver, InterruptHandler},
-};
-use rmk::{
-    channel::EVENT_CHANNEL,
-    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
-    initialize_keymap_and_storage,
-    input_device::Runnable,
-    keyboard::Keyboard,
-    light::LightController,
-    matrix::Matrix,
-    run_devices, run_rmk,
-    storage::async_flash_wrapper,
-};
+use py32_hal::gpio::{Input, Output};
+use py32_hal::rcc::{HsiFs, Pll, PllMul, PllSource, Sysclk};
+use py32_hal::usb::{Driver, InterruptHandler};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::storage::async_flash_wrapper;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USB => InterruptHandler<py32_hal::peripherals::USB>;
@@ -55,7 +49,8 @@ async fn main(_spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_py!(peripherals: p, input: [PA0, PA1, PA2, PA3], output: [PA4, PA5, PA6]);
 
     let keyboard_usb_config = KeyboardUsbConfig {
         vid: 0x4c4b,
@@ -77,7 +72,7 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let (keymap, storage) = initialize_keymap_and_storage(
+    let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut default_keymap,
         async_flash_wrapper(f),
         rmk_config.storage_config,
@@ -91,14 +86,13 @@ async fn main(_spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
     // Initialize the light controller
-    let light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     // Start
     join3(
         run_devices!((matrix) => EVENT_CHANNEL),
         keyboard.run(),
-        run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
     )
     .await;
 }

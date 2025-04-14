@@ -10,20 +10,27 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["col2row", "esp32s3_ble"] }
-esp32-nimble = { version = "0.10"  }
-defmt = "0.3"
-embassy-time = { version = "0.4.0", features = ["defmt", "generic-queue-8"] }
-esp-println = { version = "0.13", features = ["esp32s3", "defmt-espflash"] }
-esp-idf-svc = { version = "0.51", default-features = false, features = [
-    "std",
-    "alloc",
-    "binstart",
-    "embassy-sync",
-    "critical-section",
-    "embassy-time-driver",
-    "native",
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "col2row",
+    "esp32s3_ble",
+    "log",
+    "storage",
 ] }
+embassy-executor = { version = "0.7.0" }
+esp-backtrace = { version = "0.15", features = [
+    "esp32s3",
+    "exception-handler",
+    "panic-handler",
+    "println",
+] }
+esp-hal = { version = "1.0.0-beta.0", features = ["esp32s3", "unstable"] }
+esp-hal-embassy = { version = "0.7.0", features = ["esp32s3"] }
+esp-storage = { version = "0.5.0", features = ["esp32s3", "nor-flash"] }
+esp-alloc = { version = "0.7.0" }
+esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
+esp-wifi = { version = "0.13.0", features = ["esp32s3", "ble"] }
+bt-hci = { version = "0.3" }
+rand_core = { version = "0.6", default-features = false }
 
 [build-dependencies]
 xz2 = "0.1.7"
@@ -37,17 +44,30 @@ name = "rmk-esp32s3"
 test = false
 bench = false
 
+[profile.dev.package.esp-storage]
+opt-level = 3
+
 [profile.dev]
-codegen-units = 1      # better optimizations
-debug = true
-opt-level = 3          # esp-wifi should be built with opt-level 2 or 3
-overflow-checks = true
-lto = false
-panic = 'unwind'
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
 
 [profile.release]
-codegen-units = 1       # better optimizations
-debug = true            # no overhead for bare-metal
-opt-level = 3           # esp-wifi should be built with opt-level 2 or 3
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'thin'
+opt-level = 3
 overflow-checks = false
-lto = "fat"
+
+[patch.crates-io]
+esp-wifi = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }

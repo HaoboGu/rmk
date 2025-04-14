@@ -25,7 +25,6 @@ $dirs = @(
     "examples/use_config/nrf52832_ble",
     "examples/use_config/nrf52840_ble",
     "examples/use_config/nrf52840_ble_split",
-    "examples/use_config/nrf52840_usb",
     "examples/use_config/rp2040",
     "examples/use_config/rp2040_direct_pin",
     "examples/use_config/rp2040_split",

@@ -1,7 +1,7 @@
 {
-  "name": "VIAL Keyboard",
-  "vendorId": "0x4B4C",
-  "productId": "0x4346",
+    "name": "RMK Keyboard",
+    "vendorId": "0x4C4B",
+    "productId": "0x4643",
     "lighting": "none",
     "matrix": {
         "rows": 4,

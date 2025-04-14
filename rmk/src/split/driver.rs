@@ -1,16 +1,15 @@
 //! The abstracted driver layer of the split keyboard.
 //!
-use super::SplitMessage;
-use crate::channel::EVENT_CHANNEL;
-use crate::input_device::InputDevice;
-use crate::CONNECTION_STATE;
-use crate::{
-    channel::KEY_EVENT_CHANNEL,
-    event::{Event, KeyEvent},
-};
 use core::sync::atomic::Ordering;
+
 use embassy_futures::select::select;
 use embassy_time::{Instant, Timer};
+
+use super::SplitMessage;
+use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::event::{Event, KeyEvent};
+use crate::input_device::InputDevice;
+use crate::CONNECTION_STATE;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -20,6 +19,7 @@ pub(crate) enum SplitDriverError {
     DeserializeError,
     SerializeError,
     BleError(u8),
+    Disconnected,
 }
 
 /// Split message reader from other split devices
@@ -68,15 +68,15 @@ impl<
     ///
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
-    pub(crate) async fn run(mut self) -> ! {
+    pub(crate) async fn run(mut self) {
+        CONNECTION_STATE.store(true, Ordering::Release);
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
-        if let Err(e) = self
-            .receiver
-            .write(&SplitMessage::ConnectionState(conn_state))
-            .await
-        {
-            error!("SplitDriver write error: {:?}", e);
+        if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
+            match e {
+                SplitDriverError::Disconnected => return,
+                _ => error!("SplitDriver write error: {:?}", e),
+            }
         }
 
         let mut last_sync_time = Instant::now();
@@ -100,13 +100,13 @@ impl<
                 },
                 embassy_futures::select::Either::Second(_) => {
                     // Timer elapsed, sync the connection state
+                    CONNECTION_STATE.store(true, Ordering::Release);
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                    if let Err(e) = self
-                        .receiver
-                        .write(&SplitMessage::ConnectionState(conn_state))
-                        .await
-                    {
-                        error!("SplitDriver write error: {:?}", e);
+                    if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
+                        match e {
+                            SplitDriverError::Disconnected => return,
+                            _ => error!("SplitDriver write error: {:?}", e),
+                        }
                     }
                     last_sync_time = Instant::now();
                 }

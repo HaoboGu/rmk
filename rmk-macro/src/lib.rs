@@ -21,12 +21,13 @@ mod split;
 #[rustfmt::skip]
 mod usb_interrupt_map;
 
-use crate::keyboard::parse_keyboard_mod;
-use darling::{ast::NestedMeta, FromMeta};
+use darling::ast::NestedMeta;
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;
-use usb_interrupt_map::get_usb_info;
+
+use crate::keyboard::parse_keyboard_mod;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum ChipSeries {
@@ -45,26 +46,27 @@ pub(crate) struct ChipModel {
 }
 
 impl ChipModel {
-    pub(crate) fn has_usb(&self) -> bool {
-        match self.series {
-            ChipSeries::Stm32 => get_usb_info(&self.chip).is_some(),
-            ChipSeries::Nrf52 => {
-                if self.chip == "nrf52833" || self.chip == "nrf52840" || self.chip == "nrf52820" {
-                    true
-                } else {
-                    false
-                }
-            }
-            ChipSeries::Rp2040 => true,
-            ChipSeries::Esp32 => {
-                if self.chip == "esp32s3" || self.chip == "esp32s2" {
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
+    // pub(crate) fn has_usb(&self) -> bool {
+    // use usb_interrupt_map::get_usb_info;
+    //     match self.series {
+    //         ChipSeries::Stm32 => get_usb_info(&self.chip).is_some(),
+    //         ChipSeries::Nrf52 => {
+    //             if self.chip == "nrf52833" || self.chip == "nrf52840" || self.chip == "nrf52820" {
+    //                 true
+    //             } else {
+    //                 false
+    //             }
+    //         }
+    //         ChipSeries::Rp2040 => true,
+    //         ChipSeries::Esp32 => {
+    //             if self.chip == "esp32s3" || self.chip == "esp32s2" {
+    //                 true
+    //             } else {
+    //                 false
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 #[proc_macro_attribute]

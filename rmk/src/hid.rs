@@ -1,10 +1,15 @@
 /// Traits and types for HID message reporting and listening.
 use core::{future::Future, sync::atomic::Ordering};
 
-use crate::{channel::KEYBOARD_REPORT_CHANNEL, usb::descriptor::KeyboardReport, CONNECTION_STATE};
-use embassy_usb::{class::hid::ReadError, driver::EndpointError};
+use embassy_usb::class::hid::ReadError;
+use embassy_usb::driver::EndpointError;
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
+
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::state::ConnectionState;
+use crate::usb::descriptor::KeyboardReport;
+use crate::CONNECTION_STATE;
 
 #[derive(Serialize, Debug)]
 pub enum Report {
@@ -30,8 +35,7 @@ pub enum HidError {
     UsbPartialRead,
     BufferOverflow,
     ReportSerializeError,
-    BleDisconnected,
-    BleRawError,
+    BleError,
 }
 
 /// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
@@ -40,10 +44,7 @@ pub trait HidWriterTrait {
     type ReportType: AsInputReport;
 
     /// Write report to the host, return the number of bytes written if success.
-    fn write_report(
-        &mut self,
-        report: Self::ReportType,
-    ) -> impl Future<Output = Result<usize, HidError>>;
+    fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
 }
 
 /// Runnable writer
@@ -58,7 +59,7 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 // Get report to send
                 let report = self.get_report().await;
                 // Only send the report after the connection is established.
-                if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                if CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Connected.into() {
                     match self.write_report(report).await {
                         Ok(_) => continue,
                         Err(e) => error!("Failed to send report: {:?}", e),
@@ -94,7 +95,7 @@ impl HidWriterTrait for DummyWriter {
 impl RunnableHidWriter for DummyWriter {
     async fn run_writer(&mut self) {
         // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
-        CONNECTION_STATE.store(true, Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
         loop {
             let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
         }

@@ -1,9 +1,7 @@
 use num_enum::FromPrimitive;
 
-use crate::{
-    action::{Action, KeyAction},
-    keycode::{KeyCode, ModifierCombination},
-};
+use crate::action::{Action, KeyAction};
+use crate::keycode::{KeyCode, ModifierCombination};
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
@@ -77,10 +75,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             0x2000 | ((m.into_bits() as u16) << 8) | keycode
         }
         KeyAction::TapHold(tap, hold) => {
-            warn!(
-                "Tap hold action is not supported: tap: {:?}, hold: {:?}",
-                tap, hold
-            );
+            warn!("Tap hold action is not supported: tap: {:?}, hold: {:?}", tap, hold);
             0
         }
     }
@@ -221,17 +216,11 @@ mod test {
 
         // Mo(3)
         let via_keycode = 0x5223;
-        assert_eq!(
-            KeyAction::Single(Action::LayerOn(3)),
-            from_via_keycode(via_keycode)
-        );
+        assert_eq!(KeyAction::Single(Action::LayerOn(3)), from_via_keycode(via_keycode));
 
         // OSL(3)
         let via_keycode = 0x5283;
-        assert_eq!(
-            KeyAction::OneShot(Action::LayerOn(3)),
-            from_via_keycode(via_keycode)
-        );
+        assert_eq!(KeyAction::OneShot(Action::LayerOn(3)), from_via_keycode(via_keycode));
 
         // OSM RCtrl
         let via_keycode = 0x52B1;

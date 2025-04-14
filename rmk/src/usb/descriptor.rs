@@ -24,9 +24,9 @@ use usbd_hid::descriptor::generator_prelude::*;
 #[derive(Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardReport {
-    pub modifier: u8, //HidModifiers
+    pub modifier: u8, // HidModifiers
     pub reserved: u8,
-    pub leds: u8, //LedIndicator
+    pub leds: u8, // LedIndicator
     pub keycodes: [u8; 6],
 }
 
