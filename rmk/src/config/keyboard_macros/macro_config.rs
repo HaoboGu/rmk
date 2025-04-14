@@ -20,7 +20,7 @@ impl Default for KeyboardMacrosConfig {
 }
 
 impl KeyboardMacrosConfig {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(macro_sequences: [u8; MACRO_SPACE_SIZE]) -> Self {
+        Self { macro_sequences }
     }
 }
