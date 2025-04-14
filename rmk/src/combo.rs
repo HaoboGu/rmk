@@ -40,7 +40,7 @@ impl Combo {
     }
 
     pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
-        if !key_event.pressed || self.actions.len() == 0 || self.state == COMBO_TRIGGERED {
+        if !key_event.pressed || self.actions.is_empty() || self.state == COMBO_TRIGGERED {
             //ignore combo that without actions
             return false;
         }
@@ -85,12 +85,12 @@ impl Combo {
 
     // Check if the combo is dispatched into key event
     pub(crate) fn is_triggered(&self) -> bool {
-        return self.state == COMBO_TRIGGERED;
+        self.state == COMBO_TRIGGERED
     }
 
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
     pub(crate) fn is_all_pressed(&self) -> bool {
-        self.actions.len() > 0 && self.keys_pressed() == self.actions.len() as u32
+        !self.actions.is_empty() && self.keys_pressed() == self.actions.len() as u32
     }
 
     pub(crate) fn started(&self) -> bool {

@@ -138,7 +138,7 @@ pub(crate) async fn process_vial<
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let combo_idx = report.output_data[3] as usize;
-                    let combos = &keymap.borrow().combos;
+                    let combos = &keymap.borrow().behavior.combo.combos;
                     if let Some((_, combo)) = vial_combo(combos, combo_idx) {
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
@@ -163,7 +163,7 @@ pub(crate) async fn process_vial<
                         // Drop combos to release the borrowed keymap, avoid potential run-time panics
                         let combo_idx = report.output_data[3] as usize;
                         let km = &mut keymap.borrow_mut();
-                        let combos = &mut km.combos;
+                        let combos = &mut km.behavior.combo.combos;
                         let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
                             return;
                         };
@@ -289,7 +289,7 @@ pub(crate) async fn process_vial<
     }
 }
 
-fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Combo)> {
+fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &Combo)> {
     combos
         .iter()
         .enumerate()
@@ -298,7 +298,10 @@ fn vial_combo(combos: &[Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &Co
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-fn vial_combo_mut(combos: &mut [Combo; COMBO_MAX_NUM], idx: usize) -> Option<(usize, &mut Combo)> {
+fn vial_combo_mut(
+    combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>,
+    idx: usize,
+) -> Option<(usize, &mut Combo)> {
     combos
         .iter_mut()
         .enumerate()
