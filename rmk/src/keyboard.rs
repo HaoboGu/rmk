@@ -12,7 +12,6 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::keyboard_macros::keyboard_macro::MacroOperation;
 use crate::config::keyboard_macros::macro_config::NUM_MACRO;
-use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
 use crate::hid::Report;
@@ -93,9 +92,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
 
-    /// Options for configurable action behavior
-    behavior: BehaviorConfig,
-
     /// One shot layer state
     osl_state: OneShotState<u8>,
 
@@ -157,7 +153,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>, behavior: BehaviorConfig) -> Self {
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Keyboard {
             keymap,
             timer: [[None; ROW]; COL],
@@ -171,7 +167,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 None,
             ),
             hold_after_tap: Default::default(),
-            behavior,
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
             with_modifiers: HidModifiers::default(),
