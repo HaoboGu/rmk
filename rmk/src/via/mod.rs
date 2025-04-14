@@ -9,17 +9,18 @@ use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
 use vial::process_vial;
 
+use crate::config::keyboard_macros::macro_config::MACRO_SPACE_SIZE;
+#[cfg(feature = "storage")]
+use crate::config::keyboard_macros::macro_config::NUM_MACRO;
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
 use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{boot, CONNECTION_STATE};
 #[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOperationMessage};
-
+use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
 mod protocol;
 mod vial;
@@ -222,7 +223,7 @@ impl<
                 let size = report.output_data[3] as usize;
                 if size <= 28 {
                     report.input_data[4..4 + size]
-                        .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
+                        .copy_from_slice(&self.keymap.borrow().behavior.macros.macro_sequences[offset..offset + size]);
                     debug!("Get macro buffer: offset: {}, data: {:?}", offset, report.input_data);
                 } else {
                     report.input_data[0] = 0xFF;
@@ -239,23 +240,23 @@ impl<
 
                 // The first sequence, reset the macro cache
                 if offset == 0 {
-                    self.keymap.borrow_mut().macro_cache = [0; MACRO_SPACE_SIZE];
+                    self.keymap.borrow_mut().behavior.macros.macro_sequences = [0; MACRO_SPACE_SIZE];
                 }
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
                 #[cfg(feature = "defmt")]
                 info!("Data: {=[u8]:x}", report.output_data[4..]);
-                self.keymap.borrow_mut().macro_cache[offset as usize..end as usize]
+                self.keymap.borrow_mut().behavior.macros.macro_sequences[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 
                 // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
                 // Then flush macros to storage
                 #[cfg(feature = "storage")]
-                let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
+                let num_zero = count_zeros(&self.keymap.borrow_mut().behavior.macros.macro_sequences[0..end as usize]);
                 #[cfg(feature = "storage")]
                 if size < 28 || num_zero >= NUM_MACRO {
-                    let buf = self.keymap.borrow_mut().macro_cache;
+                    let buf = self.keymap.borrow_mut().behavior.macros.macro_sequences;
                     FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
                     info!("Flush macros to storage")
                 }

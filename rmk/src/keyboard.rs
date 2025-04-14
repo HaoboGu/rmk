@@ -10,13 +10,14 @@ use crate::action::{Action, KeyAction};
 use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::config::keyboard_macros::keyboard_macro::MacroOperation;
+use crate::config::keyboard_macros::macro_config::NUM_MACRO;
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
-use crate::keyboard_macro::{MacroOperation, NUM_MACRO};
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
@@ -1239,7 +1240,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     };
 
                     offset = new_offset;
-                    if offset > self.keymap.borrow().macro_cache.len() {
+                    if offset > self.keymap.borrow().behavior.macros.macro_sequences.len() {
                         break;
                     }
                 }

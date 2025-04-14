@@ -5,12 +5,7 @@ use crate::{
     via::keycode_convert::{from_ascii, to_ascii},
 };
 
-/// Default macro space size
-/// the sum of alll macro elements + number of macro elements
-pub(crate) const MACRO_SPACE_SIZE: usize = 256;
-
-/// Default number of keyboard macros
-pub(crate) const NUM_MACRO: usize = 8;
+use crate::config::keyboard_macros::macro_config::MACRO_SPACE_SIZE;
 
 /// encoded with the two bytes, content at the third byte
 /// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported
@@ -41,20 +36,20 @@ impl MacroOperation {
     /// Get the next macro operation starting from given index and offset (=position in the sequence)
     /// Return current macro operation and the next operations's offset
     pub(crate) fn get_next_macro_operation(
-        macro_cache: &[u8],
+        macro_sequences: &[u8],
         macro_start_idx: usize,
         offset: usize,
     ) -> (MacroOperation, usize) {
         let idx = macro_start_idx + offset;
-        if idx >= macro_cache.len() - 1 {
+        if idx >= macro_sequences.len() - 1 {
             return (MacroOperation::End, offset);
         }
-        match (macro_cache[idx], macro_cache[idx + 1]) {
+        match (macro_sequences[idx], macro_sequences[idx + 1]) {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
                 // SS_QMK_PREFIX + SS_TAP_CODE
-                if idx + 2 < macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(macro_cache[idx + 2] as u16);
+                if idx + 2 < macro_sequences.len() {
+                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Tap(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -62,8 +57,8 @@ impl MacroOperation {
             }
             (1, 2) => {
                 // SS_QMK_PREFIX + SS_DOWN_CODE
-                if idx + 2 < macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(macro_cache[idx + 2] as u16);
+                if idx + 2 < macro_sequences.len() {
+                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Press(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -71,8 +66,8 @@ impl MacroOperation {
             }
             (1, 3) => {
                 // SS_QMK_PREFIX + SS_UP_CODE
-                if idx + 2 < macro_cache.len() {
-                    let keycode = KeyCode::from_primitive(macro_cache[idx + 2] as u16);
+                if idx + 2 < macro_sequences.len() {
+                    let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Release(keycode), offset + 3)
                 } else {
                     (MacroOperation::End, offset + 3)
@@ -80,9 +75,8 @@ impl MacroOperation {
             }
             (1, 4) => {
                 // SS_QMK_PREFIX + SS_DELAY_CODE
-                if idx + 3 < macro_cache.len() {
-                    let delay_ms =
-                        (macro_cache[idx + 2] as u16 - 1) + (macro_cache[idx + 3] as u16 - 1) * 255;
+                if idx + 3 < macro_sequences.len() {
+                    let delay_ms = (macro_sequences[idx + 2] as u16 - 1) + (macro_sequences[idx + 3] as u16 - 1) * 255;
                     (MacroOperation::Delay(delay_ms), offset + 4)
                 } else {
                     (MacroOperation::End, offset + 4)
@@ -94,31 +88,28 @@ impl MacroOperation {
             }
             _ => {
                 // Current byte is the ascii code, convert it to keyboard keycode(with caps state)
-                let (keycode, is_caps) = from_ascii(macro_cache[idx]);
+                let (keycode, is_caps) = from_ascii(macro_sequences[idx]);
                 (MacroOperation::Text(keycode, is_caps), offset + 1)
             }
         }
     }
 
     /// finds the start of a macro sequence by providing a guessed start index
-    pub(crate) fn get_macro_sequence_start(
-        macro_cache: &[u8],
-        guessed_macro_start_idx: u8,
-    ) -> Option<usize> {
+    pub(crate) fn get_macro_sequence_start(macro_sequences: &[u8], guessed_macro_start_idx: u8) -> Option<usize> {
         let mut idx = 0;
         // Find idx until the macro start of given index
         let mut potential_start_idx = guessed_macro_start_idx;
         loop {
-            if potential_start_idx == 0 || idx >= macro_cache.len() {
+            if potential_start_idx == 0 || idx >= macro_sequences.len() {
                 break;
             }
-            if macro_cache[idx] == 0 {
+            if macro_sequences[idx] == 0 {
                 potential_start_idx -= 1;
             }
             idx += 1;
         }
 
-        if idx == macro_cache.len() {
+        if idx == macro_sequences.len() {
             None
         } else {
             Some(idx)
@@ -167,25 +158,17 @@ fn fold_to_binary(
                 .into_iter()
                 .filter(|macro_operation| !matches!(macro_operation, MacroOperation::End))
                 .map(serialize)
-                .fold(
-                    heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(),
-                    |mut acc, e| {
-                        acc.extend_from_slice(&e)
-                            .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
-                        acc
-                    },
-                );
+                .fold(heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(), |mut acc, e| {
+                    acc.extend_from_slice(&e).expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+                    acc
+                });
             vec_seq.push(0x00).expect(TOO_MANY_ELEMENTS_ERROR_TEXT); //= serialize(&MacroOperation::End));
             vec_seq
         })
-        .fold(
-            heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(),
-            |mut acc, e| {
-                acc.extend_from_slice(&e)
-                    .expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
-                acc
-            },
-        )
+        .fold(heapless::Vec::<u8, MACRO_SPACE_SIZE>::new(), |mut acc, e| {
+            acc.extend_from_slice(&e).expect(TOO_MANY_ELEMENTS_ERROR_TEXT);
+            acc
+        })
 }
 
 fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
@@ -222,9 +205,7 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
             result
         }
         // TODO check if key_code this is asccii???
-        MacroOperation::Text(key_code, shifted) => {
-            heapless::Vec::from_slice(&[to_ascii(*key_code, *shifted)]).unwrap()
-        }
+        MacroOperation::Text(key_code, shifted) => heapless::Vec::from_slice(&[to_ascii(*key_code, *shifted)]).unwrap(),
     }
 }
 
@@ -245,8 +226,7 @@ mod test {
         let macro_sequences_binary = define_macro_sequences(macro_sequences);
         // let result = [0b 0000 0000 0100 1000]
         let result: [u8; 16] = [
-            0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01,
-            0x17, 0x00,
+            0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01, 0x17, 0x00,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -271,11 +251,10 @@ mod test {
             ])
             .expect("too many elements"),
         ];
-        let macro_sequences_binary =
-            define_macro_sequences(&macro_sequences_terminated_uneccessarily);
+        let macro_sequences_binary = define_macro_sequences(&macro_sequences_terminated_uneccessarily);
         let result: [u8; 19] = [
-            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01,
-            0x4, 0x01, 0x01, 0x17, 0x00,
+            0x48, 0x69, 0x00, 0x01, 0x02, 0xE1, 0x01, 0x01, 0x13, 0x01, 0x03, 0xE1, 0x01, 0x01, 0x4, 0x01, 0x01, 0x17,
+            0x00,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -314,8 +293,8 @@ mod test {
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_clean);
         let result: [u8; 48] = [
-            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
-            1, 18, 1, 1, 21, 1, 1, 15, 1, 1, 7, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1, 1, 18, 1, 1, 21, 1,
+            1, 15, 1, 1, 7, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -354,11 +333,10 @@ mod test {
             ])
             .expect("too many elements"),
         ];
-        let macro_sequences_binary =
-            define_macro_sequences(&macro_sequences_terminated_uneccessarily);
+        let macro_sequences_binary = define_macro_sequences(&macro_sequences_terminated_uneccessarily);
         let result: [u8; 45] = [
-            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
-            1, 18, 1, 1, 21, 1, 1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1, 1, 18, 1, 1, 21, 1,
+            1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
@@ -410,8 +388,8 @@ mod test {
         ];
         let macro_sequences_binary = define_macro_sequences(&macro_sequences_random_end_markers);
         let result: [u8; 45] = [
-            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1,
-            1, 18, 1, 1, 21, 1, 1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
+            1, 2, 225, 1, 1, 11, 1, 3, 225, 1, 1, 8, 1, 1, 15, 1, 1, 15, 1, 1, 18, 0, 1, 1, 26, 1, 1, 18, 1, 1, 21, 1,
+            1, 15, 0, 1, 2, 225, 1, 1, 31, 1, 3, 225, 0,
         ];
         let mut result_filled = [0; MACRO_SPACE_SIZE];
         for (i, element) in result.into_iter().enumerate() {
