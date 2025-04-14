@@ -111,8 +111,12 @@ async fn ble_central_task<'a, C: Controller>(
         }
     };
     match select(client.task(), conn_check).await {
-        Either::First(e) => e,
+        Either::First(e) => {
+            HAND_STATE.store(false, Ordering::SeqCst);
+            e
+        }
         Either::Second(_) => {
+            HAND_STATE.store(false, Ordering::SeqCst);
             info!("Connection lost");
             Ok(())
         }
@@ -164,7 +168,6 @@ async fn run_peripheral_manager<
         let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
         HAND_STATE.store(true, Ordering::SeqCst);
         peripheral_manager.run().await;
-        HAND_STATE.store(false, Ordering::SeqCst);
         info!("Peripheral manager stopped");
     };
     Ok(())
