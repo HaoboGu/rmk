@@ -1,6 +1,6 @@
 # Appendix
 
-## `keyboard.toml`
+### `keyboard.toml`
 
 The following toml contains all available settings in `keyboard.toml`
 
@@ -45,27 +45,65 @@ direct_pin_low_active = true
 # Layout info for the keyboard, this section is mandatory
 [layout]
 # Number of rows. For split keyboard, this is the total rows contains all splits
-rows = 4
+rows = 5
 # Number of cols. For split keyboard, this is the total cols contains all splits
-cols = 3
+cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
-layers = 2
-# Default keymap definition, the size should be consist with rows/cols
-# Empty layers will be used to fill if the number of layers set in default keymap is less than `layers` setting
-keymap = [
-    [
-        ["A", "B", "C"],
-        ["Kc1", "Kc2", "Kc3"],
-        ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
-    ],
-    [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"]
-    ],
-]
+layers = 3
+# keypad example:
+# ┌───┬───┬───┬───┐
+# │NUM│ / │ * │ - │ <-- row 0, col 0..4
+# ├───┼───┼───┼───┤
+# │ 7 │ 8 │ 9 │   │
+# ├───┼───┼───┤ + │
+# │ 4 │ 5 │ 6 │   │
+# ├───┼───┼───┼───┤
+# │ 1 │ 2 │ 3 │ E │
+# ├───┴───┼───┤ N │
+# │   0   │ . │ T │
+# └───────┴───┴───┘
+matrix_map = """
+(0,0) (0,1) (0,2) (0,3)
+(1,0) (1,1) (1,2) (1,3)
+(2,0) (2,1) (2,2)
+(3,0) (3,1) (3,2) (3,3)
+(4,0)       (4,1) 
+"""
+
+# here are the aliases for the example layer.keys below
+[aliases]
+my_cut = "WM(X, LCtrl)"
+my_copy = "WM(C, LCtrl)"
+my_paste = "WM(V, LCtrl)"
+
+# Key map definitions per layer: 
+# The number (and order) of entries on each layer should be 
+# identical with the number (and order) of entries in `matrix_map`.
+# Empty layers will be used to fill if the number of explicitly 
+# defined layers is smaller then `layout.layers` setting
+
+# layer 0 (default):
+# (the number comes from the order of '[[layer]] entries' in the file)
+[[layer]]
+name = "base_layer" #optional name for the layer
+keys = """
+NumLock KpSlash KpAsterisk KpMinus
+Kp7     Kp8     Kp9        KpPlus
+Kp4     Kp5     Kp6
+Kp1     Kp2     Kp3        Enter
+    Kp0         KpDot
+"""
+
+# layer 1: 
+[[layer]]
+name = "mouse_navigation" #optional name for the layer
+keys = """
+TO(base_layer)   @MyCut     @MyCopy          @MyPaste
+MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
+MouseLeft        MouseBtn4  MouseRight
+MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
+          MouseBtn1         MouseBtn12
+"""
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
@@ -79,7 +117,7 @@ one_shot = { timeout = "1s" }
 # LED pins, capslock, scrolllock, numslock. You can safely ignore any of them if you don't have
 capslock = { pin = "PIN_0", low_active = true }
 scrolllock = { pin = "PIN_1", low_active = true }
-numslock= { pin = "PIN_2", low_active = true }
+numslock = { pin = "PIN_2", low_active = true }
 
 # Storage configuration.
 # To use the default configuration, ignore this section completely
