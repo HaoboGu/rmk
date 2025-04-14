@@ -162,41 +162,32 @@ In RMK, split keyboard's matrix are defined with row/col number and their offset
 
 ### Central
 
-Running split central is quite similar with the general keyboard, the only difference is for split central, total row/col number, central matrix's row/col number, and central matrix's offsets should be passed to `run_rmk_split_central`:
+Matrix configuration on the split central is quite similar with the general keyboard, the only difference is for split central, central matrix's row/col number, and central matrix's offsets should be passed to the central matrix:
+
+```rust
+// Suppose that the central matrix is col2row
+let mut matrix = CentralMatrix::<
+    _,
+    _,
+    _,
+    0, // ROW OFFSET 
+    0, // COL OFFSET
+    4, // ROW 
+    7, // COL
+>::new(input_pins, output_pins, debouncer);
+```
+
+On the central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
 
 ```rust
 // nRF52840 split central, arguments might be different for other microcontrollers, check the API docs for the detail.
-run_rmk_split_central::<
-            Input<'_>,
-            Output<'_>,
-            Driver<'_, USBD, &SoftwareVbusDetect>,
-            ROW, // TOTAL_ROW
-            COL, // TOTAL_COL
-            2, // CENTRAL_ROW
-            2, // CENTRAL_COL
-            0, // CENTRAL_ROW_OFFSET
-            0, // CENTRAL_COL_OFFSET
-            NUM_LAYER,
-        >(
-            input_pins,
-            output_pins,
-            driver,
-            &mut get_default_keymap(),
-            keyboard_config,
-            central_addr,
-            spawner,
-        )
-```
-
-In peripheral central, you should also run the peripheral manager for each peripheral. This task monitors the peripheral key changes and forwards them to central core keyboard task
-
-```rust
 run_peripheral_manager<
     2, // PERIPHERAL_ROW
     1, // PERIPHERAL_COL
     2, // PERIPHERAL_ROW_OFFSET
     2, // PERIPHERAL_COL_OFFSET
-  >(peripheral_id, peripheral_addr)
+    _,
+  >(peripheral_id, peripheral_addr, &stack)
 ```
 
 ### Peripheral
@@ -204,13 +195,11 @@ run_peripheral_manager<
 Running split peripheral is simplier. For peripheral, we don't need to specify peripheral matrix's offsets(we've done it in central!). So, the split peripheral API is like:
 
 ```rust
-run_rmk_split_peripheral::<Input<'_>, Output<'_>, 2, 2>(
-    input_pins,
-    output_pins,
-    central_addr,
-    peripheral_addr,
-    spawner,
-)
+// Use normal matrix on the peripheral
+let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
+
+// nRF52840 split peripheral, arguments might be different for other microcontrollers, check the API docs for the detail.
+run_rmk_split_peripheral(central_addr, &stack),
 ```
 
 where `2,2` are the size of peripheral's matrix.
