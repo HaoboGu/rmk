@@ -9,6 +9,7 @@ use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
+use crate::state::ConnectionState;
 use crate::CONNECTION_STATE;
 
 /// Run the split peripheral service.
