@@ -1,7 +1,10 @@
+use core::sync::atomic::Ordering;
+
 use embassy_futures::join::join;
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
+use crate::split::ble::central::HAND_STATE;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
@@ -123,8 +126,10 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller>(
             match advertise(central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Conected to the central");
+                    HAND_STATE.store(true, Ordering::Relaxed);
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     peripheral.run().await;
+                    HAND_STATE.store(false, Ordering::Relaxed);
                     info!("Disconnected from the central");
                 }
                 Err(e) => {
