@@ -38,7 +38,7 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-use crate::state::{ConnectionState, ConnectionType};
+use crate::state::{ConnectionState, ConnectionType, BLE_CONNECTION_STATE, CURRENT_CONNECTION};
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
@@ -165,6 +165,10 @@ pub(crate) async fn run_ble<
                 match get_connection_type() {
                     ConnectionType::Usb => {
                         info!("USB priority mode, waiting for USB enabled or BLE connection");
+                        let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
+                        if profile < 3 {
+                            BLE_CONNECTION_STATE.store(profile + 3, Ordering::Relaxed);
+                        }
                         match select4(
                             USB_ENABLED.wait(),
                             adv_fut,
@@ -178,6 +182,7 @@ pub(crate) async fn run_ble<
                         {
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
+                                BLE_CONNECTION_STATE.store(255, Ordering::Relaxed);
                                 let usb_fut = run_keyboard(
                                     keymap,
                                     #[cfg(feature = "storage")]
@@ -222,6 +227,10 @@ pub(crate) async fn run_ble<
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
                             rmk_config.vial_config,
                         );
+                        let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
+                        if profile < 3 {
+                            BLE_CONNECTION_STATE.store(profile + 3, Ordering::Relaxed);
+                        }
                         match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
                             Either3::First(Ok(conn)) => {
                                 info!("BLE connected, running BLE keyboard");
@@ -308,6 +317,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
     let system_control = server.composite_service.system_report;
 
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+    let profile = ACTIVE_PROFILE.load(Ordering::Relaxed);
+    if profile < 3 {
+        BLE_CONNECTION_STATE.store(profile, Ordering::Relaxed);
+    }
+
     loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => {

@@ -1,11 +1,19 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-/// Current connection type:
+/// Current default connection type:
 /// - 0: USB
 /// - 1: BLE
 /// - Other: reserved
 pub(crate) static CONNECTION_TYPE: AtomicU8 = AtomicU8::new(0);
+
+/// Current connection state
 pub(crate) static CONNECTION_STATE: AtomicBool = AtomicBool::new(false);
+
+/// Current connection type
+pub(crate) static CURRENT_CONNECTION: AtomicU8 = AtomicU8::new(1);
+
+/// Current BLE connection state
+pub static BLE_CONNECTION_STATE: AtomicU8 = AtomicU8::new(0);
 
 /// Current default connection type
 pub enum ConnectionType {

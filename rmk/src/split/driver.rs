@@ -69,7 +69,6 @@ impl<
     /// The manager receives from the peripheral and forward the message to `KEY_EVENT_CHANNEL`.
     /// It also sync the `ConnectionState` to the peripheral periodically.
     pub(crate) async fn run(mut self) {
-        CONNECTION_STATE.store(true, Ordering::Release);
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
         if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
@@ -100,7 +99,6 @@ impl<
                 },
                 embassy_futures::select::Either::Second(_) => {
                     // Timer elapsed, sync the connection state
-                    CONNECTION_STATE.store(true, Ordering::Release);
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     debug!("Syncing connection state to peripheral: {}", conn_state);
                     if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {

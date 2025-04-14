@@ -1,4 +1,4 @@
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
@@ -11,6 +11,7 @@ use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
+pub static HAND_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -161,7 +162,9 @@ async fn run_peripheral_manager<
         let listener = client.subscribe(&message_to_central, false).await?;
         let split_ble_driver = BleSplitCentralDriver::new(listener, message_to_peripheral, client);
         let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+        HAND_STATE.store(true, Ordering::SeqCst);
         peripheral_manager.run().await;
+        HAND_STATE.store(false, Ordering::SeqCst);
         info!("Peripheral manager stopped");
     };
     Ok(())

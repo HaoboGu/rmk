@@ -13,7 +13,7 @@ use static_cell::StaticCell;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::KeyboardUsbConfig;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
-use crate::state::ConnectionState;
+use crate::state::{ConnectionState, CURRENT_CONNECTION};
 use crate::usb::descriptor::CompositeReportType;
 use crate::CONNECTION_STATE;
 
@@ -225,11 +225,13 @@ impl Handler for UsbDeviceHandler {
         if enabled {
             info!("Device enabled");
             USB_ENABLED.signal(());
+            CURRENT_CONNECTION.store(0, Ordering::SeqCst);
         } else {
             info!("Device disabled");
             if USB_ENABLED.signaled() {
                 USB_ENABLED.reset();
             }
+            CURRENT_CONNECTION.store(1, Ordering::SeqCst);
         }
     }
 
@@ -243,6 +245,7 @@ impl Handler for UsbDeviceHandler {
 
     fn configured(&mut self, configured: bool) {
         if configured {
+            CURRENT_CONNECTION.store(0, Ordering::SeqCst);
             CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
             USB_ENABLED.signal(());
             info!("Device configured, it may now draw up to the configured current from Vbus.")
