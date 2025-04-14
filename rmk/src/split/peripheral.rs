@@ -56,7 +56,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
         loop {
             match select3(
                 self.split_driver.read(),
