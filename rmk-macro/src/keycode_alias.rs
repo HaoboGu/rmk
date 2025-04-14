@@ -54,22 +54,23 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("Kc8" = "8");
     add_alias!("Kc9" = "9");
     add_alias!("Kc0" = "0");
-    add_alias!("Enter" = "ent", "return");
-    add_alias!("Backspace" = "bspc", "bs");
+    add_alias!("Enter" = "ent");
+    add_alias!("Escape" = "esc");
+    add_alias!("Backspace" = "bspc");
     add_alias!("Tab");
-    add_alias!("Space" = "spc", " ");
-    add_alias!("Minus" = "mins", "-");
-    add_alias!("Equal" = "eql", "=");
-    add_alias!("LeftBracket" = "left_bracket", "lbrc", "[");
-    add_alias!("RightBracket" = "right_bracket", "rbrc", "]");
-    add_alias!("Backslash" = "bsls", "\\");
-    add_alias!("NonusHash" = "nonus_hash", "nuhs", "#");
-    add_alias!("Semicolon" = "scln", ";");
-    add_alias!("Quote" = "quot", "'");
-    add_alias!("Grave" = "grv", "`");
-    add_alias!("Comma" = "comm", ",");
-    add_alias!("Dot" = ".");
-    add_alias!("Slash" = "/");
+    add_alias!("Space" = "spc");
+    add_alias!("Minus" = "mins");
+    add_alias!("Equal" = "eql");
+    add_alias!("LeftBracket" = "left_bracket", "lbrc");
+    add_alias!("RightBracket" = "right_bracket", "rbrc");
+    add_alias!("Backslash" = "bsls");
+    add_alias!("NonusHash" = "nonus_hash", "nuhs");
+    add_alias!("Semicolon" = "scln");
+    add_alias!("Quote" = "quot");
+    add_alias!("Grave" = "grv");
+    add_alias!("Comma" = "comm");
+    add_alias!("Dot");
+    add_alias!("Slash" = "slsh");
     add_alias!("CapsLock" = "caps_lock", "caps");
     add_alias!("F1");
     add_alias!("F2");
@@ -84,52 +85,39 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("F11");
     add_alias!("F12");
     add_alias!("PrintScreen" = "print_screen", "pscr");
-    add_alias!("ScrollLock" = "scroll_lock", "scrl");
+    add_alias!("ScrollLock" = "scroll_lock", "scrl", "brmd");
     add_alias!("Pause" = "paus", "brk", "brmu");
     add_alias!("Insert" = "ins");
     add_alias!("Home");
-    add_alias!("End");
     add_alias!("PageUp" = "page_up", "pgup");
-    add_alias!("PageDown" = "page_down", "pgdn");
     add_alias!("Delete" = "del");
-    add_alias!("Right" = "rght", "->", "→");
-    add_alias!("Left" = "<-", "←");
-    add_alias!("Down" = "↓");
-    add_alias!("Up" = "↑");
+    add_alias!("End");
+    add_alias!("PageDown" = "page_down", "pgdn");
+    add_alias!("Right" = "rght");
+    add_alias!("Left");
+    add_alias!("Down");
+    add_alias!("Up");
     add_alias!("NumLock" = "num_lock", "num");
     add_alias!("KpSlash" = "kp_slash", "psls");
     add_alias!("KpAsterisk" = "kp_asterisk", "past");
     add_alias!("KpMinus" = "kp_minus", "pmns");
     add_alias!("KpPlus" = "kp_plus", "ppls");
     add_alias!("KpEnter" = "kp_enter", "pent");
-    add_alias!("KpDecimal" = "kp_decimal", "pdec");
-    add_alias!("Kp0" = "kp_0");
-    add_alias!("Kp0" = "kp0");
     add_alias!("Kp1" = "kp_1");
-    add_alias!("Kp1" = "kp1");
     add_alias!("Kp2" = "kp_2");
-    add_alias!("Kp2" = "kp2");
     add_alias!("Kp3" = "kp_3");
-    add_alias!("Kp3" = "kp3");
     add_alias!("Kp4" = "kp_4");
-    add_alias!("Kp4" = "kp4");
     add_alias!("Kp5" = "kp_5");
-    add_alias!("Kp5" = "kp5");
     add_alias!("Kp6" = "kp_6");
-    add_alias!("Kp6" = "kp6");
     add_alias!("Kp7" = "kp_7");
-    add_alias!("Kp7" = "kp7");
     add_alias!("Kp8" = "kp_8");
-    add_alias!("Kp8" = "kp8");
     add_alias!("Kp9" = "kp_9");
-    add_alias!("Kp9" = "kp9");
     add_alias!("Kp0" = "kp_0");
-    add_alias!("Kp0" = "kp0");
     add_alias!("KpDot" = "kp_dot", "pdot");
-    add_alias!("KpEqual" = "kp_equal", "peql");
     add_alias!("NonusBackslash" = "nonus_backslash", "nubs");
     add_alias!("Application" = "app");
     add_alias!("KbPower" = "kb_power");
+    add_alias!("KpEqual" = "kp_equal", "peql");
     add_alias!("F13");
     add_alias!("F14");
     add_alias!("F15");
@@ -153,12 +141,12 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("Copy");
     add_alias!("Paste" = "pste");
     add_alias!("Find");
-    add_alias!("KbMute" = "kb_mute", "mute"); // FIXME: mismatch with QMK. `mute` in QMK is mapped to `KC_AUDIO_MUTE`. The same for the other `Kb*` keys.
-    add_alias!("KbVolumeUp" = "kb_volume_up", "volumeup", "volume_up", "volup", "vol_up");
-    add_alias!("KbVolumeDown" = "kb_volume_down", "volumedown", "volume_down", "voldown", "vol_down");
-    add_alias!("LockingCapsLock" = "lock_caps_lock", "lock_capslock", "lcap");
-    add_alias!("LockingNumLock" = "lock_num_lock", "locking_numlock ", "lnum");
-    add_alias!("LockingScrollLock" = "lock_scroll_lock", "lock_scrolllock", "lscr");
+    add_alias!("KbMute" = "kb_mute");
+    add_alias!("KbVolumeUp" = "kb_volume_up");
+    add_alias!("KbVolumeDown" = "kb_volume_down");
+    add_alias!("LockingCapsLock" = "locking_caps_lock", "lcap");
+    add_alias!("LockingNumLock" = "locking_num_lock", "lnum");
+    add_alias!("LockingScrollLock" = "locking_scroll_lock", "lscr");
     add_alias!("KpComma" = "kp_comma", "pcmm");
     add_alias!("KpEqualAs400" = "kp_equal_as400");
     add_alias!("International1" = "international_1", "int1");
@@ -194,10 +182,13 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("SystemPower" = "system_power", "pwr");
     add_alias!("SystemSleep" = "system_sleep", "slep");
     add_alias!("SystemWake" = "system_wake", "wake");
-    add_alias!("AudioMute" = "audio_mute"); // FIXME: mismatch with QMK. See above.
-    add_alias!("AudioVolUp" = "audio_vol_up", "audio_volup", "volu");
-    add_alias!("AudioVolDown" = "audio_vol_down", "audio_voldown", "vold");
-    add_alias!("MediaPlayPause" = "media_play_pause", "mediaplay_pause", "mply");
+    add_alias!("AudioMute" = "audio_mute", "mute");
+    add_alias!("AudioVolUp" = "audio_vol_up", "volu");
+    add_alias!("AudioVolDown" = "audio_vol_down", "vold");
+    add_alias!("MediaNextTrack" = "media_next_track", "mnxt");
+    add_alias!("MediaPrevTrack" = "media_prev_track", "mprv");
+    add_alias!("MediaStop" = "media_stop", "mstp");
+    add_alias!("MediaPlayPause" = "media_play_pause", "mply");
     add_alias!("MediaSelect" = "media_select", "msel");
     add_alias!("MediaEject" = "media_eject", "ejct");
     add_alias!("Mail");
@@ -210,7 +201,7 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("WwwStop" = "www_stop", "wstp");
     add_alias!("WwwRefresh" = "www_refresh", "wref");
     add_alias!("WwwFavorites" = "www_favorites", "wfav");
-    add_alias!("MediaFastForward" = "media_fast_forward", "media_fastforward", "mffd");
+    add_alias!("MediaFastForward" = "media_fast_forward", "mffd");
     add_alias!("MediaRewind" = "media_rewind", "mrwd");
     add_alias!("BrightnessUp" = "brightness_up", "briu");
     add_alias!("BrightnessDown" = "brightness_down", "brid");
@@ -218,10 +209,10 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("Assistant" = "asst");
     add_alias!("MissionControl" = "mission_control", "mctl");
     add_alias!("Launchpad" = "lpad");
-    add_alias!("MouseUp" = "mouse_up", "mousecursorup", "mouse_cursor_up", "ms_up");
-    add_alias!("MouseDown" = "mouse_down", "mousecursordown", "mouse_cursor_down", "ms_down");
-    add_alias!("MouseLeft" = "mouse_left", "mousecursorleft", "mouse_cursor_left", "ms_left");
-    add_alias!("MouseRight" = "mouse_right", "mousecursorright", "mouse_cursor_right", "ms_right");
+    add_alias!("MouseUp" = "mousecursorup", "mouse_cursor_up", "ms_up");
+    add_alias!("MouseDown" = "mousecursordown", "mouse_cursor_down", "ms_down");
+    add_alias!("MouseLeft" = "mousecursorleft", "mouse_cursor_left", "ms_left");
+    add_alias!("MouseRight" = "mousecursorright", "mouse_cursor_right", "ms_right");
     add_alias!("MouseBtn1" = "mouse_btn_1", "mousebutton1", "mouse_button_1", "ms_btn1");
     add_alias!("MouseBtn2" = "mouse_btn_2", "mousebutton2", "mouse_button_2", "ms_btn2");
     add_alias!("MouseBtn3" = "mouse_btn_3", "mousebutton3", "mouse_button_3", "ms_btn3");
@@ -230,21 +221,36 @@ pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     add_alias!("MouseBtn6" = "mouse_btn_6", "mousebutton6", "mouse_button_6", "ms_btn6");
     add_alias!("MouseBtn7" = "mouse_btn_7", "mousebutton7", "mouse_button_7", "ms_btn7");
     add_alias!("MouseBtn8" = "mouse_btn_8", "mousebutton8", "mouse_button_8", "ms_btn8");
-    add_alias!("MouseWheelUp" = "mouse_wheelup", "mouse_wheel_up", "ms_whlu");
-    add_alias!("MouseWheelDown" = "mouse_wheeldown", "mouse_wheel_down", "ms_whld");
-    add_alias!("MouseWheelLeft" = "mouse_wheelleft", "mouse_wheel_left", "ms_whll");
-    add_alias!("MouseWheelRight" = "mouse_wheelright", "mouse_wheel_right", "ms_whlr");
-    add_alias!("MouseAccel0" = "mouse_accel0", "mouse_accel_0", "mouse_acceleration_0", "ms_acl0");
-    add_alias!("MouseAccel1" = "mouse_accel1", "mouse_accel_1", "mouse_acceleration_1", "ms_acl1");
-    add_alias!("MouseAccel2" = "mouse_accel2", "mouse_accel_2", "mouse_acceleration_2", "ms_acl2");
-    add_alias!("LCtrl" = "lctrl", "leftcontrol", "left_ctrl", "lctl");
-    add_alias!("LShift" = "lshift", "leftshift", "left_shift", "lsft");
-    add_alias!("LAlt" = "leftalt", "left_alt", "lopt");
-    add_alias!("LGui" = "leftgui", "left_gui", "lwin", "lcmd");
-    add_alias!("RCtrl" = "rightctrl", "right_control", "rctl");
-    add_alias!("RShift" = "rightshift", "right_shift", "rsft");
-    add_alias!("RAlt" = "rightalt", "right_alt", "ropt", "algr");
-    add_alias!("RGui" = "rightgui", "right_gui", "rwin", "rcmd");
+    add_alias!("MouseWheelUp" = "mouse_wheel_up", "ms_whlu");
+    add_alias!("MouseWheelDown" = "mouse_wheel_down", "ms_whld");
+    add_alias!("MouseWheelLeft" = "mouse_wheel_left", "ms_whll");
+    add_alias!("MouseWheelRight" = "mouse_wheel_right", "ms_whlr");
+    add_alias!(
+        "MouseAccel0" = "mouse_accel_0",
+        "mouseacceleration0",
+        "mouse_acceleration_0",
+        "ms_acl0"
+    );
+    add_alias!(
+        "MouseAccel1" = "mouse_accel_1",
+        "mouseacceleration1",
+        "mouse_acceleration_1",
+        "ms_acl1"
+    );
+    add_alias!(
+        "MouseAccel2" = "mouse_accel_2",
+        "mouseacceleration2",
+        "mouse_acceleration_2",
+        "ms_acl2"
+    );
+    add_alias!("LCtrl" = "l_ctrl", "leftctrl", "left_ctrl", "lctl");
+    add_alias!("LShift" = "l_shift", "leftshift", "left_shift", "lsft");
+    add_alias!("LAlt" = "l_alt", "leftalt", "left_alt", "lopt");
+    add_alias!("LGui" = "l_gui", "leftgui", "left_gui", "lcmd", "lwin");
+    add_alias!("RCtrl" = "r_ctrl", "rightctrl", "right_ctrl", "rctl");
+    add_alias!("RShift" = "r_shift", "rightshift", "right_shift", "rsft");
+    add_alias!("RAlt" = "r_alt", "rightalt", "right_alt", "ropt", "algr");
+    add_alias!("RGui" = "r_gui", "rightgui", "right_gui", "rcmd", "rwin");
 
     m
 });
