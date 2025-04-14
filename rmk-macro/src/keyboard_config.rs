@@ -790,7 +790,7 @@ impl KeyboardConfig {
                 }
                 layer_number += 1;
             }
-            if layer_names.len() >= layout.layers as usize {
+            if layers.len() > layout.layers as usize {
                 return rmk_compile_error!(
                     "keyboard.toml: Number of [[layer]] entries is larger than layout.layers"
                         .to_string()
@@ -854,9 +854,11 @@ impl KeyboardConfig {
                 ]);
             }
         } else {
-            return rmk_compile_error!(
-                "keyboard.toml: Layer number in keymap is larger than [layout.layers]".to_string()
+            let error_message = format!(
+                "keyboard.toml: The actual number of layers is larger than {} [layout.layers]: {} [[Layer]] entries + {} layers in layout.keymap",
+                layout.layers, layers.len(), layout.keymap.map(|keymap| keymap.len()).unwrap_or_default()
             );
+            return rmk_compile_error!(error_message);
         }
 
         // Row
