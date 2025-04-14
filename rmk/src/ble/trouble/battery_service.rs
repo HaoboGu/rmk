@@ -83,7 +83,7 @@ impl<'a> BleBatteryServer<'_, '_, '_> {
         let report_battery_level = async {
             loop {
                 let val = BATTERY_LEVEL.load(Ordering::Relaxed);
-                if val < 100 {
+                if val <= 100 {
                     match self.battery_level.notify(self.conn, &val).await {
                         Ok(_) => {}
                         Err(_) => {
