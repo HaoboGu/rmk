@@ -63,7 +63,7 @@ async fn main(_spawner: Spawner) {
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let mut keyboard = Keyboard::new(&keymap);
 
     // Initialize the light controller
     let light_controller: LightController<Output> =

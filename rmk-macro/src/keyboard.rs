@@ -286,7 +286,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }
     };
     quote! {
-        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap);
         #matrix
     }
 }
