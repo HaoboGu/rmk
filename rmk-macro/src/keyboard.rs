@@ -181,7 +181,6 @@ fn expand_main(
                 usb_config: KEYBOARD_USB_CONFIG,
                 vial_config: VIAL_CONFIG,
                 storage_config,
-                behavior_config,
                 #set_ble_config
                 ..Default::default()
             };
@@ -211,8 +210,8 @@ pub(crate) fn expand_keymap_and_storage(_keyboard_config: &KeyboardConfig) -> To
         ::rmk::initialize_keymap_and_storage(
             &mut default_keymap,
             flash,
-            rmk_config.storage_config,
-            rmk_config.behavior_config.clone(),
+            &storage_config,
+            behavior_config,
         )
     };
     quote! {
@@ -276,7 +275,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
                 },
                 MatrixType::direct_pin => {
                     let low_active = split_config.central.matrix.direct_pin_low_active;
-                    let size = split_config.central.rows as usize * split_config.central.cols as usize;
+                    let size = split_config.central.rows * split_config.central.cols;
                     quote! {
                         let debouncer = #debouncer_type::<COL, ROW>::new();
                         let mut matrix = ::rmk::split::central::CentralDirectPinMatrix::<_, _, #central_row_offset, #central_col_offset, #central_row, #central_col, #size>::new(direct_pins, debouncer, #low_active);
