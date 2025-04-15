@@ -1,5 +1,4 @@
 use core::cell::RefCell;
-use core::sync::atomic::AtomicU8;
 
 use embedded_hal::digital::InputPin;
 
@@ -7,9 +6,6 @@ use super::{InputDevice, InputProcessor};
 use crate::event::Event;
 use crate::input_device::ProcessResult;
 use crate::KeyMap;
-
-// 0: normal, 1: low, 2: charging
-pub static BATTERY_STATE: AtomicU8 = AtomicU8::new(0);
 
 pub struct ChargingStateReader<I: InputPin> {
     // Charging state pin or standby pin

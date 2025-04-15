@@ -38,10 +38,10 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-use crate::state::{ConnectionState, ConnectionType, BLE_CONNECTION_STATE, CURRENT_CONNECTION};
+use crate::state::{ConnectionState, ConnectionType, BLE_CONNECTION_STATE};
 use crate::{run_keyboard, CONNECTION_STATE};
 
-pub(crate) mod battery_service;
+pub mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod profile;
 

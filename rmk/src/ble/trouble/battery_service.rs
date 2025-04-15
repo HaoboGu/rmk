@@ -7,7 +7,7 @@ use super::ble_server::Server;
 
 /// Battery level global value.
 /// The range of battery level is 0-100, 255 > level > 100 means the battery is charging. 255 means the battery level is not available.
-pub(crate) static BATTERY_LEVEL: AtomicU8 = AtomicU8::new(255);
+pub static BATTERY_LEVEL: AtomicU8 = AtomicU8::new(255);
 
 /// Battery service
 #[gatt_service(uuid = service::BATTERY)]
