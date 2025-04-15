@@ -22,7 +22,7 @@ use keymap::{COL, ROW};
 use panic_probe as _;
 use rmk::{
     channel::EVENT_CHANNEL,
-    config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig},
+    config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join3,
     initialize_keymap_and_storage,
@@ -89,12 +89,10 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
-        flash,
-        &storage_config,
-    )
-    .await;
+    let behavior_config = BehaviorConfig::default();
+    let storage_config = StorageConfig::default();
+    let (keymap, mut storage) =
+        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
