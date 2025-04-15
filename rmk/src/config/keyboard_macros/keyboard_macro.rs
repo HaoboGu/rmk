@@ -137,6 +137,21 @@ pub fn define_macro_sequences(
         .expect("as we resized the vector, this can't happen!")
 }
 
+/// Convinience function to convert a String into a sequence of MacroOptions::Text.
+/// Currently ponly u8 ascii is supported.
+pub fn to_macro_sequence(text: &str) -> heapless::Vec<MacroOperation, MACRO_SPACE_SIZE> {
+    // if !text.is_ascii() {
+    //     compile_error!("Only ascii text is supported!")
+    // };
+    text.as_bytes()
+        .iter()
+        .map(|character| {
+            let (keycode, shifted) = from_ascii(*character);
+            MacroOperation::Text(keycode, shifted)
+        })
+        .collect()
+}
+
 /// converts macro sequences [Vec<MacroOperation] binary form and flattens to Vec<u8, MACRO_SPACE_SIZE>
 /// Note that the Vec is still at it's minimal needed length and needs to be etended with zeros to the desired size
 /// (with vec.resize())
@@ -202,7 +217,6 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
                 .expect("impossible error");
             result
         }
-        // TODO check if key_code this is asccii???
         MacroOperation::Text(key_code, shifted) => heapless::Vec::from_slice(&[to_ascii(*key_code, *shifted)]).unwrap(),
     }
 }
