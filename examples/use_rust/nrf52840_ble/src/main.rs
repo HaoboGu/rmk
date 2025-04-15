@@ -198,7 +198,12 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
 
-    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
+    let mut adc_device = NrfAdc::new(
+        saadc,
+        [AnalogEventType::Battery],
+        embassy_time::Duration::from_secs(12),
+        None,
+    );
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);

@@ -1,5 +1,5 @@
 use embassy_nrf::saadc::Saadc;
-use embassy_time::Instant;
+use embassy_time::{Duration, Instant};
 
 use super::{AdcState, AnalogEventType};
 use crate::event::{Axis, AxisEvent, AxisValType, Event};
@@ -7,8 +7,8 @@ use crate::input_device::InputDevice;
 
 pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
     saadc: Saadc<'a, PIN_NUM>,
-    polling_interval: u16,
-    light_sleep: Option<u16>,
+    polling_interval: Duration,
+    light_sleep: Option<Duration>,
     buf: [[i16; PIN_NUM]; 2], // double buffer for waking up
     event_type: [AnalogEventType; EVENT_NUM],
     event_state: u8,
@@ -24,8 +24,8 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
     pub fn new(
         saadc: Saadc<'a, PIN_NUM>,
         event_type: [AnalogEventType; EVENT_NUM],
-        polling_interval: u16,
-        light_sleep: Option<u16>,
+        polling_interval: Duration,
+        light_sleep: Option<Duration>,
     ) -> Self {
         Self {
             saadc,
@@ -37,23 +37,27 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
             channel_state: 0,
             buf_state: false,
             adc_state: AdcState::LightSleep,
-            active_instant: Instant::now(),
+            active_instant: Instant::MIN,
         }
     }
 }
 
 impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a, PIN_NUM, EVENT_NUM> {
     async fn read_event(&mut self) -> Event {
+        if self.active_instant == Instant::MIN {
+            // filling for the first polling
+            self.saadc.sample(&mut self.buf[1]).await;
+            self.active_instant = Instant::now();
+        }
+
         if let Some(light_sleep) = self.light_sleep {
             if self.adc_state == AdcState::LightSleep {
-                {
-                    embassy_time::Timer::after_millis(light_sleep as u64).await;
-                }
+                embassy_time::Timer::after(light_sleep).await;
             } else {
-                embassy_time::Timer::after_millis(self.polling_interval as u64).await;
+                embassy_time::Timer::after(self.polling_interval).await;
             }
         } else {
-            embassy_time::Timer::after_millis(self.polling_interval as u64).await;
+            embassy_time::Timer::after(self.polling_interval).await;
         }
 
         if self.active_instant.elapsed().as_millis() > 1200 {
@@ -74,7 +78,7 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
             self.saadc.sample(buf).await;
             for (a, b) in self.buf[0].iter().zip(self.buf[1].iter()) {
                 if i16::abs(a - b) > 150 {
-                    debug!("Adc Active");
+                    debug!("ADC Active");
                     self.adc_state = AdcState::Active;
                     self.active_instant = Instant::now();
                     break;

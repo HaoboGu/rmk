@@ -197,7 +197,12 @@ async fn main(spawner: Spawner) {
     // Initialize the encoder processor
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
-    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
+    let mut adc_device = NrfAdc::new(
+        saadc,
+        [AnalogEventType::Battery],
+        embassy_time::Duration::from_secs(12),
+        None,
+    );
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
     // Start

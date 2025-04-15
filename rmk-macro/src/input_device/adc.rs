@@ -84,13 +84,14 @@ pub(crate) fn expand_adc_device(
             }
 
             if !processor_name.is_empty() {
-                let light_sleep_param = if let Some(light_sleep_interval) = light_sleep {
-                    quote! {Some(#light_sleep_interval)}
+                let light_sleep_option = if let Some(light_sleep_interval) = light_sleep {
+                    quote! {Some(Duration::from_millis(#light_sleep_interval as u64))}
                 } else {
                     quote! {None}
                 };
                 config.extend(quote! {
                     let mut adc_device = {
+                        use embassy_time::Duration;
                         use embassy_nrf::saadc::{self, Input as _};
                         let saadc_config = saadc::Config::default();
                         embassy_nrf::interrupt::SAADC.set_priority(embassy_nrf::interrupt::Priority::P3);
@@ -101,8 +102,8 @@ pub(crate) fn expand_adc_device(
                         rmk::input_device::adc::NrfAdc::new(
                                 adc,
                                 [#(#adc_type),*],
-                                #default_polling_interval,
-                                #light_sleep_param,
+                                Duration::from_millis(#default_polling_interval as u64),
+                                #light_sleep_option,
                             )};
                 });
                 (config, processor_name)
