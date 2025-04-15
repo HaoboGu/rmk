@@ -22,7 +22,7 @@ use crate::{channel::FLASH_CHANNEL, keyboard_macro::NUM_MACRO, storage::FlashOpe
 
 pub(crate) mod keycode_convert;
 mod protocol;
-mod vial;
+pub(crate) mod vial;
 
 pub(crate) struct VialService<
     'a,

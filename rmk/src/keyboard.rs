@@ -1,4 +1,5 @@
 use core::cell::RefCell;
+use core::time::Duration;
 
 use embassy_futures::select::select;
 use embassy_futures::yield_now;
@@ -21,6 +22,7 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
+use crate::via::vial::{VialStealReason, VIAL_STATUS, VIAL_STEAL_SIGNAL, VIAL_UNLOCK_KEYS_SIGNAL};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -53,6 +55,11 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
+            // trap into vial
+            if let Some(reason) = VIAL_STEAL_SIGNAL.try_take() {
+                self.process_vial(reason).await;
+            }
+
             let key_event = KEY_EVENT_CHANNEL.receive().await;
 
             // Process the key change
@@ -101,7 +108,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
 
-    /// The modifiers coming from (last) KeyAction::WithModifier  
+    /// The modifiers coming from (last) KeyAction::WithModifier
     with_modifiers: HidModifiers,
 
     /// Macro text typing state (affects the effective modifiers)
@@ -206,6 +213,88 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    }
+
+    async fn process_vial(&mut self, reason: VialStealReason) {
+        info!("Process Vial");
+        let mut pressed_after_enter = [[false; COL]; ROW];
+        match reason {
+            VialStealReason::Unlock => {
+                // TODO: generate key randomly?
+                let mut waiting_key: Vec<_, 8> = Vec::from_slice(&[(0, 0), (0, 1), (0, 2)]).unwrap();
+                VIAL_UNLOCK_KEYS_SIGNAL.signal(waiting_key.clone());
+                loop {
+                    let timeout = embassy_time::Timer::after(embassy_time::Duration::from_secs(20));
+                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
+                        embassy_futures::select::Either::First(_) => {
+                            // unlock cancellation timeout
+                            info!("Unlock timeout");
+                            let status_cell = VIAL_STATUS.lock().await;
+                            let mut status = status_cell.borrow_mut();
+                            status.counter = 0;
+                            status.in_progress = false;
+                        }
+                        embassy_futures::select::Either::Second(event) => {
+                            let KeyEvent { row, col, pressed } = event;
+                            info!("Waiting Key Pressed: {}, {}", row, col);
+                            if pressed {
+                                // key pressing after entering vial
+                                pressed_after_enter[row as usize][col as usize] = true;
+                            } else {
+                                if pressed_after_enter[row as usize][col as usize] {
+                                    if waiting_key.last().unwrap().0 == row && waiting_key.last().unwrap().1 == col {
+                                        debug!("Waiting Key Pressed(available)");
+                                        VIAL_STATUS.lock().await.borrow_mut().counter -= 1;
+                                        waiting_key.pop();
+                                    }
+                                } else {
+                                    // if never pressed after enter `process_vial`, process it
+                                    // with standard method to release key correctly
+                                    self.process_inner(event).await;
+                                }
+                            }
+                            if waiting_key.is_empty() {
+                                // unlock successfully
+                                info!("Unlock successfully");
+                                let status_cell = VIAL_STATUS.lock().await;
+                                let mut status = status_cell.borrow_mut();
+                                status.unlocked = true;
+                                status.in_progress = false;
+                                status.counter = 0;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            VialStealReason::MatrixTest => {
+                if VIAL_STATUS.lock().borrow().unlocked {
+                    let mut pressed_keys = [[false; COL]; ROW];
+                    loop {
+                        let timeout = embassy_time::after(Duration::from_millis(50));
+                        let event = KEY_EVENT_CHANNEL.receive().await;
+                        let KeyEvent { row, col, pressed } = event;
+                        info!("Waiting Key Pressed: {}, {}", row, col);
+                        if pressed {
+                            // key pressing after entering vial
+                            pressed_after_enter[row as usize][col as usize] = true;
+
+                            pressed_keys[row as usize][col as usize] = true;
+                        } else {
+                            if pressed_after_enter[row as usize][col as usize] {
+                                pressed_keys[row as usize][col as usize] = false;
+                            } else {
+                                // if never pressed after enter `process_vial`, process it
+                                // with standard method to release key correctly
+                                self.process_inner(event).await;
+                            }
+                        }
+                    }
+                } else {
+                    info!("Failed to test matrix due to locked vial")
+                }
+            }
+        }
     }
 
     /// Process key changes at (row, col)
@@ -941,7 +1030,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - registered (held) modifiers keys
     /// - one-shot modifiers
     /// - effect of KeyAction::WithModifiers (while they are pressed)
-    /// - possible fork related modifier suppressions    
+    /// - possible fork related modifier suppressions
     pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
         // text typing macro should not be affected by any modifiers,
         // only its own capitalization

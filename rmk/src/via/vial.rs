@@ -1,6 +1,8 @@
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use embassy_sync::{mutex::Mutex, signal::Signal};
+use heapless::Vec;
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
@@ -13,6 +15,7 @@ use crate::{
     channel::FLASH_CHANNEL,
     combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
+    RawMutex,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -103,13 +106,38 @@ pub(crate) async fn process_vial<
             );
         }
         VialCommand::GetUnlockStatus => {
-            debug!("Received Vial - GetUnlockStatus");
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
-            // Unlocked
-            report.input_data[0] = 1;
-            // Unlock in progress
-            report.input_data[1] = 0;
+            let in_progress = {
+                let status_cell = VIAL_STATUS.lock().await;
+                let status = status_cell.borrow();
+                report.input_data[0] = status.unlocked as u8; // Unlocked status
+                report.input_data[1] = status.in_progress as u8; // Unlock in progress
+                status.in_progress
+            };
+            if in_progress {
+                let unlock_keys = VIAL_UNLOCK_KEYS_SIGNAL.wait().await;
+                for (i, key) in unlock_keys.iter().enumerate() {
+                    report.input_data[2 + i * 2] = key.0;
+                    report.input_data[3 + i * 2] = key.1;
+                }
+            }
+        }
+        VialCommand::UnlockPoll => {
+            report.input_data.fill(0xFF);
+            let status_cell = VIAL_STATUS.lock().await;
+            let status = status_cell.borrow();
+            report.input_data[0] = status.unlocked as u8; // Unlocked status
+            report.input_data[2] = status.counter; // Unlocked counter
+        }
+        VialCommand::UnlockStart => {
+            VIAL_STATUS.lock().await.borrow_mut().in_progress = true;
+            VIAL_STEAL_SIGNAL.signal(VialStealReason::Unlock);
+        }
+        VialCommand::Lock => {
+            debug!("Received Vial - Lock");
+            let status = VIAL_STATUS.lock().await;
+            status.borrow_mut().unlocked = true;
         }
         VialCommand::QmkSettingsQuery => {
             report.input_data.fill(0xFF);
@@ -298,10 +326,7 @@ fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Optio
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-fn vial_combo_mut(
-    combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>,
-    idx: usize,
-) -> Option<(usize, &mut Combo)> {
+fn vial_combo_mut(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &mut Combo)> {
     combos
         .iter_mut()
         .enumerate()
@@ -309,3 +334,28 @@ fn vial_combo_mut(
         .enumerate()
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
+
+pub(crate) struct VialStatus {
+    pub(crate) unlocked: bool,
+    pub(crate) in_progress: bool,
+    pub(crate) counter: u8,
+}
+
+impl VialStatus {
+    pub const fn new() -> Self {
+        VialStatus {
+            unlocked: false,
+            in_progress: false,
+            counter: 0,
+        }
+    }
+}
+
+pub(crate) enum VialStealReason {
+    Unlock,
+    MatrixTest,
+}
+
+pub(crate) static VIAL_STATUS: Mutex<RawMutex, RefCell<VialStatus>> = Mutex::new(RefCell::new(VialStatus::new()));
+pub(crate) static VIAL_STEAL_SIGNAL: Signal<RawMutex, VialStealReason> = Signal::new();
+pub(crate) static VIAL_UNLOCK_KEYS_SIGNAL: Signal<RawMutex, Vec<(u8, u8), 8>> = Signal::new();
