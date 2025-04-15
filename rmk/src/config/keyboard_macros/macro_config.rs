@@ -3,7 +3,7 @@
 pub const MACRO_SPACE_SIZE: usize = 256;
 
 /// Default number of keyboard macros
-pub(crate) const NUM_MACRO: usize = 8;
+pub(crate) const NUM_MACRO: usize = 256;
 
 #[derive(Debug)]
 pub struct KeyboardMacrosConfig {
