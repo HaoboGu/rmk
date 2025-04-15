@@ -1,10 +1,8 @@
 #![no_std]
 #![no_main]
 
-mod vial;
 #[macro_use]
 mod macros;
-mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
@@ -12,7 +10,7 @@ use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::{bind_interrupts, rng, usb, Peri};
+use embassy_nrf::{Peri, bind_interrupts, rng, usb};
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
@@ -23,7 +21,7 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
-use rmk::{run_devices, HostResources};
+use rmk::{HostResources, run_devices};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
