@@ -552,6 +552,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .await;
                 self.update_osl(key_event);
             }
+            Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, key_event).await,
         }
     }
 
@@ -1173,75 +1174,78 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_action_macro(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // Get macro index
+        if let Some(macro_idx) = key.as_macro_index() {
+            self.execute_macro(macro_idx, key_event).await;
+        }
+    }
+
+    async fn execute_macro(&mut self, macro_idx: u8, key_event: KeyEvent) {
         // Execute the macro only when releasing the key
         if key_event.pressed {
             return;
         }
 
-        // Get macro index
-        if let Some(macro_idx) = key.as_macro_index() {
-            if macro_idx as usize >= NUM_MACRO {
-                error!("Macro idx invalid: {}", macro_idx);
-                return;
-            }
-            // Read macro operations until the end of the macro
-            let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
-            if let Some(macro_start_idx) = macro_idx {
-                let mut offset = 0;
-                loop {
-                    // First, get the next macro operation
-                    let (operation, new_offset) =
-                        self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
-                    // Execute the operation
-                    match operation {
-                        MacroOperation::Press(k) => {
-                            self.macro_texting = false;
-                            self.register_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        }
-                        MacroOperation::Release(k) => {
-                            self.macro_texting = false;
-                            self.unregister_key(k, key_event);
+        if macro_idx as usize >= NUM_MACRO {
+            error!("Macro idx invalid: {}", macro_idx);
+            return;
+        }
+        // Read macro operations until the end of the macro
+        let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
+        if let Some(macro_start_idx) = macro_idx {
+            let mut offset = 0;
+            loop {
+                // First, get the next macro operation
+                let (operation, new_offset) = self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
+                // Execute the operation
+                match operation {
+                    MacroOperation::Press(k) => {
+                        self.macro_texting = false;
+                        self.register_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                    }
+                    MacroOperation::Release(k) => {
+                        self.macro_texting = false;
+                        self.unregister_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Tap(k) => {
+                        self.macro_texting = false;
+                        self.register_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.unregister_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Text(k, is_cap) => {
+                        self.macro_texting = true;
+                        self.macro_caps = is_cap;
+                        self.register_keycode(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.unregister_keycode(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Delay(t) => {
+                        embassy_time::Timer::after_millis(t as u64).await;
+                    }
+                    MacroOperation::End => {
+                        if self.macro_texting {
+                            //restore the state of the keyboard (held modifiers, etc.) after text typing
                             self.send_keyboard_report_with_resolved_modifiers(false).await;
-                        }
-                        MacroOperation::Tap(k) => {
                             self.macro_texting = false;
-                            self.register_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                            embassy_time::Timer::after_millis(2).await;
-                            self.unregister_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(false).await;
                         }
-                        MacroOperation::Text(k, is_cap) => {
-                            self.macro_texting = true;
-                            self.macro_caps = is_cap;
-                            self.register_keycode(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                            embassy_time::Timer::after_millis(2).await;
-                            self.unregister_keycode(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(false).await;
-                        }
-                        MacroOperation::Delay(t) => {
-                            embassy_time::Timer::after_millis(t as u64).await;
-                        }
-                        MacroOperation::End => {
-                            if self.macro_texting {
-                                //restore the state of the keyboard (held modifiers, etc.) after text typing
-                                self.send_keyboard_report_with_resolved_modifiers(false).await;
-                                self.macro_texting = false;
-                            }
-                            break;
-                        }
-                    };
-
-                    offset = new_offset;
-                    if offset > self.keymap.borrow().behavior.macros.macro_sequences.len() {
                         break;
                     }
+                };
+
+                offset = new_offset;
+                if offset > self.keymap.borrow().behavior.macros.macro_sequences.len() {
+                    break;
                 }
-            } else {
-                error!("Macro not found");
             }
+        } else {
+            error!("Macro not found");
         }
     }
 

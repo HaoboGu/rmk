@@ -28,7 +28,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
     - [ ] 🔴 Macro's for umlaute
     - [ ] 🔵 Macro's for unicode
     - [ ] make macro storage space configurable
-    - [ ] add KeyAction::MacroTrigger so more than 32 macros can be triggered
+    - [ ] add KeyAction::TriggerMacro so more than 32 macros can be triggered
   - [ ] 🔴 RGB
   - [ ] 🔵 display support
 

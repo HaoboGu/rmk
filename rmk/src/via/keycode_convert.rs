@@ -26,6 +26,14 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
+            // convert to KeyCode::Macro0 - Macro31, 0x0 for above (as 0x600 is already reserved)
+            Action::TriggerMacro(idx) => {
+                // if idx < 32 {
+                0x7700 + (idx as u16)
+                // } else {
+                // 0x0
+                // }
+            }
             _ => 0x0000,
         },
         KeyAction::Tap(_) => {
@@ -667,21 +675,21 @@ mod test {
     }
 
     #[test]
-    fn test_convert_from_to_asccii_a() {
+    fn test_convert_from_to_ascii_a() {
         let keycode = KeyCode::A;
         let shifted = false;
-        let asccii = b'a';
+        let ascii = b'a';
 
-        assert_eq!(to_ascii(keycode, shifted), asccii);
-        assert_eq!(from_ascii(asccii), (keycode, shifted));
+        assert_eq!(to_ascii(keycode, shifted), ascii);
+        assert_eq!(from_ascii(ascii), (keycode, shifted));
     }
     #[test]
-    fn test_convert_from_to_asccii_K() {
+    fn test_convert_from_to_ascii_K() {
         let keycode = KeyCode::K;
         let shifted = true;
-        let asccii = b'K';
+        let ascii = b'K';
 
-        assert_eq!(to_ascii(keycode, shifted), asccii);
-        assert_eq!(from_ascii(asccii), (keycode, shifted));
+        assert_eq!(to_ascii(keycode, shifted), ascii);
+        assert_eq!(from_ascii(ascii), (keycode, shifted));
     }
 }
