@@ -37,49 +37,6 @@ impl<'a> BleBatteryServer<'_, '_, '_> {
         // Wait 2 seconds, ensure that gatt server has been started
         Timer::after_secs(2).await;
 
-        // TODO: Move battery charging state checking to a separate input device and processor.
-        // let battery_led_control = async {
-        //     loop {
-        //         // Read the current battery level
-        //         let current_battery_level = BATTERY_LEVEL.load(Ordering::Relaxed);
-
-        //         // Check if the device is charging
-        //         let is_charging = if let Some(ref is_charging_pin) = battery_config.charge_state_pin {
-        //             is_charging_pin.is_low() == battery_config.charge_state_low_active
-        //         } else {
-        //             false
-        //         };
-
-        //         // Control the LED based on the charging state and battery level
-        //         if let Some(ref mut charge_led) = battery_config.charge_led_pin {
-        //             if is_charging {
-        //                 // If the device is charging, the LED is always on
-        //                 if battery_config.charge_led_low_active {
-        //                     charge_led.set_low();
-        //                 } else {
-        //                     charge_led.set_high();
-        //                 }
-        //             } else if current_battery_level < 50 {
-        //                 // If the device is not charging and the battery level is less than 10%, the LED will blink
-        //                 charge_led.toggle();
-        //                 Timer::after_millis(200).await;
-        //             } else {
-        //                 // If the device is not charging and the battery level is greater than 10%, the LED is always off
-        //                 if battery_config.charge_led_low_active {
-        //                     charge_led.set_high();
-        //                 } else {
-        //                     charge_led.set_low();
-        //                 }
-        //             }
-        //         }
-
-        //         // If there is no blinking operation, wait for a while before checking again
-        //         if !(is_charging == false && current_battery_level < 10) {
-        //             Timer::after_secs(30).await;
-        //         }
-        //     }
-        // };
-
         let report_battery_level = async {
             loop {
                 let val = BATTERY_LEVEL.load(Ordering::Relaxed);
@@ -91,6 +48,10 @@ impl<'a> BleBatteryServer<'_, '_, '_> {
                             break;
                         }
                     }
+                } else if val < 255 {
+                    debug!("Charging, val: {}", val);
+                } else {
+                    debug!("Battery level not available");
                 }
                 // Report battery level every 30s
                 Timer::after_secs(30).await

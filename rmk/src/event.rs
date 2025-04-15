@@ -24,6 +24,8 @@ pub enum Event {
     AxisEventStream(AxisEvent),
     /// Battery percentage event
     Battery(u16),
+    /// Charging state changed event, true means charging, false means not charging
+    ChargingState(bool),
     /// End of the event sequence
     ///
     /// This is used with [`Event::AxisEventStream`] to indicate the end of the event sequence.
