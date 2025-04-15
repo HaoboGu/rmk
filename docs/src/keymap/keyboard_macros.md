@@ -13,9 +13,12 @@ They are in `rmk::config::keyboard_macros::keyboard_macro`:
 Execute a key press from any available KeyCode. 
 The boolean flags if the key should be pressed with the shift modifier.
 
+Note that ofther modifiers pressed outside of a sequence with `Text` are disabled.
+
 ### Tap(KeyCode)
 Presses and releases a key. 
-Prefer `Text(KeyCode, bool)` above, as the resulting macro is 3 times smaller in size.
+Modifiers pressed outside of a macro sequence are considered as well.
+If you don't need this prefer `Text(KeyCode, bool)` above, as the resulting macro is 3 times smaller in size.
 
 ### Press(KeyCode)
 Press (and hold) a keycode.
