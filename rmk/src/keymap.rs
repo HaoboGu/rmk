@@ -272,6 +272,7 @@ mod test {
     use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
     use crate::hid_state::HidModifiers;
     use crate::k;
+    use crate::keymap::fill_vec;
     use crate::{action::KeyAction, keycode::KeyCode};
 
     #[test]
@@ -283,7 +284,7 @@ mod test {
         ])
         .unwrap();
 
-        _fill_vec(&mut combos);
+        fill_vec(&mut combos);
 
         assert_eq!(combos.len(), COMBO_MAX_NUM);
 
@@ -318,7 +319,7 @@ mod test {
         ])
         .unwrap();
 
-        _fill_vec(&mut forks);
+        fill_vec(&mut forks);
 
         assert_eq!(forks.len(), FORK_MAX_NUM);
     }
@@ -333,7 +334,7 @@ mod test {
         let mut combos = heapless::Vec::from_slice(&combos_raw).unwrap();
 
         _reorder_combos(&mut combos);
-        _fill_vec(&mut combos);
+        fill_vec(&mut combos);
 
         let result: Vec<u16> = combos
             .iter()
