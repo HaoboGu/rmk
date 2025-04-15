@@ -1240,7 +1240,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 };
 
                 offset = new_offset;
-                if offset > self.keymap.borrow().behavior.macros.macro_sequences.len() {
+                if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
                     break;
                 }
             }

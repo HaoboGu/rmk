@@ -86,7 +86,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // Read keymap to `action_map`
                     .and(storage.read_keymap(action_map, &mut encoder_map).await)
                     // Read macro cache
-                    .and(storage.read_macro_cache(&mut behavior.macros.macro_sequences).await)
+                    .and(
+                        storage
+                            .read_macro_cache(&mut behavior.keyboard_macros.macro_sequences)
+                            .await,
+                    )
                     // Read combo cache
                     .and(storage.read_combos(&mut behavior.combo.combos).await)
                     // Read fork cache
@@ -128,11 +132,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub(crate) fn get_next_macro_operation(&self, macro_start_idx: usize, offset: usize) -> (MacroOperation, usize) {
-        MacroOperation::get_next_macro_operation(&self.behavior.macros.macro_sequences, macro_start_idx, offset)
+        MacroOperation::get_next_macro_operation(
+            &self.behavior.keyboard_macros.macro_sequences,
+            macro_start_idx,
+            offset,
+        )
     }
 
     pub(crate) fn get_macro_sequence_start(&self, guessed_macro_start_idx: u8) -> Option<usize> {
-        MacroOperation::get_macro_sequence_start(&self.behavior.macros.macro_sequences, guessed_macro_start_idx)
+        MacroOperation::get_macro_sequence_start(
+            &self.behavior.keyboard_macros.macro_sequences,
+            guessed_macro_start_idx,
+        )
     }
 
     pub(crate) fn set_action_at(&mut self, row: usize, col: usize, layer_num: usize, action: KeyAction) {

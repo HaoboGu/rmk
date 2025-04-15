@@ -121,7 +121,7 @@ pub struct BehaviorConfig {
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
-    pub macros: KeyboardMacrosConfig,
+    pub keyboard_macros: KeyboardMacrosConfig,
 }
 
 /// Configurations for tap hold behavior
