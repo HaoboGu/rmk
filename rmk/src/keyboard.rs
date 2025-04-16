@@ -223,7 +223,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_vial(&mut self, reason: VialStealReason) -> Option<VialStealReason> {
-        info!("Trap into Vial ({})", reason);
+        info!("Trap into Vial ({:?})", reason);
         let mut pressed_after_enter = [[false; COL]; ROW];
         match reason {
             VialStealReason::Unlock => {
@@ -254,7 +254,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 mut pressed,
                             } = event;
                             loop {
-                                info!("Waiting for key: {}", waiting_key);
+                                info!("Waiting for key: {:?}", waiting_key);
                                 if pressed {
                                     // key pressing after entering vial
                                     pressed_after_enter[row as usize][col as usize] = true;
@@ -316,7 +316,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                         embassy_futures::select::Either::Second(sig) => {
                             if sig != VialStealReason::MatrixTest {
-                                info!("Escape matrix test mode due to {}", sig);
+                                info!("Escape matrix test mode due to {:?}", sig);
                                 return Some(sig);
                             }
                         }

@@ -10,12 +10,12 @@ use crate::combo::{Combo, COMBO_MAX_NUM};
 use crate::keymap::KeyMap;
 use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::RawMutex;
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
     combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
-    RawMutex,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -111,11 +111,11 @@ pub(crate) async fn process_vial<
             let status = status_cell.borrow();
             report.input_data[0] = status.unlocked as u8; // Unlocked status
             report.input_data[1] = status.in_progress as u8; // Unlock in progress
-            info!("keys: {}", status.unlock_keys);
             for (i, key) in status.unlock_keys.iter().enumerate() {
                 report.input_data[2 + i * 2] = key.0;
                 report.input_data[3 + i * 2] = key.1;
             }
+            // FIXME: unlock keys are not update every time
         }
         VialCommand::UnlockPoll => {
             report.input_data.fill(0xFF);
@@ -351,7 +351,7 @@ impl VialStatus {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum VialStealReason {
     Unlock,
