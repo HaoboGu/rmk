@@ -21,6 +21,11 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     config.dcdc.reg0 = true;
                     config.dcdc.reg1 = true;
                 }
+            } else if keyboard_config.chip.chip == "nrf52833" {
+                quote! {
+                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
+                    config.dcdc.reg1 = true;
+                }
             } else {
                 quote! {}
             };
