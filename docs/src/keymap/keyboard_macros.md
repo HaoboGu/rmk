@@ -234,3 +234,37 @@ pub(crate) fn get_forks() -> ForksConfig {
     }
 }
 ```
+
+## Tips
+### small and capital version of a word
+If you want to spill a macro in small letters, but occationally with the first letter capitalised you can do so with caps word:
+For example, you might want to use a combo for the rare letter `q`.
+And as this letter mostly comes as `qu` you want to use a macro for that.
+
+Thus, implement the macro:
+```
+pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
+    define_macro_sequences(&[
+        Vec::from_slice(&[
+            MacroOperation::Text(KeyCode::Q, false),
+            MacroOperation::Text(KeyCode::U, false),
+        ])
+        .expect("too many elements"),
+    ])
+}
+```
+
+With `osm(LSFT)` you can have the next letter capitalised.
+However, when using `MacroOperation::Text`, like in the code above, the whole sequence gets capitalized (outputs `QU`).
+If you use `MacroOperation:Tap` for the first letter, and `MacroOperation::Text` for the following letters, only the first letter is capitalized.
+```
+pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
+    define_macro_sequences(&[
+        Vec::from_slice(&[
+            MacroOperation::Text(KeyCode::Q, false),
+            MacroOperation::Tap(KeyCode::U),
+        ])
+        .expect("too many elements"),
+    ])
+}
+```
