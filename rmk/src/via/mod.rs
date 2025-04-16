@@ -5,9 +5,10 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
+use heapless::Vec;
 use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
-use vial::process_vial;
+use vial::{process_vial, VIAL_STEAL_SIGNAL};
 
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
@@ -40,6 +41,8 @@ pub(crate) struct VialService<
 
     // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
+
+    matrix_pressed: Vec<(u8, u8), 8>,
 }
 
 impl<
@@ -62,6 +65,7 @@ impl<
             keymap,
             vial_config,
             reader_writer,
+            matrix_pressed: Vec::new(),
         }
     }
 
@@ -93,7 +97,7 @@ impl<
     }
 
     async fn process_via_packet(
-        &self,
+        &mut self,
         report: &mut ViaReport,
         keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) {
@@ -121,7 +125,19 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            warn!("GetKeyboardValue - SwitchMatrixState")
+                            VIAL_STEAL_SIGNAL.signal(vial::VialStealReason::MatrixTest);
+                            if let Some(update) = vial::VIAL_MATRIX_PRESSED_CHANNEL.try_take() {
+                                self.matrix_pressed = update;
+                            }
+
+                            let row_byte_size = (COL + 8) / 8;
+                            let matrix_data = &mut report.input_data[2..(2 + ROW * row_byte_size)];
+                            matrix_data.fill(0); // not pressed by default
+                            for (row, col) in &self.matrix_pressed {
+                                let last_col_byte = (*row as usize + 1) * row_byte_size - 1;
+                                let index = last_col_byte - (*col as usize / 8);
+                                matrix_data[index as usize] |= 1 << (col % 8);
+                            }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
                             BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);

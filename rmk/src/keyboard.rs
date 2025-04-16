@@ -1,7 +1,6 @@
 use core::cell::RefCell;
-use core::time::Duration;
 
-use embassy_futures::select::select;
+use embassy_futures::select::{select, select3};
 use embassy_futures::yield_now;
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
@@ -22,7 +21,7 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
-use crate::via::vial::{VialStealReason, VIAL_STATUS, VIAL_STEAL_SIGNAL, VIAL_UNLOCK_KEYS_SIGNAL};
+use crate::via::vial::{VialStealReason, VIAL_MATRIX_PRESSED_CHANNEL, VIAL_STATUS, VIAL_STEAL_SIGNAL};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -55,12 +54,20 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
-            // trap into vial
-            if let Some(reason) = VIAL_STEAL_SIGNAL.try_take() {
-                self.process_vial(reason).await;
-            }
-
-            let key_event = KEY_EVENT_CHANNEL.receive().await;
+            let key_event = loop {
+                match select(VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
+                    embassy_futures::select::Either::First(first_reason) => {
+                        // trap into vial
+                        let mut reason = first_reason;
+                        while let Some(next_reason) = self.process_vial(reason).await {
+                            reason = next_reason;
+                        }
+                    }
+                    embassy_futures::select::Either::Second(event) => {
+                        break event;
+                    }
+                }
+            };
 
             // Process the key change
             self.process_inner(key_event).await;
@@ -215,85 +222,141 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
-    async fn process_vial(&mut self, reason: VialStealReason) {
-        info!("Process Vial");
+    async fn process_vial(&mut self, reason: VialStealReason) -> Option<VialStealReason> {
+        info!("Trap into Vial ({})", reason);
         let mut pressed_after_enter = [[false; COL]; ROW];
         match reason {
             VialStealReason::Unlock => {
                 // TODO: generate key randomly?
-                let mut waiting_key: Vec<_, 8> = Vec::from_slice(&[(0, 0), (0, 1), (0, 2)]).unwrap();
-                VIAL_UNLOCK_KEYS_SIGNAL.signal(waiting_key.clone());
+                VIAL_STATUS.lock().await.borrow_mut().unlock_keys = Vec::from_slice(&[(0, 0), (0, 1), (0, 2)]).unwrap();
+                let mut waiting_key = {
+                    let status_cell = VIAL_STATUS.lock().await;
+                    let status = status_cell.borrow();
+                    let k = status.unlock_keys.last().unwrap().clone();
+                    Some(k)
+                };
+
                 loop {
                     let timeout = embassy_time::Timer::after(embassy_time::Duration::from_secs(20));
-                    match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
-                        embassy_futures::select::Either::First(_) => {
+                    match select3(timeout, VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
+                        embassy_futures::select::Either3::First(_) | embassy_futures::select::Either3::Second(_) => {
                             // unlock cancellation timeout
-                            info!("Unlock timeout");
+                            info!("Unlock cancel");
                             let status_cell = VIAL_STATUS.lock().await;
                             let mut status = status_cell.borrow_mut();
-                            status.counter = 0;
                             status.in_progress = false;
+                            status.unlock_keys.clear();
                         }
-                        embassy_futures::select::Either::Second(event) => {
-                            let KeyEvent { row, col, pressed } = event;
-                            info!("Waiting Key Pressed: {}, {}", row, col);
-                            if pressed {
-                                // key pressing after entering vial
-                                pressed_after_enter[row as usize][col as usize] = true;
-                            } else {
-                                if pressed_after_enter[row as usize][col as usize] {
-                                    if waiting_key.last().unwrap().0 == row && waiting_key.last().unwrap().1 == col {
-                                        debug!("Waiting Key Pressed(available)");
-                                        VIAL_STATUS.lock().await.borrow_mut().counter -= 1;
-                                        waiting_key.pop();
-                                    }
+                        embassy_futures::select::Either3::Third(event) => {
+                            let KeyEvent {
+                                mut row,
+                                mut col,
+                                mut pressed,
+                            } = event;
+                            loop {
+                                info!("Waiting for key: {}", waiting_key);
+                                if pressed {
+                                    // key pressing after entering vial
+                                    pressed_after_enter[row as usize][col as usize] = true;
                                 } else {
-                                    // if never pressed after enter `process_vial`, process it
-                                    // with standard method to release key correctly
-                                    self.process_inner(event).await;
+                                    if pressed_after_enter[row as usize][col as usize] {
+                                        if waiting_key.is_some()
+                                            && waiting_key.unwrap().0 == row
+                                            && waiting_key.unwrap().1 == col
+                                        {
+                                            debug!("Unlock: press correct key");
+                                            let status_cell = VIAL_STATUS.lock().await;
+                                            let mut status = status_cell.borrow_mut();
+                                            status.unlock_keys.pop();
+                                            waiting_key = status.unlock_keys.last().and_then(|x| Some(x.clone()));
+                                        }
+                                    } else {
+                                        // if never pressed after enter `process_vial`, process it
+                                        // with standard method to release key correctly
+                                        self.process_inner(event).await;
+                                    }
+                                }
+
+                                // process the unprocessed event generated by some incorrect release
+                                if !self.unprocessed_events.is_empty() {
+                                    KeyEvent { row, col, pressed } = self.unprocessed_events.pop().unwrap();
+                                } else {
+                                    break;
                                 }
                             }
-                            if waiting_key.is_empty() {
-                                // unlock successfully
-                                info!("Unlock successfully");
-                                let status_cell = VIAL_STATUS.lock().await;
-                                let mut status = status_cell.borrow_mut();
-                                status.unlocked = true;
-                                status.in_progress = false;
-                                status.counter = 0;
-                                break;
-                            }
                         }
                     }
+
+                    if waiting_key.is_none() {
+                        // unlock successfully
+                        info!("Unlock successfully");
+                        let status_cell = VIAL_STATUS.lock().await;
+                        let mut status = status_cell.borrow_mut();
+                        status.unlocked = true;
+                        status.in_progress = false;
+                        break;
+                    }
                 }
+                None
             }
             VialStealReason::MatrixTest => {
-                if VIAL_STATUS.lock().borrow().unlocked {
-                    let mut pressed_keys = [[false; COL]; ROW];
-                    loop {
-                        let timeout = embassy_time::after(Duration::from_millis(50));
-                        let event = KEY_EVENT_CHANNEL.receive().await;
-                        let KeyEvent { row, col, pressed } = event;
-                        info!("Waiting Key Pressed: {}, {}", row, col);
-                        if pressed {
-                            // key pressing after entering vial
-                            pressed_after_enter[row as usize][col as usize] = true;
+                if !VIAL_STATUS.lock().await.borrow().unlocked {
+                    info!("Failed to test matrix due to locked vial");
+                    return None;
+                }
 
-                            pressed_keys[row as usize][col as usize] = true;
-                        } else {
-                            if pressed_after_enter[row as usize][col as usize] {
-                                pressed_keys[row as usize][col as usize] = false;
-                            } else {
-                                // if never pressed after enter `process_vial`, process it
-                                // with standard method to release key correctly
-                                self.process_inner(event).await;
+                info!("Enter matrix test");
+                let mut pressed_key: Vec<(u8, u8), 8> = Vec::new();
+                loop {
+                    let timeout = embassy_time::Timer::after(embassy_time::Duration::from_millis(50));
+                    match select(timeout, VIAL_STEAL_SIGNAL.wait()).await {
+                        embassy_futures::select::Either::First(_) => {
+                            info!("Escape matrix test mode due to timeout");
+                            return None;
+                        }
+                        embassy_futures::select::Either::Second(sig) => {
+                            if sig != VialStealReason::MatrixTest {
+                                info!("Escape matrix test mode due to {}", sig);
+                                return Some(sig);
                             }
                         }
                     }
-                } else {
-                    info!("Failed to test matrix due to locked vial")
+
+                    let event = if !self.unprocessed_events.is_empty() {
+                        self.unprocessed_events.pop().unwrap() // generated by some release in vial mode
+                    } else {
+                        loop {
+                            match select(VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
+                                embassy_futures::select::Either::First(sig) => {
+                                    if sig != VialStealReason::MatrixTest {
+                                        return Some(sig);
+                                    }
+                                }
+                                embassy_futures::select::Either::Second(event) => break event,
+                            }
+                        }
+                    };
+
+                    let KeyEvent { row, col, pressed } = event;
+                    info!("Matrix test key event: {}, {}", row, col);
+                    if pressed {
+                        // key pressing after entering vial
+                        pressed_after_enter[row as usize][col as usize] = true;
+
+                        let _ = pressed_key.push((row, col));
+                    } else {
+                        if pressed_after_enter[row as usize][col as usize] {
+                            pressed_key.retain(|&k| k.0 != row && k.1 != col);
+                        } else {
+                            // if never pressed after enter `process_vial`, process it
+                            // with standard method to release key correctly
+                            self.process_inner(event).await;
+                        }
+                    }
+                    VIAL_MATRIX_PRESSED_CHANNEL.signal(pressed_key.clone());
                 }
             }
+            VialStealReason::Lock => None,
         }
     }
 
