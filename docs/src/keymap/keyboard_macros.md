@@ -95,6 +95,27 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 ```
 (With the improvement that the `Text` macro operation is used in both cases.)
 
+Note that you are still limited to the ascii characters defined as `KeyCode`s. For example, you can't enter a German
+Umlaut (`ü`) or unicode. 
+If you enter an illigal character it will be converted to `X`.
+
+Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS).
+For example, in MacOS with a en-US layout you can define the following sequence to enter a `ü`:
+```
+pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
+    define_macro_sequences(&[
+        Vec::from_slice(&[
+            MacroOperation::Press(KeyCode::LAlt),
+            MacroOperation::Tap(KeyCode::U),
+            MacroOperation::Release(KeyCode::LAlt),
+            MacroOperation::Tap(KeyCode::U),
+        ])
+        .expect("too many elements"),
+    ])
+}
+```
+
+
 ## Triggering a macro
 ### binding
 A macro can be triggered in two ways:
