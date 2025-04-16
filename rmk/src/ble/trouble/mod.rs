@@ -468,7 +468,6 @@ async fn advertise<'a, 'b, C: Controller>(
         primary_phy: PhyKind::Le2M,
         secondary_phy: PhyKind::Le2M,
         tx_power: TxPower::Plus8dBm,
-        timeout: Some(Duration::from_secs(5)),
         interval_min: Duration::from_millis(200),
         interval_max: Duration::from_millis(200),
         ..Default::default()
