@@ -6,7 +6,7 @@ This can be configured via Vial or rust.
 A configuration via the toml configuration file will be provided in the future.
 
 ## macro operations
-The following operations, coming froim Vial, can be used to form a macro sequence.
+The following operations, coming from Vial, can be used to form a macro sequence.
 They are in `rmk::config::keyboard_macros::keyboard_macro`:
 
 ### Text(KeyCode, bool)
@@ -156,7 +156,7 @@ This is the configuration for the above example, assuming `1` is the chording la
 ```
 (`Action::TriggerMacro(1)` was used for demonstration only. Using `k!(Macro1)` is recommended to keep it brief.)
 
-Note that instead of having a second macro for the `ing` form you can define a macro which converts a word to the `ing` form:
+Note that instead of having a second macro for all verbs (normal and `ing` form) you can define a macro which converts a word to the `ing` form:
 ```
     define_macro_sequences(&[
         to_macro_sequence("type"),
