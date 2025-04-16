@@ -2,14 +2,11 @@ use core::cell::RefCell;
 
 use usbd_hid::descriptor::MouseReport;
 
-use crate::{
-    channel::KEYBOARD_REPORT_CHANNEL,
-    event::Event,
-    hid::{JoystickReport, Report},
-    input_device::{InputProcessor, ProcessResult},
-    keymap::KeyMap,
-};
-use core::cell::RefCell;
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::event::Event;
+use crate::hid::{JoystickReport, Report};
+use crate::input_device::{InputProcessor, ProcessResult};
+use crate::keymap::KeyMap;
 
 pub enum MapTo {
     /// Map to mouse
@@ -17,11 +14,6 @@ pub enum MapTo {
     /// Map to joystick
     Joystick,
 }
-use crate::channel::KEYBOARD_REPORT_CHANNEL;
-use crate::event::Event;
-use crate::hid::Report;
-use crate::input_device::{InputProcessor, ProcessResult};
-use crate::keymap::KeyMap;
 
 pub struct JoystickProcessor<
     'a,
