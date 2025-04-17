@@ -61,7 +61,6 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
         }
 
         if self.active_instant.elapsed().as_millis() > 1200 {
-            debug!("ADC Sleep");
             self.adc_state = AdcState::LightSleep; // sleep :)
         }
 

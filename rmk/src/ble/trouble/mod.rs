@@ -5,7 +5,7 @@ use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
-use embassy_time::{Duration, Timer};
+use embassy_time::{with_timeout, Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::{UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
@@ -33,7 +33,7 @@ use {
 
 use crate::ble::led::BleLedReader;
 use crate::ble::trouble::profile::{ProfileInfo, ProfileManager};
-use crate::channel::{LED_SIGNAL, VIAL_READ_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
@@ -206,6 +206,15 @@ pub(crate) async fn run_ble<
                                 select3(ble_fut, USB_SUSPENDED.wait(), profile_manager.update_profile()).await;
                                 continue;
                             }
+                            Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
+                                warn!("Advertising timeout, sleep and wait for any key");
+
+                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                continue;
+                            }
                             _ => {}
                         }
                     }
@@ -239,6 +248,15 @@ pub(crate) async fn run_ble<
                                     profile_manager.update_profile(),
                                 )
                                 .await;
+                            }
+                            Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
+                                warn!("Advertising timeout, sleep and wait for any key");
+
+                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                continue;
                             }
                             _ => {}
                         }
@@ -446,7 +464,6 @@ async fn advertise<'a, 'b, C: Controller>(
         primary_phy: PhyKind::Le2M,
         secondary_phy: PhyKind::Le2M,
         tx_power: TxPower::Plus8dBm,
-        timeout: Some(Duration::from_secs(120)),
         interval_min: Duration::from_millis(200),
         interval_max: Duration::from_millis(200),
         ..Default::default()
@@ -462,9 +479,16 @@ async fn advertise<'a, 'b, C: Controller>(
             },
         )
         .await?;
-    let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    info!("[adv] connection established");
-    Ok(conn)
+
+    // Timeout for advertising is 300s
+    match with_timeout(Duration::from_secs(5), advertiser.accept()).await {
+        Ok(conn_res) => {
+            let conn = conn_res?.with_attribute_server(server)?;
+            info!("[adv] connection established");
+            Ok(conn)
+        }
+        Err(_) => Err(BleHostError::BleHost(Error::Timeout)),
+    }
 }
 
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
