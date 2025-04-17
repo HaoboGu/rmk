@@ -207,14 +207,12 @@ pub(crate) async fn run_ble<
                                 continue;
                             }
                             Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                // If advertising timeout, sleep and wait for any key
+                                warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
                                 // Wait for the keyboard report for wake the keyboard
-                                let e = KEYBOARD_REPORT_CHANNEL.receive().await;
-                                // Resend the keyboard report to the channel
-                                KEYBOARD_REPORT_CHANNEL.send(e).await;
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
                                 continue;
                             }
                             _ => {}
@@ -252,14 +250,12 @@ pub(crate) async fn run_ble<
                                 .await;
                             }
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                // If advertising timeout, sleep and wait for any key
+                                warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
                                 // Wait for the keyboard report for wake the keyboard
-                                let e = KEYBOARD_REPORT_CHANNEL.receive().await;
-                                // Resend the keyboard report to the channel
-                                KEYBOARD_REPORT_CHANNEL.send(e).await;
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
                                 continue;
                             }
                             _ => {}
@@ -485,7 +481,7 @@ async fn advertise<'a, 'b, C: Controller>(
         .await?;
 
     // Timeout for advertising is 300s
-    match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+    match with_timeout(Duration::from_secs(5), advertiser.accept()).await {
         Ok(conn_res) => {
             let conn = conn_res?.with_attribute_server(server)?;
             info!("[adv] connection established");
