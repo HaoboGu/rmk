@@ -24,10 +24,10 @@ use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM};
+use crate::config::keyboard_macros::macro_config::MACRO_SPACE_SIZE;
 use crate::config::StorageConfig;
 use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::light::LedIndicator;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::BUILD_HASH;
@@ -599,7 +599,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        config: StorageConfig,
+        config: &StorageConfig,
     ) -> Self {
         // Check storage setting
         assert!(

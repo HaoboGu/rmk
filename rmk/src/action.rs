@@ -147,6 +147,15 @@ pub enum Action {
     ///
     /// Uses 0xEA0 ~ 0xEBF. Serialized as 1110|101|layer_num(5bits)
     LayerToggleOnly(u8),
+    /// Triggers the Macro at the 'index'.
+    /// this is an alternative trigger to
+    /// Macro keycodes (0x500 ~ 0x5FF; KeyCode::Macro0 ~ KeyCode::Macro31
+    /// e.g. `Action::TriggerMacro(6)`` will trigger the same Macro as `Action::Key(KeyCode::Macro6)`
+    /// the main purpose for this enum variant is to easily extend to more than 32 macros (to 256)
+    /// without introducing new Keycodes.
+    ///
+    /// Uses 0xF00 ~ 0xFFF. Serialized as 1111|macro_idx(8bits)
+    TriggerMacro(u8),
 }
 
 impl Action {
@@ -160,6 +169,7 @@ impl Action {
             Action::LayerToggle(layer) => 0xE60 | (layer as u16),
             Action::DefaultLayer(layer) => 0xE80 | (layer as u16),
             Action::LayerToggleOnly(layer) => 0xEA0 | (layer as u16),
+            Action::TriggerMacro(macro_idx) => 0xF00 | (macro_idx as u16),
         }
     }
 
