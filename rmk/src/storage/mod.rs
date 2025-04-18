@@ -29,6 +29,9 @@ use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::light::LedIndicator;
+#[cfg(all(feature = "_ble", feature = "split"))]
+use crate::split::ble::PeerAddress;
+
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::BUILD_HASH;
 
@@ -46,6 +49,9 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(feature = "_ble")]
     // Current active BLE profile number
     ActiveBleProfile(u8),
+    #[cfg(feature = "_ble")]
+    // Peer address
+    PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
     // Clear info of given slot number
@@ -95,6 +101,8 @@ pub(crate) enum StorageKeys {
     EncoderKeys,
     ForkData,
     #[cfg(feature = "_ble")]
+    PeerAddress = 0xED,
+    #[cfg(feature = "_ble")]
     ActiveBleProfile = 0xEE,
     #[cfg(feature = "_ble")]
     BleBondInfo = 0xEF,
@@ -114,6 +122,8 @@ impl StorageKeys {
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
             10 => Some(StorageKeys::ForkData),
+            #[cfg(feature = "_ble")]
+            0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
             0xEE => Some(StorageKeys::ActiveBleProfile),
             #[cfg(feature = "_ble")]
@@ -136,6 +146,8 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
+    #[cfg(feature = "_ble")]
+    PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
     BondInfo(ProfileInfo),
     #[cfg(feature = "_ble")]
@@ -160,13 +172,19 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
 pub(crate) fn get_combo_key(idx: usize) -> u32 {
     (0x3000 + idx) as u32
 }
-pub(crate) fn get_fork_key(idx: usize) -> u32 {
-    (0x4000 + idx) as u32
-}
 
 /// Get the key to retrieve the encoder config from the storage.
 pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: usize, layer: usize) -> u32 {
     (0x4000 + idx + NUM_ENCODER * layer) as u32
+}
+
+pub(crate) fn get_fork_key(idx: usize) -> u32 {
+    (0x5000 + idx) as u32
+}
+
+/// Get the key to retrieve the peer address from the storage.
+pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
+    0x6000 + peer_id as u32
 }
 
 impl Value<'_> for StorageData {
@@ -267,6 +285,16 @@ impl Value<'_> for StorageData {
                 buffer[0] = StorageKeys::ConnectionType as u8;
                 buffer[1] = *ty;
                 Ok(2)
+            }
+            StorageData::PeerAddress(p) => {
+                if buffer.len() < 9 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::PeerAddress as u8;
+                buffer[1] = p.peer_id;
+                buffer[2] = if p.is_valid { 1 } else { 0 };
+                buffer[3..9].copy_from_slice(&p.address);
+                Ok(9)
             }
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(slot_num) => {
@@ -436,6 +464,20 @@ impl Value<'_> for StorageData {
                         bindable,
                     }))
                 }
+                StorageKeys::PeerAddress => {
+                    if buffer.len() < 9 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let peer_id = buffer[1];
+                    let is_valid = buffer[2] != 0;
+                    let mut address = [0u8; 6];
+                    address.copy_from_slice(&buffer[3..9]);
+                    Ok(StorageData::PeerAddress(PeerAddress {
+                        peer_id,
+                        is_valid,
+                        address,
+                    }))
+                }
                 #[cfg(feature = "_ble")]
                 StorageKeys::ActiveBleProfile => {
                     if buffer.len() < 2 {
@@ -491,6 +533,8 @@ impl StorageData {
             StorageData::ForkData(_) => {
                 panic!("To get fork key for ForkData, use `get_fork_key` instead");
             }
+            #[cfg(feature = "_ble")]
+            StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "_ble")]
@@ -566,7 +610,7 @@ pub struct Storage<
 > {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
-    buffer: [u8; get_buffer_size()],
+    pub(crate) buffer: [u8; get_buffer_size()],
 }
 
 /// Read out storage config, update and then save back.
@@ -782,7 +826,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                #[cfg(feature = "_ble")]
                 FlashOperationMessage::WriteFork(fork) => {
                     let key = get_fork_key(fork.idx);
                     store_item(
@@ -792,6 +835,20 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &mut self.buffer,
                         &key,
                         &StorageData::ForkData(fork),
+                    )
+                    .await
+                }
+                #[cfg(feature = "_ble")]
+                FlashOperationMessage::PeerAddress(peer) => {
+                    let key = get_peer_address_key(peer.peer_id);
+                    let data = StorageData::PeerAddress(peer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &data,
                     )
                     .await
                 }
@@ -1086,6 +1143,25 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         if let Some(StorageData::BondInfo(info)) = read_data {
             Ok(Some(info))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(feature = "_ble")]
+    pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
+        let read_data = fetch_item::<u32, StorageData, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &get_peer_address_key(peer_id),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::PeerAddress(data)) = read_data {
+            Ok(Some(data))
         } else {
             Ok(None)
         }

@@ -52,10 +52,10 @@ pub const BONDED_DEVICE_NUM: usize = 8;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-const CONNECTIONS_MAX: usize = 4;
+pub(crate) const CONNECTIONS_MAX: usize = 4;
 
 /// Max number of L2CAP channels
-const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
 
 /// L2CAP MTU size
 pub(crate) const L2CAP_MTU: usize = 255;
