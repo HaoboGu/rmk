@@ -286,6 +286,7 @@ impl Value<'_> for StorageData {
                 buffer[1] = *ty;
                 Ok(2)
             }
+            #[cfg(feature = "_ble")]
             StorageData::PeerAddress(p) => {
                 if buffer.len() < 9 {
                     return Err(SerializationError::BufferTooSmall);
@@ -464,6 +465,7 @@ impl Value<'_> for StorageData {
                         bindable,
                     }))
                 }
+                #[cfg(feature = "_ble")]
                 StorageKeys::PeerAddress => {
                     if buffer.len() < 9 {
                         return Err(SerializationError::InvalidData);
