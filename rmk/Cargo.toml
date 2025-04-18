@@ -81,6 +81,7 @@ document-features = "0.2"
 
 # Used in testing
 critical-section = { version = "1.2", optional = true }
+usbd-hid-macros = "0.8.2"
 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911

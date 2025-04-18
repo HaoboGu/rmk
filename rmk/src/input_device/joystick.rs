@@ -4,9 +4,16 @@ use usbd_hid::descriptor::MouseReport;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::event::Event;
-use crate::hid::Report;
+use crate::hid::{JoystickReport, Report};
 use crate::input_device::{InputProcessor, ProcessResult};
 use crate::keymap::KeyMap;
+
+pub enum MapTo {
+    /// Map to mouse
+    Mouse,
+    /// Map to joystick
+    Joystick,
+}
 
 pub struct JoystickProcessor<
     'a,
@@ -21,6 +28,7 @@ pub struct JoystickProcessor<
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     record: [i16; N],
     resolution: u16,
+    map_to: MapTo,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, const N: usize>
@@ -31,6 +39,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         bias: [i16; N],
         resolution: u16,
         keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+        map_to: MapTo,
     ) -> Self {
         Self {
             transform,
@@ -38,6 +47,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             resolution,
             keymap,
             record: [0; N],
+            map_to,
         }
     }
     async fn generate_report(&mut self) {
@@ -60,15 +70,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         debug!("JoystickProcessor::generate_report: report = {:?}", report);
-        // map to mouse
-        let mouse_report = MouseReport {
-            buttons: 0,
-            x: (report[0].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
-            y: (report[1].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
-            wheel: 0,
-            pan: 0,
-        };
-        self.send_report(Report::MouseReport(mouse_report)).await;
+
+        match self.map_to {
+            MapTo::Mouse => {
+                let mouse_report = MouseReport {
+                    buttons: 0,
+                    x: (report[0].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
+                    y: (report[1].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
+                    wheel: 0,
+                    pan: 0,
+                };
+                self.send_report(Report::MouseReport(mouse_report)).await;
+            }
+            MapTo::Joystick => {
+                let joystick_report = JoystickReport {
+                    x: (report[0].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
+                    y: (report[1].clamp(i8::MIN as i16, i8::MAX as i16)) as i8,
+                };
+                self.send_report(Report::JoystickReport(joystick_report)).await;
+            }
+        }
     }
 }
 

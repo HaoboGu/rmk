@@ -82,6 +82,17 @@ impl<'d, D: Driver<'d>> HidWriterTrait for UsbKeyboardWriter<'_, 'd, D> {
                     .map_err(HidError::UsbEndpointError)?;
                 Ok(n)
             }
+            Report::JoystickReport(joystick_report) => {
+                let mut buf: [u8; 9] = [0; 9];
+                buf[0] = CompositeReportType::Media as u8;
+                let n = serialize(&mut buf[1..], &joystick_report)
+                    .map_err(|_| HidError::ReportSerializeError)?;
+                self.other_writer
+                    .write(&buf[0..n + 1])
+                    .await
+                    .map_err(HidError::UsbEndpointError)?;
+                Ok(n)
+            }
             Report::MediaKeyboardReport(media_keyboard_report) => {
                 let mut buf: [u8; 9] = [0; 9];
                 buf[0] = CompositeReportType::Media as u8;
