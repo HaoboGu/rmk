@@ -283,6 +283,15 @@ pub(crate) async fn run_ble<
                     )
                     .await;
                 }
+                Err(BleHostError::BleHost(Error::Timeout)) => {
+                    warn!("Advertising timeout, sleep and wait for any key");
+
+                    // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                    // Wait for the keyboard report for wake the keyboard
+                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                    continue;
+                }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
