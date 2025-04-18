@@ -49,7 +49,7 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(feature = "_ble")]
     // Current active BLE profile number
     ActiveBleProfile(u8),
-    #[cfg(feature = "_ble")]
+    #[cfg(all(feature = "_ble", feature = "split"))]
     // Peer address
     PeerAddress(PeerAddress),
     // Clear the storage
@@ -100,7 +100,7 @@ pub(crate) enum StorageKeys {
     ConnectionType,
     EncoderKeys,
     ForkData,
-    #[cfg(feature = "_ble")]
+    #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress = 0xED,
     #[cfg(feature = "_ble")]
     ActiveBleProfile = 0xEE,
@@ -122,7 +122,7 @@ impl StorageKeys {
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
             10 => Some(StorageKeys::ForkData),
-            #[cfg(feature = "_ble")]
+            #[cfg(all(feature = "_ble", feature = "split"))]
             0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
             0xEE => Some(StorageKeys::ActiveBleProfile),
@@ -146,7 +146,7 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
-    #[cfg(feature = "_ble")]
+    #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
     BondInfo(ProfileInfo),
@@ -286,7 +286,7 @@ impl Value<'_> for StorageData {
                 buffer[1] = *ty;
                 Ok(2)
             }
-            #[cfg(feature = "_ble")]
+            #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => {
                 if buffer.len() < 9 {
                     return Err(SerializationError::BufferTooSmall);
@@ -465,7 +465,7 @@ impl Value<'_> for StorageData {
                         bindable,
                     }))
                 }
-                #[cfg(feature = "_ble")]
+                #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
                     if buffer.len() < 9 {
                         return Err(SerializationError::InvalidData);
@@ -535,7 +535,7 @@ impl StorageData {
             StorageData::ForkData(_) => {
                 panic!("To get fork key for ForkData, use `get_fork_key` instead");
             }
-            #[cfg(feature = "_ble")]
+            #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
@@ -840,7 +840,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                #[cfg(feature = "_ble")]
+                #[cfg(all(feature = "_ble", feature = "split"))]
                 FlashOperationMessage::PeerAddress(peer) => {
                     let key = get_peer_address_key(peer.peer_id);
                     let data = StorageData::PeerAddress(peer);
@@ -1150,7 +1150,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
     }
 
-    #[cfg(feature = "_ble")]
+    #[cfg(all(feature = "_ble", feature = "split"))]
     pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
         let read_data = fetch_item::<u32, StorageData, _>(
             &mut self.flash,

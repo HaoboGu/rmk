@@ -6,7 +6,6 @@ use trouble_host::prelude::*;
 
 use crate::ble::trouble::{CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU};
 use crate::boot::reboot_keyboard;
-use crate::split::ble::central::HAND_STATE;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
