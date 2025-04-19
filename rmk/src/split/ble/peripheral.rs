@@ -1,25 +1,14 @@
 use embassy_futures::join::join;
-use embassy_futures::select::{select, Either};
 use embassy_time::Timer;
-use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::{CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU};
-use crate::boot::reboot_keyboard;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
 
 #[cfg(feature = "storage")]
-use {
-    super::PeerAddress,
-    crate::storage::Storage,
-    crate::storage::{get_peer_address_key, StorageData},
-    embedded_storage_async::nor_flash::NorFlash,
-    sequential_storage::cache::NoCache,
-    sequential_storage::map::store_item,
-};
+use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -115,142 +104,67 @@ impl<'stack, 'server, 'c> SplitWriter for BleSplitPeripheralDriver<'stack, 'serv
     }
 }
 
-pub async fn discover_central<
-    'a,
+/// Initialize and run the nRF peripheral keyboard service via BLE.
+///
+/// # Arguments
+///
+/// * `id` - The id of the peripheral
+/// * `central_addr` - The address of the central
+/// * `stack` - The stack to use
+pub async fn initialize_nrf_ble_split_peripheral_and_run<
+    'stack,
+    's,
     C: Controller,
-    RNG: RngCore + CryptoRng,
-    #[cfg(feature = "storage")] F: NorFlash,
+    F: NorFlash,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    peri_id: usize,
-    static_addr: [u8; 6],
-    controller: C,
-    random_generator: &mut RNG,
-    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
-    #[cfg(feature = "storage")] storage: &'a mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-) {
-    // Special addresses for central and peripheral pairing
-    let central_address = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
-    let peripheral_address = [0x7e, 0xff, 0x73, peri_id as u8, 0x66, 0xe3];
-
-    // Initialize trouble host stack
-    let stack = trouble_host::new(controller, resources)
-        .set_random_address(Address::random(peripheral_address))
-        .set_random_generator_seed(random_generator);
-
-    let Host {
-        mut peripheral, runner, ..
-    } = stack.build();
-
-    let peri_task = async {
-        let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
-        loop {
-            match split_peripheral_advertise(central_address, &mut peripheral, &server).await {
-                Ok(conn) => {
-                    info!("Conected to the central");
-                    let mut driver = BleSplitPeripheralDriver::new(&server, &conn);
-                    // Wait for cccd to be set
-                    loop {
-                        match driver.conn.next().await {
-                            GattConnectionEvent::Gatt {
-                                event: Result::Ok(GattEvent::Write(e)),
-                            } => {
-                                info!("Gatt write event: {:?}", e.handle());
-                                break;
-                            }
-                            _ => continue,
-                        }
-                    }
-                    // Write local static address to central
-                    loop {
-                        let message = SplitMessage::Address(static_addr);
-                        if let Err(e) = driver.write(&message).await {
-                            error!("BLE notify error: {:?}", e);
-                            continue;
-                        }
-                        break;
-                    }
-                    // Wait for central to send local address
-                    let addr = loop {
-                        match driver.read().await {
-                            Ok(SplitMessage::Address(addr)) => {
-                                info!("Received split addr message: {:?}", addr);
-                                break addr;
-                            }
-                            Err(e) => {
-                                error!("BLE read error: {:?}", e);
-                                continue;
-                            }
-                            _ => continue,
-                        }
-                    };
-                    info!("Disconnected from the central");
-                    break addr;
-                }
-                Err(e) => {
-                    #[cfg(feature = "defmt")]
-                    let e = defmt::Debug2Format(&e);
-                    error!("Advertise error: {:?}", e);
-                    Timer::after_millis(500).await;
-                    continue;
-                }
-            }
-        }
-    };
-
-    match select(ble_task(runner), peri_task).await {
-        Either::Second(addr) => {
-            #[cfg(feature = "storage")]
-            {
-                // Write peer address to storage
-                let key = get_peer_address_key(0);
-                let data = StorageData::PeerAddress(PeerAddress::new(0, true, addr));
-                let _ = store_item(
-                    &mut storage.flash,
-                    storage.storage_range.clone(),
-                    &mut NoCache::new(),
-                    &mut storage.buffer,
-                    &key,
-                    &data,
-                )
-                .await;
-            }
-        }
-        _ => (),
-    }
-
-    info!("Central discovered, rebooting");
-    // embassy_time::Timer::after_secs(5).await;
-    // Reboot keyboard after the central is discovered
-    reboot_keyboard();
-}
-
-/// Initialize and run the nRF peripheral keyboard service via BLE.
-///
-/// # Arguments
-///
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller>(
-    central_addr: [u8; 6],
+    id: usize,
     stack: &'stack Stack<'stack, C>,
+    storage: &'s mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let Host {
         mut peripheral, runner, ..
     } = stack.build();
+
+    // First, read central address from storage
+    let mut central_saved = false;
+    let central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
+        if central_addr.is_valid {
+            central_saved = true;
+            Some(central_addr.address)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-            match split_peripheral_advertise(central_addr, &mut peripheral, &server).await {
+            match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Conected to the central");
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
+                    // Save central address to storage if the central address is not saved
+                    if !central_saved {
+                        info!("Saving central address to storage");
+                        if let Ok(()) = storage
+                            .write_peer_address(PeerAddress {
+                                peer_id: 0,
+                                is_valid: true,
+                                address: conn.raw().peer_address().into_inner(),
+                            })
+                            .await
+                        {
+                            central_saved = true;
+                        }
+                    }
+                    // Start run peripheral service
                     peripheral.run().await;
                     info!("Disconnected from the central");
                 }
@@ -270,13 +184,43 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller>(
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn split_peripheral_advertise<'a, 'b, C: Controller>(
-    central_addr: [u8; 6],
+    id: usize,
+    central_addr: Option<[u8; 6]>,
     peripheral: &mut Peripheral<'a, C>,
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b>, BleHostError<C::Error>> {
-    let advertisement = Advertisement::ConnectableNonscannableDirected {
-        peer: Address::random(central_addr),
+    let mut advertiser_data = [0; 31];
+    let advertisement = match central_addr {
+        Some(addr) => Advertisement::ConnectableNonscannableDirected {
+            peer: Address::random(addr),
+        },
+        None => {
+            // No central address provided, so we advertise as undirected
+            AdStructure::encode_slice(
+                &[
+                    AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+                    AdStructure::ServiceUuids128(&[
+                        // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
+                        [
+                            70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8,
+                            213u8, 77u8,
+                        ],
+                    ]),
+                    AdStructure::ManufacturerSpecificData {
+                        company_identifier: 0xe118,
+                        payload: &[id as u8],
+                    },
+                ],
+                &mut advertiser_data[..],
+            )?;
+            info!("[error] advertising data: {:?}", advertiser_data);
+            Advertisement::ConnectableScannableUndirected {
+                adv_data: &advertiser_data[..],
+                scan_data: &[],
+            }
+        }
     };
+
     let advertiser = peripheral
         .advertise(&AdvertisementParameters::default(), advertisement)
         .await?;

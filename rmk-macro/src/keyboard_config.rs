@@ -380,6 +380,7 @@ impl KeyboardConfig {
                         }
                     },
                 }?;
+                // FIXME: input device for split keyboard is not supported yet
                 Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
@@ -952,11 +953,20 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
     let num_col = keyboard_config.layout.cols as usize;
     let num_row = keyboard_config.layout.rows as usize;
     let num_layer = keyboard_config.layout.layers as usize;
-
+    let num_encoder = match &keyboard_config.board {
+        BoardConfig::Split(_split_config) => {
+            // TODO: encoder config for split keyboard
+            0
+        }
+        BoardConfig::UniBody(uni_body_config) => {
+            uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
+        }
+    };
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
+        pub(crate) const NUM_ENCODER: usize = #num_encoder;
         static KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,

@@ -313,7 +313,16 @@ pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
         #[cfg(feature = "split")]
         crate::split::ble::central::STACK_STARTED.signal(true);
 
+        #[cfg(not(feature = "split"))]
         if let Err(e) = runner.run().await {
+            panic!("[ble_task] error: {:?}", e);
+        }
+
+        #[cfg(feature = "split")]
+        if let Err(e) = runner
+            .run_with_handler(&crate::split::ble::central::ScanHandler {})
+            .await
+        {
             panic!("[ble_task] error: {:?}", e);
         }
     }
