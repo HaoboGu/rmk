@@ -26,7 +26,7 @@ use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -106,9 +106,8 @@ async fn main(spawner: Spawner) {
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<3072>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
-    let central_addr = ble_addr();
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
 
     // Initialize flash
     let flash = Flash::take(mpsl, p.NVMC);

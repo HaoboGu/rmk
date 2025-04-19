@@ -1,16 +1,24 @@
 use core::sync::atomic::Ordering;
 
+use bt_hci::cmd::le::LeSetScanParams;
+use bt_hci::controller::ControllerCmdSync;
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
 use embassy_time::Duration;
+use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
 
 use crate::ble::trouble::L2CAP_MTU;
+use crate::channel::FLASH_CHANNEL;
+#[cfg(feature = "storage")]
+use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
+use crate::storage::{FlashOperationMessage, Storage};
 use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
+pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -28,20 +36,115 @@ struct BleSplitCentralServer {
     service: SplitBleCentralService,
 }
 
+/// Read peripheral addresses from storage.
+///
+/// # Arguments
+///
+/// * `storage` - The storage to read peripheral addresses from
+pub async fn read_peripheral_addresses<
+    const PERI_NUM: usize,
+    F: NorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
+    storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
+) -> heapless::Vec<Option<[u8; 6]>, PERI_NUM> {
+    let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
+    for id in 0..PERI_NUM {
+        if let Ok(Some(peer_address)) = storage.read_peer_address(id as u8).await {
+            if peer_address.is_valid {
+                peripheral_addresses.push(Some(peer_address.address)).unwrap();
+                continue;
+            }
+        }
+        peripheral_addresses.push(None).unwrap();
+    }
+    peripheral_addresses
+}
+
+// When no peripheral address is saved, the central should first scan for peripheral.
+// This handler is used to handle the scan result.
+pub(crate) struct ScanHandler {}
+
+impl EventHandler for ScanHandler {
+    fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        while let Some(Ok(report)) = it.next() {
+            // Check advertisement data
+            if report.data.len() < 25 {
+                continue;
+            }
+            if report.data[4] == 0x07
+                && report.data[5..].starts_with(&[
+                    // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
+                    70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8,
+                    77u8,
+                ])
+                && report.data[21..25] == [0x04, 0xff, 0x18, 0xe1]
+            {
+                // Uuid and manufacturer specific data check passed
+                let peripheral_id = report.data[25];
+                info!("Found split peripheral: id={}, addr={}", peripheral_id, report.addr);
+                PERIPHERAL_FOUND.signal((peripheral_id, report.addr));
+                break;
+            }
+        }
+    }
+}
+
 pub(crate) async fn run_ble_peripheral_manager<
     'a,
-    C: Controller,
+    C: Controller + ControllerCmdSync<LeSetScanParams>,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
 >(
-    id: usize,
-    addr: [u8; 6],
+    peripheral_id: usize,
+    addr: Option<[u8; 6]>,
     stack: &'a Stack<'a, C>,
 ) {
+    let address = match addr {
+        Some(addr) => Address::random(addr),
+        None => {
+            let Host { central, .. } = stack.build();
+            info!("No peripheral address is saved, scan for peripheral first");
+            wait_for_stack_started().await;
+            let mut scanner = Scanner::new(central);
+            let scan_config = ScanConfig {
+                active: false,
+                ..Default::default()
+            };
+            let addr = if let Ok(_session) = scanner.scan(&scan_config).await {
+                loop {
+                    let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
+                    if found_peripheral_id == peripheral_id as u8 {
+                        // Peripheral found, save the peripheral's address to flash
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                found_peripheral_id,
+                                true,
+                                addr.into_inner(),
+                            )))
+                            .await;
+                        // Then connect to the peripheral
+                        break Address::random(addr.into_inner());
+                    } else {
+                        // Not this peripheral, signal the value back and continue
+                        PERIPHERAL_FOUND.signal((found_peripheral_id, addr));
+                        embassy_time::Timer::after_millis(500).await;
+                        continue;
+                    }
+                }
+            } else {
+                panic!("Failed to start peripheral scanning");
+            };
+            addr
+        }
+    };
+
     let Host { mut central, .. } = stack.build();
-    let address: Address = Address::random(addr);
     info!("Peripheral peer address: {:?}", address);
     let config = ConnectConfig {
         connect_params: ConnectParams {
@@ -59,9 +162,13 @@ pub(crate) async fn run_ble_peripheral_manager<
     wait_for_stack_started().await;
     loop {
         info!("Connecting peripheral");
-        if let Err(e) =
-            connect_and_run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, stack, &mut central, &config)
-                .await
+        if let Err(e) = connect_and_run_peripheral_manager::<_, ROW, COL, ROW_OFFSET, COL_OFFSET>(
+            peripheral_id,
+            stack,
+            &mut central,
+            &config,
+        )
+        .await
         {
             #[cfg(feature = "defmt")]
             let e = defmt::Debug2Format(&e);
