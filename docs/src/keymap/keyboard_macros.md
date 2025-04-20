@@ -13,7 +13,7 @@ They are in `rmk::config::keyboard_macros::keyboard_macro`:
 Execute a key press from any available KeyCode. 
 The boolean flags if the key should be pressed with the shift modifier.
 
-Note that ofther modifiers pressed outside of a sequence with `Text` are disabled.
+Note that other modifiers pressed outside of a sequence with `Text` are disabled.
 
 ### Tap(KeyCode)
 Presses and releases a key. 
@@ -22,11 +22,11 @@ If you don't need this prefer `Text(KeyCode, bool)` above, as the resulting macr
 
 ### Press(KeyCode)
 Press (and hold) a keycode.
-Usefull for modifier keys.
+Useful for modifier keys.
 
 ### Release(KeyCode)
 Release (a formerly pressed) keycode.
-Usefull for modifier keys.
+Useful for modifier keys.
 
 ### Delay(u16)
 Wait the given time in ms before executing the next macro operation.
@@ -34,7 +34,7 @@ Wait the given time in ms before executing the next macro operation.
 ### End
 This marks the end of a macro sequence.
 Don't use it: 
-The code removes all occurences and adds one marker to the end of every sequence to be sure the sequences are terminated correctly.
+The code removes all occurrences and adds one marker to the end of every sequence to be sure the sequences are terminated correctly.
 
 ## Configure a macro sequence
 ### via the configuration file
@@ -46,7 +46,7 @@ Within it a field `macro_sequences` has to be set.
 This is in binary format (`[u8]`) and can only be as long as `MACRO_SPACE_SIZE`, which is set to 256.
 
 The maximum number of Macros depends on the length of the sequences:
-The space consued is MacroOperations * 3 + Number of Macros (where the operation `text` is only 1/3).
+The space consumed is MacroOperations * 3 + Number of Macros (where the operation `text` is only 1/3).
 
 The code is silently cutting anything longer than 256 bytes!
 So if your last macro is not complete you used too much space.
@@ -79,9 +79,9 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 }
 ```
 This code defines two macro sequences which produce "Hello" and "World".
-(As mentioned above prefere the first Macro for text only output. The first macro sequence is 6 bytes long, the second 22 bytes.)
+(As mentioned above prefer the first Macro for text only output. The first macro sequence is 6 bytes long, the second 22 bytes.)
 
-For text output there is a convinience function: `to_macro_sequence(text: &str) -> heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>`.
+For text output there is a convenience function: `to_macro_sequence(text: &str) -> heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>`.
 
 This function converts a `&str` into a sequence of `MacroOperation::Text`.
 The above example would be:
@@ -97,7 +97,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 Note that you are still limited to the ascii characters defined as `KeyCode`s. For example, you can't enter a German
 Umlaut (`ü`) or unicode. 
-If you enter an illigal character it will be converted to `X`.
+If you enter an illegal character it will be converted to `X`.
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS).
 For example, in MacOS with a en-US layout you can define the following sequence to enter a `ü`:
@@ -152,10 +152,10 @@ KeyAction::Single(Action::TriggerMacro(0))
 
 #### with `Combo` (chording)
 Combining with Combo allows for a quite powerful feature: Chording.
-Chording comes for the curt room stenography and has its name from playing chords, like on a guitar.
-Chording is pressing a few letters to emmit multiple letters.
+Chording comes for the courtroom stenography and has its name from playing chords, like on a guitar.
+Chording is pressing a few letters to emit multiple letters.
 
-Thus one can press only the beginning of a word can write the whole word.
+Thus, one can press only the beginning of a word to write the whole word.
 For example, pressing `T` & `Y` could write `type`, pressing `T` & `Y`& `G` could write `typing`.
 If you want to implement this behavior we recommend using an extra layer, so rolling over `T` and `Y` will not accidentally execute the macro, but only when a layer toggle key is pressed as well.
 
@@ -199,7 +199,7 @@ Note that instead of having a second macro for all verbs (normal and `ing` form)
         timeout: Duration::from_millis(50),
     }
 ```
-With the configuration above pressing `T` & `Y` writes `type` and pressing `G` rewrites it to `typing`.
+With the configuration above pressing `T` & `Y` writes `type` and pressing `G` changes it to `typing`.
 
 
 ### with forks
@@ -237,7 +237,7 @@ pub(crate) fn get_forks() -> ForksConfig {
 
 ## Tips
 ### small and capital version of a word
-If you want to spell a macro in small letters, but occationally with the first letter capitalised, you can do so in the following way:
+If you want to spell a macro in small letters, but occationally with the first letter capitalized, you can do so in the following way:
 
 For example, you might want to use a combo for the rare letter `q`.
 And as this letter mostly comes as `qu` you want to use a macro for that.
