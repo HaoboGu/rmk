@@ -228,9 +228,9 @@ pub(crate) async fn process_vial<
                 if let Some(encoder_layer) = encoder_map.get(layer as usize) {
                     if let Some(encoder) = encoder_layer.get(index as usize) {
                         let clockwise = to_via_keycode(encoder.clockwise());
-                        BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
                         let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
-                        BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
+                        BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
+                        BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
                         return;
                     }
                 }
@@ -247,7 +247,7 @@ pub(crate) async fn process_vial<
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            let _encoder = if let Some(ref mut encoder_map) = &mut keymap.borrow_mut().encoders {
+            let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
                 if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
                     if let Some(encoder) = encoder_layer.get_mut(index as usize) {
                         if clockwise == 1 {
@@ -298,10 +298,7 @@ fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Optio
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-fn vial_combo_mut(
-    combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>,
-    idx: usize,
-) -> Option<(usize, &mut Combo)> {
+fn vial_combo_mut(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &mut Combo)> {
     combos
         .iter_mut()
         .enumerate()
