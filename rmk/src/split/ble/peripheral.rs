@@ -4,8 +4,6 @@ use embassy_futures::join::join;
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::{CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU};
-use crate::boot::reboot_keyboard;
 use crate::split::ble::central::HAND_STATE;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
@@ -202,6 +200,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             peer: Address::random(addr),
         },
         None => {
+            info!("No central address provided, so we advertise as undirected");
             // No central address provided, so we advertise as undirected
             AdStructure::encode_slice(
                 &[
