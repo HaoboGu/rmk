@@ -1138,7 +1138,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_user(&mut self, key: KeyCode, key_event: KeyEvent) {
-        debug!("Processing user key: {}, event: {}", key, key_event);
+        debug!("Processing user key: {:?}, event: {:?}", key, key_event);
         #[cfg(feature = "_ble")]
         {
             use crate::ble::trouble::profile::BleProfileAction;
