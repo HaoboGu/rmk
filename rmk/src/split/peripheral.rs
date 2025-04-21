@@ -13,6 +13,8 @@ use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
 use crate::storage::Storage;
 use crate::CONNECTION_STATE;
+#[cfg(all(feature = "_ble", feature = "storage"))]
+use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 
 /// Run the split peripheral service.
 ///
@@ -80,6 +82,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         SplitMessage::ConnectionState(state) => {
                             info!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                        }
+                        #[cfg(all(feature = "_ble", feature = "storage"))]
+                        SplitMessage::ClearPeer => {
+                            // Clear the peer address
+                            FLASH_CHANNEL
+                                .send(crate::storage::FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    0, false, [0; 6],
+                                )))
+                                .await;
                         }
                         _ => (),
                     },
