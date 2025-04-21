@@ -9,10 +9,10 @@ use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL, SPLIT_MESSAGE_PUBLISHER};
 use crate::event::{Event, KeyEvent};
 use crate::input_device::InputDevice;
-use crate::split::ble::PeerAddress;
 use crate::CONNECTION_STATE;
-#[cfg(feature = "storage")]
-use {crate::channel::FLASH_CHANNEL, crate::storage::FlashOperationMessage};
+
+#[cfg(all(feature = "storage", feature = "_ble"))]
+use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
