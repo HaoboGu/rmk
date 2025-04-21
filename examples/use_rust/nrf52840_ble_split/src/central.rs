@@ -31,6 +31,7 @@ use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncod
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
+use rmk::split::ble::central::read_peripheral_addresses;
 use rmk::split::central::{run_peripheral_manager, CentralMatrix};
 use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
 use static_cell::StaticCell;
@@ -89,6 +90,14 @@ fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     saadc
 }
 
+fn ble_addr() -> [u8; 6] {
+    let ficr = embassy_nrf::pac::FICR;
+    let high = u64::from(ficr.deviceid(1).read());
+    let addr = high << 32 | u64::from(ficr.deviceid(0).read());
+    let addr = addr | 0x0000_c000_0000_0000;
+    unwrap!(addr.to_le_bytes()[..6].try_into())
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello RMK BLE!");
@@ -123,10 +132,8 @@ async fn main(spawner: Spawner) {
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<8192>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
-    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
-    let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
 
     // Initialize usb driver
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
@@ -191,6 +198,9 @@ async fn main(spawner: Spawner) {
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
 
+    // Read peripheral address from storage
+    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 1>(&mut storage).await;
+
     // Initialize the light controller
     let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
@@ -215,7 +225,7 @@ async fn main(spawner: Spawner) {
         },
         keyboard.run(),
         join(
-            run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addr, &stack),
+            run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addrs[0], &stack),
             run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
         ),
     )

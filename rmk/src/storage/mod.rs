@@ -603,6 +603,11 @@ pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
     embassy_embedded_hal::adapter::BlockingAsync::new(flash)
 }
 
+#[cfg(feature = "split")]
+pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(flash: F, storage_config: StorageConfig) -> Storage<F, 0, 0, 0, 0> {
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, storage_config).await
+}
+
 pub struct Storage<
     F: AsyncNorFlash,
     const ROW: usize,
@@ -1167,6 +1172,23 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         } else {
             Ok(None)
         }
+    }
+
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    pub async fn write_peer_address(&mut self, peer_address: PeerAddress) -> Result<(), ()> {
+        let peer_id = peer_address.peer_id;
+        let item = StorageData::PeerAddress(peer_address);
+
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &get_peer_address_key(peer_id),
+            &item,
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))
     }
 }
 

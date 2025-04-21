@@ -4,18 +4,36 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-use crate::keyboard_config::KeyboardConfig;
+use crate::keyboard_config::{BoardConfig, KeyboardConfig};
 use crate::keycode_alias::KEYCODE_ALIAS;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {
+    let num_encoder = match &keyboard_config.board {
+        BoardConfig::UniBody(uni_body_config) => {
+            uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
+        }
+        BoardConfig::Split(_split_config) => {
+            // TODO: encoder config for split keyboard
+            0
+        }
+    };
+    let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; num_encoder];
+
     let mut layers = vec![];
+    let mut encoder_map = vec![];
     for layer in keyboard_config.layout.keymap.clone() {
         layers.push(expand_layer(layer));
+        encoder_map.push(quote! { [#(#encoders), *] });
     }
+
     return quote! {
         pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
+        }
+
+        pub const fn get_default_encoder_map() -> [[::rmk::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+            [#(#encoder_map), *]
         }
     };
 }

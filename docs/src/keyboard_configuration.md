@@ -26,7 +26,7 @@ The config file contains almost EVERYTHING to customize a keyboard. For the full
 
 The following are the available tables and related documentaion available in `keyboard.toml`:
 
-- [Keyboard and matrix](configuration/matrix.md): basic information and physical key matrix definition of the keyboard
+- [Keyboard and matrix](configuration/keyboard_matrix.md): basic information and physical key matrix definition of the keyboard
 - [Layout](configuration/layout.md): layout and default keymap configuration of the keyboard
 - [Split keyboard](configuration/split.md): split keyboard configuration
 - [Storage](configuration/storage.md): configuration for storage, which is used for on-board config and keymap
