@@ -32,4 +32,6 @@ pub(crate) enum SplitMessage {
     ConnectionState(bool),
     /// BLE Address, used in syncing address between central and peripheral
     Address([u8; 6]),
+    /// Clear the saved peer info
+    ClearPeer,
 }

@@ -1,6 +1,7 @@
 use core::sync::atomic::Ordering;
 
 use embassy_futures::join::join;
+use embassy_futures::select::select;
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
@@ -134,7 +135,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
 
     // First, read central address from storage
     let mut central_saved = false;
-    let central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
+    let mut central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
         if central_addr.is_valid {
             central_saved = true;
             Some(central_addr.address)
@@ -166,10 +167,11 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                             .await
                         {
                             central_saved = true;
+                            central_addr = Some(conn.raw().peer_address().into_inner());
                         }
                     }
                     // Start run peripheral service
-                    peripheral.run().await;
+                    select(storage.run(), peripheral.run()).await;
                     HAND_STATE.store(false, Ordering::Relaxed);
                     info!("Disconnected from the central");
                 }

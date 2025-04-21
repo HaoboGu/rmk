@@ -1,9 +1,6 @@
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
-use embedded_storage_async::nor_flash::NorFlash;
-#[cfg(feature = "_ble")]
-use trouble_host::prelude::*;
 
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
@@ -11,8 +8,11 @@ use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
-use crate::storage::Storage;
 use crate::CONNECTION_STATE;
+#[cfg(all(feature = "_ble", feature = "storage"))]
+use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
+#[cfg(feature = "_ble")]
+use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
 /// Run the split peripheral service.
 ///
@@ -80,6 +80,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         SplitMessage::ConnectionState(state) => {
                             info!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                        }
+                        #[cfg(all(feature = "_ble", feature = "storage"))]
+                        SplitMessage::ClearPeer => {
+                            // Clear the peer address
+                            FLASH_CHANNEL
+                                .send(crate::storage::FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    0, false, [0; 6],
+                                )))
+                                .await;
                         }
                         _ => (),
                     },

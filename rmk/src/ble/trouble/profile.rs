@@ -13,7 +13,7 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
-use crate::ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM};
+use crate::ble::trouble::{ACTIVE_PROFILE, NUM_BLE_PROFILE};
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
 
@@ -63,7 +63,7 @@ pub(crate) enum BleProfileAction {
 #[cfg(feature = "_ble")]
 pub struct ProfileManager<'a, C: Controller> {
     /// List of bonded devices
-    bonded_devices: heapless::Vec<ProfileInfo, BONDED_DEVICE_NUM>,
+    bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
     /// BLE stack
     stack: &'a Stack<'a, C>,
 }
@@ -94,7 +94,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         use crate::storage::{StorageData, StorageKeys};
 
         self.bonded_devices.clear();
-        for slot_num in 0..BONDED_DEVICE_NUM {
+        for slot_num in 0..NUM_BLE_PROFILE {
             if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await {
                 if !info.removed {
                     if let Err(e) = self.bonded_devices.push(info) {
@@ -279,7 +279,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                         }
                         BleProfileAction::NextProfile => {
                             let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst) + 1;
-                            profile = profile % BONDED_DEVICE_NUM as u8;
+                            profile = profile % NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }

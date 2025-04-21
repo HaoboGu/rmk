@@ -604,7 +604,10 @@ pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
 }
 
 #[cfg(feature = "split")]
-pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(flash: F, storage_config: StorageConfig) -> Storage<F, 0, 0, 0, 0> {
+pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
+    flash: F,
+    storage_config: StorageConfig,
+) -> Storage<F, 0, 0, 0, 0> {
     Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, storage_config).await
 }
 
@@ -1128,8 +1131,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         )
         .await
         {
-            // if config.enable && config.build_hash == BUILD_HASH {
-            if config.enable {
+            if config.enable && config.build_hash == BUILD_HASH {
+                // if config.enable {
                 return true;
             }
         }
