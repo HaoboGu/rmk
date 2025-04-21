@@ -873,58 +873,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
         } else if key.is_user() {
-            #[cfg(feature = "_ble")]
-            {
-                use crate::ble::trouble::profile::BleProfileAction;
-                use crate::ble::trouble::NUM_BLE_PROFILE;
-                use crate::channel::BLE_PROFILE_CHANNEL;
-                // Get user key id
-                let id = key as u8 - KeyCode::User0 as u8;
-                if key_event.pressed {
-                    // Clear Peer is processed when pressed
-                    if id == NUM_BLE_PROFILE as u8 + 4 {
-                        #[cfg(feature = "split")]
-                        if key_event.pressed {
-                            // Wait for 5s, if the key is still pressed, clear split peer info
-                            // If there's any other key event received during this period, skip
-                            match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
-                                Either::First(_) => {
-                                    // Timeout reached, send clear peer message
-                                    info!("Clear peer");
-                                    if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
-                                        publisher.publish_immediate(crate::split::SplitMessage::ClearPeer);
-                                    }
-                                }
-                                Either::Second(e) => {
-                                    // Received a new key event before timeout, add to unprocessed list
-                                    if self.unprocessed_events.push(e).is_err() {
-                                        warn!("unprocessed event queue is full, dropping event");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Other user keys are processed when released
-                    if id < NUM_BLE_PROFILE as u8 {
-                        info!("Switch to profile: {}", id);
-                        // User0~7: Swtich to the specific profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::SwitchProfile(id)).await;
-                    } else if id == NUM_BLE_PROFILE as u8 {
-                        // User8: Next profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::NextProfile).await;
-                    } else if id == NUM_BLE_PROFILE as u8 + 1 {
-                        // User9: Previous profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::PreviousProfile).await;
-                    } else if id == NUM_BLE_PROFILE as u8 + 2 {
-                        // User10: Clear profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearProfile).await;
-                    } else if id == NUM_BLE_PROFILE as u8 + 3 {
-                        // User11:
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
-                    }
-                }
-            }
+            self.process_user(key, key_event).await;
         } else if key.is_basic() {
             self.process_basic(key, key_event).await;
         } else if key.is_macro() {
@@ -933,7 +882,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key.is_combo() {
             self.process_action_combo(key, key_event).await;
         } else if key.is_boot() {
-            self.process_boot(key, key_event).await;
+            self.process_boot(key, key_event);
         } else {
             warn!("Unsupported key: {:?}", key);
         }
@@ -1188,7 +1137,63 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_boot(&mut self, key: KeyCode, key_event: KeyEvent) {
+    async fn process_user(&mut self, key: KeyCode, key_event: KeyEvent) {
+        debug!("Processing user key: {}, event: {}", key, key_event);
+        #[cfg(feature = "_ble")]
+        {
+            use crate::ble::trouble::profile::BleProfileAction;
+            use crate::ble::trouble::NUM_BLE_PROFILE;
+            use crate::channel::BLE_PROFILE_CHANNEL;
+            // Get user key id
+            let id = key as u8 - KeyCode::User0 as u8;
+            if key_event.pressed {
+                // Clear Peer is processed when pressed
+                if id == NUM_BLE_PROFILE as u8 + 4 {
+                    #[cfg(feature = "split")]
+                    if key_event.pressed {
+                        // Wait for 5s, if the key is still pressed, clear split peer info
+                        // If there's any other key event received during this period, skip
+                        match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
+                            Either::First(_) => {
+                                // Timeout reached, send clear peer message
+                                info!("Clear peer");
+                                if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
+                                    publisher.publish_immediate(crate::split::SplitMessage::ClearPeer);
+                                }
+                            }
+                            Either::Second(e) => {
+                                // Received a new key event before timeout, add to unprocessed list
+                                if self.unprocessed_events.push(e).is_err() {
+                                    warn!("unprocessed event queue is full, dropping event");
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Other user keys are processed when released
+                if id < NUM_BLE_PROFILE as u8 {
+                    info!("Switch to profile: {}", id);
+                    // User0~7: Swtich to the specific profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::SwitchProfile(id)).await;
+                } else if id == NUM_BLE_PROFILE as u8 {
+                    // User8: Next profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::NextProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 1 {
+                    // User9: Previous profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::PreviousProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 2 {
+                    // User10: Clear profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 3 {
+                    // User11:
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
+                }
+            }
+        }
+    }
+
+    fn process_boot(&mut self, key: KeyCode, key_event: KeyEvent) {
         // When releasing the key, process the boot action
         if !key_event.pressed {
             match key {
@@ -1500,13 +1505,13 @@ mod test {
     }
 
     // Init logger for tests
-    // #[ctor::ctor]
-    // fn init_log() {
-    //     let _ = env_logger::builder()
-    //         .filter_level(log::LevelFilter::Debug)
-    //         .is_test(true)
-    //         .try_init();
-    // }
+    #[ctor::ctor]
+    fn init_log() {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+    }
 
     #[rustfmt::skip]
     pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
