@@ -46,16 +46,16 @@ pub(crate) mod ble_server;
 pub(crate) mod profile;
 
 /// Maximum number of bonded devices
-pub const BONDED_DEVICE_NUM: usize = 8;
+pub const NUM_BLE_PROFILE: usize = 3;
 
 /// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-const CONNECTIONS_MAX: usize = 4;
+pub(crate) const CONNECTIONS_MAX: usize = 4;
 
 /// Max number of L2CAP channels
-const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
 
 /// L2CAP MTU size
 pub(crate) const L2CAP_MTU: usize = 255;
@@ -283,6 +283,15 @@ pub(crate) async fn run_ble<
                     )
                     .await;
                 }
+                Err(BleHostError::BleHost(Error::Timeout)) => {
+                    warn!("Advertising timeout, sleep and wait for any key");
+
+                    // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                    // Wait for the keyboard report for wake the keyboard
+                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                    continue;
+                }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
@@ -304,7 +313,16 @@ pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
         #[cfg(feature = "split")]
         crate::split::ble::central::STACK_STARTED.signal(true);
 
+        #[cfg(not(feature = "split"))]
         if let Err(e) = runner.run().await {
+            panic!("[ble_task] error: {:?}", e);
+        }
+
+        #[cfg(feature = "split")]
+        if let Err(e) = runner
+            .run_with_handler(&crate::split::ble::central::ScanHandler {})
+            .await
+        {
             panic!("[ble_task] error: {:?}", e);
         }
     }

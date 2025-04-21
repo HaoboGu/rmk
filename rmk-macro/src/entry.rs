@@ -58,9 +58,9 @@ pub(crate) fn rmk_entry_select(
         quote! {}
     } else {
         quote! {
-                ::rmk::run_processor_chain! (
-                    ::rmk::channel::EVENT_CHANNEL=> [#(#processors),*],
-                )
+            ::rmk::run_processor_chain! (
+                ::rmk::channel::EVENT_CHANNEL=> [#(#processors),*],
+            )
         }
     };
     let entry = match &keyboard_config.board {
@@ -117,11 +117,10 @@ pub(crate) fn rmk_entry_select(
                         let col = p.cols;
                         let row_offset = p.row_offset;
                         let col_offset = p.col_offset;
-                        let peripheral_ble_addr = p.ble_addr.expect("No ble_addr defined for peripheral");
                         tasks.push(quote! {
                             ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                                 #idx,
-                                [#(#peripheral_ble_addr), *],
+                                peripheral_addrs[#idx],
                                 &stack,
                             )
                         });

@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
+use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
 use crate::{ChipModel, ChipSeries};
 
 // Default implementations of chip initialization
@@ -146,15 +146,7 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
 }
 
 fn get_ble_addr(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    if let BoardConfig::Split(split_config) = &keyboard_config.board {
-        let addr = split_config
-            .central
-            .ble_addr
-            .expect("No BLE address defined for BLE split keyboard");
-        quote! {
-            [#(#addr), *]
-        }
-    } else if keyboard_config.chip.series == ChipSeries::Nrf52 {
+    if keyboard_config.chip.series == ChipSeries::Nrf52 {
         quote! {
             {
                 let ficr = ::embassy_nrf::pac::FICR;
