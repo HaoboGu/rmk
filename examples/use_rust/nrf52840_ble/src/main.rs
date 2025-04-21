@@ -12,9 +12,9 @@ use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
-use embassy_nrf::{bind_interrupts, pac, rng, usb, Peri};
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::{Peri, bind_interrupts, pac, rng, usb};
 use keymap::{COL, ROW};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
@@ -26,14 +26,14 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
+use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
-use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -129,10 +129,8 @@ async fn main(spawner: Spawner) {
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<4096>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
-    let central_addr = ble_addr();
-    info!("Local address: {:x}", central_addr);
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
 
     // Initialize usb driver
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
@@ -198,7 +196,12 @@ async fn main(spawner: Spawner) {
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
     let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
 
-    let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], 12000, None);
+    let mut adc_device = NrfAdc::new(
+        saadc,
+        [AnalogEventType::Battery],
+        embassy_time::Duration::from_secs(12),
+        None,
+    );
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
     let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);

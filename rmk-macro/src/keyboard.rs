@@ -122,10 +122,10 @@ fn expand_main(
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
-    let split_central_config = expand_split_central_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
     let keymap_and_storage = expand_keymap_and_storage(keyboard_config);
+    let split_central_config = expand_split_central_config(keyboard_config);
     let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
     let controller = expand_controller_init(keyboard_config);
@@ -167,9 +167,6 @@ fn expand_main(
             // Initialize matrix config as `(input_pins, output_pins)` or `direct_pins`
             #matrix_config
 
-            // Initialize split central config(if needed)
-            #split_central_config
-
             // Initialize flash driver as `flash` and storage config as `storage_config`
             #flash_init
 
@@ -196,6 +193,9 @@ fn expand_main(
 
             // Initialize input device config as `input_device_config` and processor as `processor`
             #input_device_config
+
+            // Initialize split central config(if needed)
+            #split_central_config
 
             // TODO: Initialize other devices and processors
 

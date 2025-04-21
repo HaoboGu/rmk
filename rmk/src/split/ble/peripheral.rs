@@ -1,4 +1,5 @@
 use embassy_futures::join::join;
+use embassy_futures::select::select;
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
@@ -7,10 +8,13 @@ use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
 
+#[cfg(feature = "storage")]
+use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
+
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
 pub(crate) struct SplitBleService {
-    #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
+    #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify, indicate)]
     pub(crate) message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
 
     #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write_without_response, read, notify)]
@@ -58,10 +62,10 @@ impl<'stack, 'server, 'c> SplitReader for BleSplitPeripheralDriver<'stack, 'serv
                             GattEvent::Write(event) => {
                                 // Write to peripheral
                                 if event.handle() == self.message_to_peripheral.handle {
-                                    info!("Got message from central: {:?}", event.data());
+                                    trace!("Got message from central: {:?}", event.data());
                                     match postcard::from_bytes::<SplitMessage>(&event.data()) {
                                         Ok(message) => {
-                                            info!("Message from central: {:?}", message);
+                                            trace!("Message from central: {:?}", message);
                                             break message;
                                         }
                                         Err(e) => error!("Postcard deserialize split message error: {}", e),
@@ -105,26 +109,65 @@ impl<'stack, 'server, 'c> SplitWriter for BleSplitPeripheralDriver<'stack, 'serv
 ///
 /// # Arguments
 ///
-/// * `input_pins` - input gpio pins
-/// * `output_pins` - output gpio pins
-/// * `spawner` - embassy task spawner, used to spawn nrf_softdevice background task
-pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller>(
-    central_addr: [u8; 6],
+/// * `id` - The id of the peripheral
+/// * `central_addr` - The address of the central
+/// * `stack` - The stack to use
+pub async fn initialize_nrf_ble_split_peripheral_and_run<
+    'stack,
+    's,
+    C: Controller,
+    F: NorFlash,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
+    id: usize,
     stack: &'stack Stack<'stack, C>,
+    storage: &'s mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let Host {
         mut peripheral, runner, ..
     } = stack.build();
 
+    // First, read central address from storage
+    let mut central_saved = false;
+    let mut central_addr = if let Ok(Some(central_addr)) = storage.read_peer_address(0).await {
+        if central_addr.is_valid {
+            central_saved = true;
+            Some(central_addr.address)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
-            match advertise(central_addr, &mut peripheral, &server).await {
+            match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Conected to the central");
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
-                    peripheral.run().await;
+                    // Save central address to storage if the central address is not saved
+                    if !central_saved {
+                        info!("Saving central address to storage");
+                        if let Ok(()) = storage
+                            .write_peer_address(PeerAddress {
+                                peer_id: 0,
+                                is_valid: true,
+                                address: conn.raw().peer_address().into_inner(),
+                            })
+                            .await
+                        {
+                            central_saved = true;
+                            central_addr = Some(conn.raw().peer_address().into_inner());
+                        }
+                    }
+                    // Start run peripheral service
+                    select(storage.run(), peripheral.run()).await;
                     info!("Disconnected from the central");
                 }
                 Err(e) => {
@@ -142,14 +185,44 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'stack, C: Controller>(
 }
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
-async fn advertise<'a, 'b, C: Controller>(
-    central_addr: [u8; 6],
+async fn split_peripheral_advertise<'a, 'b, C: Controller>(
+    id: usize,
+    central_addr: Option<[u8; 6]>,
     peripheral: &mut Peripheral<'a, C>,
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b>, BleHostError<C::Error>> {
-    let advertisement = Advertisement::ConnectableNonscannableDirected {
-        peer: Address::random(central_addr),
+    let mut advertiser_data = [0; 31];
+    let advertisement = match central_addr {
+        Some(addr) => Advertisement::ConnectableNonscannableDirected {
+            peer: Address::random(addr),
+        },
+        None => {
+            // No central address provided, so we advertise as undirected
+            AdStructure::encode_slice(
+                &[
+                    AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+                    AdStructure::ServiceUuids128(&[
+                        // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
+                        [
+                            70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8,
+                            213u8, 77u8,
+                        ],
+                    ]),
+                    AdStructure::ManufacturerSpecificData {
+                        company_identifier: 0xe118,
+                        payload: &[id as u8],
+                    },
+                ],
+                &mut advertiser_data[..],
+            )?;
+            info!("[error] advertising data: {:?}", advertiser_data);
+            Advertisement::ConnectableScannableUndirected {
+                adv_data: &advertiser_data[..],
+                scan_data: &[],
+            }
+        }
     };
+
     let advertiser = peripheral
         .advertise(&AdvertisementParameters::default(), advertisement)
         .await?;

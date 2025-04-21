@@ -6,7 +6,7 @@
 
 ```toml
 [behavior]
-tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+tri_layer = { uppper = 1, lower = 2, adjust = 3 }  
 one_shot = { timeout = "1s" }
 ```
 
@@ -23,6 +23,8 @@ lower = 2
 adjust = 3
 ```
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
+
+Note that `"#layer_name"` could also be used in place of layer numbers.
 
 ### Tap Hold
 
@@ -80,10 +82,10 @@ combos = [
 ]
 ```
 
-#### Fork
+### Fork
 
 In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule:
-If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However with `kept_modifiers` some of them can be kept instead of automatic suppression.
+If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
 Fork configuration includes the following parameters:
 
@@ -126,7 +128,7 @@ forks = [
   { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1", bindable = false },
 
   # Shift + Backspace output Delete key (inside a layer tap/hold)
-  { trigger = "LT(2,Backspace)", negative_output = "LT(2,Backspace)", positive_output = "LT(2,Delete)", match_any = "LShift|RShift" },
+  { trigger = "LT(2, Backspace)", negative_output = "LT(2, Backspace)", positive_output = "LT(2, Delete)", match_any = "LShift|RShift" },
 
   # Ctrl + play/pause will send next track. MediaPlayPause -> MediaNextTrack
   # Ctrl + Shift + play/pause will send previous track. MediaPlayPause -> MediaPrevTrack
@@ -146,7 +148,7 @@ forks = [
 ```
 
 Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
-For example if `LT(2,Backspace)` is in your keymap, then trigger = `Backspace` will NOT work, you should "replace" the full key and use `trigger = "LT(2,Backspace)` instead, like in the last example above.
+For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above.
 You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Vial does not support fork configuration yet.

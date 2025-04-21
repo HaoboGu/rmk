@@ -59,6 +59,7 @@ trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
+bt-hci = { version = "0.3", optional = true }
 
 # nRF dependencies
 embassy-nrf = { version = "0.3.1", features = [
@@ -128,6 +129,7 @@ defmt = [
     "embassy-nrf?/defmt",
     "postcard/use-defmt",
     "trouble-host?/defmt",
+    "bt-hci?/defmt",
     "heapless/defmt-03",
 ]
 
@@ -179,7 +181,7 @@ esp32s3_ble = ["_esp_ble"]
 _esp_ble = ["_ble", "dep:esp-hal"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:rand_core"]
+_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci"]
 
 ## Enable feature if you want to use RP2040 PIO UART
 rp2040_pio = [
