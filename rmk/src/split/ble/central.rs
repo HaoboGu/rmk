@@ -118,6 +118,7 @@ pub(crate) async fn run_ble_peripheral_manager<
                 ..Default::default()
             };
             let addr = if let Ok(_session) = scanner.scan(&scan_config).await {
+                HAND_STATE.store(false, Ordering::Relaxed);
                 loop {
                     let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
                     if found_peripheral_id == peripheral_id as u8 {

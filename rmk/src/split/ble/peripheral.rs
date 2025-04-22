@@ -150,6 +150,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
         loop {
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
+            HAND_STATE.store(false, Ordering::Relaxed);
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Conected to the central");
