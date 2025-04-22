@@ -41,7 +41,7 @@ pub struct LayoutTomlConfig {
     pub cols: u8,
     pub layers: u8,
     pub keymap: Option<Vec<Vec<Vec<String>>>>, // will be deprecated in the future
-    pub matrix_map: Option<String>, //temporarily allow both matrix_map and keymap to be set
+    pub matrix_map: Option<String>,            //temporarily allow both matrix_map and keymap to be set
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -370,8 +370,8 @@ pub struct PointingDeviceConfig {
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
 pub enum CommunicationProtocol {
-    I2C(I2cConfig),
-    SPI(SpiConfig),
+    I2c(I2cConfig),
+    Spi(SpiConfig),
 }
 
 /// SPI config

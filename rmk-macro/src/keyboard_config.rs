@@ -134,17 +134,11 @@ pub(crate) enum CommunicationConfig {
 
 impl CommunicationConfig {
     pub(crate) fn ble_enabled(&self) -> bool {
-        match self {
-            CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => true,
-            _ => false,
-        }
+        matches!(self, CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _))
     }
 
     pub(crate) fn usb_enabled(&self) -> bool {
-        match self {
-            CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => true,
-            _ => false,
-        }
+        matches!(self, CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _))
     }
 
     pub(crate) fn get_ble_config(&self) -> Option<BleConfig> {
@@ -175,7 +169,7 @@ impl KeyboardConfig {
         config.communication = Self::get_communication_config(
             config.communication,
             toml_config.ble,
-            toml_config.keyboard.usb_enable.clone(),
+            toml_config.keyboard.usb_enable,
             &config.chip,
         )?;
 
@@ -212,7 +206,7 @@ impl KeyboardConfig {
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
         if config.keyboard.board.is_none() == config.keyboard.chip.is_none() {
-            let message = format!("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both");
+            let message = "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both";
             return rmk_compile_error!(message);
         }
 
@@ -366,14 +360,14 @@ impl KeyboardConfig {
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
-                        if m.input_pins == None || m.output_pins == None {
+                        if m.input_pins.is_none() |m.output_pins.is_none() {
                             rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
                         } else {
                             Ok(())
                         }
                     },
                     MatrixType::direct_pin => {
-                        if m.direct_pins == None {
+                        if m.direct_pins.is_none() {
                             rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
                         } else {
                             Ok(())
@@ -381,7 +375,7 @@ impl KeyboardConfig {
                     },
                 }?;
                 // FIXME: input device for split keyboard is not supported yet
-                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
+                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or_default()}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
             _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
@@ -717,19 +711,16 @@ impl KeyboardConfig {
                     return rmk_compile_error!(error_message);
                 }
             }
-        } else {
-            if layers.len() > 0 {
-                return rmk_compile_error!(
-                    "layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string()
-                );
-            }
+        } else if !layers.is_empty() {
+            return rmk_compile_error!(
+                "layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string()
+            );
         }
 
         if let Some(sequence_to_grid) = &sequence_to_grid {
             // collect layer names first
-            let mut layer_number = 0u32;
             let mut layer_names = HashMap::<String, u32>::new();
-            for layer in &layers {
+            for (layer_number, layer) in layers.iter().enumerate() {
                 if let Some(name) = &layer.name {
                     if layer_names.contains_key(name) {
                         let error_message = format!(
@@ -738,9 +729,8 @@ impl KeyboardConfig {
                         );
                         return rmk_compile_error!(error_message);
                     }
-                    layer_names.insert(name.clone(), layer_number);
+                    layer_names.insert(name.clone(), layer_number as u32);
                 }
-                layer_number += 1;
             }
             if layers.len() > layout.layers as usize {
                 return rmk_compile_error!(
@@ -752,8 +742,7 @@ impl KeyboardConfig {
             // using the previously defined sequence_to_grid mapping to fill in the
             // grid shaped classic keymaps
             let layer_names = layer_names; //make it immutable
-            let mut layer_number = 0;
-            for layer in &layers {
+            for (layer_number, layer) in layers.iter().enumerate() {
                 // each layer should contain a sequence of keymap entries
                 // their number and order should match the number and order of the above parsed matrix map
                 match Self::keymap_parser(&layer.keys, &aliases, &layer_names) {
@@ -761,8 +750,7 @@ impl KeyboardConfig {
                         let mut legacy_keymap =
                             vec![vec!["No".to_string(); layout.cols as usize]; layout.rows as usize];
 
-                        let mut sequence_number: usize = 0;
-                        for key_action in key_action_sequence {
+                        for (sequence_number, key_action) in key_action_sequence.into_iter().enumerate() {
                             if sequence_number >= sequence_to_grid.len() {
                                 let error_message = format!(
                                     "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)", &layer.name.clone().unwrap_or_default(), layer_number);
@@ -770,7 +758,6 @@ impl KeyboardConfig {
                             }
                             let (row, col) = sequence_to_grid[sequence_number];
                             legacy_keymap[row as usize][col as usize] = key_action.clone();
-                            sequence_number += 1;
                         }
 
                         final_layers.push(legacy_keymap);
@@ -782,7 +769,6 @@ impl KeyboardConfig {
                         return rmk_compile_error!(error_message);
                     }
                 }
-                layer_number += 1;
             }
         }
 
@@ -807,16 +793,15 @@ impl KeyboardConfig {
         }
 
         // Row
-        if let Some(_) = final_layers.iter().map(|r| r.len()).find(|l| *l as u8 != layout.rows) {
+        if final_layers.iter().any(|r| r.len() as u8 != layout.rows) {
             return rmk_compile_error!(
                 "keyboard.toml: Row number in keymap doesn't match with [layout.row]".to_string()
             );
         }
         // Col
-        if let Some(_) = final_layers
+        if final_layers
             .iter()
-            .filter_map(|r| r.iter().map(|c| c.len()).find(|l| *l as u8 != layout.cols))
-            .next()
+            .any(|r| r.iter().any(|c| c.len() as u8 != layout.cols))
         {
             // Find a row whose col num is wrong
             return rmk_compile_error!(
@@ -938,7 +923,7 @@ pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStr
         Ok(c) => Ok(c),
         Err(e) => {
             let msg = format!("Parse `keyboard.toml` error: {}", e.message());
-            return rmk_compile_error!(msg);
+            rmk_compile_error!(msg)
         }
     }
 }

@@ -17,8 +17,8 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: 
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Some(i) = &item_fn.attrs[0].meta.path().get_ident() {
-                            if i.to_string() == "bind_interrupt" {
+                        if let Some(i) = item_fn.attrs[0].meta.path().get_ident() {
+                            if i == "bind_interrupt" {
                                 let content = &item_fn.block.stmts;
                                 return Some(quote! {
                                     #(#content)*
