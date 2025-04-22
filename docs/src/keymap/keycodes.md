@@ -4,7 +4,7 @@ Here is the list of the available keycode in RMK.
 
 When used in configuration files, all keycodes are case-insensitive.
 
-## Normal keycodes
+## Alphabetical keys
 
 | Keycode | Aliases | Usage |
 |---------|---------|-------|
@@ -34,6 +34,21 @@ When used in configuration files, all keycodes are case-insensitive.
 | `X`     |         | `X` and `x` |
 | `Y`     |         | `Y` and `y` |
 | `Z`     |         | `Z` and `z` |
+
+## Numerical keys
+
+| Keycode | Aliases | Usage |
+|---------|---------|-------|
+| `Kc1`   | `1`     | `1` and `!` |
+| `Kc2`   | `2`     | `2` and `@` |
+| `Kc3`   | `3`     | `3` and `#` |
+| `Kc4`   | `4`     | `4` and `$` |
+| `Kc5`   | `5`     | `5` and `%` |
+| `Kc6`   | `6`     | `6` and `^` |
+| `Kc7`   | `7`     | `7` and `&` |
+| `Kc8`   | `8`     | `8` and `*` |
+| `Kc9`   | `9`     | `9` and `(` |
+| `Kc0`   | `0`     | `0` and `)` |
 
 ## Special keycodes
 
