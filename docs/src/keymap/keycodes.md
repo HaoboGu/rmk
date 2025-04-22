@@ -50,7 +50,30 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Kc9`   | `9`     | `9` and `(` |
 | `Kc0`   | `0`     | `0` and `)` |
 
-## Special keycodes
+## Punctation keys
+
+| Keycode | Aliases | Usage |
+|---------|---------|-------|
+| `Enter` | `ent`   | Enter |
+| `Escape` | `esc`  | Escape |
+| `Backspace` | `bspc` | Backspace |
+| `Tab`   |         | Tab   |
+| `Space` | `spc`   | Spacebar |
+| `Minus` | `mins`, `-` | `-` and `_` |
+| `Equal` | `eql`, `=` | `=` and `+` |
+| `LeftBracket` | `left_bracket`, `lbrc`, `[` | `[` and `{` |
+| `RightBracket` | `right_bracket`, `rbrc`, `]` | `]` and `}` |
+| `Backslash` | `bsls`, `\` | `\` and `\|` |
+| `NonusHash` | `nonus_hash`, `nuhs` | Non-US `#` and `~` |
+| `Semicolon` | `scln`, `;` | `;` and `:` |
+| `Quote` | `quot`, `'` | `'` and `"` |
+| `Grave` | `grv`, <code>&#96;</code>  | <code>&#96;</code> and `~` |
+| `Comma` | `comm`, `,` | `,` and `<` |
+| `Dot`   | `.`     | `.` and `>` |
+| `Slash` | `slsh`, `/` | `/` and `?` |
+| `NonusBackslash` | `nonus_backslash`, `nubs` | Non-US `\` and `\|` |
+
+## Special keys
 
 | Keycode | Aliases | Usage |
 |---------|---------|-------|
