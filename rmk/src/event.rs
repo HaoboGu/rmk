@@ -1,7 +1,8 @@
+use embassy_time::Instant;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::input_device::rotary_encoder::Direction;
+use crate::{action::Action, input_device::rotary_encoder::Direction};
 
 /// Raw events from input devices and keyboards
 ///
@@ -92,4 +93,15 @@ pub struct KeyEvent {
     pub row: u8,
     pub col: u8,
     pub pressed: bool,
+}
+
+// record pressing tap hold keys
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PressedKeyEvent {
+    pub key_event: KeyEvent,
+    pub tap_action: Action,
+    pub hold_action: Action,
+    pub pressed_time: Instant,
+    pub deadline: u64,
 }
