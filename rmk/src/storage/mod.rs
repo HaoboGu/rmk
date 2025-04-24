@@ -13,12 +13,11 @@ use heapless::Vec;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
 use sequential_storage::Error as SSError;
-use trouble_host::IdentityResolvingKey;
 #[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
-    trouble_host::{prelude::*, BondInformation, LongTermKey},
+    trouble_host::{prelude::*, BondInformation, IdentityResolvingKey, LongTermKey},
 };
 
 use self::eeconfig::EeKeymapConfig;
