@@ -73,6 +73,19 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Slash` | `slsh`, `/` | `/` and `?` |
 | `NonusBackslash` | `nonus_backslash`, `nubs` | Non-US `\` and `\|` |
 
+## Modifier keys
+
+| Keycode | Aliases | Usage |
+|---------|---------|-------|
+| `LCtrl` | `l_ctrl`, `leftctrl`, `left_ctrl`, `lctl` | Left Control |
+| `LShift` | `l_shift`, `leftshift`, `left_shift`, `lsft` | Left Shift |
+| `LAlt`  | `l_alt`, `leftalt`, `left_alt`, `lopt` | Left Alt |
+| `LGui`  | `l_gui`, `leftgui`, `left_gui`, `lcmd`, `lwin` | Left GUI |
+| `RCtrl` | `r_ctrl`, `rightctrl`, `right_ctrl`, `rctl` | Right Control |
+| `RShift` | `r_shift`, `rightshift`, `right_shift`, `rsft` | Right Shift |
+| `RAlt`  | `r_alt`, `rightalt`, `right_alt`, `ropt` | Right Alt |
+| `RGui`  | `r_gui`, `rightgui`, `right_gui`, `rcmd`, `rwin` | Right GUI |
+
 ## Special keys
 
 | Keycode | Aliases | Usage |
