@@ -58,15 +58,15 @@ pub(crate) const CONNECTIONS_MAX: usize = 4;
 pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
 
 /// L2CAP MTU size
-pub(crate) const L2CAP_MTU: usize = 255;
+pub(crate) const L2CAP_MTU: usize = 512;
 
 /// Build the BLE stack.
-pub async fn build_ble_stack<'a, C: Controller, RNG: RngCore + CryptoRng>(
+pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + CryptoRng>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
-) -> Stack<'a, C> {
+    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
+) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
@@ -88,7 +88,7 @@ pub(crate) async fn run_ble<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    stack: &'b Stack<'b, C>,
+    stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
@@ -307,7 +307,7 @@ pub(crate) async fn run_ble<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
+pub(crate) async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
     loop {
         // Signal to indicate the stack is started
         #[cfg(feature = "split")]
@@ -332,7 +332,7 @@ pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
 ///
 /// This function will handle the GATT events and process them.
 /// This is how we interact with read and write requests.
-async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) -> Result<(), Error> {
+async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, DefaultPacketPool>) -> Result<(), Error> {
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
     let input_keyboard = server.hid_service.input_keyboard;
@@ -429,7 +429,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                         // Update CCCD table after processing the event
                         if cccd_updated {
                             if let Some(table) = server.get_cccd_table(conn.raw()) {
-                                info!("Updated profile CCCD table: {:?}", table);
                                 UPDATED_CCCD_TABLE.signal(table);
                             }
                         }
@@ -459,9 +458,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn advertise<'a, 'b, C: Controller>(
     name: &'a str,
-    peripheral: &mut Peripheral<'a, C>,
+    peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b Server<'_>,
-) -> Result<GattConnection<'a, 'b>, BleHostError<C::Error>> {
+) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     // Wait for 10ms to ensure the USB is checked
     embassy_time::Timer::after_millis(10).await;
     let mut advertiser_data = [0; 31];
@@ -530,7 +529,10 @@ pub(crate) async fn run_dummy_keyboard<
     dummy_writer.run_writer().await;
 }
 
-pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(stack: &Stack<'_, C>, conn: &GattConnection<'a, 'b>) {
+pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+    stack: &Stack<'_, C, P>,
+    conn: &GattConnection<'a, 'b, P>,
+) {
     // Wait for 5 seconds before setting connection parameters to avoid connection drop
     embassy_time::Timer::after_secs(5).await;
 
@@ -575,6 +577,7 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(stack: &Stack<'_, C>,
             Err(BleHostError::BleHost(Error::Hci(error))) => {
                 if 0x2A == error.to_status().into_inner() {
                     // Busy, retry
+                    info!("[set_conn_params] 2nd time HCI busy: {:?}", error);
                     continue;
                 } else {
                     error!("[set_conn_params] 2nd time HCI error: {:?}", error);
@@ -605,8 +608,8 @@ async fn run_ble_keyboard<
     const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
-    conn: &GattConnection<'a, 'b>,
-    stack: &Stack<'_, C>,
+    conn: &GattConnection<'a, 'b, DefaultPacketPool>,
+    stack: &Stack<'_, C, DefaultPacketPool>,
     light_controller: &mut LightController<Out>,
     keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     rmk_config: &'d mut RmkConfig<'static>,
@@ -623,7 +626,7 @@ async fn run_ble_keyboard<
         .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
         .await
     {
-        if bond_info.info.address == conn.raw().peer_address() {
+        if bond_info.info.identity.match_identity(&conn.raw().peer_identity()) {
             info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
             server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
         }

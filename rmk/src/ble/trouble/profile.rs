@@ -36,8 +36,11 @@ impl Default for ProfileInfo {
             slot_num: 0,
             removed: false,
             info: BondInformation {
+                identity: Identity {
+                    bd_addr: BdAddr::default(),
+                    irk: None,
+                },
                 ltk: LongTermKey(0),
-                address: BdAddr::default(),
             },
             cccd_table: CccdTable::<CCCD_TABLE_SIZE>::default(),
         }
@@ -61,17 +64,17 @@ pub(crate) enum BleProfileAction {
 /// 3. Updating the bonding information of the active profile to the BLE stack
 /// 4. Handling profile switch, clear, and save operations
 #[cfg(feature = "_ble")]
-pub struct ProfileManager<'a, C: Controller> {
+pub struct ProfileManager<'a, C: Controller, P: PacketPool> {
     /// List of bonded devices
     bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
     /// BLE stack
-    stack: &'a Stack<'a, C>,
+    stack: &'a Stack<'a, C, P>,
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, C: Controller> ProfileManager<'a, C> {
+impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C>) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
@@ -127,7 +130,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
         for bond in current_bond_info {
-            if let Err(e) = self.stack.remove_bond_information(bond.address) {
+            if let Err(e) = self.stack.remove_bond_information(bond.identity) {
                 debug!("Remove bond info error: {:?}", e);
             }
         }
@@ -165,6 +168,8 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                 error!("Failed to add bond info: {:?}", e);
             }
         }
+
+        self.update_stack_bonds();
 
         #[cfg(feature = "storage")]
         // Send bonding information to the flash task for saving
