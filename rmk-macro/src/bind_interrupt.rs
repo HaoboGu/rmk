@@ -3,9 +3,9 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::BleConfig;
 use syn::ItemMod;
 
-use crate::config::BleConfig;
 use crate::keyboard_config::{BoardConfig, KeyboardConfig};
 
 // Expand `bind_interrupt!` stuffs

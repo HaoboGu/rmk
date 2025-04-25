@@ -1,6 +1,51 @@
+use std::collections::HashMap;
+
 use serde::de;
 use serde_derive::Deserialize;
-use std::collections::HashMap;
+use serde_inline_default::serde_inline_default;
+
+/// Keyboard constants configuration for performance and hardware limits
+#[serde_inline_default]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyboardConstants {
+    /// Mouse key interval (ms) - controls mouse movement speed
+    #[serde_inline_default(20)]
+    pub mouse_key_interval: u32,
+    /// Mouse wheel interval (ms) - controls scrolling speed
+    #[serde_inline_default(80)]
+    pub mouse_wheel_interval: u32,
+    /// Maximum number of combos keyboard can store
+    #[serde_inline_default(8)]
+    pub combo_max_num: usize,
+    /// Maximum number of keys pressed simultaneously in a combo
+    #[serde_inline_default(4)]
+    pub combo_max_length: usize,
+    /// Maximum number of forks for conditional key actions
+    #[serde_inline_default(8)]
+    pub fork_max_num: usize,
+    /// Maximum number of macros keyboard can store
+    #[serde_inline_default(8)]
+    pub macro_max_num: u8,
+    /// Macro space size in bytes for storing sequences
+    #[serde_inline_default(256)]
+    pub macro_space_size: usize,
+}
+
+/// This separate Default impl is needed when `[constants]` section is not set in keyboard.toml
+impl Default for KeyboardConstants {
+    fn default() -> Self {
+        Self {
+            mouse_key_interval: 20,
+            mouse_wheel_interval: 80,
+            combo_max_num: 8,
+            combo_max_length: 4,
+            fork_max_num: 8,
+            macro_max_num: 8,
+            macro_space_size: 256,
+        }
+    }
+}
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
@@ -16,7 +61,7 @@ pub struct KeyboardTomlConfig {
     pub layer: Option<Vec<LayerTomlConfig>>,
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
-    pub layout: LayoutTomlConfig,
+    pub layout: Option<LayoutTomlConfig>,
     /// Behavior config
     pub behavior: Option<BehaviorConfig>,
     /// Light config
@@ -31,6 +76,9 @@ pub struct KeyboardTomlConfig {
     pub split: Option<SplitConfig>,
     /// Input device config
     pub input_device: Option<InputDeviceConfig>,
+    /// 全局常量配置
+    #[serde(default)]
+    pub constants: KeyboardConstants,
 }
 
 /// Configurations for keyboard layout

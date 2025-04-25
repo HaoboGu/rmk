@@ -1,8 +1,8 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
+use rmk_config::MatrixType;
 
-use crate::config::MatrixType;
 use crate::feature::is_feature_enabled;
 use crate::gpio_config::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,

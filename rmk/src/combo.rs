@@ -2,11 +2,7 @@ use heapless::Vec;
 
 use crate::action::KeyAction;
 use crate::event::KeyEvent;
-
-// Max number of combos
-pub(crate) const COMBO_MAX_NUM: usize = 8;
-// Max size of combos
-pub(crate) const COMBO_MAX_LENGTH: usize = 4;
+use crate::COMBO_MAX_LENGTH;
 
 #[derive(Clone, Debug)]
 pub struct Combo {

@@ -2,16 +2,16 @@
 
 use embassy_sync::channel::Channel;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
+#[cfg(feature = "_ble")]
+use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
+#[cfg(feature = "split")]
+use {crate::split::SplitMessage, embassy_sync::pubsub::PubSubChannel};
 
 use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
 #[cfg(feature = "storage")]
 use crate::storage::FlashOperationMessage;
 use crate::RawMutex;
-#[cfg(feature = "_ble")]
-use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
-#[cfg(feature = "split")]
-use {crate::split::SplitMessage, embassy_sync::pubsub::PubSubChannel};
 
 pub const EVENT_CHANNEL_SIZE: usize = 16;
 pub const REPORT_CHANNEL_SIZE: usize = 16;

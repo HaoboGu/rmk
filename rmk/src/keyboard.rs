@@ -7,20 +7,20 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::action::{Action, KeyAction};
-use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
-use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
+use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
-use crate::keyboard_macro::{MacroOperation, NUM_MACRO};
+use crate::keyboard_macro::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
+use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM, MACRO_MAX_NUM};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -1216,7 +1216,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Get macro index
         if let Some(macro_idx) = key.as_macro_index() {
-            if macro_idx as usize >= NUM_MACRO {
+            if macro_idx >= MACRO_MAX_NUM {
                 error!("Macro idx invalid: {}", macro_idx);
                 return;
             }

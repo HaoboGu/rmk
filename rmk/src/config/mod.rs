@@ -12,14 +12,14 @@ pub use esp_config::BleBatteryConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::combo::Combo;
 use crate::event::{Event, KeyEvent};
-use crate::fork::{Fork, FORK_MAX_NUM};
+use crate::fork::Fork;
 use crate::hid::Report;
 use crate::light::LedIndicator;
 #[cfg(feature = "storage")]
 use crate::storage::FlashOperationMessage;
-use crate::RawMutex;
+use crate::{RawMutex, COMBO_MAX_NUM, FORK_MAX_NUM};
 
 /// The config struct for RMK keyboard.
 ///
