@@ -146,34 +146,6 @@ struct StateBitsMacro {
 }
 
 impl StateBitsMacro {
-    fn new() -> Self {
-        Self {
-            modifiers_left_ctrl: false,
-            modifiers_left_shift: false,
-            modifiers_left_alt: false,
-            modifiers_left_gui: false,
-            modifiers_right_ctrl: false,
-            modifiers_right_shift: false,
-            modifiers_right_alt: false,
-            modifiers_right_gui: false,
-
-            leds_num_lock: false,
-            leds_caps_lock: false,
-            leds_scroll_lock: false,
-            leds_compose: false,
-            leds_kana: false,
-
-            mouse_button1: false,
-            mouse_button2: false,
-            mouse_button3: false,
-            mouse_button4: false,
-            mouse_button5: false,
-            mouse_button6: false,
-            mouse_button7: false,
-            mouse_button8: false,
-        }
-    }
-
     fn is_empty(&self) -> bool {
         !(self.modifiers_left_ctrl
             || self.modifiers_left_shift
@@ -236,7 +208,7 @@ impl quote::ToTokens for StateBitsMacro {
 
 /// Get modifier combination, in types of mod1 | mod2 | ...
 fn parse_state_combination(states_str: &str) -> StateBitsMacro {
-    let mut combination = StateBitsMacro::new();
+    let mut combination = StateBitsMacro::default();
     let tokens = states_str.split_terminator("|");
     tokens.for_each(|w| {
         let w = w.trim();
@@ -279,9 +251,9 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
                 let trigger = parse_key(fork.trigger.to_owned());
                 let negative_output = parse_key(fork.negative_output.to_owned());
                 let positive_output = parse_key(fork.positive_output.to_owned());
-                let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
-                let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
-                let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(&s)).unwrap_or(StateBitsMacro::new());
+                let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
+                let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
+                let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let bindable = fork.bindable.unwrap_or(false);
 
                 if match_any.is_empty() && match_none.is_empty() {

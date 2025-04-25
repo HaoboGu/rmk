@@ -32,7 +32,7 @@ pub async fn run_peripheral_manager<
 >(
     id: usize,
     #[cfg(feature = "_ble")] addr: Option<[u8; 6]>,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
     #[cfg(not(feature = "_ble"))] receiver: S,
 ) {
     #[cfg(feature = "_ble")]

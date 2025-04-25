@@ -116,9 +116,9 @@ pub(crate) fn expand_chip_init(keyboard_config: &KeyboardConfig, item_mod: &Item
                 }
                 None
             })
-            .unwrap_or(chip_init_default(&keyboard_config))
+            .unwrap_or(chip_init_default(keyboard_config))
     } else {
-        chip_init_default(&keyboard_config)
+        chip_init_default(keyboard_config)
     }
 }
 

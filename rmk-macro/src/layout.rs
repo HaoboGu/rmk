@@ -27,7 +27,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenSt
         encoder_map.push(quote! { [#(#encoders), *] });
     }
 
-    return quote! {
+    quote! {
         pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
@@ -35,7 +35,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenSt
         pub const fn get_default_encoder_map() -> [[::rmk::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
             [#(#encoder_map), *]
         }
-    };
+    }
 }
 
 /// Push rows in the layer
@@ -139,7 +139,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
-                    .filter(|w| w.len() > 0)
+                    .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
@@ -160,9 +160,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     ::rmk::wm!(#ident, #modifiers)
                 }
             } else {
-                return quote! {
+                quote! {
                     compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                }
             }
         }
         s if s.starts_with("MO(") => {
@@ -200,7 +200,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
-                    .filter(|w| w.len() > 0)
+                    .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
@@ -220,9 +220,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     ::rmk::lm!(#layer, #modifiers)
                 }
             } else {
-                return quote! {
+                quote! {
                     compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                }
             }
         }
         s if s.starts_with("LT(") => {
@@ -231,7 +231,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 .trim_end_matches(")")
                 .split_terminator(",")
                 .map(|w| w.trim())
-                .filter(|w| w.len() > 0)
+                .filter(|w| !w.is_empty())
                 .collect();
             if keys.len() != 2 {
                 return quote! {
@@ -273,7 +273,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
-                    .filter(|w| w.len() > 0)
+                    .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
@@ -292,9 +292,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     ::rmk::mt!(#ident, #modifiers)
                 }
             } else {
-                return quote! {
+                quote! {
                     compile_error!("keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                }
             }
         }
         s if s.starts_with("TH(") => {
@@ -302,7 +302,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
-                    .filter(|w| w.len() > 0)
+                    .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
                     return quote! {
@@ -316,9 +316,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     ::rmk::th!(#ident1, #ident2)
                 }
             } else {
-                return quote! {
+                quote! {
                     compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                }
             }
         }
         s if s.starts_with("SHIFTED(") => {
@@ -331,9 +331,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let ident = format_ident!("{}", internal);
                 quote! { ::rmk::shifted!(#ident) }
             } else {
-                return quote! {
+                quote! {
                     compile_error!("keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                }
             }
         }
         _ => get_key_with_alias(key),

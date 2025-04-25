@@ -81,14 +81,10 @@ pub(crate) fn expand_matrix_direct_pins(
     // Get input pin type
     let input_pin_type = get_input_pin_type(chip, async_matrix);
     let rows = direct_pins.len();
-    let cols = if direct_pins.len() == 0 {
-        0
-    } else {
-        direct_pins[0].len()
-    };
+    let cols = direct_pins.first().map_or(0, |row| row.len());
     // Initialize input pins
     pin_initialization.extend(convert_direct_pins_to_initializers(
-        &chip,
+        chip,
         direct_pins,
         async_matrix,
         low_active,
@@ -126,9 +122,9 @@ pub(crate) fn expand_matrix_input_output_pins(
     let output_pin_type = get_output_pin_type(chip);
 
     // Initialize input pins
-    pin_initialization.extend(convert_input_pins_to_initializers(&chip, input_pins, async_matrix));
+    pin_initialization.extend(convert_input_pins_to_initializers(chip, input_pins, async_matrix));
     // Initialize output pins
-    pin_initialization.extend(convert_output_pins_to_initializers(&chip, output_pins));
+    pin_initialization.extend(convert_output_pins_to_initializers(chip, output_pins));
     // Generate a macro that does pin matrix config
     quote! {
         #extra_import

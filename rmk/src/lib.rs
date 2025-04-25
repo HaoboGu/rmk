@@ -37,9 +37,9 @@ use light::{LedIndicator, LightService};
 use matrix::MatrixTrait;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
-pub use trouble_host::prelude::HostResources;
-#[cfg(feature = "_ble")]
 use trouble_host::prelude::*;
+#[cfg(feature = "_ble")]
+pub use trouble_host::prelude::{DefaultPacketPool, HostResources};
 use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
@@ -183,7 +183,7 @@ pub async fn run_rmk<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,

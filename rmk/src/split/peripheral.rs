@@ -34,7 +34,7 @@ pub async fn run_rmk_split_peripheral<
     #[cfg(feature = "_ble")] const NUM_ENCODER: usize,
 >(
     #[cfg(feature = "_ble")] id: usize,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
     #[cfg(feature = "_ble")] storage: &'b mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) {

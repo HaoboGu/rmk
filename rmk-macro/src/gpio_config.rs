@@ -203,7 +203,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
 
 /// Get pin number from pin str.
 /// For example, if the pin str is "PD13", this function will return "13".
-fn get_pin_num_stm32(gpio_name: &String) -> Option<String> {
+fn get_pin_num_stm32(gpio_name: &str) -> Option<String> {
     if gpio_name.len() < 3 {
         None
     } else {
