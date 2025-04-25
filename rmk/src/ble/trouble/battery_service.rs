@@ -18,13 +18,13 @@ pub(crate) struct BatteryService {
     pub(crate) level: u8,
 }
 
-pub(crate) struct BleBatteryServer<'stack, 'server, 'conn> {
+pub(crate) struct BleBatteryServer<'stack, 'server, 'conn, P: PacketPool> {
     pub(crate) battery_level: Characteristic<u8>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server>,
+    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
-impl<'stack, 'server, 'conn> BleBatteryServer<'stack, 'server, 'conn> {
-    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server>) -> Self {
+impl<'stack, 'server, 'conn, P: PacketPool> BleBatteryServer<'stack, 'server, 'conn, P> {
+    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
         Self {
             battery_level: server.battery_service.level,
             conn,
@@ -32,7 +32,7 @@ impl<'stack, 'server, 'conn> BleBatteryServer<'stack, 'server, 'conn> {
     }
 }
 
-impl<'a> BleBatteryServer<'_, '_, '_> {
+impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
     pub(crate) async fn run(&mut self) {
         // Wait 2 seconds, ensure that gatt server has been started
         Timer::after_secs(2).await;
