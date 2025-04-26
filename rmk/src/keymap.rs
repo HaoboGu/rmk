@@ -347,12 +347,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use super::{Combo, _reorder_combos};
     use crate::action::KeyAction;
-    use crate::combo::COMBO_MAX_NUM;
-    use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
+    use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
     use crate::k;
     use crate::keycode::KeyCode;
     use crate::keymap::_fill_vec;
+    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
 
     #[test]
     fn test_fill_vec() {
