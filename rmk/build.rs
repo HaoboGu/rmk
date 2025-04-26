@@ -57,6 +57,7 @@ fn get_constants_str(constants: KeyboardConstants) -> String {
         const_declaration!(pub(crate) MACRO_MAX_NUM = constants.macro_max_num),
         const_declaration!(pub(crate) MACRO_SPACE_SIZE = constants.macro_space_size),
         const_declaration!(pub(crate) FORK_MAX_NUM = constants.fork_max_num),
+        const_declaration!(pub(crate) DEBOUNCE_THRESHOLD = constants.debounce_time),
         format!("pub(crate) const BUILD_HASH: u32 = {:#010x};\n", build_hash),
     ]
     .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())

@@ -30,6 +30,9 @@ pub struct KeyboardConstants {
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
+    /// Default debounce time in ms
+    #[serde_inline_default(20)]
+    pub debounce_time: u16,
 }
 
 /// This separate Default impl is needed when `[constants]` section is not set in keyboard.toml
@@ -43,6 +46,7 @@ impl Default for KeyboardConstants {
             fork_max_num: 8,
             macro_max_num: 8,
             macro_space_size: 256,
+            debounce_time: 20,
         }
     }
 }
