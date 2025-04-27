@@ -51,6 +51,9 @@ pub struct RmkConstantsConfig {
     /// The size of the split message
     #[serde_inline_default(4)]
     pub split_message_channel_size: usize,
+    /// The number of available BLE profiles
+    #[serde_inline_default(3)]
+    pub ble_profiles_num: usize,
 }
 
 /// This separate Default impl is needed when `[rmk]` section is not set in keyboard.toml
@@ -71,6 +74,7 @@ impl Default for RmkConstantsConfig {
             flash_channel_size: 4,
             split_peripherals_num: 1,
             split_message_channel_size: 4,
+            ble_profiles_num: 3,
         }
     }
 }
