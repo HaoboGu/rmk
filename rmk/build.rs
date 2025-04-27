@@ -6,7 +6,7 @@ use std::process::Command;
 use std::{env, fs};
 
 use const_gen::*;
-use rmk_config::{KeyboardConstants, KeyboardTomlConfig};
+use rmk_config::{KeyboardTomlConfig, RmkConstantsConfig};
 
 fn main() {
     // Set the compilation target configuration
@@ -37,7 +37,9 @@ fn main() {
     let user_toml: KeyboardTomlConfig =
         toml::from_str(&user_config_str).expect("Failed to parse KEYBOARD_TOML_PATH file");
 
-    let constants = get_constants_str(user_toml.constants);
+    // FIXME: calculate the number of split peripherals automatically
+
+    let constants = get_constants_str(user_toml.rmk);
 
     // Write to constants.rs file
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -45,7 +47,7 @@ fn main() {
     fs::write(&dest_path, constants).expect("Failed to write constants.rs file");
 }
 
-fn get_constants_str(constants: KeyboardConstants) -> String {
+fn get_constants_str(constants: RmkConstantsConfig) -> String {
     // Compute build hash according to the latest git commit
     let build_hash = compute_build_hash();
     // Add other constants
@@ -58,6 +60,12 @@ fn get_constants_str(constants: KeyboardConstants) -> String {
         const_declaration!(pub(crate) MACRO_SPACE_SIZE = constants.macro_space_size),
         const_declaration!(pub(crate) FORK_MAX_NUM = constants.fork_max_num),
         const_declaration!(pub(crate) DEBOUNCE_THRESHOLD = constants.debounce_time),
+        const_declaration!(pub(crate) EVENT_CHANNEL_SIZE = constants.event_channel_size),
+        const_declaration!(pub(crate) REPORT_CHANNEL_SIZE = constants.report_channel_size),
+        const_declaration!(pub(crate) VIAL_CHANNEL_SIZE = constants.vial_channel_size),
+        const_declaration!(pub(crate) FLASH_CHANNEL_SIZE = constants.flash_channel_size),
+        const_declaration!(pub(crate) SPLIT_PERIPHERALS_NUM = constants.split_peripherals_num),
+        const_declaration!(pub(crate) SPLIT_MESSAGE_CHANNEL_SIZE = constants.split_message_channel_size),
         format!("pub(crate) const BUILD_HASH: u32 = {:#010x};\n", build_hash),
     ]
     .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())

@@ -8,7 +8,7 @@ use serde_inline_default::serde_inline_default;
 #[serde_inline_default]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct KeyboardConstants {
+pub struct RmkConstantsConfig {
     /// Mouse key interval (ms) - controls mouse movement speed
     #[serde_inline_default(20)]
     pub mouse_key_interval: u32,
@@ -33,10 +33,28 @@ pub struct KeyboardConstants {
     /// Default debounce time in ms
     #[serde_inline_default(20)]
     pub debounce_time: u16,
+    /// Event channel size
+    #[serde_inline_default(16)]
+    pub event_channel_size: usize,
+    /// Report channel size
+    #[serde_inline_default(16)]
+    pub report_channel_size: usize,
+    /// Vial channel size
+    #[serde_inline_default(4)]
+    pub vial_channel_size: usize,
+    /// Flash channel size
+    #[serde_inline_default(4)]
+    pub flash_channel_size: usize,
+    /// The number of the split peripherals
+    #[serde_inline_default(1)]
+    pub split_peripherals_num: usize,
+    /// The size of the split message
+    #[serde_inline_default(4)]
+    pub split_message_channel_size: usize,
 }
 
-/// This separate Default impl is needed when `[constants]` section is not set in keyboard.toml
-impl Default for KeyboardConstants {
+/// This separate Default impl is needed when `[rmk]` section is not set in keyboard.toml
+impl Default for RmkConstantsConfig {
     fn default() -> Self {
         Self {
             mouse_key_interval: 20,
@@ -47,6 +65,12 @@ impl Default for KeyboardConstants {
             macro_max_num: 8,
             macro_space_size: 256,
             debounce_time: 20,
+            event_channel_size: 16,
+            report_channel_size: 16,
+            vial_channel_size: 4,
+            flash_channel_size: 4,
+            split_peripherals_num: 1,
+            split_message_channel_size: 4,
         }
     }
 }
@@ -80,9 +104,9 @@ pub struct KeyboardTomlConfig {
     pub split: Option<SplitConfig>,
     /// Input device config
     pub input_device: Option<InputDeviceConfig>,
-    /// 全局常量配置
+    /// RMK config constants
     #[serde(default)]
-    pub constants: KeyboardConstants,
+    pub rmk: RmkConstantsConfig,
 }
 
 /// Configurations for keyboard layout
