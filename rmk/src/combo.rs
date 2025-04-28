@@ -51,7 +51,10 @@ impl Combo {
             }
         }
 
-        debug!("combo {:?} search key action {:?} ", self.output, key_action);
+        debug!(
+            "combo {:?} search key action {:?} ",
+            self.output, key_action
+        );
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
             self.state |= 1 << i;
@@ -78,7 +81,10 @@ impl Combo {
 
         if self.is_all_pressed() {
             self.state = COMBO_TRIGGERED;
-            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
+            debug!(
+                "combo {:?} mark triggered, updated state: {}",
+                self.output, self.state
+            );
         }
         self.output
     }
