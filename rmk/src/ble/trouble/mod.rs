@@ -3,11 +3,12 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
+use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{with_timeout, Duration, Timer};
 use embedded_hal::digital::OutputPin;
-use profile::{UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -32,7 +33,6 @@ use {
 };
 
 use crate::ble::led::BleLedReader;
-use crate::ble::trouble::profile::{ProfileInfo, ProfileManager};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
@@ -43,6 +43,7 @@ use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
+pub(crate) mod device_info;
 pub(crate) mod profile;
 
 /// Maximum number of bonded devices
@@ -142,13 +143,38 @@ pub(crate) async fn run_ble<
         mut peripheral, runner, ..
     } = stack.build();
 
-    // Set conn param
     info!("Starting advertising and GATT service");
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
         name: rmk_config.usb_config.product_name,
         appearance: &appearance::human_interface_device::KEYBOARD,
     }))
     .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.pnp_id,
+            &PnPID {
+                vid_source: VidSource::BluetoothSIG,
+                vendor_id: rmk_config.usb_config.vid,
+                product_id: rmk_config.usb_config.pid,
+                product_version: 0x0001,
+            },
+        )
+        .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.serial_number,
+            &heapless::String::try_from(rmk_config.usb_config.serial_number).unwrap(),
+        )
+        .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.manufacturer_name,
+            &heapless::String::try_from(rmk_config.usb_config.manufacturer).unwrap(),
+        )
+        .unwrap();
 
     #[cfg(not(feature = "_no_usb"))]
     let background_task = join(ble_task(runner), usb_device.run());
