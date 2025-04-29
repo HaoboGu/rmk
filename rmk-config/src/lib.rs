@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::de;
+use serde::Deserialize as SerdeDeserialize;
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
 
@@ -17,12 +18,14 @@ pub struct RmkConstantsConfig {
     pub mouse_wheel_interval: u32,
     /// Maximum number of combos keyboard can store
     #[serde_inline_default(8)]
+    #[serde(deserialize_with = "check_combo_max_num")]
     pub combo_max_num: usize,
     /// Maximum number of keys pressed simultaneously in a combo
     #[serde_inline_default(4)]
     pub combo_max_length: usize,
     /// Maximum number of forks for conditional key actions
     #[serde_inline_default(8)]
+    #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
     /// Maximum number of macros keyboard can store
     #[serde_inline_default(8)]
@@ -54,6 +57,28 @@ pub struct RmkConstantsConfig {
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
+}
+
+fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = SerdeDeserialize::deserialize(deserializer)?;
+    if value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
+    }
+    Ok(value)
+}
+
+fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = SerdeDeserialize::deserialize(deserializer)?;
+    if value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
+    }
+    Ok(value)
 }
 
 /// This separate Default impl is needed when `[rmk]` section is not set in keyboard.toml
