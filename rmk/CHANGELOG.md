@@ -7,16 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Updated
+
+- **BREAKING**: The BLE stack is migrated to [TrouBLE](https://github.com/embassy-rs/trouble/)
+- **BREAKING**: Add `rmk-config` and use `[env]` in `.cargo/config.toml` to configure the path of `keyboard.toml`
+- Optimize the size of buffer used in USB 
+
+### Added
+
+- Battery charging state reader
+- Sleep timeout when advertising
+- Manually pairing between central and peripheral
+- Make constants in RMK configurable via `keyboard.toml`
+
+### Fixed
+
+- Wrong connection state between splits
+- Issue about first adc polling
+- Wrong battery status
+
+## [0.6.1] - 2025-04-11
+
 ### Added
 
 - Repeat key support
+- Basic GraveEscape support
 - Internal pull-up config for encoders
-
 
 ### Fixed
 
 - Wrong GPIO pulls for stm32
 - Combo cannot be triggered correctly when there's overlap between combos 
+- Battery level led indicator failure
 
 ## [0.6.0] - 2025-04-06
 

@@ -1,7 +1,8 @@
 use embassy_time::Instant;
 
-use super::{DebounceState, DebouncerTrait, DEBOUNCE_THRESHOLD};
+use super::{DebounceState, DebouncerTrait};
 use crate::matrix::KeyState;
+use crate::DEBOUNCE_THRESHOLD;
 
 /// Debounce counter info for each key.
 #[derive(Copy, Clone, Debug)]

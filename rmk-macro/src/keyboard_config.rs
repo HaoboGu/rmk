@@ -1,16 +1,16 @@
-use pest::Parser;
-use pest_derive::Parser;
-
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::config::{
+use pest::Parser;
+use pest_derive::Parser;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+use rmk_config::{
     BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo, KeyboardTomlConfig, LayerTomlConfig,
     LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
 };
+use serde::Deserialize;
+
 use crate::default_config::esp32::default_esp32;
 use crate::default_config::nrf52810::default_nrf52810;
 use crate::default_config::nrf52832::default_nrf52832;
@@ -181,7 +181,7 @@ impl KeyboardConfig {
 
         // Layout config
         config.layout = Self::get_layout_from_toml(
-            toml_config.layout,
+            toml_config.layout.expect("layout config is required"),
             toml_config.layer.unwrap_or_default(),
             toml_config.aliases.unwrap_or_default(),
         )?;
@@ -910,7 +910,10 @@ impl KeyboardConfig {
 
 pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStream2> {
     // Read keyboard config file at project root
-    let s = match fs::read_to_string("keyboard.toml") {
+    let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
+        .expect("\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n");
+
+    let s = match fs::read_to_string(config_toml_path) {
         Ok(s) => s,
         Err(e) => {
             let msg = format!("Read keyboard config file `keyboard.toml` error: {}", e);

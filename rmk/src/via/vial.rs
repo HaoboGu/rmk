@@ -4,15 +4,16 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
-use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::combo::Combo;
 use crate::keymap::KeyMap;
 use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
-    combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
+    COMBO_MAX_LENGTH,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)

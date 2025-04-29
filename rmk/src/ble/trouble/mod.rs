@@ -46,9 +46,6 @@ pub(crate) mod ble_server;
 pub(crate) mod device_info;
 pub(crate) mod profile;
 
-/// Maximum number of bonded devices
-pub const NUM_BLE_PROFILE: usize = 3;
-
 /// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 

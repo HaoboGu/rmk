@@ -2,8 +2,8 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{SerialConfig, SplitConfig};
 
-use crate::config::{SerialConfig, SplitConfig};
 use crate::keyboard_config::{BoardConfig, KeyboardConfig};
 use crate::{ChipModel, ChipSeries};
 

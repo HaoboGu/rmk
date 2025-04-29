@@ -1,4 +1,5 @@
-use crate::config::{BleConfig, StorageConfig};
+use rmk_config::{BleConfig, StorageConfig};
+
 use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
 use crate::ChipModel;
 
