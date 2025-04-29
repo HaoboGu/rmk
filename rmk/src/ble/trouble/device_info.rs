@@ -31,7 +31,7 @@ impl AsGatt for PnPID {
 impl Default for PnPID {
     fn default() -> Self {
         Self {
-            vid_source: VidSource::BluetoothSIG,
+            vid_source: VidSource::UsbIF,
             vendor_id: 0xE118,
             product_id: 0x0001,
             product_version: 0x0001,

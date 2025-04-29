@@ -154,7 +154,7 @@ pub(crate) async fn run_ble<
         .set(
             &server.device_info_service.pnp_id,
             &PnPID {
-                vid_source: VidSource::BluetoothSIG,
+                vid_source: VidSource::UsbIF,
                 vendor_id: rmk_config.usb_config.vid,
                 product_id: rmk_config.usb_config.pid,
                 product_version: 0x0001,
