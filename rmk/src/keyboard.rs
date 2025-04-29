@@ -1131,7 +1131,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // But it requires embassy-executor, which is not available for esp-idf-svc.
                 // So now we just block for 20ms for mouse keys.
                 // In the future, we're going to use esp-hal once it have good support for BLE
-                embassy_time::Timer::after_millis(20).await;
+                embassy_time::Timer::after_millis(crate::MOUSE_KEY_INTERVAL as u64).await;
                 KEY_EVENT_CHANNEL.try_send(key_event).ok();
             }
         }
