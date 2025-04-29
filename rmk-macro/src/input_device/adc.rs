@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use rmk_config::{BleConfig, JoystickConfig};
 
-use crate::config::{BleConfig, JoystickConfig};
 use crate::ChipSeries;
 
 pub(crate) fn expand_adc_device(

@@ -11,3 +11,4 @@ rustflags = [
 
 [env]
 ESP_LOG = "trace"
+KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }

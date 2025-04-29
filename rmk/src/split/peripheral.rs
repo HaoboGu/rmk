@@ -1,6 +1,10 @@
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+#[cfg(all(feature = "_ble", feature = "storage"))]
+use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
+#[cfg(feature = "_ble")]
+use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
@@ -9,10 +13,6 @@ use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
 use crate::CONNECTION_STATE;
-#[cfg(all(feature = "_ble", feature = "storage"))]
-use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
-#[cfg(feature = "_ble")]
-use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
 /// Run the split peripheral service.
 ///

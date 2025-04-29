@@ -1,8 +1,8 @@
 //! Initialize light config boilerplate of RMK, including USB or BLE
 //!
 use quote::quote;
+use rmk_config::PinConfig;
 
-use crate::config::PinConfig;
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::keyboard_config::KeyboardConfig;
 use crate::ChipModel;

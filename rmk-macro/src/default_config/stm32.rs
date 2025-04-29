@@ -1,4 +1,5 @@
-use crate::config::StorageConfig;
+use rmk_config::StorageConfig;
+
 use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
 use crate::usb_interrupt_map::get_usb_info;
 use crate::ChipModel;

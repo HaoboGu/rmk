@@ -1,6 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use rmk_config::MatrixType;
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -8,7 +9,6 @@ use crate::bind_interrupt::expand_bind_interrupt;
 use crate::ble::expand_ble_config;
 use crate::chip_init::expand_chip_init;
 use crate::comm::expand_usb_init;
-use crate::config::MatrixType;
 use crate::entry::expand_rmk_entry;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;

@@ -34,6 +34,7 @@ The following are the available tables and related documentaion available in `ke
 - [Input device](configuration/input_device.md): configuration for input devices, such as rotary encoder, joystick, etc.
 - [Wireless/Bluetooth](configuration/wireless.md): configuration for wireless/bluetooth
 - [Light](configuration/light.md): configuration for lights
+- [RMK config](configuration/rmk.md): internal configurations of RMK, such as length of communication channels, number of allowed macros, etc
 - [Appendix](configuration/appendix.md): full spec and references of the `keyboard.toml`
 
 ## TODOs:

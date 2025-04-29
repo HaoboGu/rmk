@@ -2,8 +2,8 @@
 //!
 
 use quote::quote;
+use rmk_config::{CombosConfig, ForksConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 
-use crate::config::{CombosConfig, ForksConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 use crate::keyboard_config::KeyboardConfig;
 use crate::layout::parse_key;
 

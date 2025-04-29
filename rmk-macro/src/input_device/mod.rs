@@ -2,8 +2,8 @@ use adc::expand_adc_device;
 use encoder::expand_encoder_device;
 use proc_macro2::TokenStream;
 use quote::quote;
+use rmk_config::InputDeviceConfig;
 
-use crate::config::InputDeviceConfig;
 use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig, UniBodyConfig};
 
 mod adc;

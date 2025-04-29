@@ -23,17 +23,15 @@ use {
 use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
-use crate::combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM};
+use crate::combo::Combo;
 use crate::config::StorageConfig;
-use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
+use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::keyboard_macro::MACRO_SPACE_SIZE;
 use crate::light::LedIndicator;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
-
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::BUILD_HASH;
+use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -1017,7 +1015,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::ComboData(combo)) = read_data {
-                let mut actions = Vec::<_, COMBO_MAX_LENGTH>::new();
+                let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }

@@ -12,6 +12,7 @@ target
 # ignore Cargo.lock of library, but keep it for binaries
 rmk/Cargo.lock
 rmk-macro/Cargo.lock
+rmk-config/Cargo.lock
 
 # mdbook site
 docs/book

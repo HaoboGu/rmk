@@ -1,9 +1,9 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{MatrixType, SplitBoardConfig};
 use syn::ItemMod;
 
 use crate::chip_init::expand_chip_init;
-use crate::config::{MatrixType, SplitBoardConfig};
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;

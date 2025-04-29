@@ -195,9 +195,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cargo_toml"
-version = "0.21.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fbd1fe9db3ebf71b89060adaf7b0504c2d6a425cf061313099547e382c2e472"
+checksum = "02260d489095346e5cafd04dea8e8cb54d1d74fcd759022a9b72986ebe9a1257"
 dependencies = [
  "serde",
  "toml",
@@ -1612,8 +1612,10 @@ name = "rmk"
 version = "0.6.1"
 dependencies = [
  "bitfield-struct",
+ "bt-hci",
  "byteorder",
  "chrono",
+ "const-gen",
  "cortex-m",
  "crc32fast",
  "defmt 1.0.1",
@@ -1636,13 +1638,27 @@ dependencies = [
  "paste",
  "postcard",
  "rand_core",
+ "rmk-config",
  "rmk-macro",
  "sequential-storage",
  "serde",
+ "serde_derive",
  "ssmarshal",
  "static_cell",
+ "toml",
  "trouble-host",
  "usbd-hid",
+]
+
+[[package]]
+name = "rmk-config"
+version = "0.3.0"
+dependencies = [
+ "cargo_toml",
+ "serde",
+ "serde-inline-default",
+ "serde_derive",
+ "toml",
 ]
 
 [[package]]
@@ -1657,6 +1673,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "rmk-config",
  "serde",
  "serde_derive",
  "syn 2.0.99",
@@ -1775,6 +1792,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8dfc9d19bdbf6d17e22319da49161d5d0108e4188e8b680aef6299eed22df60"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-inline-default"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59fb1bedd774187d304179493b0d3c41fbe97b04b14305363f68d2bdf5e47cb9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
 ]
 
 [[package]]
@@ -1945,7 +1973,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=3d77c0b#3d77c0bad07aa278f72754119320169688614328"
+source = "git+https://github.com/embassy-rs/trouble?rev=2128a22#2128a22360300554b90efaa7804c759b24a60fad"
 dependencies = [
  "aes",
  "bt-hci",
@@ -1968,7 +1996,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=3d77c0b#3d77c0bad07aa278f72754119320169688614328"
+source = "git+https://github.com/embassy-rs/trouble?rev=2128a22#2128a22360300554b90efaa7804c759b24a60fad"
 dependencies = [
  "Inflector",
  "darling",

@@ -24,6 +24,7 @@
     - [Input device](configuration/input_device.md)
     - [Wireless/Bluetooth](configuration/wireless.md)
     - [Light](configuration/light.md)
+    - [RMK config](configuration/rmk.md)
     - [Appendix](configuration/appendix.md)
 - [Keymap](keymap/keymap.md)
     - [Special keys](keymap/special_keys.md)

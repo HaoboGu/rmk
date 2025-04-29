@@ -1,11 +1,4 @@
 use crate::keycode::KeyCode;
-
-// Default macro space size
-pub(crate) const MACRO_SPACE_SIZE: usize = 256;
-
-// Default number of keyboard macros
-pub(crate) const NUM_MACRO: usize = 8;
-
 pub(crate) enum MacroOperation {
     Press(KeyCode),
     Release(KeyCode),

@@ -3,6 +3,7 @@ use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
+use super::device_info::DeviceInformationService;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
 use crate::usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
@@ -17,6 +18,7 @@ pub(crate) struct Server {
     pub(crate) hid_service: HidService,
     pub(crate) via_service: ViaService,
     pub(crate) composite_service: CompositeService,
+    pub(crate) device_info_service: DeviceInformationService,
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
@@ -169,6 +171,7 @@ impl<P: PacketPool> HidWriterTrait for BleViaServer<'_, '_, '_, P> {
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buf = [0u8; 32];
         let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
+        debug!("Sending via report: {:?}", buf);
         self.input_via.notify(self.conn, &buf).await.map_err(|e| {
             error!("Failed to notify via report: {:?}", e);
             HidError::BleError

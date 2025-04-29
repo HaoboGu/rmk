@@ -13,9 +13,10 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
-use crate::ble::trouble::{ACTIVE_PROFILE, NUM_BLE_PROFILE};
+use crate::ble::trouble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
+use crate::NUM_BLE_PROFILE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
