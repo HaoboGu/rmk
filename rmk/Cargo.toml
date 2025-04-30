@@ -52,12 +52,13 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "2128a22", features = [
+trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble", rev = "7d72e8d", features = [
     "gatt",
     "scan",
     "derive",
     "security",
-    "l2cap-default-packet-pool-mtu-255",
+    "default-packet-pool-mtu-255",
+    "default-packet-pool-size-64",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
