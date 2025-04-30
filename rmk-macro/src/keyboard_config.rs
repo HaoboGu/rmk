@@ -7,7 +7,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::{
     BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo, KeyboardTomlConfig, LayerTomlConfig,
-    LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+    LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, RmkConstantsConfig, SplitConfig,
+    StorageConfig,
 };
 use serde::Deserialize;
 
@@ -30,14 +31,6 @@ macro_rules! rmk_compile_error {
         Err(syn::Error::new_spanned(quote! {}, $msg).to_compile_error())
     };
 }
-
-// Max number of combos
-pub const COMBO_MAX_NUM: usize = 8;
-// Max size of combos
-pub const COMBO_MAX_LENGTH: usize = 4;
-
-// Max number of forks
-pub const FORK_MAX_NUM: usize = 16;
 
 // Max alias resolution depth to prevent infinite loops
 const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
@@ -187,7 +180,8 @@ impl KeyboardConfig {
         )?;
 
         // Behavior config
-        config.behavior = Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
+        config.behavior =
+            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, toml_config.rmk, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -820,6 +814,7 @@ impl KeyboardConfig {
     fn get_behavior_from_toml(
         default: BehaviorConfig,
         toml: Option<BehaviorConfig>,
+        rmk: RmkConstantsConfig,
         layout: &LayoutConfig,
     ) -> Result<BehaviorConfig, TokenStream2> {
         match toml {
@@ -846,15 +841,15 @@ impl KeyboardConfig {
 
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
-                    if combo.combos.len() > COMBO_MAX_NUM {
+                    if combo.combos.len() > rmk.combo_max_num {
                         return rmk_compile_error!(format!(
-                            "keyboard.toml: number of combos is greater than [behavior.combo.max_num]"
+                            "keyboard.toml: number of combos is greater than combo_max_num configured under [rmk] section"
                         ));
                     }
 
                     for (i, c) in combo.combos.iter().enumerate() {
-                        if c.actions.len() > COMBO_MAX_LENGTH {
-                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
+                        if c.actions.len() > rmk.combo_max_length {
+                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than combo_max_length configured under [rmk] section"));
                         }
 
                         if let Some(layer) = c.layer {
@@ -869,9 +864,9 @@ impl KeyboardConfig {
 
                 behavior.fork = behavior.fork.or(default.fork);
                 if let Some(fork) = &behavior.fork {
-                    if fork.forks.len() > FORK_MAX_NUM {
+                    if fork.forks.len() > rmk.fork_max_num {
                         return rmk_compile_error!(format!(
-                            "keyboard.toml: number of forks is greater than [behavior.fork.max_num]"
+                            "keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section"
                         ));
                     }
                 }
