@@ -45,7 +45,6 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
                         Ok(_) => {}
                         Err(_) => {
                             error!("Failed to notify battery level");
-                            break;
                         }
                     }
                 } else if val < 255 {
