@@ -125,7 +125,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 {
                     let current_value =
                         crate::ble::trouble::battery_service::BATTERY_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
-                    if current_value > 100 || current_value == 255 {
+                    if current_value < 100 || current_value == 255 {
                         // When charging, don't update the battery level(which is inaccurate)
                         crate::ble::trouble::battery_service::BATTERY_LEVEL
                             .store(self.get_battery_percent(val), core::sync::atomic::Ordering::Relaxed);
