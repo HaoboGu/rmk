@@ -115,6 +115,17 @@ When used in configuration files, all keycodes are case-insensitive.
 | `F23`   |         | F23   |
 | `F24`   |         | F24   |
 
+## Lock keys
+
+| Keycode | Aliases | Usage |
+|---------|---------|-------|
+| `CapsLock` | `caps_lock`, `caps` | Caps Lock |
+| `ScrollLock` | `scroll_lock`, `scrl`, `brmd` | Scroll Lock or Brightness Down on macOS |
+| `NumLock` | `num_lock`, `num` | Num Lock |
+| `LockingCapsLock` | `locking_caps_lock`, `lcap` | Locking Caps Lock |
+| `LockingNumLock` | `locking_num_lock`, `lnum` | Locking Num Lock |
+| `LockingScrollLock` | `locking_scroll_lock`, `lscr` | Locking Scroll Lock |
+
 ## Special keys
 
 | Keycode | Aliases | Usage |
