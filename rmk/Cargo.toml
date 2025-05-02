@@ -58,7 +58,7 @@ trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble
     "derive",
     "security",
     "default-packet-pool-mtu-255",
-    "default-packet-pool-size-64",
+    "default-packet-pool-size-32",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
