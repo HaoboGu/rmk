@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wrong connection state between splits
 - Issue about first adc polling
 - Wrong battery status
+- Capslock stuck on macOS
 
 ## [0.6.1] - 2025-04-11
 
