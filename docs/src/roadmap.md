@@ -25,10 +25,10 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [ ] 🔴 Macro support
     - [x] 🔴 Macro definition via Rust
     - [ ] 🟢 Macro definition via toml
-    - [ ] 🔴 Macros for umlaute
-    - [ ] 🔵 Macros for unicode
     - [ ] make macro storage space configurable
     - [x] add KeyAction::TriggerMacro so more than 32 macros can be triggered
+  - [ ] 🔴 Support umlaute
+  - [ ] 🔵 Support unicode
   - [ ] 🔴 RGB
   - [ ] 🔵 display support
 
