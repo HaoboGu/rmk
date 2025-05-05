@@ -79,6 +79,7 @@ pub mod hid;
 pub mod hid_state;
 pub mod input_device;
 pub mod keyboard;
+pub mod keyboard_macros;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;

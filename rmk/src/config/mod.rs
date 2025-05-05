@@ -1,9 +1,8 @@
 #[cfg(feature = "_esp_ble")]
 mod esp_config;
+pub mod macro_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
-
-pub mod keyboard_macros;
 
 use ::heapless::Vec;
 use embassy_sync::channel::Channel;
@@ -11,7 +10,7 @@ use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
-use keyboard_macros::macro_config::KeyboardMacrosConfig;
+use macro_config::KeyboardMacrosConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 

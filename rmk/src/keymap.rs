@@ -1,9 +1,9 @@
 use crate::{
     action::{EncoderAction, KeyAction},
     combo::{Combo, COMBO_MAX_NUM},
-    config::keyboard_macros::keyboard_macro::MacroOperation,
     config::BehaviorConfig,
     event::{KeyEvent, RotaryEncoderEvent},
+    keyboard_macros::MacroOperation,
 };
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
