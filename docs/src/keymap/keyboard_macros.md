@@ -120,8 +120,8 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 ### binding
 A macro can be triggered in two ways:
 1. Using the `KeyCode::Macro0` - `KeyCode::Macro31`.
-1. Using the `Action::MacroTrigger(index)`, where index can be any number up to `MAX_NUM_MACRO` (which is set to 256).
-2. 
+2. Using the `Action::MacroTrigger(index)`, where index can be any number. If the total number of macro sequences is less than the index passed, nothing is executed (and an error "Macro not found" is logged). Remember that the index starts at `0`.
+3. 
 Defined macro sequences are automatically bound to a sequence: 
 The first macro sequence defined is executed when triggering `KeyCode::Macro0` and `Action::MacroTrigger(0)`.
 

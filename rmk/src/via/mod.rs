@@ -10,8 +10,6 @@ use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_V
 use vial::process_vial;
 
 use crate::config::keyboard_macros::macro_config::MACRO_SPACE_SIZE;
-#[cfg(feature = "storage")]
-use crate::config::keyboard_macros::macro_config::NUM_MACRO;
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
 use crate::keymap::KeyMap;
@@ -232,7 +230,6 @@ impl<
             }
             ViaCommand::DynamicKeymapMacroSetBuffer => {
                 // Every write writes all buffer space of the macro(if it's not empty)
-                // The sequence must have NUM_MACRO 0s, where each 0 indicates the end of a macro
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
                 // Current sequence size, <= 28
                 let size = report.output_data[3];
@@ -251,13 +248,12 @@ impl<
                 self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 
-                // Count zeros, if there're NUM_MACRO 0s in total, current sequnce is the last.
                 // Then flush macros to storage
                 #[cfg(feature = "storage")]
-                let num_zero =
-                    count_zeros(&self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[0..end as usize]);
+                // let num_zero =
+                //     count_zeros(&self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[0..end as usize]);
                 #[cfg(feature = "storage")]
-                if size < 28 || num_zero >= NUM_MACRO {
+                {
                     let buf = self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences;
                     FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
                     info!("Flush macros to storage")

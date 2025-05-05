@@ -11,7 +11,6 @@ use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::{Combo, COMBO_MAX_LENGTH};
 use crate::config::keyboard_macros::keyboard_macro::MacroOperation;
-use crate::config::keyboard_macros::macro_config::NUM_MACRO;
 use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
 use crate::hid::Report;
@@ -1186,10 +1185,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             return;
         }
 
-        if macro_idx as usize >= NUM_MACRO {
-            error!("Macro idx invalid: {}", macro_idx);
-            return;
-        }
         // Read macro operations until the end of the macro
         let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
         if let Some(macro_start_idx) = macro_idx {
