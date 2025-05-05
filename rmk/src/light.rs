@@ -88,9 +88,9 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
 
     pub(crate) async fn run(&mut self) {
         loop {
-            if self.enabled {
-                match self.reader.read_report().await {
-                    Ok(indicator) => {
+            match self.reader.read_report().await {
+                Ok(indicator) => {
+                    if self.enabled {
                         // Read led indicator data and send to LED channel
                         debug!("Read keyboard state: {:?}", indicator);
                         if let Err(e) = self.light_controller.set_leds(indicator) {
@@ -99,14 +99,11 @@ impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightServic
                             embassy_time::Timer::after_millis(500).await;
                         }
                     }
-                    Err(e) => {
-                        error!("Read led error {:?}", e);
-                        embassy_time::Timer::after_secs(1).await;
-                    }
                 }
-            } else {
-                // Check service state after 1s
-                embassy_time::Timer::after_secs(1).await;
+                Err(e) => {
+                    error!("Read led error {:?}", e);
+                    embassy_time::Timer::after_secs(1).await;
+                }
             }
         }
     }

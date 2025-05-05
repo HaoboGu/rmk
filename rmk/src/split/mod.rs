@@ -30,4 +30,8 @@ pub(crate) enum SplitMessage {
     /// The central connection state, true if central has been connected to host.
     /// This message is sync from central to peripheral
     ConnectionState(bool),
+    /// BLE Address, used in syncing address between central and peripheral
+    Address([u8; 6]),
+    /// Clear the saved peer info
+    ClearPeer,
 }

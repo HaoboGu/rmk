@@ -123,18 +123,18 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Key
     usb_config.composite_with_iads = true;
 
     // Create embassy-usb DeviceBuilder using the driver and config.
-    static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static MSOS_DESC: StaticCell<[u8; 128]> = StaticCell::new();
+    static CONFIG_DESC: StaticCell<[u8; 128]> = StaticCell::new();
+    static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
+    static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; 128]> = StaticCell::new();
 
     // UsbDevice builder
     let mut builder = Builder::new(
         driver,
         usb_config,
-        &mut CONFIG_DESC.init([0; 256])[..],
-        &mut BOS_DESC.init([0; 256])[..],
-        &mut MSOS_DESC.init([0; 128])[..],
+        &mut CONFIG_DESC.init([0; 128])[..],
+        &mut BOS_DESC.init([0; 16])[..],
+        &mut MSOS_DESC.init([0; 16])[..],
         &mut CONTROL_BUF.init([0; 128])[..],
     );
 

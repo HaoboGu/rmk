@@ -4,9 +4,8 @@ All input devices are defined in the `[input_device]` table. Currently supported
 
 - Rotary Encoder (encoder)
 - Joystick (joystick)
-- Pointing Device (pointing)
 
-## Rotary Encoder
+## Rotary Encoder(not ready yet)
 
 A rotary encoder is a common input device that can be used for volume control, page scrolling, and other functions. It can be defined in the configuration file as follows:
 

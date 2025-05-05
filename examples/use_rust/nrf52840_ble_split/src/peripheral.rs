@@ -1,10 +1,8 @@
 #![no_std]
 #![no_main]
 
-mod vial;
 #[macro_use]
 mod macros;
-mod keymap;
 
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
@@ -12,18 +10,21 @@ use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::{bind_interrupts, rng, usb, Peri};
+use embassy_nrf::{Peri, bind_interrupts, rng, usb};
+use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
+use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
-use rmk::{run_devices, HostResources};
+use rmk::storage::new_storage_for_split_peripheral;
+use rmk::{HostResources, run_devices};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -76,6 +77,14 @@ fn init_adc(adc_pin: AnyInput, adc: Peri<'static, SAADC>) -> Saadc<'static, 1> {
     saadc
 }
 
+fn ble_addr() -> [u8; 6] {
+    let ficr = embassy_nrf::pac::FICR;
+    let high = u64::from(ficr.deviceid(1).read());
+    let addr = high << 32 | u64::from(ficr.deviceid(0).read());
+    let addr = addr | 0x0000_c000_0000_0000;
+    unwrap!(addr.to_le_bytes()[..6].try_into())
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello RMK BLE!");
@@ -111,9 +120,8 @@ async fn main(spawner: Spawner) {
     let mut sdc_mem = sdc::Mem::<4096>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
-    let peripheral_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
     let mut resources = HostResources::new();
-    let stack = build_ble_stack(sdc, peripheral_addr, &mut rng_generator, &mut resources).await;
+    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_generator, &mut resources).await;
 
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
@@ -123,7 +131,15 @@ async fn main(spawner: Spawner) {
 
     let (input_pins, output_pins) = config_matrix_pins_nrf!(peripherals: p, input: [P1_09, P0_28, P0_03, P1_10], output:  [P0_30, P0_31, P0_29, P0_02, P1_13, P0_10, P0_09]);
 
-    let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+    // Initialize flash
+    // nRF52840's bootloader starts from 0xF4000(976K)
+    let storage_config = StorageConfig {
+        start_addr: 0x60000, // 384K
+        num_sectors: 32,     // 128K
+        ..Default::default()
+    };
+    let flash = Flash::take(mpsl, p.NVMC);
+    let mut storage = new_storage_for_split_peripheral(flash, storage_config).await;
 
     // Initialize the peripheral matrix
     let debouncer = DefaultDebouncer::<4, 7>::new();
@@ -135,7 +151,7 @@ async fn main(spawner: Spawner) {
         run_devices! (
             (matrix) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
         ),
-        run_rmk_split_peripheral(central_addr, &stack),
+        run_rmk_split_peripheral(0, &stack, &mut storage),
     )
     .await;
 }

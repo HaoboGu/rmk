@@ -11,3 +11,4 @@ target = "thumbv7m-none-eabi"        # Cortex-M3
 
 [env]
 DEFMT_LOG = "error"
+KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }

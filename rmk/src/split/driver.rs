@@ -2,11 +2,13 @@
 //!
 use core::sync::atomic::Ordering;
 
-use embassy_futures::select::select;
+use embassy_futures::select::{select3, Either3};
 use embassy_time::{Instant, Timer};
+#[cfg(all(feature = "storage", feature = "_ble"))]
+use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
-use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL, SPLIT_MESSAGE_PUBLISHER};
 use crate::event::{Event, KeyEvent};
 use crate::input_device::InputDevice;
 use crate::CONNECTION_STATE;
@@ -44,10 +46,10 @@ pub(crate) struct PeripheralManager<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    R: SplitReader + SplitWriter,
+    T: SplitReader + SplitWriter,
 > {
     /// Receiver
-    receiver: R,
+    transceiver: T,
     /// Peripheral id
     id: usize,
 }
@@ -57,11 +59,11 @@ impl<
         const COL: usize,
         const ROW_OFFSET: usize,
         const COL_OFFSET: usize,
-        R: SplitReader + SplitWriter,
-    > PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+        T: SplitReader + SplitWriter,
+    > PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, T>
 {
-    pub(crate) fn new(receiver: R, id: usize) -> Self {
-        Self { receiver, id }
+    pub(crate) fn new(transceiver: T, id: usize) -> Self {
+        Self { transceiver, id }
     }
 
     /// Run the manager.
@@ -71,7 +73,7 @@ impl<
     pub(crate) async fn run(mut self) {
         let mut conn_state = CONNECTION_STATE.load(Ordering::Acquire);
         // Send connection state once on start
-        if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
+        if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
             match e {
                 SplitDriverError::Disconnected => return,
                 _ => error!("SplitDriver write error: {:?}", e),
@@ -79,6 +81,9 @@ impl<
         }
 
         let mut last_sync_time = Instant::now();
+        let mut subscriber = SPLIT_MESSAGE_PUBLISHER
+            .subscriber()
+            .expect("Failed to create split message subscriber: MaximumSubscribersReached");
 
         loop {
             // Calculate the time until the next 3000ms sync
@@ -86,9 +91,14 @@ impl<
             let wait_time = if elapsed >= 3000 { 1 } else { 3000 - elapsed };
 
             // Read the message from peripheral, or sync the connection state every 1000ms.
-            match select(self.read_event(), Timer::after_millis(wait_time)).await {
-                // Use built-in channels for split peripherals
-                embassy_futures::select::Either::First(event) => match event {
+            match select3(
+                self.read_event(),
+                subscriber.next_message_pure(),
+                Timer::after_millis(wait_time),
+            )
+            .await
+            {
+                Either3::First(event) => match event {
                     Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
                     _ => {
                         if EVENT_CHANNEL.is_full() {
@@ -97,11 +107,34 @@ impl<
                         EVENT_CHANNEL.send(event).await;
                     }
                 },
-                embassy_futures::select::Either::Second(_) => {
+                Either3::Second(split_message) => {
+                    #[cfg(all(feature = "storage", feature = "_ble"))]
+                    match split_message {
+                        SplitMessage::ClearPeer => {
+                            // Clear the peer address
+                            FLASH_CHANNEL
+                                .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    self.id as u8,
+                                    false,
+                                    [0; 6],
+                                )))
+                                .await;
+                        }
+                        _ => (),
+                    }
+                    debug!("Publishing split message {:?} to peripherals", split_message);
+                    if let Err(e) = self.transceiver.write(&split_message).await {
+                        match e {
+                            SplitDriverError::Disconnected => return,
+                            _ => error!("SplitDriver write error: {:?}", e),
+                        }
+                    }
+                }
+                Either3::Third(_) => {
                     // Timer elapsed, sync the connection state
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
                     debug!("Syncing connection state to peripheral: {}", conn_state);
-                    if let Err(e) = self.receiver.write(&SplitMessage::ConnectionState(conn_state)).await {
+                    if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
                         match e {
                             SplitDriverError::Disconnected => return,
                             _ => error!("SplitDriver write error: {:?}", e),
@@ -124,7 +157,7 @@ impl<
 {
     async fn read_event(&mut self) -> Event {
         loop {
-            match self.receiver.read().await {
+            match self.transceiver.read().await {
                 Ok(SplitMessage::Key(e)) => {
                     // Verify the row/col
                     if e.row as usize > ROW || e.col as usize > COL {

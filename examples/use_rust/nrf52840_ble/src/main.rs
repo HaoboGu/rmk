@@ -129,10 +129,8 @@ async fn main(spawner: Spawner) {
     let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut sdc_mem = sdc::Mem::<4096>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
-    let central_addr = ble_addr();
-    info!("Local address: {:x}", central_addr);
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+    let stack = build_ble_stack(sdc, ble_addr(), &mut rng_gen, &mut host_resources).await;
 
     // Initialize usb driver
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));

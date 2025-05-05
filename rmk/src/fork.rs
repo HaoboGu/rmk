@@ -4,9 +4,6 @@ use crate::action::KeyAction;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
 
-// Max number of fork behaviors
-pub(crate) const FORK_MAX_NUM: usize = 16;
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {

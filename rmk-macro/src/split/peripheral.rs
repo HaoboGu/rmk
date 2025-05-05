@@ -1,11 +1,12 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{MatrixType, SplitBoardConfig};
 use syn::ItemMod;
 
 use crate::chip_init::expand_chip_init;
-use crate::config::{MatrixType, SplitBoardConfig};
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
+use crate::flash::expand_flash_init;
 use crate::import::expand_imports;
 use crate::keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig};
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
@@ -118,15 +119,17 @@ fn expand_split_peripheral(
 
     let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
 
-    let central_config = &split_config.central;
-
     let imports = expand_imports(&item_mod);
-    let chip_init = expand_chip_init(keyboard_config, &item_mod);
-    // TODO: use same bind_interrupts for central and peripheral
+    let mut chip_init = expand_chip_init(keyboard_config, &item_mod);
+    if split_config.connection == "ble" {
+        // Add storage when using BLE split
+        let flash_init = expand_flash_init(keyboard_config);
+        chip_init.extend(quote! {
+            #flash_init
+            let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
+        });
+    }
 
-    // let peripheral_addr = peripheral_config
-    // .ble_addr
-    // .expect("Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`");
     // Debouncer config
     let rapid_debouncer_enabled = is_feature_enabled(rmk_features, "rapid_debouncer");
     let col2row_enabled = is_feature_enabled(rmk_features, "col2row");
@@ -192,7 +195,7 @@ fn expand_split_peripheral(
         }
     }
 
-    let run_rmk_peripheral = expand_split_peripheral_entry(&keyboard_config.chip, peripheral_config, &central_config);
+    let run_rmk_peripheral = expand_split_peripheral_entry(id, &keyboard_config.chip, peripheral_config);
 
     quote! {
         #imports
@@ -202,24 +205,23 @@ fn expand_split_peripheral(
     }
 }
 
-fn expand_split_peripheral_entry(
-    chip: &ChipModel,
-    peripheral_config: &SplitBoardConfig,
-    central_config: &SplitBoardConfig,
-) -> TokenStream2 {
+fn expand_split_peripheral_entry(id: usize, chip: &ChipModel, peripheral_config: &SplitBoardConfig) -> TokenStream2 {
+    let mut run_storage = quote! {};
     let peripheral_matrix_task = quote! {
         ::rmk::run_devices!((matrix) => ::rmk::channel::EVENT_CHANNEL)
     };
     match chip.series {
         ChipSeries::Nrf52 => {
-            let central_addr = central_config.ble_addr.expect("Missing central ble address");
-
             let peripheral_run = quote! {
                 ::rmk::split::peripheral::run_rmk_split_peripheral(
-                    [#(#central_addr), *],
+                    #id,
                     &stack,
+                    &mut storage,
                 )
             };
+            run_storage.extend(quote! {
+                let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
+            });
             join_all_tasks(vec![peripheral_matrix_task, peripheral_run])
         }
         ChipSeries::Rp2040 | ChipSeries::Stm32 => {

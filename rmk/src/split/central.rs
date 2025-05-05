@@ -8,7 +8,7 @@ use embedded_hal_async::digital::Wait;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 #[cfg(feature = "_ble")]
-use trouble_host::prelude::*;
+use {bt_hci::cmd::le::LeSetScanParams, bt_hci::controller::ControllerCmdSync, trouble_host::prelude::*};
 
 use crate::debounce::{DebounceState, DebouncerTrait};
 use crate::event::{Event, KeyEvent};
@@ -27,12 +27,12 @@ pub async fn run_peripheral_manager<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    #[cfg(feature = "_ble")] C: Controller,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdSync<LeSetScanParams>,
     #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,
-    #[cfg(feature = "_ble")] addr: [u8; 6],
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(feature = "_ble")] addr: Option<[u8; 6]>,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
     #[cfg(not(feature = "_ble"))] receiver: S,
 ) {
     #[cfg(feature = "_ble")]

@@ -3,6 +3,7 @@ use trouble_host::prelude::*;
 use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
+use super::device_info::DeviceInformationService;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
 use crate::usb::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
@@ -17,6 +18,7 @@ pub(crate) struct Server {
     pub(crate) hid_service: HidService,
     pub(crate) via_service: ViaService,
     pub(crate) composite_service: CompositeService,
+    pub(crate) device_info_service: DeviceInformationService,
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
@@ -76,16 +78,16 @@ pub(crate) struct ViaService {
     pub(crate) output_via: [u8; 32],
 }
 
-pub(crate) struct BleHidServer<'stack, 'server, 'conn> {
+pub(crate) struct BleHidServer<'stack, 'server, 'conn, P: PacketPool> {
     pub(crate) input_keyboard: Characteristic<[u8; 8]>,
     pub(crate) mouse_report: Characteristic<[u8; 5]>,
     pub(crate) media_report: Characteristic<[u8; 2]>,
     pub(crate) system_report: Characteristic<[u8; 1]>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server>,
+    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
-impl<'stack, 'server, 'conn> BleHidServer<'stack, 'server, 'conn> {
-    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server>) -> Self {
+impl<'stack, 'server, 'conn, P: PacketPool> BleHidServer<'stack, 'server, 'conn, P> {
+    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
         Self {
             input_keyboard: server.hid_service.input_keyboard,
             mouse_report: server.composite_service.mouse_report,
@@ -96,7 +98,7 @@ impl<'stack, 'server, 'conn> BleHidServer<'stack, 'server, 'conn> {
     }
 }
 
-impl HidWriterTrait for BleHidServer<'_, '_, '_> {
+impl<P: PacketPool> HidWriterTrait for BleHidServer<'_, '_, '_, P> {
     type ReportType = Report;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
@@ -141,20 +143,20 @@ impl HidWriterTrait for BleHidServer<'_, '_, '_> {
     }
 }
 
-impl RunnableHidWriter for BleHidServer<'_, '_, '_> {
+impl<P: PacketPool> RunnableHidWriter for BleHidServer<'_, '_, '_, P> {
     async fn get_report(&mut self) -> Self::ReportType {
         KEYBOARD_REPORT_CHANNEL.receive().await
     }
 }
 
-pub(crate) struct BleViaServer<'stack, 'server, 'conn> {
+pub(crate) struct BleViaServer<'stack, 'server, 'conn, P: PacketPool> {
     pub(crate) input_via: Characteristic<[u8; 32]>,
     pub(crate) output_via: Characteristic<[u8; 32]>,
-    pub(crate) conn: &'conn GattConnection<'stack, 'server>,
+    pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
-impl<'stack, 'server, 'conn> BleViaServer<'stack, 'server, 'conn> {
-    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server>) -> Self {
+impl<'stack, 'server, 'conn, P: PacketPool> BleViaServer<'stack, 'server, 'conn, P> {
+    pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
         Self {
             input_via: server.via_service.input_via,
             output_via: server.via_service.output_via,
@@ -163,12 +165,13 @@ impl<'stack, 'server, 'conn> BleViaServer<'stack, 'server, 'conn> {
     }
 }
 
-impl HidWriterTrait for BleViaServer<'_, '_, '_> {
+impl<P: PacketPool> HidWriterTrait for BleViaServer<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
     async fn write_report(&mut self, report: Self::ReportType) -> Result<usize, HidError> {
         let mut buf = [0u8; 32];
         let n = serialize(&mut buf, &report).map_err(|_| HidError::ReportSerializeError)?;
+        debug!("Sending via report: {:?}", buf);
         self.input_via.notify(self.conn, &buf).await.map_err(|e| {
             error!("Failed to notify via report: {:?}", e);
             HidError::BleError
@@ -177,7 +180,7 @@ impl HidWriterTrait for BleViaServer<'_, '_, '_> {
     }
 }
 
-impl HidReaderTrait for BleViaServer<'_, '_, '_> {
+impl<P: PacketPool> HidReaderTrait for BleViaServer<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
     async fn read_report(&mut self) -> Result<Self::ReportType, HidError> {
