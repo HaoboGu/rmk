@@ -13,9 +13,10 @@ use {
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
-use crate::ble::trouble::{ACTIVE_PROFILE, BONDED_DEVICE_NUM};
+use crate::ble::trouble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
+use crate::NUM_BLE_PROFILE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();
@@ -36,8 +37,11 @@ impl Default for ProfileInfo {
             slot_num: 0,
             removed: false,
             info: BondInformation {
+                identity: Identity {
+                    bd_addr: BdAddr::default(),
+                    irk: None,
+                },
                 ltk: LongTermKey(0),
-                address: BdAddr::default(),
             },
             cccd_table: CccdTable::<CCCD_TABLE_SIZE>::default(),
         }
@@ -61,17 +65,17 @@ pub(crate) enum BleProfileAction {
 /// 3. Updating the bonding information of the active profile to the BLE stack
 /// 4. Handling profile switch, clear, and save operations
 #[cfg(feature = "_ble")]
-pub struct ProfileManager<'a, C: Controller> {
+pub struct ProfileManager<'a, C: Controller, P: PacketPool> {
     /// List of bonded devices
-    bonded_devices: heapless::Vec<ProfileInfo, BONDED_DEVICE_NUM>,
+    bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
     /// BLE stack
-    stack: &'a Stack<'a, C>,
+    stack: &'a Stack<'a, C, P>,
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, C: Controller> ProfileManager<'a, C> {
+impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C>) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
@@ -94,7 +98,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         use crate::storage::{StorageData, StorageKeys};
 
         self.bonded_devices.clear();
-        for slot_num in 0..BONDED_DEVICE_NUM {
+        for slot_num in 0..NUM_BLE_PROFILE {
             if let Ok(Some(info)) = storage.read_trouble_bond_info(slot_num as u8).await {
                 if !info.removed {
                     if let Err(e) = self.bonded_devices.push(info) {
@@ -127,7 +131,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
         // Remove current bonding information in the stack
         let current_bond_info = self.stack.get_bond_information();
         for bond in current_bond_info {
-            if let Err(e) = self.stack.remove_bond_information(bond.address) {
+            if let Err(e) = self.stack.remove_bond_information(bond.identity) {
                 debug!("Remove bond info error: {:?}", e);
             }
         }
@@ -165,6 +169,8 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                 error!("Failed to add bond info: {:?}", e);
             }
         }
+
+        self.update_stack_bonds();
 
         #[cfg(feature = "storage")]
         // Send bonding information to the flash task for saving
@@ -279,7 +285,7 @@ impl<'a, C: Controller> ProfileManager<'a, C> {
                         }
                         BleProfileAction::NextProfile => {
                             let mut profile = ACTIVE_PROFILE.load(Ordering::SeqCst) + 1;
-                            profile = profile % BONDED_DEVICE_NUM as u8;
+                            profile = profile % NUM_BLE_PROFILE as u8;
 
                             self.switch_profile(profile).await;
                         }

@@ -17,20 +17,21 @@ use sequential_storage::Error as SSError;
 use {
     crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
-    trouble_host::{prelude::*, BondInformation, LongTermKey},
+    trouble_host::{prelude::*, BondInformation, IdentityResolvingKey, LongTermKey},
 };
 
 use self::eeconfig::EeKeymapConfig;
 use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
-use crate::combo::{Combo, COMBO_MAX_LENGTH, COMBO_MAX_NUM};
-use crate::config::macro_config::MACRO_SPACE_SIZE;
+use crate::combo::Combo;
 use crate::config::StorageConfig;
-use crate::fork::{Fork, StateBits, FORK_MAX_NUM};
+use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
+#[cfg(all(feature = "_ble", feature = "split"))]
+use crate::split::ble::PeerAddress;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::BUILD_HASH;
+use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -46,6 +47,9 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(feature = "_ble")]
     // Current active BLE profile number
     ActiveBleProfile(u8),
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    // Peer address
+    PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
     // Clear info of given slot number
@@ -94,6 +98,8 @@ pub(crate) enum StorageKeys {
     ConnectionType,
     EncoderKeys,
     ForkData,
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    PeerAddress = 0xED,
     #[cfg(feature = "_ble")]
     ActiveBleProfile = 0xEE,
     #[cfg(feature = "_ble")]
@@ -114,6 +120,8 @@ impl StorageKeys {
             8 => Some(StorageKeys::ConnectionType),
             9 => Some(StorageKeys::EncoderKeys),
             10 => Some(StorageKeys::ForkData),
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
             0xEE => Some(StorageKeys::ActiveBleProfile),
             #[cfg(feature = "_ble")]
@@ -136,6 +144,8 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
     BondInfo(ProfileInfo),
     #[cfg(feature = "_ble")]
@@ -160,13 +170,19 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
 pub(crate) fn get_combo_key(idx: usize) -> u32 {
     (0x3000 + idx) as u32
 }
-pub(crate) fn get_fork_key(idx: usize) -> u32 {
-    (0x4000 + idx) as u32
-}
 
 /// Get the key to retrieve the encoder config from the storage.
 pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: usize, layer: usize) -> u32 {
     (0x4000 + idx + NUM_ENCODER * layer) as u32
+}
+
+pub(crate) fn get_fork_key(idx: usize) -> u32 {
+    (0x5000 + idx) as u32
+}
+
+/// Get the key to retrieve the peer address from the storage.
+pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
+    0x6000 + peer_id as u32
 }
 
 impl Value<'_> for StorageData {
@@ -268,6 +284,17 @@ impl Value<'_> for StorageData {
                 buffer[1] = *ty;
                 Ok(2)
             }
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            StorageData::PeerAddress(p) => {
+                if buffer.len() < 9 {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::PeerAddress as u8;
+                buffer[1] = p.peer_id;
+                buffer[2] = if p.is_valid { 1 } else { 0 };
+                buffer[3..9].copy_from_slice(&p.address);
+                Ok(9)
+            }
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(slot_num) => {
                 buffer[0] = StorageKeys::ActiveBleProfile as u8;
@@ -276,30 +303,39 @@ impl Value<'_> for StorageData {
             }
             #[cfg(feature = "_ble")]
             StorageData::BondInfo(b) => {
-                if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
+                if buffer.len() < 40 + CCCD_TABLE_SIZE * 4 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::BleBondInfo as u8;
                 let ltk = b.info.ltk.to_le_bytes();
-                let address = b.info.address;
+                let address = b.info.identity.bd_addr;
+                let irk = match b.info.identity.irk {
+                    Some(irk) => irk.to_le_bytes(),
+                    None => [0; 16],
+                };
+                // let (address, irk) = match b.info.identity {
+                //     Identity::BdAddr(address) => (address, [0; 16]),
+                //     Identity::Irk(irk) => (BdAddr::default(), irk.to_le_bytes()),
+                // };
                 buffer[1] = b.slot_num;
                 buffer[2..18].copy_from_slice(&ltk);
                 buffer[18..24].copy_from_slice(address.raw());
+                buffer[24..40].copy_from_slice(&irk);
                 let cccd_table = b.cccd_table.inner();
                 for i in 0..CCCD_TABLE_SIZE {
                     match cccd_table.get(i) {
                         Some(cccd) => {
                             let handle: u16 = cccd.0;
                             let cccd: u16 = cccd.1.raw();
-                            buffer[24 + i * 4..26 + i * 4].copy_from_slice(&handle.to_le_bytes());
-                            buffer[26 + i * 4..28 + i * 4].copy_from_slice(&cccd.to_le_bytes());
+                            buffer[40 + i * 4..42 + i * 4].copy_from_slice(&handle.to_le_bytes());
+                            buffer[42 + i * 4..44 + i * 4].copy_from_slice(&cccd.to_le_bytes());
                         }
                         None => {
-                            buffer[24 + i * 4..28 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
+                            buffer[40 + i * 4..44 + i * 4].copy_from_slice(&[0, 0, 0, 0]);
                         }
                     };
                 }
-                Ok(24 + CCCD_TABLE_SIZE * 4)
+                Ok(40 + CCCD_TABLE_SIZE * 4)
             }
         }
     }
@@ -436,6 +472,21 @@ impl Value<'_> for StorageData {
                         bindable,
                     }))
                 }
+                #[cfg(all(feature = "_ble", feature = "split"))]
+                StorageKeys::PeerAddress => {
+                    if buffer.len() < 9 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let peer_id = buffer[1];
+                    let is_valid = buffer[2] != 0;
+                    let mut address = [0u8; 6];
+                    address.copy_from_slice(&buffer[3..9]);
+                    Ok(StorageData::PeerAddress(PeerAddress {
+                        peer_id,
+                        is_valid,
+                        address,
+                    }))
+                }
                 #[cfg(feature = "_ble")]
                 StorageKeys::ActiveBleProfile => {
                     if buffer.len() < 2 {
@@ -445,22 +496,42 @@ impl Value<'_> for StorageData {
                 }
                 #[cfg(feature = "_ble")]
                 StorageKeys::BleBondInfo => {
-                    if buffer.len() < 23 + CCCD_TABLE_SIZE * 4 {
+                    if buffer.len() < 40 + CCCD_TABLE_SIZE * 4 {
                         return Err(SerializationError::BufferTooSmall);
                     }
                     let slot_num = buffer[1];
                     let ltk = LongTermKey::from_le_bytes(buffer[2..18].try_into().unwrap());
                     let address = BdAddr::new(buffer[18..24].try_into().unwrap());
+                    let irk = IdentityResolvingKey::from_le_bytes(buffer[24..40].try_into().unwrap());
+                    // Use all 0s as the empty irk
+                    let info = if irk.0 == 0 {
+                        BondInformation::new(
+                            Identity {
+                                bd_addr: address,
+                                irk: None,
+                            },
+                            ltk,
+                        )
+                    } else {
+                        BondInformation::new(
+                            Identity {
+                                bd_addr: address,
+                                irk: Some(irk),
+                            },
+                            ltk,
+                        )
+                    };
+                    // Read info:
                     let mut cccd_table_values = [(0u16, CCCD::default()); CCCD_TABLE_SIZE];
                     for i in 0..CCCD_TABLE_SIZE {
-                        let handle = u16::from_le_bytes(buffer[24 + i * 4..26 + i * 4].try_into().unwrap());
-                        let cccd = u16::from_le_bytes(buffer[26 + i * 4..28 + i * 4].try_into().unwrap());
+                        let handle = u16::from_le_bytes(buffer[40 + i * 4..42 + i * 4].try_into().unwrap());
+                        let cccd = u16::from_le_bytes(buffer[42 + i * 4..44 + i * 4].try_into().unwrap());
                         cccd_table_values[i] = (handle, cccd.into());
                     }
                     Ok(StorageData::BondInfo(ProfileInfo {
                         slot_num,
                         removed: false,
-                        info: BondInformation::new(address, ltk),
+                        info,
                         cccd_table: CccdTable::new(cccd_table_values),
                     }))
                 }
@@ -491,6 +562,8 @@ impl StorageData {
             StorageData::ForkData(_) => {
                 panic!("To get fork key for ForkData, use `get_fork_key` instead");
             }
+            #[cfg(all(feature = "_ble", feature = "split"))]
+            StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
             #[cfg(feature = "_ble")]
             StorageData::ActiveBleProfile(_) => StorageKeys::ActiveBleProfile as u32,
             #[cfg(feature = "_ble")]
@@ -557,6 +630,14 @@ pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
     embassy_embedded_hal::adapter::BlockingAsync::new(flash)
 }
 
+#[cfg(feature = "split")]
+pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
+    flash: F,
+    storage_config: StorageConfig,
+) -> Storage<F, 0, 0, 0, 0> {
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, storage_config).await
+}
+
 pub struct Storage<
     F: AsyncNorFlash,
     const ROW: usize,
@@ -566,7 +647,7 @@ pub struct Storage<
 > {
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
-    buffer: [u8; get_buffer_size()],
+    pub(crate) buffer: [u8; get_buffer_size()],
 }
 
 /// Read out storage config, update and then save back.
@@ -782,7 +863,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                #[cfg(feature = "_ble")]
                 FlashOperationMessage::WriteFork(fork) => {
                     let key = get_fork_key(fork.idx);
                     store_item(
@@ -792,6 +872,20 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &mut self.buffer,
                         &key,
                         &StorageData::ForkData(fork),
+                    )
+                    .await
+                }
+                #[cfg(all(feature = "_ble", feature = "split"))]
+                FlashOperationMessage::PeerAddress(peer) => {
+                    let key = get_peer_address_key(peer.peer_id);
+                    let data = StorageData::PeerAddress(peer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &data,
                     )
                     .await
                 }
@@ -921,7 +1015,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::ComboData(combo)) = read_data {
-                let mut actions = Vec::<_, COMBO_MAX_LENGTH>::new();
+                let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
                 for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
                     let _ = actions.push(action);
                 }
@@ -1089,6 +1183,42 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         } else {
             Ok(None)
         }
+    }
+
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    pub async fn read_peer_address(&mut self, peer_id: u8) -> Result<Option<PeerAddress>, ()> {
+        let read_data = fetch_item::<u32, StorageData, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &get_peer_address_key(peer_id),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        if let Some(StorageData::PeerAddress(data)) = read_data {
+            Ok(Some(data))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[cfg(all(feature = "_ble", feature = "split"))]
+    pub async fn write_peer_address(&mut self, peer_address: PeerAddress) -> Result<(), ()> {
+        let peer_id = peer_address.peer_id;
+        let item = StorageData::PeerAddress(peer_address);
+
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &get_peer_address_key(peer_id),
+            &item,
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))
     }
 }
 

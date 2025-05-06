@@ -3,10 +3,10 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::BleConfig;
 use syn::ItemMod;
 
-use crate::config::BleConfig;
-use crate::keyboard_config::KeyboardConfig;
+use crate::keyboard_config::{BoardConfig, KeyboardConfig};
 
 // Expand `bind_interrupt!` stuffs
 pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
@@ -17,8 +17,8 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: 
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Some(i) = &item_fn.attrs[0].meta.path().get_ident() {
-                            if i.to_string() == "bind_interrupt" {
+                        if let Some(i) = item_fn.attrs[0].meta.path().get_ident() {
+                            if i == "bind_interrupt" {
                                 let content = &item_fn.block.stmts;
                                 return Some(quote! {
                                     #(#content)*
@@ -75,6 +75,27 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
             } else {
                 quote! { CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler; }
             };
+            let nrf_sdc_config = match keyboard_config.board {
+                BoardConfig::Split(_) => quote! {
+                    ::nrf_sdc::Builder::new()?
+                    .support_scan()?
+                    .support_central()?
+                    .support_adv()?
+                    .support_peripheral()?
+                    .central_count(1)?
+                    .peripheral_count(1)?
+                    .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
+                    .build(p, rng, mpsl, mem)
+                },
+                BoardConfig::UniBody(_) => quote! {
+                    ::nrf_sdc::Builder::new()?
+                    .support_adv()?
+                    .support_peripheral()?
+                    .peripheral_count(1)?
+                    .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
+                    .build(p, rng, mpsl, mem)
+                },
+            };
             quote! {
                 use ::embassy_nrf::bind_interrupts;
                 bind_interrupts!(struct Irqs {
@@ -105,12 +126,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                     mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
                     mem: &'d mut ::nrf_sdc::Mem<N>,
                 ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
-                    ::nrf_sdc::Builder::new()?
-                        .support_adv()?
-                        .support_peripheral()?
-                        .peripheral_count(1)?
-                        .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
-                        .build(p, rng, mpsl, mem)
+                    #nrf_sdc_config
                 }
             }
         }

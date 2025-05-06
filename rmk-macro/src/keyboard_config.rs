@@ -1,16 +1,17 @@
-use pest::Parser;
-use pest_derive::Parser;
-
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::config::{
+use pest::Parser;
+use pest_derive::Parser;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+use rmk_config::{
     BehaviorConfig, BleConfig, DependencyConfig, InputDeviceConfig, KeyboardInfo, KeyboardTomlConfig, LayerTomlConfig,
-    LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, SplitConfig, StorageConfig,
+    LayoutConfig, LayoutTomlConfig, LightConfig, MatrixConfig, MatrixType, RmkConstantsConfig, SplitConfig,
+    StorageConfig,
 };
+use serde::Deserialize;
+
 use crate::default_config::esp32::default_esp32;
 use crate::default_config::nrf52810::default_nrf52810;
 use crate::default_config::nrf52832::default_nrf52832;
@@ -30,14 +31,6 @@ macro_rules! rmk_compile_error {
         Err(syn::Error::new_spanned(quote! {}, $msg).to_compile_error())
     };
 }
-
-// Max number of combos
-pub const COMBO_MAX_NUM: usize = 8;
-// Max size of combos
-pub const COMBO_MAX_LENGTH: usize = 4;
-
-// Max number of forks
-pub const FORK_MAX_NUM: usize = 16;
 
 // Max alias resolution depth to prevent infinite loops
 const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
@@ -134,17 +127,11 @@ pub(crate) enum CommunicationConfig {
 
 impl CommunicationConfig {
     pub(crate) fn ble_enabled(&self) -> bool {
-        match self {
-            CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => true,
-            _ => false,
-        }
+        matches!(self, CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _))
     }
 
     pub(crate) fn usb_enabled(&self) -> bool {
-        match self {
-            CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => true,
-            _ => false,
-        }
+        matches!(self, CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _))
     }
 
     pub(crate) fn get_ble_config(&self) -> Option<BleConfig> {
@@ -175,7 +162,7 @@ impl KeyboardConfig {
         config.communication = Self::get_communication_config(
             config.communication,
             toml_config.ble,
-            toml_config.keyboard.usb_enable.clone(),
+            toml_config.keyboard.usb_enable,
             &config.chip,
         )?;
 
@@ -187,13 +174,14 @@ impl KeyboardConfig {
 
         // Layout config
         config.layout = Self::get_layout_from_toml(
-            toml_config.layout,
+            toml_config.layout.expect("layout config is required"),
             toml_config.layer.unwrap_or_default(),
             toml_config.aliases.unwrap_or_default(),
         )?;
 
         // Behavior config
-        config.behavior = Self::get_behavior_from_toml(config.behavior, toml_config.behavior, &config.layout)?;
+        config.behavior =
+            Self::get_behavior_from_toml(config.behavior, toml_config.behavior, toml_config.rmk, &config.layout)?;
 
         // Light config
         config.light = Self::get_light_from_toml(config.light, toml_config.light);
@@ -212,7 +200,7 @@ impl KeyboardConfig {
     /// The chip model can be either configured to a board or a microcontroller chip.
     pub(crate) fn get_chip_model(config: &KeyboardTomlConfig) -> Result<ChipModel, TokenStream2> {
         if config.keyboard.board.is_none() == config.keyboard.chip.is_none() {
-            let message = format!("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both");
+            let message = "Either \"board\" or \"chip\" should be set in keyboard.toml, but not both";
             return rmk_compile_error!(message);
         }
 
@@ -366,21 +354,22 @@ impl KeyboardConfig {
             (Some(m), None) => {
                 match m.matrix_type {
                     MatrixType::normal => {
-                        if m.input_pins == None || m.output_pins == None {
+                        if m.input_pins.is_none() |m.output_pins.is_none() {
                             rmk_compile_error!("`input_pins` and `output_pins` is required for normal matrix".to_string())
                         } else {
                             Ok(())
                         }
                     },
                     MatrixType::direct_pin => {
-                        if m.direct_pins == None {
+                        if m.direct_pins.is_none() {
                             rmk_compile_error!("`direct_pins` is required for direct pin matrix".to_string())
                         } else {
                             Ok(())
                         }
                     },
                 }?;
-                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or(InputDeviceConfig::default())}))
+                // FIXME: input device for split keyboard is not supported yet
+                Ok(BoardConfig::UniBody(UniBodyConfig{matrix: m, input_device: input_device.unwrap_or_default()}))
             },
             (None, None) => rmk_compile_error!("[matrix] section in keyboard.toml is required for non-split keyboard".to_string()),
             _ => rmk_compile_error!("Use at most one of [matrix] or [split] in your keyboard.toml!\n-> [matrix] is used to define a normal matrix of non-split keyboard\n-> [split] is used to define a split keyboard\n".to_string()),
@@ -716,19 +705,16 @@ impl KeyboardConfig {
                     return rmk_compile_error!(error_message);
                 }
             }
-        } else {
-            if layers.len() > 0 {
-                return rmk_compile_error!(
-                    "layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string()
-                );
-            }
+        } else if !layers.is_empty() {
+            return rmk_compile_error!(
+                "layout.matrix_map is need to be defined to process [[layer]] based key maps".to_string()
+            );
         }
 
         if let Some(sequence_to_grid) = &sequence_to_grid {
             // collect layer names first
-            let mut layer_number = 0u32;
             let mut layer_names = HashMap::<String, u32>::new();
-            for layer in &layers {
+            for (layer_number, layer) in layers.iter().enumerate() {
                 if let Some(name) = &layer.name {
                     if layer_names.contains_key(name) {
                         let error_message = format!(
@@ -737,9 +723,8 @@ impl KeyboardConfig {
                         );
                         return rmk_compile_error!(error_message);
                     }
-                    layer_names.insert(name.clone(), layer_number);
+                    layer_names.insert(name.clone(), layer_number as u32);
                 }
-                layer_number += 1;
             }
             if layers.len() > layout.layers as usize {
                 return rmk_compile_error!(
@@ -751,8 +736,7 @@ impl KeyboardConfig {
             // using the previously defined sequence_to_grid mapping to fill in the
             // grid shaped classic keymaps
             let layer_names = layer_names; //make it immutable
-            let mut layer_number = 0;
-            for layer in &layers {
+            for (layer_number, layer) in layers.iter().enumerate() {
                 // each layer should contain a sequence of keymap entries
                 // their number and order should match the number and order of the above parsed matrix map
                 match Self::keymap_parser(&layer.keys, &aliases, &layer_names) {
@@ -760,8 +744,7 @@ impl KeyboardConfig {
                         let mut legacy_keymap =
                             vec![vec!["No".to_string(); layout.cols as usize]; layout.rows as usize];
 
-                        let mut sequence_number: usize = 0;
-                        for key_action in key_action_sequence {
+                        for (sequence_number, key_action) in key_action_sequence.into_iter().enumerate() {
                             if sequence_number >= sequence_to_grid.len() {
                                 let error_message = format!(
                                     "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)", &layer.name.clone().unwrap_or_default(), layer_number);
@@ -769,7 +752,6 @@ impl KeyboardConfig {
                             }
                             let (row, col) = sequence_to_grid[sequence_number];
                             legacy_keymap[row as usize][col as usize] = key_action.clone();
-                            sequence_number += 1;
                         }
 
                         final_layers.push(legacy_keymap);
@@ -781,7 +763,6 @@ impl KeyboardConfig {
                         return rmk_compile_error!(error_message);
                     }
                 }
-                layer_number += 1;
             }
         }
 
@@ -806,16 +787,15 @@ impl KeyboardConfig {
         }
 
         // Row
-        if let Some(_) = final_layers.iter().map(|r| r.len()).find(|l| *l as u8 != layout.rows) {
+        if final_layers.iter().any(|r| r.len() as u8 != layout.rows) {
             return rmk_compile_error!(
                 "keyboard.toml: Row number in keymap doesn't match with [layout.row]".to_string()
             );
         }
         // Col
-        if let Some(_) = final_layers
+        if final_layers
             .iter()
-            .filter_map(|r| r.iter().map(|c| c.len()).find(|l| *l as u8 != layout.cols))
-            .next()
+            .any(|r| r.iter().any(|c| c.len() as u8 != layout.cols))
         {
             // Find a row whose col num is wrong
             return rmk_compile_error!(
@@ -834,6 +814,7 @@ impl KeyboardConfig {
     fn get_behavior_from_toml(
         default: BehaviorConfig,
         toml: Option<BehaviorConfig>,
+        rmk: RmkConstantsConfig,
         layout: &LayoutConfig,
     ) -> Result<BehaviorConfig, TokenStream2> {
         match toml {
@@ -860,15 +841,15 @@ impl KeyboardConfig {
 
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
-                    if combo.combos.len() > COMBO_MAX_NUM {
+                    if combo.combos.len() > rmk.combo_max_num {
                         return rmk_compile_error!(format!(
-                            "keyboard.toml: number of combos is greater than [behavior.combo.max_num]"
+                            "keyboard.toml: number of combos is greater than combo_max_num configured under [rmk] section"
                         ));
                     }
 
                     for (i, c) in combo.combos.iter().enumerate() {
-                        if c.actions.len() > COMBO_MAX_LENGTH {
-                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than [behavior.combo.max_length]"));
+                        if c.actions.len() > rmk.combo_max_length {
+                            return rmk_compile_error!(format!("keyboard.toml: number of keys in combo #{i} is greater than combo_max_length configured under [rmk] section"));
                         }
 
                         if let Some(layer) = c.layer {
@@ -883,9 +864,9 @@ impl KeyboardConfig {
 
                 behavior.fork = behavior.fork.or(default.fork);
                 if let Some(fork) = &behavior.fork {
-                    if fork.forks.len() > FORK_MAX_NUM {
+                    if fork.forks.len() > rmk.fork_max_num {
                         return rmk_compile_error!(format!(
-                            "keyboard.toml: number of forks is greater than [behavior.fork.max_num]"
+                            "keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section"
                         ));
                     }
                 }
@@ -924,7 +905,10 @@ impl KeyboardConfig {
 
 pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStream2> {
     // Read keyboard config file at project root
-    let s = match fs::read_to_string("keyboard.toml") {
+    let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
+        .expect("\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n");
+
+    let s = match fs::read_to_string(config_toml_path) {
         Ok(s) => s,
         Err(e) => {
             let msg = format!("Read keyboard config file `keyboard.toml` error: {}", e);
@@ -937,7 +921,7 @@ pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStr
         Ok(c) => Ok(c),
         Err(e) => {
             let msg = format!("Parse `keyboard.toml` error: {}", e.message());
-            return rmk_compile_error!(msg);
+            rmk_compile_error!(msg)
         }
     }
 }
@@ -952,11 +936,20 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_mac
     let num_col = keyboard_config.layout.cols as usize;
     let num_row = keyboard_config.layout.rows as usize;
     let num_layer = keyboard_config.layout.layers as usize;
-
+    let num_encoder = match &keyboard_config.board {
+        BoardConfig::Split(_split_config) => {
+            // TODO: encoder config for split keyboard
+            0
+        }
+        BoardConfig::UniBody(uni_body_config) => {
+            uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
+        }
+    };
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
+        pub(crate) const NUM_ENCODER: usize = #num_encoder;
         static KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,

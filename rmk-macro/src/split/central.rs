@@ -2,8 +2,8 @@ use core::panic;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{SerialConfig, SplitConfig};
 
-use crate::config::{SerialConfig, SplitConfig};
 use crate::keyboard_config::{BoardConfig, KeyboardConfig};
 use crate::{ChipModel, ChipSeries};
 
@@ -19,21 +19,10 @@ fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfi
     match &split_config.connection[..] {
         "ble" => {
             // We need to create addrs for BLE
-            let central_addr = split_config.central.ble_addr.expect("central.ble_addr is required");
-            let mut peripheral_addrs = proc_macro2::TokenStream::new();
-            split_config
-                .peripheral
-                .iter()
-                .map(|p| p.ble_addr.unwrap())
-                .enumerate()
-                .for_each(|(idx, addr)| {
-                    let addr_name = format_ident!("peripheral_addr{}", idx);
-                    peripheral_addrs.extend(quote! {let #addr_name = [#(#addr), *];})
-                });
-
+            let num_peripheral = split_config.peripheral.len();
             quote! {
-                let central_addr = [#(#central_addr), *];
-                #peripheral_addrs
+                // Read peripheral address from storage
+                let peripheral_addrs = ::rmk::split::ble::central::read_peripheral_addresses::<#num_peripheral, _, ROW, COL, NUM_LAYER, NUM_ENCODER>(&mut storage).await;
             }
         }
         "serial" => {

@@ -4,15 +4,16 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
-use crate::combo::{Combo, COMBO_MAX_NUM};
+use crate::combo::Combo;
 use crate::keymap::KeyMap;
 use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
-    combo::COMBO_MAX_LENGTH,
     storage::{ComboData, FlashOperationMessage},
+    COMBO_MAX_LENGTH,
 };
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
@@ -71,20 +72,18 @@ pub(crate) async fn process_vial<
 ) {
     // report.output_data[0] == 0xFE -> vial commands
     let vial_command = VialCommand::from_primitive(report.output_data[1]);
-    info!("Received vial command: {:?}", vial_command);
+    debug!("Received vial command: {:?}", vial_command);
     match vial_command {
         VialCommand::GetKeyboardId => {
-            debug!("Received Vial - GetKeyboardId");
             // Returns vial protocol version + vial keyboard id
             LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
             report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
+            debug!("Vial return: {:?}", report.input_data);
         }
         VialCommand::GetSize => {
-            debug!("Received Vial - GetSize");
             LittleEndian::write_u32(&mut report.input_data[0..4], vial_keyboard_def.len() as u32);
         }
         VialCommand::GetKeyboardDef => {
-            debug!("Received Vial - GetKeyboardDefinition");
             let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
             let start = page * VIAL_EP_SIZE;
             let mut end = start + VIAL_EP_SIZE;
@@ -103,7 +102,6 @@ pub(crate) async fn process_vial<
             );
         }
         VialCommand::GetUnlockStatus => {
-            debug!("Received Vial - GetUnlockStatus");
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
             // Unlocked
@@ -228,9 +226,9 @@ pub(crate) async fn process_vial<
                 if let Some(encoder_layer) = encoder_map.get(layer as usize) {
                     if let Some(encoder) = encoder_layer.get(index as usize) {
                         let clockwise = to_via_keycode(encoder.clockwise());
-                        BigEndian::write_u16(&mut report.input_data[0..2], clockwise);
                         let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
-                        BigEndian::write_u16(&mut report.input_data[2..4], counter_clockwise);
+                        BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
+                        BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
                         return;
                     }
                 }
@@ -247,7 +245,7 @@ pub(crate) async fn process_vial<
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            let _encoder = if let Some(ref mut encoder_map) = &mut keymap.borrow_mut().encoders {
+            let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
                 if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
                     if let Some(encoder) = encoder_layer.get_mut(index as usize) {
                         if clockwise == 1 {
@@ -298,10 +296,7 @@ fn vial_combo(combos: &heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Optio
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-fn vial_combo_mut(
-    combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>,
-    idx: usize,
-) -> Option<(usize, &mut Combo)> {
+fn vial_combo_mut(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) -> Option<(usize, &mut Combo)> {
     combos
         .iter_mut()
         .enumerate()

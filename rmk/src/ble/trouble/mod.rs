@@ -3,11 +3,12 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
+use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
-use embassy_time::{Duration, Timer};
+use embassy_time::{with_timeout, Duration, Timer};
 use embedded_hal::digital::OutputPin;
-use profile::{UPDATED_CCCD_TABLE, UPDATED_PROFILE};
+use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
@@ -32,8 +33,7 @@ use {
 };
 
 use crate::ble::led::BleLedReader;
-use crate::ble::trouble::profile::{ProfileInfo, ProfileManager};
-use crate::channel::{LED_SIGNAL, VIAL_READ_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
@@ -43,30 +43,28 @@ use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
+pub(crate) mod device_info;
 pub(crate) mod profile;
-
-/// Maximum number of bonded devices
-pub const BONDED_DEVICE_NUM: usize = 8;
 
 /// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-const CONNECTIONS_MAX: usize = 4;
+pub(crate) const CONNECTIONS_MAX: usize = 4;
 
 /// Max number of L2CAP channels
-const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
 
 /// L2CAP MTU size
-pub(crate) const L2CAP_MTU: usize = 255;
+pub(crate) const L2CAP_MTU: usize = 512;
 
 /// Build the BLE stack.
-pub async fn build_ble_stack<'a, C: Controller, RNG: RngCore + CryptoRng>(
+pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + CryptoRng>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
-) -> Stack<'a, C> {
+    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
+) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
         .set_random_address(Address::random(host_address))
@@ -88,7 +86,7 @@ pub(crate) async fn run_ble<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    stack: &'b Stack<'b, C>,
+    stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
@@ -142,13 +140,38 @@ pub(crate) async fn run_ble<
         mut peripheral, runner, ..
     } = stack.build();
 
-    // Set conn param
     info!("Starting advertising and GATT service");
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
         name: rmk_config.usb_config.product_name,
         appearance: &appearance::human_interface_device::KEYBOARD,
     }))
     .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.pnp_id,
+            &PnPID {
+                vid_source: VidSource::UsbIF,
+                vendor_id: rmk_config.usb_config.vid,
+                product_id: rmk_config.usb_config.pid,
+                product_version: 0x0001,
+            },
+        )
+        .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.serial_number,
+            &heapless::String::try_from(rmk_config.usb_config.serial_number).unwrap(),
+        )
+        .unwrap();
+
+    server
+        .set(
+            &server.device_info_service.manufacturer_name,
+            &heapless::String::try_from(rmk_config.usb_config.manufacturer).unwrap(),
+        )
+        .unwrap();
 
     #[cfg(not(feature = "_no_usb"))]
     let background_task = join(ble_task(runner), usb_device.run());
@@ -206,6 +229,15 @@ pub(crate) async fn run_ble<
                                 select3(ble_fut, USB_SUSPENDED.wait(), profile_manager.update_profile()).await;
                                 continue;
                             }
+                            Either4::Second(Err(BleHostError::BleHost(Error::Timeout))) => {
+                                warn!("Advertising timeout, sleep and wait for any key");
+
+                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                continue;
+                            }
                             _ => {}
                         }
                     }
@@ -240,6 +272,15 @@ pub(crate) async fn run_ble<
                                 )
                                 .await;
                             }
+                            Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
+                                warn!("Advertising timeout, sleep and wait for any key");
+
+                                // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                                CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                                // Wait for the keyboard report for wake the keyboard
+                                let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                                continue;
+                            }
                             _ => {}
                         }
                     }
@@ -265,6 +306,15 @@ pub(crate) async fn run_ble<
                     )
                     .await;
                 }
+                Err(BleHostError::BleHost(Error::Timeout)) => {
+                    warn!("Advertising timeout, sleep and wait for any key");
+
+                    // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
+                    CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+                    // Wait for the keyboard report for wake the keyboard
+                    let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+                    continue;
+                }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
@@ -280,13 +330,22 @@ pub(crate) async fn run_ble<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
+pub(crate) async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
     loop {
         // Signal to indicate the stack is started
         #[cfg(feature = "split")]
         crate::split::ble::central::STACK_STARTED.signal(true);
 
+        #[cfg(not(feature = "split"))]
         if let Err(e) = runner.run().await {
+            panic!("[ble_task] error: {:?}", e);
+        }
+
+        #[cfg(feature = "split")]
+        if let Err(e) = runner
+            .run_with_handler(&crate::split::ble::central::ScanHandler {})
+            .await
+        {
             panic!("[ble_task] error: {:?}", e);
         }
     }
@@ -296,7 +355,7 @@ pub(crate) async fn ble_task<C: Controller>(mut runner: Runner<'_, C>) {
 ///
 /// This function will handle the GATT events and process them.
 /// This is how we interact with read and write requests.
-async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) -> Result<(), Error> {
+async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, DefaultPacketPool>) -> Result<(), Error> {
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
     let input_keyboard = server.hid_service.input_keyboard;
@@ -393,7 +452,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
                         // Update CCCD table after processing the event
                         if cccd_updated {
                             if let Some(table) = server.get_cccd_table(conn.raw()) {
-                                info!("Updated profile CCCD table: {:?}", table);
                                 UPDATED_CCCD_TABLE.signal(table);
                             }
                         }
@@ -423,9 +481,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_>) ->
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn advertise<'a, 'b, C: Controller>(
     name: &'a str,
-    peripheral: &mut Peripheral<'a, C>,
+    peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b Server<'_>,
-) -> Result<GattConnection<'a, 'b>, BleHostError<C::Error>> {
+) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     // Wait for 10ms to ensure the USB is checked
     embassy_time::Timer::after_millis(10).await;
     let mut advertiser_data = [0; 31];
@@ -446,7 +504,6 @@ async fn advertise<'a, 'b, C: Controller>(
         primary_phy: PhyKind::Le2M,
         secondary_phy: PhyKind::Le2M,
         tx_power: TxPower::Plus8dBm,
-        timeout: Some(Duration::from_secs(120)),
         interval_min: Duration::from_millis(200),
         interval_max: Duration::from_millis(200),
         ..Default::default()
@@ -462,9 +519,16 @@ async fn advertise<'a, 'b, C: Controller>(
             },
         )
         .await?;
-    let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    info!("[adv] connection established");
-    Ok(conn)
+
+    // Timeout for advertising is 300s
+    match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+        Ok(conn_res) => {
+            let conn = conn_res?.with_attribute_server(server)?;
+            info!("[adv] connection established");
+            Ok(conn)
+        }
+        Err(_) => Err(BleHostError::BleHost(Error::Timeout)),
+    }
 }
 
 // Dummy keyboard service is used to monitoring keys when there's no actual connection.
@@ -488,7 +552,10 @@ pub(crate) async fn run_dummy_keyboard<
     dummy_writer.run_writer().await;
 }
 
-pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(stack: &Stack<'_, C>, conn: &GattConnection<'a, 'b>) {
+pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+    stack: &Stack<'_, C, P>,
+    conn: &GattConnection<'a, 'b, P>,
+) {
     // Wait for 5 seconds before setting connection parameters to avoid connection drop
     embassy_time::Timer::after_secs(5).await;
 
@@ -533,6 +600,7 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller>(stack: &Stack<'_, C>,
             Err(BleHostError::BleHost(Error::Hci(error))) => {
                 if 0x2A == error.to_status().into_inner() {
                     // Busy, retry
+                    info!("[set_conn_params] 2nd time HCI busy: {:?}", error);
                     continue;
                 } else {
                     error!("[set_conn_params] 2nd time HCI error: {:?}", error);
@@ -563,8 +631,8 @@ async fn run_ble_keyboard<
     const NUM_ENCODER: usize,
 >(
     server: &'b Server<'_>,
-    conn: &GattConnection<'a, 'b>,
-    stack: &Stack<'_, C>,
+    conn: &GattConnection<'a, 'b, DefaultPacketPool>,
+    stack: &Stack<'_, C, DefaultPacketPool>,
     light_controller: &mut LightController<Out>,
     keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     rmk_config: &'d mut RmkConfig<'static>,
@@ -581,7 +649,7 @@ async fn run_ble_keyboard<
         .read_trouble_bond_info(ACTIVE_PROFILE.load(Ordering::SeqCst))
         .await
     {
-        if bond_info.info.address == conn.raw().peer_address() {
+        if bond_info.info.identity.match_identity(&conn.raw().peer_identity()) {
             info!("Loading CCCD table from storage: {:?}", bond_info.cccd_table);
             server.set_cccd_table(conn.raw(), bond_info.cccd_table.clone());
         }

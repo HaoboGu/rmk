@@ -4,24 +4,18 @@ pub mod macro_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
-use ::heapless::Vec;
-use embassy_sync::channel::Channel;
 use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
+use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
-use crate::combo::{Combo, COMBO_MAX_NUM};
-use crate::event::{Event, KeyEvent};
-use crate::fork::{Fork, FORK_MAX_NUM};
-use crate::hid::Report;
-use crate::light::LedIndicator;
-#[cfg(feature = "storage")]
-use crate::storage::FlashOperationMessage;
-use crate::RawMutex;
+use crate::combo::Combo;
+use crate::fork::Fork;
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
 
 /// The config struct for RMK keyboard.
 ///
@@ -30,7 +24,6 @@ use crate::RawMutex;
 /// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
 /// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
 pub struct KeyboardConfig<'a, O: OutputPin> {
-    pub channel_config: ChannelConfig,
     pub controller_config: ControllerConfig<O>,
     pub rmk_config: RmkConfig<'a>,
 }
@@ -38,49 +31,9 @@ pub struct KeyboardConfig<'a, O: OutputPin> {
 impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
     fn default() -> Self {
         Self {
-            channel_config: ChannelConfig::default(),
             controller_config: ControllerConfig::default(),
             rmk_config: RmkConfig::default(),
         }
-    }
-}
-
-/// Configurations for channels used in RMK
-pub struct ChannelConfig<
-    const KEY_EVENT_CHANNEL_SIZE: usize = 16,
-    const EVENT_CHANNEL_SIZE: usize = 16,
-    const REPORT_CHANNEL_SIZE: usize = 16,
-> {
-    pub key_event_channel: Channel<RawMutex, KeyEvent, KEY_EVENT_CHANNEL_SIZE>,
-    pub event_channel: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE>,
-    pub keyboard_report_channel: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>,
-    #[cfg(feature = "storage")]
-    pub(crate) flash_channel: Channel<RawMutex, FlashOperationMessage, 4>,
-    pub(crate) led_channel: Channel<RawMutex, LedIndicator, 4>,
-    pub(crate) vial_read_channel: Channel<RawMutex, [u8; 32], 4>,
-}
-
-impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize> Default
-    for ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
-{
-    fn default() -> Self {
-        Self {
-            key_event_channel: Channel::new(),
-            event_channel: Channel::new(),
-            keyboard_report_channel: Channel::new(),
-            #[cfg(feature = "storage")]
-            flash_channel: Channel::new(),
-            led_channel: Channel::new(),
-            vial_read_channel: Channel::new(),
-        }
-    }
-}
-
-impl<const KEY_EVENT_CHANNEL_SIZE: usize, const EVENT_CHANNEL_SIZE: usize, const REPORT_CHANNEL_SIZE: usize>
-    ChannelConfig<KEY_EVENT_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE>
-{
-    pub fn new() -> Self {
-        Self::default()
     }
 }
 
@@ -102,7 +55,6 @@ impl<O: OutputPin> Default for ControllerConfig<O> {
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
 pub struct RmkConfig<'a> {
-    pub mouse_config: MouseConfig,
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
     pub storage_config: StorageConfig,
@@ -244,40 +196,6 @@ impl<'a> VialConfig<'a> {
             vial_keyboard_def,
         }
     }
-}
-
-/// Configuration for debouncing
-pub struct DebounceConfig {
-    /// Debounce time in ms
-    pub debounce_time: u32,
-}
-
-/// Configurations for mouse functionalities
-#[derive(Clone, Copy, Debug)]
-pub struct MouseConfig {
-    /// Time interval in ms of reporting mouse cursor states
-    pub mouse_key_interval: u32,
-    /// Time interval in ms of reporting mouse wheel states
-    pub mouse_wheel_interval: u32,
-}
-
-impl Default for MouseConfig {
-    fn default() -> Self {
-        Self {
-            mouse_key_interval: 20,
-            mouse_wheel_interval: 80,
-        }
-    }
-}
-
-/// Configurations for RGB light
-#[derive(Clone, Copy, Debug)]
-pub struct RGBLightConfig {
-    pub enabled: bool,
-    pub rgb_led_num: u32,
-    pub rgb_hue_step: u32,
-    pub rgb_val_step: u32,
-    pub rgb_sat_step: u32,
 }
 
 /// Configurations for usb

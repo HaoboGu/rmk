@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
+use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
 use crate::{ChipModel, ChipSeries};
 
 // Default implementations of chip initialization
@@ -19,6 +19,11 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 quote! {
                     config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
                     config.dcdc.reg0 = true;
+                    config.dcdc.reg1 = true;
+                }
+            } else if keyboard_config.chip.chip == "nrf52833" {
+                quote! {
+                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
                     config.dcdc.reg1 = true;
                 }
             } else {
@@ -111,9 +116,9 @@ pub(crate) fn expand_chip_init(keyboard_config: &KeyboardConfig, item_mod: &Item
                 }
                 None
             })
-            .unwrap_or(chip_init_default(&keyboard_config))
+            .unwrap_or(chip_init_default(keyboard_config))
     } else {
-        chip_init_default(&keyboard_config)
+        chip_init_default(keyboard_config)
     }
 }
 
@@ -141,15 +146,7 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
 }
 
 fn get_ble_addr(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    if let BoardConfig::Split(split_config) = &keyboard_config.board {
-        let addr = split_config
-            .central
-            .ble_addr
-            .expect("No BLE address defined for BLE split keyboard");
-        quote! {
-            [#(#addr), *]
-        }
-    } else if keyboard_config.chip.series == ChipSeries::Nrf52 {
+    if keyboard_config.chip.series == ChipSeries::Nrf52 {
         quote! {
             {
                 let ficr = ::embassy_nrf::pac::FICR;

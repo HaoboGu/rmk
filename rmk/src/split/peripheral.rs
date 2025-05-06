@@ -1,32 +1,41 @@
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
+#[cfg(all(feature = "_ble", feature = "storage"))]
+use {super::ble::PeerAddress, crate::channel::FLASH_CHANNEL};
 #[cfg(feature = "_ble")]
-use trouble_host::prelude::*;
+use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, trouble_host::prelude::*};
 
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
+use crate::state::ConnectionState;
 use crate::CONNECTION_STATE;
 
 /// Run the split peripheral service.
 ///
 /// # Arguments
 ///
-/// * `matrix` - the matrix scanning implementation to use.
-/// * `central_addr` - (optional) central's BLE static address. This argument is enabled only for nRF BLE split now
-/// * `peripheral_addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `id` - (optional) The id of the peripheral
+/// * `stack` - (optional) The TrouBLE stack
 /// * `serial` - (optional) serial port used to send peripheral split message. This argument is enabled only for serial split now
-/// * `spawner`: (optional) embassy spawner used to spawn async tasks. This argument is enabled for non-esp microcontrollers
+/// * `storage` - (optional) The storage to save the central address
 pub async fn run_rmk_split_peripheral<
     'a,
+    #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
+    #[cfg(feature = "_ble")] F: NorFlash,
+    #[cfg(feature = "_ble")] const ROW: usize,
+    #[cfg(feature = "_ble")] const COL: usize,
+    #[cfg(feature = "_ble")] const NUM_LAYER: usize,
+    #[cfg(feature = "_ble")] const NUM_ENCODER: usize,
 >(
-    #[cfg(feature = "_ble")] central_addr: [u8; 6],
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C>,
+    #[cfg(feature = "_ble")] id: usize,
+    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
+    #[cfg(feature = "_ble")] storage: &'b mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) {
     #[cfg(not(feature = "_ble"))]
@@ -38,7 +47,7 @@ pub async fn run_rmk_split_peripheral<
     }
 
     #[cfg(feature = "_ble")]
-    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(central_addr, stack).await;
+    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack, storage).await;
 }
 
 /// The split peripheral instance.
@@ -56,7 +65,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
     /// The peripheral uses the general matrix, does scanning and send the key events through `SplitWriter`.
     /// If also receives split messages from the central through `SplitReader`.
     pub(crate) async fn run(&mut self) {
-        CONNECTION_STATE.store(true, core::sync::atomic::Ordering::Release);
+        CONNECTION_STATE.store(ConnectionState::Connected.into(), core::sync::atomic::Ordering::Release);
         loop {
             match select3(
                 self.split_driver.read(),
@@ -71,6 +80,15 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                         SplitMessage::ConnectionState(state) => {
                             info!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
+                        }
+                        #[cfg(all(feature = "_ble", feature = "storage"))]
+                        SplitMessage::ClearPeer => {
+                            // Clear the peer address
+                            FLASH_CHANNEL
+                                .send(crate::storage::FlashOperationMessage::PeerAddress(PeerAddress::new(
+                                    0, false, [0; 6],
+                                )))
+                                .await;
                         }
                         _ => (),
                     },

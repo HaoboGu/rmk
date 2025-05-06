@@ -1,17 +1,17 @@
 use core::cell::RefCell;
 
-use embassy_futures::select::select;
+use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::action::{Action, KeyAction};
-use crate::boot;
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::combo::{Combo, COMBO_MAX_LENGTH};
+use crate::combo::Combo;
+use crate::config::BehaviorConfig;
 use crate::event::KeyEvent;
-use crate::fork::{ActiveFork, StateBits, FORK_MAX_NUM};
+use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
@@ -20,6 +20,7 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
+use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM, MACRO_MAX_NUM};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -468,8 +469,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             } else {
                 let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
                 match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
-                    embassy_futures::select::Either::First(_) => self.dispatch_combos().await,
-                    embassy_futures::select::Either::Second(event) => self.unprocessed_events.push(event).unwrap(),
+                    Either::First(_) => self.dispatch_combos().await,
+                    Either::Second(event) => self.unprocessed_events.push(event).unwrap(),
                 }
             }
             next_action
@@ -651,12 +652,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let hold_timeout =
                 embassy_time::Timer::after_millis(self.keymap.borrow().behavior.tap_hold.hold_timeout.as_millis());
             match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
-                embassy_futures::select::Either::First(_) => {
+                Either::First(_) => {
                     // Timeout, trigger hold
                     debug!("Hold timeout, got HOLD: {:?}, {:?}", hold_action, key_event);
                     self.process_key_action_normal(hold_action, key_event).await;
                 }
-                embassy_futures::select::Either::Second(e) => {
+                Either::Second(e) => {
                     if e.row == key_event.row && e.col == key_event.col {
                         // If it's same key event and releasing within `hold_timeout`, trigger tap
                         if !e.pressed {
@@ -730,11 +731,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.keymap.borrow().behavior.tap_hold.post_wait_time.as_millis(),
                 );
                 match select(wait_timeout, wait_release).await {
-                    embassy_futures::select::Either::First(_) => {
+                    Either::First(_) => {
                         // Wait timeout, release the hold key finally
                         self.process_key_action_normal(hold_action, key_event).await;
                     }
-                    embassy_futures::select::Either::Second(next_press) => {
+                    Either::Second(next_press) => {
                         // Next press event comes, add hold release to unprocessed list first, then add next press
                         self.unprocessed_events.push(key_event).ok();
                         self.unprocessed_events.push(next_press).ok();
@@ -778,12 +779,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
-                        embassy_futures::select::Either::First(_) => {
+                        Either::First(_) => {
                             // Timeout, release modifiers
                             self.update_osl(key_event);
                             self.osm_state = OneShotState::None;
                         }
-                        embassy_futures::select::Either::Second(e) => {
+                        Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
                                 warn!("unprocessed event queue is full, dropping event");
@@ -832,12 +833,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
-                        embassy_futures::select::Either::First(_) => {
+                        Either::First(_) => {
                             // Timeout, deactivate layer
                             self.keymap.borrow_mut().deactivate_layer(layer_num);
                             self.osl_state = OneShotState::None;
                         }
-                        embassy_futures::select::Either::Second(e) => {
+                        Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
                                 warn!("unprocessed event queue is full, dropping event");
@@ -869,32 +870,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, key_event).await;
         } else if key.is_user() {
-            #[cfg(feature = "_ble")]
-            {
-                use crate::ble::trouble::profile::BleProfileAction;
-                use crate::channel::BLE_PROFILE_CHANNEL;
-                if !key_event.pressed {
-                    // Get user key id
-                    let id = key as u8 - KeyCode::User0 as u8;
-                    if id < 8 {
-                        info!("Switch to profile: {}", id);
-                        // User0~7: Swtich to the specific profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::SwitchProfile(id)).await;
-                    } else if id == 8 {
-                        // User8: Next profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::NextProfile).await;
-                    } else if id == 9 {
-                        // User9: Previous profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::PreviousProfile).await;
-                    } else if id == 10 {
-                        // User10: Clear profile
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearProfile).await;
-                    } else if id == 11 {
-                        // User11:
-                        BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
-                    }
-                }
-            }
+            self.process_user(key, key_event).await;
         } else if key.is_basic() {
             self.process_basic(key, key_event).await;
         } else if key.is_macro() {
@@ -1152,14 +1128,71 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // But it requires embassy-executor, which is not available for esp-idf-svc.
                 // So now we just block for 20ms for mouse keys.
                 // In the future, we're going to use esp-hal once it have good support for BLE
-                embassy_time::Timer::after_millis(20).await;
+                embassy_time::Timer::after_millis(crate::MOUSE_KEY_INTERVAL as u64).await;
                 KEY_EVENT_CHANNEL.try_send(key_event).ok();
             }
         }
     }
 
+    async fn process_user(&mut self, key: KeyCode, key_event: KeyEvent) {
+        debug!("Processing user key: {:?}, event: {:?}", key, key_event);
+        #[cfg(feature = "_ble")]
+        {
+            use crate::ble::trouble::profile::BleProfileAction;
+            use crate::channel::BLE_PROFILE_CHANNEL;
+            use crate::NUM_BLE_PROFILE;
+            // Get user key id
+            let id = key as u8 - KeyCode::User0 as u8;
+            if key_event.pressed {
+                // Clear Peer is processed when pressed
+                if id == NUM_BLE_PROFILE as u8 + 4 {
+                    #[cfg(feature = "split")]
+                    if key_event.pressed {
+                        // Wait for 5s, if the key is still pressed, clear split peer info
+                        // If there's any other key event received during this period, skip
+                        match select(embassy_time::Timer::after_millis(5000), KEY_EVENT_CHANNEL.receive()).await {
+                            Either::First(_) => {
+                                // Timeout reached, send clear peer message
+                                info!("Clear peer");
+                                if let Ok(publisher) = crate::channel::SPLIT_MESSAGE_PUBLISHER.publisher() {
+                                    publisher.publish_immediate(crate::split::SplitMessage::ClearPeer);
+                                }
+                            }
+                            Either::Second(e) => {
+                                // Received a new key event before timeout, add to unprocessed list
+                                if self.unprocessed_events.push(e).is_err() {
+                                    warn!("unprocessed event queue is full, dropping event");
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Other user keys are processed when released
+                if id < NUM_BLE_PROFILE as u8 {
+                    info!("Switch to profile: {}", id);
+                    // User0~7: Swtich to the specific profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::SwitchProfile(id)).await;
+                } else if id == NUM_BLE_PROFILE as u8 {
+                    // User8: Next profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::NextProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 1 {
+                    // User9: Previous profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::PreviousProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 2 {
+                    // User10: Clear profile
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearProfile).await;
+                } else if id == NUM_BLE_PROFILE as u8 + 3 {
+                    // User11:
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::ToggleConnection).await;
+                }
+            }
+        }
+    }
+
     fn process_boot(&mut self, key: KeyCode, key_event: KeyEvent) {
-        if key_event.pressed {
+        // When releasing the key, process the boot action
+        if !key_event.pressed {
             match key {
                 KeyCode::Bootloader => {
                     boot::jump_to_bootloader();
