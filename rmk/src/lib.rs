@@ -78,6 +78,7 @@ pub mod fork;
 pub mod hid;
 pub mod hid_state;
 pub mod input_device;
+pub mod controller;
 pub mod keyboard;
 pub mod keyboard_macros;
 pub mod keycode;

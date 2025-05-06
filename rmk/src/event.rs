@@ -93,3 +93,9 @@ pub struct KeyEvent {
     pub col: u8,
     pub pressed: bool,
 }
+
+/// Event for controllers
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ControllerEvent { }
