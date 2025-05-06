@@ -1,16 +1,14 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
-use num_enum::FromPrimitive;
 
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyEvent, RotaryEncoderEvent};
-use crate::keyboard_macro::MacroOperation;
-use crate::keycode::KeyCode;
+use crate::keyboard_macros::MacroOperation;
+use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
-use crate::{COMBO_MAX_NUM, MACRO_SPACE_SIZE};
 
 /// Keymap represents the stack of layers.
 ///
@@ -281,7 +279,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod test {
     use super::{Combo, _reorder_combos};
-    use crate::action::KeyAction;
     use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
     use crate::k;

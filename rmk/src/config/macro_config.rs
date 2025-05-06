@@ -1,6 +1,4 @@
-/// Default macro space size
-/// the sum of all macro elements + number of macro elements
-pub const MACRO_SPACE_SIZE: usize = 256;
+use crate::MACRO_SPACE_SIZE;
 
 #[derive(Debug)]
 pub struct KeyboardMacrosConfig {

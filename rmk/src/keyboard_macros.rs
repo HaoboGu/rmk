@@ -4,9 +4,8 @@ use crate::{
     keycode::KeyCode,
     keymap::fill_vec,
     via::keycode_convert::{from_ascii, to_ascii},
+    MACRO_SPACE_SIZE,
 };
-
-use crate::config::macro_config::MACRO_SPACE_SIZE;
 
 /// encoded with the two bytes, content at the third byte
 /// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported

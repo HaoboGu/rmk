@@ -9,7 +9,6 @@ use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
 use vial::process_vial;
 
-use crate::config::macro_config::MACRO_SPACE_SIZE;
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
 use crate::keymap::KeyMap;

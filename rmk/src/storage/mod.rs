@@ -635,7 +635,7 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     flash: F,
     storage_config: StorageConfig,
 ) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, storage_config).await
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config).await
 }
 
 pub struct Storage<
