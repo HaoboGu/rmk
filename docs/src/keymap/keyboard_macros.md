@@ -100,7 +100,7 @@ Note that you are still limited to the ascii characters defined as `KeyCode`s.
 If you enter an illegal character it will be converted to `X`.
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS).
-For example, in MacOS with a en-US layout you can define the following sequence to enter a `ü`:
+For example, in MacOS with a en-US layout you can define the following sequence to enter an `ö`:
 ```
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
@@ -108,7 +108,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
             MacroOperation::Press(KeyCode::LAlt),
             MacroOperation::Tap(KeyCode::U),
             MacroOperation::Release(KeyCode::LAlt),
-            MacroOperation::Tap(KeyCode::U),
+            MacroOperation::Tap(KeyCode::O),
         ])
         .expect("too many elements"),
     ])

@@ -7,7 +7,7 @@ This documentation and the `KeyCodes` assume an en-US layout.
 
 ## Issuing Specific Characters
 Entering special characters usually requires a key combination, which depends on your operating system and chosen keyboard layout (setting in the OS).
-For example, in macOS with an en-US layout, you can define the following sequence to enter a `ü`:
+For example, in macOS with an en-US layout, you can define the following sequence to enter an `ä`:
 ```
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
@@ -15,7 +15,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
             MacroOperation::Press(KeyCode::LAlt),
             MacroOperation::Tap(KeyCode::U),
             MacroOperation::Release(KeyCode::LAlt),
-            MacroOperation::Tap(KeyCode::U),
+            MacroOperation::Tap(KeyCode::A),
         ])
         .expect("too many elements"),
     ])
