@@ -95,8 +95,8 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 ```
 (With the improvement that the `Text` macro operation is used in both cases.)
 
-Note that you are still limited to the ascii characters defined as `KeyCode`s. For example, you can't enter a German
-Umlaut (`ü`) or unicode. 
+Note that you are still limited to the ascii characters defined as `KeyCode`s.
+ For example, you can't enter a German Umlaut (`ü`) or unicode directly with a `KeyCode` binding.
 If you enter an illegal character it will be converted to `X`.
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS).
