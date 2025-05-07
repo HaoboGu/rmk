@@ -6,7 +6,7 @@ use quote::quote;
 use rmk_config::StorageConfig;
 
 use crate::keyboard_config::KeyboardConfig;
-use crate::ChipSeries;
+use rmk_config::ChipSeries;
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     if !keyboard_config.storage.enabled {

@@ -4,8 +4,8 @@ use quote::{format_ident, quote};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
-use crate::ChipSeries;
+use crate::keyboard_config::KeyboardConfig;
+use rmk_config::{BoardConfig, ChipSeries, CommunicationConfig};
 
 pub(crate) fn expand_rmk_entry(
     keyboard_config: &KeyboardConfig,

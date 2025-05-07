@@ -4,8 +4,9 @@ use quote::{quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
-use crate::{ChipModel, ChipSeries};
+use crate::keyboard_config::KeyboardConfig;
+use rmk_config::CommunicationConfig;
+use rmk_config::{ChipModel, ChipSeries};
 
 // Default implementations of chip initialization
 pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {

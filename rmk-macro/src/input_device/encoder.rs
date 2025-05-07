@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use rmk_config::EncoderConfig;
 
 use crate::gpio_config::convert_gpio_str_to_input_pin;
-use crate::ChipModel;
+use rmk_config::ChipModel;
 
 pub(crate) fn expand_encoder_device(
     encoder_config: Vec<EncoderConfig>,

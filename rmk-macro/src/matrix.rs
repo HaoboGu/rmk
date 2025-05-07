@@ -1,15 +1,15 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
-use rmk_config::MatrixType;
+use rmk_config::{BoardConfig, MatrixType, UniBodyConfig};
 
 use crate::feature::is_feature_enabled;
 use crate::gpio_config::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
     get_input_pin_type, get_output_pin_type,
 };
-use crate::keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig};
-use crate::{ChipModel, ChipSeries};
+use crate::keyboard_config::KeyboardConfig;
+use rmk_config::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_matrix_config(
     keyboard_config: &KeyboardConfig,

@@ -1,7 +1,8 @@
 use rmk_config::{BleConfig, StorageConfig};
 
-use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
-use crate::ChipModel;
+use rmk_config::CommunicationConfig;
+use crate::keyboard_config::KeyboardConfig;
+use rmk_config::ChipModel;
 
 // Default config for nRF52832
 pub(crate) fn default_nrf52832(chip: ChipModel) -> KeyboardConfig {

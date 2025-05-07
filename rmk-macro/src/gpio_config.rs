@@ -1,6 +1,6 @@
 use quote::{format_ident, quote};
 
-use crate::{ChipModel, ChipSeries};
+use rmk_config::{ChipModel, ChipSeries};
 
 pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();

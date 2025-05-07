@@ -2,9 +2,9 @@ use adc::expand_adc_device;
 use encoder::expand_encoder_device;
 use proc_macro2::TokenStream;
 use quote::quote;
-use rmk_config::InputDeviceConfig;
+use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, UniBodyConfig};
 
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig, UniBodyConfig};
+use crate::keyboard_config::KeyboardConfig;
 
 mod adc;
 mod encoder;
@@ -25,7 +25,7 @@ pub(crate) fn expand_input_device_config(
         BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_adc_device(
             input_device.clone().joystick.unwrap_or(Vec::new()),
             ble_config,
-            keyboard_config.chip.series,
+            keyboard_config.chip.series.clone(),
         ),
         BoardConfig::Split(split_config) => expand_adc_device(
             split_config
@@ -36,7 +36,7 @@ pub(crate) fn expand_input_device_config(
                 .joystick
                 .unwrap_or(Vec::new()),
             ble_config,
-            keyboard_config.chip.series,
+            keyboard_config.chip.series.clone(),
         ),
     };
     config.extend(adc_config);

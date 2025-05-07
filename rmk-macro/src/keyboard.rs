@@ -1,7 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::MatrixType;
+use rmk_config::{BoardConfig, MatrixType, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -14,14 +14,12 @@ use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
 use crate::import::expand_imports;
 use crate::input_device::expand_input_device_config;
-use crate::keyboard_config::{
-    expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, BoardConfig, KeyboardConfig, UniBodyConfig,
-};
+use crate::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config, KeyboardConfig};
 use crate::layout::expand_default_keymap;
 use crate::light::expand_light_config;
 use crate::matrix::expand_matrix_config;
 use crate::split::central::expand_split_central_config;
-use crate::ChipSeries;
+use rmk_config::ChipSeries;
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]

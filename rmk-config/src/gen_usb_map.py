@@ -65,7 +65,7 @@ generated_file = """//! This file is auto-generated from https://github.com/emba
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
-use crate::{ChipModel, ChipSeries};
+use crate::UsbInfo;
 
 static USB_INFO: Lazy<HashMap<String, UsbInfo>> = Lazy::new(|| {
     let mut m = HashMap::new();

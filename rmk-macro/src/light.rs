@@ -5,7 +5,7 @@ use rmk_config::PinConfig;
 
 use crate::gpio_config::convert_gpio_str_to_output_pin;
 use crate::keyboard_config::KeyboardConfig;
-use crate::ChipModel;
+use rmk_config::ChipModel;
 
 pub(crate) fn build_light_config(chip: &ChipModel, pin_config: &Option<PinConfig>) -> proc_macro2::TokenStream {
     match pin_config {

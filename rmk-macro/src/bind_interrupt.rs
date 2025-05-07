@@ -3,10 +3,10 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::BleConfig;
+use rmk_config::{BleConfig, BoardConfig};
 use syn::ItemMod;
 
-use crate::keyboard_config::{BoardConfig, KeyboardConfig};
+use crate::keyboard_config::KeyboardConfig;
 
 // Expand `bind_interrupt!` stuffs
 pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
@@ -37,7 +37,7 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: 
 
 pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
     match keyboard_config.chip.series {
-        crate::ChipSeries::Stm32 => {
+        rmk_config::ChipSeries::Stm32 => {
             if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
@@ -51,7 +51,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                 quote! {}
             }
         }
-        crate::ChipSeries::Nrf52 => {
+        rmk_config::ChipSeries::Nrf52 => {
             let saadc_interrupt = if let Some(BleConfig {
                 enabled: true,
                 battery_adc_pin: Some(_adc_pin),
@@ -130,7 +130,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                 }
             }
         }
-        crate::ChipSeries::Rp2040 => {
+        rmk_config::ChipSeries::Rp2040 => {
             let usb_info = keyboard_config.communication.get_usb_info().unwrap();
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
@@ -141,6 +141,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                 });
             }
         }
-        crate::ChipSeries::Esp32 => quote! {},
+        rmk_config::ChipSeries::Esp32 => quote! {},
     }
 }
