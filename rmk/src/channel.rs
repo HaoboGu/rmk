@@ -7,7 +7,7 @@ use crate::RawMutex;
 use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
 use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE, CONTROLLER_CHANNEL_SIZE};
 use embassy_sync::channel::Channel;
-use embassy_sync::pubsub::PubSubChannel;
+use embassy_sync::pubsub::{PubSubChannel, Publisher, Subscriber};
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 #[cfg(feature = "_ble")]
 use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
@@ -20,6 +20,9 @@ use {
 // TODO: calculate these based on config
 pub const CONTROLLER_CHANNEL_SUBS: usize = 8;
 pub const CONTROLLER_CHANNEL_PUBS: usize = 4;
+
+pub type ControllerSub<'a> = Subscriber<'a, RawMutex, ControllerEvent, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, CONTROLLER_CHANNEL_PUBS>;
+pub type ControllerPub<'a> = Publisher<'a, RawMutex, ControllerEvent, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, CONTROLLER_CHANNEL_PUBS>;
 
 /// Signal for control led indicator, it's used only in BLE keyboards, since BLE receiving is not async
 #[cfg(feature = "_ble")]

@@ -49,6 +49,16 @@ impl ModifierCombination {
             .with_ctrl(ctrl)
     }
 
+    pub(crate) fn from_hid_modifiers(modifiers: HidModifiers) -> Self {
+        Self::new_from(
+            modifiers.right_shift() || modifiers.right_ctrl() || modifiers.right_alt() || modifiers.right_gui(),
+            modifiers.left_gui() || modifiers.right_gui(),
+            modifiers.left_alt() || modifiers.right_alt(),
+            modifiers.left_shift() || modifiers.right_shift(),
+            modifiers.left_ctrl() || modifiers.right_ctrl(),
+        )
+    }
+
     /// Get modifier hid report bits from modifier combination
     pub(crate) fn to_hid_modifiers(self) -> HidModifiers {
         if !self.right() {
