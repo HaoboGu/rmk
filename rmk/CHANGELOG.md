@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduce matrix_map for nicer keyboard matrix configs
 - Battery charging state reader
 - Sleep timeout when advertising
-- Manually pairing between central and peripheral
+- Automatically pair between central and peripheral
 - Make constants in RMK configurable via `keyboard.toml`
 
 ### Fixed
