@@ -1,7 +1,7 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::input_device::rotary_encoder::Direction;
+use crate::{input_device::rotary_encoder::Direction, keycode::ModifierCombination};
 
 /// Raw events from input devices and keyboards
 ///
@@ -98,4 +98,23 @@ pub struct KeyEvent {
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ControllerEvent { }
+pub enum ControllerEvent {
+    /// Key event
+    Key(KeyEvent),
+    /// Battery percent changed
+    Battery(u16, bool),
+    /// Charging state changed
+    ChargingState(bool),
+    /// Ble profile changed
+    BleProfile(u8),
+    /// Layer changed
+    Layer(u8),
+    /// Modifier changed
+    Modifier(ModifierCombination),
+    /// Typing speed
+    Wpm(u16),
+    /// Usb or Ble connection
+    ConnectionType(u8),
+    /// Split peripheral connection
+    SplitPeripheral(u8, bool),
+}

@@ -2,6 +2,8 @@ use core::ops::BitOr;
 
 use bitfield_struct::bitfield;
 use num_enum::FromPrimitive;
+use postcard::experimental::max_size::MaxSize;
+use serde::{Deserialize, Serialize};
 
 use crate::hid_state::HidModifiers;
 
@@ -12,7 +14,7 @@ use crate::hid_state::HidModifiers;
 /// | --- | --- | --- | --- | --- |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
 #[bitfield(u8, order = Lsb)]
-#[derive(Eq, PartialEq)]
+#[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ModifierCombination {
     #[bits(1)]
