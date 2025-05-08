@@ -236,7 +236,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let modifiers = self.resolve_modifiers(pressed);
 
         if self.prev_modifiers != modifiers {
-            self.controller_pub.publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(modifiers)));
+            self.controller_pub
+                .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                    modifiers,
+                )));
             self.prev_modifiers = modifiers;
         }
 
