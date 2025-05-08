@@ -79,7 +79,7 @@ pub mod hid;
 pub mod hid_state;
 pub mod input_device;
 pub mod keyboard;
-mod keyboard_macro;
+pub mod keyboard_macros;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;
@@ -126,7 +126,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     flash: F,
-    storage_config: config::StorageConfig,
+    storage_config: &config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -156,7 +156,7 @@ pub async fn initialize_keymap_and_storage<
 >(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     flash: F,
-    storage_config: config::StorageConfig,
+    storage_config: &config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,

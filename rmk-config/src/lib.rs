@@ -27,9 +27,6 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
-    /// Maximum number of macros keyboard can store
-    #[serde_inline_default(8)]
-    pub macro_max_num: u8,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -90,7 +87,6 @@ impl Default for RmkConstantsConfig {
             combo_max_num: 8,
             combo_max_length: 4,
             fork_max_num: 8,
-            macro_max_num: 8,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,

@@ -178,7 +178,6 @@ fn expand_main(
                 usb_config: KEYBOARD_USB_CONFIG,
                 vial_config: VIAL_CONFIG,
                 storage_config,
-                behavior_config,
                 #set_ble_config
                 ..Default::default()
             };
@@ -211,8 +210,8 @@ pub(crate) fn expand_keymap_and_storage(_keyboard_config: &KeyboardConfig) -> To
         ::rmk::initialize_keymap_and_storage(
             &mut default_keymap,
             flash,
-            rmk_config.storage_config,
-            rmk_config.behavior_config.clone(),
+            &storage_config,
+            behavior_config,
         )
     };
     quote! {
@@ -286,7 +285,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }
     };
     quote! {
-        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap);
         #matrix
     }
 }

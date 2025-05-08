@@ -290,6 +290,8 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_m
             one_shot: #one_shot,
             combo: #combos,
             fork: #forks,
+            //TODO implement macro for configuring Keyboard-Macro-Sequences
+            keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
         };
     }
 }

@@ -1952,7 +1952,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=2128a22#2128a22360300554b90efaa7804c759b24a60fad"
+source = "git+https://github.com/embassy-rs/trouble?rev=7d72e8d#7d72e8d0cf4558bb54f0a1ab43cdb88fabe160a8"
 dependencies = [
  "aes",
  "bt-hci",
@@ -1975,7 +1975,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=2128a22#2128a22360300554b90efaa7804c759b24a60fad"
+source = "git+https://github.com/embassy-rs/trouble?rev=7d72e8d#7d72e8d0cf4558bb54f0a1ab43cdb88fabe160a8"
 dependencies = [
  "Inflector",
  "darling",

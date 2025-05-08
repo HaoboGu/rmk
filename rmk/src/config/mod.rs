@@ -1,5 +1,6 @@
 #[cfg(feature = "_esp_ble")]
 mod esp_config;
+pub mod macro_config;
 #[cfg(feature = "_nrf_ble")]
 mod nrf_config;
 
@@ -8,6 +9,7 @@ use embedded_hal::digital::OutputPin;
 #[cfg(feature = "_esp_ble")]
 pub use esp_config::BleBatteryConfig;
 use heapless::Vec;
+use macro_config::KeyboardMacrosConfig;
 #[cfg(feature = "_nrf_ble")]
 pub use nrf_config::BleBatteryConfig;
 
@@ -56,7 +58,6 @@ pub struct RmkConfig<'a> {
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
     pub storage_config: StorageConfig,
-    pub behavior_config: BehaviorConfig,
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
     #[cfg(feature = "_esp_ble")]
@@ -64,13 +65,14 @@ pub struct RmkConfig<'a> {
 }
 
 /// Config for configurable action behavior
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
+    pub keyboard_macros: KeyboardMacrosConfig,
 }
 
 /// Configurations for tap hold behavior
