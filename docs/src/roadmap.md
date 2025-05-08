@@ -24,12 +24,10 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] 🔵 Input device
   - [x] 🔴 Basic Macro support
     - [x] 🔴 Macro definition via Rust
-    - [ ] 🟢 Macro definition via toml
-    - [ ] make macro storage space configurable
     - [x] add KeyAction::TriggerMacro so more than 32 macros can be triggered
     - [x] 🔴 Support umlaute
     - [x] 🔵 Support unicode
-  - [x] Macro support enhancement
+  - [ ] Macro support enhancement
     - [ ] 🟢 Macro definition via toml
     - [ ] 🟢 make macro storage space configurable
   - [ ] 🔴 RGB
