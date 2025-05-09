@@ -5,7 +5,10 @@ use crate::hid::Report;
 use crate::RawMutex;
 #[cfg(feature = "storage")]
 use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
-use crate::{CONTROLLER_CHANNEL_SIZE, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
+use crate::{
+    CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE,
+    VIAL_CHANNEL_SIZE,
+};
 use embassy_sync::channel::Channel;
 use embassy_sync::pubsub::{PubSubChannel, Publisher, Subscriber};
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
@@ -16,10 +19,6 @@ use {
     crate::split::SplitMessage,
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
 };
-
-// TODO: calculate these based on config
-pub const CONTROLLER_CHANNEL_SUBS: usize = 8;
-pub const CONTROLLER_CHANNEL_PUBS: usize = 4;
 
 pub type ControllerSub<'a> = Subscriber<
     'a,
