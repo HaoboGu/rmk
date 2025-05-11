@@ -38,6 +38,7 @@ fn main() {
         toml::from_str(&user_config_str).expect("Failed to parse KEYBOARD_TOML_PATH file");
 
     // FIXME: calculate the number of split peripherals automatically
+    // FIXME: calculate the number of controllers automatically
 
     let constants = get_constants_str(user_toml.rmk);
 
@@ -60,6 +61,9 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) FORK_MAX_NUM = constants.fork_max_num),
         const_declaration!(pub(crate) DEBOUNCE_THRESHOLD = constants.debounce_time),
         const_declaration!(pub(crate) EVENT_CHANNEL_SIZE = constants.event_channel_size),
+        const_declaration!(pub(crate) CONTROLLER_CHANNEL_SIZE = constants.controller_channel_size),
+        const_declaration!(pub(crate) CONTROLLER_CHANNEL_PUBS = constants.controller_channel_pubs),
+        const_declaration!(pub(crate) CONTROLLER_CHANNEL_SUBS = constants.controller_channel_subs),
         const_declaration!(pub(crate) REPORT_CHANNEL_SIZE = constants.report_channel_size),
         const_declaration!(pub(crate) VIAL_CHANNEL_SIZE = constants.vial_channel_size),
         const_declaration!(pub(crate) FLASH_CHANNEL_SIZE = constants.flash_channel_size),

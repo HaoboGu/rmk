@@ -7,9 +7,9 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::action::{Action, KeyAction};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{ControllerPub, CONTROLLER_CHANNEL, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
-use crate::event::KeyEvent;
+use crate::event::{ControllerEvent, KeyEvent};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -108,10 +108,13 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
 
-    /// the held keys for the keyboard hid report, except the modifiers
+    /// The previous held modifiers
+    prev_modifiers: HidModifiers,
+
+    /// The held modifiers for the keyboard hid report
     held_modifiers: HidModifiers,
 
-    /// the held keys for the keyboard hid report, except the modifiers
+    /// The held keys for the keyboard hid report, except the modifiers
     held_keycodes: [KeyCode; 6],
 
     /// Registered key position
@@ -147,6 +150,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
+
+    /// Publisher for controller channel
+    controller_pub: ControllerPub<'a>,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -175,6 +181,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
+            prev_modifiers: HidModifiers::default(),
             held_modifiers: HidModifiers::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
@@ -196,6 +203,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -225,10 +233,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
-        let modifiers = self.resolve_modifiers(pressed).into_bits();
+        let modifiers = self.resolve_modifiers(pressed);
+
+        if self.prev_modifiers != modifiers {
+            self.controller_pub
+                .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                    modifiers,
+                )));
+            self.prev_modifiers = modifiers;
+        }
 
         self.send_report(Report::KeyboardReport(KeyboardReport {
-            modifier: modifiers,
+            modifier: modifiers.into_bits(),
             reserved: 0,
             leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
             keycodes: self.held_keycodes.map(|k| k as u8),
@@ -912,7 +928,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - registered (held) modifiers keys
     /// - one-shot modifiers
     /// - effect of KeyAction::WithModifiers (while they are pressed)
-    /// - possible fork related modifier suppressions    
+    /// - possible fork related modifier suppressions
     pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
         // text typing macro should not be affected by any modifiers,
         // only its own capitalization
