@@ -10,6 +10,9 @@ pub trait Controller {
     /// Type of the received events
     type Event;
 
+    /// Process the received event
+    async fn process_event(&mut self, event: Self::Event);
+
     /// Block waiting for next message
     async fn next_message(&mut self) -> Self::Event;
 }
@@ -23,13 +26,13 @@ pub trait Controller {
 /// // Define a controller
 /// struct MyController;
 ///
-/// impl Controller for MyController { /* ... */ }
-///
-/// impl EventController for MyController {
+/// impl Controller for MyController {
 ///     async fn process_event(&mut self, event: Self::Event) {
 ///         // handle event
 ///     }
 /// }
+///
+/// impl EventController for MyController { }
 ///
 /// // Use the input device
 /// let c = MyController;
@@ -44,9 +47,6 @@ pub trait Controller {
 /// .await;
 /// ```
 pub trait EventController: Controller {
-    /// Process the received event
-    async fn process_event(&mut self, event: Self::Event);
-
     /// Event loop
     async fn event_loop(&mut self) {
         loop {
@@ -65,14 +65,14 @@ pub trait EventController: Controller {
 /// // Define a controller
 /// struct MyController;
 ///
-/// impl Controller for MyController { /* ... */ }
-///
-/// impl PollingController for MyController {
-///     type INTERVAL: embassy_time::Duration = embassy_time::Duration::from_hz(60);
-///
+/// impl Controller for MyController {
 ///     async fn process_event(&mut self, event: Self::Event) {
 ///         // handle event
 ///     }
+/// }
+///
+/// impl PollingController for MyController {
+///     type INTERVAL: embassy_time::Duration = embassy_time::Duration::from_hz(60);
 ///
 ///     async fn update(&mut self) {
 ///         // update periodic
@@ -94,9 +94,6 @@ pub trait EventController: Controller {
 pub trait PollingController: Controller {
     /// Interval between `update` calls
     const INTERVAL: embassy_time::Duration;
-
-    /// Process the received event
-    async fn process_event(&mut self, event: Self::Event);
 
     /// Update periodically
     async fn update(&mut self);
