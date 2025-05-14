@@ -126,6 +126,29 @@ When used in configuration files, all keycodes are case-insensitive.
 | `LockingNumLock` | `locking_num_lock`, `lnum` | Locking Num Lock |
 | `LockingScrollLock` | `locking_scroll_lock`, `lscr` | Locking Scroll Lock |
 
+## International keys
+
+| Keycode | Aliases | Usage |
+|---------|---------|-------|
+| `International1` | `international_1`, `int1` | JIS `\` and `_` |
+| `International2` | `international_2`, `int2` | JIS Katana or Hiragana |
+| `International3` | `international_3`, `int3` | JIS `¥` and `|` |
+| `International4` | `international_4`, `int4` | JIS Henkan |
+| `International5` | `international_5`, `int5` | JIS Muhenkan |
+| `International6` | `international_6`, `int6` | JIS Numpad `,` |
+| `International7` | `international_7`, `int7` | International 7 |
+| `International8` | `international_8`, `int8` | International 8 |
+| `International9` | `international_9`, `int9` | International 9 |
+| `Language1` | `language_1`, `lng1` | Hangul/English |
+| `Language2` | `language_2`, `lng2` | Hanja |
+| `Language3` | `language_3`, `lng3` | JIS Katakana |
+| `Language4` | `language_4`, `lng4` | JIS Hiragana |
+| `Language5` | `language_5`, `lng5` | JIS Zenkaku/Hankaku |
+| `Language6` | `language_6`, `lng6` | Language 6 |
+| `Language7` | `language_7`, `lng7` | Language 7 |
+| `Language8` | `language_8`, `lng8` | Language 8 |
+| `Language9` | `language_9`, `lng9` | Language 9 |
+
 ## Special keys
 
 | Keycode | Aliases | Usage |
