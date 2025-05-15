@@ -12,6 +12,7 @@ use macro_config::KeyboardMacrosConfig;
 use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
+use crate::event::KeyEvent;
 
 /// The config struct for RMK keyboard.
 ///
@@ -77,15 +78,54 @@ pub struct TapHoldConfig {
     pub prior_idle_time: Duration,
     pub post_wait_time: Duration,
     pub hold_timeout: Duration,
+    pub permissive_hold: bool,
+    pub chordal_hold: bool,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ChordHoldHand {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug)]
+pub struct ChordHoldState<const COLS: usize> {
+    pub hand: ChordHoldHand,
+}
+
+impl<const COLS: usize> ChordHoldState<COLS> {
+    // is the key event in the same side of current chord hold
+    pub fn is_same(&self, key_event: KeyEvent) -> bool {
+        match self.hand {
+            ChordHoldHand::Left => (key_event.col as usize) < COLS / 2,
+            ChordHoldHand::Right => (key_event.col as usize) >= COLS / 2,
+        }
+    }
+
+    pub(crate) fn create(event: KeyEvent, cols: usize) -> Self {
+        if (event.col as usize) < (cols / 2) {
+            ChordHoldState {
+                hand: ChordHoldHand::Left,
+            }
+        } else {
+            ChordHoldState {
+                hand: ChordHoldHand::Right,
+            }
+        }
+    }
 }
 
 impl Default for TapHoldConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
+            permissive_hold: false,
+
             prior_idle_time: Duration::from_millis(120),
             post_wait_time: Duration::from_millis(50),
             hold_timeout: Duration::from_millis(250),
+            chordal_hold: false,
         }
     }
 }
@@ -217,5 +257,68 @@ impl Default for KeyboardUsbConfig<'_> {
             product_name: "RMK Keyboard",
             serial_number: "vial:f64c2b3c:000001",
         }
+    }
+}
+
+mod tests {
+    use super::*;
+    use ChordHoldHand::Left;
+    use ChordHoldHand::Right;
+
+    #[test]
+    fn test_chord_hold() {
+        assert_eq!(
+            ChordHoldState::<6>::create(
+                KeyEvent {
+                    row: 0,
+                    col: 0,
+                    pressed: true,
+                },
+                6
+            )
+            .hand,
+            Left
+        );
+        assert_eq!(
+            ChordHoldState::<6>::create(
+                KeyEvent {
+                    row: 3,
+                    col: 3,
+                    pressed: true,
+                },
+                6
+            )
+            .hand,
+            Right
+        );
+        assert_eq!(
+            ChordHoldState::<6>::create(
+                KeyEvent {
+                    row: 5,
+                    col: 6,
+                    pressed: true,
+                },
+                6
+            )
+            .hand,
+            Right
+        );
+
+        let chord = ChordHoldState::<6> { hand: Left };
+
+        let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
+        let result: Vec<_, 6> = vec
+            .iter()
+            .map(|col| {
+                chord.is_same(KeyEvent {
+                    row: 0,
+                    col: 0 + col,
+                    pressed: true,
+                })
+            })
+            .collect();
+
+        let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
+        assert_eq!(result, result2);
     }
 }
