@@ -1,11 +1,9 @@
-use crate::{BehaviorConfig, LayoutConfig};
+use crate::BehaviorConfig;
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_behavior_from_toml(
-        &self,
-        default: BehaviorConfig,
-        layout: &LayoutConfig,
-    ) -> Result<BehaviorConfig, String> {
+    pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
+        let default = self.get_default_config().unwrap().behavior;
+        let layout = self.get_layout_config().unwrap();
         match self.behavior.clone() {
             Some(mut behavior) => {
                 behavior.tri_layer = match behavior.tri_layer {

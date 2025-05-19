@@ -7,10 +7,10 @@ use quote::{format_ident, quote, ToTokens};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::KeyboardConfig;
 use rmk_config::ChipSeries;
+use rmk_config::KeyboardTomlConfig;
 
-pub(crate) fn expand_usb_init(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
+pub(crate) fn expand_usb_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
         items
@@ -32,10 +32,10 @@ pub(crate) fn expand_usb_init(keyboard_config: &KeyboardConfig, item_mod: &ItemM
 }
 
 /// Default implementation of usb initialization
-pub(crate) fn usb_config_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
+pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    if let Some(usb_info) = keyboard_config.get_communication_config().unwrap().get_usb_info() {
         let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
-        match keyboard_config.chip.series {
+        match keyboard_config.get_chip_model().unwrap().series {
             ChipSeries::Stm32 => {
                 let dp = format_ident!("{}", usb_info.dp);
                 let dm = format_ident!("{}", usb_info.dm);

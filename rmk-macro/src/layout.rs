@@ -5,12 +5,12 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::BoardConfig;
 
-use crate::keyboard_config::KeyboardConfig;
+use rmk_config::KeyboardTomlConfig;
 use rmk_config::KEYCODE_ALIAS;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
-pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    let num_encoder = match &keyboard_config.board {
+pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let num_encoder = match &keyboard_config.get_board_config().unwrap() {
         BoardConfig::UniBody(uni_body_config) => {
             uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
         }
@@ -23,7 +23,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardConfig) -> TokenSt
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in keyboard_config.layout.keymap.clone() {
+    for layer in keyboard_config.layout.as_ref().unwrap().keymap.clone().unwrap() {
         layers.push(expand_layer(layer));
         encoder_map.push(quote! { [#(#encoders), *] });
     }

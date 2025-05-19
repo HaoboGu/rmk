@@ -8,10 +8,12 @@ use serde_inline_default::serde_inline_default;
 pub mod chip;
 pub mod communication;
 pub mod keyboard;
+pub mod keyboard_config;
 #[rustfmt::skip]
 pub mod usb_interrupt_map;
 pub mod behavior;
 pub mod board;
+pub mod default_config;
 pub mod keycode_alias;
 pub mod layout;
 pub mod light;
@@ -20,7 +22,9 @@ pub mod storage;
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
 pub use communication::{CommunicationConfig, UsbInfo};
+pub use default_config::*;
 pub use keyboard::Basic;
+pub use keyboard_config::KeyboardConfig;
 pub use keycode_alias::KEYCODE_ALIAS;
 
 /// Keyboard constants configuration for performance and hardware limits

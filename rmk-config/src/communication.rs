@@ -73,11 +73,9 @@ impl CommunicationConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn get_communication_config(
-        &self,
-        default_setting: CommunicationConfig,
-        chip: &ChipModel,
-    ) -> Result<CommunicationConfig, String> {
+    pub fn get_communication_config(&self) -> Result<CommunicationConfig, String> {
+        let default_setting = self.get_default_config().unwrap().communication;
+        let chip = self.get_chip_model().unwrap();
         // Get usb config
         let usb_enabled = self.keyboard.usb_enable.unwrap_or(default_setting.usb_enabled());
         let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };

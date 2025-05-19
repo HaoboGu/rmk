@@ -1,20 +1,22 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
-use crate::keyboard_config::KeyboardConfig;
 use rmk_config::ChipSeries;
 use rmk_config::CommunicationConfig;
+use rmk_config::KeyboardTomlConfig;
 
 // Default implementations of ble configuration.
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
-pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStream2, TokenStream2) {
-    if !keyboard_config.communication.ble_enabled() {
+pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenStream2, TokenStream2) {
+    let communication = keyboard_config.get_communication_config().unwrap();
+    let chip = keyboard_config.get_chip_model().unwrap();
+    if !communication.ble_enabled() {
         return (quote! {}, quote! {});
     }
     // Support only nrf52 and esp32 (for now)
-    if keyboard_config.chip.series != ChipSeries::Nrf52 {
-        if keyboard_config.chip.series == ChipSeries::Esp32 {
+    if chip.series != ChipSeries::Nrf52 {
+        if chip.series == ChipSeries::Esp32 {
             return (
                 quote! {
                     let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
@@ -27,7 +29,7 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStrea
             return (quote! {}, quote! {});
         }
     }
-    match &keyboard_config.communication {
+    match &communication {
         CommunicationConfig::Ble(ble) | CommunicationConfig::Both(_, ble) => {
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();

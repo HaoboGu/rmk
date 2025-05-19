@@ -8,10 +8,10 @@ use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
 use crate::import::expand_imports;
-use crate::keyboard_config::{read_keyboard_toml_config, KeyboardConfig};
+use crate::keyboard_config::{read_keyboard_toml_config};
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
-use rmk_config::{ChipModel, ChipSeries};
+use rmk_config::{ChipModel, ChipSeries, KeyboardTomlConfig};
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
@@ -27,14 +27,10 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         Err(e) => return e,
     };
 
-    let keyboard_config = match KeyboardConfig::new(toml_config) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
+    let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
+    let chip = toml_config.get_chip_model().unwrap();
 
-    let main_function = expand_split_peripheral(id, &keyboard_config, item_mod, &rmk_features);
-
-    let bind_interrupts = if keyboard_config.chip.series == ChipSeries::Nrf52 {
+    let bind_interrupts = if chip.series == ChipSeries::Nrf52 {
         quote! {
             use ::embassy_nrf::bind_interrupts;
             bind_interrupts!(struct Irqs {
@@ -76,7 +72,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         quote! {}
     };
 
-    let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
+    let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
             use {esp_alloc as _, esp_backtrace as _};
             #[esp_hal_embassy::main]
@@ -103,12 +99,13 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 
 fn expand_split_peripheral(
     id: usize,
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let split_config = match &keyboard_config.board {
+    let split_config = keyboard_config.get_board_config().unwrap();
+    let split_config = match &split_config {
         BoardConfig::Split(split) => split,
         _ => {
             return quote! {
@@ -149,11 +146,12 @@ fn expand_split_peripheral(
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
+    let chip = keyboard_config.get_chip_model().unwrap();
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &peripheral_config.matrix.matrix_type {
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
-                &keyboard_config.chip,
+                &chip,
                 peripheral_config
                     .matrix
                     .input_pins
@@ -174,7 +172,7 @@ fn expand_split_peripheral(
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
-                &keyboard_config.chip,
+                &chip,
                 peripheral_config
                     .matrix
                     .direct_pins
@@ -195,7 +193,7 @@ fn expand_split_peripheral(
         }
     }
 
-    let run_rmk_peripheral = expand_split_peripheral_entry(id, &keyboard_config.chip, peripheral_config);
+    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, peripheral_config);
 
     quote! {
         #imports

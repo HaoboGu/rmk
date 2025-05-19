@@ -1,11 +1,6 @@
-use rmk_config::{BleConfig, StorageConfig};
+use crate::{BleConfig, ChipModel, CommunicationConfig, KeyboardConfig, StorageConfig};
 
-use rmk_config::CommunicationConfig;
-use crate::keyboard_config::KeyboardConfig;
-use rmk_config::ChipModel;
-
-// Default config for esp32
-pub(crate) fn default_esp32(chip: ChipModel) -> KeyboardConfig {
+pub fn default_nrf52832(chip: ChipModel) -> KeyboardConfig {
     KeyboardConfig {
         chip,
         communication: CommunicationConfig::Ble(BleConfig {
@@ -13,7 +8,7 @@ pub(crate) fn default_esp32(chip: ChipModel) -> KeyboardConfig {
             ..Default::default()
         }),
         storage: StorageConfig {
-            start_addr: Some(0),
+            start_addr: Some(0x60000),
             num_sectors: Some(16),
             enabled: true,
             ..Default::default()

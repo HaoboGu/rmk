@@ -3,13 +3,11 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BleConfig, BoardConfig};
+use rmk_config::{BleConfig, BoardConfig, KeyboardTomlConfig};
 use syn::ItemMod;
 
-use crate::keyboard_config::KeyboardConfig;
-
 // Expand `bind_interrupt!` stuffs
-pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
+pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
         items
@@ -35,10 +33,13 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardConfig, item_mod: 
     }
 }
 
-pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    match keyboard_config.chip.series {
+pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let board = keyboard_config.get_board_config().unwrap();
+    let communication = keyboard_config.get_communication_config().unwrap();
+    match chip.series {
         rmk_config::ChipSeries::Stm32 => {
-            if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
+            if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
                 quote! {
@@ -59,13 +60,13 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
                 charge_led: _,
                 adc_divider_measured: _,
                 adc_divider_total: _,
-            }) = keyboard_config.communication.get_ble_config()
+            }) = communication.get_ble_config()
             {
                 quote! { SAADC => ::embassy_nrf::saadc::InterruptHandler; }
             } else {
                 quote! {}
             };
-            let usb_and_clock_interrupt = if let Some(usb_info) = keyboard_config.communication.get_usb_info() {
+            let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
                 quote! {
@@ -75,7 +76,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
             } else {
                 quote! { CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler; }
             };
-            let nrf_sdc_config = match keyboard_config.board {
+            let nrf_sdc_config = match board {
                 BoardConfig::Split(_) => quote! {
                     ::nrf_sdc::Builder::new()?
                     .support_scan()?
@@ -131,7 +132,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardConfig) -> TokenS
             }
         }
         rmk_config::ChipSeries::Rp2040 => {
-            let usb_info = keyboard_config.communication.get_usb_info().unwrap();
+            let usb_info = communication.get_usb_info().unwrap();
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
             quote! {

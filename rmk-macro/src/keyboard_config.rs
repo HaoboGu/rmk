@@ -2,128 +2,11 @@ use std::fs;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{
-    Basic, BehaviorConfig, BoardConfig, CommunicationConfig, DependencyConfig, KeyboardTomlConfig, LayoutConfig,
-    LightConfig, StorageConfig,
-};
-
-use crate::default_config::esp32::default_esp32;
-use crate::default_config::nrf52810::default_nrf52810;
-use crate::default_config::nrf52832::default_nrf52832;
-use crate::default_config::nrf52840::default_nrf52840;
-use crate::default_config::rp2040::default_rp2040;
-use crate::default_config::stm32::default_stm32;
-use rmk_config::ChipModel;
-
+use rmk_config::{BoardConfig, KeyboardTomlConfig};
 macro_rules! rmk_compile_error {
     ($msg:expr) => {
         Err(syn::Error::new_spanned(quote! {}, $msg).to_compile_error())
     };
-}
-
-/// Keyboard config is a bridge representation between toml_config and generated keyboard configuration
-/// This struct is added mainly for the following reasons:
-/// 1. To make it easier to set per-chip default configuration
-/// 2. To do pre-checking for all configs before generating code
-///
-/// This struct is constructed as the generated code, not toml_config
-#[derive(Clone, Debug, Default)]
-pub(crate) struct KeyboardConfig {
-    // Keyboard basic info
-    pub(crate) basic: Basic,
-    // Communication config
-    pub(crate) communication: CommunicationConfig,
-    // Chip model
-    pub(crate) chip: ChipModel,
-    // Board config, normal or split
-    pub(crate) board: BoardConfig,
-    // Layout config
-    pub(crate) layout: LayoutConfig,
-    // Behavior Config
-    pub(crate) behavior: BehaviorConfig,
-    // Light config
-    pub(crate) light: LightConfig,
-    // Storage config
-    pub(crate) storage: StorageConfig,
-    // Dependency config
-    pub(crate) dependency: DependencyConfig,
-}
-
-impl KeyboardConfig {
-    pub(crate) fn new(toml_config: KeyboardTomlConfig) -> Result<Self, TokenStream2> {
-        let chip = toml_config
-            .get_chip_model()
-            .map_err(|e| syn::Error::new_spanned(quote! {}, e).to_compile_error())?;
-
-        // Get per-chip configuration
-        let mut config = Self::get_default_config(chip.clone())?;
-
-        // Then update all the configurations from toml
-
-        // Update communication config
-        config.communication = toml_config
-            .get_communication_config(config.communication, &chip)
-            .map_err(|e| syn::Error::new_spanned(quote! {}, e).to_compile_error())?;
-
-        // Update basic info
-        config.basic = toml_config.get_basic_info();
-
-        // Board config
-        config.board = toml_config
-            .get_board_config()
-            .map_err(|e| syn::Error::new_spanned(quote! {}, e).to_compile_error())?;
-
-        // Layout config
-        config.layout = toml_config
-            .get_layout_from_toml()
-            .map_err(|e| syn::Error::new_spanned(quote! {}, e).to_compile_error())?;
-
-        // Behavior config
-        config.behavior = toml_config
-            .get_behavior_from_toml(config.behavior, &config.layout)
-            .map_err(|e| syn::Error::new_spanned(quote! {}, e).to_compile_error())?;
-
-        // Light config
-        config.light = toml_config.get_light_from_toml(config.light);
-
-        // Storage config
-        config.storage = toml_config.get_storage_from_toml(config.storage);
-
-        // Dependency config
-        config.dependency = toml_config.dependency.unwrap_or_default();
-
-        Ok(config)
-    }
-
-    // Get per-chip/board default configuration
-    fn get_default_config(chip: ChipModel) -> Result<KeyboardConfig, TokenStream2> {
-        if let Some(board) = chip.board.clone() {
-            match board.as_str() {
-                "nice!nano" | "nice!nano_v2" | "XIAO BLE" => {
-                    return Ok(default_nrf52840(chip));
-                }
-                _ => (),
-            }
-        }
-
-        let config = match chip.chip.as_str() {
-            "nrf52840" | "nrf52833" => default_nrf52840(chip),
-            "nrf52832" => default_nrf52832(chip),
-            "nrf52810" | "nrf52811" => default_nrf52810(chip),
-            "rp2040" => default_rp2040(chip),
-            s if s.starts_with("stm32") => default_stm32(chip),
-            s if s.starts_with("esp32") => default_esp32(chip),
-            _ => {
-                let message = format!(
-                    "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
-                    chip.chip
-                );
-                return rmk_compile_error!(message);
-            }
-        };
-
-        Ok(config)
-    }
 }
 
 pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStream2> {
@@ -149,17 +32,20 @@ pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStr
     }
 }
 
-pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
-    let pid = keyboard_config.basic.product_id;
-    let vid = keyboard_config.basic.vendor_id;
-    let product_name = keyboard_config.basic.product_name.clone();
-    let manufacturer = keyboard_config.basic.manufacturer.clone();
-    let serial_number = keyboard_config.basic.serial_number.clone();
+pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    let basic = keyboard_config.get_basic_info();
+    let layout = keyboard_config.get_layout_config().unwrap();
+    let board = keyboard_config.get_board_config().unwrap();
+    let pid = basic.product_id;
+    let vid = basic.vendor_id;
+    let product_name = basic.product_name.clone();
+    let manufacturer = basic.manufacturer.clone();
+    let serial_number = basic.serial_number.clone();
 
-    let num_col = keyboard_config.layout.cols as usize;
-    let num_row = keyboard_config.layout.rows as usize;
-    let num_layer = keyboard_config.layout.layers as usize;
-    let num_encoder = match &keyboard_config.board {
+    let num_col = layout.cols as usize;
+    let num_row = layout.rows as usize;
+    let num_layer = layout.layers as usize;
+    let num_encoder = match &board {
         BoardConfig::Split(_split_config) => {
             // TODO: encoder config for split keyboard
             0

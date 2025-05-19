@@ -14,7 +14,7 @@ const MAX_ALIAS_RESOLUTION_DEPTH: usize = 10;
 
 impl KeyboardTomlConfig {
     /// Layout is a mandatory field in toml, so we mainly check the sizes
-    pub fn get_layout_from_toml(&self) -> Result<LayoutConfig, String> {
+    pub fn get_layout_config(&self) -> Result<LayoutConfig, String> {
         let aliases = self.aliases.clone().unwrap_or_default();
         let layers = self.layer.clone().unwrap_or_default();
         let mut layout = self.layout.clone().expect("layout config is required");
