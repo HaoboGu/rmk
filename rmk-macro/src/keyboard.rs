@@ -51,6 +51,14 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         Err(e) => return e,
     };
 
+    if keyboard_config.storage.enabled != is_feature_enabled(&rmk_features, "storage") {
+        if keyboard_config.storage.enabled {
+            panic!("If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml.")
+        } else {
+            panic!("Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)")
+        }
+    }
+
     // Generate imports and statics
     let imports_and_statics = gen_imports_and_static_values(&keyboard_config);
 
