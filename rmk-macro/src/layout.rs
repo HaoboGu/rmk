@@ -1,24 +1,14 @@
 //! Initialize default keymap from config
-//!
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::BoardConfig;
 
 use rmk_config::KeyboardTomlConfig;
 use rmk_config::KEYCODE_ALIAS;
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    let num_encoder = match &keyboard_config.get_board_config().unwrap() {
-        BoardConfig::UniBody(uni_body_config) => {
-            uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
-        }
-        BoardConfig::Split(_split_config) => {
-            // TODO: encoder config for split keyboard
-            0
-        }
-    };
+    let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; num_encoder];
 
     let mut layers = vec![];

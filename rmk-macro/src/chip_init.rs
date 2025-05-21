@@ -8,6 +8,29 @@ use rmk_config::CommunicationConfig;
 use rmk_config::KeyboardTomlConfig;
 use rmk_config::{ChipModel, ChipSeries};
 
+/// Expand chip initialization code
+pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
+    if let Some((_, items)) = &item_mod.content {
+        items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Fn(item_fn) = &item {
+                    if item_fn.attrs.len() == 1 {
+                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
+                            let chip = keyboard_config.get_chip_model().unwrap();
+                            return Some(override_chip_init(&chip, item_fn));
+                        }
+                    }
+                }
+                None
+            })
+            .unwrap_or(chip_init_default(keyboard_config))
+    } else {
+        chip_init_default(keyboard_config)
+    }
+}
+
 // Default implementations of chip initialization
 pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
@@ -34,8 +57,8 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             };
             let ble_addr = get_ble_addr(keyboard_config);
             let ble_init = match &communication {
-                CommunicationConfig::Usb(_) => quote! {},
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
+                    // Initialize nrf-sdc and ble stack
                     let mpsl_p = ::nrf_sdc::mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
                     let lfclk_cfg = ::nrf_sdc::mpsl::raw::mpsl_clock_lfclk_cfg_t {
                         source: ::nrf_sdc::mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
@@ -66,14 +89,14 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                     let mut host_resources = ::rmk::HostResources::new();
                     let stack = ::rmk::ble::trouble::build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
                 },
-                CommunicationConfig::None => quote! {},
+                _ => quote! {},
             };
             quote! {
-                    use embassy_nrf::interrupt::InterruptExt;
-                    let mut config = ::embassy_nrf::config::Config::default();
-                    #dcdc_config
-                    let p = ::embassy_nrf::init(config);
-                    #ble_init
+                use embassy_nrf::interrupt::InterruptExt;
+                let mut config = ::embassy_nrf::config::Config::default();
+                #dcdc_config
+                let p = ::embassy_nrf::init(config);
+                #ble_init
             }
         }
         ChipSeries::Rp2040 => {
@@ -101,28 +124,6 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                 let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
             }
         }
-    }
-}
-
-pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
-    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
-    if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            let chip = keyboard_config.get_chip_model().unwrap();
-                            return Some(override_chip_init(&chip, item_fn));
-                        }
-                    }
-                }
-                None
-            })
-            .unwrap_or(chip_init_default(keyboard_config))
-    } else {
-        chip_init_default(keyboard_config)
     }
 }
 

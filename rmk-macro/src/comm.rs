@@ -71,7 +71,16 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenS
             ChipSeries::Rp2040 => quote! {
                 let driver = ::embassy_rp::usb::Driver::new(p.#peripheral_name, Irqs);
             },
-            ChipSeries::Esp32 => quote! {},
+            ChipSeries::Esp32 => {
+                let dp = format_ident!("{}", usb_info.dp);
+                let dm = format_ident!("{}", usb_info.dm);
+                quote! {
+                    static mut EP_MEMORY: [u8; 1024] = [0; 1024];
+                    let usb = ::esp_hal::otg_fs::Usb::new(p.#peripheral_name, p.#dp, p.#dm);
+                    let usb_config = ::esp_hal::otg_fs::asynch::Config::default();
+                    let driver = ::esp_hal::otg_fs::asynch::Driver::new(usb, unsafe { &mut *addr_of_mut!(EP_MEMORY) }, usb_config);
+                }
+            }
         }
     } else {
         quote! {}

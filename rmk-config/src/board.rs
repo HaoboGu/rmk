@@ -18,6 +18,39 @@ impl Default for BoardConfig {
     }
 }
 
+impl BoardConfig {
+    pub fn get_num_encoder(&self) -> usize {
+        match self {
+            BoardConfig::Split(split) => {
+                // Central's encoders
+                let mut encoder_num = split
+                    .central
+                    .input_device
+                    .clone()
+                    .unwrap_or_default()
+                    .encoder
+                    .unwrap_or(Vec::new())
+                    .len();
+
+                // Peripheral's encoders
+                for peri in &split.peripheral {
+                    encoder_num += peri
+                        .input_device
+                        .clone()
+                        .unwrap_or_default()
+                        .encoder
+                        .unwrap_or(Vec::new())
+                        .len();
+                }
+                encoder_num
+            }
+            BoardConfig::UniBody(uni_body_config) => {
+                uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
+            }
+        }
+    }
+}
+
 impl KeyboardTomlConfig {
     pub fn get_board_config(&self) -> Result<BoardConfig, String> {
         let matrix = self.matrix.clone();

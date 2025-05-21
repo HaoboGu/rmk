@@ -12,7 +12,7 @@ use crate::comm::expand_usb_init;
 use crate::entry::expand_rmk_entry;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
-use crate::import::expand_imports;
+use crate::import::expand_custom_imports;
 use crate::input_device::expand_input_device_config;
 use crate::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
 use crate::layout::expand_default_keymap;
@@ -33,12 +33,12 @@ pub enum Overwritten {
 pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
 
-    let toml_config = match read_keyboard_toml_config() {
+    let keyboard_config = match read_keyboard_toml_config() {
         Ok(c) => c,
         Err(e) => return e,
     };
 
-    if let Some(m) = &toml_config.matrix {
+    if let Some(m) = &keyboard_config.matrix {
         if m.row2col {
             eprintln!(
                 "row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)"
@@ -46,10 +46,8 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         }
     }
 
-    let keyboard_config = toml_config;
-
     // Generate imports and statics
-    let imports_and_statics = gen_imports_and_static_values(&keyboard_config);
+    let imports_and_statics = expand_imports_and_constants(&keyboard_config);
 
     // Generate main function body
     let main_function = expand_main(&keyboard_config, item_mod, &rmk_features);
@@ -61,7 +59,7 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     }
 }
 
-pub(crate) fn gen_imports_and_static_values(config: &KeyboardTomlConfig) -> TokenStream2 {
+pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> TokenStream2 {
     // Generate keyboard info and number of rows/cols/layers
     let keyboard_info_static_var = expand_keyboard_info(config);
     // Generate default keymap
@@ -69,9 +67,11 @@ pub(crate) fn gen_imports_and_static_values(config: &KeyboardTomlConfig) -> Toke
     // Generate vial config
     let vial_static_var = expand_vial_config();
 
-    // Generate extra imports
+    // Generate extra imports, panic handler and logger
     let imports = match config.get_chip_model().unwrap().series {
-        ChipSeries::Esp32 => quote! {}, // For ESP32s, no panic handler and defmt logger are used
+        ChipSeries::Esp32 => quote! {
+            use {esp_alloc as _, esp_backtrace as _};
+        },
         _ => {
             // If defmt_log is disabled, add an empty defmt logger impl
             if config.dependency.as_ref().map_or(false, |d| d.defmt_log) {
@@ -80,6 +80,7 @@ pub(crate) fn gen_imports_and_static_values(config: &KeyboardTomlConfig) -> Toke
                     use defmt_rtt as _;
                 }
             } else {
+                // TODO: use panic_halt when defmt_log is disabled
                 quote! {
                     use panic_probe as _;
 
@@ -112,7 +113,7 @@ fn expand_main(
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Expand components of main function
-    let imports = expand_imports(&item_mod);
+    let imports = expand_custom_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(keyboard_config, &item_mod);
     let chip_init = expand_chip_init(keyboard_config, &item_mod);
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
@@ -130,8 +131,7 @@ fn expand_main(
 
     let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32 {
         quote! {
-            use {esp_alloc as _, esp_backtrace as _};
-            #[esp_hal_embassy::main]
+            #[::esp_hal_embassy::main]
             async fn main(_s: ::embassy_executor::Spawner)
         }
     } else {
@@ -147,8 +147,6 @@ fn expand_main(
         #bind_interrupt
 
         #main_function_sig {
-            // ::defmt::info!("RMK start!");
-
             // Initialize peripherals as `p`
             #chip_init
 
@@ -180,6 +178,7 @@ fn expand_main(
                 ..Default::default()
             };
 
+            // Initialize the controller, as `controller`
             #controller
 
             // Initialize the storage and keymap, as `storage` and `keymap`
@@ -193,8 +192,6 @@ fn expand_main(
 
             // Initialize split central config(if needed)
             #split_central_config
-
-            // TODO: Initialize other devices and processors
 
             // Start
             #run_rmk

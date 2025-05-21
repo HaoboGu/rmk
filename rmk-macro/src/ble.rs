@@ -10,10 +10,10 @@ use rmk_config::KeyboardTomlConfig;
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
 pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenStream2, TokenStream2) {
     let communication = keyboard_config.get_communication_config().unwrap();
-    let chip = keyboard_config.get_chip_model().unwrap();
     if !communication.ble_enabled() {
         return (quote! {}, quote! {});
     }
+    let chip = keyboard_config.get_chip_model().unwrap();
     // Support only nrf52 and esp32 (for now)
     if chip.series != ChipSeries::Nrf52 {
         if chip.series == ChipSeries::Esp32 {
@@ -29,6 +29,9 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenS
             return (quote! {}, quote! {});
         }
     }
+
+    // nRF52 configuration
+    // Only nRF52 supports charge_state, charging_led and adc config
     match &communication {
         CommunicationConfig::Ble(ble) | CommunicationConfig::Both(_, ble) => {
             if ble.enabled {

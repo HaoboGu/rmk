@@ -7,8 +7,8 @@ use crate::chip_init::expand_chip_init;
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
-use crate::import::expand_imports;
-use crate::keyboard_config::{read_keyboard_toml_config};
+use crate::import::expand_custom_imports;
+use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
 use rmk_config::{ChipModel, ChipSeries, KeyboardTomlConfig};
@@ -116,7 +116,7 @@ fn expand_split_peripheral(
 
     let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
 
-    let imports = expand_imports(&item_mod);
+    let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(keyboard_config, &item_mod);
     if split_config.connection == "ble" {
         // Add storage when using BLE split

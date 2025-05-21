@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 use rmk_config::{BleConfig, BoardConfig, KeyboardTomlConfig};
 use syn::ItemMod;
 
-// Expand `bind_interrupt!` stuffs
+/// Expand `bind_interrupt!` stuffs, and other code before `main` function
 pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
     if let Some((_, items)) = &item_mod.content {
@@ -33,12 +33,14 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_m
     }
 }
 
+/// Expand default `bind_interrupt!` for different chips and nrf-sdc config for nRF52
 pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     let board = keyboard_config.get_board_config().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
         rmk_config::ChipSeries::Stm32 => {
+            // For stm32, bind only USB interrupt by default
             if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
@@ -53,6 +55,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             }
         }
         rmk_config::ChipSeries::Nrf52 => {
+            // Adc interrupt
             let saadc_interrupt = if let Some(BleConfig {
                 enabled: true,
                 battery_adc_pin: Some(_adc_pin),
@@ -66,6 +69,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             } else {
                 quote! {}
             };
+            // Usb and clock interrupt
             let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
                 let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
@@ -76,6 +80,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             } else {
                 quote! { CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler; }
             };
+            // nrf-sdc interrupt config
             let nrf_sdc_config = match board {
                 BoardConfig::Split(_) => quote! {
                     ::nrf_sdc::Builder::new()?
