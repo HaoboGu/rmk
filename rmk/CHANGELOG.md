@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- BLE support for Pi Pico W 
 - Introduce matrix_map for nicer keyboard matrix configs
 - Battery charging state reader
 - Sleep timeout when advertising
