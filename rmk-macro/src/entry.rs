@@ -65,13 +65,13 @@ pub(crate) fn rmk_entry_select(
     };
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let board = keyboard_config.get_board_config().unwrap();
-    let storage = if keyboard_config.storage.enabled {
+    let storage = if keyboard_config.get_storage_config().enabled {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
     };
-    let entry = match &keyboard_config.board {
+    let board = keyboard_config.get_board_config().unwrap();
+    let entry = match &board {
         BoardConfig::Split(split_config) => {
             let keyboard_task = quote! {
                 keyboard.run(),
@@ -161,7 +161,7 @@ pub(crate) fn rmk_entry_default(
         tasks.push(processors_task);
     }
     //remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.storage.enabled {
+    let storage = if keyboard_config.get_storage_config().enabled {
         quote! {&mut storage,}
     } else {
         TokenStream2::new()
