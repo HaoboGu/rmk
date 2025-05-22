@@ -6,9 +6,9 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 
 | Mark | Description |
 | ---- | ----------- |
-|  🔴  | important   |
-|  🟢  | easy        |
-|  🔵  | heavy work  |
+| 🔴    | important   |
+| 🟢    | easy        |
+| 🔵    | heavy work  |
 
 
 #### keyboard feature
@@ -22,6 +22,14 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
   - [x] Direct pin
   - [x] 🟢 encoder
   - [x] 🔵 Input device
+  - [x] 🔴 Basic Macro support
+    - [x] 🔴 Macro definition via Rust
+    - [x] add KeyAction::TriggerMacro so more than 32 macros can be triggered
+    - [x] 🔴 Support umlaute
+    - [x] 🔵 Support unicode
+  - [ ] Macro support enhancement
+    - [ ] 🟢 Macro definition via toml
+    - [ ] 🟢 make macro storage space configurable
   - [ ] 🔴 RGB
   - [ ] 🔵 display support
 

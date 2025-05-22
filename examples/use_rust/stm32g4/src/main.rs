@@ -10,17 +10,16 @@ use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_stm32::{
-    bind_interrupts,
+    Config, bind_interrupts,
     gpio::{Input, Output},
     peripherals::USB,
     usb::{Driver, InterruptHandler},
-    Config,
 };
 use keymap::{COL, ROW};
 use panic_halt as _;
 use rmk::{
     channel::EVENT_CHANNEL,
-    config::{ControllerConfig, RmkConfig, VialConfig},
+    config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig},
     debounce::default_debouncer::DefaultDebouncer,
     futures::future::join3,
     initialize_keymap,
@@ -45,7 +44,8 @@ async fn main(_spawner: Spawner) {
     let p = embassy_stm32::init(config);
 
     // Pin config
-    let (input_pins, output_pins) = config_matrix_pins_stm32!(peripherals: p, input: [PB9, PB8, PB13, PB12], output: [PA8, PA9, PA10]);
+    let (input_pins, output_pins) =
+        config_matrix_pins_stm32!(peripherals: p, input: [PB9, PB8, PB13, PB12], output: [PA8, PA9, PA10]);
 
     // Usb driver
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
@@ -58,21 +58,23 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let keymap = initialize_keymap(&mut default_keymap, rmk_config.behavior_config.clone()).await;
+    let behavior_config = BehaviorConfig::default();
+    // let storage_config = StorageConfig::default();
+
+    let keymap = initialize_keymap(&mut default_keymap, behavior_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
-    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let mut keyboard = Keyboard::new(&keymap);
 
     // Initialize the light controller
-    let light_controller: LightController<Output> =
-        LightController::new(ControllerConfig::default().light_config);
+    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     // Start
     join3(
         keyboard.run(),
-        run_rmk(&keymap, driver, light_controller, rmk_config),
+        run_rmk(&keymap, driver, &mut light_controller, rmk_config),
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),

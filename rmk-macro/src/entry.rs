@@ -63,8 +63,15 @@ pub(crate) fn rmk_entry_select(
             )
         }
     };
+
+    // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let board = keyboard_config.get_board_config().unwrap();
-    let entry = match &board {
+    let storage = if keyboard_config.storage.enabled {
+        quote! {&mut storage,}
+    } else {
+        TokenStream2::new()
+    };
+    let entry = match &keyboard_config.board {
         BoardConfig::Split(split_config) => {
             let keyboard_task = quote! {
                 keyboard.run(),
@@ -73,7 +80,7 @@ pub(crate) fn rmk_entry_select(
             match chip.series {
                 ChipSeries::Stm32 | ChipSeries::Rp2040 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
+                        ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
@@ -108,7 +115,7 @@ pub(crate) fn rmk_entry_select(
                 }
                 ChipSeries::Nrf52 => {
                     let rmk_task = quote! {
-                        ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+                        ::rmk::run_rmk(&keymap, driver, &stack, #storage &mut light_controller, rmk_config),
                     };
                     let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                     if !processors.is_empty() {
@@ -153,27 +160,33 @@ pub(crate) fn rmk_entry_default(
     if !processors_task.is_empty() {
         tasks.push(processors_task);
     }
+    //remove the storage argument if disabled in config. The feature also needs to be disabled.
+    let storage = if keyboard_config.storage.enabled {
+        quote! {&mut storage,}
+    } else {
+        TokenStream2::new()
+    };
     let chip = keyboard_config.get_chip_model().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
         ChipSeries::Nrf52 => match communication {
             CommunicationConfig::Usb(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
+                    ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Ble(_) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config)
+                    ::rmk::run_rmk(&keymap, &stack, #storage &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
             }
             CommunicationConfig::Both(_, _) => {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config)
+                    ::rmk::run_rmk(&keymap, driver, &stack, #storage &mut light_controller, rmk_config)
                 };
                 tasks.push(rmk_task);
                 join_all_tasks(tasks)
@@ -182,14 +195,14 @@ pub(crate) fn rmk_entry_default(
         },
         ChipSeries::Esp32 => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
+                ::rmk::run_rmk(&keymap, &stack, #storage &mut light_controller, rmk_config),
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         _ => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

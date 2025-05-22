@@ -9,11 +9,11 @@
     "rust-analyzer.cargo.noDefaultFeatures": true,
     "rust-analyzer.showUnlinkedFileNotification": false,
     // Uncomment the target of your chip.
-    //"rust-analyzer.cargo.target": "thumbv6m-none-eabi",
-    //"rust-analyzer.cargo.target": "thumbv7m-none-eabi",
+    // "rust-analyzer.cargo.target": "thumbv6m-none-eabi",
+    // "rust-analyzer.cargo.target": "thumbv7m-none-eabi",
     // "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
     // "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
-    //"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
+    // "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
     // "rust-analyzer.cargo.target": "riscv32imc-unknown-none-elf", // for esp32c3
     // "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf", // for esp32c6
     "rust-analyzer.linkedProjects": [
@@ -47,6 +47,7 @@
         // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
         // "examples/use_rust/py32f07x/Cargo.toml",
         // "examples/use_rust/rp2040/Cargo.toml"
+        // "examples/use_rust/rp_pico_w_ble/Cargo.toml"
         // "examples/use_rust/rp2040_direct_pin/Cargo.toml"
         // "examples/use_rust/rp2040_split/Cargo.toml"
         // "examples/use_rust/rp2040_split_pio/Cargo.toml"

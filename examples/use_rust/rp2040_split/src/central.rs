@@ -16,14 +16,14 @@ use embassy_rp::peripherals::{UART0, USB};
 use embassy_rp::uart::{self, BufferedUart};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
-use rmk::split::central::{run_peripheral_manager, CentralMatrix};
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::split::central::{CentralMatrix, run_peripheral_manager};
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -78,18 +78,15 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut default_keymap,
-        flash,
-        rmk_config.storage_config,
-        rmk_config.behavior_config.clone(),
-    )
-    .await;
+    let behavior_config = BehaviorConfig::default();
+    let storage_config = StorageConfig::default();
+    let (keymap, mut storage) =
+        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<2, 2>::new();
     let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
-    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let mut keyboard = Keyboard::new(&keymap);
 
     // Initialize the light controller
     let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);

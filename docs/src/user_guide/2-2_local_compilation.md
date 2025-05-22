@@ -42,7 +42,7 @@ cargo install rmkit
 # powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
 ```
 
-There are several other tools should be installed:
+There are several other tools that should be installed:
 
 - `flip-link`: zero-cost stack overflow protection.
 

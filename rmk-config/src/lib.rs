@@ -49,9 +49,6 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
-    /// Maximum number of macros keyboard can store
-    #[serde_inline_default(8)]
-    pub macro_max_num: u8,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -61,6 +58,15 @@ pub struct RmkConstantsConfig {
     /// Event channel size
     #[serde_inline_default(16)]
     pub event_channel_size: usize,
+    /// Controller event channel size
+    #[serde_inline_default(16)]
+    pub controller_channel_size: usize,
+    /// Number of publishers to controllers
+    #[serde_inline_default(4)]
+    pub controller_channel_pubs: usize,
+    /// Number of controllers
+    #[serde_inline_default(4)]
+    pub controller_channel_subs: usize,
     /// Report channel size
     #[serde_inline_default(16)]
     pub report_channel_size: usize,
@@ -112,10 +118,12 @@ impl Default for RmkConstantsConfig {
             combo_max_num: 8,
             combo_max_length: 4,
             fork_max_num: 8,
-            macro_max_num: 8,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
+            controller_channel_size: 16,
+            controller_channel_pubs: 4,
+            controller_channel_subs: 4,
             report_channel_size: 16,
             vial_channel_size: 4,
             flash_channel_size: 4,

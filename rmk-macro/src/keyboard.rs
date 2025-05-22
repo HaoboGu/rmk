@@ -46,6 +46,14 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         }
     }
 
+    if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
+        if keyboard_config.get_storage_config().enabled {
+            panic!("If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml.")
+        } else {
+            panic!("Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)")
+        }
+    }
+
     // Generate imports and statics
     let imports_and_statics = expand_imports_and_constants(&keyboard_config);
 
@@ -129,6 +137,27 @@ fn expand_main(
     let controller = expand_controller_init(keyboard_config);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors);
 
+    let rmk_config = if keyboard_config.get_storage_config().enabled {
+        quote! {
+            let rmk_config = ::rmk::config::RmkConfig {
+                usb_config: KEYBOARD_USB_CONFIG,
+                vial_config: VIAL_CONFIG,
+                storage_config,
+                #set_ble_config
+                ..Default::default()
+            };
+        }
+    } else {
+        quote! {
+            let rmk_config = ::rmk::config::RmkConfig {
+                usb_config: KEYBOARD_USB_CONFIG,
+                vial_config: VIAL_CONFIG,
+                #set_ble_config
+                ..Default::default()
+            };
+        }
+    };
+
     let main_function_sig = if keyboard_config.get_chip_model().unwrap().series == ChipSeries::Esp32 {
         quote! {
             #[::esp_hal_embassy::main]
@@ -169,14 +198,7 @@ fn expand_main(
             #ble_config
 
             // Set all keyboard config
-            let rmk_config = ::rmk::config::RmkConfig {
-                usb_config: KEYBOARD_USB_CONFIG,
-                vial_config: VIAL_CONFIG,
-                storage_config,
-                behavior_config,
-                #set_ble_config
-                ..Default::default()
-            };
+            #rmk_config
 
             // Initialize the controller, as `controller`
             #controller
@@ -200,42 +222,53 @@ fn expand_main(
 }
 
 pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    // TODO: Add encoder support
-    let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
-    let total_num_encoders = num_encoders.iter().sum::<usize>();
-    let keymap_storage_init = if total_num_encoders == 0 {
-        // No encoder
+    if keyboard_config.get_storage_config().enabled {
+        let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+        let total_num_encoders = num_encoders.iter().sum::<usize>();
+        let keymap_storage_init = if total_num_encoders == 0 {
+            // No encoder
+            quote! {
+                ::rmk::initialize_keymap_and_storage(
+                    &mut default_keymap,
+                    flash,
+                    rmk_config.storage_config,
+                    rmk_config.behavior_config.clone(),
+                )
+            }
+        } else {
+            // Encoder exists
+            quote! {
+                ::rmk::initialize_encoder_keymap_and_storage(
+                    &mut default_keymap,
+                    &mut encoder_keymap,
+                    flash,
+                    rmk_config.storage_config,
+                    rmk_config.behavior_config.clone(),
+                )
+            }
+        };
+        let default_encoder_keymap = if total_num_encoders == 0 {
+            quote! {}
+        } else {
+            quote! {
+                let mut encoder_keymap = get_default_encoder_map();
+            }
+        };
+        // Return the keymap and storage initialization code
         quote! {
-            ::rmk::initialize_keymap_and_storage(
-                &mut default_keymap,
-                flash,
-                rmk_config.storage_config,
-                rmk_config.behavior_config.clone(),
-            )
+            let mut default_keymap = get_default_keymap();
+            #default_encoder_keymap
+            let (keymap, mut storage) =  #keymap_storage_init.await;
         }
     } else {
-        // Encoder exists
+        // Return the keymap initialization code
         quote! {
-            ::rmk::initialize_encoder_keymap_and_storage(
+            let mut default_keymap = get_default_keymap();
+            let keymap =  ::rmk::initialize_keymap(
                 &mut default_keymap,
-                &mut encoder_keymap,
-                flash,
-                rmk_config.storage_config,
-                rmk_config.behavior_config.clone(),
-            )
+                behavior_config,
+            ).await;
         }
-    };
-    let default_encoder_keymap = if total_num_encoders == 0 {
-        quote! {}
-    } else {
-        quote! {
-            let mut encoder_keymap = get_default_encoder_map();
-        }
-    };
-    quote! {
-        let mut default_keymap = get_default_keymap();
-        #default_encoder_keymap
-        let (keymap, mut storage) =  #keymap_storage_init.await;
     }
 }
 
@@ -304,7 +337,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }
     };
     quote! {
-        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+        let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap);
         #matrix
     }
 }
