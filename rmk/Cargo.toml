@@ -188,7 +188,7 @@ _esp_ble = ["_ble", "dep:esp-hal"]
 pico_w_ble = ["_ble", "dep:embassy-rp"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci"]
+_ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
 
 ## Enable feature if you want to use RP2040 PIO UART
 rp2040_pio = [
