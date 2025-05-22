@@ -199,18 +199,42 @@ fn expand_main(
     }
 }
 
-pub(crate) fn expand_keymap_and_storage(_keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     // TODO: Add encoder support
-    let keymap_storage_init = quote! {
-        ::rmk::initialize_keymap_and_storage(
-            &mut default_keymap,
-            flash,
-            rmk_config.storage_config,
-            rmk_config.behavior_config.clone(),
-        )
+    let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+    let total_num_encoders = num_encoders.iter().sum::<usize>();
+    let keymap_storage_init = if total_num_encoders == 0 {
+        // No encoder
+        quote! {
+            ::rmk::initialize_keymap_and_storage(
+                &mut default_keymap,
+                flash,
+                rmk_config.storage_config,
+                rmk_config.behavior_config.clone(),
+            )
+        }
+    } else {
+        // Encoder exists
+        quote! {
+            ::rmk::initialize_encoder_keymap_and_storage(
+                &mut default_keymap,
+                &mut encoder_keymap,
+                flash,
+                rmk_config.storage_config,
+                rmk_config.behavior_config.clone(),
+            )
+        }
+    };
+    let default_encoder_keymap = if total_num_encoders == 0 {
+        quote! {}
+    } else {
+        quote! {
+            let mut encoder_keymap = get_default_encoder_map();
+        }
     };
     quote! {
         let mut default_keymap = get_default_keymap();
+        #default_encoder_keymap
         let (keymap, mut storage) =  #keymap_storage_init.await;
     }
 }

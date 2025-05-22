@@ -1,32 +1,38 @@
-use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use rmk_config::EncoderConfig;
 
 use crate::gpio_config::convert_gpio_str_to_input_pin;
 use rmk_config::ChipModel;
 
+use super::Initializer;
+
+/// Expand encoder device, this function returns the (device_initializer, processor_initializer)
+///
+/// `id_offset` is the offset of the encoder id, it is used to distinguish the encoder id between central and peripheral
 pub(crate) fn expand_encoder_device(
+    id_offset: usize,
     encoder_config: Vec<EncoderConfig>,
     chip: &ChipModel,
-) -> (TokenStream, Vec<TokenStream>, Vec<Ident>) {
+) -> (Vec<Initializer>, Vec<Initializer>) {
     if encoder_config.is_empty() {
-        return (quote! {}, Vec::new(), Vec::new());
+        return (Vec::new(), Vec::new());
     }
 
-    let mut config = TokenStream::new();
-    let mut processor_names = vec![];
-    let mut encoder_names = vec![];
+    let mut processor_initializer = vec![];
+    let mut device_initializer = vec![];
 
     // Add encoder processor
     let encoder_processor_ident = format_ident!("encoder_processor");
-    processor_names.push(quote!(#encoder_processor_ident));
-    config.extend(quote! {
-        let mut #encoder_processor_ident = ::rmk::input_device::rotary_encoder::RotaryEncoderProcessor::new(&keymap);
+    processor_initializer.push(Initializer {
+        initializer: quote! {
+            let mut #encoder_processor_ident = ::rmk::input_device::rotary_encoder::RotaryEncoderProcessor::new(&keymap);
+        },
+        var_name: encoder_processor_ident,
     });
 
     // Create rotary encoders
     for (idx, encoder) in encoder_config.iter().enumerate() {
-        let encoder_id = idx as u8;
+        let encoder_id = idx as u8 + id_offset as u8;
 
         let pull = if encoder.internal_pullup { Some(true) } else { None };
 
@@ -35,7 +41,7 @@ pub(crate) fn expand_encoder_device(
         let pin_b = convert_gpio_str_to_input_pin(chip, encoder.pin_b.clone(), false, pull);
 
         let encoder_name = format_ident!("encoder_{}", encoder_id);
-        encoder_names.push(encoder_name.clone());
+        // encoder_names.push(encoder_name.clone());
 
         // Create different types of encoders based on the phase field
         let encoder_device = match encoder.phase.as_deref() {
@@ -82,10 +88,11 @@ pub(crate) fn expand_encoder_device(
             }
         };
 
-        config.extend(quote! {
-            #encoder_device
+        device_initializer.push(Initializer {
+            initializer: encoder_device,
+            var_name: encoder_name,
         });
     }
 
-    (config, processor_names, encoder_names)
+    (device_initializer, processor_initializer)
 }

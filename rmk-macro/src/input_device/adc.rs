@@ -4,6 +4,7 @@ use rmk_config::{BleConfig, JoystickConfig};
 
 use rmk_config::ChipSeries;
 
+// TODO: use (commented) initializer type
 pub(crate) fn expand_adc_device(
     joystick_config: Vec<JoystickConfig>,
     ble_config: Option<BleConfig>,
@@ -40,6 +41,12 @@ pub(crate) fn expand_adc_device(
                         let (adc_divider_measured, adc_divider_total) =
                             (ble.adc_divider_measured, ble.adc_divider_total);
                         let bat_ident = format_ident!("battery_processor",);
+                        // let battery_processor = Initializer {
+                        //     initializer: quote! {
+                        //         let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
+                        //     },
+                        //     var_name: bat_ident,
+                        // };
                         config.extend(quote! {
                             let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);
                         });
@@ -78,6 +85,12 @@ pub(crate) fn expand_adc_device(
                     resolution,
                     ..
                 } = joystick;
+                // let joystick_processor = Initializer {
+                //     initializer: quote! {
+                //         let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new([#([#(#transform),*]),*], [#(#bias),*], #resolution, &keymap);
+                //     },
+                //     var_name: joy_ident,
+                // };
                 config.extend(quote! {
                     let mut #joy_ident = rmk::input_device::joystick::JoystickProcessor::new([#([#(#transform),*]),*], [#(#bias),*], #resolution, &keymap);
                 });
@@ -89,6 +102,27 @@ pub(crate) fn expand_adc_device(
                 } else {
                     quote! {None}
                 };
+                // let adc_device = Initializer {
+                //     initializer: quote! {
+                //         let mut adc_device = {
+                //             use embassy_time::Duration;
+                //         use embassy_nrf::saadc::{self, Input as _};
+                //         let saadc_config = saadc::Config::default();
+                //         embassy_nrf::interrupt::SAADC.set_priority(embassy_nrf::interrupt::Priority::P3);
+
+                //         let adc = saadc::Saadc::new(p.SAADC, Irqs, saadc_config, [#(#channel_cfg),*]);
+                //         adc.calibrate().await;
+
+                //         rmk::input_device::adc::NrfAdc::new(
+                //                 adc,
+                //                 [#(#adc_type),*],
+                //                 Duration::from_millis(#default_polling_interval as u64),
+                //                 #light_sleep_option,
+                //             )
+                //         };
+                //     },
+                //     var_name: format_ident!("adc_device"),
+                // };
                 config.extend(quote! {
                     let mut adc_device = {
                         use embassy_time::Duration;

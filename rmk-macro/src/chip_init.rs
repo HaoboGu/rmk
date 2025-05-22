@@ -85,9 +85,9 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
                     let mut sdc_mem = ::nrf_sdc::Mem::<4096>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
-                    let central_addr = #ble_addr;
+                    let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
                 },
                 _ => quote! {},
             };
@@ -119,9 +119,9 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
                 let bluetooth = p.BT;
                 let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
-                let central_addr = #ble_addr;
+                let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+                let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
             }
         }
     }

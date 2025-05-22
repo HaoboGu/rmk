@@ -46,11 +46,12 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
     let num_row = layout.rows as usize;
     let num_layer = layout.layers as usize;
     let num_encoder = board.get_num_encoder();
+    let total_num_encoder = num_encoder.iter().sum::<usize>();
     quote! {
         pub(crate) const COL: usize = #num_col;
         pub(crate) const ROW: usize = #num_row;
         pub(crate) const NUM_LAYER: usize = #num_layer;
-        pub(crate) const NUM_ENCODER: usize = #num_encoder;
+        pub(crate) const NUM_ENCODER: usize = #total_num_encoder;
         const KEYBOARD_USB_CONFIG: ::rmk::config::KeyboardUsbConfig = ::rmk::config::KeyboardUsbConfig {
             vid: #vid,
             pid: #pid,

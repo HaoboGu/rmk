@@ -19,35 +19,44 @@ impl Default for BoardConfig {
 }
 
 impl BoardConfig {
-    pub fn get_num_encoder(&self) -> usize {
+    /// Get the number of encoders for each board
+    ///
+    /// - If the board is the unibody board, the returned vector has only one element.
+    /// - If the board is the split board, the number of elements is the number of peripherals + 1 (central),
+    ///   where the first element is the number of encoders on the central.
+    pub fn get_num_encoder(&self) -> Vec<usize> {
+        let mut num_encoder = Vec::new();
         match self {
             BoardConfig::Split(split) => {
                 // Central's encoders
-                let mut encoder_num = split
-                    .central
-                    .input_device
-                    .clone()
-                    .unwrap_or_default()
-                    .encoder
-                    .unwrap_or(Vec::new())
-                    .len();
-
-                // Peripheral's encoders
-                for peri in &split.peripheral {
-                    encoder_num += peri
+                num_encoder.push(
+                    split
+                        .central
                         .input_device
                         .clone()
                         .unwrap_or_default()
                         .encoder
                         .unwrap_or(Vec::new())
-                        .len();
+                        .len(),
+                );
+
+                // Peripheral's encoders
+                for peri in &split.peripheral {
+                    num_encoder.push(
+                        peri.input_device
+                            .clone()
+                            .unwrap_or_default()
+                            .encoder
+                            .unwrap_or(Vec::new())
+                            .len(),
+                    );
                 }
-                encoder_num
             }
             BoardConfig::UniBody(uni_body_config) => {
-                uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len()
+                num_encoder.push(uni_body_config.input_device.encoder.clone().unwrap_or(Vec::new()).len());
             }
-        }
+        };
+        num_encoder
     }
 }
 

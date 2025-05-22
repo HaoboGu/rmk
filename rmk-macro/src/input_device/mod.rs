@@ -1,11 +1,17 @@
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 
-mod adc;
-mod encoder;
+pub(crate) mod adc;
+pub(crate) mod encoder;
+
+/// Initializer struct for input devices
+pub(crate) struct Initializer {
+    pub(crate) initializer: TokenStream,
+    pub(crate) var_name: Ident,
+}
 
 pub(crate) fn expand_input_device_config(
     keyboard_config: &KeyboardTomlConfig,
@@ -47,11 +53,12 @@ pub(crate) fn expand_input_device_config(
     processors.extend(adc_processors);
 
     // generate encoder configuration
-    let (encoder_config, encoder_processors, encoder_names) = match &board {
+    let (device_initializer, processor_initializer) = match &board {
         BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
-            expand_encoder_device(input_device.clone().encoder.unwrap_or(Vec::new()), &chip)
+            expand_encoder_device(0, input_device.clone().encoder.unwrap_or(Vec::new()), &chip)
         }
         BoardConfig::Split(split_config) => expand_encoder_device(
+            0,
             split_config
                 .central
                 .input_device
@@ -62,13 +69,17 @@ pub(crate) fn expand_input_device_config(
             &chip,
         ),
     };
-    config.extend(encoder_config);
-    if !encoder_processors.is_empty() {
-        for encoder_name in encoder_names {
-            devices.push(quote! {#encoder_name});
-        }
+    for initializer in device_initializer {
+        config.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
     }
-    processors.extend(encoder_processors);
+
+    for initializer in processor_initializer {
+        config.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
+    }
 
     (config, devices, processors)
 }
