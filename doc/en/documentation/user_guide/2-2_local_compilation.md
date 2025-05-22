@@ -93,7 +93,7 @@ The generated project uses the `keyboard.toml` file to config the keyboard. Thes
 
 The generated `keyboard.toml` should have some fields configured from `rmkit init`. But there are still some fields that you want to fill, such as the pin matrix, default keymap, led config, etc.
 
-The [Keyboard Configuration](/features/keyboard_configuration.md) section has full instructions on how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
+The [Keyboard Configuration](/documentation/features/keyboard_configuration.md) section has full instructions on how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
 
 ### Update `memory.x`
 

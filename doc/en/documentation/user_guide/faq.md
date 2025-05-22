@@ -112,7 +112,7 @@ run `cargo clean` and then `cargo run --release`. Open an [issue](https://github
 
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 
-This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/features/binary_size_optimization.md) doc to reduce your code size.
+This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/documentation/features/binary_size_optimization.md) doc to reduce your code size.
 
 ### I see ERROR: Storage is full error in the log
 
