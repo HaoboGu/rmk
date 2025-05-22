@@ -151,3 +151,7 @@
   --docsearch-primary-color: var(--vp-c-brand-1) !important;
 }
 
+/* 自定义任务列表样式 */
+.task-list-item-checkbox {
+  margin-right: 8px;
+}
