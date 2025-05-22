@@ -12,8 +12,8 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream
     if !keyboard_config.storage.enabled {
         // This config actually does nothing if storage is disabled
         return quote! {
-            let storage_config = ::rmk::config::StorageConfig::default();
-            let flash = ::rmk::DummyFlash::new();
+            // let storage_config = ::rmk::config::StorageConfig::default();
+            // let flash = ::rmk::DummyFlash::new();
         };
     }
     let mut flash_init = get_storage_config(&keyboard_config.storage);

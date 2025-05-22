@@ -57,6 +57,7 @@ impl<O: OutputPin> Default for ControllerConfig<O> {
 pub struct RmkConfig<'a> {
     pub usb_config: KeyboardUsbConfig<'a>,
     pub vial_config: VialConfig<'a>,
+    #[cfg(feature = "storage")]
     pub storage_config: StorageConfig,
     #[cfg(feature = "_nrf_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
