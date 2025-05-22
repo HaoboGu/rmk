@@ -19,6 +19,9 @@ export default defineConfig({
     },
 
     socialLinks: [{ icon: "github", link: "https://github.com/HaoboGu/rmk" }],
+    search: {
+      provider: 'local'
+    },
   },
   // locales: {
   //   root: { label: 'English' },
