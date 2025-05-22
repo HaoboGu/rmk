@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
-pub(crate) static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
+pub static KEYCODE_ALIAS: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert("no", "No");
     m.insert("a", "A");

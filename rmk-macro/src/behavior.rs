@@ -2,9 +2,8 @@
 //!
 
 use quote::quote;
-use rmk_config::{CombosConfig, ForksConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
+use rmk_config::{CombosConfig, ForksConfig, KeyboardTomlConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
 
-use crate::keyboard_config::KeyboardConfig;
 use crate::layout::parse_key;
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
@@ -276,12 +275,13 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
-    let tri_layer = expand_tri_layer(&keyboard_config.behavior.tri_layer);
-    let tap_hold = expand_tap_hold(&keyboard_config.behavior.tap_hold);
-    let one_shot = expand_one_shot(&keyboard_config.behavior.one_shot);
-    let combos = expand_combos(&keyboard_config.behavior.combo);
-    let forks = expand_forks(&keyboard_config.behavior.fork);
+pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    let behavior = keyboard_config.get_behavior_config().unwrap();
+    let tri_layer = expand_tri_layer(&behavior.tri_layer);
+    let tap_hold = expand_tap_hold(&behavior.tap_hold);
+    let one_shot = expand_one_shot(&behavior.one_shot);
+    let combos = expand_combos(&behavior.combo);
+    let forks = expand_forks(&behavior.fork);
 
     quote! {
         let behavior_config = ::rmk::config::BehaviorConfig {

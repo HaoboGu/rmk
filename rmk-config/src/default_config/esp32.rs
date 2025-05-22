@@ -1,10 +1,6 @@
-use rmk_config::{BleConfig, StorageConfig};
+use crate::{BleConfig, ChipModel, CommunicationConfig, KeyboardConfig, StorageConfig};
 
-use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
-use crate::ChipModel;
-
-// Default config for esp32
-pub(crate) fn default_esp32(chip: ChipModel) -> KeyboardConfig {
+pub fn default_esp32(chip: ChipModel) -> KeyboardConfig {
     KeyboardConfig {
         chip,
         communication: CommunicationConfig::Ble(BleConfig {
