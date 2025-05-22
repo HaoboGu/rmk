@@ -23,8 +23,8 @@ row2col = true
 
 ### Where is my built firmware?
 
-By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./user_guide/2_setup_environment.md/#3-install-your-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
-
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's target  and `<MODE>` is `debug` or `release`, depending on your build mode.
+<!-- [target](./user_guide/2_setup_environment.md/#3-install-your-target) -->
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
 ### I want `hex`/`bin`/`uf2` file, how can I get it?
@@ -112,7 +112,7 @@ run `cargo clean` and then `cargo run --release`. Open an [issue](https://github
 
 ### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
 
-This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](binary_size_optimization.md) doc to reduce your code size.
+This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/features/binary_size_optimization.md) doc to reduce your code size.
 
 ### I see ERROR: Storage is full error in the log
 

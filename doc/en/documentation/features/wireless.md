@@ -35,8 +35,8 @@ RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely us
 
 nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format.
 
-You can also refer to [RMK user guide](./user_guide/4_compile_and_flash.md#use-uf2-bootloader) about the instructions.
-
+You can also refer to RMK user guide about the instructions.
+<!-- [RMK user guide](./user_guide/4_compile_and_flash.md#use-uf2-bootloader) -->
 ## Multiple-profile support
 
 RMK supports at most 8 wireless profiles, profile 0 is activated by default. Vial user keycode can be configured to operate wireless profiles:
