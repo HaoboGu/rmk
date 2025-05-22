@@ -30,6 +30,13 @@ export default defineConfig({
       // const taskLists = require('markdown-it-task-lists')
       md.use(taskLists);
     },
+    // 启用代码块自动格式化
+    codeTransformers: [
+      {
+        // 缩进修复
+        postprocess: (html) => html.replace(/^(\s*)<pre>/gm, '<pre>')
+      }
+    ]
   },
 });
 
