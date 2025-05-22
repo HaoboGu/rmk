@@ -1,10 +1,11 @@
 import { defineConfig } from "vitepress";
-import taskLists from 'markdown-it-task-lists';
+import taskLists from "markdown-it-task-lists";
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: "RMK",
   description: "A Rmk Site",
+  head: [["link", { rel: "icon", href: "/images/rmk_logo.svg" }]],
   rewrites: {
     "en/:rest*": ":rest*",
   },
@@ -17,9 +18,7 @@ export default defineConfig({
       "/documentation/": { base: "/documentation/", items: sidebarGuide() },
     },
 
-    socialLinks: [
-      { icon: "github", link: "https://github.com/HaoboGu/rmk" },
-    ],
+    socialLinks: [{ icon: "github", link: "https://github.com/HaoboGu/rmk" }],
   },
   // locales: {
   //   root: { label: 'English' },
@@ -29,9 +28,9 @@ export default defineConfig({
     config: (md) => {
       // 启用任务列表插件
       // const taskLists = require('markdown-it-task-lists')
-      md.use(taskLists)
-    }
-  }
+      md.use(taskLists);
+    },
+  },
 });
 
 function nav() {
@@ -123,14 +122,14 @@ function sidebarGuide() {
       items: [
         { text: "Rotary Encoder", link: "input_devices/encoder" },
         { text: "Joystick", link: "input_devices/joystick" },
-      ]
+      ],
     },
     {
       text: "Development",
       items: [
         { text: "Roadmap", link: "development/roadmap" },
         { text: "How to Contribute", link: "development/how_to_contribute" },
-      ]
-    }
+      ],
+    },
   ];
 }
