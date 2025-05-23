@@ -24,6 +24,6 @@ docs/po/messages.pot
 # Pi Pico W firmware folder
 cyw43-firmware
 
-# node modules
+# vitepress site
 node_modules
 doc/.vitepress/cache
