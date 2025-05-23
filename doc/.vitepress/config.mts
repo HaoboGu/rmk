@@ -49,7 +49,8 @@ function nav() {
 function sidebarGuide() {
   return [
     {
-      items: [{ text: 'Introduction', link: '/introduction' }]
+      text: 'Introduction',
+      items: [{ text: 'RMK Introduction', link: '/introduction' }]
     },
     {
       text: 'User Guide',

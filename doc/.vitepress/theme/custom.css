@@ -85,6 +85,7 @@
   margin-top: 2px;
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
+  padding-left: 5px;
 }
 .item a:hover {
   opacity: 0.7;
@@ -93,14 +94,11 @@
 .is-active .item a {
   opacity: 1 !important;
   background-color: var(--vp-c-brand-4-bg);
-  padding-left: 5px;
 }
 .is-active .items a {
-  padding-left: 0;
   background-color: transparent;
 }
 .is-active .items a:hover {
-  padding-left: 0;
   background-color: transparent;
   opacity: 0.7;
   background-color: var(--vp-c-brand-4-bg);
