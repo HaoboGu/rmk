@@ -53,6 +53,9 @@
 .action a {
   color: var(--vp-c-ant-text) !important;
 }
+.item .VPSocialLink {
+  border-radius: 8px !important;
+}
 
 /* 代码块样式 */
 .vp-doc div[class*='language-'] {
