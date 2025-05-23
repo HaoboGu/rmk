@@ -170,9 +170,9 @@ let mut matrix = CentralMatrix::<
     _,
     _,
     _,
-    0, // ROW OFFSET 
+    0, // ROW OFFSET
     0, // COL OFFSET
-    4, // ROW 
+    4, // ROW
     7, // COL
 >::new(input_pins, output_pins, debouncer);
 ```
@@ -204,7 +204,6 @@ run_rmk_split_peripheral(central_addr, &stack),
 
 where `2,2` are the size of peripheral's matrix.
 
-
 ## Communication
 
 RMK supports both wired and wireless communication.
@@ -213,7 +212,6 @@ Currently, the communication type indicates that how split central communicates 
 
 - For communication over BLE: the central talks with the host via BLE or USB, depends on whether the USB cable is connected
 - For communication over serial: the central can only use USB to talk with the host
-
 
 ### Wired split
 
@@ -235,7 +233,6 @@ rmk = { version = "0.4", features = [
 ### Wireless split
 
 RMK supports BLE wireless split on only nRF chips right now. The [BLE random static address](https://novelbits.io/bluetooth-address-privacy-ble/) for both central and peripheral should be defined.
-
 
 ## Split keyboard project
 

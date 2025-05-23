@@ -15,7 +15,7 @@ manufacturer = "haobo"
 serial_number = "vial:f64c2b3c:000001"
 # The chip or existing board used in keyboard
 # Either \"board\" or \"chip\" can be set, but not both
-chip = "rp2040" 
+chip = "rp2040"
 board = "nice!nano_v2"
 # USB is enabled by default for most chips
 # Set to false if you don't want USB
@@ -67,7 +67,7 @@ matrix_map = """
 (1,0) (1,1) (1,2) (1,3)
 (2,0) (2,1) (2,2)
 (3,0) (3,1) (3,2) (3,3)
-(4,0)       (4,1) 
+(4,0)       (4,1)
 """
 
 # here are the aliases for the example layer.keys below
@@ -76,10 +76,10 @@ my_cut = "WM(X, LCtrl)"
 my_copy = "WM(C, LCtrl)"
 my_paste = "WM(V, LCtrl)"
 
-# Key map definitions per layer: 
-# The number (and order) of entries on each layer should be 
+# Key map definitions per layer:
+# The number (and order) of entries on each layer should be
 # identical with the number (and order) of entries in `matrix_map`.
-# Empty layers will be used to fill if the number of explicitly 
+# Empty layers will be used to fill if the number of explicitly
 # defined layers is smaller then `layout.layers` setting
 
 # layer 0 (default):
@@ -94,7 +94,7 @@ Kp1     Kp2     Kp3        Enter
     Kp0         KpDot
 """
 
-# layer 1: 
+# layer 1:
 [[layer]]
 name = "mouse_navigation" #optional name for the layer
 keys = """
@@ -219,13 +219,14 @@ output_pins = ["PIN_10"]
 
 # Dependency config
 [dependency]
-# Whether to enable defmt, set to false for reducing binary size 
+# Whether to enable defmt, set to false for reducing binary size
 defmt_log = true
 ```
 
 ### Available chip names
 
 Available chip names in `chip` field:
+
 - rp2040
 - nrf52840
 - nrf52833
@@ -240,6 +241,7 @@ Available chip names in `chip` field:
 ### Available board names
 
 Available board names in `board` field:
+
 - nice!nano
 - nice!nano_v2
 - XIAO BLE

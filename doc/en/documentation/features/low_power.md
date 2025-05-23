@@ -14,7 +14,7 @@ If you're using nRF chips or rp2040, you're all set! You've already got your key
 For stm32, there's some limitations about Exti(see [here](https://docs.embassy.dev/embassy-stm32/git/stm32g474pc/exti/struct.ExtiInput.html)):
 
 > EXTI is not built into Input itself because it needs to take ownership of the corresponding EXTI channel, which is a limited resource.
-> 
+>
 > Pins PA5, PB5, PC5… all use EXTI channel 5, so you can’t use EXTI on, say, PA5 and PC5 at the same time.
 
 There are a few more things that you have to do:

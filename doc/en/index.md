@@ -3,9 +3,9 @@
 layout: home
 
 hero:
-  name: "RMK"
-  text: "A feature-rich Rust keyboard firmware."
-  tagline: "Join our Discord server to discuss keyboard firmware development!"
+  name: 'RMK'
+  text: 'A feature-rich Rust keyboard firmware.'
+  tagline: 'Join our Discord server to discuss keyboard firmware development!'
   image:
     src: /images/rmk_logo.svg
     alt: Rmk Logo

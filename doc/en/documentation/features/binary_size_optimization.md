@@ -3,7 +3,7 @@
 RMK has included many optimizations by default to of binary size. But there are still some tricks to reduce the binary size more. If you got linker error like:
 
 ```
-= note: rust-lld: error: 
+= note: rust-lld: error:
         ERROR(cortex-m-rt): The .text section must be placed inside the FLASH memory.
         Set _stext to an address smaller than 'ORIGIN(FLASH) + LENGTH(FLASH)'
 ```
@@ -50,7 +50,7 @@ The in `main.rs`, use `panic-halt` instead:
 You can also remove the entire defmt-rtt logger to save flash.
 
 ```diff
-# In your binary's Cargo.toml 
+# In your binary's Cargo.toml
 - defmt-rtt = "1.0"
 ```
 
@@ -62,7 +62,7 @@ In this case, you have to implement an empty defmt logger.
 
 + #[defmt::global_logger]
 + struct Logger;
-+ 
++
 + unsafe impl defmt::Logger for Logger {
 +     fn acquire() {}
 +     unsafe fn flush() {}
@@ -96,7 +96,7 @@ After applying all above approaches, total binary size of stm32h7 example can be
 
 ## Make storage optional
 
-Making storage feature optional and marking `sequential-storage` dependency as optional could also reduce the binary size a lot. 
+Making storage feature optional and marking `sequential-storage` dependency as optional could also reduce the binary size a lot.
 
 This work is not done yet, if there is still binary size issue for your microcontroller, please fire an issue at <https://github.com/HaoboGu/rmk/issues> and let us know! We'll improve the priority of this feature if we got sufficient feedback.
 

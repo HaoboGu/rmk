@@ -17,7 +17,7 @@ usb_enable = true
 
 ## `[matrix]`
 
-`[matrix]` section defines the physical [key matrix](https://docs.qmk.fm/how_a_matrix_works) IO information of the keyboard, aka input/output pins. 
+`[matrix]` section defines the physical [key matrix](https://docs.qmk.fm/how_a_matrix_works) IO information of the keyboard, aka input/output pins.
 
 <div class="warning">
 For split keyboard, this section should be just ignored, the matrix IO pins for split keyboard are defined in `[split]` section.
@@ -26,6 +26,7 @@ For split keyboard, this section should be just ignored, the matrix IO pins for 
 ### Key matrix
 
 For the normal key matrix, in order to identify the IO pins take a look at your keyboard's schematic: The pin going to the [diode](https://en.wikipedia.org/wiki/Diode) (called anode) is an output pin, the pin coming out (called cathode) is an input pin:
+
 ```
 output_pin =>   >|   => input_pin
                  ↑
@@ -62,6 +63,7 @@ If your keys are directly connected to the microcontroller pins, set `matrix_typ
 If your pin requires a pull-up resistor and the button press pulls the pin low, set `direct_pin_low_active` to true. Conversely, set it to false if your pin requires a pull-down resistor and the button press pulls the pin high.
 
 Here is an example for rp2040.
+
 ```toml
 matrix_type = "direct_pin"
 direct_pins = [

@@ -50,7 +50,7 @@ pub(crate) const ROW: usize = 5;
 pub(crate) const NUM_LAYER: usize = 2;
 ```
 
-Then, the keymap is defined as a static 3-D matrix of `KeyAction`: 
+Then, the keymap is defined as a static 3-D matrix of `KeyAction`:
 
 ```rust
 // You should define a function that returns defualt keymap by yourself

@@ -30,7 +30,7 @@ So, if you want to contribute new features of RMK, just look into `rmk` core cra
 - Create services: main keyboard service, matrix service, usb service, ble service, vial service, light service, etc.
 - Run all tasks in an infinite loop, if there's a task failed, wait some time and rerun
 
-Generally, there are 4-5 running tasks in the meanwhile, according to the user's config. Communication between tasks is done by channels.There are several built-in channels: 
+Generally, there are 4-5 running tasks in the meanwhile, according to the user's config. Communication between tasks is done by channels.There are several built-in channels:
 
 - `FLASH_CHANNEL`: a multi-sender, single-receiver channel. There are many tasks send the `FlashOperationMessage`, such as BLE task(which saves bond info), vial task(which saves key), etc.
 - `KEY_EVENT_CHANNEL`: a multi-sender, single-receiver channel. The sender can be a matrix task which scans the key matrix or a split peripheral manager which receives key event from split peripheral. The receiver, i.e. keyboard task, receives the key event and processes the key
@@ -42,4 +42,3 @@ Generally, there are 4-5 running tasks in the meanwhile, according to the user's
 An important part of a keyboard firmware is how it performs [matrix scanning](https://en.wikipedia.org/wiki/Keyboard_matrix_circuit) and how it processes the scanning result to generate keys.
 
 In RMK, this work is done in `Matrix` and `Keyboard` respectively. The `Matrix` scans the key matrix and send `KeyEvent` if there's a key change in matrix. Then the `Keyboard` receives the `KeyEvent` and processes it into actual keyboard report. Finally, the keyboard report is sent to USB/BLE tasks and forwarded to the host via USB/BLE.
-

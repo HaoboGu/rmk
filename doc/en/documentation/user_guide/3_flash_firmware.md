@@ -1,6 +1,6 @@
 # Flash the firmware
 
-The last step is to flash compiled firmware to your microcontroller. RMK supports flashing the firmware via uf2 bootloader or debug probe. 
+The last step is to flash compiled firmware to your microcontroller. RMK supports flashing the firmware via uf2 bootloader or debug probe.
 
 ## Use uf2 bootloader
 

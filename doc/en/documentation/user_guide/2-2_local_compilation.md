@@ -50,7 +50,6 @@ There are several other tools that should be installed:
 
 - (optional) `probe-rs`: used to flash and debug your firmware via debug proble. [Here](https://probe.rs/docs/getting-started/installation/) is the installation instruction.
 
-
 You can use the following commands to install them:
 
 ```bash
@@ -62,7 +61,7 @@ You can use the following commands to install them:
   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
   # Windows
   irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.ps1 | iex
-  ```
+```
 
 ## Create firmware project
 
@@ -75,7 +74,7 @@ rmkit init
 This command will ask you to give some basic info about your project and then create a project from RMK's templates:
 
 ```shell
-$ rmkit init                                                                
+$ rmkit init
 > Project Name: rmk-keyboard
 > Choose your keyboard type? split
 > Choose your microcontroller nrf52840
@@ -109,13 +108,9 @@ You can either checkout your microcontroller's datasheet or an existing Rust pro
 
 > The layout should be consistent with the default keymap set in `keyboard.toml`
 
-The next step is to add your own keymap layout for your firmware. RMK supports [vial app](https://get.vial.today/), an
-open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be
-imported to the firmware project.
+The next step is to add your own keymap layout for your firmware. RMK supports [vial app](https://get.vial.today/), an open-source cross-platform(windows/macos/linux/web) keyboard configurator. So the vial like keymap definition has to be imported to the firmware project.
 
-Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and
-convert it to `vial.json` following **[vial's doc here](https://get.vial.today/docs/porting-to-via.html)**, and place it
-at the root of the firmware project, replacing the default one. RMK will do all the rest for you.
+Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and convert it to `vial.json` following **[vial's doc here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK will do all the rest for you.
 
 ### (Optional) Update compilation target
 
@@ -133,7 +128,7 @@ target = "thumbv7em-none-eabihf"     # Cortex-M4F and Cortex-M7F (with FPU)
 # target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
 ```
 
-It's also welcome to submit and share your project template, please open an [issue](https://github.com/HaoboGu/rmk-template/issues) with your project attached. 
+It's also welcome to submit and share your project template, please open an [issue](https://github.com/HaoboGu/rmk-template/issues) with your project attached.
 
 ## Compile the firmware
 

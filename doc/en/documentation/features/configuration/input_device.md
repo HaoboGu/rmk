@@ -19,7 +19,7 @@ pin_b = "P0_31"
 # - default: EC11 compatible mode, resolution = 1
 # - e8h7: resolution = 2, direction reversed
 # - resolution: custom resolution, requires specifying resolution and reverse parameters
-phase = "default" 
+phase = "default"
 
 # Resolution represents the number of pulses generated per detent
 # For example: if your encoder has 30 detents and generates 15 pulses per 360-degree rotation, then resolution = 30/15 = 2
@@ -37,13 +37,13 @@ Multiple encoders can be added, and their indices are determined by the order of
 [[input_device.encoder]]
 pin_a = "P0_01"
 pin_b = "P0_02"
-phase = "default" 
+phase = "default"
 
 # Encoder 1
 [[input_device.encoder]]
 pin_a = "P0_03"
 pin_b = "P0_04"
-phase = "default" 
+phase = "default"
 ```
 
 ## Joystick
@@ -76,6 +76,7 @@ resolution = 6
 > `_` indicates that the axis does not exist.
 >
 > `_` is only allowed for:
+>
 > 1. Both y and z axes are missing
 > 2. Only z axis is missing
 >
@@ -86,13 +87,15 @@ resolution = 6
 1. Device reads values from each axis
 2. Adds `bias` value to each axis to make the value close to 0 when the joystick is released
 3. About the `transform` matrix:
-    1. New x-axis value = (axis_x + bias[0]) / transform[0][0] + (axis_y + bias[1]) / transform[0][1] + (axis_z + bias[2]) / transform[0][2]
-    2. New y-axis value = (axis_x + bias[0]) / transform[1][0] + (axis_y + bias[1]) / transform[1][1] + (axis_z + bias[2]) / transform[1][2]
-    3. New z-axis value = (axis_x + bias[0]) / transform[2][0] + (axis_y + bias[1]) / transform[2][1] + (axis_z + bias[2]) / transform[2][2]
 
-    If `transform[new_axis][old_axis]` is 0, that old axis value is ignored.
+   1. New x-axis value = (axis_x + bias[0]) / transform[0][0] + (axis_y + bias[1]) / transform[0][1] + (axis_z + bias[2]) / transform[0][2]
+   2. New y-axis value = (axis_x + bias[0]) / transform[1][0] + (axis_y + bias[1]) / transform[1][1] + (axis_z + bias[2]) / transform[1][2]
+   3. New z-axis value = (axis_x + bias[0]) / transform[2][0] + (axis_y + bias[1]) / transform[2][1] + (axis_z + bias[2]) / transform[2][2]
 
-    Since the value range read by the ADC device is usually much larger than the mouse report range of -256~255, `transform` is designed as a divisor.
+   If `transform[new_axis][old_axis]` is 0, that old axis value is ignored.
+
+   Since the value range read by the ADC device is usually much larger than the mouse report range of -256~255, `transform` is designed as a divisor.
+
 4. Each axis value is adjusted to the largest integer multiple of `resolution` that is less than its original value to reduce noise from ADC device readings.
 
 ### Quick Configuration Guide
@@ -100,6 +103,7 @@ resolution = 6
 1. First set `bias` to 0, `resolution` to 1, and `transform` to `[[1, 0, 0], [0, 1, 0], [0, 0, 1]]` (matrix dimension depends on the number of axes)
 
 2. Find the optimal `bias` value:
+
    - Use a debug probe to find the output `JoystickProcessor::generate_report: record = [axis_x, axis_y, axis_z]` in debug information
    - Observe these values to find the `bias` value that makes each axis closest to 0 when the joystick is released
 
@@ -126,11 +130,13 @@ interface = { spi = { instance = "SPIM0", sck = "P0_25", mosi = "P0_24", miso = 
 ### Parameters:
 
 #### I2C Configuration
+
 - `instance`: I2C instance name
 - `scl`: Clock pin
 - `sda`: Data pin
 
 #### SPI Configuration
+
 - `instance`: SPI instance name
 - `sck`: Clock pin
 - `mosi`: Master Out Slave In pin

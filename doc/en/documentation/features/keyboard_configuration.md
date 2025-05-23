@@ -2,10 +2,11 @@
 
 RMK provides an easy and accessible way to set up the keyboard with a toml config file, even without Rust code!
 
-## Usage 
+## Usage
 
 A `toml` file named `keyboard.toml` is used as the configuration file of RMK. The following is the spec of `toml` if you're unfamiliar with toml:
-  - [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
+
+- [English](https://toml.io/en/v1.0.0) / [中文](https://toml.io/cn/v1.0.0)
 
 RMK provides a proc-macro to load the `keyboard.toml` at your projects root: `#[rmk_keyboard]`, add it to your `main.rs` like:
 

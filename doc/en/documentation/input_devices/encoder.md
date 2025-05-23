@@ -13,11 +13,11 @@ pin_b = "P0_31"
 internal_pullup = false
 
 # Phase is the working mode of the rotary encoders.
-# Available mode: 
+# Available mode:
 # - default: EC11 compatible, resolution = 1
 # - e8h7: resolution = 2, reverse = true
 # - resolution: customized resolution, the resolution value and reverse should be specified later
-phase = "default" 
+phase = "default"
 
 # The resolution represents how many pulses the encoder generates per detent.
 # For examples, if your rotary encoder has 30 detents in total and generates 15 pulses per 360 degree rotation, then the resolution = 30/15 = 2.
@@ -35,12 +35,12 @@ Multiple encoders can be added directly, the encoder index is determined by the 
 [[input_device.encoder]]
 pin_a = "P0_01"
 pin_b = "P0_02"
-phase = "default" 
+phase = "default"
 # Encoder 1
 [[input_device.encoder]]
 pin_a = "P0_03"
 pin_b = "P0_04"
-phase = "default" 
+phase = "default"
 ```
 
 ## Rust configuration

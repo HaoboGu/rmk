@@ -19,7 +19,7 @@ join3(
     run_devices! (
         (matrix, encoder) => rmk::channel::EVENT_CHANNEL,
     ),
-    // Use `encoder_processor` to process the events. 
+    // Use `encoder_processor` to process the events.
     run_processor_chain! {
         rmk::channel::EVENT_CHANNEL => [encoder_processor],
     },
@@ -32,6 +32,7 @@ join3(
 ```
 
 Notes:
+
 - If the input devices emit only `KeyEvent`, use only `run_device!((matrix, dev) => EVENT_CHANNEL))` is enough, no `run_processor_chain` is needed. Because all `KeyEvent`s are automatically processed by `keyboard.run()`
 - `EVENT_CHANNEL` are built-in, you can also use your own local channels
 - The events are processed in a chained way, until the processor's `process()` returns `ProcessResult::Stop`. So the order of processors in the `run_processor_chain` matters
@@ -39,6 +40,7 @@ Notes:
 - The keyboard is special -- it receives events only from `KEY_EVENT_CHANNEL` and processes `KeyEvent`s only. `KeyEvent` from ALL devices are handled by the `Keyboard` processor, then the other events are dispatched to binded processors
 
 ## Implementation new devices
+
 RMK's input device framework is designed to provide a simple yet extensible way to handle both keys and sensors. Below is an overview of the framework:
 
 ![input_device_framework](/images/input_device_framework.excalidraw.svg)
@@ -85,7 +87,6 @@ pub trait Runnable {
 
 The `Keyboard` type implements this trait to process events and generate reports.
 
-
 ## Event Types
 
 RMK provides a default `Event` enum that is compatible with built-in `InputProcessor`s:
@@ -124,7 +125,7 @@ pub trait InputProcessor {
     ///
     /// Note there might be multiple HID reports are generated for one event,
     /// so the "sending report" operation should be done in the `process` method.
-    /// The input processor implementor should be aware of this.  
+    /// The input processor implementor should be aware of this.
     async fn process(&mut self, event: Event);
 
     /// Send the processed report.
@@ -138,8 +139,7 @@ The `process` method is responsible for processing input events and sending HID 
 
 ### Rotary encoder
 
-TODO:
-The encoder list is represented separately in vial, different from normal matrix. But layers still have effect on encoder. The behavior of rotary encoder could be changed by vial.
+TODO: The encoder list is represented separately in vial, different from normal matrix. But layers still have effect on encoder. The behavior of rotary encoder could be changed by vial.
 
 # Input Devices
 
@@ -219,6 +219,7 @@ join3(
 ```
 
 This pattern is used across all RMK examples and provides a clean way to:
+
 1. Read events from input devices and send them to a channel
 2. Process those events with a keyboard processor
 3. Handle all RMK system functionality in parallel

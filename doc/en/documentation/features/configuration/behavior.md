@@ -6,7 +6,7 @@
 
 ```toml
 [behavior]
-tri_layer = { uppper = 1, lower = 2, adjust = 3 }  
+tri_layer = { uppper = 1, lower = 2, adjust = 3 }
 one_shot = { timeout = "1s" }
 ```
 
@@ -22,6 +22,7 @@ uppper = 1
 lower = 2
 adjust = 3
 ```
+
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
@@ -39,7 +40,7 @@ The following are the typical configurations:
 
 ```toml
 [behavior]
-# Enable HRM 
+# Enable HRM
 tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
 # Disable HRM, you can safely ignore any fields if you don't want to change them
 tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
@@ -47,8 +48,7 @@ tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
 
 ### One Shot
 
-In the `one_shot` sub-table you can define how long OSM or OSL will wait before releasing the modifier/layer with the `timeout` option, default is one second.
-`timeout` is a string with a suffix of either "s" or "ms".
+In the `one_shot` sub-table you can define how long OSM or OSL will wait before releasing the modifier/layer with the `timeout` option, default is one second. `timeout` is a string with a suffix of either "s" or "ms".
 
 ```toml
 [behavior.one_shot]
@@ -84,8 +84,7 @@ combos = [
 
 ### Fork
 
-In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule:
-If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
+In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
 Fork configuration includes the following parameters:
 
@@ -97,11 +96,12 @@ Fork configuration includes the following parameters:
   - `match_none`: A strings defining a combination of modifier keys, lock leds, mouse buttons (optional)
   - `kept_modifiers`: A strings defining a combination of modifier keys, which should not be 'suppressed' form the keyboard state for the time the replacement action is executed. (optional)
   - `bindable`: Enables the evaluation of not yet triggered forks on the output of this fork to further manipulate the output. Advanced use cases can be solved using this option. (optional)
-  
-For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"): 
-  - `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too) 
-  - `CapsLock`, `ScrollLock`, `NumLock`, `Compose`, `Kana`
-  - `MouseBtn1` .. `MouseBtn8`
+
+For `match_any`, `match_none` the legal values are listed below (many values may be combined with "|"):
+
+- `LShift`, `LCtrl`, `LAlt`, `LGui`, `RShift`, `RCtrl`, `RAlt`, `RGui` (these are including the effect of explicitly held and one-shot modifiers too)
+- `CapsLock`, `ScrollLock`, `NumLock`, `Compose`, `Kana`
+- `MouseBtn1` .. `MouseBtn8`
 
 Here is a sample of fork configuration with random examples:
 
@@ -112,18 +112,18 @@ forks = [
   { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
 
   # Shift + ',' output ';' key but only if no Alt is pressed
-  { trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift", match_none = "LAlt|RAlt" },  
-  
-  # left bracket outputs by default '{', with shifts pressed outputs '['  
+  { trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift", match_none = "LAlt|RAlt" },
+
+  # left bracket outputs by default '{', with shifts pressed outputs '['
   { trigger = "LeftBracket", negative_output = "WM(LeftBracket, LShift)", positive_output = "LeftBracket", match_any = "LShift|RShift" },
 
   # Flip the effect of shift on 'x'/'X'
   { trigger = "X", negative_output = "WM(X, LShift)", positive_output = "X", match_any = "LShift|RShift" },
 
-  # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro 
+  # F24 usually outputs 'a', except when Left Shift or Ctrl pressed, in that case triggers a macro
   { trigger = "F24", negative_output = "A", positive_output = "Macro1", match_any = "LShift|LCtrl" },
 
-  # Swap Z and Y keys if MouseBtn1 is pressed (on the keyboard) (Note that these must not be bindable to avoid infinite fork loops!) 
+  # Swap Z and Y keys if MouseBtn1 is pressed (on the keyboard) (Note that these must not be bindable to avoid infinite fork loops!)
   { trigger = "Y", negative_output = "Y", positive_output = "Z", match_any = "MouseBtn1", bindable = false },
   { trigger = "Z", negative_output = "Z", positive_output = "Y", match_any = "MouseBtn1", bindable = false },
 
@@ -136,19 +136,17 @@ forks = [
   # Alt + Shift + play/pause will send volume down. MediaPlayPause -> AudioVolDown
   # Ctrl + Alt + play/pause will send brightness up. MediaPlayPause -> BrightnessUp
   # Ctrl + Alt + Shift + play/pause will send brightness down. MediaPlayPause -> BrightnessDown
-  # ( Note that the trigger and immediate trigger keys of the fork chain could be 'virtual keys', 
+  # ( Note that the trigger and immediate trigger keys of the fork chain could be 'virtual keys',
   #   which will never output, like F23, but here multiple overrides demonstrated.)
     { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "MediaNextTrack", match_any = "LCtrl|RCtrl", bindable = true },
   { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "BrightnessUp", match_any = "LAlt|RAlt", bindable = true },
   { trigger = "BrightnessUp", negative_output = "BrightnessUp", positive_output = "BrightnessDown", match_any = "LShift|RShift", bindable = false },
   { trigger = "MediaNextTrack", negative_output = "MediaNextTrack", positive_output = "MediaPrevTrack", match_any = "LShift|RShift", match_none = "LAlt|RAlt", bindable = false},
   { trigger = "MediaPlayPause", negative_output = "MediaPlayPause", positive_output = "AudioVolUp", match_any = "LAlt|RAlt", match_none = "LCtrl|RCtrl", bindable = true },
-  { trigger = "AudioVolUp", negative_output = "AudioVolUp", positive_output = "AudioVolDown", match_any = "LShift|RShift", match_none = "LCtrl|RCtrl", bindable = false } 
+  { trigger = "AudioVolUp", negative_output = "AudioVolUp", positive_output = "AudioVolDown", match_any = "LShift|RShift", match_none = "LCtrl|RCtrl", bindable = false }
 ]
 ```
 
-Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output).
-For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above.
-You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
+Please note that the processing of forks happen after combos and before others, so the trigger key must be the one listed in your keymap (or combo output). For example if `LT(2, Backspace)` is in your keymap, then `trigger = "Backspace"` will NOT work, you should "replace" the full key and use `trigger = "LT(2, Backspace)"` instead, like in the example above. You may want to include `F24` or similar dummy keys in your keymap, and use them as trigger for your pre-configured forks, such as Shift/CapsLock dependent macros to enter unicode characters of your language.
 
 Vial does not support fork configuration yet.

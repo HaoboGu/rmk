@@ -5,64 +5,58 @@
   --vp-c-brand-3: #66c2ff;
   --vp-c-brand-4-bg: rgba(100, 184, 255, 0.15);
 
-  --vp-c-text-1: #414141; /* 深灰 */
+  --vp-c-text-1: #414141;
   --vp-c-text-2: #52525b;
-  --vp-c-ant-text:rgba(255, 255, 255, 0.92);
+  --vp-c-ant-text: rgba(255, 255, 255, 0.92);
 
   --vp-c-bg: #ffffff;
   --vp-c-bg-soft: #f9f9f9;
 
-  --vp-c-block-bg:#e9f0f7;
-  --vp-c-block-code-bg:#f6f8fa;
-  
+  --vp-c-block-bg: #e9f0f7;
+  --vp-c-block-code-bg: #f6f8fa;
+
   --vp-c-gray-1: #8e8e8e;
   --vp-c-gray-2: #aeaeae;
   --vp-c-gray-3: #c7c7c7;
 
-  --vp-sidebar-bg-color:#eeeeee;
-
+  --vp-sidebar-bg-color: #eeeeee;
 }
 
 /* 暗黑模式 */
 .dark {
-  --vp-c-brand-1: #60a5fa;       
-  --vp-c-brand-2: #7eb8fc;      
-  --vp-c-brand-3: #9ecbfd;     
+  --vp-c-brand-1: #60a5fa;
+  --vp-c-brand-2: #7eb8fc;
+  --vp-c-brand-3: #9ecbfd;
   --vp-c-brand-4-bg: rgba(96, 165, 250, 0.2);
 
-  --vp-c-text-1: rgba(255, 255, 255, 0.92); 
-  --vp-c-text-2: rgba(235, 235, 235, 0.78); 
-  --vp-c-ant-text:#414141;
+  --vp-c-text-1: rgba(255, 255, 255, 0.92);
+  --vp-c-text-2: rgba(235, 235, 235, 0.78);
+  --vp-c-ant-text: #414141;
 
-  --vp-c-bg: #111827;     
-  --vp-c-bg-soft: #1f2937;     
-  --vp-c-block-bg: #2d2d2d;    
-  --vp-c-block-code-bg: #242424
+  --vp-c-bg: #111827;
+  --vp-c-bg-soft: #1f2937;
+  --vp-c-block-bg: #2d2d2d;
+  --vp-c-block-code-bg: #242424 --vp-c-gray-1: #6b7280;
+  --vp-c-gray-2: #9ca3af;
+  --vp-c-gray-3: #d1d5db;
 
-  --vp-c-gray-1: #6b7280;       
-  --vp-c-gray-2: #9ca3af;       
-  --vp-c-gray-3: #d1d5db;      
+  --vp-c-divider: rgba(255, 255, 255, 0.1);
+  --vp-c-surface-0: rgba(0, 0, 0, 0.4);
 
-  --vp-c-divider: rgba(255,255,255,0.1);  
-  --vp-c-surface-0: rgba(0, 0, 0, 0.4);   
-
-  --vp-sidebar-bg-color: rgb(10, 17, 31)
+  --vp-sidebar-bg-color: rgb(10, 17, 31);
 }
 
 /* 链接样式 */
-.action a{
+.action a {
   color: var(--vp-c-ant-text) !important;
 }
 
-/* 侧边栏样式 */
-
-
 /* 代码块样式 */
-.vp-doc div[class*="language-"] {
+.vp-doc div[class*='language-'] {
   border-radius: 1rem;
   background-color: var(--vp-c-bg-soft);
 }
-.vp-doc div[class*="language-"] span.lang {
+.vp-doc div[class*='language-'] span.lang {
   font-size: 14px;
   position: unset;
   padding: 12px 24px;
@@ -70,10 +64,10 @@
   background-color: var(--vp-c-block-bg);
   opacity: 1 !important;
 }
-.vp-doc div[class*="language-"] pre {
+.vp-doc div[class*='language-'] pre {
   background-color: var(--vp-c-block-code-bg);
 }
-.vp-doc [class*="language-"] > button.copy {
+.vp-doc [class*='language-'] > button.copy {
   top: 25px;
 }
 
@@ -84,8 +78,8 @@
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
 }
-.item a:hover  {
-  opacity: .7;
+.item a:hover {
+  opacity: 0.7;
   background-color: var(--vp-c-brand-4-bg);
 }
 .is-active .item a {
@@ -96,4 +90,10 @@
 .is-active .items a {
   padding-left: 0;
   background-color: transparent;
+}
+.is-active .items a:hover {
+  padding-left: 0;
+  background-color: transparent;
+  opacity: 0.7;
+  background-color: var(--vp-c-brand-4-bg);
 }

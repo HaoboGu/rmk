@@ -1,12 +1,17 @@
 {
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.5.3",
     "vitepress": "^1.6.3"
   },
   "scripts": {
     "docs:dev": "vitepress dev doc --open",
     "docs:build": "vitepress build doc",
-    "docs:preview": "vitepress preview doc"
+    "docs:preview": "vitepress preview doc",
+    "docs:format": "prettier --write \"./doc/**/*\"",
+    "docs:lint": "eslint --fix ."
   },
   "dependencies": {
     "markdown-it": "^14.1.0",

@@ -23,7 +23,7 @@ row2col = true
 
 ### Where is my built firmware?
 
-By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](/documentation/user_guide/2-2_local_compilation.md#setup-rmk-environment)  and `<MODE>` is `debug` or `release`, depending on your build mode.
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](/documentation/user_guide/2-2_local_compilation.md#setup-rmk-environment) and `<MODE>` is `debug` or `release`, depending on your build mode.
 
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
@@ -48,7 +48,7 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   ```
 
 - `uf2`: RMK provides [cargo-make](https://github.com/sagiegurari/cargo-make) config for all examples to generate `uf2` file automatically. Check `Makefile.toml` files in the example folders. The following command can be used to generate uf2 firmware:
-  
+
   ```shell
   # Install cargo-make
   cargo install --force cargo-make
@@ -56,7 +56,7 @@ By default, Rust compiler generates `elf` file in target folder. There're a litt
   # Generate uf2
   cargo make uf2 --release
   ```
-  
+
 ### I changed keymap in `keyboard.toml`, but the keyboard is not updated
 
 RMK assumes that users change the keymap using [vial](https://vial.rocks). So reflashing the firmware won't change the keymap by default. For testing senario, RMK provides a config `clear_storage` under `[storage]` section, you can enable it to clear the storage when the keyboard boots.
@@ -95,7 +95,7 @@ mod keyboard {
         config.rcc.sys = Sysclk::PLL1_P;
         config.rcc.ahb_pre = AHBPrescaler::DIV1;
         config.rcc.apb1_pre = APBPrescaler::DIV2;
-        config.rcc.apb2_pre = APBPrescaler::DIV1; 
+        config.rcc.apb2_pre = APBPrescaler::DIV1;
         config
     }
 }
@@ -116,15 +116,15 @@ This is because your MCU's flash is too small. Try building in release mode: `ca
 
 ### I see ERROR: Storage is full error in the log
 
-By default, RMK uses only 2 sectors of your microcontroller's internal flash. You may get the following error if 2 sectors is not big enough to store all your keymaps: 
+By default, RMK uses only 2 sectors of your microcontroller's internal flash. You may get the following error if 2 sectors is not big enough to store all your keymaps:
 
 ```
 ERROR Storage is full
-└─ rmk::storage::print_sequential_storage_err @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/storage.rs:577 
+└─ rmk::storage::print_sequential_storage_err @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/storage.rs:577
 ERROR Got none when reading keymap from storage at (layer,col,row)=(1,5,8)
-└─ rmk::storage::{impl#2}::read_keymap::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/storage.rs:460 
+└─ rmk::storage::{impl#2}::read_keymap::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/storage.rs:460
 ERROR Keymap reading aborted!
-└─ rmk::keymap::{impl#0}::new_from_storage::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/keymap.rs:38  
+└─ rmk::keymap::{impl#0}::new_from_storage::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/keymap.rs:38
 ```
 
 If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.

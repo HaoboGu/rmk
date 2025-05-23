@@ -6,7 +6,7 @@ RMK uses the **last 2 sectors** of your microcontroller's flash by default. If y
 
 </div>
 
-Storage feature is used by saving keymap edits to internal flash. 
+Storage feature is used by saving keymap edits to internal flash.
 
 ## Storage configuration
 
@@ -21,7 +21,7 @@ enabled = true
 start_addr = 0x00000000
 # How many sectors are used for storage, the default value is 2
 num_sectors = 2
-# Clear storage at keyboard boot. 
+# Clear storage at keyboard boot.
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.
 clear_storage = false
