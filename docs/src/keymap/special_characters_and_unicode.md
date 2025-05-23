@@ -1,14 +1,17 @@
 # Special Characters and Unicode
-rmk ultimately emits HID codes to the operating system.
+
+RMK ultimately emits HID codes to the operating system.
 How these codes are interpreted to print a letter depends on the operating system and the keyboard layout setting.
 For example, pressing the key for `;` on a keyboard with an en-US layout will print `;`. But if you change that to de-DE, it will print `ö` instead.
 
 This documentation and the `KeyCodes` assume an en-US layout.
 
 ## Issuing Specific Characters
+
 Entering special characters usually requires a key combination, which depends on your operating system and chosen keyboard layout (setting in the OS).
 For example, in macOS with an en-US layout, you can define the following sequence to enter an `ä`:
-```
+
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
@@ -20,8 +23,10 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
         .expect("too many elements"),
     ])
 }
+```
 
-## printing unicode
+## Printing unicode
+
 Each unicode symbol has an `code point` (aka alt-sequence) identifying it, usually depicted as `U+` and a hex number, like `U+2764` for ❤.
 This [wikipedia article](https://en.wikipedia.org/wiki/List_of_Unicode_characters) lists all unicode symbols.
 
