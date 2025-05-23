@@ -14,7 +14,7 @@ Due to multiple targets are not supported by `docs.rs` right now, so API documen
 
 ## Supported microcontrollers
 
-The following is the list of available feature gates(aka supported BLE chips): 
+The following is the list of available feature gates(aka supported BLE chips):
 
 - nrf52840_ble
 - nrf52833_ble
@@ -35,19 +35,18 @@ RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely us
 
 nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format.
 
-You can also refer to RMK user guide about the instructions.
-<!-- [RMK user guide](./user_guide/4_compile_and_flash.md#use-uf2-bootloader) -->
+You can also refer to [RMK user guide](/documentation/user_guide/3_flash_firmware.md#use-uf2-bootloader) about the instructions.
+
 ## Multiple-profile support
 
 RMK supports at most 8 wireless profiles, profile 0 is activated by default. Vial user keycode can be configured to operate wireless profiles:
 
 - `User0` - `User7`: switch to specific profile
-- `User8`: switch to next profile 
+- `User8`: switch to next profile
 - `User9`: switch to previous profile
 - `User10`: clear current profile bond info
 - `User11`: switch default output between USB/BLE
 
 Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User11` will be displayed as `BT0`, ..., `Switch Output`.
 
-
-If you've connected a host for a profile, other devices would not be able to connect to this profile before doing manually clearing. 
+If you've connected a host for a profile, other devices would not be able to connect to this profile before doing manually clearing.

@@ -23,8 +23,8 @@ row2col = true
 
 ### Where is my built firmware?
 
-By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's target  and `<MODE>` is `debug` or `release`, depending on your build mode.
-<!-- [target](./user_guide/2_setup_environment.md/#3-install-your-target) -->
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](/documentation/user_guide/2-2_local_compilation.md#setup-rmk-environment)  and `<MODE>` is `debug` or `release`, depending on your build mode.
+
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
 ### I want `hex`/`bin`/`uf2` file, how can I get it?
