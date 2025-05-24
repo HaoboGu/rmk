@@ -1,5 +1,4 @@
 ---
-# https://vitepress.dev/reference/default-theme-home-page
 layout: home
 
 hero:
@@ -18,35 +17,31 @@ hero:
       link: https://discord.gg/HHGA7pQxkG
 
 features:
-  - icon: 🦀
-    title: Memory Safety & Performance
-    details: Rust's ownership ensures memory safety without GC, matching C's efficiency.
+  - icon: 🖥️
+    title: Microcontroller Support
+    link: https://github.com/embassy-rs/embassy
+    linkText: embassy
+    details: Powered by embassy, supports stm32/nRF/rp2040/esp32
 
-  - icon: 🛠️
-    title: Cross-Platform Hardware
-    details: Supports Nordic, RP2040, ESP32 with single-command compilation.
+  - icon: 🎛️
+    title: Real-time Keymap Editing
+    link: https://get.vial.today/
+    linkText: Vial
+    details: Built-in Vial support with BLE direct editing
 
-  - icon: ⌨️
-    title: Live Keymap Editing
-    details: VIA/Vial GUI support for real-time keymap/RGB adjustments.
+  - icon: 🕹️
+    title: Advanced Features
+    details: Layer/media/system control, mouse emulation out-of-box
 
-  - icon: 📶
-    title: Multi-Protocol Wireless
-    details: BLE 5.2 + 2.4G hybrid mode with smart power management.
+  - icon: 📡
+    title: Wireless Connectivity
+    details: BLE with auto-reconnection (nRF52840/esp32c3/s3 tested)
 
-  - icon: 🔄
-    title: Hot-Swap Profiles
-    details: EEPROM stores 5+ keymap profiles for instant switching.
+  - icon: ⚙️
+    title: Easy Configuration
+    details: Define keyboard via keyboard.toml + Rust code customization
 
-  - icon: 🧩
-    title: Modular Architecture
-    details: Decoupled matrix scan, HID protocol, and keymap layers.
-
-  - icon: ⚡
-    title: CLI Toolchain
-    details: Built-in firmware build/flash/debug tools via cargo-rmk.
-
-  - icon: 🌍
-    title: Open Ecosystem
-    details: Full OSS stack from PCB design to production.
+  - icon: 🔋
+    title: Low-Latency & Power
+    details: 2ms wired/10ms wireless latency, months-long battery life
 ---
