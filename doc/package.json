@@ -7,10 +7,10 @@
     "vitepress": "^1.6.3"
   },
   "scripts": {
-    "docs:dev": "vitepress dev doc --open",
-    "docs:build": "vitepress build doc",
-    "docs:preview": "vitepress preview doc",
-    "docs:format": "prettier --write \"./doc/**/*\"",
+    "docs:dev": "vitepress dev --open",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview",
+    "docs:format": "prettier --write \"./**/*.{md,json,js,ts,mts,vue}\"",
     "docs:lint": "eslint --fix ."
   },
   "dependencies": {
