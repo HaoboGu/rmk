@@ -20,3 +20,11 @@ docs/po/messages.pot
 
 # esp idf build files
 .embuild
+
+# Pi Pico W firmware folder
+cyw43-firmware
+
+# vitepress site
+node_modules
+docs/.vitepress/cache
+docs/.vitepress/dist
