@@ -22,7 +22,7 @@ features:
     linkText: embassy
     details: Powered by embassy, with robust support for STM32, nRF, RP2040, and ESP32
 
-  - icon: 🎛️
+  - icon: 🧪
     title: Real-time Keymap Configuration
     link: https://get.vial.today/
     linkText: Vial
