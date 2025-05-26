@@ -1,17 +1,18 @@
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use embassy_sync::{mutex::Mutex, signal::Signal};
+use embassy_sync::signal::Signal;
 use heapless::Vec;
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
 use crate::combo::Combo;
+use crate::event::KeyEvent;
 use crate::keymap::KeyMap;
 use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::RawMutex;
-use crate::COMBO_MAX_NUM;
+use crate::{COMBO_MAX_NUM, VIAL_MATRIX_STATUS_SIZE};
 
 #[cfg(feature = "storage")]
 use crate::{
@@ -19,6 +20,9 @@ use crate::{
     storage::{ComboData, FlashOperationMessage},
     COMBO_MAX_LENGTH,
 };
+
+use super::VialService;
+use super::{HidReaderTrait, HidWriterTrait};
 
 /// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
@@ -62,260 +66,250 @@ const VIAL_PROTOCOL_VERSION: u32 = 6;
 const VIAL_EP_SIZE: usize = 32;
 const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
-/// Note: vial uses little endian, while via uses big endian
-pub(crate) async fn process_vial<
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
->(
-    report: &mut ViaReport,
-    vial_keyboard_Id: &[u8],
-    vial_keyboard_def: &[u8],
-    keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-) {
-    // report.output_data[0] == 0xFE -> vial commands
-    let vial_command = VialCommand::from_primitive(report.output_data[1]);
-    debug!("Received vial command: {:?}", vial_command);
-    match vial_command {
-        VialCommand::GetKeyboardId => {
-            // Returns vial protocol version + vial keyboard id
-            LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
-            report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
-            debug!("Vial return: {:?}", report.input_data);
-        }
-        VialCommand::GetSize => {
-            LittleEndian::write_u32(&mut report.input_data[0..4], vial_keyboard_def.len() as u32);
-        }
-        VialCommand::GetKeyboardDef => {
-            let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
-            let start = page * VIAL_EP_SIZE;
-            let mut end = start + VIAL_EP_SIZE;
-            if end < start || start >= vial_keyboard_def.len() {
-                return;
+impl<
+        'a,
+        RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+        const NUM_ENCODER: usize,
+    > VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    /// Note: vial uses little endian, while via uses big endian
+    pub(crate) async fn process_vial(
+        &mut self,
+        report: &mut ViaReport,
+        vial_keyboard_Id: &[u8],
+        vial_keyboard_def: &[u8],
+        keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    ) {
+        // report.output_data[0] == 0xFE -> vial commands
+        let vial_command = VialCommand::from_primitive(report.output_data[1]);
+        debug!("Received vial command: {:?}", vial_command);
+        match vial_command {
+            VialCommand::GetKeyboardId => {
+                // Returns vial protocol version + vial keyboard id
+                LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
+                report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
+                debug!("Vial return: {:?}", report.input_data);
             }
-            if end > vial_keyboard_def.len() {
-                end = vial_keyboard_def.len();
+            VialCommand::GetSize => {
+                LittleEndian::write_u32(&mut report.input_data[0..4], vial_keyboard_def.len() as u32);
             }
-            vial_keyboard_def[start..end].iter().enumerate().for_each(|(i, v)| {
-                report.input_data[i] = *v;
-            });
-            debug!(
-                "Vial return: page:{} start:{} end: {}, data: {:?}",
-                page, start, end, report.input_data
-            );
-        }
-        VialCommand::GetUnlockStatus => {
-            debug!("Received Vial - GetUnlockStatus");
-            // Reset all data to 0xFF(it's required!)
-            report.input_data.fill(0xFF);
-            let status_cell = VIAL_STATUS.lock().await;
-            let status = status_cell.borrow();
-            report.input_data[0] = status.unlocked as u8; // Unlocked status
-            report.input_data[1] = status.in_progress as u8; // Unlock in progress
-            for (i, key) in status.unlock_keys.iter().enumerate() {
-                report.input_data[2 + i * 2] = key.0;
-                report.input_data[3 + i * 2] = key.1;
+            VialCommand::GetKeyboardDef => {
+                let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
+                let start = page * VIAL_EP_SIZE;
+                let mut end = start + VIAL_EP_SIZE;
+                if end < start || start >= vial_keyboard_def.len() {
+                    return;
+                }
+                if end > vial_keyboard_def.len() {
+                    end = vial_keyboard_def.len();
+                }
+                vial_keyboard_def[start..end].iter().enumerate().for_each(|(i, v)| {
+                    report.input_data[i] = *v;
+                });
+                debug!(
+                    "Vial return: page:{} start:{} end: {}, data: {:?}",
+                    page, start, end, report.input_data
+                );
             }
-            // FIXME: unlock keys are not update every time
-        }
-        VialCommand::UnlockPoll => {
-            report.input_data.fill(0xFF);
-            let status_cell = VIAL_STATUS.lock().await;
-            let status = status_cell.borrow();
-            // Unlocked status
-            report.input_data[0] = status.unlocked as u8;
-            // Unlocked counter
-            report.input_data[2] = status.unlock_keys.len().try_into().unwrap();
-        }
-        VialCommand::UnlockStart => {
-            VIAL_STATUS.lock().await.borrow_mut().in_progress = true;
-            VIAL_STEAL_SIGNAL.signal(VialStealReason::Unlock);
-        }
-        VialCommand::Lock => {
-            let status_cell = VIAL_STATUS.lock().await;
-            let mut status = status_cell.borrow_mut();
-            status.in_progress = false;
-            status.unlocked = false;
-            status.unlock_keys.clear();
+            VialCommand::GetUnlockStatus => {
+                debug!("Received Vial - GetUnlockStatus");
+                // Reset all data to 0xFF(it's required!)
+                report.input_data.fill(0xFF);
+                report.input_data[0] = !self.get_lock_status() as u8; // Unlocked status
+                report.input_data[1] = self.status.in_progress as u8; // Unlock in progress
 
-            VIAL_STEAL_SIGNAL.signal(VialStealReason::Lock);
-        }
-        VialCommand::QmkSettingsQuery => {
-            report.input_data.fill(0xFF);
-        }
-        VialCommand::DynamicEntryOp => {
-            let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
-            match vial_dynamic {
-                VialDynamic::DynamicVialGetNumberOfEntries => {
-                    debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
-                    // TODO: Support dynamic tap dance
-                    report.input_data[0] = 0; // Tap dance entries
-                    report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
-                                                                                     // TODO: Support dynamic key override
-                    report.input_data[2] = 0; // Key override entries
-                }
-                VialDynamic::DynamicVialTapDanceGet => {
-                    warn!("DynamicEntryOp - DynamicVialTapDanceGet -- to be implemented");
-                    report.input_data.fill(0x00);
-                }
-                VialDynamic::DynamicVialTapDanceSet => {
-                    warn!("DynamicEntryOp - DynamicVialTapDanceSet -- to be implemented");
-                    report.input_data.fill(0x00);
-                }
-                VialDynamic::DynamicVialComboGet => {
-                    debug!("DynamicEntryOp - DynamicVialComboGet");
-                    report.input_data[0] = 0; // Index 0 is the return code, 0 means success
-
-                    let combo_idx = report.output_data[3] as usize;
-                    let combos = &keymap.borrow().behavior.combo.combos;
-                    if let Some((_, combo)) = vial_combo(combos, combo_idx) {
-                        for i in 0..VIAL_COMBO_MAX_LENGTH {
-                            LittleEndian::write_u16(
-                                &mut report.input_data[1 + i * 2..3 + i * 2],
-                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
-                            );
-                        }
-                        LittleEndian::write_u16(
-                            &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
-                            to_via_keycode(combo.output),
-                        );
-                    } else {
-                        report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
+                // TODO: echo the unlock key bind
+            }
+            VialCommand::UnlockPoll => {
+                report.input_data.fill(0xFF);
+                // Unlocked status
+                report.input_data[0] = !self.get_lock_status() as u8;
+                // TODO: Unlocked counter
+                report.input_data[2] = 0;
+            }
+            VialCommand::UnlockStart => {
+                self.status.in_progress = true;
+            }
+            VialCommand::Lock => self.status.lock(),
+            VialCommand::QmkSettingsQuery => {
+                report.input_data.fill(0xFF);
+            }
+            VialCommand::DynamicEntryOp => {
+                let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
+                match vial_dynamic {
+                    VialDynamic::DynamicVialGetNumberOfEntries => {
+                        debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
+                        // TODO: Support dynamic tap dance
+                        report.input_data[0] = 0; // Tap dance entries
+                        report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
+                                                                                         // TODO: Support dynamic key override
+                        report.input_data[2] = 0; // Key override entries
                     }
-                }
-                VialDynamic::DynamicVialComboSet => {
-                    debug!("DynamicEntryOp - DynamicVialComboSet");
-                    report.input_data[0] = 0; // Index 0 is the return code, 0 means success
+                    VialDynamic::DynamicVialTapDanceGet => {
+                        warn!("DynamicEntryOp - DynamicVialTapDanceGet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialTapDanceSet => {
+                        warn!("DynamicEntryOp - DynamicVialTapDanceSet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialComboGet => {
+                        debug!("DynamicEntryOp - DynamicVialComboGet");
+                        report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    #[cfg(feature = "storage")]
-                    let (real_idx, actions, output) = {
-                        // Drop combos to release the borrowed keymap, avoid potential run-time panics
                         let combo_idx = report.output_data[3] as usize;
-                        let km = &mut keymap.borrow_mut();
-                        let combos = &mut km.behavior.combo.combos;
-                        let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
-                            return;
-                        };
-
-                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
-                        let mut n: usize = 0;
-                        for i in 0..VIAL_COMBO_MAX_LENGTH {
-                            let action =
-                                from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
-                            if action != KeyAction::No {
-                                if n >= COMBO_MAX_LENGTH {
-                                    //fail if the combo action buffer is too small
-                                    return;
-                                }
-                                actions[n] = action;
-                                n += 1;
+                        let combos = &keymap.borrow().behavior.combo.combos;
+                        if let Some((_, combo)) = vial_combo(combos, combo_idx) {
+                            for i in 0..VIAL_COMBO_MAX_LENGTH {
+                                LittleEndian::write_u16(
+                                    &mut report.input_data[1 + i * 2..3 + i * 2],
+                                    to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
+                                );
                             }
+                            LittleEndian::write_u16(
+                                &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
+                                to_via_keycode(combo.output),
+                            );
+                        } else {
+                            report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
                         }
-                        let output = from_via_keycode(LittleEndian::read_u16(
-                            &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
-                        ));
+                    }
+                    VialDynamic::DynamicVialComboSet => {
+                        debug!("DynamicEntryOp - DynamicVialComboSet");
+                        report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                        combo.actions.clear();
-                        let _ = combo.actions.extend_from_slice(&actions[0..n]);
-                        combo.output = output;
+                        #[cfg(feature = "storage")]
+                        let (real_idx, actions, output) = {
+                            // Drop combos to release the borrowed keymap, avoid potential run-time panics
+                            let combo_idx = report.output_data[3] as usize;
+                            let km = &mut keymap.borrow_mut();
+                            let combos = &mut km.behavior.combo.combos;
+                            let Some((real_idx, combo)) = vial_combo_mut(combos, combo_idx) else {
+                                return;
+                            };
 
-                        //reordering combo order
-                        km.reorder_combos();
+                            let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                            let mut n: usize = 0;
+                            for i in 0..VIAL_COMBO_MAX_LENGTH {
+                                let action =
+                                    from_via_keycode(LittleEndian::read_u16(&report.output_data[4 + i * 2..6 + i * 2]));
+                                if action != KeyAction::No {
+                                    if n >= COMBO_MAX_LENGTH {
+                                        //fail if the combo action buffer is too small
+                                        return;
+                                    }
+                                    actions[n] = action;
+                                    n += 1;
+                                }
+                            }
+                            let output = from_via_keycode(LittleEndian::read_u16(
+                                &report.output_data[4 + VIAL_COMBO_MAX_LENGTH * 2..6 + VIAL_COMBO_MAX_LENGTH * 2],
+                            ));
 
-                        (real_idx, actions, output)
-                    };
-                    #[cfg(feature = "storage")]
-                    FLASH_CHANNEL
-                        .send(FlashOperationMessage::WriteCombo(ComboData {
-                            idx: real_idx,
-                            actions,
-                            output,
-                        }))
-                        .await;
-                }
-                VialDynamic::DynamicVialKeyOverrideGet => {
-                    warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
-                    report.input_data.fill(0x00);
-                }
-                VialDynamic::DynamicVialKeyOverrideSet => {
-                    warn!("DynamicEntryOp - DynamicVialKeyOverrideSet -- to be implemented");
-                    report.input_data.fill(0x00);
-                }
-                VialDynamic::Unhandled => {
-                    warn!("DynamicEntryOp - Unhandled -- subcommand not recognized");
-                    report.input_data.fill(0x00);
-                }
-            }
-        }
-        VialCommand::GetEncoder => {
-            let layer = report.output_data[2];
-            let index = report.output_data[3];
-            debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
+                            combo.actions.clear();
+                            let _ = combo.actions.extend_from_slice(&actions[0..n]);
+                            combo.output = output;
 
-            // Get encoder value
-            if let Some(encoder_map) = &keymap.borrow().encoders {
-                if let Some(encoder_layer) = encoder_map.get(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get(index as usize) {
-                        let clockwise = to_via_keycode(encoder.clockwise());
-                        let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
-                        BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
-                        BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
-                        return;
+                            //reordering combo order
+                            km.reorder_combos();
+
+                            (real_idx, actions, output)
+                        };
+                        #[cfg(feature = "storage")]
+                        FLASH_CHANNEL
+                            .send(FlashOperationMessage::WriteCombo(ComboData {
+                                idx: real_idx,
+                                actions,
+                                output,
+                            }))
+                            .await;
+                    }
+                    VialDynamic::DynamicVialKeyOverrideGet => {
+                        warn!("DynamicEntryOp - DynamicVialKeyOverrideGet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::DynamicVialKeyOverrideSet => {
+                        warn!("DynamicEntryOp - DynamicVialKeyOverrideSet -- to be implemented");
+                        report.input_data.fill(0x00);
+                    }
+                    VialDynamic::Unhandled => {
+                        warn!("DynamicEntryOp - Unhandled -- subcommand not recognized");
+                        report.input_data.fill(0x00);
                     }
                 }
             }
+            VialCommand::GetEncoder => {
+                let layer = report.output_data[2];
+                let index = report.output_data[3];
+                debug!("Received Vial - GetEncoder, encoder idx: {} at layer: {}", index, layer);
 
-            // Clear returned value, aka `KeyAction::No`
-            report.input_data.fill(0x0);
-        }
-        VialCommand::SetEncoder => {
-            let layer = report.output_data[2];
-            let index = report.output_data[3];
-            let clockwise = report.output_data[4];
-            debug!(
-                "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
-                index, clockwise, layer
-            );
-            let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
-                if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get_mut(index as usize) {
-                        if clockwise == 1 {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting clockwise action: {:?}", action);
-                            encoder.set_clockwise(action);
-                        } else {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting counter-clockwise action: {:?}", action);
-                            encoder.set_counter_clockwise(action);
+                // Get encoder value
+                if let Some(encoder_map) = &keymap.borrow().encoders {
+                    if let Some(encoder_layer) = encoder_map.get(layer as usize) {
+                        if let Some(encoder) = encoder_layer.get(index as usize) {
+                            let clockwise = to_via_keycode(encoder.clockwise());
+                            let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
+                            BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
+                            BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
+                            return;
                         }
-                        Some(encoder.clone())
+                    }
+                }
+
+                // Clear returned value, aka `KeyAction::No`
+                report.input_data.fill(0x0);
+            }
+            VialCommand::SetEncoder => {
+                let layer = report.output_data[2];
+                let index = report.output_data[3];
+                let clockwise = report.output_data[4];
+                debug!(
+                    "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
+                    index, clockwise, layer
+                );
+                let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
+                    if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
+                        if let Some(encoder) = encoder_layer.get_mut(index as usize) {
+                            if clockwise == 1 {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting clockwise action: {:?}", action);
+                                encoder.set_clockwise(action);
+                            } else {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting counter-clockwise action: {:?}", action);
+                                encoder.set_counter_clockwise(action);
+                            }
+                            Some(encoder.clone())
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
-            #[cfg(feature = "storage")]
-            // Save the encoder action to the storage after the RefCell is released
-            if let Some(encoder) = _encoder {
-                // Save the encoder action to the storage
-                FLASH_CHANNEL
-                    .send(FlashOperationMessage::EncoderKey {
-                        idx: index,
-                        layer,
-                        action: encoder,
-                    })
-                    .await;
+                #[cfg(feature = "storage")]
+                // Save the encoder action to the storage after the RefCell is released
+                if let Some(encoder) = _encoder {
+                    // Save the encoder action to the storage
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::EncoderKey {
+                            idx: index,
+                            layer,
+                            action: encoder,
+                        })
+                        .await;
+                }
             }
+            _ => (),
         }
-        _ => (),
     }
 }
 
@@ -337,30 +331,72 @@ fn vial_combo_mut(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>, idx: usize) 
         .find_map(|(i, combo)| (i == idx).then_some(combo))
 }
 
-pub(crate) struct VialStatus {
-    pub(crate) unlocked: bool,
+pub(crate) struct VialStatus<const ROW: usize, const COL: usize> {
+    pub(crate) locked: bool,
     pub(crate) in_progress: bool,
-    pub(crate) unlock_keys: Vec<(u8, u8), 8>,
+    pub(crate) matrix_data: Vec<u8, VIAL_MATRIX_STATUS_SIZE>,
 }
 
-impl VialStatus {
+impl<const ROW: usize, const COL: usize> VialStatus<ROW, COL> {
     pub const fn new() -> Self {
-        VialStatus {
-            unlocked: false,
+        Self {
+            locked: true,
             in_progress: false,
-            unlock_keys: Vec::new(),
+            matrix_data: Vec::new(),
         }
+    }
+    pub fn try_unlock(&mut self) {
+        if self.in_progress {
+            self.locked = false;
+        }
+    }
+    pub fn lock(&mut self) {
+        self.in_progress = false;
+        self.locked = true;
     }
 }
 
-#[derive(PartialEq, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) enum VialStealReason {
-    Unlock,
-    MatrixTest,
-    Lock, // Lock command: cancel all the trap
+#[cfg(feature = "matrix_test")]
+pub struct MatrixStatus<const ROW: usize, const COL: usize> {
+    pub waiting: bool,
+    pub pressed: [[bool; COL]; ROW],
+    pub pressed_counter: usize,
 }
 
-pub(crate) static VIAL_STATUS: Mutex<RawMutex, RefCell<VialStatus>> = Mutex::new(RefCell::new(VialStatus::new()));
-pub(crate) static VIAL_STEAL_SIGNAL: Signal<RawMutex, VialStealReason> = Signal::new();
-pub(crate) static VIAL_MATRIX_PRESSED_CHANNEL: Signal<RawMutex, Vec<(u8, u8), 8>> = Signal::new();
+impl<const ROW: usize, const COL: usize> MatrixStatus<ROW, COL> {
+    pub const fn new() -> Self {
+        MatrixStatus {
+            waiting: false,
+            pressed: [[false; COL]; ROW],
+            pressed_counter: 0,
+        }
+    }
+    pub fn update(&mut self, event: &KeyEvent) {
+        let row = event.row as usize;
+        let col = event.col as usize;
+        if event.pressed && !self.pressed[row][col] {
+            self.pressed_counter += 1;
+            self.pressed[row][col] = true;
+        } else if !event.pressed && self.pressed[row][col] {
+            self.pressed_counter -= 1;
+            self.pressed[row][col] = false;
+        }
+    }
+    pub fn empty(&self) -> bool {
+        self.pressed_counter == 0
+    }
+}
+
+pub enum VialSecureSignal {
+    Unlock,
+    Lock,
+    Toggle,
+}
+
+#[cfg(feature = "matrix_test")]
+pub(crate) static VIAL_MATRIX_TEST_SIGNAL: Signal<RawMutex, ()> = Signal::new();
+
+#[cfg(feature = "matrix_test")]
+pub(crate) static VIAL_MATRIX_STATUS_SIGNAL: Signal<RawMutex, Vec<u8, VIAL_MATRIX_STATUS_SIZE>> = Signal::new();
+
+pub(crate) static VIAL_SECURE_EVENT_SIGNAL: Signal<RawMutex, VialSecureSignal> = Signal::new();

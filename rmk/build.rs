@@ -66,6 +66,7 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) CONTROLLER_CHANNEL_SUBS = constants.controller_channel_subs),
         const_declaration!(pub(crate) REPORT_CHANNEL_SIZE = constants.report_channel_size),
         const_declaration!(pub(crate) VIAL_CHANNEL_SIZE = constants.vial_channel_size),
+        const_declaration!(pub(crate) VIAL_MATRIX_STATUS_SIZE = constants.vial_matrix_status_size),
         const_declaration!(pub(crate) FLASH_CHANNEL_SIZE = constants.flash_channel_size),
         const_declaration!(pub(crate) SPLIT_PERIPHERALS_NUM = constants.split_peripherals_num),
         const_declaration!(pub(crate) SPLIT_MESSAGE_CHANNEL_SIZE = constants.split_message_channel_size),

@@ -19,7 +19,7 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
-use crate::via::vial::{VialStealReason, VIAL_MATRIX_PRESSED_CHANNEL, VIAL_STATUS, VIAL_STEAL_SIGNAL};
+use crate::via::vial::{MatrixStatus, VIAL_MATRIX_STATUS_SIGNAL, VIAL_MATRIX_TEST_SIGNAL};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 /// State machine for one shot keys
@@ -53,22 +53,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
-            let key_event = loop {
-                match select(VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
-                    embassy_futures::select::Either::First(first_reason) => {
-                        // trap into vial
-                        let mut reason = first_reason;
-                        while let Some(next_reason) = self.process_vial(reason).await {
-                            reason = next_reason;
-                        }
-                    }
-                    embassy_futures::select::Either::Second(event) => {
-                        break event;
-                    }
-                }
-            };
+            #[cfg(feature = "matrix_test")]
+            if VIAL_MATRIX_TEST_SIGNAL.try_take().is_some() {
+                self.matrix_status.waiting = true;
+            }
+
+            let key_event = KEY_EVENT_CHANNEL.receive().await;
 
             // Process the key change
+            #[cfg(feature = "matrix_test")]
+            self.matrix_status.update(&key_event);
             self.process_inner(key_event).await;
 
             // After processing the key change, check if there are unprocessed events
@@ -80,6 +74,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
                 self.process_inner(e).await;
+
+                #[cfg(feature = "matrix_test")]
+                self.matrix_status.update(&e);
+            }
+
+            #[cfg(feature = "matrix_test")]
+            // all the keys are released. step into the matrix test mode
+            if self.matrix_status.waiting && self.matrix_status.empty() {
+                self.process_matrix_test().await;
+                self.matrix_status.waiting = false;
             }
         }
     }
@@ -167,6 +171,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Publisher for controller channel
     controller_pub: ControllerPub<'a>,
+
+    #[cfg(feature = "matrix_test")]
+    /// Matrix test
+    matrix_status: MatrixStatus<ROW, COL>,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -218,6 +226,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             combo_actions_buffer: Deque::new(),
             combo_on: true,
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+
+            #[cfg(feature = "matrix_test")]
+            matrix_status: MatrixStatus::new(),
         }
     }
 
@@ -225,141 +236,41 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
-    async fn process_vial(&mut self, reason: VialStealReason) -> Option<VialStealReason> {
-        info!("Trap into Vial ({:?})", reason);
-        let mut pressed_after_enter = [[false; COL]; ROW];
-        match reason {
-            VialStealReason::Unlock => {
-                // TODO: generate key randomly?
-                VIAL_STATUS.lock().await.borrow_mut().unlock_keys = Vec::from_slice(&[(0, 0), (0, 1), (0, 2)]).unwrap();
-                let mut waiting_key = {
-                    let status_cell = VIAL_STATUS.lock().await;
-                    let status = status_cell.borrow();
-                    let k = status.unlock_keys.last().unwrap().clone();
-                    Some(k)
-                };
+    #[cfg(feature = "matrix_test")]
+    async fn process_matrix_test(&mut self) {
+        use crate::via::generate_matrix_data;
+        use embassy_futures::select::Either3;
+        use embassy_time::Duration;
 
-                loop {
-                    let timeout = embassy_time::Timer::after(embassy_time::Duration::from_secs(20));
-                    match select3(timeout, VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
-                        embassy_futures::select::Either3::First(_) | embassy_futures::select::Either3::Second(_) => {
-                            // unlock cancellation timeout
-                            info!("Unlock cancel");
-                            let status_cell = VIAL_STATUS.lock().await;
-                            let mut status = status_cell.borrow_mut();
-                            status.in_progress = false;
-                            status.unlock_keys.clear();
-                        }
-                        embassy_futures::select::Either3::Third(event) => {
-                            let KeyEvent {
-                                mut row,
-                                mut col,
-                                mut pressed,
-                            } = event;
-                            loop {
-                                info!("Waiting for key: {:?}", waiting_key);
-                                if pressed {
-                                    // key pressing after entering vial
-                                    pressed_after_enter[row as usize][col as usize] = true;
-                                } else {
-                                    if pressed_after_enter[row as usize][col as usize] {
-                                        if waiting_key.is_some()
-                                            && waiting_key.unwrap().0 == row
-                                            && waiting_key.unwrap().1 == col
-                                        {
-                                            debug!("Unlock: press correct key");
-                                            let status_cell = VIAL_STATUS.lock().await;
-                                            let mut status = status_cell.borrow_mut();
-                                            status.unlock_keys.pop();
-                                            waiting_key = status.unlock_keys.last().and_then(|x| Some(x.clone()));
-                                        }
-                                    } else {
-                                        // if never pressed after enter `process_vial`, process it
-                                        // with standard method to release key correctly
-                                        self.process_inner(event).await;
-                                    }
-                                }
+        info!("Matrix testing...");
 
-                                // process the unprocessed event generated by some incorrect release
-                                if !self.unprocessed_events.is_empty() {
-                                    KeyEvent { row, col, pressed } = self.unprocessed_events.pop().unwrap();
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
+        loop {
+            // Vial poll the matrix with 20ms timer
+            // Reference: https://github.com/vial-kb/vial-gui/blob/4452671f29ff884618d781752cf8d694b68eecda/src/main/python/editor/matrix_test.py#L150
+            // To avoid the effect of packet lossing, we use 500ms timeout
+            const escape_timeout: Duration = Duration::from_millis(500);
+            let timeout = embassy_time::Timer::after(escape_timeout);
+            match select3(timeout, VIAL_MATRIX_TEST_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
+                Either3::First(_) => {
+                    info!("Matrix polling timeout");
+                    // wait for all keys released
+                    while !self.matrix_status.empty() {
+                        self.matrix_status.update(&KEY_EVENT_CHANNEL.receive().await);
                     }
-
-                    if waiting_key.is_none() {
-                        // unlock successfully
-                        info!("Unlock successfully");
-                        let status_cell = VIAL_STATUS.lock().await;
-                        let mut status = status_cell.borrow_mut();
-                        status.unlocked = true;
-                        status.in_progress = false;
-                        break;
-                    }
+                    break;
                 }
-                None
-            }
-            VialStealReason::MatrixTest => {
-                if !VIAL_STATUS.lock().await.borrow().unlocked {
-                    info!("Failed to test matrix due to locked vial");
-                    return None;
+                Either3::Second(_) => {
+                    // receive new poll and reset the timeout
+                    // nothing to do
                 }
+                Either3::Third(event) => {
+                    info!("Matrix test key event: {}, {}", event.row, event.col);
 
-                info!("Enter matrix test");
-                let mut pressed_key: Vec<(u8, u8), 8> = Vec::new();
-                loop {
-                    let timeout = embassy_time::Timer::after(embassy_time::Duration::from_millis(50));
-                    match select(timeout, VIAL_STEAL_SIGNAL.wait()).await {
-                        embassy_futures::select::Either::First(_) => {
-                            info!("Escape matrix test mode due to timeout");
-                            return None;
-                        }
-                        embassy_futures::select::Either::Second(sig) => {
-                            if sig != VialStealReason::MatrixTest {
-                                info!("Escape matrix test mode due to {:?}", sig);
-                                return Some(sig);
-                            }
-                        }
-                    }
-
-                    let event = if !self.unprocessed_events.is_empty() {
-                        self.unprocessed_events.pop().unwrap() // generated by some release in vial mode
-                    } else {
-                        loop {
-                            match select(VIAL_STEAL_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
-                                embassy_futures::select::Either::First(sig) => {
-                                    if sig != VialStealReason::MatrixTest {
-                                        return Some(sig);
-                                    }
-                                }
-                                embassy_futures::select::Either::Second(event) => break event,
-                            }
-                        }
-                    };
-
-                    let KeyEvent { row, col, pressed } = event;
-                    info!("Matrix test key event: {}, {}", row, col);
-                    if pressed {
-                        // key pressing after entering vial
-                        pressed_after_enter[row as usize][col as usize] = true;
-
-                        let _ = pressed_key.push((row, col));
-                    } else {
-                        if pressed_after_enter[row as usize][col as usize] {
-                            pressed_key.retain(|&k| k.0 != row && k.1 != col);
-                        } else {
-                            // if never pressed after enter `process_vial`, process it
-                            // with standard method to release key correctly
-                            self.process_inner(event).await;
-                        }
-                    }
-                    VIAL_MATRIX_PRESSED_CHANNEL.signal(pressed_key.clone());
+                    self.matrix_status.update(&event);
+                    let matrix_data = generate_matrix_data(&self.matrix_status.pressed);
+                    VIAL_MATRIX_STATUS_SIGNAL.signal(matrix_data);
                 }
             }
-            VialStealReason::Lock => None,
         }
     }
 
@@ -1047,6 +958,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_action_combo(key, key_event).await;
         } else if key.is_boot() {
             self.process_boot(key, key_event);
+        } else if key.is_secure() {
+            self.process_secure(key, key_event).await;
         } else {
             warn!("Unsupported key: {:?}", key);
         }
@@ -1366,6 +1279,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 KeyCode::Reboot => {
                     boot::reboot_keyboard();
+                }
+                _ => (), // unreachable, do nothing
+            };
+        }
+    }
+
+    async fn process_secure(&mut self, key: KeyCode, key_event: KeyEvent) {
+        use crate::via::vial::VialSecureSignal;
+        use crate::via::vial::VIAL_SECURE_EVENT_SIGNAL;
+
+        // When releasing the key, process the secure action
+        if !key_event.pressed {
+            match key {
+                KeyCode::SecureLock => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Lock);
+                }
+                KeyCode::SecureUnlock => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Unlock);
+                }
+                KeyCode::SecureToggle => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Toggle);
                 }
                 _ => (), // unreachable, do nothing
             };

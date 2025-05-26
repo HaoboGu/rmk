@@ -51,6 +51,9 @@ pub struct RmkConstantsConfig {
     /// Vial channel size
     #[serde_inline_default(4)]
     pub vial_channel_size: usize,
+    /// Vial matrix status channel size
+    #[serde_inline_default(30)]
+    pub vial_matrix_status_size: usize,
     /// Flash channel size
     #[serde_inline_default(4)]
     pub flash_channel_size: usize,
@@ -104,6 +107,7 @@ impl Default for RmkConstantsConfig {
             controller_channel_subs: 4,
             report_channel_size: 16,
             vial_channel_size: 4,
+            vial_matrix_status_size: 30,
             flash_channel_size: 4,
             split_peripherals_num: 1,
             split_message_channel_size: 4,

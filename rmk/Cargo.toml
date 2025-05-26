@@ -93,7 +93,7 @@ ctor = "0.4.1"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
-rmk-config = { path = "../rmk-config", version = "=0.3.0"}
+rmk-config = { path = "../rmk-config", version = "=0.3.0" }
 toml = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
@@ -109,7 +109,7 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage"]
+default = ["col2row", "defmt", "storage", "matrix_test"]
 
 ## the storage is optional to save memory
 storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
@@ -160,6 +160,9 @@ split = []
 
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
+
+## enable matrix test of vial
+matrix_test = []
 
 #! ### BLE feature flags
 #!
