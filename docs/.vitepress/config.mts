@@ -149,7 +149,12 @@ function sidebarGuide() {
           text: 'Keymap',
           link: 'features/keymap',
           collapsed: true,
-          items: [{ text: 'Special Key', link: 'features/keymap/special_keys' }]
+          items: [
+            { text: 'Keycodes', link: 'features/keymap/keycodes' },
+            { text: 'Special Key', link: 'features/keymap/special_keys' },
+            { text: 'Keyboard Macros', link: 'features/keymap/keyboard_macros' },
+            { text: 'Special Characters and Unicode', link: 'features/keymap/special_characters_and_unicode' },
+          ]
         },
         { text: 'Vial Support', link: 'features/vial_support' },
         { text: 'Wireless', link: 'features/wireless' },
