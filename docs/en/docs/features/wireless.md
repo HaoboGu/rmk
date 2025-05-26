@@ -35,7 +35,7 @@ RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely us
 
 nice!nano has a built-in bootloader, enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions to convert RMK firmware to .uf2 format.
 
-You can also refer to [RMK user guide](/documentation/user_guide/3_flash_firmware.md#use-uf2-bootloader) about the instructions.
+You can also refer to [RMK user guide](/docs/user_guide/3_flash_firmware.md#use-uf2-bootloader) about the instructions.
 
 ## Multiple-profile support
 

@@ -3,15 +3,15 @@ layout: home
 
 hero:
   name: 'RMK'
-  text: 'A feature-rich Rust keyboard firmware.'
+  text: 'A feature-rich Rust keyboard firmware'
   tagline: 'Join our Discord server to discuss keyboard firmware development!'
   image:
     src: /images/rmk_logo.svg
-    alt: Rmk Logo
+    alt: RMK Logo
   actions:
     - theme: brand
       text: Get Started
-      link: /documentation/user_guide/1_guide_overview
+      link: /docs/user_guide/1_guide_overview
     - theme: alt
       text: Discord Community
       link: https://discord.gg/HHGA7pQxkG
