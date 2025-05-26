@@ -4,18 +4,19 @@ import taskLists from 'markdown-it-task-lists'
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: 'RMK',
-  description: 'A Rmk Site',
+  description: 'RMK keyboard firmware',
   head: [['link', { rel: 'icon', href: '/images/rmk_logo.svg' }]],
   rewrites: {
     'en/:rest*': ':rest*'
   },
+  base: '/',
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     logo: '/images/rmk_logo.svg',
     nav: nav(),
 
     sidebar: {
-      '/documentation/': { base: '/documentation/', items: sidebarGuide() }
+      '/docs/': { base: '/docs/', items: sidebarGuide() }
     },
 
     socialLinks: [{ icon: 'github', link: 'https://github.com/HaoboGu/rmk' }],
@@ -44,7 +45,7 @@ export default defineConfig({
 })
 
 function nav() {
-  return [{ text: 'Docs', link: '/documentation/introduction' }]
+  return [{ text: 'Docs', link: '/docs/introduction' }]
 }
 function sidebarGuide() {
   return [

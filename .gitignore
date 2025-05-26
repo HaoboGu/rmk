@@ -26,5 +26,5 @@ cyw43-firmware
 
 # vitepress site
 node_modules
-doc/.vitepress/cache
-doc/.vitepress/dist
+docs/.vitepress/cache
+docs/.vitepress/dist

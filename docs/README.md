@@ -50,4 +50,4 @@ Build the application:
 pnpm run docs:build
 ```
 
-This command generates static content into the `/doc/.vitepress/dist` directory and can be served using any static contents hosting service.
+This command generates static content into the `/docs/.vitepress/dist` directory and can be served using any static contents hosting service.
