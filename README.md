@@ -6,7 +6,7 @@
   </a>
 
   <p align="center">
-  A sophisticated, feature-rich keyboard firmware written in Rust.
+  A feature-rich keyboard firmware written in Rust.
   <br />
   <br />
   <a href="https://crates.io/crates/rmk"><img src="https://img.shields.io/crates/v/rmk"></a>
@@ -24,11 +24,11 @@
 
 ## Features
 
-- **Broad microcontroller compatibility**: Leveraging [embassy](https://github.com/embassy-rs/embassy), RMK supports a comprehensive range of microcontrollers, including stm32, nRF, rp2040, and esp32 platforms
-- **Dynamic keymap customization**: RMK offers native [Vial](https://get.vial.today) integration, enabling real-time keymap modifications. You can even edit keymaps over BLE connections wirelessly
-- **Advanced keyboard functionality**: RMK comes with a wealth of sophisticated keyboard features by default, including layer switching, media controls, system commands, mouse control, and more
-- **Wireless connectivity**: Robust BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, thoroughly tested on nRF52840, esp32c3, and esp32s3
-- **Streamlined configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
+- **Broad microcontroller compatibility**: Leveraging [embassy](https://github.com/embassy-rs/embassy), RMK supports a comprehensive range of microcontrollers, including stm32, nRF, rp2040(w), esp32, etc
+- **Dynamic keymap customization**: RMK offers native [Vial](https://get.vial.today) support, enabling real-time keymap modifications. You can even edit keymaps over BLE connections wirelessly
+- **Advanced keyboard functionality**: RMK comes with lots of advanced keyboard features by default, including layer switching, media controls, system commands, mouse control, and more
+- **Wireless connectivity**: BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3, esp32s3
+- **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
 ## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
@@ -113,17 +113,17 @@ Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main
 
 ## [Development Roadmap](https://haobogu.github.io/rmk/roadmap.html)
 
-View our current development plans and upcoming features on the [roadmap page](https://haobogu.github.io/rmk/roadmap.html).
+Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap.html).
 
 ## Minimum Supported Rust Version (MSRV)
 
-RMK is developed against the latest stable Rust release. While other versions may work, they are not officially tested or supported.
+RMK is developed against the latest stable Rust release. While other versions may work, they are not fully tested.
 
 ## License
 
-RMK is dual-licensed under either:
+RMK is licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 (LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license (LICENSE-MIT or <http://opensource.org/licenses/MIT>)
 
 at your option.

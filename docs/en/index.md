@@ -2,9 +2,8 @@
 layout: home
 
 hero:
-  name: 'RMK'
   text: 'A feature-rich Rust keyboard firmware'
-  tagline: 'Join our Discord server to discuss keyboard firmware development!'
+  tagline: 'Join our Discord server for discussions, support, and community collaboration!'
   image:
     src: /images/rmk_logo.svg
     alt: RMK Logo
@@ -18,30 +17,30 @@ hero:
 
 features:
   - icon: 🖥️
-    title: Microcontroller Support
+    title: Extensive Microcontroller Support
     link: https://github.com/embassy-rs/embassy
     linkText: embassy
-    details: Powered by embassy, supports stm32/nRF/rp2040/esp32
+    details: Powered by embassy, with robust support for STM32, nRF, RP2040, and ESP32
 
   - icon: 🎛️
-    title: Real-time Keymap Editing
+    title: Real-time Keymap Configuration
     link: https://get.vial.today/
     linkText: Vial
-    details: Built-in Vial support with BLE direct editing
+    details: Native Vial support, enabling real-time keymap modification over BLE connections wirelessly
 
   - icon: 🕹️
     title: Advanced Features
-    details: Layer/media/system control, mouse emulation out-of-box
+    details: Layer switching, media controls and tap-hold keys are available out-of-the-box
 
   - icon: 📡
     title: Wireless Connectivity
-    details: BLE with auto-reconnection (nRF52840/esp32c3/s3 tested)
+    details: BLE wireless support with automatic reconnection and multi-device (tested on nRF52840, ESP32-C3, and ESP32-S3)
 
   - icon: ⚙️
     title: Easy Configuration
-    details: Define keyboard via keyboard.toml + Rust code customization
+    details: Define your keyboard through a single keyboard.toml file
 
   - icon: 🔋
-    title: Low-Latency & Power
-    details: 2ms wired/10ms wireless latency, months-long battery life
+    title: Optimized Performance & Power Efficiency
+    details: Ultra-low 2ms wired/10ms wireless latency with months of battery life
 ---
