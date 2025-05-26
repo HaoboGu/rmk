@@ -43,7 +43,37 @@ export default defineConfig({
         postprocess: (html) => html.replace(/^(\s*)<pre>/gm, '<pre>')
       }
     ]
+  },
+
+  transformHead: ({ assets }) => {
+    const textFont = assets.find(file => /OpenSans\.[\w-]+\.ttf/.test(file))
+    const codeFont = assets.find(file => /FiraCode\.[\w-]+\.ttf/.test(file))
+    if (textFont && codeFont) {
+      return [
+        [
+          'link',
+          {
+            rel: 'preload',
+            href: textFont,
+            as: 'font',
+            type: 'font/ttf',
+            crossorigin: ''
+          }
+        ],
+        [
+          'link',
+          {
+            rel: 'preload',
+            href: codeFont,
+            as: 'font',
+            type: 'font/ttf',
+            crossorigin: ''
+          }
+        ]
+      ]
+    }
   }
+
 })
 
 function nav() {
