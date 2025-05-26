@@ -4,7 +4,7 @@ rmk supports keyboard macros: Pressing a trigger to execute a sequence of keypre
 
 This can be configured via Vial or rust. A configuration via the toml configuration file will be provided in the future.
 
-## macro operations
+## Macro operations
 
 The following operations, coming from Vial, can be used to form a macro sequence. They are in `rmk::config::keyboard_macros::keyboard_macro`:
 
@@ -52,7 +52,7 @@ There are two helper functions to define macro sequences:
 
 1. `define_macro_sequences(&[heapless::Vec<MacroOperation, MACRO_SPACE_SIZE>])` You can use it this way:
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
@@ -83,7 +83,7 @@ For text output there is a convenience function: `to_macro_sequence(text: &str) 
 
 This function converts a `&str` into a sequence of `MacroOperation::Text`. The above example would be:
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         to_macro_sequence("Hello"),
@@ -98,7 +98,7 @@ Note that you are still limited to the ascii characters defined as `KeyCode`s. F
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS). For example, in MacOS with a en-US layout you can define the following sequence to enter an `ö`:
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
@@ -114,7 +114,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 ## Triggering a macro
 
-### binding
+### Binding
 
 A macro can be triggered in two ways:
 
@@ -124,35 +124,35 @@ A macro can be triggered in two ways:
 
 There is no difference using either, other than that there is no `KeyCode::Macro32`. To trigger the 33th macro and above you need to use `Action::TriggerMacro(index)`.
 
-### combining
+### Combining
 
 Both macro triggers can be used anywhere, where a `KeyCode` or an `Action` can be assigned.
 
 As the only `Action` taking a `KeyCode` is `Action::Key`, combining with `Action`s is limited.
 
-#### with `KeyAction`
+#### With `KeyAction`
 
 You can combine the trigger with any `KeyAction`, like layer-taps, hold-taps, etc.
 
 For example:
 
-```
+```rust
 KeyAction::TapHold(k!(Macro0, Acrion::TriggerMacro(1)))
 ```
 
 Probably you most likely will need
 
-```
+```rust
 k!(Macro0)
 ```
 
 or
 
-```
+```rust
 KeyAction::Single(Action::TriggerMacro(0))
 ```
 
-#### with `Combo` (chording)
+#### With `Combo` (chording)
 
 Combining with Combo allows for a quite powerful feature: Chording. Chording comes for the courtroom stenography and has its name from playing chords, like on a guitar. Chording is pressing a few letters to emit multiple letters.
 
@@ -160,7 +160,7 @@ Thus, one can press only the beginning of a word to write the whole word. For ex
 
 This is the configuration for the above example, assuming `1` is the chording layer:
 
-```
+```rust
     define_macro_sequences(&[
         to_macro_sequence("type"),
         to_macro_sequence("typing"),
@@ -180,7 +180,7 @@ This is the configuration for the above example, assuming `1` is the chording la
 
 Note that instead of having a second macro for all verbs (normal and `ing` form) you can define a macro which converts a word to the `ing` form:
 
-```
+```rust
     define_macro_sequences(&[
         to_macro_sequence("type"),
         Vec::from_slice(&[
@@ -204,13 +204,13 @@ Note that instead of having a second macro for all verbs (normal and `ing` form)
 
 With the configuration above pressing `T` & `Y` writes `type` and pressing `G` changes it to `typing`.
 
-### with forks
+### With forks
 
 You can use macro triggers in forks as well.
 
 This is how you can trigger `hello` and `Hello` with pressing shift:
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         to_macro_sequence("hello"),
@@ -241,7 +241,7 @@ pub(crate) fn get_forks() -> ForksConfig {
 
 ## Tips
 
-### small and capital version of a word
+### Small and capital version of a word
 
 If you want to spell a macro in small letters, but occationally with the first letter capitalized, you can do so in the following way:
 
@@ -249,7 +249,7 @@ For example, you might want to use a combo for the rare letter `q`. And as this 
 
 Thus, implement the macro:
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
@@ -263,7 +263,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 When you press `shift` and use `MacroOperation::Text`, like in the code above, no letter gets capitalized (outputs `qu`). Remember that `MacroOperation::Text` ignores all modifiers not being part of the sequence. `MacroOperation:Tap` doesn't, thus you can use `MacroOperation::Tap` for the first letter, and `MacroOperation::Text` for the following letters, to capitalize the first letter only.
 
-```
+```rust
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
