@@ -1,6 +1,6 @@
 # Rotary encoders
 
-## `toml` configurationn
+## `toml` configuration
 
 You can define a rotary encoder in your `keyboard.toml`. The default type of rotary encoder is EC11, you can config it as:
 
