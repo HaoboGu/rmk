@@ -356,7 +356,7 @@ impl<const ROW: usize, const COL: usize> VialStatus<ROW, COL> {
     }
 }
 
-#[cfg(feature = "matrix_test")]
+#[allow(dead_code)]
 pub struct MatrixStatus<const ROW: usize, const COL: usize> {
     pub waiting: bool,
     pub pressed: [[bool; COL]; ROW],
@@ -393,10 +393,11 @@ pub enum VialSecureSignal {
     Toggle,
 }
 
-#[cfg(feature = "matrix_test")]
+/// The heartbeat to keep matrix tester mode
 pub(crate) static VIAL_MATRIX_TEST_SIGNAL: Signal<RawMutex, ()> = Signal::new();
 
-#[cfg(feature = "matrix_test")]
+/// The channel for transmission of the matrix status
 pub(crate) static VIAL_MATRIX_STATUS_SIGNAL: Signal<RawMutex, Vec<u8, VIAL_MATRIX_STATUS_SIZE>> = Signal::new();
 
+/// The main task triggers the event about `secure`
 pub(crate) static VIAL_SECURE_EVENT_SIGNAL: Signal<RawMutex, VialSecureSignal> = Signal::new();

@@ -10,8 +10,7 @@ use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
 use vial::VialSecureSignal;
 use vial::VialStatus;
-use vial::VIAL_MATRIX_TEST_SIGNAL;
-use vial::VIAL_SECURE_EVENT_SIGNAL;
+use vial::{VIAL_MATRIX_TEST_SIGNAL, VIAL_SECURE_EVENT_SIGNAL};
 
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};

@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use embassy_futures::select::{select, select3, Either};
+use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
 use embassy_time::{Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
@@ -19,6 +19,7 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
+#[allow(unused_imports)]
 use crate::via::vial::{MatrixStatus, VIAL_MATRIX_STATUS_SIGNAL, VIAL_MATRIX_TEST_SIGNAL};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
@@ -239,7 +240,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     #[cfg(feature = "matrix_test")]
     async fn process_matrix_test(&mut self) {
         use crate::via::generate_matrix_data;
-        use embassy_futures::select::Either3;
+        use embassy_futures::select::{select3, Either3};
         use embassy_time::Duration;
 
         info!("Matrix testing...");
