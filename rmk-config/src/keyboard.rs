@@ -1,4 +1,4 @@
-use crate::KeyboardTomlConfig;
+use crate::{DependencyConfig, KeyboardTomlConfig};
 
 /// Keyboard's basic info
 #[derive(Clone, Debug)]
@@ -40,6 +40,14 @@ impl KeyboardTomlConfig {
             manufacturer: self.keyboard.manufacturer.clone().unwrap_or(default.manufacturer),
             product_name: self.keyboard.product_name.clone().unwrap_or(default.product_name),
             serial_number: self.keyboard.serial_number.clone().unwrap_or(default.serial_number),
+        }
+    }
+
+    pub fn get_dependency_config(&self) -> DependencyConfig {
+        if let Some(dependency) = &self.dependency {
+            dependency.clone()
+        } else {
+            DependencyConfig::default()
         }
     }
 }

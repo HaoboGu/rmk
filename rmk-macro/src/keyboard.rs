@@ -82,7 +82,7 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
         },
         _ => {
             // If defmt_log is disabled, add an empty defmt logger impl
-            if config.dependency.as_ref().map_or(false, |d| d.defmt_log) {
+            if config.get_dependency_config().defmt_log {
                 quote! {
                     use panic_probe as _;
                     use defmt_rtt as _;
