@@ -19,6 +19,8 @@
   --vp-c-gray-2: #aeaeae;
   --vp-c-gray-3: #c7c7c7;
 
+  --vp-c-divider-to: var(--vp-c-gray-1);
+
   --vp-sidebar-bg-color: #f8f8f8;
 }
 
@@ -45,16 +47,37 @@
   --vp-c-gray-3: #d1d5db;
 
   --vp-c-divider: #ffffff1a;
+  --vp-c-divider-to: var(--vp-c-gray-1);
   --vp-c-surface-0: #00000066;
 
-  --vp-sidebar-bg-color: #0b0b0b;
+  --vp-sidebar-bg-color: #0e0e0e;
 }
 /* 链接样式 */
 .action a {
   color: var(--vp-c-ant-text) !important;
 }
-.item .VPSocialLink {
+.VPSocialLinks {
+  display: flex;
+  gap: 5px;
+}
+.VPSocialLink {
+  padding: 0 !important;
+  margin: 0 !important;
   border-radius: 8px !important;
+}
+
+/* 导航栏样式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-text-2) var(--vp-c-bg);
+}
+aside {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) var(--vp-c-bg);
+  transition: all 0.3s ease;
+}
+aside:hover {
+  scrollbar-color: var(--vp-c-divider-to) var(--vp-c-bg);
 }
 
 /* 代码块样式 */
