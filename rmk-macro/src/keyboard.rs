@@ -231,8 +231,8 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                 ::rmk::initialize_keymap_and_storage(
                     &mut default_keymap,
                     flash,
-                    rmk_config.storage_config,
-                    rmk_config.behavior_config.clone(),
+                    &rmk_config.storage_config,
+                    behavior_config,
                 )
             }
         } else {
@@ -242,8 +242,8 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                     &mut default_keymap,
                     &mut encoder_keymap,
                     flash,
-                    rmk_config.storage_config,
-                    rmk_config.behavior_config.clone(),
+                    &rmk_config.storage_config,
+                    behavior_config,
                 )
             }
         };
