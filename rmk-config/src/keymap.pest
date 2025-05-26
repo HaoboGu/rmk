@@ -44,7 +44,7 @@ simple_keycode = { keycode_name }
 no_action = { ^"No" } // Case-insensitive "No"
 
 // Rule 3: Transparent Key
-transparent_action = @{ ("_")+ } // One or more 
+transparent_action = @{ ("_")+ | ^"Trns" } // One or more 
 
 // Rule 1: WM(key, modifier) - Key with Modifier
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
