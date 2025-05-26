@@ -87,8 +87,8 @@ pub(crate) fn convert_direct_pins_to_initializers(
         let pin_initializers = row_pins.into_iter().map(|p| {
             let ident_name = format_ident!("{}_{}_{}", p.to_lowercase(), row_idx, col_idents.len());
             col_idents.push(ident_name.clone());
-            if p != "_" {
-                // Convert pin to Some(pin) when it's not "_"
+            if p != "_" && p.to_lowercase() != "trns" {
+                // Convert pin to Some(pin) when it's not transparent
                 let pin = convert_gpio_str_to_input_pin(chip, p, async_matrix, Some(low_active)); // low active = false == pull down
                 quote! { let #ident_name = Some(#pin); }
             } else {
