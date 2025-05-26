@@ -24,9 +24,11 @@ jobs:
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@v3
+        working-directory: docs
         with:
           version: 9
       - name: Setup Node
+        working-directory: docs
         uses: actions/setup-node@v4
         with:
           node-version: 22
