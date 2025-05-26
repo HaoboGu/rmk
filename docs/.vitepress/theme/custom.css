@@ -9,8 +9,8 @@
   --vp-c-text-2: #52525b;
   --vp-c-ant-text: #ffffff;
 
-  --vp-c-bg: #f8f8f8;
-  --vp-c-bg-soft: #f0f0f0;
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-soft: #f8f8f8;
 
   --vp-c-block-bg: #e9f0f7;
   --vp-c-block-code-bg: #f6f8fa;
@@ -19,7 +19,7 @@
   --vp-c-gray-2: #aeaeae;
   --vp-c-gray-3: #c7c7c7;
 
-  --vp-sidebar-bg-color: #eeeeee;
+  --vp-sidebar-bg-color: #f8f8f8;
 }
 
 /* 暗黑模式 */

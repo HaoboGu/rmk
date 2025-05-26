@@ -11,7 +11,6 @@ export default defineConfig({
   },
   base: '/',
   themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
     logo: '/images/rmk_logo.svg',
     nav: nav(),
 
@@ -19,7 +18,10 @@ export default defineConfig({
       '/docs/': { base: '/docs/', items: sidebarGuide() }
     },
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/HaoboGu/rmk' }],
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/HaoboGu/rmk' },
+      { icon: 'discord', link: 'https://discord.gg/HHGA7pQxkG' }
+    ],
     search: {
       provider: 'local'
     }
@@ -45,13 +47,17 @@ export default defineConfig({
 })
 
 function nav() {
-  return [{ text: 'Docs', link: '/docs/introduction' }]
+  return [
+    { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
+    { text: 'Documentation', link: '/docs/introduction' },
+    { text: 'API', link: 'https://docs.rs/rmk/latest/rmk/' }
+  ]
 }
 function sidebarGuide() {
   return [
     {
       text: 'Introduction',
-      items: [{ text: 'RMK Introduction', link: '/introduction' }]
+      items: [{ text: 'RMK Introduction', link: 'introduction' }]
     },
     {
       text: 'User Guide',
