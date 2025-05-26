@@ -3,7 +3,7 @@
 #![doc = document_features::document_features!()]
 // Add docs.rs logo
 #![doc(
-    html_logo_url = "https://raw.githubusercontent.com/HaoboGu/rmk/23d7e5009a7ba28bdab13d892c5aec53a6a94703/docs/src/images/rmk_logo.png"
+    html_logo_url = "https://github.com/HaoboGu/rmk/blob/dad1f922f471127f5449262c4cb4a922e351bf43/docs/images/rmk_logo.svg?raw=true"
 )]
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
