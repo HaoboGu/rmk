@@ -15,7 +15,7 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/HaoboGu/rmk
-cd ./doc
+cd ./docs
 ```
 
 Install dependencies:
