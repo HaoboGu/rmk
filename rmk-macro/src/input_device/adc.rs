@@ -1,8 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use rmk_config::{BleConfig, JoystickConfig};
-
-use rmk_config::ChipSeries;
+use rmk_config::{BleConfig, ChipSeries, JoystickConfig};
 
 // TODO: use (commented) initializer type
 pub(crate) fn expand_adc_device(

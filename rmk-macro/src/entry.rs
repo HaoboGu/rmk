@@ -1,11 +1,10 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{BoardConfig, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use rmk_config::KeyboardTomlConfig;
-use rmk_config::{BoardConfig, ChipSeries, CommunicationConfig};
 
 pub(crate) fn expand_rmk_entry(
     keyboard_config: &KeyboardTomlConfig,

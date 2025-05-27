@@ -1,10 +1,8 @@
 use quote::{format_ident, quote};
-use rmk_config::EncoderConfig;
-
-use crate::gpio_config::convert_gpio_str_to_input_pin;
-use rmk_config::ChipModel;
+use rmk_config::{ChipModel, EncoderConfig};
 
 use super::Initializer;
+use crate::gpio_config::convert_gpio_str_to_input_pin;
 
 /// Expand encoder device, this function returns the (device_initializer, processor_initializer)
 ///

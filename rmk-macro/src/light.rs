@@ -1,11 +1,9 @@
 //! Initialize light config boilerplate of RMK, including USB or BLE
 //!
 use quote::quote;
-use rmk_config::PinConfig;
+use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 
 use crate::gpio_config::convert_gpio_str_to_output_pin;
-use rmk_config::ChipModel;
-use rmk_config::KeyboardTomlConfig;
 
 pub(crate) fn build_light_config(chip: &ChipModel, pin_config: &Option<PinConfig>) -> proc_macro2::TokenStream {
     match pin_config {

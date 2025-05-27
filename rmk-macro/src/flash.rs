@@ -3,10 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::StorageConfig;
-
-use rmk_config::ChipSeries;
-use rmk_config::KeyboardTomlConfig;
+use rmk_config::{ChipSeries, KeyboardTomlConfig, StorageConfig};
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     if keyboard_config.storage.as_ref().map_or(true, |s| !s.enabled) {

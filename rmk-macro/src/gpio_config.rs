@@ -1,5 +1,4 @@
 use quote::{format_ident, quote};
-
 use rmk_config::{ChipModel, ChipSeries};
 
 pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {

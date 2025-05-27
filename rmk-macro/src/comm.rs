@@ -4,11 +4,10 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
+use rmk_config::{ChipSeries, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use rmk_config::ChipSeries;
-use rmk_config::KeyboardTomlConfig;
 
 pub(crate) fn expand_usb_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization

@@ -1,7 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::{BoardConfig, KeyboardTomlConfig, MatrixType, UniBodyConfig};
+use rmk_config::{BoardConfig, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig};
 use syn::ItemMod;
 
 use crate::behavior::expand_behavior_config;
@@ -19,7 +19,6 @@ use crate::layout::expand_default_keymap;
 use crate::light::expand_light_config;
 use crate::matrix::expand_matrix_config;
 use crate::split::central::expand_split_central_config;
-use rmk_config::ChipSeries;
 
 /// List of functions that can be overwritten
 #[derive(Debug, Clone, Copy, FromMeta)]
@@ -37,14 +36,6 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
         Ok(c) => c,
         Err(e) => return e,
     };
-
-    if let Some(m) = &keyboard_config.matrix {
-        if m.row2col {
-            eprintln!(
-                "row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)"
-            );
-        }
-    }
 
     if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
         if keyboard_config.get_storage_config().enabled {
@@ -296,6 +287,9 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             input_device: _,
         }) => match matrix_config.matrix_type {
             MatrixType::normal => {
+                if matrix_config.row2col {
+                    eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
+                }
                 quote! {
                     let debouncer = #debouncer_type::<#input_output_num>::new();
                     let mut matrix = ::rmk::matrix::Matrix::<_, _, _, #input_output_num>::new(input_pins, output_pins, debouncer);
@@ -316,6 +310,7 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             let central_col = split_config.central.cols;
             let central_col_offset = split_config.central.col_offset;
             let input_output_pin_num = if split_config.central.matrix.row2col {
+                eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
                 quote! { #central_row_offset, #central_col_offset, #central_col, #central_row }
             } else {
                 quote! { #central_row_offset, #central_col_offset, #central_row, #central_col }

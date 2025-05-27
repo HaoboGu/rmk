@@ -2,9 +2,7 @@
 
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-
-use rmk_config::KeyboardTomlConfig;
-use rmk_config::KEYCODE_ALIAS;
+use rmk_config::{KeyboardTomlConfig, KEYCODE_ALIAS};
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {

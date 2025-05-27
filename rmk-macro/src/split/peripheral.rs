@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, MatrixType, SplitBoardConfig};
+use rmk_config::{
+    BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, MatrixType,
+    SplitBoardConfig,
+};
 use syn::ItemMod;
 
 use crate::chip_init::expand_chip_init;
@@ -13,7 +16,6 @@ use crate::input_device::encoder::expand_encoder_device;
 use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
-use rmk_config::{ChipModel, ChipSeries, KeyboardTomlConfig};
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {

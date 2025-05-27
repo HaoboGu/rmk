@@ -1,12 +1,10 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
+use rmk_config::{ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use rmk_config::CommunicationConfig;
-use rmk_config::KeyboardTomlConfig;
-use rmk_config::{ChipModel, ChipSeries};
 
 /// Expand chip initialization code
 pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
