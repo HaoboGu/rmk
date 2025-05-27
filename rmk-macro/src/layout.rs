@@ -130,16 +130,15 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
 
     match key {
         s if s.to_lowercase().starts_with("wm(") => {
-            if let Some(internal) = s.trim_start_matches("WM(").strip_suffix(")") {
+            let prefix = s.get(0..3).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
                 let keys: Vec<&str> = internal
                     .split_terminator(",")
                     .map(|w| w.trim())
                     .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
-                    return quote! {
-                        compile_error!("keyboard.toml: WM(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: WM(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
 
                 let ident = get_key_with_alias(keys[0].to_string());
@@ -147,17 +146,13 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let modifiers = parse_modifiers(keys[1]);
 
                 if modifiers.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: modifier in WM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: modifier in WM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 quote! {
                     ::rmk::wm!(#ident, #modifiers)
                 }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: WM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         s if s.to_lowercase().starts_with("mo(") => {
@@ -178,17 +173,13 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 let modifiers = parse_modifiers(internal);
 
                 if modifiers.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 quote! {
                     ::rmk::osm!(#modifiers)
                 }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: OSM(modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: OSM(modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         s if s.to_lowercase().starts_with("lm(") => {
@@ -200,26 +191,20 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
-                    return quote! {
-                        compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 let layer = keys[0].parse::<u8>().unwrap();
 
                 let modifiers = parse_modifiers(keys[1]);
 
                 if modifiers.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: modifier in LM(layer, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 quote! {
                     ::rmk::lm!(#layer, #modifiers)
                 }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: LM(layer, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         s if s.to_lowercase().starts_with("lt(") => {
@@ -232,9 +217,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 .filter(|w| !w.is_empty())
                 .collect();
             if keys.len() != 2 {
-                return quote! {
-                    compile_error!("keyboard.toml: LT(layer, key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                };
+                panic!("\n❌ keyboard.toml: LT(layer, key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
             let layer = keys[0].parse::<u8>().unwrap();
             let key = get_key_with_alias(keys[1].to_string());
@@ -275,25 +258,19 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
-                    return quote! {
-                        compile_error!("keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 let ident = get_key_with_alias(keys[0].to_string());
                 let modifiers = parse_modifiers(keys[1]);
 
                 if modifiers.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: modifier in MT(key, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: modifier in MT(key, modifier) is not valid! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 quote! {
                     ::rmk::mt!(#ident, #modifiers)
                 }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         s if s.to_lowercase().starts_with("th(") => {
@@ -305,9 +282,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     .filter(|w| !w.is_empty())
                     .collect();
                 if keys.len() != 2 {
-                    return quote! {
-                        compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 let ident1 = get_key_with_alias(keys[0].to_string());
                 let ident2 = get_key_with_alias(keys[1].to_string());
@@ -316,25 +291,19 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                     ::rmk::th!(#ident1, #ident2)
                 }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         s if s.to_lowercase().starts_with("shifted(") => {
             let prefix = s.get(0..8).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
                 if internal.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
                 let key = get_key_with_alias(internal.to_string());
                 quote! { ::rmk::shifted!(#key) }
             } else {
-                quote! {
-                    compile_error!("keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                }
+                panic!("\n❌ keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
             }
         }
         _ => {

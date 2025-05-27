@@ -21,15 +21,10 @@ use crate::split::central::expand_serial_init;
 pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
     if !is_feature_enabled(&rmk_features, "split") {
-        return quote! {
-            compile_error!("\"split\" feature of RMK should be enabled");
-        };
+        panic!("\"split\" feature of RMK should be enabled");
     }
 
-    let toml_config = match read_keyboard_toml_config() {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
+    let toml_config = read_keyboard_toml_config();
 
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
     let chip = toml_config.get_chip_model().unwrap();
@@ -112,9 +107,7 @@ fn expand_split_peripheral(
     let split_config = match &split_config {
         BoardConfig::Split(split) => split,
         _ => {
-            return quote! {
-                compile_error!("No `split` field in `keyboard.toml`");
-            }
+            panic!("No `split` field in `keyboard.toml`");
         }
     };
 

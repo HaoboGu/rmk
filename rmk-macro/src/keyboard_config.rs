@@ -1,34 +1,20 @@
 use std::fs;
 
-use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use rmk_config::KeyboardTomlConfig;
-macro_rules! rmk_compile_error {
-    ($msg:expr) => {
-        Err(syn::Error::new_spanned(quote! {}, $msg).to_compile_error())
-    };
-}
 
-pub(crate) fn read_keyboard_toml_config() -> Result<KeyboardTomlConfig, TokenStream2> {
-    // Read keyboard config file at project root
+pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
+    // Get the path of the keyboard config file from the environment variable
     let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
         .expect("\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n");
 
-    let s = match fs::read_to_string(config_toml_path) {
-        Ok(s) => s,
-        Err(e) => {
-            let msg = format!("Read keyboard config file `keyboard.toml` error: {}", e);
-            return rmk_compile_error!(msg);
-        }
-    };
-
-    // Parse keyboard config file content to `KeyboardTomlConfig`
-    match toml::from_str(&s) {
-        Ok(c) => Ok(c),
-        Err(e) => {
-            let msg = format!("Parse `keyboard.toml` error: {}", e.message());
-            rmk_compile_error!(msg)
-        }
+    // Read and parse the keyboard config file to `KeyboardTomlConfig`
+    match fs::read_to_string(config_toml_path) {
+        Ok(s) => match toml::from_str(&s) {
+            Ok(c) => c,
+            Err(e) => panic!("Parse `keyboard.toml` error: {}", e.message()),
+        },
+        Err(e) => panic!("Read keyboard config file `keyboard.toml` error: {}", e),
     }
 }
 

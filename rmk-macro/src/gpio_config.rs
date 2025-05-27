@@ -169,8 +169,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                         }
                     }
                     None => {
-                        let message = format!("Invalid pin definition: {}", gpio_name);
-                        quote! { compile_error!(#message); }
+                        panic!("\n❌ keyboard.toml: Invalid pin definition: {}", gpio_name);
                     }
                 }
             } else {

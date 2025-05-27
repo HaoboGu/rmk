@@ -32,10 +32,7 @@ pub enum Overwritten {
 pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
 
-    let keyboard_config = match read_keyboard_toml_config() {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
+    let keyboard_config = read_keyboard_toml_config();
 
     if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
         if keyboard_config.get_storage_config().enabled {

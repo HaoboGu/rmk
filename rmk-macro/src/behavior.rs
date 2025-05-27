@@ -256,9 +256,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
                 let bindable = fork.bindable.unwrap_or(false);
 
                 if match_any.is_empty() && match_none.is_empty() {
-                    return quote! {
-                        compile_error!("keyboard.toml: fork configuration missing match conditions! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
-                    };
+                    panic!("\n❌ keyboard.toml: fork configuration missing match conditions! Please check the documentation: https://haobogu.github.io/rmk/keyboard_configuration.html");
                 }
 
                 quote! { ::rmk::fork::Fork::new_ex(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept, #bindable) }
