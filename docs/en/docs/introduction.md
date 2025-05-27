@@ -19,6 +19,7 @@
 </div>
 
 </div>
+
 RMK is a Rust keyboard firmware crate with lots of usable features, like layer support, dynamic keymap, vial support, BLE wireless, etc, makes firmware customization easy and accessible.
 
 The following table compares features available from RMK, Keyberon, QMK and ZMK:
