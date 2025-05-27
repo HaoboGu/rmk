@@ -1,4 +1,4 @@
-## Keyboard Macros
+# Keyboard Macros
 
 rmk supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
 

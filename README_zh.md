@@ -2,7 +2,7 @@
 <br />
 <p align="center">
   <a href="https://github.com/haobogu/rmk">
-    <img src="https://github.com/HaoboGu/rmk/blob/2b73951291fd829075277d64e0aeb8ea82d0bea9/docs/src/images/rmk_logo2.png?raw=true" alt="Logo" width="150">
+    <img src="https://github.com/HaoboGu/rmk/blob/dad1f922f471127f5449262c4cb4a922e351bf43/docs/images/rmk_logo.svg?raw=true" alt="Logo" width="150">
   </a>
 
   <p align="center">
@@ -37,7 +37,7 @@
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="https://github.com/HaoboGu/rmk/blob/main/docs/src/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
+<img src="https://github.com/HaoboGu/rmk/blob/main/docs/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
 
 ## 使用 RMK
 

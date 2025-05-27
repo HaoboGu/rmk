@@ -43,7 +43,37 @@ export default defineConfig({
         postprocess: (html) => html.replace(/^(\s*)<pre>/gm, '<pre>')
       }
     ]
+  },
+
+  transformHead: ({ assets }) => {
+    const textFont = assets.find(file => /OpenSans\.[\w-]+\.ttf/.test(file))
+    const codeFont = assets.find(file => /FiraCode\.[\w-]+\.ttf/.test(file))
+    if (textFont && codeFont) {
+      return [
+        [
+          'link',
+          {
+            rel: 'preload',
+            href: textFont,
+            as: 'font',
+            type: 'font/ttf',
+            crossorigin: ''
+          }
+        ],
+        [
+          'link',
+          {
+            rel: 'preload',
+            href: codeFont,
+            as: 'font',
+            type: 'font/ttf',
+            crossorigin: ''
+          }
+        ]
+      ]
+    }
   }
+
 })
 
 function nav() {
@@ -119,7 +149,12 @@ function sidebarGuide() {
           text: 'Keymap',
           link: 'features/keymap',
           collapsed: true,
-          items: [{ text: 'Special Key', link: 'features/keymap/special_keys' }]
+          items: [
+            { text: 'Keycodes', link: 'features/keymap/keycodes' },
+            { text: 'Special Key', link: 'features/keymap/special_keys' },
+            { text: 'Keyboard Macros', link: 'features/keymap/keyboard_macros' },
+            { text: 'Special Characters and Unicode', link: 'features/keymap/special_characters_and_unicode' },
+          ]
         },
         { text: 'Vial Support', link: 'features/vial_support' },
         { text: 'Wireless', link: 'features/wireless' },
