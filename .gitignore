@@ -28,3 +28,4 @@ cyw43-firmware
 node_modules
 docs/.vitepress/cache
 docs/.vitepress/dist
+docs/pnpm-lock.yaml
