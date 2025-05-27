@@ -66,8 +66,8 @@
   border-radius: 8px !important;
 }
 
-/* 导航栏样式 */
-* {
+/* 滑动条样式 */
+html {
   scrollbar-width: thin;
   scrollbar-color: var(--vp-c-text-2) var(--vp-c-bg);
 }
@@ -95,6 +95,8 @@ aside:hover {
 }
 .vp-doc div[class*='language-'] pre {
   background-color: var(--vp-c-block-code-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-gray-1) var(--vp-c-bg);
 }
 .vp-doc [class*='language-'] > button.copy {
   top: 15px;
@@ -104,7 +106,7 @@ aside:hover {
 
 /* 导航栏聚焦样式 */
 .item a {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-top: 2px;
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
@@ -125,4 +127,14 @@ aside:hover {
   background-color: transparent;
   opacity: 0.7;
   background-color: var(--vp-c-brand-4-bg);
+}
+
+/* 锚点导航 */
+.VPContent {
+  .outline-link:hover,
+  .outline-link.active {
+    color: var(--vp-c-brand-1);
+    transition: color 0.25s;
+  }
+  
 }
