@@ -1,9 +1,8 @@
 @font-face {
   font-family: 'Open Sans';
   src:
-    url('OpenSans-VariableFont_wdth,wght.ttf') format('truetype'),
-    url('OpenSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
-  font-style: normal, italic;
+    url('OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+  font-style: normal;
 }
 @font-face {
   font-family: 'Fira Code';
