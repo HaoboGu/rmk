@@ -4,7 +4,7 @@
   --vp-c-brand-2: #ff9e33;
   --vp-c-brand-3: #ffb666;
   --vp-c-brand-4-bg: #ffe4c6;
-  --vp-code-color: rgb(201, 110, 13);
+  --vp-code-color: #ff8800;
 
   --vp-c-text-1: #414141;
   --vp-c-text-2: #52525b;
@@ -16,7 +16,7 @@
   --vp-c-block-bg: #e9f0f7;
   --vp-c-block-code-bg: #f6f8fa;
 
-  --vp-c-gray-1: #8e8e8e;
+  --vp-c-gray-1: #8e8e8e125;
   --vp-c-gray-2: #aeaeae;
   --vp-c-gray-3: #c0c0c0;
 
@@ -42,8 +42,9 @@
   --vp-c-text-2: #919191;
   --vp-c-ant-text: #414141;
 
-  --vp-c-bg: #121212;
+  --vp-c-bg: #191d24;
   --vp-c-bg-soft: #1a1a1a;
+  --vp-c-bg-alt: #282828;
 
   --vp-c-block-bg: #2d2d2d;
   --vp-c-block-code-bg: #242424;
@@ -60,7 +61,7 @@
   --vp-c-divider-to: var(--vp-c-gray-1);
   --vp-c-surface-0: #00000066;
 
-  --vp-sidebar-bg-color: #0e0e0e;
+  --vp-sidebar-bg-color: #191d24;
 }
 /* 链接样式 */
 .action a {

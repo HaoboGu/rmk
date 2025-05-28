@@ -530,9 +530,30 @@
                   .custom-block {
                     margin: var(--default) 0;
                     border: calc(1 / 16 * var(--default)) solid var(--vp-custom-block-warning-border);
-                    border-radius: calc(8 / 16 * var(--default));
+                    border-radius: calc(18 / 16 * var(--default));
                     padding: var(--default) var(--default) calc(8 / 16 * var(--default));
                     line-height: calc(24 / 16 * var(--default));
+                    
+                    .custom-block-title {
+                      margin: calc(0.75 * var(--default)) calc(0 * var(--default));
+                      padding:  calc(0 * var(--default)) calc(1 * var(--default) );
+                      line-height: calc(1.5 * var(--default));
+                    }
+                    
+                    p {
+                        padding:  calc(0.25 * var(--default)) calc(1 * var(--default) );
+                    }
+
+                    div[class*="language-"] {
+                      margin: calc(1 * var(--default)) calc(1 * var(--default));
+                      
+                      button.copy {
+                        top: calc(0.55 * var(--default));
+                        right: calc(0.75 * var(--default));
+                        width: calc(2 * var(--default));
+                        height: calc(2 * var(--default));
+                      }
+                    }
                   }
                 }
               }
