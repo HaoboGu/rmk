@@ -98,9 +98,62 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             }
         }
         ChipSeries::Rp2040 => {
-            quote! {
-                let config = ::embassy_rp::config::Config::default();
-                let p = ::embassy_rp::init(config);
+            let ble_addr = get_ble_addr(keyboard_config);
+            if communication.ble_enabled() {
+                quote! {
+                    let config = ::embassy_rp::config::Config::default();
+                    let p = ::embassy_rp::init(config);
+
+                    #[cfg(feature = "skip-cyw43-firmware")]
+                    let (fw, clm, btfw) = (&[], &[], &[]);
+
+                    #[cfg(not(feature = "skip-cyw43-firmware"))]
+                    let (fw, clm, btfw) = {
+                        // IMPORTANT
+                        //
+                        // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
+                        // are available in `./examples/rp-pico-w`. (should be automatic)
+                        //
+                        // IMPORTANT
+                        let fw = include_bytes!("../cyw43-firmware/43439A0.bin");
+                        let clm = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
+                        let btfw = include_bytes!("../cyw43-firmware/43439A0_btfw.bin");
+                        (fw, clm, btfw)
+                    };
+
+                    let pwr = ::embassy_rp::gpio::Output::new(p.PIN_23, ::embassy_rp::gpio::Level::Low);
+                    let cs = ::embassy_rp::gpio::Output::new(p.PIN_25, ::embassy_rp::gpio::Level::High);
+                    let mut pio = ::embassy_rp::pio::Pio::new(p.PIO0, Irqs);
+                    let spi = ::cyw43_pio::PioSpi::new(
+                        &mut pio.common,
+                        pio.sm0,
+                        ::cyw43_pio::DEFAULT_CLOCK_DIVIDER,
+                        pio.irq0,
+                        cs,
+                        p.PIN_24,
+                        p.PIN_29,
+                        p.DMA_CH0,
+                    );
+
+                    static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
+                    let state = STATE.init(::cyw43::State::new());
+                    let (_net_device, bt_device, mut control, runner) = ::cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
+                    spawner.spawn(cyw43_task(runner)).unwrap();
+                    control.init(clm).await;
+
+                    let controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
+                    let ble_addr = #ble_addr;
+                    let mut host_resources = ::rmk::HostResources::new();
+                    let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
+                    use rand_core::SeedableRng;
+                    let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
+                    let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                }
+            } else {
+                quote! {
+                    let config = ::embassy_rp::config::Config::default();
+                    let p = ::embassy_rp::init(config);
+                }
             }
         }
         ChipSeries::Esp32 => {

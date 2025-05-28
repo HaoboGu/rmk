@@ -1,17 +1,13 @@
-#[cfg(feature = "_esp_ble")]
-mod esp_config;
+#[cfg(feature = "_ble")]
+mod ble_config;
 pub mod macro_config;
-#[cfg(feature = "_nrf_ble")]
-mod nrf_config;
 
+#[cfg(feature = "_ble")]
+pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
 use embedded_hal::digital::OutputPin;
-#[cfg(feature = "_esp_ble")]
-pub use esp_config::BleBatteryConfig;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
-#[cfg(feature = "_nrf_ble")]
-pub use nrf_config::BleBatteryConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
@@ -59,9 +55,7 @@ pub struct RmkConfig<'a> {
     pub vial_config: VialConfig<'a>,
     #[cfg(feature = "storage")]
     pub storage_config: StorageConfig,
-    #[cfg(feature = "_nrf_ble")]
-    pub ble_battery_config: BleBatteryConfig<'a>,
-    #[cfg(feature = "_esp_ble")]
+    #[cfg(feature = "_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
 }
 

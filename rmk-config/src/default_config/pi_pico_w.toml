@@ -1,0 +1,10 @@
+[keyboard]
+usb_enable = true
+
+[ble]
+enabled = true
+
+[storage]
+enabled = true
+start_addr = 0x100000
+num_sectors = 32 
