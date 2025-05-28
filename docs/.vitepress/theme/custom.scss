@@ -459,17 +459,13 @@
                     font-size: var(--default);
                     letter-spacing: 0;
                     line-height: calc(1.75 * var(--default));
-                    code {
-                      border-radius: calc(0.25 * var(--default));
-                      padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
-                    }
                   }
                   :not(pre) > code {
                     border-radius: calc(0.25 * var(--default));
                     padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
                   }
                   span {
-                    font-size: calc(0.875 * var(--default));
+                    font-size: calc(0.9 * var(--default));
                     letter-spacing: 0;
                     line-height: calc(1.5 * var(--default));
                   }
@@ -482,6 +478,11 @@
                       font-size: calc(0.875 * var(--default));
                       line-height: calc(1.75 * var(--default));
                     }
+                  }
+                  code {
+                    border-radius: calc(0.25 * var(--default));
+                    padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
+                    font-size: calc(0.9 * var(--default));
                   }
                   a {
                     font-size: var(--default);

@@ -3,7 +3,8 @@
   --vp-c-brand-1: #ff8600;
   --vp-c-brand-2: #ff9e33;
   --vp-c-brand-3: #ffb666;
-  --vp-c-brand-4-bg: #ffdbb3;
+  --vp-c-brand-4-bg: #ffe4c6;
+  --vp-c-brand-4-black: rgb(201, 110, 13);
 
   --vp-c-text-1: #414141;
   --vp-c-text-2: #52525b;
@@ -136,5 +137,12 @@ aside:hover {
     color: var(--vp-c-brand-1);
     transition: color 0.25s;
   }
-  
+}
+
+.Layout {
+  code {
+    font-size: 0.9rem;
+    color: var(--vp-c-brand-4-black) !important;
+    letter-spacing: 0;
+  }
 }
