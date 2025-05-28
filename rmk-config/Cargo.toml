@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 resolver = "2"
 
 [dependencies]
+config = "0.15"
 toml = "0.8"
 cargo_toml = "0.22"
 serde = "1.0"

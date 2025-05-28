@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use config::{Config, File, FileFormat};
 use serde::de;
 use serde::Deserialize as SerdeDeserialize;
 use serde_derive::Deserialize;
@@ -8,12 +9,10 @@ use serde_inline_default::serde_inline_default;
 pub mod chip;
 pub mod communication;
 pub mod keyboard;
-pub mod keyboard_config;
 #[rustfmt::skip]
 pub mod usb_interrupt_map;
 pub mod behavior;
 pub mod board;
-pub mod default_config;
 pub mod keycode_alias;
 pub mod layout;
 pub mod light;
@@ -22,9 +21,7 @@ pub mod storage;
 pub use board::{BoardConfig, UniBodyConfig};
 pub use chip::{ChipModel, ChipSeries};
 pub use communication::{CommunicationConfig, UsbInfo};
-pub use default_config::*;
 pub use keyboard::Basic;
-pub use keyboard_config::KeyboardConfig;
 pub use keycode_alias::KEYCODE_ALIAS;
 
 /// Keyboard constants configuration for performance and hardware limits
@@ -139,7 +136,7 @@ impl Default for RmkConstantsConfig {
 #[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
-    pub keyboard: KeyboardInfo,
+    pub keyboard: Option<KeyboardInfo>,
     /// Matrix of the keyboard, only for non-split keyboards
     pub matrix: Option<MatrixConfig>,
     // Aliases for key maps
@@ -168,6 +165,29 @@ pub struct KeyboardTomlConfig {
     pub rmk: RmkConstantsConfig,
 }
 
+impl KeyboardTomlConfig {
+    pub fn new_from_toml_str(config_toml_path: &str) -> Self {
+        // The first run, load chip model only
+        let user_config = match std::fs::read_to_string(config_toml_path) {
+            Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
+                Ok(c) => c,
+                Err(e) => panic!("Parse {} error: {}", config_toml_path, e.message()),
+            },
+            Err(e) => panic!("Read keyboard config file {} error: {}", config_toml_path, e),
+        };
+        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+
+        // The second run, load the user config and merge with the default config
+        Config::builder()
+            .add_source(File::from_str(default_config_str, FileFormat::Toml))
+            .add_source(File::with_name(config_toml_path))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap()
+    }
+}
+
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
@@ -187,7 +207,7 @@ pub struct LayerTomlConfig {
 }
 
 /// Configurations for keyboard info
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct KeyboardInfo {
     /// Keyboard name
     pub name: String,

@@ -1,0 +1,12 @@
+[keyboard]
+usb_enable = true
+
+[ble]
+enabled = true
+
+[storage]
+enabled = true
+# Storage starts from 400K
+start_addr = 0x64000
+# Storage uses 64K = 400K ~ 464K
+num_sectors = 16 

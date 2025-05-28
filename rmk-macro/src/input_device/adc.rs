@@ -36,9 +36,15 @@ pub(crate) fn expand_adc_device(
                             ::rmk::input_device::adc::AnalogEventType::Battery
                         });
 
-                        let (adc_divider_measured, adc_divider_total) =
-                            (ble.adc_divider_measured, ble.adc_divider_total);
-                        let bat_ident = format_ident!("battery_processor",);
+                        let (adc_divider_measured, adc_divider_total) = if adc_pin == "vddh" {
+                            (1, 5)
+                        } else {
+                            (
+                                ble.adc_divider_measured.unwrap_or(1),
+                                ble.adc_divider_total.unwrap_or(1),
+                            )
+                        };
+                        let bat_ident = format_ident!("battery_processor");
                         // let battery_processor = Initializer {
                         //     initializer: quote! {
                         //         let mut #bat_ident = ::rmk::input_device::battery::BatteryProcessor::new(#adc_divider_measured, #adc_divider_total, &keymap);

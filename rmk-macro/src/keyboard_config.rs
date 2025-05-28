@@ -1,5 +1,3 @@
-use std::fs;
-
 use quote::quote;
 use rmk_config::KeyboardTomlConfig;
 
@@ -8,14 +6,7 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
         .expect("\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n");
 
-    // Read and parse the keyboard config file to `KeyboardTomlConfig`
-    match fs::read_to_string(config_toml_path) {
-        Ok(s) => match toml::from_str(&s) {
-            Ok(c) => c,
-            Err(e) => panic!("Parse `keyboard.toml` error: {}", e.message()),
-        },
-        Err(e) => panic!("Read keyboard config file `keyboard.toml` error: {}", e),
-    }
+    KeyboardTomlConfig::new_from_toml_str(&config_toml_path)
 }
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {

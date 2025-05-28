@@ -33,13 +33,14 @@ impl Default for Basic {
 impl KeyboardTomlConfig {
     pub fn get_basic_info(&self) -> Basic {
         let default = Basic::default();
+        let keyboard = self.keyboard.as_ref().unwrap();
         Basic {
-            name: self.keyboard.name.clone(),
-            vendor_id: self.keyboard.vendor_id,
-            product_id: self.keyboard.product_id,
-            manufacturer: self.keyboard.manufacturer.clone().unwrap_or(default.manufacturer),
-            product_name: self.keyboard.product_name.clone().unwrap_or(default.product_name),
-            serial_number: self.keyboard.serial_number.clone().unwrap_or(default.serial_number),
+            name: keyboard.name.clone(),
+            vendor_id: keyboard.vendor_id,
+            product_id: keyboard.product_id,
+            manufacturer: keyboard.manufacturer.clone().unwrap_or(default.manufacturer),
+            product_name: keyboard.product_name.clone().unwrap_or(default.product_name),
+            serial_number: keyboard.serial_number.clone().unwrap_or(default.serial_number),
         }
     }
 

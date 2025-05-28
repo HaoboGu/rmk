@@ -74,30 +74,10 @@ impl CommunicationConfig {
 
 impl KeyboardTomlConfig {
     pub fn get_communication_config(&self) -> Result<CommunicationConfig, String> {
-        let default_setting = self.get_default_config().unwrap().communication;
+        let usb_enabled = self.keyboard.clone().unwrap_or_default().usb_enable.unwrap_or(false);
         let chip = self.get_chip_model().unwrap();
-        // Get usb config
-        let usb_enabled = self.keyboard.usb_enable.unwrap_or(default_setting.usb_enabled());
         let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };
-
-        // Get ble config
-        let ble_config = match (&default_setting, &self.ble) {
-            (CommunicationConfig::Ble(default), None) | (CommunicationConfig::Both(_, default), None) => {
-                Some(default.clone())
-            }
-            (CommunicationConfig::Ble(default), Some(config))
-            | (CommunicationConfig::Both(_, default), Some(config)) => {
-                // Use default setting if the corresponding field is not set
-                let mut new_config = config.clone();
-                new_config.battery_adc_pin = new_config.battery_adc_pin.or_else(|| default.battery_adc_pin.clone());
-                new_config.charge_state = new_config.charge_state.or_else(|| default.charge_state.clone());
-                new_config.charge_led = new_config.charge_led.or_else(|| default.charge_led.clone());
-                new_config.adc_divider_measured = new_config.adc_divider_measured.or(default.adc_divider_measured);
-                new_config.adc_divider_total = new_config.adc_divider_total.or(default.adc_divider_total);
-                Some(new_config)
-            }
-            (_, c) => c.clone(),
-        };
+        let ble_config = self.ble.clone();
 
         match (usb_info, ble_config) {
             (Some(usb_info), None) => Ok(CommunicationConfig::Usb(usb_info)),
