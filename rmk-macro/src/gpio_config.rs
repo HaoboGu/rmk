@@ -1,6 +1,5 @@
 use quote::{format_ident, quote};
-
-use crate::{ChipModel, ChipSeries};
+use rmk_config::{ChipModel, ChipSeries};
 
 pub(crate) fn convert_output_pins_to_initializers(chip: &ChipModel, pins: Vec<String>) -> proc_macro2::TokenStream {
     let mut initializers = proc_macro2::TokenStream::new();
@@ -170,8 +169,7 @@ pub(crate) fn convert_gpio_str_to_input_pin(
                         }
                     }
                     None => {
-                        let message = format!("Invalid pin definition: {}", gpio_name);
-                        quote! { compile_error!(#message); }
+                        panic!("\n❌ keyboard.toml: Invalid pin definition: {}", gpio_name);
                     }
                 }
             } else {

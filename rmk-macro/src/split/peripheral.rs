@@ -1,40 +1,35 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{MatrixType, SplitBoardConfig};
+use rmk_config::{
+    BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, MatrixType,
+    SplitBoardConfig,
+};
 use syn::ItemMod;
 
 use crate::chip_init::expand_chip_init;
 use crate::entry::join_all_tasks;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
-use crate::import::expand_imports;
-use crate::keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig};
+use crate::import::expand_custom_imports;
+use crate::input_device::adc::expand_adc_device;
+use crate::input_device::encoder::expand_encoder_device;
+use crate::keyboard_config::read_keyboard_toml_config;
 use crate::matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins};
 use crate::split::central::expand_serial_init;
-use crate::{ChipModel, ChipSeries};
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStream, item_mod: ItemMod) -> TokenStream2 {
     let rmk_features = get_rmk_features();
     if !is_feature_enabled(&rmk_features, "split") {
-        return quote! {
-            compile_error!("\"split\" feature of RMK should be enabled");
-        };
+        panic!("\"split\" feature of RMK should be enabled");
     }
 
-    let toml_config = match read_keyboard_toml_config() {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
+    let toml_config = read_keyboard_toml_config();
 
-    let keyboard_config = match KeyboardConfig::new(toml_config) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
+    let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
+    let chip = toml_config.get_chip_model().unwrap();
 
-    let main_function = expand_split_peripheral(id, &keyboard_config, item_mod, &rmk_features);
-
-    let bind_interrupts = if keyboard_config.chip.series == ChipSeries::Nrf52 {
+    let bind_interrupts = if chip.series == ChipSeries::Nrf52 {
         quote! {
             use ::embassy_nrf::bind_interrupts;
             bind_interrupts!(struct Irqs {
@@ -76,7 +71,7 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         quote! {}
     };
 
-    let main_function_sig = if keyboard_config.chip.series == ChipSeries::Esp32 {
+    let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
             use {esp_alloc as _, esp_backtrace as _};
             #[esp_hal_embassy::main]
@@ -103,23 +98,22 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
 
 fn expand_split_peripheral(
     id: usize,
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let split_config = match &keyboard_config.board {
+    let split_config = keyboard_config.get_board_config().unwrap();
+    let split_config = match &split_config {
         BoardConfig::Split(split) => split,
         _ => {
-            return quote! {
-                compile_error!("No `split` field in `keyboard.toml`");
-            }
+            panic!("No `split` field in `keyboard.toml`");
         }
     };
 
     let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
 
-    let imports = expand_imports(&item_mod);
+    let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(keyboard_config, &item_mod);
     if split_config.connection == "ble" {
         // Add storage when using BLE split
@@ -149,11 +143,12 @@ fn expand_split_peripheral(
 
     // Matrix config
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
+    let chip = keyboard_config.get_chip_model().unwrap();
     let mut matrix_config = proc_macro2::TokenStream::new();
     match &peripheral_config.matrix.matrix_type {
         MatrixType::normal => {
             matrix_config.extend(expand_matrix_input_output_pins(
-                &keyboard_config.chip,
+                &chip,
                 peripheral_config
                     .matrix
                     .input_pins
@@ -174,7 +169,7 @@ fn expand_split_peripheral(
         }
         MatrixType::direct_pin => {
             matrix_config.extend(expand_matrix_direct_pins(
-                &keyboard_config.chip,
+                &chip,
                 peripheral_config
                     .matrix
                     .direct_pins
@@ -195,21 +190,34 @@ fn expand_split_peripheral(
         }
     }
 
-    let run_rmk_peripheral = expand_split_peripheral_entry(id, &keyboard_config.chip, peripheral_config);
+    // Peripherals don't need to run processors
+    let (input_device_config, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
+    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, peripheral_config, devices);
 
     quote! {
         #imports
         #chip_init
         #matrix_config
+        #input_device_config
         #run_rmk_peripheral
     }
 }
 
-fn expand_split_peripheral_entry(id: usize, chip: &ChipModel, peripheral_config: &SplitBoardConfig) -> TokenStream2 {
-    let mut run_storage = quote! {};
-    let peripheral_matrix_task = quote! {
-        ::rmk::run_devices!((matrix) => ::rmk::channel::EVENT_CHANNEL)
+fn expand_split_peripheral_entry(
+    id: usize,
+    chip: &ChipModel,
+    peripheral_config: &SplitBoardConfig,
+    devices: Vec<TokenStream2>,
+) -> TokenStream2 {
+    // Add matrix to devices, and run all devices
+    let mut devs = devices.clone();
+    devs.push(quote! {matrix});
+    let device_task = quote! {
+        ::rmk::run_devices! (
+            (#(#devs),*) => ::rmk::channel::EVENT_CHANNEL,
+        )
     };
+
     match chip.series {
         ChipSeries::Nrf52 => {
             let peripheral_run = quote! {
@@ -219,10 +227,10 @@ fn expand_split_peripheral_entry(id: usize, chip: &ChipModel, peripheral_config:
                     &mut storage,
                 )
             };
-            run_storage.extend(quote! {
-                let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
-            });
-            join_all_tasks(vec![peripheral_matrix_task, peripheral_run])
+            let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
+            quote! {
+                #run_rmk_peripheral
+            }
         }
         ChipSeries::Rp2040 | ChipSeries::Stm32 => {
             let peripheral_serial = peripheral_config
@@ -248,7 +256,7 @@ fn expand_split_peripheral_entry(id: usize, chip: &ChipModel, peripheral_config:
             let peripheral_run = quote! {
                 ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
             };
-            let run_rmk_peripheral = join_all_tasks(vec![peripheral_matrix_task, peripheral_run]);
+            let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
             quote! {
                 #serial_init
                 #run_rmk_peripheral
@@ -256,4 +264,67 @@ fn expand_split_peripheral_entry(id: usize, chip: &ChipModel, peripheral_config:
         }
         ChipSeries::Esp32 => todo!("esp32 split keyboard is not supported yet"),
     }
+}
+
+pub(crate) fn expand_peripheral_input_device_config(
+    id: usize,
+    keyboard_config: &KeyboardTomlConfig,
+) -> (TokenStream2, Vec<TokenStream2>, Vec<TokenStream2>) {
+    let mut config = TokenStream2::new();
+    let mut devices = Vec::new();
+    let mut processors = Vec::new();
+
+    let communication = keyboard_config.get_communication_config().unwrap();
+    let ble_config = match &communication {
+        CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
+        _ => None,
+    };
+    let board = keyboard_config.get_board_config().unwrap();
+    let chip = keyboard_config.get_chip_model().unwrap();
+
+    // generate ADC configuration
+    let (adc_config, adc_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_adc_device(
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .joystick
+                .unwrap_or(Vec::new()),
+            ble_config,
+            chip.series.clone(),
+        ),
+        _ => (quote! {}, vec![]),
+    };
+    config.extend(adc_config);
+    if !adc_processors.is_empty() {
+        devices.push(quote! {adc_device});
+    }
+    processors.extend(adc_processors);
+
+    // generate encoder configuration, processors are ignored
+    let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
+    // The num_encoders[0] is always the number of encoders on the central, so the offset should be num_encoders[0..id + 1], where id is the index of the peripheral
+    let encoder_id_offset = num_encoders[0..id + 1].iter().sum::<usize>();
+    let (encoder_devices, _encoder_processors) = match &board {
+        BoardConfig::Split(split_config) => expand_encoder_device(
+            encoder_id_offset,
+            split_config.peripheral[id]
+                .input_device
+                .clone()
+                .unwrap_or(InputDeviceConfig::default())
+                .encoder
+                .unwrap_or(Vec::new()),
+            &chip,
+        ),
+        _ => (vec![], vec![]),
+    };
+
+    for initializer in encoder_devices {
+        config.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
+    }
+
+    (config, devices, processors)
 }

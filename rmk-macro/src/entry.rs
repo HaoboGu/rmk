@@ -1,14 +1,13 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::{BoardConfig, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig};
-use crate::ChipSeries;
 
 pub(crate) fn expand_rmk_entry(
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     item_mod: &ItemMod,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
@@ -41,7 +40,7 @@ fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
 }
 
 pub(crate) fn rmk_entry_select(
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
 ) -> TokenStream2 {
@@ -63,14 +62,21 @@ pub(crate) fn rmk_entry_select(
             )
         }
     };
-    //remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.storage.enabled {quote! {&mut storage,}} else {TokenStream2::new()};
-    let entry = match &keyboard_config.board {
+
+    // Remove the storage argument if disabled in config. The feature also needs to be disabled.
+    let storage = if keyboard_config.get_storage_config().enabled {
+        quote! {&mut storage,}
+    } else {
+        TokenStream2::new()
+    };
+    let board = keyboard_config.get_board_config().unwrap();
+    let entry = match &board {
         BoardConfig::Split(split_config) => {
             let keyboard_task = quote! {
                 keyboard.run(),
             };
-            match keyboard_config.chip.series {
+            let chip = keyboard_config.get_chip_model().unwrap();
+            match chip.series {
                 ChipSeries::Stm32 | ChipSeries::Rp2040 => {
                     let rmk_task = quote! {
                         ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config),
@@ -141,7 +147,7 @@ pub(crate) fn rmk_entry_select(
 }
 
 pub(crate) fn rmk_entry_default(
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
 ) -> TokenStream2 {
@@ -154,9 +160,15 @@ pub(crate) fn rmk_entry_default(
         tasks.push(processors_task);
     }
     //remove the storage argument if disabled in config. The feature also needs to be disabled.
-    let storage = if keyboard_config.storage.enabled {quote! {&mut storage,}} else {TokenStream2::new()};
-    match keyboard_config.chip.series {
-        ChipSeries::Nrf52 => match keyboard_config.communication {
+    let storage = if keyboard_config.get_storage_config().enabled {
+        quote! {&mut storage,}
+    } else {
+        TokenStream2::new()
+    };
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let communication = keyboard_config.get_communication_config().unwrap();
+    match chip.series {
+        ChipSeries::Nrf52 => match communication {
             CommunicationConfig::Usb(_) => {
                 let rmk_task = quote! {
                     ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config)

@@ -1,11 +1,9 @@
 //! Initialize light config boilerplate of RMK, including USB or BLE
 //!
 use quote::quote;
-use rmk_config::PinConfig;
+use rmk_config::{ChipModel, KeyboardTomlConfig, PinConfig};
 
 use crate::gpio_config::convert_gpio_str_to_output_pin;
-use crate::keyboard_config::KeyboardConfig;
-use crate::ChipModel;
 
 pub(crate) fn build_light_config(chip: &ChipModel, pin_config: &Option<PinConfig>) -> proc_macro2::TokenStream {
     match pin_config {
@@ -23,10 +21,14 @@ pub(crate) fn build_light_config(chip: &ChipModel, pin_config: &Option<PinConfig
     }
 }
 
-pub(crate) fn expand_light_config(keyboard_config: &KeyboardConfig) -> proc_macro2::TokenStream {
-    let numslock = build_light_config(&keyboard_config.chip, &keyboard_config.light.numslock);
-    let capslock = build_light_config(&keyboard_config.chip, &keyboard_config.light.capslock);
-    let scrolllock = build_light_config(&keyboard_config.chip, &keyboard_config.light.scrolllock);
+pub(crate) fn expand_light_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let numslock = build_light_config(&chip, &keyboard_config.light.as_ref().and_then(|l| l.numslock.clone()));
+    let capslock = build_light_config(&chip, &keyboard_config.light.as_ref().and_then(|l| l.capslock.clone()));
+    let scrolllock = build_light_config(
+        &chip,
+        &keyboard_config.light.as_ref().and_then(|l| l.scrolllock.clone()),
+    );
 
     // Generate a macro that does light config
     quote! {

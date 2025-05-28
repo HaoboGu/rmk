@@ -3,22 +3,20 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::StorageConfig;
+use rmk_config::{ChipSeries, KeyboardTomlConfig, StorageConfig};
 
-use crate::keyboard_config::KeyboardConfig;
-use crate::ChipSeries;
-
-pub(crate) fn expand_flash_init(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    if !keyboard_config.storage.enabled {
+pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    if keyboard_config.storage.as_ref().map_or(true, |s| !s.enabled) {
         // This config actually does nothing if storage is disabled
         return quote! {
             // let storage_config = ::rmk::config::StorageConfig::default();
             // let flash = ::rmk::DummyFlash::new();
         };
     }
-    let mut flash_init = get_storage_config(&keyboard_config.storage);
+    let mut flash_init = get_storage_config(keyboard_config.storage.as_ref().unwrap());
+    let chip = keyboard_config.get_chip_model().unwrap();
     flash_init.extend(
-    match keyboard_config.chip.series {
+    match chip.series {
             ChipSeries::Stm32 => {
                 quote! {
                     let flash = ::rmk::storage::async_flash_wrapper(::embassy_stm32::flash::Flash::new_blocking(p.FLASH));

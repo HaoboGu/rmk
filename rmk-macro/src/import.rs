@@ -5,7 +5,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::ItemMod;
 
-pub(crate) fn expand_imports(item_mod: &ItemMod) -> TokenStream2 {
+/// Expand user-customized imports
+pub(crate) fn expand_custom_imports(item_mod: &ItemMod) -> TokenStream2 {
     // Parse added imports in mod
     if let Some((_, items)) = &item_mod.content {
         let imports = items.iter().map(|item| {
