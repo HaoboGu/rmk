@@ -444,6 +444,9 @@
                     a {
                       font-size: calc(1.5 * var(--default));
                     }
+                    code {
+                      font-size: calc(1.35 * var(--default));
+                    }
                   }
                   h3 {
                     margin: calc(2 * var(--default)) 0 0;
@@ -455,6 +458,9 @@
                       letter-spacing: calc(-0.015 * var(--default));
                       line-height: calc(1.75 * var(--default));
                       margin-left: calc(-1.25 * var(--default));
+                    }
+                    code {
+                      font-size: calc(1.125 * var(--default));
                     }
                   }
                   h4 {
