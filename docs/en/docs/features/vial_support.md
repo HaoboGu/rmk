@@ -2,11 +2,11 @@
 
 RMK uses [vial](https://get.vial.today/) as the default keymap editor. By using vial, you can change your keymapping at real-time, no more programming/flashing is needed.
 
-<div class="warning">
+::: warning
 
 To persistently save your keymap data, RMK will use the **last two sectors** of your microcontroller's internal flash. See [storage](./storage.md). If you don't have enough flash for saving keymaps, changing in vial will lose after keyboard reboot.
 
-</div>
+:::
 
 ## Port vial
 

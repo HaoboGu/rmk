@@ -1,5 +1,5 @@
 :root {
-  --default: clamp(1rem, 1.11vw, 3rem);
+  --default: clamp(1rem, 0.9vw, 3rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
@@ -459,17 +459,13 @@
                     font-size: var(--default);
                     letter-spacing: 0;
                     line-height: calc(1.75 * var(--default));
-                    code {
-                      border-radius: calc(0.25 * var(--default));
-                      padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
-                    }
                   }
                   :not(pre) > code {
                     border-radius: calc(0.25 * var(--default));
                     padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
                   }
                   span {
-                    font-size: calc(0.875 * var(--default));
+                    font-size: calc(0.9 * var(--default));
                     letter-spacing: 0;
                     line-height: calc(1.5 * var(--default));
                   }
@@ -482,6 +478,12 @@
                       font-size: calc(0.875 * var(--default));
                       line-height: calc(1.75 * var(--default));
                     }
+                  }
+                  code {
+                    border-radius: calc(0.25 * var(--default));
+                    padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
+                    font-size: calc(0.9 * var(--default));
+                    line-height: calc(1.5 * var(--default));
                   }
                   a {
                     font-size: var(--default);
@@ -524,6 +526,13 @@
                   .badge-container {
                     gap: calc(1 / 2 * var(--default)) !important;
                     margin: var(--default) 0 !important;
+                  }
+                  .custom-block {
+                    margin: var(--default) 0;
+                    border: calc(1 / 16 * var(--default)) solid var(--vp-custom-block-warning-border);
+                    border-radius: calc(8 / 16 * var(--default));
+                    padding: var(--default) var(--default) calc(8 / 16 * var(--default));
+                    line-height: calc(24 / 16 * var(--default));
                   }
                 }
               }
