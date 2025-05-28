@@ -1,5 +1,5 @@
 :root {
-  --default: clamp(1rem, 1.11vw, 3rem);
+  --default: clamp(1rem, 0.9vw, 3rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
