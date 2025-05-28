@@ -4,6 +4,14 @@
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
 }
+
+@media (max-width: 1439px) {
+  .vp-doc div[class*="language-"] {
+    margin-left: 1vw;
+    margin-right: 1vw;
+  }
+}
+
 @media (min-width: 1440px) {
   :root {
     --vp-layout-max-width: min(92vw, 3600px);
