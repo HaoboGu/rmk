@@ -70,9 +70,11 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 
 The number and order of entries on each defined layers must be identical with the number and order of entries in `matrix_map`. White spaces, line breaks are free to vary, but its worth to keep a consistent arrangement with the real keyboard.
 
-<div class="warning">
+::: warning
+
 If the number of defined layers is smaller than what was defined in `layout.layers`, RMK will fill empty layers automatically (so you can configure them freely in Vial). But the empty layers still consumes flash and RAM, so if you don't have a enough space for them, it's not recommended to use a big layer count.
-</div>
+
+:::
 
 In each `layer.keys`, the keys are bound to various key actions. Due to the limitation of `toml` file, this is done in a string. RMK parses the string and fill the to actual keymap initializer, like what's in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs)
 
@@ -87,9 +89,11 @@ The `layer.keys` string should follow several rules:
    You may use aliases, prefixed with `@`, like `@my_copy` in the above example. The alias names are case sensitive. The definition of aliases is described below.
 
    You may use layer names instead of layer numbers, like `TO(base_layer)` in the above example.
-   <div class="warning"> 
+   ::: warning 
+
    Please note that layer name if used like this, may not contain white spaces and may not be a number. Layer names are case sensitive.
-   </div>
+   
+   :::
 
 2. For no-key (`KeyAction::No`), use `No`
 
@@ -126,6 +130,8 @@ my_copy = "WM(C, LCtrl)"
 my_paste = "WM(V, LCtrl)"
 ```
 
-<div class="warning">
+::: warning
+
 Please note that alias names may not contain white spaces and they are case sensitive.
-</div>
+
+:::

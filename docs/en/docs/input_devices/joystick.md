@@ -1,12 +1,11 @@
 # Joysticks
 
-<div class="warning">
-    Notice:
+::: warning
 
-    1. You need to use a debug probe to find your parameters now.
-    2. Only Nrf is supported now.
+1. You need to use a debug probe to find your parameters now.
+2. Only Nrf is supported now.
 
-</div>
+:::
 
 TODO:
 
@@ -50,13 +49,12 @@ resolution = 6
 
 #### How it works
 
-<div class="warning">
-    Notice:
+::: warning 
 
-    the transform might work not so intuitively,
-    please read the document below for more information.
+the transform might work not so intuitively,
+please read the document below for more information.
 
-</div>
+:::
 
 1. The device read axes
 2. Add `bias` on each axis to make them into `0` when the joystick is released because the number returned by the ADC device is `u16`.
