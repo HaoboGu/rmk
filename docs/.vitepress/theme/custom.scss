@@ -483,6 +483,7 @@
                     border-radius: calc(0.25 * var(--default));
                     padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
                     font-size: calc(0.9 * var(--default));
+                    line-height: calc(1.5 * var(--default));
                   }
                   a {
                     font-size: var(--default);
@@ -525,6 +526,13 @@
                   .badge-container {
                     gap: calc(1 / 2 * var(--default)) !important;
                     margin: var(--default) 0 !important;
+                  }
+                  .custom-block {
+                    margin: var(--default) 0;
+                    border: calc(1 / 16 * var(--default)) solid var(--vp-custom-block-warning-border);
+                    border-radius: calc(8 / 16 * var(--default));
+                    padding: var(--default) var(--default) calc(8 / 16 * var(--default));
+                    line-height: calc(24 / 16 * var(--default));
                   }
                 }
               }
