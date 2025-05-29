@@ -46,8 +46,8 @@ export default defineConfig({
   },
 
   transformHead: ({ assets }) => {
-    const textFont = assets.find(file => /OpenSans\.[\w-]+\.ttf/.test(file))
-    const codeFont = assets.find(file => /FiraCode\.[\w-]+\.ttf/.test(file))
+    const textFont = assets.find((file) => /OpenSans\.[\w-]+\.ttf/.test(file))
+    const codeFont = assets.find((file) => /FiraCode\.[\w-]+\.ttf/.test(file))
     if (textFont && codeFont) {
       return [
         [
@@ -73,7 +73,6 @@ export default defineConfig({
       ]
     }
   }
-
 })
 
 function nav() {
@@ -153,7 +152,10 @@ function sidebarGuide() {
             { text: 'Keycodes', link: 'features/keymap/keycodes' },
             { text: 'Special Key', link: 'features/keymap/special_keys' },
             { text: 'Keyboard Macros', link: 'features/keymap/keyboard_macros' },
-            { text: 'Special Characters and Unicode', link: 'features/keymap/special_characters_and_unicode' },
+            {
+              text: 'Special Characters and Unicode',
+              link: 'features/keymap/special_characters_and_unicode'
+            }
           ]
         },
         { text: 'Vial Support', link: 'features/vial_support' },

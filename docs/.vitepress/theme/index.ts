@@ -6,6 +6,7 @@ import './my-font.css'
 import './style.css'
 import './custom.css'
 import './custom.scss'
+import './custom-block-style.scss'
 
 export default {
   extends: DefaultTheme,
