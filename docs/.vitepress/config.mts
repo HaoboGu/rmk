@@ -79,7 +79,27 @@ function nav() {
   return [
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
-    { text: 'API', link: 'https://docs.rs/rmk/latest/rmk/' }
+    {
+      text: `V0.7.x`,
+      items: [
+        {
+          items: [
+            { text: "V0.7.x", link: "/docs/introduction" },
+          ],
+        },
+        {
+          items: [
+            { text: "Migration Guide", link: "/docs/migration_guide" },
+          ],
+        },
+        {
+          items: [
+            { text: "V0.6.x", link: "https://haobogu.github.io/rmk" },
+          ]
+        }
+      ],
+    },
+    { text: 'API', link: 'https://docs.rs/rmk/latest/rmk/' },
   ]
 }
 function sidebarGuide() {
