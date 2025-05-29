@@ -86,7 +86,13 @@ aside:hover {
 /* 代码块样式 */
 .vp-doc div[class*='language-'] {
   border-radius: 1rem;
+  margin: 16px 0;
   background-color: var(--vp-c-bg-soft);
+}
+.vp-doc .vp-code-group .tabs{
+  margin: 0;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
 }
 .vp-doc div[class*='language-'] span.lang {
   font-size: 14px;
