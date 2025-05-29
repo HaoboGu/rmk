@@ -27,7 +27,7 @@
 - **Broad microcontroller compatibility**: Leveraging [embassy](https://github.com/embassy-rs/embassy), RMK supports a comprehensive range of microcontrollers, including stm32, nRF, rp2040(w), esp32, etc
 - **Dynamic keymap customization**: RMK offers native [Vial](https://get.vial.today) support, enabling real-time keymap modifications. You can even edit keymaps over BLE connections wirelessly
 - **Advanced keyboard functionality**: RMK comes with lots of advanced keyboard features by default, including layer switching, media controls, system commands, mouse control, and more
-- **Wireless connectivity**: BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3, esp32s3
+- **Wireless connectivity**: BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3, esp32s3, Pi Pico W
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
