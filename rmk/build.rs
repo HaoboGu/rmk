@@ -24,13 +24,7 @@ fn main() {
         println!("cargo:rerun-if-changed={}", toml_path);
         fs::read_to_string(&toml_path).expect("Failed to read user config file")
     } else {
-        r#"# Default config
-            [keyboard]
-            name = "RMK Keyboard"
-            vendor_id = 0xe118
-            product_id = 0x4643
-            "#
-        .to_string()
+        "".to_string()
     };
 
     // Parse user configuration

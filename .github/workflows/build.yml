@@ -3,10 +3,10 @@ name: Build
 on:
   push:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   pull_request:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**"]
+    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   workflow_dispatch:
 
 # Cancel any currently running workflows from the same PR, branch, or
@@ -32,6 +32,8 @@ jobs:
           - rp2040
           - rp2040_split
           - rp2040_direct_pin
+          - pi_pico_w_ble
+          - pi_pico_w_ble_split
           - stm32f1
           - stm32f4
           - stm32h7

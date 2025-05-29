@@ -24,11 +24,13 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::BehaviorConfig;
 use rmk::config::{ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join3;
+use rmk::futures::future::{join, join3};
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
+use rmk::split::ble::central::read_peripheral_addresses;
+use rmk::split::central::run_peripheral_manager;
 use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -105,7 +107,7 @@ async fn main(spawner: Spawner) {
         vid: 0x4c4c,
         pid: 0x464c,
         manufacturer: "Haobo",
-        product_name: "RMK PicoW",
+        product_name: "RMK PicoW Split",
         serial_number: "vial:f64c2b3c:000001",
     };
 
@@ -135,6 +137,9 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
+    // Read peripheral address from storage
+    let peripheral_addrs = read_peripheral_addresses::<1, _, 4, 3, 2, 0>(&mut storage).await;
+
     // Initialize the light controller
     let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
@@ -145,13 +150,17 @@ async fn main(spawner: Spawner) {
     let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
 
     let stack = build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+
     // Start
     join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+        join(
+            run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addrs[0], &stack),
+            run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+        ),
     )
     .await;
 }

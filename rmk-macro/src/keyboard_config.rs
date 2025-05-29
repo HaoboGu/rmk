@@ -3,8 +3,8 @@ use rmk_config::KeyboardTomlConfig;
 
 pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     // Get the path of the keyboard config file from the environment variable
-    let config_toml_path = std::env::var("KEYBOARD_TOML_PATH")
-        .expect("\x1b[1;31mERROR\x1b[0m: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`\n");
+    let config_toml_path =
+        std::env::var("KEYBOARD_TOML_PATH").expect("[ERROR]: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`");
 
     KeyboardTomlConfig::new_from_toml_str(&config_toml_path)
 }

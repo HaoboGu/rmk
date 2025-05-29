@@ -3,6 +3,8 @@ cd examples/use_rust/nrf52832_ble && cargo build --release && cd ../../..
 cd examples/use_rust/nrf52840 && cargo build --release && cd ../../..
 cd examples/use_rust/nrf52840_ble && cargo build --release && cd ../../..
 cd examples/use_rust/nrf52840_ble_split && cargo build --release && cd ../../..
+cd examples/use_rust/pi_pico_w_ble && cargo build --release && cd ../../..
+cd examples/use_rust/pi_pico_w_ble_split && cargo build --release && cd ../../..
 cd examples/use_rust/rp2040 && cargo build --release && cd ../../..
 cd examples/use_rust/rp2040_direct_pin && cargo build --release && cd ../../.. 
 cd examples/use_rust/rp2040_split && cargo build --release && cd ../../.. 
@@ -18,6 +20,8 @@ cd examples/use_config/nrf52832_ble && cargo build --release && cd ../../..
 cd examples/use_config/nrf52840_ble && cargo build --release && cd ../../.. 
 cd examples/use_config/nrf52840_ble_split && cargo build --release --bin central && cargo build --release --bin peripheral && cd ../../.. 
 cd examples/use_config/nrf52840_ble_split_direct_pin && cargo build --release --bin central && cargo build --release --bin peripheral && cd ../../.. 
+cd examples/use_config/pi_pico_w_ble && cargo build --release && cd ../../..
+cd examples/use_config/pi_pico_w_ble_split && cargo build --release && cd ../../..
 cd examples/use_config/rp2040 && cargo build --release && cd ../../.. 
 cd examples/use_config/rp2040_direct_pin && cargo build --release && cd ../../.. 
 cd examples/use_config/rp2040_split && cargo build --release --bin central && cargo build --release --bin peripheral && cd ../../.. 
