@@ -529,6 +529,19 @@
                       }
                     }
                   }
+                  .vp-code-group {
+                    margin-top: var(--default);
+                    .tabs {
+                      border-radius: calc(8 / 16 * var(--default)) calc(8 / 16 * var(--default)) 0 0;
+                      padding: 0 calc(12 / 16 * var(--default));
+                      lable {
+                        border-bottom: calc(1 / 16 * var(--default)) solid transparent;
+                        padding: 0 calc(12 / 16 * var(--default));
+                        line-height: calc(48 / 16 * var(--default));
+                        font-size: calc(1 * var(--default));
+                      }
+                    }
+                  }
                   blockquote {
                     margin: var(--default) 0;
                     border-left: calc(1 / 8 * var(--default)) solid var(--vp-c-divider);
