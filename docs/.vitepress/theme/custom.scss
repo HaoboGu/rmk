@@ -543,7 +543,7 @@
                   }
                   .custom-block {
                     margin: var(--default) 0;
-                    border: calc(1 / 16 * var(--default)) solid var(--vp-custom-block-warning-border);
+                    border-width: calc(1 / 16 * var(--default)) solid;
                     border-radius: calc(18 / 16 * var(--default));
                     padding: var(--default) var(--default) calc(8 / 16 * var(--default));
                     line-height: calc(24 / 16 * var(--default));
