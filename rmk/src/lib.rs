@@ -91,7 +91,7 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
-pub(crate) mod usb;
+pub mod usb;
 pub mod via;
 
 pub async fn initialize_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
