@@ -1,6 +1,8 @@
 # Custom Block Ex
 
-::: info This is an info box `code`.
+::: info 
+
+This is an info box `code`.
 
 ```js
 conslog('hello world')
@@ -14,7 +16,9 @@ conslog('hello world')
 >conslog('hello world');
 >```
 
-::: tip This is a tip `code`.
+::: tip 
+
+This is a tip `code`.
 
 ```js
 conslog('hello world')
@@ -22,7 +26,9 @@ conslog('hello world')
 
 :::
 
-::: warning This is a warning `code`.
+::: warning 
+
+This is a warning `code`.
 
 ```js
 conslog('hello world')
@@ -30,7 +36,9 @@ conslog('hello world')
 
 :::
 
-::: danger This is a dangerous warning `code`.
+::: danger 
+
+This is a dangerous warning `code`.
 
 ```js
 conslog('hello world')
@@ -38,7 +46,9 @@ conslog('hello world')
 
 :::
 
-::: details This is a details block `code`.
+::: details 
+
+This is a details block `code`.
 
 ```js
 conslog('hello world')

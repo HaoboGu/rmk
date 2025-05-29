@@ -80,7 +80,7 @@ function nav() {
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
     { text: 'API', link: 'https://docs.rs/rmk/latest/rmk/' },
-    {text:'CustomBlockEx',link:"/docs/custom-block-ex"}
+    // {text:'CustomBlockEx',link:"/docs/custom-block-ex"}
   ]
 }
 function sidebarGuide() {
