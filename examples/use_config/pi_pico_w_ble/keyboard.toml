@@ -1,15 +1,15 @@
 [keyboard]
 name = "RMK Keyboard"
-product_name = "My RMK Keyboard"
+product_name = "RMK Keyboard"
 vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
-chip = "stm32h7b0vb"
+board = "pi_pico_w"
 
 [matrix]
 # Input and output pins are mandatory
-input_pins = ["PD9", "PD8", "PB13", "PB12"]
-output_pins = ["PE13", "PE14", "PE15"]
+input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
+output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true
 
@@ -32,16 +32,5 @@ keymap = [
     ],
 ]
 
-[light]
-# All light pins are high-active by default, uncomment if you want it to be low-active
-capslock.pin = "PA4"
-capslock.low_active = false
-scrolllock.pin = "PA3"
-scrolllock.low_active = false
-# Just ignore if no light pin is used for it
-# numslock.pin = "PA5"
-# numslock.low_active = true
-
-[storage]
-# Storage feature is enabled by default
-# enabled = false
+[ble]
+enabled = true

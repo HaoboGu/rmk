@@ -140,11 +140,29 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             let usb_info = communication.get_usb_info().unwrap();
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
+            // For Pico W, enabled PIO0_IRQ_0 interrupt
+            let (pio0_irq_0, ble_task) = if communication.ble_enabled() {
+                (
+                    quote! {
+                        PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
+                    },
+                    quote! {
+                        #[::embassy_executor::task]
+                        async fn cyw43_task(runner: ::cyw43::Runner<'static, ::embassy_rp::gpio::Output<'static>, ::cyw43_pio::PioSpi<'static, ::embassy_rp::peripherals::PIO0, 0, ::embassy_rp::peripherals::DMA_CH0>>) -> ! {
+                            runner.run().await
+                        }
+                    },
+                )
+            } else {
+                (quote! {}, quote! {})
+            };
             quote! {
                 use ::embassy_rp::bind_interrupts;
                 bind_interrupts!(struct Irqs {
                     #interrupt_name => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::#peripheral_name>;
+                    #pio0_irq_0
                 });
+                #ble_task
             }
         }
         rmk_config::ChipSeries::Esp32 => quote! {},

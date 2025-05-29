@@ -23,6 +23,7 @@ impl ChipModel {
                 "nice!nano_v2" | "nice!nano v2" => Ok(include_str!("default_config/nice_nano_v2.toml")),
                 "nice!nano" | "nice!nano_v1" | "nicenano" => Ok(include_str!("default_config/nice_nano.toml")),
                 "XIAO BLE" => Ok(include_str!("default_config/nrf52840.toml")),
+                "pi_pico_w" | "pico_w" => Ok(include_str!("default_config/pi_pico_w.toml")),
                 _ => Err(format!("No default config file for board {}", board)),
             }
         } else {
@@ -45,7 +46,6 @@ impl ChipModel {
 
 impl KeyboardTomlConfig {
     pub fn get_chip_model(&self) -> Result<ChipModel, String> {
-        // Duplicate the logic in `rmk-macro/src/keyboard_config.rs`
         let keyboard = self.keyboard.as_ref().unwrap();
         if keyboard.board.is_none() == keyboard.chip.is_none() {
             return Err("Either \"board\" or \"chip\" should be set in keyboard.toml, but not both".to_string());
@@ -54,9 +54,16 @@ impl KeyboardTomlConfig {
         // Check board type
         if let Some(board) = keyboard.board.clone() {
             match board.as_str() {
-                "nice!nano" | "nice!nano_v2" | "XIAO BLE" => Ok(ChipModel {
-                    series: ChipSeries::Nrf52,
-                    chip: "nrf52840".to_string(),
+                "nice!nano" | "nice!nano_v1" | "nicenano" | "nice!nano_v2" | "nice!nano v2" | "XIAO BLE" => {
+                    Ok(ChipModel {
+                        series: ChipSeries::Nrf52,
+                        chip: "nrf52840".to_string(),
+                        board: Some(board),
+                    })
+                }
+                "pi_pico_w" | "pico_w" => Ok(ChipModel {
+                    series: ChipSeries::Rp2040,
+                    chip: "rp2040".to_string(),
                     board: Some(board),
                 }),
                 _ => Err(format!("Unsupported board: {}", board)),

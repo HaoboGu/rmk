@@ -11,20 +11,16 @@ pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenS
         return (quote! {}, quote! {});
     }
     let chip = keyboard_config.get_chip_model().unwrap();
-    // Support only nrf52 and esp32 (for now)
+    // Advanced parameters are only supported for nrf52(for now)
     if chip.series != ChipSeries::Nrf52 {
-        if chip.series == ChipSeries::Esp32 {
-            return (
-                quote! {
-                    let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-                },
-                quote! {
-                    ble_battery_config,
-                },
-            );
-        } else {
-            return (quote! {}, quote! {});
-        }
+        return (
+            quote! {
+                let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+            },
+            quote! {
+                ble_battery_config,
+            },
+        );
     }
 
     // nRF52 configuration

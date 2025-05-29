@@ -173,6 +173,7 @@ pub async fn initialize_keymap_and_storage<
 #[allow(unreachable_code)]
 pub async fn run_rmk<
     'a,
+    'b,
     #[cfg(feature = "_ble")] C: Controller,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
@@ -184,7 +185,7 @@ pub async fn run_rmk<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
+    #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
