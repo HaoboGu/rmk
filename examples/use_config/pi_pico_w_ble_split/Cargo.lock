@@ -2594,7 +2594,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rmk-rp-pico-w"
+name = "rmk-pi-pico-w"
 version = "0.2.0"
 dependencies = [
  "bt-hci",

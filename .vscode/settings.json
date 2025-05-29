@@ -29,6 +29,8 @@
         // "examples/use_config/nrf52840_ble/Cargo.toml",
         // "examples/use_config/nrf52840_ble_split/Cargo.toml",
         // "examples/use_config/nrf52840_ble_split_direct_pin/Cargo.toml",
+        // "examples/use_config/pi_pico_w_ble/Cargo.toml"
+        // "examples/use_config/pi_pico_w_ble_split/Cargo.toml"
         // "examples/use_config/rp2040/Cargo.toml"
         // "examples/use_config/rp2040_direct_pin/Cargo.toml"
         // "examples/use_config/rp2040_split/Cargo.toml"
@@ -46,8 +48,8 @@
         // "examples/use_rust/nrf52840_ble/Cargo.toml",
         // "examples/use_rust/nrf52840_ble_split/Cargo.toml",
         // "examples/use_rust/py32f07x/Cargo.toml",
+        // "examples/use_rust/pi_pico_w_ble/Cargo.toml"
         // "examples/use_rust/rp2040/Cargo.toml"
-        // "examples/use_rust/rp_pico_w_ble/Cargo.toml"
         // "examples/use_rust/rp2040_direct_pin/Cargo.toml"
         // "examples/use_rust/rp2040_split/Cargo.toml"
         // "examples/use_rust/rp2040_split_pio/Cargo.toml"

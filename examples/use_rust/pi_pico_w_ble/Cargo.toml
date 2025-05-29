@@ -1,5 +1,5 @@
 [package]
-name = "rmk-rp-pico-w"
+name = "rmk-pi-pico-w"
 version = "0.2.0"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Keyboard firmware written in Rust"
@@ -60,7 +60,7 @@ const-gen = "1.6"
 reqwest = { version = "0.12.9", features = ["blocking"]}
 
 [[bin]]
-name = "rmk-rp-pico-w"
+name = "rmk-pi-pico-w"
 test = false
 bench = false
 
