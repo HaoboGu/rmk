@@ -242,8 +242,9 @@ Available chip names in `chip` field:
 
 Available board names in `board` field:
 
-- nice!nano
-- nice!nano_v2
-- XIAO BLE
+- `nice!nano`
+- `nice!nano_v2`
+- `XIAO BLE`
+- `pi_pico_w`
 
 If you want to add more built-in boards, feel free to open a PR!

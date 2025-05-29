@@ -16,13 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- BLE and BLE split support for Pi Pico W 
-- Introduce matrix_map for nicer keyboard matrix configs
+- BLE and BLE split support for Pi Pico W, check out [this example](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/pi_pico_w_ble)
+- Introduce matrix_map for [nicer keyboard matrix configs](https://rmk.rs/docs/features/configuration/layout.html)
 - Battery charging state reader
 - Sleep timeout when advertising
 - Automatically pair between central and peripheral
-- Make constants in RMK configurable via `keyboard.toml`
-- enables support for keyboard macros (via rust based configuration only for now) (closes issues issues #308, #284, #303, #313, #170)
+- Make constants in RMK [configurable via `keyboard.toml`](https://rmk.rs/docs/features/configuration/rmk_config.html)
+- Enable [support for keyboard macros](https://rmk.rs/docs/features/keymap/keyboard_macros.html) (via rust based configuration only for now) (closes issues #308, #284, #303, #313, #170)
 
 ### Fixed
 

@@ -64,6 +64,19 @@ The migration process is simple, you just need to:
     3. Set `clear_storage` back to false and compile
     4. Flash both splits again
 
+### Path of `keyboard.toml`
+
+In v0.7.x, RMK requries to set the path of `keyboard.toml` in `.cargo/config.toml`. This makes the path of `keyboard.toml` configurable. In versions before v0.7.x, `keyboard.toml` is located in the root directory of the project. So you will need to set the following in `.cargo/config.toml` after updating to v0.7.x:
+
+```toml
+[env]
+KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
+```
+
 ### ESP32 BLE stack migration
 
 Older versions of RMK uses [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal), which is now community-maintained. RMK v0.7.x now uses Espressif's official [`esp-hal`](https://github.com/esp-rs/esp-hal). Because the difference between [`esp-hal`](https://github.com/esp-rs/esp-hal) and [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal) is too large, the recommended way to migrate to v0.7.x is to recreate your project from scratch and migrate your keymap & configuration to the new project.
+
+### Check out new features
+
+RMK v0.7.x brings lots of exciting features, making configuration easier and more flexible. Check out the [CHANGELOG](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md) for more details.
