@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::{
     BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, MatrixType,
-    SplitBoardConfig,
+    SplitBoardConfig, SplitConfig,
 };
 use syn::ItemMod;
 
@@ -29,47 +29,8 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     let main_function = expand_split_peripheral(id, &toml_config, item_mod, &rmk_features);
     let chip = toml_config.get_chip_model().unwrap();
 
-    let bind_interrupts = if chip.series == ChipSeries::Nrf52 {
-        quote! {
-            use ::embassy_nrf::bind_interrupts;
-            bind_interrupts!(struct Irqs {
-                CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler;
-                RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
-                EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;
-                RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
-                TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
-                RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
-            });
-
-            #[::embassy_executor::task]
-            async fn mpsl_task(mpsl: &'static ::nrf_sdc::mpsl::MultiprotocolServiceLayer<'static>) -> ! {
-                mpsl.run().await
-            }
-            /// How many outgoing L2CAP buffers per link
-            const L2CAP_TXQ: u8 = 3;
-
-            /// How many incoming L2CAP buffers per link
-            const L2CAP_RXQ: u8 = 3;
-
-            /// Size of L2CAP packets
-            const L2CAP_MTU: usize = 72;
-            fn build_sdc<'d, const N: usize>(
-                p: ::nrf_sdc::Peripherals<'d>,
-                rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG>,
-                mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
-                mem: &'d mut ::nrf_sdc::Mem<N>,
-            ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
-                ::nrf_sdc::Builder::new()?
-                    .support_adv()?
-                    .support_peripheral()?
-                    .peripheral_count(1)?
-                    .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
-                    .build(p, rng, mpsl, mem)
-            }
-        }
-    } else {
-        quote! {}
-    };
+    let bind_interrupts =
+        expand_bind_interrupt_for_split_peripheral(&chip, &toml_config.get_communication_config().unwrap());
 
     let main_function_sig = if chip.series == ChipSeries::Esp32 {
         quote! {
@@ -96,6 +57,67 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     }
 }
 
+fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &CommunicationConfig) -> TokenStream2 {
+    match chip.series {
+        ChipSeries::Nrf52 => {
+            quote! {
+                use ::embassy_nrf::bind_interrupts;
+                bind_interrupts!(struct Irqs {
+                    CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler;
+                    RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
+                    EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;
+                    RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                    TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                    RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                });
+
+                #[::embassy_executor::task]
+                async fn mpsl_task(mpsl: &'static ::nrf_sdc::mpsl::MultiprotocolServiceLayer<'static>) -> ! {
+                    mpsl.run().await
+                }
+                /// How many outgoing L2CAP buffers per link
+                const L2CAP_TXQ: u8 = 3;
+
+                /// How many incoming L2CAP buffers per link
+                const L2CAP_RXQ: u8 = 3;
+
+                /// Size of L2CAP packets
+                const L2CAP_MTU: usize = 72;
+                fn build_sdc<'d, const N: usize>(
+                    p: ::nrf_sdc::Peripherals<'d>,
+                    rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG>,
+                    mpsl: &'d ::nrf_sdc::mpsl::MultiprotocolServiceLayer,
+                    mem: &'d mut ::nrf_sdc::Mem<N>,
+                ) -> Result<::nrf_sdc::SoftdeviceController<'d>, ::nrf_sdc::Error> {
+                    ::nrf_sdc::Builder::new()?
+                        .support_adv()?
+                        .support_peripheral()?
+                        .peripheral_count(1)?
+                        .buffer_cfg(L2CAP_MTU as u8, L2CAP_MTU as u8, L2CAP_TXQ, L2CAP_RXQ)?
+                        .build(p, rng, mpsl, mem)
+                }
+            }
+        }
+        ChipSeries::Rp2040 => {
+            if communication.ble_enabled() {
+                quote! {
+                    use ::embassy_rp::bind_interrupts;
+                    bind_interrupts!(struct Irqs {
+                        PIO0_IRQ_0 => ::embassy_rp::pio::InterruptHandler<::embassy_rp::peripherals::PIO0>;
+                    });
+                    #[::embassy_executor::task]
+                    async fn cyw43_task(runner: ::cyw43::Runner<'static, ::embassy_rp::gpio::Output<'static>, ::cyw43_pio::PioSpi<'static, ::embassy_rp::peripherals::PIO0, 0, ::embassy_rp::peripherals::DMA_CH0>>) -> ! {
+                        runner.run().await
+                    }
+                }
+            } else {
+                quote! {}
+            }
+        }
+        _ => quote! {},
+    }
+}
+
 fn expand_split_peripheral(
     id: usize,
     keyboard_config: &KeyboardTomlConfig,
@@ -103,8 +125,8 @@ fn expand_split_peripheral(
     rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Check whether keyboard.toml contains split section
-    let split_config = keyboard_config.get_board_config().unwrap();
-    let split_config = match &split_config {
+    let board_config = keyboard_config.get_board_config().unwrap();
+    let split_config = match &board_config {
         BoardConfig::Split(split) => split,
         _ => {
             panic!("No `split` field in `keyboard.toml`");
@@ -192,7 +214,7 @@ fn expand_split_peripheral(
 
     // Peripherals don't need to run processors
     let (input_device_config, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
-    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, peripheral_config, devices);
+    let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices);
 
     quote! {
         #imports
@@ -206,6 +228,7 @@ fn expand_split_peripheral(
 fn expand_split_peripheral_entry(
     id: usize,
     chip: &ChipModel,
+    split_config: &SplitConfig,
     peripheral_config: &SplitBoardConfig,
     devices: Vec<TokenStream2>,
 ) -> TokenStream2 {
@@ -218,51 +241,49 @@ fn expand_split_peripheral_entry(
         )
     };
 
-    match chip.series {
-        ChipSeries::Nrf52 => {
-            let peripheral_run = quote! {
-                ::rmk::split::peripheral::run_rmk_split_peripheral(
-                    #id,
-                    &stack,
-                    &mut storage,
-                )
-            };
-            let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
-            quote! {
-                #run_rmk_peripheral
-            }
+    if split_config.connection == "ble" {
+        let peripheral_run = quote! {
+            ::rmk::split::peripheral::run_rmk_split_peripheral(
+                #id,
+                &stack,
+                &mut storage,
+            )
+        };
+        let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
+        quote! {
+            #run_rmk_peripheral
         }
-        ChipSeries::Rp2040 | ChipSeries::Stm32 => {
-            let peripheral_serial = peripheral_config
-                .serial
-                .clone()
-                .expect("Missing peripheral serial config");
-            if peripheral_serial.len() != 1 {
-                panic!("Peripheral should have only one serial config");
-            }
-            let serial_init = expand_serial_init(chip, peripheral_serial);
+    } else if split_config.connection == "serial" {
+        let peripheral_serial = peripheral_config
+            .serial
+            .clone()
+            .expect("Missing peripheral serial config");
+        if peripheral_serial.len() != 1 {
+            panic!("Peripheral should have only one serial config");
+        }
+        let serial_init = expand_serial_init(chip, peripheral_serial);
 
-            let uart_instance = format_ident!(
-                "{}",
-                peripheral_config
-                    .serial
-                    .as_ref()
-                    .expect("Missing peripheral serial config")
-                    .first()
-                    .expect("Peripheral should have only one serial config")
-                    .instance
-                    .to_lowercase()
-            );
-            let peripheral_run = quote! {
-                ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
-            };
-            let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
-            quote! {
-                #serial_init
-                #run_rmk_peripheral
-            }
+        let uart_instance = format_ident!(
+            "{}",
+            peripheral_config
+                .serial
+                .as_ref()
+                .expect("Missing peripheral serial config")
+                .first()
+                .expect("Peripheral should have only one serial config")
+                .instance
+                .to_lowercase()
+        );
+        let peripheral_run = quote! {
+            ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
+        };
+        let run_rmk_peripheral = join_all_tasks(vec![device_task, peripheral_run]);
+        quote! {
+            #serial_init
+            #run_rmk_peripheral
         }
-        ChipSeries::Esp32 => todo!("esp32 split keyboard is not supported yet"),
+    } else {
+        panic!("Invalid split connection type: {}", split_config.connection);
     }
 }
 
