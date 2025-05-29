@@ -94,10 +94,12 @@ This config will reduce about 4-6kb of binary size furthermore.
 
 After applying all above approaches, total binary size of stm32h7 example can be reduced from about 93KB to 54KB, which means the binary size decreases about 42%!
 
-## Make storage optional
+## Disable `storage` feature and `defmt` feature
 
-Making storage feature optional and marking `sequential-storage` dependency as optional could also reduce the binary size a lot.
+If you don't need storage, you can disable the `storage` feature to save some flash. To disable `storage` feature you need to disable default features of `rmk` crate, and then enable features you need manually.
 
-This work is not done yet, if there is still binary size issue for your microcontroller, please fire an issue at <https://github.com/HaoboGu/rmk/issues> and let us know! We'll improve the priority of this feature if we got sufficient feedback.
+You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate and similar feature gates from all other dependencies.
 
-Any PRs are also welcomed.
+```toml
+rmk = { version = "0.7", default-features = false, features = ["col2row"] }
+```
