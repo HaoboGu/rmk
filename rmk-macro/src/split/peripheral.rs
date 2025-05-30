@@ -136,7 +136,7 @@ fn expand_split_peripheral(
     let peripheral_config = split_config.peripheral.get(id).expect("Missing peripheral config");
 
     let imports = expand_custom_imports(&item_mod);
-    let mut chip_init = expand_chip_init(keyboard_config, &item_mod);
+    let mut chip_init = expand_chip_init(keyboard_config, Some(id), &item_mod);
     if split_config.connection == "ble" {
         // Add storage when using BLE split
         let flash_init = expand_flash_init(keyboard_config);

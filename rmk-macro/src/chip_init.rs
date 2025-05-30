@@ -1,13 +1,20 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
-use rmk_config::{ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
+use rmk_config::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
 
 /// Expand chip initialization code
-pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+///
+/// If `peripheral_id` is `None`, it means that the chip initialization is for the central.
+/// Otherwise, the `peripheral_id` is the index of the peripheral.
+pub(crate) fn expand_chip_init(
+    keyboard_config: &KeyboardTomlConfig,
+    peripheral_id: Option<usize>,
+    item_mod: &ItemMod,
+) -> TokenStream2 {
     // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
     if let Some((_, items)) = &item_mod.content {
         items
@@ -23,14 +30,14 @@ pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &
                 }
                 None
             })
-            .unwrap_or(chip_init_default(keyboard_config))
+            .unwrap_or(chip_init_default(keyboard_config, peripheral_id))
     } else {
-        chip_init_default(keyboard_config)
+        chip_init_default(keyboard_config, peripheral_id)
     }
 }
 
 // Default implementations of chip initialization
-pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
     match chip.series {
@@ -53,7 +60,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             } else {
                 quote! {}
             };
-            let ble_addr = get_ble_addr(keyboard_config);
+            let ble_addr = get_ble_addr(keyboard_config, peripheral_id);
             let ble_init = match &communication {
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
                     // Initialize nrf-sdc and ble stack
@@ -98,7 +105,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             }
         }
         ChipSeries::Rp2040 => {
-            let ble_addr = get_ble_addr(keyboard_config);
+            let ble_addr = get_ble_addr(keyboard_config, peripheral_id);
             if communication.ble_enabled() {
                 quote! {
                     let config = ::embassy_rp::config::Config::default();
@@ -157,7 +164,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenSt
             }
         }
         ChipSeries::Esp32 => {
-            let ble_addr = get_ble_addr(keyboard_config);
+            let ble_addr = get_ble_addr(keyboard_config, peripheral_id);
             quote! {
                 ::esp_println::logger::init_logger_from_env();
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
@@ -201,7 +208,7 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     initialization_tokens
 }
 
-fn get_ble_addr(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+fn get_ble_addr(keyboard_config: &KeyboardTomlConfig, peripheral_id: Option<usize>) -> TokenStream2 {
     let chip = keyboard_config.get_chip_model().unwrap();
     if chip.series == ChipSeries::Nrf52 {
         quote! {
@@ -215,9 +222,36 @@ fn get_ble_addr(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
             }
         }
     } else {
-        // Default BLE random static address
+        // Check whether the address is set in the keyboard.toml, if not, use the default address
+        let board = keyboard_config.get_board_config().unwrap();
+        let addr = match board {
+            BoardConfig::Split(split) => {
+                match peripheral_id {
+                    Some(id) => {
+                        // Split peripheral
+                        // The 4th byte is the peripheral index to make sure that the BLE address for each peripheral is different
+                        let default_addr = [0x7e, 0xfe, 0x73, id as u8, 0x66, 0xe3];
+                        split
+                            .peripheral
+                            .get(id)
+                            .expect(&format!("There's no config for peripheral {}", id))
+                            .ble_addr
+                            .unwrap_or(default_addr)
+                    }
+                    None => {
+                        // Split central
+                        let default_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
+                        split.central.ble_addr.unwrap_or(default_addr)
+                    }
+                }
+            }
+            // TODO: allow user to set the BLE address for uni-body keyboards
+            BoardConfig::UniBody(_uni_body) => [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7],
+        };
         quote! {
-            [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
+            [
+                #(#addr),*
+            ]
         }
     }
 }
