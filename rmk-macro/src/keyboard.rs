@@ -111,7 +111,7 @@ fn expand_main(
     // Expand components of main function
     let imports = expand_custom_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(keyboard_config, &item_mod);
-    let chip_init = expand_chip_init(keyboard_config, &item_mod);
+    let chip_init = expand_chip_init(keyboard_config, None, &item_mod);
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
     let light_config = expand_light_config(keyboard_config);
