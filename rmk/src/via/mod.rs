@@ -5,9 +5,12 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
+use heapless::Vec;
 use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
 use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
-use vial::process_vial;
+use vial::VialSecureSignal;
+use vial::VialStatus;
+use vial::{VIAL_MATRIX_TEST_SIGNAL, VIAL_SECURE_EVENT_SIGNAL};
 
 use crate::config::VialConfig;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
@@ -20,7 +23,7 @@ use crate::{boot, CONNECTION_STATE, MACRO_SPACE_SIZE};
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
 mod protocol;
-mod vial;
+pub(crate) mod vial;
 
 pub(crate) struct VialService<
     'a,
@@ -38,6 +41,8 @@ pub(crate) struct VialService<
 
     // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
+
+    pub(crate) status: VialStatus<ROW, COL>,
 }
 
 impl<
@@ -60,6 +65,7 @@ impl<
             keymap,
             vial_config,
             reader_writer,
+            status: VialStatus::new(),
         }
     }
 
@@ -91,7 +97,7 @@ impl<
     }
 
     async fn process_via_packet(
-        &self,
+        &mut self,
         report: &mut ViaReport,
         keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) {
@@ -119,7 +125,21 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            warn!("GetKeyboardValue - SwitchMatrixState")
+                            // return nothing if vial is still locked
+                            if self.get_lock_status() {
+                                return;
+                            }
+
+                            VIAL_MATRIX_TEST_SIGNAL.signal(());
+                            if let Some(update) = vial::VIAL_MATRIX_STATUS_SIGNAL.try_take() {
+                                self.status.matrix_data = update;
+                            }
+
+                            if !self.status.matrix_data.is_empty() {
+                                let row_byte_size: usize = (COL + 8) / 8;
+                                let matrix_data = &mut report.input_data[2..(2 + ROW * row_byte_size)];
+                                matrix_data.copy_from_slice(&self.status.matrix_data[..(ROW * row_byte_size)]);
+                            }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
                             BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
@@ -329,7 +349,7 @@ impl<
                 warn!("Keymap set encoder -- not supported");
             }
             ViaCommand::Vial => {
-                process_vial(
+                self.process_vial(
                     report,
                     self.vial_config.vial_keyboard_id,
                     self.vial_config.vial_keyboard_def,
@@ -342,6 +362,27 @@ impl<
                 report.input_data[0] = ViaCommand::Unhandled as u8
             }
         }
+    }
+
+    fn get_lock_status(&mut self) -> bool {
+        match VIAL_SECURE_EVENT_SIGNAL.try_take() {
+            Some(VialSecureSignal::Lock) => {
+                self.status.lock();
+            }
+            Some(VialSecureSignal::Unlock) => {
+                error!("Get unlocked");
+                self.status.try_unlock();
+            }
+            Some(VialSecureSignal::Toggle) => {
+                if self.status.locked {
+                    self.status.try_unlock();
+                } else {
+                    self.status.lock();
+                }
+            }
+            None => {}
+        }
+        self.status.locked
     }
 }
 
@@ -394,4 +435,23 @@ impl<'d, D: Driver<'d>> HidReaderTrait for UsbVialReaderWriter<'_, 'd, D> {
 
         Ok(read_report)
     }
+}
+
+#[allow(dead_code)]
+pub fn generate_matrix_data<const ROW: usize, const COL: usize, const MATRIX_STATUS_SIZE: usize>(
+    pressed: &[[bool; COL]; ROW],
+) -> Vec<u8, MATRIX_STATUS_SIZE> {
+    let row_byte_size: usize = (COL + 8) / 8;
+    let mut ret_data = Vec::new();
+    ret_data.resize(ROW * row_byte_size, 0).unwrap();
+    for row in 0..ROW {
+        for col in 0..COL {
+            if pressed[row][col] {
+                let last_col_byte = (row as usize + 1) * row_byte_size - 1;
+                let index = last_col_byte - (col as usize / 8);
+                ret_data[index as usize] |= 1 << (col % 8);
+            }
+        }
+    }
+    ret_data
 }

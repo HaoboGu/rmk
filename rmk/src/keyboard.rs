@@ -19,6 +19,8 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
+#[allow(unused_imports)]
+use crate::via::vial::{MatrixStatus, VIAL_MATRIX_STATUS_SIGNAL, VIAL_MATRIX_TEST_SIGNAL};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 /// State machine for one shot keys
@@ -52,9 +54,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
+            #[cfg(feature = "matrix_test")]
+            if VIAL_MATRIX_TEST_SIGNAL.try_take().is_some() {
+                self.matrix_status.waiting = true;
+            }
+
             let key_event = KEY_EVENT_CHANNEL.receive().await;
 
             // Process the key change
+            #[cfg(feature = "matrix_test")]
+            self.matrix_status.update(&key_event);
             self.process_inner(key_event).await;
 
             // After processing the key change, check if there are unprocessed events
@@ -66,6 +75,16 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
                 self.process_inner(e).await;
+
+                #[cfg(feature = "matrix_test")]
+                self.matrix_status.update(&e);
+            }
+
+            #[cfg(feature = "matrix_test")]
+            // all the keys are released. step into the matrix test mode
+            if self.matrix_status.waiting && self.matrix_status.empty() {
+                self.process_matrix_test().await;
+                self.matrix_status.waiting = false;
             }
         }
     }
@@ -97,7 +116,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
 
-    /// The modifiers coming from (last) KeyAction::WithModifier  
+    /// The modifiers coming from (last) KeyAction::WithModifier
     with_modifiers: HidModifiers,
 
     /// Macro text typing state (affects the effective modifiers)
@@ -153,6 +172,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Publisher for controller channel
     controller_pub: ControllerPub<'a>,
+
+    #[cfg(feature = "matrix_test")]
+    /// Matrix test
+    matrix_status: MatrixStatus<ROW, COL>,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -204,11 +227,52 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             combo_actions_buffer: Deque::new(),
             combo_on: true,
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+
+            #[cfg(feature = "matrix_test")]
+            matrix_status: MatrixStatus::new(),
         }
     }
 
     async fn send_report(&self, report: Report) {
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
+    }
+
+    #[cfg(feature = "matrix_test")]
+    async fn process_matrix_test(&mut self) {
+        use crate::via::generate_matrix_data;
+        use embassy_futures::select::{select3, Either3};
+        use embassy_time::Duration;
+
+        info!("Matrix testing...");
+
+        loop {
+            // Vial poll the matrix with 20ms timer
+            // Reference: https://github.com/vial-kb/vial-gui/blob/4452671f29ff884618d781752cf8d694b68eecda/src/main/python/editor/matrix_test.py#L150
+            // To avoid the effect of packet lossing, we use 500ms timeout
+            const escape_timeout: Duration = Duration::from_millis(500);
+            let timeout = embassy_time::Timer::after(escape_timeout);
+            match select3(timeout, VIAL_MATRIX_TEST_SIGNAL.wait(), KEY_EVENT_CHANNEL.receive()).await {
+                Either3::First(_) => {
+                    info!("Matrix polling timeout");
+                    // wait for all keys released
+                    while !self.matrix_status.empty() {
+                        self.matrix_status.update(&KEY_EVENT_CHANNEL.receive().await);
+                    }
+                    break;
+                }
+                Either3::Second(_) => {
+                    // receive new poll and reset the timeout
+                    // nothing to do
+                }
+                Either3::Third(event) => {
+                    info!("Matrix test key event: {}, {}", event.row, event.col);
+
+                    self.matrix_status.update(&event);
+                    let matrix_data = generate_matrix_data(&self.matrix_status.pressed);
+                    VIAL_MATRIX_STATUS_SIGNAL.signal(matrix_data);
+                }
+            }
+        }
     }
 
     /// Process key changes at (row, col)
@@ -895,6 +959,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_action_combo(key, key_event).await;
         } else if key.is_boot() {
             self.process_boot(key, key_event);
+        } else if key.is_secure() {
+            self.process_secure(key, key_event).await;
         } else {
             warn!("Unsupported key: {:?}", key);
         }
@@ -1214,6 +1280,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 KeyCode::Reboot => {
                     boot::reboot_keyboard();
+                }
+                _ => (), // unreachable, do nothing
+            };
+        }
+    }
+
+    async fn process_secure(&mut self, key: KeyCode, key_event: KeyEvent) {
+        use crate::via::vial::VialSecureSignal;
+        use crate::via::vial::VIAL_SECURE_EVENT_SIGNAL;
+
+        // When releasing the key, process the secure action
+        if !key_event.pressed {
+            match key {
+                KeyCode::SecureLock => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Lock);
+                }
+                KeyCode::SecureUnlock => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Unlock);
+                }
+                KeyCode::SecureToggle => {
+                    VIAL_SECURE_EVENT_SIGNAL.signal(VialSecureSignal::Toggle);
                 }
                 _ => (), // unreachable, do nothing
             };

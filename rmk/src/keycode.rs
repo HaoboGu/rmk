@@ -1124,6 +1124,11 @@ impl KeyCode {
         KeyCode::Bootloader <= self && self <= KeyCode::Reboot
     }
 
+    /// Returns `true` if the keycode is secure lock related
+    pub(crate) fn is_secure(self) -> bool {
+        KeyCode::SecureLock <= self && self <= KeyCode::SecureToggle
+    }
+
     /// Returns `true` if the keycode is a kb keycode
     pub(crate) fn is_kb(self) -> bool {
         KeyCode::Kb0 <= self && self <= KeyCode::Kb31
