@@ -1,6 +1,6 @@
 # Storage
 
-::: warning
+::: tip
 
 RMK has default values for used flash area, check out the [default config](https://github.com/HaoboGu/rmk/tree/main/rmk-config/src/default_config) for your microcontroller. If you're using Rust API, it's recommended to use the default values.
 

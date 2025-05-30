@@ -39,14 +39,16 @@ You can also refer to [RMK user guide](/docs/user_guide/3_flash_firmware.md#use-
 
 ## Multiple-profile support
 
-RMK supports at most 8 wireless profiles, profile 0 is activated by default. Vial user keycode can be configured to operate wireless profiles:
+RMK has multiple BLE profiles support. The number of profile can be set in [`[rmk]`](./configuration/rmk_config#wireless-configuration) section in the configuration, the default value is 3.
 
-- `User0` - `User7`: switch to specific profile
-- `User8`: switch to next profile
-- `User9`: switch to previous profile
-- `User10`: clear current profile bond info
-- `User11`: switch default output between USB/BLE
+Vial user keycode can be configured to operate wireless profiles, suppose that you have N BLE profiles, then:
 
-Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User11` will be displayed as `BT0`, ..., `Switch Output`.
+- `User0` - `User(N-1)`: switch to specific profile
+- `UserN`: switch to next profile
+- `User(N+1)`: switch to previous profile
+- `User(N+2)`: clear current profile bond info
+- `User(N+3)`: switch default output between USB/BLE
+
+Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User(N+3)` will be displayed as `BT0`, ..., `Switch Output`.
 
 If you've connected a host for a profile, other devices would not be able to connect to this profile before doing manually clearing.
