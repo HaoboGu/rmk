@@ -37,7 +37,7 @@
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="https://github.com/HaoboGu/rmk/blob/main/docs/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
+<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/images/rmk_ble_keyboard.jpg" width="60%">
 
 ### [dactyl-lynx-rmk](https://github.com/whitelynx/dactyl-lynx-rmk)
 
