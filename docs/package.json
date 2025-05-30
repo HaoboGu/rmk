@@ -1,0 +1,22 @@
+{
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "eslint": "^9.27.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.5.3",
+    "vitepress": "^1.6.3"
+  },
+  "scripts": {
+    "docs:dev": "vitepress dev --open",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview",
+    "docs:format": "prettier --write \"./**/*.{md,json,js,ts,mts,vue}\"",
+    "docs:lint": "eslint --fix ."
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "sass": "^1.89.0",
+    "vue": "^3.5.14"
+  }
+}

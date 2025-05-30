@@ -12,9 +12,9 @@ use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
-use embassy_nrf::{bind_interrupts, pac, rng, usb, Peri};
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::{Peri, bind_interrupts, pac, rng, usb};
 use keymap::{COL, ROW};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
@@ -23,17 +23,19 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{
+    BehaviorConfig, BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
+};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
+use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
-use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -175,13 +177,14 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
+    let behavior_config = BehaviorConfig::default();
     let mut encoder_map = keymap::get_default_encoder_map();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut encoder_map,
         flash,
-        rmk_config.storage_config,
-        rmk_config.behavior_config.clone(),
+        &storage_config,
+        behavior_config,
     )
     .await;
 
@@ -189,7 +192,7 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::<ROW, COL>::new();
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     // let mut matrix = TestMatrix::<ROW, COL>::new();
-    let mut keyboard = Keyboard::new(&keymap, rmk_config.behavior_config.clone());
+    let mut keyboard = Keyboard::new(&keymap);
 
     // Initialize the encoder
     let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);

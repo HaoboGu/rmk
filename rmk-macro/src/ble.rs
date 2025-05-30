@@ -1,32 +1,31 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-
-use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
-use crate::ChipSeries;
+use rmk_config::{ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 
 // Default implementations of ble configuration.
 // Because ble configuration in `config` is enabled by a feature gate, so this function returns two TokenStreams.
 // One for initialization ble config, another one for filling this field into `RmkConfig`.
-pub(crate) fn expand_ble_config(keyboard_config: &KeyboardConfig) -> (TokenStream2, TokenStream2) {
-    if !keyboard_config.communication.ble_enabled() {
+pub(crate) fn expand_ble_config(keyboard_config: &KeyboardTomlConfig) -> (TokenStream2, TokenStream2) {
+    let communication = keyboard_config.get_communication_config().unwrap();
+    if !communication.ble_enabled() {
         return (quote! {}, quote! {});
     }
-    // Support only nrf52 and esp32 (for now)
-    if keyboard_config.chip.series != ChipSeries::Nrf52 {
-        if keyboard_config.chip.series == ChipSeries::Esp32 {
-            return (
-                quote! {
-                    let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
-                },
-                quote! {
-                    ble_battery_config,
-                },
-            );
-        } else {
-            return (quote! {}, quote! {});
-        }
+    let chip = keyboard_config.get_chip_model().unwrap();
+    // Advanced parameters are only supported for nrf52(for now)
+    if chip.series != ChipSeries::Nrf52 {
+        return (
+            quote! {
+                let ble_battery_config = ::rmk::config::BleBatteryConfig::default();
+            },
+            quote! {
+                ble_battery_config,
+            },
+        );
     }
-    match &keyboard_config.communication {
+
+    // nRF52 configuration
+    // Only nRF52 supports charge_state, charging_led and adc config
+    match &communication {
         CommunicationConfig::Ble(ble) | CommunicationConfig::Both(_, ble) => {
             if ble.enabled {
                 let mut ble_config_tokens = TokenStream2::new();

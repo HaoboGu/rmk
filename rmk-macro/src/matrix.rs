@@ -1,27 +1,25 @@
 //! Initialize matrix initialization boilerplate of RMK
 //!
 use quote::quote;
-use rmk_config::MatrixType;
+use rmk_config::{BoardConfig, ChipModel, ChipSeries, KeyboardTomlConfig, MatrixType, UniBodyConfig};
 
 use crate::feature::is_feature_enabled;
 use crate::gpio_config::{
     convert_direct_pins_to_initializers, convert_input_pins_to_initializers, convert_output_pins_to_initializers,
     get_input_pin_type, get_output_pin_type,
 };
-use crate::keyboard_config::{BoardConfig, KeyboardConfig, UniBodyConfig};
-use crate::{ChipModel, ChipSeries};
 
 pub(crate) fn expand_matrix_config(
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
     rmk_features: &Option<Vec<String>>,
 ) -> proc_macro2::TokenStream {
     let async_matrix = is_feature_enabled(rmk_features, "async_matrix");
     let mut matrix_config = proc_macro2::TokenStream::new();
-    match &keyboard_config.board {
+    match &keyboard_config.get_board_config().unwrap() {
         BoardConfig::UniBody(UniBodyConfig { matrix, .. }) => match matrix.matrix_type {
             MatrixType::normal => {
                 matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.chip,
+                    &keyboard_config.get_chip_model().unwrap(),
                     matrix.input_pins.clone().unwrap(),
                     matrix.output_pins.clone().unwrap(),
                     async_matrix,
@@ -29,17 +27,18 @@ pub(crate) fn expand_matrix_config(
             }
             MatrixType::direct_pin => {
                 matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.chip,
+                    &keyboard_config.get_chip_model().unwrap(),
                     matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     matrix.direct_pin_low_active,
                 ));
                 // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
                 // So we need to declaring them in advance.
-                let rows = keyboard_config.layout.rows as usize;
-                let cols = keyboard_config.layout.cols as usize;
-                let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
-                let layers = keyboard_config.layout.layers as usize;
+                let layout = keyboard_config.layout.as_ref().unwrap();
+                let rows = layout.rows as usize;
+                let cols = layout.cols as usize;
+                let size = layout.rows as usize * layout.cols as usize;
+                let layers = layout.layers as usize;
                 let low_active = matrix.direct_pin_low_active;
                 matrix_config.extend(quote! {
                     pub(crate) const ROW: usize = #rows;
@@ -54,13 +53,13 @@ pub(crate) fn expand_matrix_config(
             // Matrix config for split central
             match split_config.central.matrix.matrix_type {
                 MatrixType::normal => matrix_config.extend(expand_matrix_input_output_pins(
-                    &keyboard_config.chip,
+                    &keyboard_config.get_chip_model().unwrap(),
                     split_config.central.matrix.input_pins.clone().unwrap(),
                     split_config.central.matrix.output_pins.clone().unwrap(),
                     async_matrix,
                 )),
                 MatrixType::direct_pin => matrix_config.extend(expand_matrix_direct_pins(
-                    &keyboard_config.chip,
+                    &keyboard_config.get_chip_model().unwrap(),
                     split_config.central.matrix.direct_pins.clone().unwrap(),
                     async_matrix,
                     split_config.central.matrix.direct_pin_low_active,

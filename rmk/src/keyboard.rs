@@ -7,20 +7,19 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::action::{Action, KeyAction};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{ControllerPub, CONTROLLER_CHANNEL, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
-use crate::config::BehaviorConfig;
-use crate::event::KeyEvent;
+use crate::event::{ControllerEvent, KeyEvent};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
-use crate::keyboard_macro::MacroOperation;
+use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
-use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM, MACRO_MAX_NUM};
+use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -92,9 +91,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
 
-    /// Options for configurable action behavior
-    behavior: BehaviorConfig,
-
     /// One shot layer state
     osl_state: OneShotState<u8>,
 
@@ -112,10 +108,13 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
 
-    /// the held keys for the keyboard hid report, except the modifiers
+    /// The previous held modifiers
+    prev_modifiers: HidModifiers,
+
+    /// The held modifiers for the keyboard hid report
     held_modifiers: HidModifiers,
 
-    /// the held keys for the keyboard hid report, except the modifiers
+    /// The held keys for the keyboard hid report, except the modifiers
     held_keycodes: [KeyCode; 6],
 
     /// Registered key position
@@ -151,12 +150,15 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Used for temporarily disabling combos
     combo_on: bool,
+
+    /// Publisher for controller channel
+    controller_pub: ControllerPub<'a>,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
-    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>, behavior: BehaviorConfig) -> Self {
+    pub fn new(keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Keyboard {
             keymap,
             timer: [[None; ROW]; COL],
@@ -170,7 +172,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 None,
             ),
             hold_after_tap: Default::default(),
-            behavior,
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
             with_modifiers: HidModifiers::default(),
@@ -180,6 +181,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
+            prev_modifiers: HidModifiers::default(),
             held_modifiers: HidModifiers::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
@@ -201,6 +203,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -230,10 +233,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
-        let modifiers = self.resolve_modifiers(pressed).into_bits();
+        let modifiers = self.resolve_modifiers(pressed);
+
+        if self.prev_modifiers != modifiers {
+            self.controller_pub
+                .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                    modifiers,
+                )));
+            self.prev_modifiers = modifiers;
+        }
 
         self.send_report(Report::KeyboardReport(KeyboardReport {
-            modifier: modifiers,
+            modifier: modifiers.into_bits(),
             reserved: 0,
             leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
             keycodes: self.held_keycodes.map(|k| k as u8),
@@ -556,6 +567,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .await;
                 self.update_osl(key_event);
             }
+            Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, key_event).await,
         }
     }
 
@@ -916,7 +928,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - registered (held) modifiers keys
     /// - one-shot modifiers
     /// - effect of KeyAction::WithModifiers (while they are pressed)
-    /// - possible fork related modifier suppressions    
+    /// - possible fork related modifier suppressions
     pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
         // text typing macro should not be affected by any modifiers,
         // only its own capitalization
@@ -1209,75 +1221,74 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_action_macro(&mut self, key: KeyCode, key_event: KeyEvent) {
+        // Get macro index
+        if let Some(macro_idx) = key.as_macro_index() {
+            self.execute_macro(macro_idx, key_event).await;
+        }
+    }
+
+    async fn execute_macro(&mut self, macro_idx: u8, key_event: KeyEvent) {
         // Execute the macro only when releasing the key
         if key_event.pressed {
             return;
         }
 
-        // Get macro index
-        if let Some(macro_idx) = key.as_macro_index() {
-            if macro_idx >= MACRO_MAX_NUM {
-                error!("Macro idx invalid: {}", macro_idx);
-                return;
-            }
-            // Read macro operations until the end of the macro
-            let macro_idx = self.keymap.borrow().get_macro_start(macro_idx);
-            if let Some(macro_start_idx) = macro_idx {
-                let mut offset = 0;
-                loop {
-                    // First, get the next macro operation
-                    let (operation, new_offset) =
-                        self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
-                    // Execute the operation
-                    match operation {
-                        MacroOperation::Press(k) => {
-                            self.macro_texting = false;
-                            self.register_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        }
-                        MacroOperation::Release(k) => {
-                            self.macro_texting = false;
-                            self.unregister_key(k, key_event);
+        // Read macro operations until the end of the macro
+        let macro_idx = self.keymap.borrow().get_macro_sequence_start(macro_idx);
+        if let Some(macro_start_idx) = macro_idx {
+            let mut offset = 0;
+            loop {
+                // First, get the next macro operation
+                let (operation, new_offset) = self.keymap.borrow().get_next_macro_operation(macro_start_idx, offset);
+                // Execute the operation
+                match operation {
+                    MacroOperation::Press(k) => {
+                        self.macro_texting = false;
+                        self.register_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                    }
+                    MacroOperation::Release(k) => {
+                        self.macro_texting = false;
+                        self.unregister_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Tap(k) => {
+                        self.macro_texting = false;
+                        self.register_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.unregister_key(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Text(k, is_cap) => {
+                        self.macro_texting = true;
+                        self.macro_caps = is_cap;
+                        self.register_keycode(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(true).await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.unregister_keycode(k, key_event);
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    MacroOperation::Delay(t) => {
+                        embassy_time::Timer::after_millis(t as u64).await;
+                    }
+                    MacroOperation::End => {
+                        if self.macro_texting {
+                            //restore the state of the keyboard (held modifiers, etc.) after text typing
                             self.send_keyboard_report_with_resolved_modifiers(false).await;
-                        }
-                        MacroOperation::Tap(k) => {
                             self.macro_texting = false;
-                            self.register_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                            embassy_time::Timer::after_millis(2).await;
-                            self.unregister_key(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(false).await;
                         }
-                        MacroOperation::Text(k, is_cap) => {
-                            self.macro_texting = true;
-                            self.macro_caps = is_cap;
-                            self.register_keycode(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(true).await;
-                            embassy_time::Timer::after_millis(2).await;
-                            self.unregister_keycode(k, key_event);
-                            self.send_keyboard_report_with_resolved_modifiers(false).await;
-                        }
-                        MacroOperation::Delay(t) => {
-                            embassy_time::Timer::after_millis(t as u64).await;
-                        }
-                        MacroOperation::End => {
-                            if self.macro_texting {
-                                //restore the state of the keyboard (held modifiers, etc.) after text typing
-                                self.send_keyboard_report_with_resolved_modifiers(false).await;
-                                self.macro_texting = false;
-                            }
-                            break;
-                        }
-                    };
-
-                    offset = new_offset;
-                    if offset > self.keymap.borrow().macro_cache.len() {
                         break;
                     }
+                };
+
+                offset = new_offset;
+                if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
+                    break;
                 }
-            } else {
-                error!("Macro not found");
             }
+        } else {
+            error!("Macro not found");
         }
     }
 
@@ -1565,11 +1576,11 @@ mod test {
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, config.clone()));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 
-        Keyboard::new(keymap_ref, config)
+        Keyboard::new(keymap_ref)
     }
 
     fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {

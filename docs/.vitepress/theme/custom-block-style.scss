@@ -1,0 +1,112 @@
+:root {
+  --vp-custom-block-note-border: #3c3c3c1a;
+  --vp-custom-block-note-text: var(--vp-c-text-1);
+  --vp-custom-block-note-bg: #f9f9f9;
+  --vp-custom-block-note-code-bg: #8080801a;
+
+  --vp-custom-block-tip-border: #079c7033;
+  --vp-custom-block-tip-text: #278359;
+  --vp-custom-block-tip-bg: #079c700f;
+  --vp-custom-block-tip-code-bg: #079c701a;
+
+  --vp-custom-block-info-border: #0095ff33;
+  --vp-custom-block-info-text: #07f;
+  --vp-custom-block-info-bg: #0095ff0f;
+  --vp-custom-block-info-code-bg: #0095ff1a;
+
+  --vp-custom-block-warning-border: #ffc51766;
+  --vp-custom-block-warning-text: #887233;
+  --vp-custom-block-warning-bg: #ffc5171a;
+  --vp-custom-block-warning-code-bg: #ffc5171a;
+
+  --vp-custom-block-danger-border: #ed3c5033;
+  --vp-custom-block-danger-text: #ab2131;
+  --vp-custom-block-danger-bg: #ed3c5014;
+  --vp-custom-block-danger-code-bg: #ed3c501a;
+
+  --vp-custom-block-details-border: #3c3c3c1a;
+  --vp-custom-block-details-text: var(--vp-c-text-1);
+  --vp-custom-block-details-bg: #f9f9f9;
+  --vp-custom-block-details-code-bg: #8080801a;
+}
+.dark {
+  --vp-custom-block-note-border: #5454547a;
+  --vp-custom-block-note-bg: #292e37;
+
+  --vp-custom-block-tip-text: #3ec480;
+  --vp-custom-block-tip-bg: #079c701a;
+
+  --vp-custom-block-info-text: #66c2ff;
+  --vp-custom-block-info-bg: #0095ff1a;
+
+  --vp-custom-block-warning-border: #ffc30f40;
+  --vp-custom-block-warning-text: #e39931;
+  --vp-custom-block-warning-bg: #edb7131f;
+
+  --vp-custom-block-danger-text: #f76e85;
+  --vp-custom-block-danger-border: #ed3c504d;
+  --vp-custom-block-danger-bg: #ed3c501f;
+
+  --vp-custom-block-details-border: #5454547a;
+  --vp-custom-block-details-bg: #292e37;
+}
+
+.Layout {
+  code {
+    font-size: 0.9rem;
+    line-height: 28px;
+  }
+  .custom-block div[class*='language-'] {
+    background-color: var(--vp-custom-block-tip-code-bg);
+    span.lang {
+      display: none;
+    }
+    pre {
+      background-color: var(--vp-custom-block-tip-code-bg);
+    }
+  }
+  .custom-block {
+    p {
+      color: var(--vp-c-text-1);
+    }
+    $text-types: (
+      info: var(--vp-custom-block-info-text),
+      note: var(--vp-custom-block-note-text),
+      tip: var(--vp-custom-block-tip-text),
+      warning: var(--vp-custom-block-warning-text),
+      danger: var(--vp-custom-block-danger-text),
+      details: var(--vp-custom-block-details-text)
+    );
+    $code-types: (
+      info: var(--vp-custom-block-info-code-bg),
+      note: var(--vp-custom-block-note-code-bg),
+      tip: var(--vp-custom-block-tip-code-bg),
+      warning: var(--vp-custom-block-warning-code-bg),
+      danger: var(--vp-custom-block-danger-code-bg),
+      details: var(--vp-custom-block-details-code-bg)
+    );
+
+    @each $text-type, $color in $text-types {
+      &.#{$text-type} {
+        .custom-block-title,
+        code {
+          color: $color;
+        }
+      }
+    }
+
+    @each $code-type, $color in $code-types {
+      &.#{$code-type} {
+        div[class*='language-'] {
+          background-color: $color;
+          span.lang {
+            display: none;
+          }
+          pre {
+            background-color: $color;
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,9 +1,28 @@
 use std::collections::HashMap;
 
+use config::{Config, File, FileFormat};
 use serde::de;
 use serde::Deserialize as SerdeDeserialize;
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
+
+pub mod chip;
+pub mod communication;
+pub mod keyboard;
+#[rustfmt::skip]
+pub mod usb_interrupt_map;
+pub mod behavior;
+pub mod board;
+pub mod keycode_alias;
+pub mod layout;
+pub mod light;
+pub mod storage;
+
+pub use board::{BoardConfig, UniBodyConfig};
+pub use chip::{ChipModel, ChipSeries};
+pub use communication::{CommunicationConfig, UsbInfo};
+pub use keyboard::Basic;
+pub use keycode_alias::KEYCODE_ALIAS;
 
 /// Keyboard constants configuration for performance and hardware limits
 #[serde_inline_default]
@@ -27,9 +46,6 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
-    /// Maximum number of macros keyboard can store
-    #[serde_inline_default(8)]
-    pub macro_max_num: u8,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -39,6 +55,15 @@ pub struct RmkConstantsConfig {
     /// Event channel size
     #[serde_inline_default(16)]
     pub event_channel_size: usize,
+    /// Controller event channel size
+    #[serde_inline_default(16)]
+    pub controller_channel_size: usize,
+    /// Number of publishers to controllers
+    #[serde_inline_default(4)]
+    pub controller_channel_pubs: usize,
+    /// Number of controllers
+    #[serde_inline_default(4)]
+    pub controller_channel_subs: usize,
     /// Report channel size
     #[serde_inline_default(16)]
     pub report_channel_size: usize,
@@ -90,10 +115,12 @@ impl Default for RmkConstantsConfig {
             combo_max_num: 8,
             combo_max_length: 4,
             fork_max_num: 8,
-            macro_max_num: 8,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
+            controller_channel_size: 16,
+            controller_channel_pubs: 4,
+            controller_channel_subs: 4,
             report_channel_size: 16,
             vial_channel_size: 4,
             flash_channel_size: 4,
@@ -109,7 +136,7 @@ impl Default for RmkConstantsConfig {
 #[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
-    pub keyboard: KeyboardInfo,
+    pub keyboard: Option<KeyboardInfo>,
     /// Matrix of the keyboard, only for non-split keyboards
     pub matrix: Option<MatrixConfig>,
     // Aliases for key maps
@@ -138,6 +165,29 @@ pub struct KeyboardTomlConfig {
     pub rmk: RmkConstantsConfig,
 }
 
+impl KeyboardTomlConfig {
+    pub fn new_from_toml_str(config_toml_path: &str) -> Self {
+        // The first run, load chip model only
+        let user_config = match std::fs::read_to_string(config_toml_path) {
+            Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
+                Ok(c) => c,
+                Err(e) => panic!("Parse {} error: {}", config_toml_path, e.message()),
+            },
+            Err(e) => panic!("Read keyboard config file {} error: {}", config_toml_path, e),
+        };
+        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+
+        // The second run, load the user config and merge with the default config
+        Config::builder()
+            .add_source(File::from_str(default_config_str, FileFormat::Toml))
+            .add_source(File::with_name(config_toml_path))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap()
+    }
+}
+
 /// Configurations for keyboard layout
 #[derive(Clone, Debug, Deserialize)]
 #[allow(unused)]
@@ -157,7 +207,7 @@ pub struct LayerTomlConfig {
 }
 
 /// Configurations for keyboard info
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct KeyboardInfo {
     /// Keyboard name
     pub name: String,

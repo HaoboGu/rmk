@@ -1,31 +1,38 @@
 use adc::expand_adc_device;
 use encoder::expand_encoder_device;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use rmk_config::InputDeviceConfig;
+use rmk_config::{BoardConfig, CommunicationConfig, InputDeviceConfig, KeyboardTomlConfig, UniBodyConfig};
 
-use crate::keyboard_config::{BoardConfig, CommunicationConfig, KeyboardConfig, UniBodyConfig};
+pub(crate) mod adc;
+pub(crate) mod encoder;
 
-mod adc;
-mod encoder;
+/// Initializer struct for input devices
+pub(crate) struct Initializer {
+    pub(crate) initializer: TokenStream,
+    pub(crate) var_name: Ident,
+}
 
 pub(crate) fn expand_input_device_config(
-    keyboard_config: &KeyboardConfig,
+    keyboard_config: &KeyboardTomlConfig,
 ) -> (TokenStream, Vec<TokenStream>, Vec<TokenStream>) {
     let mut config = TokenStream::new();
     let mut devices = Vec::new();
     let mut processors = Vec::new();
 
     // generate ADC configuration
-    let ble_config = match &keyboard_config.communication {
+    let communication = keyboard_config.get_communication_config().unwrap();
+    let ble_config = match &communication {
         CommunicationConfig::Ble(ble_config) | CommunicationConfig::Both(_, ble_config) => Some(ble_config.clone()),
         _ => None,
     };
-    let (adc_config, adc_processors) = match &keyboard_config.board {
+    let board = keyboard_config.get_board_config().unwrap();
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let (adc_config, adc_processors) = match &board {
         BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_adc_device(
             input_device.clone().joystick.unwrap_or(Vec::new()),
             ble_config,
-            keyboard_config.chip.series,
+            chip.series.clone(),
         ),
         BoardConfig::Split(split_config) => expand_adc_device(
             split_config
@@ -36,7 +43,7 @@ pub(crate) fn expand_input_device_config(
                 .joystick
                 .unwrap_or(Vec::new()),
             ble_config,
-            keyboard_config.chip.series,
+            chip.series.clone(),
         ),
     };
     config.extend(adc_config);
@@ -46,12 +53,12 @@ pub(crate) fn expand_input_device_config(
     processors.extend(adc_processors);
 
     // generate encoder configuration
-    let (encoder_config, encoder_processors, encoder_names) = match &keyboard_config.board {
-        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_encoder_device(
-            input_device.clone().encoder.unwrap_or(Vec::new()),
-            &keyboard_config.chip,
-        ),
+    let (device_initializer, processor_initializer) = match &board {
+        BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => {
+            expand_encoder_device(0, input_device.clone().encoder.unwrap_or(Vec::new()), &chip)
+        }
         BoardConfig::Split(split_config) => expand_encoder_device(
+            0,
             split_config
                 .central
                 .input_device
@@ -59,16 +66,20 @@ pub(crate) fn expand_input_device_config(
                 .unwrap_or(InputDeviceConfig::default())
                 .encoder
                 .unwrap_or(Vec::new()),
-            &keyboard_config.chip,
+            &chip,
         ),
     };
-    config.extend(encoder_config);
-    if !encoder_processors.is_empty() {
-        for encoder_name in encoder_names {
-            devices.push(quote! {#encoder_name});
-        }
+    for initializer in device_initializer {
+        config.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
     }
-    processors.extend(encoder_processors);
+
+    for initializer in processor_initializer {
+        config.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
+    }
 
     (config, devices, processors)
 }

@@ -1,0 +1,13 @@
+[keyboard]
+usb_enable = true
+
+[ble]
+enabled = true
+battery_adc_pin = "vddh"
+
+[storage]
+enabled = true
+# Storage starts from 640K
+start_addr = 0xA0000
+# Storage uses 128K = 640K ~ 768K
+num_sectors = 32

@@ -1,0 +1,613 @@
+:root {
+  --default: clamp(1rem, 0.9vw, 3rem);
+  --vp-fluid-sidebar: calc(20 * var(--default));
+  --vp-sidebar-padding: calc(2 * var(--default));
+  --vp-nav-height: calc(4 * var(--default));
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --vp-layout-max-width: min(92vw, 3600px);
+    --vp-sidebar-width: var(--vp-fluid-sidebar);
+    --vp-content-padding: calc(2.5 * var(--default));
+  }
+
+  body {
+    line-height: calc(1.5 * var(--default));
+    font-size: var(--default);
+  }
+  .dark .VPNavBarAppearance .VPSwitchAppearance .check {
+    transform: translateX(calc(18 / 16 * var(--default)));
+  }
+  .Layout {
+    // home
+    .VPHome {
+      margin-bottom: calc(128 / 16 * var(--default));
+      .VPHero {
+        .container {
+          margin: 0 auto;
+          max-width: calc(1152 / 16 * var(--default));
+          .main {
+            max-width: calc(592 / 16 * var(--default));
+            h1 {
+              margin: 0;
+              line-height: calc(1.5 * var(--default));
+              font-size: var(--default);
+              .name,
+              .text {
+                line-height: calc(4 * var(--default));
+                font-size: calc(56 / 16 * var(--default));
+                max-width: calc(576 / 16 * var(--default));
+              }
+            }
+            .tagline {
+              line-height: calc(36 / 16 * var(--default));
+              font-size: calc(24 / 16 * var(--default));
+              padding-top: calc(12 / 16 * var(--default));
+              max-width: calc(576 / 16 * var(--default));
+            }
+            .actions {
+              padding-top: calc(2 * var(--default));
+              margin: calc(-6 / 16 * var(--default));
+              .action {
+                padding: calc(6 / 16 * var(--default));
+                .VPButton.medium {
+                  border-radius: calc(20 / 16 * var(--default));
+                  padding: 0 calc(20 / 16 * var(--default));
+                  line-height: calc(38 / 16 * var(--default));
+                  font-size: calc(14 / 16 * var(--default));
+                }
+              }
+            }
+          }
+          .image {
+            .image-src {
+              max-width: calc(320 / 16 * var(--default));
+              max-height: calc(320 / 16 * var(--default));
+              width: calc(320 / 16 * var(--default));
+              height: calc(320 / 16 * var(--default));
+            }
+            .image-bg {
+              width: calc(320 / 16 * var(--default));
+              height: calc(320 / 16 * var(--default));
+              filter: blur(calc(68 / 16 * var(--default)));
+            }
+          }
+        }
+      }
+      .VPFeatures {
+        .container {
+          margin: 0 auto;
+          max-width: calc(1152 / 16 * var(--default));
+        }
+        .items {
+          margin: calc(-8 / 16 * var(--default));
+          .item {
+            padding: calc(8 / 16 * var(--default));
+            .VPFeature {
+              border: calc(1 / 16 * var(--default)) solid var(--vp-c-bg-soft);
+              border-radius: calc(12 / 16 * var(--default));
+              margin-top: calc(2 / 16 * var(--default));
+              padding-left: calc(5 / 16 * var(--default));
+              .box {
+                padding: calc(24 / 16 * var(--default));
+                .icon {
+                  margin-bottom: calc(20 / 16 * var(--default));
+                  border-radius: calc(6 / 16 * var(--default));
+                  width: calc(48 / 16 * var(--default));
+                  height: calc(48 / 16 * var(--default));
+                  font-size: calc(24 / 16 * var(--default));
+                }
+                .title {
+                  line-height: calc(24 / 16 * var(--default));
+                  font-size: calc(16 / 16 * var(--default));
+                }
+                .details {
+                  padding-top: calc(8 / 16 * var(--default));
+                  line-height: calc(24 / 16 * var(--default));
+                  font-size: calc(14 / 16 * var(--default));
+                }
+                .link-text {
+                  padding-top: calc(8 / 16 * var(--default));
+                  .link-text-value {
+                    font-size: calc(14 / 16 * var(--default));
+                    .link-text-icon {
+                      margin-left: calc(6 / 16 * var(--default));
+                      width: var(--default);
+                      height: var(--default);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 侧边栏
+    .VPSidebar {
+      padding-left: calc(2 * var(--default));
+      padding-right: calc(2 * var(--default));
+      width: calc((272 / 16) * var(--default));
+      .nav {
+        .group {
+          padding-top: calc(5 / 8 * var(--default));
+          width: calc((272 / 16 - 4) * var(--default));
+          .text {
+            font-size: calc(14 / 16 * var(--default));
+            padding: calc(4 / 16 * var(--default)) 0;
+            letter-spacing: 0;
+            line-height: calc(24 / 16 * var(--default));
+          }
+          .item a {
+            margin-top: calc(1 / 8 * var(--default));
+            padding-left: calc(5 / 16 * var(--default));
+            border-top-right-radius: var(--default);
+            border-bottom-right-radius: var(--default);
+          }
+          .indicator {
+            top: calc(6 / 16 * var(--default));
+            bottom: calc(6 / 16 * var(--default));
+            left: calc(-17 / 16 * var(--default));
+            width: calc(2 / 16 * var(--default));
+            border-radius: calc(2 / 16 * var(--default));
+          }
+        }
+        .group + .group {
+          border-top: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+        }
+      }
+
+      .VPSidebarItem {
+        &.level-1 .items,
+        &.level-2 .items,
+        &.level-3 .items,
+        &.level-4 .items,
+        &.level-5 .items {
+          border-left: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+          padding-left: var(--default);
+        }
+        &.level-0 {
+          padding-bottom: calc(1.5 * var(--default));
+        }
+        .caret-icon {
+          font-size: calc(1.2 * var(--default));
+        }
+        .caret {
+          width: calc(2 * var(--default));
+          height: calc(2 * var(--default));
+        }
+      }
+      .curtain {
+        top: calc(-4 * var(--default));
+      }
+    }
+
+    // 导航栏
+    .VPNav {
+      .has-sidebar {
+        div.title {
+          padding-left: calc(2 * var(--default));
+          padding-right: calc(2 * var(--default));
+          width: calc(17 * var(--default));
+        }
+        .content {
+          padding-left: calc(17 * var(--default));
+          padding-right: calc(2 * var(--default));
+        }
+        .divider {
+          padding-left: calc(17 * var(--default));
+        }
+      }
+      .home {
+        .wrapper {
+          padding: 0 calc(32 / 16 * var(--default));
+          .container {
+            max-width: calc(1152 / 16 * var(--default));
+          }
+        }
+        .divider {
+          height: calc(1 / 16 * var(--default));
+        }
+      }
+      .VPNavBar {
+        div.title {
+          .logo {
+            width: calc(2 * var(--default));
+            height: calc(2 * var(--default));
+            margin-right: calc(0.5 * var(--default));
+          }
+          span {
+            font-size: var(--default);
+            letter-spacing: 0;
+            line-height: calc(1.5 * var(--default));
+          }
+        }
+        // 搜索search
+        .VPNavBarSearch {
+          padding-left: calc(2 * var(--default));
+          .DocSearch-Button {
+            border: calc(1 / 16 * var(--default)) solid transparent;
+            border-radius: calc(0.5 * var(--default));
+            padding: 0 calc(5 / 8 * var(--default)) 0 calc(0.75 * var(--default));
+            height: calc(2.5 * var(--default));
+            .DocSearch-Search-Icon {
+              top: calc(1 / 16 * var(--default));
+              margin-right: calc(0.5 * var(--default));
+              width: calc(0.875 * var(--default));
+              height: calc(0.875 * var(--default));
+              color: var(--vp-c-text-2);
+            }
+            .DocSearch-Button-Placeholder {
+              margin-top: calc(1 / 8 * var(--default));
+              padding: 0 var(--default) 0 0;
+              font-size: calc(13 / 16 * var(--default));
+            }
+            .DocSearch-Button-Key:first-child:after {
+              font-size: calc(0.75 * var(--default));
+            }
+            .DocSearch-Button-Key {
+              margin: calc(1 / 8 * var(--default)) 0 0 0;
+              border-left: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+              border-radius: calc(0.25 * var(--default)) 0 0 calc(0.25 * var(--default));
+              padding-left: calc(0.375 * var(--default));
+              height: calc(11 / 8 * var(--default));
+              line-height: calc(11 / 8 * var(--default));
+              font-size: calc(0.75 * var(--default));
+              & + .DocSearch-Button-Key {
+                border-right: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                border-radius: 0 calc(0.25 * var(--default)) calc(0.25 * var(--default)) 0;
+                padding-left: calc(0.125 * var(--default));
+                padding-right: calc(0.375 * var(--default));
+              }
+            }
+          }
+        }
+        // 菜单menu
+        .VPNavBarMenu {
+          .VPNavBarMenuLink {
+            padding: 0 calc(0.75 * var(--default));
+            font-size: calc(0.875 * var(--default));
+          }
+        }
+        // 暗黑模式
+        .VPNavBarAppearance {
+          .VPSwitch {
+            border-radius: calc(11 / 16 * var(--default));
+            width: calc(2.5 * var(--default));
+            height: calc(11 / 8 * var(--default));
+            border: calc(1 / 16 * var(--default)) solid var(--vp-input-border-color);
+            .check,
+            .icon {
+              width: calc(1.125 * var(--default));
+              height: calc(1.125 * var(--default));
+              [class^="vpi-"] {
+                top: calc(3 / 16 * var(--default));
+                left: calc(3 / 16 * var(--default));
+                width: calc(0.75 * var(--default));
+                height: calc(0.75 * var(--default));
+              }
+            }
+            .check {
+              top: calc(1 / 16 * var(--default));
+              left: calc(1 / 16 * var(--default));
+            }
+          }
+        }
+        // 链接
+        .VPSocialLinks {
+          gap: calc(5 / 16 * var(--default));
+          margin-right: calc(-1 / 2 * var(--default));
+          .VPSocialLink {
+            width: calc(2.25 * var(--default));
+            height: calc(2.25 * var(--default));
+            > svg,
+            > [class^="vpi-social-"] {
+              width: calc(1.25 * var(--default));
+              height: calc(1.25 * var(--default));
+            }
+          }
+        }
+
+        :is(.vp-external-link-icon, .vp-doc a[href*='://'], .vp-doc a[target='_blank']):not(:is(.no-icon, svg a, :has(img, svg)))::after
+        {
+          margin-top: calc(-1 / 16 * var(--default));
+          margin-left: calc(0.25 * var(--default));
+          width: calc(11 / 16 * var(--default));
+          height: calc(11 / 16 * var(--default));
+        }
+        .menu + .appearance::before,
+        .translations + .appearance::before {
+          margin-right: var(--default);
+        }
+
+        .appearance + .social-links::before {
+          margin-left: var(--default);
+        }
+        .menu + .translations::before,
+        .menu + .appearance::before,
+        .menu + .social-links::before,
+        .translations + .appearance::before,
+        .appearance + .social-links::before {
+          margin-right: calc(1 / 2 * var(--default));
+          margin-left: calc(1 / 2 * var(--default));
+          width: calc(1 / 16 * var(--default));
+          height: calc(1.5 * var(--default));
+        }
+      }
+    }
+
+    // main
+    .VPContent.has-sidebar {
+      padding-left: calc(17 * var(--default));
+      padding-right: calc(2 * var(--default));
+      .VPDoc.has-aside {
+        padding: calc(3 * var(--default)) calc(2 * var(--default)) 0;
+        .container {
+          // 锚点
+          .aside {
+            max-width: calc(16 * var(--default));
+            display: block;
+            padding-left: calc(2 * var(--default));
+            .aside-container {
+              width: calc(16 * var(--default));
+              padding-top: calc(3 * var(--default) + var(--vp-nav-height));
+              .aside-content {
+                .content {
+                  border-left: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                  padding-left: var(--default);
+                  font-size: calc(13 / 16 * var(--default));
+                  .outline-marker {
+                    opacity: 1 !important;
+                    transition: none;
+                    top: calc(0.5 * var(--default)) !important;
+                    left: calc(-1 / 16 * var(--default));
+                    width: calc(1 / 8 * var(--default));
+                    border-radius: calc(1 / 8 * var(--default));
+                    height: calc(9 / 8 * var(--default));
+                  }
+                  .outline-title,
+                  .outline-link {
+                    font-size: calc(7 / 8 * var(--default));
+                    letter-spacing: 0;
+                    line-height: calc(2 * var(--default));
+                  }
+                }
+              }
+            }
+          }
+          // 内容
+          .content {
+            padding: 0 calc(2 * var(--default)) calc(8 * var(--default));
+            min-width: calc(40 * var(--default));
+            .content-container {
+              max-width: calc(688 / 16 * clamp(1rem, 1.3vw, 6rem));
+              margin: 0 auto;
+              // main
+              .main {
+                .vp-doc {
+                  ul,
+                  ol {
+                    padding-left: calc(1.25 * var(--default));
+                    margin: var(--default) 0;
+                  }
+                  li {
+                    font-size: var(--default);
+                    line-height: calc(1.75 * var(--default));
+                    & + li {
+                      margin-top: calc(0.5 * var(--default));
+                    }
+                    input {
+                      margin: calc(3 / 16 * var(--default)) calc(0.5 * var(--default)) calc(3 / 16 * var(--default))
+                        calc(0.25 * var(--default));
+                      width: calc(13 / 16 * var(--default));
+                      height: calc(13 / 16 * var(--default));
+                    }
+                  }
+                  p,
+                  summary {
+                    margin: var(--default) 0;
+                  }
+                  h1 {
+                    font-size: calc(2 * var(--default));
+                    letter-spacing: calc(-0.03 * var(--default));
+                    line-height: calc(2.5 * var(--default));
+                    .header-anchor {
+                      font-size: calc(2 * var(--default));
+                      letter-spacing: calc(-0.03 * var(--default));
+                      line-height: calc(2.5 * var(--default));
+                      margin-left: calc(-2 * var(--default));
+                    }
+                  }
+                  h2 {
+                    margin: calc(3 * var(--default)) 0 var(--default);
+                    border-top: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                    padding-top: calc(1.5 * var(--default));
+                    font-size: calc(1.5 * var(--default));
+                    letter-spacing: calc(-0.03 * var(--default));
+                    line-height: calc(2 * var(--default));
+                    .header-anchor {
+                      top: calc(1.5 * var(--default));
+                      font-size: calc(1.5 * var(--default));
+                      letter-spacing: calc(-0.03 * var(--default));
+                      line-height: calc(2 * var(--default));
+                      margin-left: calc(-1.5 * var(--default));
+                    }
+                    a {
+                      font-size: calc(1.5 * var(--default));
+                    }
+                    code {
+                      font-size: calc(1.35 * var(--default));
+                    }
+                  }
+                  h3 {
+                    margin: calc(2 * var(--default)) 0 0;
+                    font-size: calc(1.25 * var(--default));
+                    letter-spacing: calc(-0.015 * var(--default));
+                    line-height: calc(1.75 * var(--default));
+                    .header-anchor {
+                      font-size: calc(1.25 * var(--default));
+                      letter-spacing: calc(-0.015 * var(--default));
+                      line-height: calc(1.75 * var(--default));
+                      margin-left: calc(-1.25 * var(--default));
+                    }
+                    code {
+                      font-size: calc(1.125 * var(--default));
+                    }
+                  }
+                  h4 {
+                    margin: calc(1.5 * var(--default)) 0 0;
+                    letter-spacing: calc(-0.01 * var(--default));
+                    line-height: calc(1.5 * var(--default));
+                    font-size: calc(1.125 * var(--default));
+                  }
+                  p {
+                    font-size: var(--default);
+                    letter-spacing: 0;
+                    line-height: calc(1.75 * var(--default));
+                  }
+                  :not(pre) > code {
+                    border-radius: calc(0.25 * var(--default));
+                    padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
+                  }
+                  span {
+                    font-size: calc(0.9 * var(--default));
+                    letter-spacing: 0;
+                    line-height: calc(1.5 * var(--default));
+                  }
+                  table {
+                    margin: calc(1.25 * var(--default)) 0;
+                    th,
+                    td {
+                      border: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                      padding: calc(1 / 2 * var(--default)) var(--default);
+                      font-size: calc(0.875 * var(--default));
+                      line-height: calc(1.75 * var(--default));
+                    }
+                  }
+                  code {
+                    border-radius: calc(0.25 * var(--default));
+                    padding: calc(3 / 16 * var(--default)) calc(3 / 8 * var(--default));
+                    font-size: calc(0.9 * var(--default));
+                    line-height: calc(1.5 * var(--default));
+                  }
+                  a {
+                    font-size: var(--default);
+                    letter-spacing: 0;
+                    line-height: calc(1.75 * var(--default));
+                    img {
+                      height: calc(1.25 * var(--default));
+                      width: calc(6.5 * var(--default));
+                    }
+                  }
+                  div[class*="language-"] {
+                    border-radius: var(--default);
+                    margin: var(--default) 0;
+                    button.copy {
+                      top: var(--default);
+                      right: calc(0.75 * var(--default));
+                      width: calc(2.5 * var(--default));
+                      height: calc(2.5 * var(--default));
+                      background-size: calc(1.25 * var(--default));
+                    }
+                    span.lang {
+                      font-size: calc(0.875 * var(--default));
+                      padding: calc(0.75 * var(--default)) calc(1.5 * var(--default));
+                    }
+                    pre {
+                      padding: calc(1.25 * var(--default)) 0;
+                      code {
+                        padding: 0 calc(1.5 * var(--default));
+                      }
+                    }
+                  }
+                  .vp-code-group {
+                    margin-top: var(--default);
+                    .tabs {
+                      border-radius: calc(8 / 16 * var(--default)) calc(8 / 16 * var(--default)) 0 0;
+                      padding: 0 calc(12 / 16 * var(--default));
+                      lable {
+                        border-bottom: calc(1 / 16 * var(--default)) solid transparent;
+                        padding: 0 calc(12 / 16 * var(--default));
+                        line-height: calc(48 / 16 * var(--default));
+                        font-size: calc(1 * var(--default));
+                      }
+                    }
+                  }
+                  blockquote {
+                    margin: var(--default) 0;
+                    border-left: calc(1 / 8 * var(--default)) solid var(--vp-c-divider);
+                    padding-left: var(--default);
+                    p {
+                      font-size: var(--default);
+                    }
+                  }
+                  .badge-container {
+                    gap: calc(1 / 2 * var(--default)) !important;
+                    margin: var(--default) 0 !important;
+                  }
+                  .custom-block {
+                    margin: var(--default) 0;
+                    border-width: calc(1 / 16 * var(--default));
+                    border-radius: calc(18 / 16 * var(--default));
+                    padding: var(--default) var(--default) calc(8 / 16 * var(--default));
+                    line-height: calc(24 / 16 * var(--default));
+                    .custom-block-title {
+                      margin: calc(0.75 * var(--default)) calc(0 * var(--default));
+                      padding:  calc(0 * var(--default)) calc(1 * var(--default) );
+                      line-height: calc(1.5 * var(--default));
+                    }
+                    p {
+                        padding:  calc(0.25 * var(--default)) calc(1 * var(--default) );
+                    }
+                    div[class*="language-"] {
+                      margin: calc(1 * var(--default)) calc(1 * var(--default));
+                      button.copy {
+                        top: calc(0.55 * var(--default));
+                        right: calc(0.75 * var(--default));
+                        width: calc(2 * var(--default));
+                        height: calc(2 * var(--default));
+                      }
+                    }
+                    summary{
+                      font-size: calc(1 * var(--default));
+                    }
+                  }
+                }
+              }
+
+              // footer
+              .VPDocFooter {
+                margin-top: calc(4 * var(--default));
+                .prev-next {
+                  border-top: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                  padding-top: calc(1.5 * var(--default));
+                  grid-row-gap: calc(0.5 * var(--default));
+                  grid-template-columns: repeat(2, 1fr);
+                  grid-column-gap: var(--default);
+                  .pager-link {
+                    border: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                    border-radius: calc(0.5 * var(--default));
+                    padding: calc(11 / 16 * var(--default)) var(--default) calc(13 / 16 * var(--default));
+                    width: 100%;
+                    height: 100%;
+                    transition: border-color 0.25s;
+                    .desc {
+                      font-size: calc(0.75 * var(--default));
+                      line-height: calc(1.25 * var(--default));
+                    }
+                    .title {
+                      font-size: calc(0.875 * var(--default));
+                      line-height: calc(1.25 * var(--default));
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -17,8 +17,7 @@ use crate::usb::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{boot, CONNECTION_STATE, MACRO_SPACE_SIZE};
 #[cfg(feature = "storage")]
-use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage, MACRO_MAX_NUM};
-
+use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
 mod protocol;
 mod vial;
@@ -220,8 +219,9 @@ impl<
                 let offset = BigEndian::read_u16(&report.output_data[1..3]) as usize;
                 let size = report.output_data[3] as usize;
                 if size <= 28 {
-                    report.input_data[4..4 + size]
-                        .copy_from_slice(&self.keymap.borrow().macro_cache[offset..offset + size]);
+                    report.input_data[4..4 + size].copy_from_slice(
+                        &self.keymap.borrow().behavior.keyboard_macros.macro_sequences[offset..offset + size],
+                    );
                     debug!("Get macro buffer: offset: {}, data: {:?}", offset, report.input_data);
                 } else {
                     report.input_data[0] = 0xFF;
@@ -229,7 +229,6 @@ impl<
             }
             ViaCommand::DynamicKeymapMacroSetBuffer => {
                 // Every write writes all buffer space of the macro(if it's not empty)
-                // The sequence must have MACRO_MAX_NUM 0s, where each 0 indicates the end of a macro
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
                 // Current sequence size, <= 28
                 let size = report.output_data[3];
@@ -238,26 +237,25 @@ impl<
 
                 // The first sequence, reset the macro cache
                 if offset == 0 {
-                    self.keymap.borrow_mut().macro_cache = [0; MACRO_SPACE_SIZE];
+                    self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences = [0; MACRO_SPACE_SIZE];
                 }
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
                 #[cfg(feature = "defmt")]
                 info!("Data: {=[u8]:x}", report.output_data[4..]);
-                self.keymap.borrow_mut().macro_cache[offset as usize..end as usize]
+                self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 
-                // Count zeros, if there're MACRO_MAX_NUM 0s in total, current sequnce is the last.
                 // Then flush macros to storage
                 #[cfg(feature = "storage")]
+                // let num_zero =
+                //     count_zeros(&self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[0..end as usize]);
+                #[cfg(feature = "storage")]
                 {
-                    let num_zero = count_zeros(&self.keymap.borrow_mut().macro_cache[0..end as usize]);
-                    if size < 28 || num_zero as u8 >= MACRO_MAX_NUM {
-                        let buf = self.keymap.borrow_mut().macro_cache;
-                        FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
-                        info!("Flush macros to storage")
-                    }
+                    let buf = self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences;
+                    FLASH_CHANNEL.send(FlashOperationMessage::WriteMacro(buf)).await;
+                    info!("Flush macros to storage")
                 }
             }
             ViaCommand::DynamicKeymapMacroReset => {

@@ -1,27 +1,51 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
+use rmk_config::{ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
 use crate::keyboard::Overwritten;
-use crate::keyboard_config::{CommunicationConfig, KeyboardConfig};
-use crate::{ChipModel, ChipSeries};
+
+/// Expand chip initialization code
+pub(crate) fn expand_chip_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
+    if let Some((_, items)) = &item_mod.content {
+        items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Fn(item_fn) = &item {
+                    if item_fn.attrs.len() == 1 {
+                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
+                            let chip = keyboard_config.get_chip_model().unwrap();
+                            return Some(override_chip_init(&chip, item_fn));
+                        }
+                    }
+                }
+                None
+            })
+            .unwrap_or(chip_init_default(keyboard_config))
+    } else {
+        chip_init_default(keyboard_config)
+    }
+}
 
 // Default implementations of chip initialization
-pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    match keyboard_config.chip.series {
+pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let chip = keyboard_config.get_chip_model().unwrap();
+    let communication = keyboard_config.get_communication_config().unwrap();
+    match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
                 let mut p = ::embassy_stm32::init(config);
         },
         ChipSeries::Nrf52 => {
-            let dcdc_config = if keyboard_config.chip.chip == "nrf52840" {
+            let dcdc_config = if chip.chip == "nrf52840" {
                 quote! {
                     config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
                     config.dcdc.reg0 = true;
                     config.dcdc.reg1 = true;
                 }
-            } else if keyboard_config.chip.chip == "nrf52833" {
+            } else if chip.chip == "nrf52833" {
                 quote! {
                     config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
                     config.dcdc.reg1 = true;
@@ -30,9 +54,9 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 quote! {}
             };
             let ble_addr = get_ble_addr(keyboard_config);
-            let ble_init = match &keyboard_config.communication {
-                CommunicationConfig::Usb(_) => quote! {},
+            let ble_init = match &communication {
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
+                    // Initialize nrf-sdc and ble stack
                     let mpsl_p = ::nrf_sdc::mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
                     let lfclk_cfg = ::nrf_sdc::mpsl::raw::mpsl_clock_lfclk_cfg_t {
                         source: ::nrf_sdc::mpsl::raw::MPSL_CLOCK_LF_SRC_RC as u8,
@@ -59,24 +83,77 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
                     let mut sdc_mem = ::nrf_sdc::Mem::<4096>::new();
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
-                    let central_addr = #ble_addr;
+                    let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, central_addr, &mut rng_gen, &mut host_resources).await;
+                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
                 },
-                CommunicationConfig::None => quote! {},
+                _ => quote! {},
             };
             quote! {
-                    use embassy_nrf::interrupt::InterruptExt;
-                    let mut config = ::embassy_nrf::config::Config::default();
-                    #dcdc_config
-                    let p = ::embassy_nrf::init(config);
-                    #ble_init
+                use embassy_nrf::interrupt::InterruptExt;
+                let mut config = ::embassy_nrf::config::Config::default();
+                #dcdc_config
+                let p = ::embassy_nrf::init(config);
+                #ble_init
             }
         }
         ChipSeries::Rp2040 => {
-            quote! {
-                let config = ::embassy_rp::config::Config::default();
-                let p = ::embassy_rp::init(config);
+            let ble_addr = get_ble_addr(keyboard_config);
+            if communication.ble_enabled() {
+                quote! {
+                    let config = ::embassy_rp::config::Config::default();
+                    let p = ::embassy_rp::init(config);
+
+                    #[cfg(feature = "skip-cyw43-firmware")]
+                    let (fw, clm, btfw) = (&[], &[], &[]);
+
+                    #[cfg(not(feature = "skip-cyw43-firmware"))]
+                    let (fw, clm, btfw) = {
+                        // IMPORTANT
+                        //
+                        // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
+                        // are available in `./examples/rp-pico-w`. (should be automatic)
+                        //
+                        // IMPORTANT
+                        let fw = include_bytes!("../cyw43-firmware/43439A0.bin");
+                        let clm = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
+                        let btfw = include_bytes!("../cyw43-firmware/43439A0_btfw.bin");
+                        (fw, clm, btfw)
+                    };
+
+                    let pwr = ::embassy_rp::gpio::Output::new(p.PIN_23, ::embassy_rp::gpio::Level::Low);
+                    let cs = ::embassy_rp::gpio::Output::new(p.PIN_25, ::embassy_rp::gpio::Level::High);
+                    let mut pio = ::embassy_rp::pio::Pio::new(p.PIO0, Irqs);
+                    let spi = ::cyw43_pio::PioSpi::new(
+                        &mut pio.common,
+                        pio.sm0,
+                        ::cyw43_pio::DEFAULT_CLOCK_DIVIDER,
+                        pio.irq0,
+                        cs,
+                        p.PIN_24,
+                        p.PIN_29,
+                        p.DMA_CH0,
+                    );
+
+                    static STATE: ::static_cell::StaticCell<::cyw43::State> = ::static_cell::StaticCell::new();
+                    let state = STATE.init(::cyw43::State::new());
+                    let (_net_device, bt_device, mut control, runner) = ::cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
+                    spawner.spawn(cyw43_task(runner)).unwrap();
+                    control.init(clm).await;
+
+                    let controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
+                    let ble_addr = #ble_addr;
+                    let mut host_resources = ::rmk::HostResources::new();
+                    let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
+                    use rand_core::SeedableRng;
+                    let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
+                    let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                }
+            } else {
+                quote! {
+                    let config = ::embassy_rp::config::Config::default();
+                    let p = ::embassy_rp::init(config);
+                }
             }
         }
         ChipSeries::Esp32 => {
@@ -93,32 +170,11 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardConfig) -> TokenStream
                 let bluetooth = p.BT;
                 let connector = ::esp_wifi::ble::controller::BleConnector::new(&init, bluetooth);
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
-                let central_addr = #ble_addr;
+                let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::trouble::build_ble_stack(controller, central_addr, &mut rng, &mut host_resources).await;
+                let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
             }
         }
-    }
-}
-
-pub(crate) fn expand_chip_init(keyboard_config: &KeyboardConfig, item_mod: &ItemMod) -> TokenStream2 {
-    // If there is a function with `#[Overwritten(usb)]`, override the chip initialization
-    if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            return Some(override_chip_init(&keyboard_config.chip, item_fn));
-                        }
-                    }
-                }
-                None
-            })
-            .unwrap_or(chip_init_default(keyboard_config))
-    } else {
-        chip_init_default(keyboard_config)
     }
 }
 
@@ -145,8 +201,9 @@ fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     initialization_tokens
 }
 
-fn get_ble_addr(keyboard_config: &KeyboardConfig) -> TokenStream2 {
-    if keyboard_config.chip.series == ChipSeries::Nrf52 {
+fn get_ble_addr(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+    let chip = keyboard_config.get_chip_model().unwrap();
+    if chip.series == ChipSeries::Nrf52 {
         quote! {
             {
                 let ficr = ::embassy_nrf::pac::FICR;

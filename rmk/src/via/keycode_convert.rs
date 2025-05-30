@@ -26,6 +26,14 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
             Action::LayerToggle(l) => 0x5260 | l as u16,
+            // convert to KeyCode::Macro0 - Macro31, 0x0 for above (as 0x600 is already reserved)
+            Action::TriggerMacro(idx) => {
+                // if idx < 32 {
+                0x7700 + (idx as u16)
+                // } else {
+                // 0x0
+                // }
+            }
             _ => 0x0000,
         },
         KeyAction::Tap(_) => {
@@ -191,6 +199,224 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             warn!("Via keycode {:#X} is not processed", via_keycode);
             KeyAction::No
         }
+    }
+}
+
+/// Convert a ascii chat to keycode
+/// bool, if the keycode should be shifted
+/// assumes en-us keyboard mapping
+pub(crate) fn from_ascii(ascii: u8) -> (KeyCode, bool) {
+    match ascii {
+        b'0' => (KeyCode::Kc0, false),
+        b'1' => (KeyCode::Kc1, false),
+        b'2' => (KeyCode::Kc2, false),
+        b'3' => (KeyCode::Kc3, false),
+        b'4' => (KeyCode::Kc4, false),
+        b'5' => (KeyCode::Kc5, false),
+        b'6' => (KeyCode::Kc6, false),
+        b'7' => (KeyCode::Kc7, false),
+        b'8' => (KeyCode::Kc8, false),
+        b'9' => (KeyCode::Kc9, false),
+        b'a' => (KeyCode::A, false),
+        b'b' => (KeyCode::B, false),
+        b'c' => (KeyCode::C, false),
+        b'd' => (KeyCode::D, false),
+        b'e' => (KeyCode::E, false),
+        b'f' => (KeyCode::F, false),
+        b'g' => (KeyCode::G, false),
+        b'h' => (KeyCode::H, false),
+        b'i' => (KeyCode::I, false),
+        b'j' => (KeyCode::J, false),
+        b'k' => (KeyCode::K, false),
+        b'l' => (KeyCode::L, false),
+        b'm' => (KeyCode::M, false),
+        b'n' => (KeyCode::N, false),
+        b'o' => (KeyCode::O, false),
+        b'p' => (KeyCode::P, false),
+        b'q' => (KeyCode::Q, false),
+        b'r' => (KeyCode::R, false),
+        b's' => (KeyCode::S, false),
+        b't' => (KeyCode::T, false),
+        b'u' => (KeyCode::U, false),
+        b'v' => (KeyCode::V, false),
+        b'w' => (KeyCode::W, false),
+        b'x' => (KeyCode::X, false),
+        b'y' => (KeyCode::Y, false),
+        b'z' => (KeyCode::Z, false),
+        b'A' => (KeyCode::A, true),
+        b'B' => (KeyCode::B, true),
+        b'C' => (KeyCode::C, true),
+        b'D' => (KeyCode::D, true),
+        b'E' => (KeyCode::E, true),
+        b'F' => (KeyCode::F, true),
+        b'G' => (KeyCode::G, true),
+        b'H' => (KeyCode::H, true),
+        b'I' => (KeyCode::I, true),
+        b'J' => (KeyCode::J, true),
+        b'K' => (KeyCode::K, true),
+        b'L' => (KeyCode::L, true),
+        b'M' => (KeyCode::M, true),
+        b'N' => (KeyCode::N, true),
+        b'O' => (KeyCode::O, true),
+        b'P' => (KeyCode::P, true),
+        b'Q' => (KeyCode::Q, true),
+        b'R' => (KeyCode::R, true),
+        b'S' => (KeyCode::S, true),
+        b'T' => (KeyCode::T, true),
+        b'U' => (KeyCode::U, true),
+        b'V' => (KeyCode::V, true),
+        b'W' => (KeyCode::W, true),
+        b'X' => (KeyCode::X, true),
+        b'Y' => (KeyCode::Y, true),
+        b'Z' => (KeyCode::Z, true),
+        b'!' => (KeyCode::Kc1, true),
+        b'@' => (KeyCode::Kc2, true),
+        b'#' => (KeyCode::Kc3, true),
+        b'$' => (KeyCode::Kc4, true),
+        b'%' => (KeyCode::Kc5, true),
+        b'^' => (KeyCode::Kc6, true),
+        b'&' => (KeyCode::Kc7, true),
+        b'*' => (KeyCode::Kc8, true),
+        b'(' => (KeyCode::Kc9, true),
+        b')' => (KeyCode::Kc0, true),
+        b'-' => (KeyCode::Minus, false),
+        b'_' => (KeyCode::Minus, true),
+        b'=' => (KeyCode::Equal, false),
+        b'+' => (KeyCode::Equal, true),
+        b'[' => (KeyCode::LeftBracket, false),
+        b']' => (KeyCode::RightBracket, false),
+        b'{' => (KeyCode::LeftBracket, true),
+        b'}' => (KeyCode::RightBracket, true),
+        b';' => (KeyCode::Semicolon, false),
+        b':' => (KeyCode::Semicolon, true),
+        b'\'' => (KeyCode::Quote, false),
+        b'"' => (KeyCode::Quote, true),
+        b'`' => (KeyCode::Grave, false),
+        b'~' => (KeyCode::Grave, true),
+        b'\\' => (KeyCode::Backslash, true),
+        b'|' => (KeyCode::Backslash, false),
+        b',' => (KeyCode::Comma, false),
+        b'<' => (KeyCode::Comma, true),
+        b'.' => (KeyCode::Dot, false),
+        b'>' => (KeyCode::Dot, true),
+        b'/' => (KeyCode::Slash, false),
+        b'?' => (KeyCode::Slash, true),
+        b' ' => (KeyCode::Space, false),
+        b'\n' => (KeyCode::Enter, false),
+        b'\t' => (KeyCode::Tab, false),
+        b'\x08' => (KeyCode::Backspace, false),
+        b'\x1B' => (KeyCode::Escape, false),
+        b'\x7F' => (KeyCode::Delete, false),
+        _ => (KeyCode::No, false),
+    }
+}
+
+/// Convert a ascii chat to keycode
+/// assumes en-us keyboard mapping
+pub(crate) fn to_ascii(keycode: KeyCode, shifted: bool) -> u8 {
+    match (keycode, shifted) {
+        (KeyCode::Kc0, false) => b'0',
+        (KeyCode::Kc1, false) => b'1',
+        (KeyCode::Kc2, false) => b'2',
+        (KeyCode::Kc3, false) => b'3',
+        (KeyCode::Kc4, false) => b'4',
+        (KeyCode::Kc5, false) => b'5',
+        (KeyCode::Kc6, false) => b'6',
+        (KeyCode::Kc7, false) => b'7',
+        (KeyCode::Kc8, false) => b'8',
+        (KeyCode::Kc9, false) => b'9',
+        (KeyCode::A, false) => b'a',
+        (KeyCode::B, false) => b'b',
+        (KeyCode::C, false) => b'c',
+        (KeyCode::D, false) => b'd',
+        (KeyCode::E, false) => b'e',
+        (KeyCode::F, false) => b'f',
+        (KeyCode::G, false) => b'g',
+        (KeyCode::H, false) => b'h',
+        (KeyCode::I, false) => b'i',
+        (KeyCode::J, false) => b'j',
+        (KeyCode::K, false) => b'k',
+        (KeyCode::L, false) => b'l',
+        (KeyCode::M, false) => b'm',
+        (KeyCode::N, false) => b'n',
+        (KeyCode::O, false) => b'o',
+        (KeyCode::P, false) => b'p',
+        (KeyCode::Q, false) => b'q',
+        (KeyCode::R, false) => b'r',
+        (KeyCode::S, false) => b's',
+        (KeyCode::T, false) => b't',
+        (KeyCode::U, false) => b'u',
+        (KeyCode::V, false) => b'v',
+        (KeyCode::W, false) => b'w',
+        (KeyCode::X, false) => b'x',
+        (KeyCode::Y, false) => b'y',
+        (KeyCode::Z, false) => b'z',
+        (KeyCode::A, true) => b'A',
+        (KeyCode::B, true) => b'B',
+        (KeyCode::C, true) => b'C',
+        (KeyCode::D, true) => b'D',
+        (KeyCode::E, true) => b'E',
+        (KeyCode::F, true) => b'F',
+        (KeyCode::G, true) => b'G',
+        (KeyCode::H, true) => b'H',
+        (KeyCode::I, true) => b'I',
+        (KeyCode::J, true) => b'J',
+        (KeyCode::K, true) => b'K',
+        (KeyCode::L, true) => b'L',
+        (KeyCode::M, true) => b'M',
+        (KeyCode::N, true) => b'N',
+        (KeyCode::O, true) => b'O',
+        (KeyCode::P, true) => b'P',
+        (KeyCode::Q, true) => b'Q',
+        (KeyCode::R, true) => b'R',
+        (KeyCode::S, true) => b'S',
+        (KeyCode::T, true) => b'T',
+        (KeyCode::U, true) => b'U',
+        (KeyCode::V, true) => b'V',
+        (KeyCode::W, true) => b'W',
+        (KeyCode::X, true) => b'X',
+        (KeyCode::Y, true) => b'Y',
+        (KeyCode::Z, true) => b'Z',
+        (KeyCode::Kc1, true) => b'!',
+        (KeyCode::Kc2, true) => b'@',
+        (KeyCode::Kc3, true) => b'#',
+        (KeyCode::Kc4, true) => b'$',
+        (KeyCode::Kc5, true) => b'%',
+        (KeyCode::Kc6, true) => b'^',
+        (KeyCode::Kc7, true) => b'&',
+        (KeyCode::Kc8, true) => b'*',
+        (KeyCode::Kc9, true) => b'(',
+        (KeyCode::Kc0, true) => b')',
+        (KeyCode::Minus, false) => b'-',
+        (KeyCode::Minus, true) => b'_',
+        (KeyCode::Equal, false) => b'=',
+        (KeyCode::Equal, true) => b'+',
+        (KeyCode::LeftBracket, false) => b'[',
+        (KeyCode::RightBracket, false) => b']',
+        (KeyCode::LeftBracket, true) => b'{',
+        (KeyCode::RightBracket, true) => b'}',
+        (KeyCode::Semicolon, false) => b';',
+        (KeyCode::Semicolon, true) => b':',
+        (KeyCode::Quote, false) => b'\'',
+        (KeyCode::Quote, true) => b'"',
+        (KeyCode::Grave, false) => b'`',
+        (KeyCode::Grave, true) => b'~',
+        (KeyCode::Backslash, true) => b'\\',
+        (KeyCode::Backslash, false) => b'|',
+        (KeyCode::Comma, false) => b',',
+        (KeyCode::Comma, true) => b'<',
+        (KeyCode::Dot, false) => b'.',
+        (KeyCode::Dot, true) => b'>',
+        (KeyCode::Slash, false) => b'/',
+        (KeyCode::Slash, true) => b'?',
+        (KeyCode::Space, false) => b' ',
+        (KeyCode::Enter, false) => b'\n',
+        (KeyCode::Tab, false) => b'\t',
+        (KeyCode::Backspace, false) => b'\x08',
+        (KeyCode::Escape, false) => b'\x1B',
+        (KeyCode::Delete, false) => b'\x7F',
+        // not supported keycodes
+        (_, _) => b'X',
     }
 }
 
@@ -446,5 +672,24 @@ mod test {
         // RepeatKey
         let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
         assert_eq!(0x7C79, to_via_keycode(a));
+    }
+
+    #[test]
+    fn test_convert_from_to_ascii_a() {
+        let keycode = KeyCode::A;
+        let shifted = false;
+        let ascii = b'a';
+
+        assert_eq!(to_ascii(keycode, shifted), ascii);
+        assert_eq!(from_ascii(ascii), (keycode, shifted));
+    }
+    #[test]
+    fn test_convert_from_to_ascii_K() {
+        let keycode = KeyCode::K;
+        let shifted = true;
+        let ascii = b'K';
+
+        assert_eq!(to_ascii(keycode, shifted), ascii);
+        assert_eq!(from_ascii(ascii), (keycode, shifted));
     }
 }

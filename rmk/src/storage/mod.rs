@@ -635,7 +635,7 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     flash: F,
     storage_config: StorageConfig,
 ) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, storage_config).await
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config).await
 }
 
 pub struct Storage<
@@ -680,7 +680,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        config: StorageConfig,
+        config: &StorageConfig,
     ) -> Self {
         // Check storage setting
         assert!(

@@ -1,0 +1,10 @@
+[usb]
+enabled = false
+
+[ble]
+enabled = true
+
+[storage]
+enabled = true
+start_addr = 0x60000
+num_sectors = 16 

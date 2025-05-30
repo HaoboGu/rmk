@@ -1,0 +1,7 @@
+[keyboard]
+usb_enable = true
+
+[storage]
+enabled = true
+start_addr = 0
+num_sectors = 2 

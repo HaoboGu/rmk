@@ -42,14 +42,6 @@ scrolllock.low_active = false
 # numslock.pin = "PA5"
 # numslock.low_active = true
 
-
-
 [storage]
 # Storage feature is enabled by default
 # enabled = false
-
-[ble]
-enabled = true
-battery_adc_pin = "PA0"
-charge_state.pin = "PA0"
-charge_state.low_active = true

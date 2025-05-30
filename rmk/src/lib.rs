@@ -3,7 +3,7 @@
 #![doc = document_features::document_features!()]
 // Add docs.rs logo
 #![doc(
-    html_logo_url = "https://raw.githubusercontent.com/HaoboGu/rmk/23d7e5009a7ba28bdab13d892c5aec53a6a94703/docs/src/images/rmk_logo.png"
+    html_logo_url = "https://github.com/HaoboGu/rmk/blob/dad1f922f471127f5449262c4cb4a922e351bf43/docs/images/rmk_logo.svg?raw=true"
 )]
 // Make compiler and rust analyzer happy
 #![allow(dead_code)]
@@ -71,6 +71,7 @@ mod boot;
 pub mod channel;
 pub mod combo;
 pub mod config;
+pub mod controller;
 pub mod debounce;
 pub mod direct_pin;
 pub mod event;
@@ -79,7 +80,7 @@ pub mod hid;
 pub mod hid_state;
 pub mod input_device;
 pub mod keyboard;
-mod keyboard_macro;
+pub mod keyboard_macros;
 pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;
@@ -126,7 +127,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     flash: F,
-    storage_config: config::StorageConfig,
+    storage_config: &config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
@@ -156,7 +157,7 @@ pub async fn initialize_keymap_and_storage<
 >(
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     flash: F,
-    storage_config: config::StorageConfig,
+    storage_config: &config::StorageConfig,
     behavior_config: config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
@@ -172,6 +173,7 @@ pub async fn initialize_keymap_and_storage<
 #[allow(unreachable_code)]
 pub async fn run_rmk<
     'a,
+    'b,
     #[cfg(feature = "_ble")] C: Controller,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
@@ -183,7 +185,7 @@ pub async fn run_rmk<
 >(
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
-    #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
+    #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,

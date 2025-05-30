@@ -1,0 +1,15 @@
+[keyboard]
+usb_enable = true
+
+[ble]
+enabled = true
+battery_adc_pin = "P0_04"
+adc_divider_measured = 2000
+adc_divider_total = 2806
+
+[storage]
+enabled = true
+# Storage starts from 640K
+start_addr = 0xA0000
+# Storage uses 128K = 640K ~ 768K
+num_sectors = 32

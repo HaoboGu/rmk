@@ -1,0 +1,117 @@
+// Grammar for RMK keyboard.toml layer.keys string
+
+// Define default whitespace handling (space, tab, newline, carriage return)
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+// Optional comments
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* } 
+
+// --- Helper Rules ---
+
+strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// captures anything that isn't whitespace or a specific delimiter
+loose_identifier = @{ (!( "(" | ")" | "," | "@" | WHITESPACE ) ~ ANY)+ }
+
+keycode_name = @{ loose_identifier }
+
+// Number (for layer indices)
+number = @{ ASCII_DIGIT+ }
+
+// Layer Reference (either a number or a name)
+layer_number = @{ number }
+layer_name = @{ loose_identifier }
+
+//the order is important here, as we want to match the number first 
+layer_reference = _{ layer_number | layer_name }
+
+// Modifier Names
+modifier_name = @{
+    ^"LShift" | ^"LCtrl" | ^"LAlt" | ^"LGui" |
+    ^"RShift" | ^"RCtrl" | ^"RAlt" | ^"RGui"
+}
+
+// Modifier Chain (one or more modifiers separated by '|')
+// Silent rules (_) used for delimiters we don't need in the AST.
+modifier_combination = { modifier_name ~ ("|" ~ modifier_name)* }
+
+// --- Main Action Rules ---
+
+// Rule 0: Simple Keycode (must come after more specific rules)
+simple_keycode = { keycode_name }
+
+// Rule 2: No Key
+no_action = { ^"No" } // Case-insensitive "No"
+
+// Rule 3: Transparent Key
+transparent_action = @{ ("_")+ | ^"Trns" } // One or more 
+
+// Rule 1: WM(key, modifier) - Key with Modifier
+wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
+
+// Rule 4.6: OSM(modifier) - One-Shot Modifier (requires quotes)
+osm_action = { ^"OSM" ~ "(" ~ "\"" ~ modifier_combination ~ "\"" ~ ")" }
+
+// Rule 4.1: DF(n) - Switch Default Layer
+df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
+
+// Rule 4.2: MO(n) - Momentary Layer Activate
+mo_action = { ^"MO" ~ "(" ~ layer_reference ~ ")" }
+
+// Rule 4.3: LM(n, modifier) - Layer Activate with Modifier
+lm_action = { ^"LM" ~ "(" ~ layer_reference ~ "," ~ modifier_combination ~ ")" }
+
+// Rule 4.4: LT(n, key) - Layer Activate or Tap Key (Tap/Hold)
+lt_action = { ^"LT" ~ "(" ~ layer_reference ~ "," ~ keycode_name ~ ")" }
+
+// Rule 4.5: OSL(n) - One-Shot Layer
+osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ")" }
+
+// Rule 4.7: TT(n) - Layer Activate or Tap Toggle
+tt_action = { ^"TT" ~ "(" ~ layer_reference ~ ")" }
+
+// Rule 4.8: TG(n) - Layer Toggle
+tg_action = { ^"TG" ~ "(" ~ layer_reference ~ ")" }
+
+// Rule 4.9: TO(n) - Layer Toggle Only
+to_action = { ^"TO" ~ "(" ~ layer_reference ~ ")" }
+
+// Grouping for Layer Actions
+layer_action = _{
+    df_action | mo_action | lm_action | lt_action |
+    osl_action | tt_action | tg_action | to_action
+}
+
+// Rule 5: MT(key, modifier) - Modifier Tap-Hold
+mt_action = { ^"MT" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
+
+// Rule 6: TH(key-tap, key-hold) - Generic Tap-Hold
+th_action = { ^"TH" ~ "(" ~ keycode_name ~ "," ~ keycode_name ~ ")" }
+
+// Grouping for Tap/Hold Actions
+tap_hold_action = _{ mt_action | th_action }
+
+// Rule 7: SHIFTED(key)
+shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
+
+// --- Top Level Rules ---
+
+// A single key action entry in the map
+// Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
+key_action = _{ // Consume surrounding whitespace/comments implicitly
+    wm_action | osm_action | layer_action | tap_hold_action | shifted_action | no_action | transparent_action | simple_keycode
+}
+
+// The entire key map string: Start, zero or more key actions, End.
+key_map = { SOI ~ key_action* ~ EOI }
+
+// ============================================================================
+// rules for matrix_map parsing
+
+// Define the coordinate structure, capturing row and col numbers
+// Make the rule itself non-silent ({}) so we get pairs for it
+coordinate = { "(" ~ number ~ "," ~ number ~ ")" }
+
+// The main rule: Start, zero or more coordinates or whitespace occurrences, End.
+// This ensures the entire string consists *only* of valid coordinates and whitespace.
+matrix_map = { SOI ~ (coordinate | WHITESPACE)* ~ EOI }
