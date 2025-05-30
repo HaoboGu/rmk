@@ -15,7 +15,6 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "esp32s3_ble",
     "log",
     "storage",
-    "_no_usb", # TODO: Add usb support for esp32s3
 ] }
 embassy-executor = { version = "0.7.0" }
 esp-backtrace = { version = "0.15", features = [

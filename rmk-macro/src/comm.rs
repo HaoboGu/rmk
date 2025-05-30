@@ -77,7 +77,7 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenS
                     static mut EP_MEMORY: [u8; 1024] = [0; 1024];
                     let usb = ::esp_hal::otg_fs::Usb::new(p.#peripheral_name, p.#dp, p.#dm);
                     let usb_config = ::esp_hal::otg_fs::asynch::Config::default();
-                    let driver = ::esp_hal::otg_fs::asynch::Driver::new(usb, unsafe { &mut *addr_of_mut!(EP_MEMORY) }, usb_config);
+                    let driver = ::esp_hal::otg_fs::asynch::Driver::new(usb, unsafe { &mut *core::ptr::addr_of_mut!(EP_MEMORY) }, usb_config);
                 }
             }
         }

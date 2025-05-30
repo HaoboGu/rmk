@@ -161,6 +161,21 @@ split = []
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 
+## Enable feature if you want to use RP2040 PIO UART
+rp2040_pio = [
+    "dep:embassy-rp",
+    "dep:embassy-hal-internal",
+    "dep:rp-pac",
+    "dep:pio",
+    "dep:fixed",
+]
+
+## Enable feature if you want rp2040 bootloader jumping key
+rp2040_bl = ["dep:embassy-rp"]
+
+## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
+adafruit_bl = ["_nrf_ble"]
+
 #! ### BLE feature flags
 #!
 #! ⚠️ Due to the limitation of docs.rs, functions gated by BLE features won't show in docs.rs. You have to head to [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) folder of RMK repo for their usages.
@@ -189,21 +204,6 @@ pico_w_ble = ["_ble", "dep:embassy-rp"]
 
 ## Enable feature if you want to use trouble BLE stack
 _ble = ["dep:trouble-host", "dep:rand_core", "dep:bt-hci", "storage"]
-
-## Enable feature if you want to use RP2040 PIO UART
-rp2040_pio = [
-    "dep:embassy-rp",
-    "dep:embassy-hal-internal",
-    "dep:rp-pac",
-    "dep:pio",
-    "dep:fixed",
-]
-
-## Enable feature if you want rp2040 bootloader jumping key
-rp2040_bl = ["dep:embassy-rp"]
-
-## Enable feature if you're using Adafruit nRF52 bootloader and want bootloader jumping key
-adafruit_bl = ["_nrf_ble"]
 
 [lib]
 # Don't run doctest for lib
