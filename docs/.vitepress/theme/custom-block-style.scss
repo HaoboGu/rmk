@@ -56,33 +56,57 @@
     font-size: 0.9rem;
     line-height: 28px;
   }
+  .custom-block div[class*='language-'] {
+    background-color: var(--vp-custom-block-tip-code-bg);
+    span.lang {
+      display: none;
+    }
+    pre {
+      background-color: var(--vp-custom-block-tip-code-bg);
+    }
+  }
   .custom-block {
     p {
       color: var(--vp-c-text-1);
     }
-    &.info .custom-block-title,
-    &.info code {
-      color: var(--vp-custom-block-info-text);
+    $text-types: (
+      info: var(--vp-custom-block-info-text),
+      note: var(--vp-custom-block-note-text),
+      tip: var(--vp-custom-block-tip-text),
+      warning: var(--vp-custom-block-warning-text),
+      danger: var(--vp-custom-block-danger-text),
+      details: var(--vp-custom-block-details-text)
+    );
+    $code-types: (
+      info: var(--vp-custom-block-info-code-bg),
+      note: var(--vp-custom-block-note-code-bg),
+      tip: var(--vp-custom-block-tip-code-bg),
+      warning: var(--vp-custom-block-warning-code-bg),
+      danger: var(--vp-custom-block-danger-code-bg),
+      details: var(--vp-custom-block-details-code-bg)
+    );
+
+    @each $text-type, $color in $text-types {
+      &.#{$text-type} {
+        .custom-block-title,
+        code {
+          color: $color;
+        }
+      }
     }
-    &.note .custom-block-title,
-    &.note code {
-      color: var(--vp-custom-block-note-text);
-    }
-    &.tip .custom-block-title,
-    &.tip code {
-      color: var(--vp-custom-block-tip-text);
-    }
-    &.warning .custom-block-title,
-    &.warning code {
-      color: var(--vp-custom-block-warning-text);
-    }
-    &.danger .custom-block-title,
-    &.danger code {
-      color: var(--vp-custom-block-danger-text);
-    }
-    &.details .custom-block-title,
-    &.details code {
-      color: var(--vp-custom-block-details-text);
+
+    @each $code-type, $color in $code-types {
+      &.#{$code-type} {
+        div[class*='language-'] {
+          background-color: $color;
+          span.lang {
+            display: none;
+          }
+          pre {
+            background-color: $color;
+          }
+        }
+      }
     }
   }
 }

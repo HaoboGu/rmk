@@ -5,11 +5,11 @@ vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
 chip = "esp32s3"
-usb_enable = false
+usb_enable = true
 
 [matrix]
 # Input and output pins are mandatory
-input_pins = ["GPIO6", "GPIO7", "GPIO20", "GPIO21"]
+input_pins = ["GPIO6", "GPIO7", "GPIO18", "GPIO21"]
 output_pins = ["GPIO3", "GPIO4", "GPIO5"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
 # row2col = true

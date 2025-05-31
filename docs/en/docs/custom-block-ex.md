@@ -1,25 +1,90 @@
 # Custom Block Ex
 
-::: info
+::: info 
+
 This is an info box `code`.
+
+```js
+conslog('hello world')
+```
+
 :::
 
->[!NOTE]
->this is a note `code`.
+> [!NOTE] 
+> this is a note `code`.
+>```js
+>conslog('hello world');
+>```
 
+::: tip 
 
-::: tip
 This is a tip `code`.
+
+```js
+conslog('hello world')
+```
+
 :::
 
-::: warning
+::: warning 
+
 This is a warning `code`.
+
+```js
+conslog('hello world')
+```
+
 :::
 
-::: danger
+::: danger 
+
 This is a dangerous warning `code`.
+
+```js
+conslog('hello world')
+```
+
 :::
 
-::: details
+::: details 
+
 This is a details block `code`.
+
+```js
+conslog('hello world')
+```
+
+:::
+
+---
+
+```js
+conslog('hello world')
+```
+
+---
+
+::: code-group
+
+```js [config.js]
+/**
+ * @type {import('vitepress').UserConfig}
+ */
+const config = {
+  // ...
+}
+
+export default config
+```
+
+```ts [config.ts]
+import type { UserConfig } from 'vitepress'
+
+const config: UserConfig = {
+  // ...
+}
+
+export default config
+```
+
 :::
