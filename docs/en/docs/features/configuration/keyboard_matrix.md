@@ -11,9 +11,32 @@ vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "RMK"
 chip = "stm32h7b0vb"
+board = "nice!nano" # optional, cannot be used with `chip`
 # If your chip doesn't have a functional USB peripheral, for example, nRF52832/esp32c3(esp32c3 has only USB serial, not full functional USB), set `usb_enable` to false
 usb_enable = true
 ```
+
+### Supported `chip` and `board`
+
+#### chip
+
+- nrf52840
+- nrf52833
+- nrf52832
+- nrf52811
+- nrf52810
+- esp32c3
+- esp32c6
+- esp32s3
+- rp2040
+- ALL stm32s supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB
+
+#### board
+
+- `nice!nano`
+- `nice!nano_v2`
+- `pi_pico_w`   
+- `XIAO BLE`
 
 ## `[matrix]`
 

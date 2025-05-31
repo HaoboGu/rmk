@@ -2,7 +2,11 @@
 
 RMK provides a [project-template](https://github.com/HaoboGu/rmk-project-template) that you can use to create your firmware easily. The following is a step-by-step tutorial for compiling RMK firmware using Github Actions.
 
-Note: There are some limitations currently for cloud compilation. For example, you cannot edit cargo features in the generated project. If you have any problems when compiling RMK using cloud, please [open an issue](https://github.com/HaoboGu/rmk/issues/new)!
+::: info
+
+There are some limitations currently for cloud compilation. For example, you cannot edit cargo features in the generated project. If you have any problems when compiling RMK using cloud, please [open an issue](https://github.com/HaoboGu/rmk/issues/new)!
+
+:::
 
 ## Steps
 

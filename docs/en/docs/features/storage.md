@@ -1,8 +1,8 @@
 # Storage
 
-::: warning
+::: tip
 
-RMK uses the **last 2 sectors** of your microcontroller's flash by default. If you're using a bootloader like [Adafruit_nRF52_Bootloader](https://github.com/adafruit/Adafruit_nRF52_Bootloader), which puts itself at the end of the flash, RMK will break it. Solving this by setting `start_addr` manually.
+RMK has default values for used flash area, check out the [default config](https://github.com/HaoboGu/rmk/tree/main/rmk-config/src/default_config) for your microcontroller. If you're using Rust API, it's recommended to use the default values.
 
 :::
 
@@ -46,4 +46,4 @@ let rmk_config = RmkConfig {
 
 ```
 
-By default, RMK uses **last 2 sectors** of your microcontroller's internal flash as the storage space. So you have to ensure that you have enough flash space for storage feature. If there is not enough space, passing `None` is acceptable.
+When manually setting the storage area, you have to ensure that you have enough flash space for storage feature. If there is not enough space, passing `None` is acceptable.

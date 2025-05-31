@@ -554,12 +554,12 @@
                     padding: var(--default) var(--default) calc(8 / 16 * var(--default));
                     line-height: calc(24 / 16 * var(--default));
                     .custom-block-title {
-                      margin: calc(0.75 * var(--default)) calc(0 * var(--default));
+                      margin: calc(0.5 * var(--default)) calc(0 * var(--default));
                       padding:  calc(0 * var(--default)) calc(1 * var(--default) );
                       line-height: calc(1.5 * var(--default));
                     }
                     p {
-                        padding:  calc(0.25 * var(--default)) calc(1 * var(--default) );
+                        padding:  calc(0 * var(--default)) calc(1 * var(--default) );
                     }
                     div[class*="language-"] {
                       margin: calc(1 * var(--default)) calc(1 * var(--default));
