@@ -198,8 +198,8 @@ impl<
             }
             ViaCommand::EepromReset => {
                 warn!("Reseting storage..");
-                #[cfg(feature = "storage")]
-                FLASH_CHANNEL.send(FlashOperationMessage::Reset).await
+                // #[cfg(feature = "storage")]
+                // FLASH_CHANNEL.send(FlashOperationMessage::Reset).await
                 // TODO: Reboot after a eeprom reset?
             }
             ViaCommand::BootloaderJump => {
