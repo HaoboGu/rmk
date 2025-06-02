@@ -34,7 +34,13 @@ impl ChipModel {
                 "nrf52810" | "nrf52811" => Ok(include_str!("default_config/nrf52810.toml")),
                 "rp2040" => Ok(include_str!("default_config/rp2040.toml")),
                 s if s.starts_with("stm32") => Ok(include_str!("default_config/stm32.toml")),
-                s if s.starts_with("esp32") => Ok(include_str!("default_config/esp32.toml")),
+                s if s.starts_with("esp32") => {
+                    if s == "esp32s3" {
+                        return Ok(include_str!("default_config/esp32s3.toml"));
+                    } else {
+                        Ok(include_str!("default_config/esp32.toml"))
+                    }
+                }
                 _ => Err(format!(
                     "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
                     self.chip
