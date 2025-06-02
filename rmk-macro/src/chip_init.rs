@@ -48,13 +48,13 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
         ChipSeries::Nrf52 => {
             let dcdc_config = if chip.chip == "nrf52840" {
                 quote! {
-                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
+                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3V3);
                     config.dcdc.reg0 = true;
                     config.dcdc.reg1 = true;
                 }
             } else if chip.chip == "nrf52833" {
                 quote! {
-                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3v3);
+                    config.dcdc.reg0_voltage = Some(::embassy_nrf::config::Reg0Voltage::_3V3);
                     config.dcdc.reg1 = true;
                 }
             } else {

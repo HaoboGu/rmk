@@ -37,9 +37,9 @@ static_cell = "2"
 # default = ["rp-pico/disable-intrinsics"]
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
 
 [build-dependencies]
 xz2 = "0.1.7"
