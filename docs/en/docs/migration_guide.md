@@ -11,6 +11,33 @@ Updating to `TrouBLE` brings lots of benefits, including:
 - For ESP32, RMK migrates to Espressif's official [`esp-hal`](https://github.com/esp-rs/esp-hal), making it possible to use USB on ESP32S3. Now you can build a dual-mode keyboard using ESP32S3, with all the features of RMK!
 - You can even build a split keyboard using different microcontrollers, for example, use ESP32 as a dongle and use nRF52 as the peripherals
 
+The following is the step-by-step guide to update your project to v0.7.x.
+
+::: tip
+
+The following guide is for local compilation. If you are using [cloud compilation](../user_guide/2-1_cloud_compilation.md), you can skip the following steps and just rerun the github action.
+
+:::
+
+## 1. Update Cargo dependencies
+
+Lot of dependencies are updated from v0.6.x to v0.7.x. 
+
+The best updating approach is to copy the new `Cargo.toml` file from examples to replace the old one, delete the old `Cargo.lock` file, then tune the RMK features used and then re-build the project.
+
+## 2. Add the path of `keyboard.toml` to `.cargo/config.toml`
+
+In v0.7.x, RMK requries to set the path of `keyboard.toml` in `.cargo/config.toml`. This makes the path of `keyboard.toml` configurable.
+
+In versions before v0.7.x, `keyboard.toml` is located in the root directory of the project. So you will need to set the following in `.cargo/config.toml` after updating to v0.7.x:
+
+```toml
+[env]
+KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
+```
+
+## 3. Platform specific changes
+
 ### nRF BLE stack migration
 
 For nRF chips, now RMK uses Nordic latest SoftDevice Controller(sdc) in [`nrfxlib`](https://github.com/nrfconnect/sdk-nrfxlib) as the low-level BLE controller, brings better performance and stability, but it's not compatible with the old SoftDevice stack.
@@ -53,7 +80,15 @@ The migration process is simple, you just need to:
 
 3. Compile your firmware and flash it to your controller
 
-#### Troubleshooting
+### ESP32 BLE stack migration
+
+Older versions of RMK uses [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal), which is now community-maintained. RMK v0.7.x now uses Espressif's official [`esp-hal`](https://github.com/esp-rs/esp-hal). Because the difference between [`esp-hal`](https://github.com/esp-rs/esp-hal) and [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal) is too large, the recommended way to migrate to v0.7.x is to recreate your project from scratch and migrate your keymap & configuration to the new project.
+
+## 4. Check out new features
+
+RMK v0.7.x brings lots of exciting features, making configuration easier and more flexible. Check out the [CHANGELOG](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md) for more details.
+
+## Troubleshooting
 
 1. BLE peripheral doesn't work
 
@@ -64,19 +99,6 @@ The migration process is simple, you just need to:
     3. Set `clear_storage` back to false and compile
     4. Flash both splits again
 
-### Path of `keyboard.toml`
+## Known issues
 
-In v0.7.x, RMK requries to set the path of `keyboard.toml` in `.cargo/config.toml`. This makes the path of `keyboard.toml` configurable. In versions before v0.7.x, `keyboard.toml` is located in the root directory of the project. So you will need to set the following in `.cargo/config.toml` after updating to v0.7.x:
-
-```toml
-[env]
-KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
-```
-
-### ESP32 BLE stack migration
-
-Older versions of RMK uses [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal), which is now community-maintained. RMK v0.7.x now uses Espressif's official [`esp-hal`](https://github.com/esp-rs/esp-hal). Because the difference between [`esp-hal`](https://github.com/esp-rs/esp-hal) and [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal) is too large, the recommended way to migrate to v0.7.x is to recreate your project from scratch and migrate your keymap & configuration to the new project.
-
-### Check out new features
-
-RMK v0.7.x brings lots of exciting features, making configuration easier and more flexible. Check out the [CHANGELOG](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md) for more details.
+1. The dongle setting & multiple peripherals is not working

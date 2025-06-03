@@ -80,11 +80,11 @@ function nav() {
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
     {
-      text: `V0.7.x`,
+      text: `V0.7.0`,
       items: [
         {
           items: [
-            { text: "V0.7.x", link: "/docs/introduction" },
+            { text: "V0.7.0", link: "/docs/introduction" },
           ],
         },
         {
@@ -94,7 +94,7 @@ function nav() {
         },
         {
           items: [
-            { text: "V0.6.x", link: "https://haobogu.github.io/rmk" },
+            { text: "V0.6.1", link: "https://haobogu.github.io/rmk" },
           ]
         }
       ],
