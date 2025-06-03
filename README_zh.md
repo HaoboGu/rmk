@@ -31,7 +31,7 @@
 - **易于配置**：RMK提供了一个非常简单的配置键盘的方法，你只需要一个`keyboard.toml`文件，就可以构建起你的键盘固件（不需要写任何Rust代码）！当然，对于 Rust 开发者来说，你仍然可以使用代码方式来使用 RMK 从而获得更大的灵活性。
 - **低延迟、低电量消耗**：根据测试，RMK在有线模式下延迟约为2ms，蓝牙模式下延迟约为10ms。在开启`async_matrix` feature之后，RMK有着非常低的电量消耗，一块2000mah的电池可以续航好几个月。
 
-## [用户文档](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API文档](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [更新日志](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [用户文档](https://rmk.rs/docs/user_guide/1_guide_overview.html) | [API文档](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [更新日志](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## 真实例子
 
@@ -47,11 +47,11 @@
 ```shell
 cargo install rmkit flip-link
 # 如果你在Windows下安装rmkit报错，那么可以尝试改用下面的命令安装:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
-详细步骤介绍，请查看 RMK 的 [用户指南](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html)。
+详细步骤介绍，请查看 RMK 的 [用户指南](https://rmk.rs/docs/user_guide/1_guide_overview.html)。
 
 ### 选项 2：尝试内置的例子
 
@@ -106,9 +106,9 @@ RMK 内置了一些常见 MCU 的示例，这些示例可以在 [`examples`](htt
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
 
-## [Roadmap](https://haobogu.github.io/rmk/roadmap.html)
+## [Roadmap](https://rmk.rs/docs/development/roadmap.html)
 
-RMK 现在的 roadmap 在[这里](https://haobogu.github.io/rmk/roadmap.html)。
+RMK 现在的 roadmap 在[这里](https://rmk.rs/docs/development/roadmap.html)。
 
 ## 最小支持的 Rust 版本（MSRV）
 

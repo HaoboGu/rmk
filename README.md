@@ -31,7 +31,7 @@
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
-## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [User Documentation](https://rmk.rs/docs/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
 
@@ -52,11 +52,11 @@ Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) a
 ```shell
 cargo install rmkit flip-link
 # If you encounter installation issues on Windows, try this alternative command:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
-For comprehensive guidance, refer to the [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html).
+For comprehensive guidance, refer to the [User Guide](https://rmk.rs/docs/user_guide/1_guide_overview.html).
 
 ### Option 2: Explore Built-in Examples
 
@@ -111,9 +111,9 @@ Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
 
-## [Development Roadmap](https://haobogu.github.io/rmk/roadmap.html)
+## [Development Roadmap](https://rmk.rs/docs/development/roadmap.html)
 
-Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap.html).
+Current roadmap of RMK can be found [here](https://rmk.rs/docs/development/roadmap.html).
 
 ## Minimum Supported Rust Version (MSRV)
 

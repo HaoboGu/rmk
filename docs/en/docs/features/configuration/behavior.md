@@ -1,8 +1,6 @@
 # Behavior
 
-## `[behavior]`
-
-`[behavior]` section contains configuration for how different keyboard actions should behave:
+The `[behavior]` section contains configuration for how different keyboard actions should behave:
 
 ```toml
 [behavior]
@@ -10,7 +8,7 @@ tri_layer = { uppper = 1, lower = 2, adjust = 3 }
 one_shot = { timeout = "1s" }
 ```
 
-### Tri Layer
+## Tri Layer
 
 `Tri Layer` works by enabling a layer (called `adjust`) when other two layers (`upper` and `lower`) are both enabled.
 
@@ -27,7 +25,7 @@ In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
 
-### Tap Hold
+## Tap Hold
 
 In the `tap_hold` sub-table, you can configure the following parameters:
 
@@ -46,7 +44,7 @@ tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms
 tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
 ```
 
-### One Shot
+## One Shot
 
 In the `one_shot` sub-table you can define how long OSM or OSL will wait before releasing the modifier/layer with the `timeout` option, default is one second. `timeout` is a string with a suffix of either "s" or "ms".
 
@@ -55,7 +53,7 @@ In the `one_shot` sub-table you can define how long OSM or OSL will wait before 
 timeout = "5s"
 ```
 
-### Combo
+## Combo
 
 In the `combo` sub-table, you can configure the keyboard's combo key functionality. Combo allows you to define a group of keys that, when pressed simultaneously, will trigger a specific output action.
 
@@ -82,7 +80,7 @@ combos = [
 ]
 ```
 
-### Fork
+## Fork
 
 In the `fork` sub-table, you can configure the keyboard's state based key fork functionality. Forks allows you to define a trigger key and condition dependent possible replacement keys. When the trigger key is pressed, the condition is checked by the following rule: If any of the `match_any` states are active AND none of the `match_none` states active, the trigger key will be replaced with positive_output, otherwise with the negative_output. By default the modifiers listed in `match_any` will be suppressed (even the one-shot modifiers) for the time the replacement key action is executed. However, with `kept_modifiers` some of them can be kept instead of automatic suppression.
 
