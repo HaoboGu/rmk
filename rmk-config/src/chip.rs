@@ -22,30 +22,39 @@ impl ChipModel {
             match board.as_str() {
                 "nice!nano_v2" | "nice!nano v2" => Ok(include_str!("default_config/nice_nano_v2.toml")),
                 "nice!nano" | "nice!nano_v1" | "nicenano" => Ok(include_str!("default_config/nice_nano.toml")),
-                "XIAO BLE" => Ok(include_str!("default_config/nrf52840.toml")),
+                "XIAO BLE" | "nrfmicro" | "bluemicro840" | "puchi_ble" => {
+                    Ok(include_str!("default_config/nrf52840.toml"))
+                }
                 "pi_pico_w" | "pico_w" => Ok(include_str!("default_config/pi_pico_w.toml")),
-                _ => Err(format!("No default config file for board {}", board)),
+                _ => {
+                    eprintln!("Fallback to use chip config for board: {}", board);
+                    self.get_default_config_str_from_chip(&self.chip)
+                }
             }
         } else {
-            match self.chip.as_str() {
-                "nrf52840" => Ok(include_str!("default_config/nrf52840.toml")),
-                "nrf52833" => Ok(include_str!("default_config/nrf52833.toml")),
-                "nrf52832" => Ok(include_str!("default_config/nrf52832.toml")),
-                "nrf52810" | "nrf52811" => Ok(include_str!("default_config/nrf52810.toml")),
-                "rp2040" => Ok(include_str!("default_config/rp2040.toml")),
-                s if s.starts_with("stm32") => Ok(include_str!("default_config/stm32.toml")),
-                s if s.starts_with("esp32") => {
-                    if s == "esp32s3" {
-                        return Ok(include_str!("default_config/esp32s3.toml"));
-                    } else {
-                        Ok(include_str!("default_config/esp32.toml"))
-                    }
+            self.get_default_config_str_from_chip(&self.chip)
+        }
+    }
+
+    fn get_default_config_str_from_chip(&self, chip: &str) -> Result<&'static str, String> {
+        match chip {
+            "nrf52840" => Ok(include_str!("default_config/nrf52840.toml")),
+            "nrf52833" => Ok(include_str!("default_config/nrf52833.toml")),
+            "nrf52832" => Ok(include_str!("default_config/nrf52832.toml")),
+            "nrf52810" | "nrf52811" => Ok(include_str!("default_config/nrf52810.toml")),
+            "rp2040" => Ok(include_str!("default_config/rp2040.toml")),
+            s if s.starts_with("stm32") => Ok(include_str!("default_config/stm32.toml")),
+            s if s.starts_with("esp32") => {
+                if s == "esp32s3" {
+                    return Ok(include_str!("default_config/esp32s3.toml"));
+                } else {
+                    Ok(include_str!("default_config/esp32.toml"))
                 }
-                _ => Err(format!(
-                    "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
-                    self.chip
-                )),
             }
+            _ => Err(format!(
+                "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
+                self.chip
+            )),
         }
     }
 }
@@ -60,13 +69,12 @@ impl KeyboardTomlConfig {
         // Check board type
         if let Some(board) = keyboard.board.clone() {
             match board.as_str() {
-                "nice!nano" | "nice!nano_v1" | "nicenano" | "nice!nano_v2" | "nice!nano v2" | "XIAO BLE" => {
-                    Ok(ChipModel {
-                        series: ChipSeries::Nrf52,
-                        chip: "nrf52840".to_string(),
-                        board: Some(board),
-                    })
-                }
+                "nice!nano" | "nice!nano_v1" | "nicenano" | "nice!nano_v2" | "nice!nano v2" | "XIAO BLE"
+                | "nrfmicro" | "bluemicro840" | "puchi_ble" => Ok(ChipModel {
+                    series: ChipSeries::Nrf52,
+                    chip: "nrf52840".to_string(),
+                    board: Some(board),
+                }),
                 "pi_pico_w" | "pico_w" => Ok(ChipModel {
                     series: ChipSeries::Rp2040,
                     chip: "rp2040".to_string(),

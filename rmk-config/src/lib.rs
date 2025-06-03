@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use config::{Config, File, FileFormat};
 use serde::de;
@@ -166,21 +167,21 @@ pub struct KeyboardTomlConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn new_from_toml_str(config_toml_path: &str) -> Self {
+    pub fn new_from_toml_str<P: AsRef<Path>>(config_toml_path: P) -> Self {
         // The first run, load chip model only
-        let user_config = match std::fs::read_to_string(config_toml_path) {
+        let user_config = match std::fs::read_to_string(config_toml_path.as_ref()) {
             Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
                 Ok(c) => c,
-                Err(e) => panic!("Parse {} error: {}", config_toml_path, e.message()),
+                Err(e) => panic!("Parse {:?} error: {}", config_toml_path.as_ref(), e.message()),
             },
-            Err(e) => panic!("Read keyboard config file {} error: {}", config_toml_path, e),
+            Err(e) => panic!("Read keyboard config file {:?} error: {}", config_toml_path.as_ref(), e),
         };
         let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
 
         // The second run, load the user config and merge with the default config
         Config::builder()
             .add_source(File::from_str(default_config_str, FileFormat::Toml))
-            .add_source(File::with_name(config_toml_path))
+            .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
             .build()
             .unwrap()
             .try_deserialize()
