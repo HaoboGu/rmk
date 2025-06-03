@@ -15,7 +15,7 @@ The following is the step-by-step guide to update your project to v0.7.x.
 
 ::: tip
 
-The following guide is for local compilation. If you are using [cloud compilation](../user_guide/2-1_cloud_compilation.md), you can skip the following steps and just rerun the github action.
+The following guide is for local compilation. If you are using [cloud compilation](./user_guide/2-1_cloud_compilation.md), you can skip the following steps and just rerun the github action.
 
 :::
 
