@@ -6,7 +6,7 @@ RMK enables `col2row` as the default feature. To use the row2col matrix, you hav
 
 ```toml
 # Cargo.toml
-rmk = { version = "0.5", default-features = false, features = ["nrf52840_ble", "async_matrix"] }
+rmk = { version = "0.7", default-features = false, features = ["nrf52840_ble", "async_matrix"] }
 ```
 
 If you're using the cloud compilation, you have to update your `keyboard.toml`, add `row2col = true` under the `[matrix]` section or `[split.central.matrix]` section:
@@ -23,7 +23,7 @@ row2col = true
 
 ### Where is my built firmware?
 
-By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](/docs/user_guide/2-2_local_compilation.md#setup-rmk-environment) and `<MODE>` is `debug` or `release`, depending on your build mode.
+By default, the built firmware is at `target/<TARGET>/<MODE>` folder, where `<TARGET>` is your microcontroller's [target](./2-2_local_compilation.md#_2-choose-your-hardware-and-install-the-target) and `<MODE>` is `debug` or `release`, depending on your build mode.
 
 The firmware's name is your project name in `Cargo.toml`. It's actually an `elf` file, but without file extension.
 
@@ -69,6 +69,10 @@ clear_storage = true
 
 Note that the storage will be clear EVERYTIME you reboot the keyboard.
 
+### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
+
+This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/docs/features/binary_size_optimization.md) doc to reduce your code size.
+
 ### I can see a `RMK Start` log, but nothing else
 
 First you need to check the RCC config of your board, make sure that the USB's clock is enabled and set to 48MHZ. For example, if you're using stm32f1, you can set the RCC as the following:
@@ -110,10 +114,6 @@ DEFMT_LOG = "trace"
 
 run `cargo clean` and then `cargo run --release`. Open an [issue](https://github.com/HaoboGu/rmk/issues) with the detailed logs.
 
-### rust-lld: error: section will not fit in region 'FLASH': overflowed by x bytes
-
-This is because your MCU's flash is too small. Try building in release mode: `cargo build --release`. If the error still there, follow our [`binary size optimization`](/docs/features/binary_size_optimization.md) doc to reduce your code size.
-
 ### I see ERROR: Storage is full error in the log
 
 By default, RMK uses only 2 sectors of your microcontroller's internal flash. You may get the following error if 2 sectors is not big enough to store all your keymaps:
@@ -129,7 +129,7 @@ ERROR Keymap reading aborted!
 
 If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
-### panicked at embassy-executor: task arena is full.
+### OUTDATED: panicked at embassy-executor: task arena is full.
 
 The current embassy requires manually setting of the task arena size. By default, RMK set's it to 32768 in all examples:
 
@@ -159,10 +159,6 @@ embassy-executor = { version = "0.7", features = [
 In the latest git version of embassy, task arena size could be calculated automatically, but it requires **nightly** version of Rust.
 
 If you're comfortable with nightly Rust, you can enable `nightly` feature of embassy-executor and remove `task-arena-size-*` feature.
-
-### RMK breaks my bootloader
-
-By default RMK uses last 2 sectors as the storage. If your bootloader is placed there too, RMK will erase it. To avoid it, you can change `start_addr` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
 
 ### What font is used for the RMK logo?
 

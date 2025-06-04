@@ -11,9 +11,32 @@ vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "RMK"
 chip = "stm32h7b0vb"
+board = "nice!nano" # optional, cannot be used with `chip`
 # If your chip doesn't have a functional USB peripheral, for example, nRF52832/esp32c3(esp32c3 has only USB serial, not full functional USB), set `usb_enable` to false
 usb_enable = true
 ```
+
+### Supported `chip` and `board`
+
+#### chip
+
+- nrf52840
+- nrf52833
+- nrf52832
+- nrf52811
+- nrf52810
+- esp32c3
+- esp32c6
+- esp32s3
+- rp2040
+- ALL stm32s supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB
+
+#### board
+
+- `nice!nano`
+- `nice!nano_v2`
+- `pi_pico_w`   
+- `XIAO BLE`
 
 ## `[matrix]`
 
@@ -37,7 +60,7 @@ output_pin =>   >|   => input_pin
 
 ::: warning
 
-Per default RMK assumes that your pins are <b>col2row</b>, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to <a href="https://haobogu.github.io/rmk/faq.html#my-matrix-is-row2col-the-matrix-doesnt-work"> change the configuration to `row2col`</a>
+Per default RMK assumes that your pins are <b>col2row</b>, meaning that the output pins (anodes) represent the columns and the input pins (cathodes) represent the rows. If your schemata shows the opposite you need to <a href="https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work"> change the configuration to `row2col`</a>
 
 :::
 
@@ -55,6 +78,7 @@ Here is an example toml of `[matrix]` section for stm32:
 input_pins = ["PD4", "PD5", "PD6", "PD3"]
 output_pins = ["PD7", "PD8", "PD9"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
 # row2col = true
 ```
 

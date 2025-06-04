@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt", "storage"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
-py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "7260371", features = [
+py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "3ffc9c2", features = [
     "py32f072c1b", 
     "memory-x", 
     "rt", 
@@ -31,9 +31,9 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cb4d8c74c2b07de7c32be588140512bdd4d3f47e" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
 
 [build-dependencies]
 xz2 = "0.1.7"

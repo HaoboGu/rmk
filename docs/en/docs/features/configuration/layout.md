@@ -1,6 +1,6 @@
 # Layout
 
-## `[layout]`
+## Keyboard layout configuration
 
 `[matrix]` defines the physical key matrix on your board, while `[layout]` section contains the layout and the default keymap for the keyboard:
 
@@ -82,7 +82,7 @@ The `layer.keys` string should follow several rules:
 
 1. For a simple keycode(aka keys in RMK's [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html) enum), just fill its name.
 
-   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of [alternative key names](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/keycode_alias.rs) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
+   For example, if you set a keycode `Backspace`, it will be turned to `KeyCode::Backspace`. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](../keymap/keycodes)) were added and also case-insensitive search is used to find the valid [KeyCode](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html).
 
    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
@@ -118,9 +118,9 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 7. For shifted key, use `SHIFTED(key)`
 
-### `[aliases]`
+## Aliases
 
-`[aliases]` section contains a table of user defined names and an associated replacement string, which can be used in the `layer.keys`:
+The `[aliases]` section contains a table of user defined names and an associated replacement string, which can be used in the `layer.keys`:
 
 ```toml
 # here are the aliases for the example above

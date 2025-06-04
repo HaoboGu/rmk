@@ -27,17 +27,21 @@
 - **Broad microcontroller compatibility**: Leveraging [embassy](https://github.com/embassy-rs/embassy), RMK supports a comprehensive range of microcontrollers, including stm32, nRF, rp2040(w), esp32, etc
 - **Dynamic keymap customization**: RMK offers native [Vial](https://get.vial.today) support, enabling real-time keymap modifications. You can even edit keymaps over BLE connections wirelessly
 - **Advanced keyboard functionality**: RMK comes with lots of advanced keyboard features by default, including layer switching, media controls, system commands, mouse control, and more
-- **Wireless connectivity**: BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3, esp32s3
+- **Wireless connectivity**: BLE wireless support with automatic reconnection and multi-device capabilities for nRF52 and esp32 microcontrollers, tested on nRF52840, esp32c3, esp32s3, Pi Pico W
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
-## [User Documentation](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://haobogu.github.io/rmk/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## News
+
+- 2025-06-04: v0.7.0 is released! Check out the [migration guide](https://rmk.rs/docs/migration_guide.html) to upgrade!
+
+## [User Documentation](https://rmk.rs/docs/user_guide/1_guide_overview.html) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/user_guide/faq.html) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
 
 ### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
-<img src="https://github.com/HaoboGu/rmk/blob/main/docs/images/rmk_ble_keyboard.jpg?raw=true" width="60%">
+<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/images/rmk_ble_keyboard.jpg" width="60%">
 
 ### [dactyl-lynx-rmk](https://github.com/whitelynx/dactyl-lynx-rmk)
 
@@ -52,11 +56,11 @@ Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) a
 ```shell
 cargo install rmkit flip-link
 # If you encounter installation issues on Windows, try this alternative command:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
-For comprehensive guidance, refer to the [User Guide](https://haobogu.github.io/rmk/user_guide/1_guide_overview.html).
+For comprehensive guidance, refer to the [User Guide](https://rmk.rs/docs/user_guide/1_guide_overview.html).
 
 ### Option 2: Explore Built-in Examples
 
@@ -111,9 +115,9 @@ Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/blob/main
       173.00 KB / 173.00 KB [=======================] 100.00 % 193.64 KB/s  
       ```
 
-## [Development Roadmap](https://haobogu.github.io/rmk/roadmap.html)
+## [Development Roadmap](https://rmk.rs/docs/development/roadmap.html)
 
-Current roadmap of RMK can be found [here](https://haobogu.github.io/rmk/roadmap.html).
+Current roadmap of RMK can be found [here](https://rmk.rs/docs/development/roadmap.html).
 
 ## Minimum Supported Rust Version (MSRV)
 

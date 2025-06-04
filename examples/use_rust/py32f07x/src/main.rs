@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(impl_trait_in_assoc_type)]
 
 #[macro_use]
 mod keymap;
@@ -61,6 +60,7 @@ async fn main(_spawner: Spawner) {
     };
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let storage_config = rmk::config::StorageConfig::default();
 
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,

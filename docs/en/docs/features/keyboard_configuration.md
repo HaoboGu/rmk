@@ -23,7 +23,7 @@ If you don't want any other customizations beyond the `keyboard.toml`, `#[rmk_ke
 
 ## What's in the config file?
 
-The config file contains almost EVERYTHING to customize a keyboard. For the full reference of `keyboard.toml`, please refer to [**this doc**](configuration/appendix.md). Also, we have pre-defined default configurations for chips, at [`rmk-macro/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-macro/src/default_config) folder. We're going to add default configurations for more chips, contributions are welcome!
+The config file contains almost EVERYTHING to customize a keyboard. For the full reference of `keyboard.toml`, please refer to [**this doc**](configuration/appendix.md). Also, we have pre-defined default configurations for chips, at [`rmk-config/src/default_config`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config) folder. We're going to add default configurations for more chips, contributions are welcome!
 
 The following are the available tables and related documentaion available in `keyboard.toml`:
 

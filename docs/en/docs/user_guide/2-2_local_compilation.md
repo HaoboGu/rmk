@@ -39,7 +39,7 @@ rustup target add thumbv7em-none-eabihf
 ```shell
 cargo install rmkit
 # If you have problems installing rmkit on Windows, try the following command to install it:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.9/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
 ```
 
 There are several other tools that should be installed:
@@ -92,7 +92,7 @@ The generated project uses the `keyboard.toml` file to config the keyboard. Thes
 
 The generated `keyboard.toml` should have some fields configured from `rmkit init`. But there are still some fields that you want to fill, such as the pin matrix, default keymap, led config, etc.
 
-The [Keyboard Configuration](/docs/features/keyboard_configuration.md) section has full instructions on how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
+The [Keyboard Configuration](../features/keyboard_configuration) section has full instructions on how to write your own `keyboard.toml`. Follow the doc and report any issues/questions at <https://github.com/HaoboGu/rmk/issues>. We appreciate your feedback!
 
 ### Update `memory.x`
 

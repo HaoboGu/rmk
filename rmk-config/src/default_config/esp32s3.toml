@@ -1,3 +1,6 @@
+[keyboard]
+usb_enable = true
+
 [ble]
 enabled = true
 

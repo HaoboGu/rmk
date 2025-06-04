@@ -45,7 +45,11 @@ ble_profiles_num = 3
 
 ### Behavior Configuration
 
-NOTE: Increasing the number of combos, forks and macros will increase memory usage.
+::: info
+
+Increasing the number of combos, forks and macros will increase memory usage.
+
+:::
 
 - `combo_max_num`: Maximum number of combos that the keyboard can store, default value is 8. This value must be between 0 and 256.
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
