@@ -19,7 +19,13 @@ The following guide is for local compilation. If you are using [cloud compilatio
 
 :::
 
-## 1. Update Cargo dependencies
+## 1. Update `rmkit`
+
+```shell
+cargo install rmkit --force
+```
+
+## 2. Update Cargo dependencies
 
 Lot of dependencies are updated from v0.6.x to v0.7.x. 
 
@@ -30,7 +36,7 @@ cargo update
 cargo build --release
 ```
 
-## 2. Add the path of `keyboard.toml` to `.cargo/config.toml`
+## 3. Add the path of `keyboard.toml` to `.cargo/config.toml`
 
 In v0.7.x, RMK requries to set the path of `keyboard.toml` in `.cargo/config.toml`. This makes the path of `keyboard.toml` configurable.
 
@@ -41,7 +47,7 @@ In versions before v0.7.x, `keyboard.toml` is located in the root directory of t
 KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
 ```
 
-## 3. Platform specific changes
+## 4. Platform specific changes
 
 ### nRF BLE stack migration
 
@@ -89,7 +95,7 @@ The migration process is simple, you just need to:
 
 Older versions of RMK uses [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal), which is now community-maintained. RMK v0.7.x now uses Espressif's official [`esp-hal`](https://github.com/esp-rs/esp-hal). Because the difference between [`esp-hal`](https://github.com/esp-rs/esp-hal) and [`esp-idf-hal`](https://github.com/esp-rs/esp-idf-hal) is too large, the recommended way to migrate to v0.7.x is to recreate your project from scratch and migrate your keymap & configuration to the new project.
 
-## 4. Check out new features
+## 5. Check out new features
 
 RMK v0.7.x brings lots of exciting features, making configuration easier and more flexible. Check out the [CHANGELOG](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md) for more details.
 
