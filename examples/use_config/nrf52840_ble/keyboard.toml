@@ -11,6 +11,7 @@ chip = "nrf52840"
 input_pins = ["P1_00", "P1_01", "P1_02", "P1_07"]
 output_pins = ["P1_05", "P1_06", "P1_03"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
 # row2col = true
 
 [layout]

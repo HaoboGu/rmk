@@ -12,6 +12,7 @@ usb_enable = false
 input_pins = ["P0_03", "P0_04", "P0_28", "P0_29"]
 output_pins = ["P0_11", "P0_27", "P0_07"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
 # row2col = true
 
 [layout]

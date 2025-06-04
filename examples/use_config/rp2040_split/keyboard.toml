@@ -42,6 +42,7 @@ serial = [
 [split.central.matrix]
 matrix_type = "normal"
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
 # row2col = true
 input_pins = ["PIN_9", "PIN_11"]
 output_pins = ["PIN_10", "PIN_12"]

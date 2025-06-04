@@ -14,7 +14,7 @@ product_id = 0x4643
 manufacturer = "haobo"
 serial_number = "vial:f64c2b3c:000001"
 # The chip or existing board used in keyboard
-# Either \"board\" or \"chip\" can be set, but not both
+# Either "board" or "chip" can be set, but not both
 chip = "rp2040"
 board = "nice!nano_v2"
 # USB is enabled by default for most chips
@@ -29,6 +29,8 @@ matrix_type = "normal"
 input_pins = ["PIN_6", "PIN_7", "PIN_8", "PIN_9"]
 output_pins = ["PIN_19", "PIN_20", "PIN_21"]
 # WARNING: Currently row2col/col2row is set in RMK's feature gate, row2col config here is valid ONLY when you're using cloud compilation
+# Checkout documentation here: https://rmk.rs/docs/user_guide/faq.html#my-matrix-is-row2col-the-matrix-doesn-t-work
+row2col = false
 
 # Direct Pin Matrix is a Matrix of buttons connected directly to pins. It conflicts with the above.
 matrix_type = "direct_pin"
@@ -128,6 +130,10 @@ enabled = true
 start_addr = 0x60000
 # Number of sectors used for storage, >= 2
 start_addr = 16
+# Clear storage at keyboard boot.
+# Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
+# This option is useful when testing the firmware.
+clear_storage = false
 
 # Ble configuration
 # To use the default configuration, ignore this section completely
@@ -177,7 +183,7 @@ serial = [
     # Or use the PIO serial port in full-duplex mode using different pins for RX/TX
     { instance = "PIO1", tx_pin = "PIN_7", rx_pin = "PIN_8" },
 ]
-# If the connection type is "ble", we should have `ble_addr` to define the central's BLE static address
+# If the connection type is "ble", we can override the BLE static address used by setting `ble_addr`.
 # This address should be a valid BLE random static address, see: https://academy.nordicsemi.com/courses/bluetooth-low-energy-fundamentals/lessons/lesson-2-bluetooth-le-advertising/topic/bluetooth-address/
 ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7]
 
@@ -201,7 +207,7 @@ row_offset = 2
 col_offset = 2
 # The serial instance used to communication with the central board, if the connection type is "serial"
 serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
-# The BLE random static address of the peripheral board
+# Override the BLE random static address of the peripheral board
 ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3]
 
 [split.peripheral.matrix]
@@ -242,8 +248,9 @@ Available chip names in `chip` field:
 
 Available board names in `board` field:
 
-- nice!nano
-- nice!nano_v2
-- XIAO BLE
+- `nice!nano`
+- `nice!nano_v2`
+- `XIAO BLE`
+- `pi_pico_w`
 
 If you want to add more built-in boards, feel free to open a PR!

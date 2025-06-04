@@ -79,8 +79,27 @@ function nav() {
   return [
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
+    {
+      text: `v0.7.0`,
+      items: [
+        {
+          items: [
+            { text: "v0.7.0", link: "/docs/introduction" },
+          ],
+        },
+        {
+          items: [
+            { text: "Migration Guide", link: "/docs/migration_guide" },
+          ],
+        },
+        {
+          items: [
+            { text: "v0.6.1", link: "https://haobogu.github.io/rmk" },
+          ]
+        }
+      ],
+    },
     { text: 'API', link: 'https://docs.rs/rmk/latest/rmk/' },
-    // {text:'CustomBlockEx',link:"/docs/custom-block-ex"}
   ]
 }
 function sidebarGuide() {
@@ -111,6 +130,12 @@ function sidebarGuide() {
         { text: '3.Flash the Firmware', link: 'user_guide/3_flash_firmware' },
         { text: 'FAQs', link: 'user_guide/faq' },
         { text: 'Real World Examples', link: 'user_guide/real_world_examples' }
+      ]
+    },
+    {
+      text: 'Migration Guide',
+      items: [
+        { text: 'From v0.6.1 to v0.7.0', link: 'migration_guide' }
       ]
     },
     {
