@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2025-06-04
+
+### Fixed
+
+- Fix the error when using matrix_map
+
 ## [0.7.0] - 2025-06-04
 
 ### Changed
