@@ -13,7 +13,7 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
 
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in keyboard_config.layout.as_ref().unwrap().keymap.clone().unwrap() {
+    for layer in keyboard_config.get_layout_config().unwrap().keymap {
         layers.push(expand_layer(layer));
         encoder_map.push(quote! { [#(#encoders), *] });
     }

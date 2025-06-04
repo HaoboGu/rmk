@@ -34,7 +34,7 @@ pub(crate) fn expand_matrix_config(
                 ));
                 // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
                 // So we need to declaring them in advance.
-                let layout = keyboard_config.layout.as_ref().unwrap();
+                let layout = keyboard_config.get_layout_config().unwrap();
                 let rows = layout.rows as usize;
                 let cols = layout.cols as usize;
                 let size = layout.rows as usize * layout.cols as usize;
