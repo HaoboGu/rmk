@@ -64,7 +64,7 @@ TO(base_layer)   @my_cut    @my_copy         @my_paste
 MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
 MouseLeft        MouseBtn4  MouseRight
 MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
-       MouseBtn1            MouseBtn12
+       MouseBtn1            MouseBtn2
 """
 ```
 
