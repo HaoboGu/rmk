@@ -1,7 +1,8 @@
 use crate::LightConfig;
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_light_from_toml(&self, default: LightConfig) -> LightConfig {
+    pub fn get_light_config(&self) -> LightConfig {
+        let default = LightConfig::default();
         match self.light.clone() {
             Some(mut light_config) => {
                 light_config.capslock = light_config.capslock.or(default.capslock);

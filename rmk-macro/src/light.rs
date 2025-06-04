@@ -23,12 +23,10 @@ pub(crate) fn build_light_config(chip: &ChipModel, pin_config: &Option<PinConfig
 
 pub(crate) fn expand_light_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let chip = keyboard_config.get_chip_model().unwrap();
-    let numslock = build_light_config(&chip, &keyboard_config.light.as_ref().and_then(|l| l.numslock.clone()));
-    let capslock = build_light_config(&chip, &keyboard_config.light.as_ref().and_then(|l| l.capslock.clone()));
-    let scrolllock = build_light_config(
-        &chip,
-        &keyboard_config.light.as_ref().and_then(|l| l.scrolllock.clone()),
-    );
+    let light_config = keyboard_config.get_light_config();
+    let numslock = build_light_config(&chip, &light_config.numslock);
+    let capslock = build_light_config(&chip, &light_config.capslock);
+    let scrolllock = build_light_config(&chip, &light_config.scrolllock);
 
     // Generate a macro that does light config
     quote! {
