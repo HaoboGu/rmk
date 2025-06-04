@@ -2458,9 +2458,9 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "reqwest"
-version = "0.12.18"
+version = "0.12.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e98ff6b0dbbe4d5a37318f433d4fc82babd21631f194d370409ceb2e40b2f0b5"
+checksum = "a2f8e5513d63f2e5b386eb5106dc67eaf3f84e95258e210489136b8b92ad6119"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2525,7 +2525,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -2569,7 +2569,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "cargo_toml",
  "config",
@@ -2585,7 +2585,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -3287,9 +3287,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fdb0c213ca27a9f57ab69ddb290fd80d970922355b83ae380b395d3986b8a2e"
+checksum = "adc82fd73de2a9722ac5da747f12383d2bfdb93591ee6c58486e0097890f05f2"
 dependencies = [
  "bitflags 2.9.1",
  "bytes",

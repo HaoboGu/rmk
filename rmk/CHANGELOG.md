@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-06-04
 
-### Updated
+### Changed
 
 - **BREAKING**: The BLE stack is migrated to [TrouBLE](https://github.com/embassy-rs/trouble/)
 - **BREAKING**: Add `rmk-config` and use `[env]` in `.cargo/config.toml` to configure the path of `keyboard.toml`
 - Optimize the size of buffer used in USB 
+- A new documentation site is released! Check out [rmk.rs](https://rmk.rs)
 
 ### Added
 
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable [support for keyboard macros](https://rmk.rs/docs/features/keymap/keyboard_macros.html) (via rust based configuration only for now) (closes issues #308, #284, #303, #313, #170)
 - Battery charging state reader
 - Sleep timeout when advertising
+- Allow disabling the storage feature in `Cargo.toml` to work with `keyboard.toml`
 
 ### Fixed
 
@@ -31,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue about first adc polling
 - Wrong battery status
 - Capslock stuck on macOS
+- Wrong BLE address setting in `keyboard.toml`
 
 ## [0.6.1] - 2025-04-11
 
