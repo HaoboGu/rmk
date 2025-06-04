@@ -23,7 +23,12 @@ The following guide is for local compilation. If you are using [cloud compilatio
 
 Lot of dependencies are updated from v0.6.x to v0.7.x. 
 
-The best updating approach is to copy the new `Cargo.toml` file from examples to replace the old one, delete the old `Cargo.lock` file, then tune the RMK features used and then re-build the project.
+The best updating approach is to copy the new `Cargo.toml` file from examples to replace the old one, delete the old `Cargo.lock` file, then tune the RMK features used and then re-build the project using
+
+```shell
+cargo update
+cargo build --release
+```
 
 ## 2. Add the path of `keyboard.toml` to `.cargo/config.toml`
 
