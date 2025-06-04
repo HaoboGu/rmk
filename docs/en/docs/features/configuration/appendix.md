@@ -104,7 +104,7 @@ TO(base_layer)   @MyCut     @MyCopy          @MyPaste
 MouseBtn1        MouseUp    MouseBtn2        MouseWheelUp
 MouseLeft        MouseBtn4  MouseRight
 MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
-          MouseBtn1         MouseBtn12
+          MouseBtn1         MouseBtn2
 """
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
