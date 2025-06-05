@@ -206,6 +206,7 @@ pub(crate) async fn run_ble<
                             Either4::First(_) => {
                                 info!("USB enabled, run USB keyboard");
                                 BLE_CONNECTION_STATE.store(255, Ordering::Relaxed);
+                                USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
                                     keymap,
                                     #[cfg(feature = "storage")]

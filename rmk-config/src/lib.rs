@@ -137,30 +137,30 @@ impl Default for RmkConstantsConfig {
 #[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
-    pub keyboard: Option<KeyboardInfo>,
+    keyboard: Option<KeyboardInfo>,
     /// Matrix of the keyboard, only for non-split keyboards
-    pub matrix: Option<MatrixConfig>,
+    matrix: Option<MatrixConfig>,
     // Aliases for key maps
-    pub aliases: Option<HashMap<String, String>>,
+    aliases: Option<HashMap<String, String>>,
     // Layers of key maps
-    pub layer: Option<Vec<LayerTomlConfig>>,
+    layer: Option<Vec<LayerTomlConfig>>,
     /// Layout config.
     /// For split keyboard, the total row/col should be defined in this section
-    pub layout: Option<LayoutTomlConfig>,
+    layout: Option<LayoutTomlConfig>,
     /// Behavior config
-    pub behavior: Option<BehaviorConfig>,
+    behavior: Option<BehaviorConfig>,
     /// Light config
-    pub light: Option<LightConfig>,
+    light: Option<LightConfig>,
     /// Storage config
-    pub storage: Option<StorageConfig>,
+    storage: Option<StorageConfig>,
     /// Ble config
-    pub ble: Option<BleConfig>,
+    ble: Option<BleConfig>,
     /// Dependency config
-    pub dependency: Option<DependencyConfig>,
+    dependency: Option<DependencyConfig>,
     /// Split config
-    pub split: Option<SplitConfig>,
+    split: Option<SplitConfig>,
     /// Input device config
-    pub input_device: Option<InputDeviceConfig>,
+    input_device: Option<InputDeviceConfig>,
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,

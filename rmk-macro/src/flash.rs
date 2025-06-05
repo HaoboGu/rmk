@@ -6,14 +6,14 @@ use quote::quote;
 use rmk_config::{ChipSeries, KeyboardTomlConfig, StorageConfig};
 
 pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    if keyboard_config.storage.as_ref().map_or(true, |s| !s.enabled) {
+    if !keyboard_config.get_storage_config().enabled {
         // This config actually does nothing if storage is disabled
         return quote! {
             // let storage_config = ::rmk::config::StorageConfig::default();
             // let flash = ::rmk::DummyFlash::new();
         };
     }
-    let mut flash_init = get_storage_config(keyboard_config.storage.as_ref().unwrap());
+    let mut flash_init = expand_storage_config(&keyboard_config.get_storage_config());
     let chip = keyboard_config.get_chip_model().unwrap();
     flash_init.extend(
     match chip.series {
@@ -40,7 +40,7 @@ pub(crate) fn expand_flash_init(keyboard_config: &KeyboardTomlConfig) -> TokenSt
     flash_init
 }
 
-fn get_storage_config(storage_config: &StorageConfig) -> TokenStream2 {
+fn expand_storage_config(storage_config: &StorageConfig) -> TokenStream2 {
     let num_sectors = storage_config.num_sectors.unwrap_or(2);
     let start_addr = storage_config.start_addr.unwrap_or(0);
     let clear_storage = storage_config.clear_storage.unwrap_or(false);

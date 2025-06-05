@@ -137,7 +137,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             }
         }
         rmk_config::ChipSeries::Rp2040 => {
-            let usb_info = communication.get_usb_info().unwrap();
+            let usb_info = communication.get_usb_info().expect("no usb info for the chip");
             let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
             let peripheral_name = format_ident!("{}", usb_info.peripheral_name);
             // For Pico W, enabled PIO0_IRQ_0 interrupt
