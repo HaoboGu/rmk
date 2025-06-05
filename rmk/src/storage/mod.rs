@@ -950,33 +950,38 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         encoder_map: &mut Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
     ) -> Result<(), ()> {
         let mut storage_cache = NoCache::new();
-        if let Ok(mut key_iterator) = fetch_all_items::<u32, _, _>(
+        // Use fetch_all_items to speed up the keymap reading
+        let mut key_iterator = fetch_all_items::<u32, _, _>(
             &mut self.flash,
             self.storage_range.clone(),
             &mut storage_cache,
             &mut self.buffer,
         )
         .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        // Read all keymap keys and encoder configs
+        while let Some((_key, item)) = key_iterator
+            .next::<u32, StorageData>(&mut self.buffer)
+            .await
+            .map_err(|e| print_storage_error::<F>(e))?
         {
-            // Iterator the storage, read all keymap keys and encoder configs
-            while let Ok(Some((_key, item))) = key_iterator.next::<u32, StorageData>(&mut self.buffer).await {
-                match item {
-                    StorageData::KeymapKey(key) => {
-                        if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
-                            keymap[key.layer][key.row][key.col] = key.action;
-                        }
+            match item {
+                StorageData::KeymapKey(key) => {
+                    if key.layer < NUM_LAYER && key.row < ROW && key.col < COL {
+                        keymap[key.layer][key.row][key.col] = key.action;
                     }
-                    StorageData::EncoderConfig(encoder) => {
-                        if let Some(ref mut map) = encoder_map {
-                            if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
-                                map[encoder.layer][encoder.idx] = encoder.action;
-                            }
-                        }
-                    }
-                    _ => continue,
                 }
+                StorageData::EncoderConfig(encoder) => {
+                    if let Some(ref mut map) = encoder_map {
+                        if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
+                            map[encoder.layer][encoder.idx] = encoder.action;
+                        }
+                    }
+                }
+                _ => continue,
             }
-        };
+        }
 
         Ok(())
     }
