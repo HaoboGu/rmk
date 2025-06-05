@@ -118,7 +118,7 @@ jobs:
           bloaty-args: ${{ env.ORIGINAL_PATH }} -- ${{ env.BINARY_PATH }}
           output-to-summary: false
       - name: Upload size results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: size-results-${{ matrix.example }}-${{ matrix.example_type }}
           path: |
@@ -202,19 +202,19 @@ jobs:
             echo '```' >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
           fi
       - name: Upload size results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: size-results-${{ matrix.chip }}-${{ matrix.example_type }}
           path: |
             /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-        if: always()
+        if: always() # Always upload the size results even if some builds fail
 
   collect-and-comment:
     needs: 
       - binary-size
       - build-esp32s3
     runs-on: ubuntu-latest
-    if: always()
+    if: always() # Always upload the size results even if some builds fail
     permissions:
       actions: read
       pull-requests: write
