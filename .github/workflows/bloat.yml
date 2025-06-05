@@ -30,24 +30,15 @@ jobs:
         example:
           - nrf52832_ble
           - nrf52840_ble
-          - nrf52840_ble_split
           - rp2040
-          - rp2040_split
           - rp2040_direct_pin
           - pi_pico_w_ble
-          - pi_pico_w_ble_split
           - stm32f1
           - stm32f4
           - stm32h7
-          - esp32c3_ble
-          - esp32c6_ble
         example_type:
           - use_rust
           - use_config
-        exclude:
-          # ESP32 examples need special handling, exclude them for now
-          - example: esp32c3_ble
-          - example: esp32c6_ble
     outputs:
       size-results: ${{ steps.collect-sizes.outputs.size-results }}
     steps:
@@ -117,14 +108,6 @@ jobs:
         with:
           bloaty-args: ${{ env.ORIGINAL_PATH }} -- ${{ env.BINARY_PATH }}
           output-to-summary: false
-      - name: Upload size results
-        uses: actions/upload-artifact@v4
-        with:
-          name: size-results-${{ matrix.example }}-${{ matrix.example_type }}
-          path: |
-            /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-        if: always()
-        continue-on-error: true
       - name: Save size results to file
         run: |
           mkdir -p /tmp
@@ -136,83 +119,136 @@ jobs:
             echo "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           fi
-
-  build-esp32s3:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        chip:
-          - esp32s3
-        example_type:
-          - use_rust
-          - use_config
-    steps:
-      - uses: cargo-bins/cargo-binstall@main
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: "0"
-      - name: Install esp tools
-        run: |
-          cargo binstall ldproxy espup -y
-          espup install
-      - name: Build new binary
-        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
-        run: . /home/runner/export-esp.sh && cargo +esp build --release
-      - name: Calculate binary size
-        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
-        run: |
-          echo "SIZE_OUTPUT<<EOF" >> $GITHUB_ENV
-          echo "## ${{ matrix.example_type }}/${{ matrix.chip }}_ble" >> $GITHUB_ENV
-          echo '```' >> $GITHUB_ENV
-          . /home/runner/export-esp.sh && cargo +esp size --release >> $GITHUB_ENV
-          echo '```' >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-      - name: Find and save binary
-        run: |
-          BINARY_PATH=$(find ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble/target -name "rmk-*" -type f ! -name "*.d" ! -name "*.rlib" | head -1)
-          if [ -n "$BINARY_PATH" ]; then
-            ORIGINAL_PATH="${BINARY_PATH%/*}/original-${{ matrix.chip }}-${{ matrix.example_type }}.elf"
-            cp "$BINARY_PATH" "$ORIGINAL_PATH"
-            echo "BINARY_PATH=$BINARY_PATH" >> $GITHUB_ENV
-            echo "ORIGINAL_PATH=$ORIGINAL_PATH" >> $GITHUB_ENV
-          fi
-      - name: If it's a PR checkout the base commit
-        if: ${{ github.event.pull_request }}
-        run: git checkout -f ${{ github.event.pull_request.base.sha }}
-      - name: Rebuild with the base commit
-        if: ${{ github.event.pull_request }}
-        working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
-        run: . /home/runner/export-esp.sh && cargo +esp build --release
-      - name: Run Bloaty to compare both output files
-        if: ${{ github.event.pull_request && env.BINARY_PATH != '' }}
-        id: bloaty-comparison
-        uses: carlosperate/bloaty-action@v1
-        with:
-          bloaty-args: ${{ env.ORIGINAL_PATH }} -- ${{ env.BINARY_PATH }}
-          output-to-summary: false
-      - name: Save size results to file
-        run: |
-          mkdir -p /tmp
-          echo "${{ env.SIZE_OUTPUT }}" > /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-          if [ "${{ github.event.pull_request }}" != "" ] && [ -n "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" ]; then
-            echo "" >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-            echo "### Diff" >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-            echo '```' >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-            echo "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-            echo '```' >> /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-          fi
       - name: Upload size results
         uses: actions/upload-artifact@v4
         with:
-          name: size-results-${{ matrix.chip }}-${{ matrix.example_type }}
+          name: size-results-${{ matrix.example }}-${{ matrix.example_type }}
           path: |
-            /tmp/size-${{ matrix.chip }}-${{ matrix.example_type }}.txt
-        if: always() # Always upload the size results even if some builds fail
+            /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+        if: always()
+        continue-on-error: true
 
+  binary-size-split:
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          example:
+            - nrf52840_ble_split
+            - rp2040_split
+            - pi_pico_w_ble_split
+          example_type:
+            - use_rust
+            - use_config
+      outputs:
+        size-results: ${{ steps.collect-sizes.outputs.size-results }}
+      steps:
+        - uses: actions-rust-lang/setup-rust-toolchain@v1
+        - uses: actions/setup-python@v5
+          with:
+            python-version: "3.11"
+        - uses: cargo-bins/cargo-binstall@main
+        - uses: actions/cache@v3
+          id: cache-cargo
+          with:
+            path: |
+              ~/.cargo/bin/
+              ~/.cargo/registry/index/
+              ~/.cargo/registry/cache/
+              ~/.cargo/git/db/
+              ./examples/target/
+            key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        - name: Install tools
+          run: |
+            cargo binstall cargo-make flip-link -y
+            rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
+            rustup component add rust-src llvm-tools
+        - if: steps.cache-cargo.outputs.cache-hit != 'true'
+          run: cargo install cargo-binutils
+        - name: Check out the repo with the full git history
+          uses: actions/checkout@v3
+          with:
+            fetch-depth: "0"
+        - name: Build new binary
+          working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
+          run: cargo build --release
+        - name: Calculate binary size
+          working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
+          run: |
+            echo "SIZE_OUTPUT<<EOF" >> $GITHUB_ENV
+            echo "## ${{ matrix.example_type }}/${{ matrix.example }}_central" >> $GITHUB_ENV
+            echo '```' >> $GITHUB_ENV
+            cargo size --release --bin central >> $GITHUB_ENV
+            echo '```' >> $GITHUB_ENV
+            echo "## ${{ matrix.example_type }}/${{ matrix.example }}_peripheral" >> $GITHUB_ENV
+            echo '```' >> $GITHUB_ENV
+            cargo size --release --bin peripheral >> $GITHUB_ENV
+            echo '```' >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          id: new-size
+        - name: Find and save binary
+          run: |
+            # Find the binary file (it could be in different target directories)
+            BINARY_PATH_CENTRAL=$(find ./examples/${{ matrix.example_type }}/${{ matrix.example }}/target -name "central" -type f ! -name "*.d" ! -name "*.rlib" | head -1)
+            if [ -n "$BINARY_PATH_CENTRAL" ]; then
+              ORIGINAL_PATH_CENTRAL="${BINARY_PATH_CENTRAL%/*}/original-${{ matrix.example }}-${{ matrix.example_type }}.elf"
+              cp "$BINARY_PATH_CENTRAL" "$ORIGINAL_PATH_CENTRAL"
+              echo "BINARY_PATH_CENTRAL=$BINARY_PATH_CENTRAL" >> $GITHUB_ENV
+              echo "ORIGINAL_PATH_CENTRAL=$ORIGINAL_PATH_CENTRAL" >> $GITHUB_ENV
+            else
+              echo "No central binary found for ${{ matrix.example_type }}/${{ matrix.example }}"
+              exit 1
+            fi
+            BINARY_PATH_PERIPHERAL=$(find ./examples/${{ matrix.example_type }}/${{ matrix.example }}/target -name "peripheral" -type f ! -name "*.d" ! -name "*.rlib" | head -1)
+            if [ -n "$BINARY_PATH_PERIPHERAL" ]; then
+              ORIGINAL_PATH_PERIPHERAL="${BINARY_PATH_PERIPHERAL%/*}/original-${{ matrix.example }}-${{ matrix.example_type }}.elf"
+              cp "$BINARY_PATH_PERIPHERAL" "$ORIGINAL_PATH_PERIPHERAL"
+              echo "BINARY_PATH_PERIPHERAL=$BINARY_PATH_PERIPHERAL" >> $GITHUB_ENV
+              echo "ORIGINAL_PATH_PERIPHERAL=$ORIGINAL_PATH_PERIPHERAL" >> $GITHUB_ENV
+            else
+              echo "No peripheral binary found for ${{ matrix.example_type }}/${{ matrix.example }}"
+              exit 1
+            fi
+        - name: If it's a PR checkout the base commit
+          if: ${{ github.event.pull_request }}
+          run: git checkout -f ${{ github.event.pull_request.base.sha }}
+        - name: Rebuild with the base commit
+          if: ${{ github.event.pull_request }}
+          working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
+          run: cargo build --release
+        - name: Run Bloaty to compare both output files
+          if: ${{ github.event.pull_request }}
+          id: bloaty-comparison
+          uses: carlosperate/bloaty-action@v1
+          with:
+            bloaty-args: ${{ env.ORIGINAL_PATH_CENTRAL }} -- ${{ env.BINARY_PATH_CENTRAL }}
+            bloaty-args: ${{ env.ORIGINAL_PATH_PERIPHERAL }} -- ${{ env.BINARY_PATH_PERIPHERAL }}
+            output-to-summary: false
+        - name: Save size results to file
+          run: |
+            mkdir -p /tmp
+            echo "${{ env.SIZE_OUTPUT }}" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            if [ "${{ github.event.pull_request }}" != "" ]; then
+              echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "### Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            fi
+        - name: Upload size results
+          uses: actions/upload-artifact@v4
+          with:
+            name: size-results-${{ matrix.example }}-${{ matrix.example_type }}
+            path: |
+              /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          if: always()
+          continue-on-error: true
   collect-and-comment:
     needs: 
       - binary-size
-      - build-esp32s3
+      - binary-size-split
     runs-on: ubuntu-latest
     if: always() # Always upload the size results even if some builds fail
     permissions:
