@@ -210,7 +210,9 @@ jobs:
         if: always()
 
   collect-and-comment:
-    needs: [binary-size, build-esp32s3]
+    needs: 
+      - binary-size
+      - build-esp32s3
     runs-on: ubuntu-latest
     if: always()
     permissions:
