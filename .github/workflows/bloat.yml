@@ -116,7 +116,7 @@ jobs:
             echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "### Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-            echo "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            printf '%b\n' "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           fi
       - name: Upload size results
@@ -237,10 +237,15 @@ jobs:
               echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-              echo "### Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "### Central Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-              echo "${{ steps.bloaty-comparison-central.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-              echo "${{ steps.bloaty-comparison-peripheral.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              printf '%b\n' "${{ steps.bloaty-comparison-central.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "### Peripheral Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              printf '%b\n' "${{ steps.bloaty-comparison-peripheral.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             fi
