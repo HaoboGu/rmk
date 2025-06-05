@@ -108,11 +108,13 @@ jobs:
       - name: Save size results to file
         run: |
           mkdir -p /tmp
+          echo "## ${{ matrix.example_type }}/${{ matrix.example }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           printf '%b\n' "${{ join(steps.new-size.outputs.*, '\n') }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           if [ "${{ github.event.pull_request }}" != "" ]; then
-            echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
@@ -120,6 +122,7 @@ jobs:
             printf '%b\n' "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           fi
       - name: Upload size results
         uses: actions/upload-artifact@v4
@@ -177,9 +180,8 @@ jobs:
           working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
           run: |
             echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
-            echo "# ${{ matrix.example_type }}/${{ matrix.example }}_central" >> $GITHUB_OUTPUT
             cargo size --release --bin central >> $GITHUB_OUTPUT
-            echo "# ${{ matrix.example_type }}/${{ matrix.example }}_peripheral" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
             cargo size --release --bin peripheral >> $GITHUB_OUTPUT
             echo 'EOF' >> $GITHUB_OUTPUT
           id: new-size
@@ -230,11 +232,13 @@ jobs:
         - name: Save size results to file
           run: |
             mkdir -p /tmp
+            echo "## ${{ matrix.example_type }}/${{ matrix.example }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             printf '%b\n' "${{ join(steps.new-size.outputs.*, '\n') }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             if [ "${{ github.event.pull_request }}" != "" ]; then
-              echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
@@ -248,6 +252,7 @@ jobs:
               printf '%b\n' "${{ steps.bloaty-comparison-peripheral.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             fi
         - name: Upload size results
           uses: actions/upload-artifact@v4
