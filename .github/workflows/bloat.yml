@@ -215,12 +215,18 @@ jobs:
           if: ${{ github.event.pull_request }}
           working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
           run: cargo build --release
-        - name: Run Bloaty to compare both output files
+        - name: Run Bloaty to compare both central output files
           if: ${{ github.event.pull_request }}
-          id: bloaty-comparison
+          id: bloaty-comparison-central
           uses: carlosperate/bloaty-action@v1
           with:
             bloaty-args: ${{ env.ORIGINAL_PATH_CENTRAL }} -- ${{ env.BINARY_PATH_CENTRAL }}
+            output-to-summary: false
+        - name: Run Bloaty to compare both peripheral output files
+          if: ${{ github.event.pull_request }}
+          id: bloaty-comparison-peripheral
+          uses: carlosperate/bloaty-action@v1
+          with:
             bloaty-args: ${{ env.ORIGINAL_PATH_PERIPHERAL }} -- ${{ env.BINARY_PATH_PERIPHERAL }}
             output-to-summary: false
         - name: Save size results to file
@@ -233,7 +239,8 @@ jobs:
               echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "### Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-              echo "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "${{ steps.bloaty-comparison-central.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+              echo "${{ steps.bloaty-comparison-peripheral.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             fi
