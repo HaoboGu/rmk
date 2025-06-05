@@ -63,6 +63,7 @@ use {
 
 use crate::light::LightController;
 use crate::state::ConnectionState;
+pub use crate::usb::USB_ENABLED;
 
 pub mod action;
 #[cfg(feature = "_ble")]

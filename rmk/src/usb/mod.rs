@@ -217,7 +217,7 @@ impl UsbDeviceHandler {
     }
 }
 
-pub(crate) static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
+pub static USB_ENABLED: Signal<crate::RawMutex, ()> = Signal::new();
 pub(crate) static USB_SUSPENDED: Signal<crate::RawMutex, ()> = Signal::new();
 
 impl Handler for UsbDeviceHandler {
