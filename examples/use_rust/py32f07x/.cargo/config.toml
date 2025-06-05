@@ -6,3 +6,4 @@ target = "thumbv6m-none-eabi" # Cortex-M0 and Cortex-M0+
 
 [env]
 DEFMT_LOG = "debug"
+KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
