@@ -59,7 +59,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install tools
         run: |
-          cargo binstall cargo-make flip-link -y
+          cargo binstall cargo-make flip-link --force -y
           rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
           rustup component add rust-src llvm-tools
       - if: steps.cache-cargo.outputs.cache-hit != 'true'
@@ -158,7 +158,7 @@ jobs:
             key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         - name: Install tools
           run: |
-            cargo binstall cargo-make flip-link -y
+            cargo binstall cargo-make flip-link --force -y
             rustup target add thumbv6m-none-eabi thumbv7em-none-eabihf thumbv7m-none-eabi riscv32imac-unknown-none-elf riscv32imc-unknown-none-elf
             rustup component add rust-src llvm-tools
         - if: steps.cache-cargo.outputs.cache-hit != 'true'
@@ -227,7 +227,9 @@ jobs:
         - name: Save size results to file
           run: |
             mkdir -p /tmp
-            echo "$## PR build size\n \`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            printf '%b\n' "${{ join(steps.new-size.outputs.*, '\n') }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             if [ "${{ github.event.pull_request }}" != "" ]; then
               echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
@@ -293,9 +295,34 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
+            const commentIdentifier = '# Binary Size Report';
+            // Get all comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: process.env.COMBINED_RESULTS
-            })
+            });
+
+            // Find if the comment already exists
+            const existingComment = comments.find(comment => 
+              comment.body.includes(commentIdentifier)
+            );
+            if (existingComment) {
+              // Update the existing comment
+              await github.rest.issues.updateComment({
+                comment_id: existingComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: process.env.COMBINED_RESULTS
+              });
+              console.log('Updated existing comment with ID:', existingComment.id);
+            } else {
+              // Create a new comment
+              const { data: newComment } = await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: process.env.COMBINED_RESULTS
+              });
+              console.log('Created new comment with ID:', newComment.id);
+            }
