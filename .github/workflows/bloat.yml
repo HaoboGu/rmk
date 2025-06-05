@@ -28,14 +28,14 @@ jobs:
     strategy:
       matrix:
         example:
-          - nrf52832_ble
+          # - nrf52832_ble
           - nrf52840_ble
           - rp2040
-          - rp2040_direct_pin
-          - pi_pico_w_ble
+          # - rp2040_direct_pin
+          # - pi_pico_w_ble
           - stm32f1
-          - stm32f4
-          - stm32h7
+          # - stm32f4
+          # - stm32h7
         example_type:
           - use_rust
           - use_config
@@ -135,9 +135,9 @@ jobs:
           example:
             - nrf52840_ble_split
             - rp2040_split
-            - pi_pico_w_ble_split
+            # - pi_pico_w_ble_split
           example_type:
-            - use_rust
+            # - use_rust
             - use_config
       outputs:
         size-results: ${{ steps.collect-sizes.outputs.size-results }}
