@@ -220,7 +220,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Download all size results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./size-results
       - name: Combine all size results
