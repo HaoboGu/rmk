@@ -94,6 +94,8 @@ pub mod storage;
 pub(crate) mod usb;
 pub mod via;
 
+const TMP: usize = 1;
+
 pub async fn initialize_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: config::BehaviorConfig,
