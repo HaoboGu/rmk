@@ -108,7 +108,9 @@ jobs:
       - name: Save size results to file
         run: |
           mkdir -p /tmp
-          echo "$\`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          printf '%b\n' "${{ join(steps.new-size.outputs.*, '\n') }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           if [ "${{ github.event.pull_request }}" != "" ]; then
             echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
@@ -117,6 +119,7 @@ jobs:
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             printf '%b\n' "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "</details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           fi
       - name: Upload size results
         uses: actions/upload-artifact@v4
@@ -185,7 +188,7 @@ jobs:
             # Find the binary file (it could be in different target directories)
             BINARY_PATH_CENTRAL=$(find ./examples/${{ matrix.example_type }}/${{ matrix.example }}/target -name "central" -type f ! -name "*.d" ! -name "*.rlib" | head -1)
             if [ -n "$BINARY_PATH_CENTRAL" ]; then
-              ORIGINAL_PATH_CENTRAL="${BINARY_PATH_CENTRAL%/*}/original-${{ matrix.example }}-${{ matrix.example_type }}.elf"
+              ORIGINAL_PATH_CENTRAL="${BINARY_PATH_CENTRAL%/*}/original-central-${{ matrix.example }}-${{ matrix.example_type }}.elf"
               cp "$BINARY_PATH_CENTRAL" "$ORIGINAL_PATH_CENTRAL"
               echo "BINARY_PATH_CENTRAL=$BINARY_PATH_CENTRAL" >> $GITHUB_ENV
               echo "ORIGINAL_PATH_CENTRAL=$ORIGINAL_PATH_CENTRAL" >> $GITHUB_ENV
@@ -195,7 +198,7 @@ jobs:
             fi
             BINARY_PATH_PERIPHERAL=$(find ./examples/${{ matrix.example_type }}/${{ matrix.example }}/target -name "peripheral" -type f ! -name "*.d" ! -name "*.rlib" | head -1)
             if [ -n "$BINARY_PATH_PERIPHERAL" ]; then
-              ORIGINAL_PATH_PERIPHERAL="${BINARY_PATH_PERIPHERAL%/*}/original-${{ matrix.example }}-${{ matrix.example_type }}.elf"
+              ORIGINAL_PATH_PERIPHERAL="${BINARY_PATH_PERIPHERAL%/*}/original-peripheral-${{ matrix.example }}-${{ matrix.example_type }}.elf"
               cp "$BINARY_PATH_PERIPHERAL" "$ORIGINAL_PATH_PERIPHERAL"
               echo "BINARY_PATH_PERIPHERAL=$BINARY_PATH_PERIPHERAL" >> $GITHUB_ENV
               echo "ORIGINAL_PATH_PERIPHERAL=$ORIGINAL_PATH_PERIPHERAL" >> $GITHUB_ENV
