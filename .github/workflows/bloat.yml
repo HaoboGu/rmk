@@ -74,12 +74,9 @@ jobs:
       - name: Calculate binary size
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
         run: |
-          echo "SIZE_OUTPUT<<EOF" >> $GITHUB_ENV
-          echo "## ${{ matrix.example_type }}/${{ matrix.example }}" >> $GITHUB_ENV
-          echo '```' >> $GITHUB_ENV
-          cargo size --release >> $GITHUB_ENV
-          echo '```' >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
+          cargo size --release >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
         id: new-size
       - name: Find and save binary
         run: |
@@ -111,10 +108,12 @@ jobs:
       - name: Save size results to file
         run: |
           mkdir -p /tmp
-          echo "${{ env.SIZE_OUTPUT }}" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+          echo "$\`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
           if [ "${{ github.event.pull_request }}" != "" ]; then
             echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
-            echo "### Diff" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "<summary>Diff</summary>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             printf '%b\n' "${{ steps.bloaty-comparison.outputs.bloaty-output-encoded }}" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             echo '```' >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
@@ -174,16 +173,12 @@ jobs:
         - name: Calculate binary size
           working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.example }}
           run: |
-            echo "SIZE_OUTPUT<<EOF" >> $GITHUB_ENV
-            echo "## ${{ matrix.example_type }}/${{ matrix.example }}_central" >> $GITHUB_ENV
-            echo '```' >> $GITHUB_ENV
-            cargo size --release --bin central >> $GITHUB_ENV
-            echo '```' >> $GITHUB_ENV
-            echo "## ${{ matrix.example_type }}/${{ matrix.example }}_peripheral" >> $GITHUB_ENV
-            echo '```' >> $GITHUB_ENV
-            cargo size --release --bin peripheral >> $GITHUB_ENV
-            echo '```' >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            echo 'RESULT<<EOF' >> $GITHUB_OUTPUT
+            echo "# ${{ matrix.example_type }}/${{ matrix.example }}_central" >> $GITHUB_OUTPUT
+            cargo size --release --bin central >> $GITHUB_OUTPUT
+            echo "# ${{ matrix.example_type }}/${{ matrix.example }}_peripheral" >> $GITHUB_OUTPUT
+            cargo size --release --bin peripheral >> $GITHUB_OUTPUT
+            echo 'EOF' >> $GITHUB_OUTPUT
           id: new-size
         - name: Find and save binary
           run: |
@@ -232,7 +227,7 @@ jobs:
         - name: Save size results to file
           run: |
             mkdir -p /tmp
-            echo "${{ env.SIZE_OUTPUT }}" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
+            echo "$## PR build size\n \`\`\`\n${{ join(steps.new-size.outputs.*, '\n') }}\n\`\`\`\n" > /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
             if [ "${{ github.event.pull_request }}" != "" ]; then
               echo "" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
               echo "<details>" >> /tmp/size-${{ matrix.example }}-${{ matrix.example_type }}.txt
