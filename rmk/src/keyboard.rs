@@ -882,7 +882,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let key_event = key_event_released;
         let col = key_event_released.col as usize;
         let row = key_event_released.row as usize;
-        let post_hold_release_delay = self.keymap.borrow().behavior.tap_hold.post_wait_time;
 
         trace!("buffer queue to process {:?}", self.holding_buffer);
 
@@ -901,30 +900,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         //     self.process_key_action_normal(e.tap_action(), key_event_released).await;
                         // },
                         TapHoldState::Hold | PostHold => {
-
-                            if post_hold_release_delay.as_ticks() > 0 {
-                                debug!("|TH_RELEASE| {:?}] as Hold, wait releasing after {} ms",
-                                tap_hold,post_hold_release_delay.as_millis()
-                            );
-                                tap_hold.update_state(TapHoldState::Release);
-                                tap_hold.key_event = key_event_released;
-                                //update deadline
-                                tap_hold.deadline = Instant::now() + post_hold_release_delay;
-                                self.holding_buffer.push(
-                                    HoldingKey::TapHold(tap_hold)
-                                ).ok();
-                                //return to buffer
-                                return;
-                            } else {
-                                debug!(
-                                "|TH_RELEASE|TapHold {:?}] as Hold, releasing {:?}",
-                                tap_hold.key_event,
-                                tap_hold.hold_action()
-                            );
-                                self.process_key_action_normal(tap_hold.hold_action(), key_event_released)
-                                    .await;
-                                self.tap_hold_release_key_from_buffer(key_event_released);
-                            }
+                            debug!( "|TH_RELEASE|TapHold {:?}] as Hold, releasing {:?}", tap_hold.key_event, tap_hold.hold_action());
+                            self.process_key_action_normal(tap_hold.hold_action(), key_event_released)
+                                .await;
+                            self.tap_hold_release_key_from_buffer(key_event_released);
                         }
                         PostTap => {
                             debug!(
@@ -990,48 +969,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             //FIXME a release taphold key should in state of PostXX or Hold/Tap , this branch need remove
             //ignore timer, should be fire by main loop
             debug!("TapHold is released, should be hold action");
-            let post_wait_time = self.keymap.borrow().behavior.tap_hold.post_wait_time.as_millis();
 
-            if post_wait_time > 0 {
-                // Release hold action, wait for `post_wait_time`, then clear timer
-
-                debug!(
-                    "[Deprecated] HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
-                    hold_action, key_event.pressed
-                );
-                //TODO move to main loop
-                let wait_release = async {
-                    loop {
-                        let next_key_event = KEY_EVENT_CHANNEL.receive().await;
-                        if !next_key_event.pressed {
-                            //ignore release
-                            self.unprocessed_events.push(next_key_event).ok();
-                        } else {
-                            //press , add to result
-                            break next_key_event;
-                        }
-                    }
-                };
-
-                let wait_timeout = embassy_time::Timer::after_millis(
-                    self.keymap.borrow().behavior.tap_hold.post_wait_time.as_millis(),
-                );
-
-                match select(wait_timeout, wait_release).await {
-                    embassy_futures::select::Either::First(_) => {
-                        debug!("post_wait_timeout reached, releasing hold key");
-                        // Wait timeout, release the hold key finally
-                        self.process_key_action_normal(hold_action, key_event).await;
-                    }
-                    embassy_futures::select::Either::Second(next_press) => {
-                        debug!("post wait interrupted by new key event: {:?}", next_press);
-                        self.unprocessed_events.push(next_press).ok();
-                        self.unprocessed_events.push(key_event).ok();
-                    }
-                };
-            } else {
-                self.process_key_action_normal(hold_action, key_event).await;
-            }
+            self.process_key_action_normal(hold_action, key_event).await;
         }
         // Clear timer
         self.timer[col][row] = None;
