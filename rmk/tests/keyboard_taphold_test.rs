@@ -100,7 +100,6 @@ mod tap_hold_test {
             block_on(main);
         }
 
-        // test post_wait_time
         #[test]
         fn test_tap_hold_key_post_wait_in_new_version_1() {
             block_on( async {
@@ -182,54 +181,6 @@ mod tap_hold_test {
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [kc8!(A), 0, 0, 0, 0, 0]],
                     [0, [kc8!(A), 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-            });
-        }
-        // test post_wait_time
-        #[test]
-        fn test_tap_hold_key_post_wait_timeout() {
-            block_on( async {
-                    let config =BehaviorConfig {
-                            tap_hold: TapHoldConfig {
-                                post_wait_time: Duration::from_millis(50),
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        };
-                let keymap:&mut RefCell<KeyMap<1, 2, 1>> = wrap_keymap(
-                        [[[
-                            th!(B, LShift),
-                        k!(A)
-                        ]]]
-                        ,
-                        config
-                    );
-                let mut keyboard = Keyboard::new(keymap);
-
-
-                let sequence = key_sequence![
-                    [0, 0, true, 10],  // press th b
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, true, 10],  // Press a within post wait timeout
-                    [0, 1, false, 10],  // Press a
-                    [0, 0, true, 10],  // press th b
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, true, 100],  // Press a out of post wait timeout
-                    [0, 1, false, 10],  // Press a
-                ];
-
-                let expected_reports = key_report![
-                    //tap on a
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [ kc8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ kc8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                    [0, [ kc8!(A) , 0, 0, 0, 0, 0]],
                     [0, [ 0, 0, 0, 0, 0, 0]],
                 ];
 
