@@ -97,7 +97,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
 
-    /// The modifiers coming from (last) KeyAction::WithModifier  
+    /// The modifiers coming from (last) KeyAction::WithModifier
     with_modifiers: HidModifiers,
 
     /// Macro text typing state (affects the effective modifiers)
@@ -107,9 +107,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// The real state before fork activations is stored here
     fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
-
-    /// The previous held modifiers
-    prev_modifiers: HidModifiers,
 
     /// The held modifiers for the keyboard hid report
     held_modifiers: HidModifiers,
@@ -181,7 +178,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
             registered_keys: [None; 6],
-            prev_modifiers: HidModifiers::default(),
             held_modifiers: HidModifiers::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
@@ -234,14 +230,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed);
-
-        if self.prev_modifiers != modifiers {
-            self.controller_pub
-                .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                    modifiers,
-                )));
-            self.prev_modifiers = modifiers;
-        }
 
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers.into_bits(),
@@ -1363,6 +1351,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers |= key.to_hid_modifiers();
+        self.controller_pub
+            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                self.held_modifiers,
+            )));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -1371,11 +1363,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers &= !key.to_hid_modifiers();
+        self.controller_pub
+            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                self.held_modifiers,
+            )));
     }
 
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers |= modifiers.to_hid_modifiers();
+        self.controller_pub
+            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                self.held_modifiers,
+            )));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers.to_hid_modifiers();
@@ -1384,6 +1384,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers &= !modifiers.to_hid_modifiers();
+        self.controller_pub
+            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
+                self.held_modifiers,
+            )));
     }
 }
 
