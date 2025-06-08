@@ -71,6 +71,7 @@ mod boot;
 pub mod channel;
 pub mod combo;
 pub mod config;
+#[cfg(feature = "controller")]
 pub mod controller;
 pub mod debounce;
 pub mod direct_pin;

@@ -1,25 +1,29 @@
 //! Exposed channels which can be used to share data across devices & processors
 
-use crate::event::{ControllerEvent, Event, KeyEvent};
+use crate::event::{Event, KeyEvent};
 use crate::hid::Report;
 use crate::RawMutex;
 #[cfg(feature = "storage")]
 use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
-use crate::{
-    CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE,
-    VIAL_CHANNEL_SIZE,
-};
+use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
 use embassy_sync::channel::Channel;
-use embassy_sync::pubsub::{PubSubChannel, Publisher, Subscriber};
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 #[cfg(feature = "_ble")]
 use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
+#[cfg(feature = "controller")]
+use {
+    crate::event::ControllerEvent,
+    crate::{CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS},
+    embassy_sync::pubsub::{PubSubChannel, Publisher, Subscriber},
+};
 #[cfg(feature = "split")]
 use {
     crate::split::SplitMessage,
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
+    embassy_sync::pubsub::PubSubChannel,
 };
 
+#[cfg(feature = "controller")]
 pub type ControllerSub<'a> = Subscriber<
     'a,
     RawMutex,
@@ -28,6 +32,7 @@ pub type ControllerSub<'a> = Subscriber<
     CONTROLLER_CHANNEL_SUBS,
     CONTROLLER_CHANNEL_PUBS,
 >;
+#[cfg(feature = "controller")]
 pub type ControllerPub<'a> =
     Publisher<'a, RawMutex, ControllerEvent, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, CONTROLLER_CHANNEL_PUBS>;
 
@@ -41,6 +46,7 @@ pub static EVENT_CHANNEL: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE> = Channel
 /// Channel for keyboard report from input processors to hid writer/reader
 pub static KEYBOARD_REPORT_CHANNEL: Channel<RawMutex, Report, REPORT_CHANNEL_SIZE> = Channel::new();
 /// Channel for controller events
+#[cfg(feature = "controller")]
 pub static CONTROLLER_CHANNEL: PubSubChannel<
     RawMutex,
     ControllerEvent,

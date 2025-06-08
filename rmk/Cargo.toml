@@ -156,6 +156,9 @@ rapid_debouncer = []
 ## Feature for split keyboard
 split = []
 
+## Feature for controller devices
+controller = []
+
 ## Internal feature that indicates no USB is used, this feature will be auto-activated for some chips
 _no_usb = []
 

@@ -7,9 +7,9 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::action::{Action, KeyAction};
-use crate::channel::{ControllerPub, CONTROLLER_CHANNEL, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
-use crate::event::{ControllerEvent, KeyEvent};
+use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -20,6 +20,11 @@ use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::usb::descriptor::{KeyboardReport, ViaReport};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -149,6 +154,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     combo_on: bool,
 
     /// Publisher for controller channel
+    #[cfg(feature = "controller")]
     controller_pub: ControllerPub<'a>,
 }
 
@@ -199,6 +205,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+            #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
@@ -1351,6 +1358,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Register a modifier to be sent in hid report.
     fn register_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers |= key.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
         self.controller_pub
             .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
                 self.held_modifiers,
@@ -1363,6 +1372,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers &= !key.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
         self.controller_pub
             .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
                 self.held_modifiers,
@@ -1372,6 +1383,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers |= modifiers.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
         self.controller_pub
             .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
                 self.held_modifiers,
@@ -1384,6 +1397,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers &= !modifiers.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
         self.controller_pub
             .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
                 self.held_modifiers,
