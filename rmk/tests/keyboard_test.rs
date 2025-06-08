@@ -1,9 +1,7 @@
 mod common;
-pub(crate) use crate::common::*;
 
 mod keyboard_test {
 
-    use super::*;
 
     use embassy_futures::block_on;
     use log::{debug, info};
@@ -17,7 +15,6 @@ mod keyboard_test {
         block_on(main);
     }
 
-    /// demo for test need fork
     rusty_fork_test! {
 
     #[test]

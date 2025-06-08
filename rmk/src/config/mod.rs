@@ -90,27 +90,54 @@ pub enum ChordHoldHand {
 }
 
 #[derive(Clone, Debug)]
-pub struct ChordHoldState<const COLS: usize> {
+pub struct ChordHoldState<const COUNT: usize> {
+    pub is_vertical_chord: bool,
     pub hand: ChordHoldHand,
 }
 
-impl<const COLS: usize> ChordHoldState<COLS> {
+impl<const COUNT: usize> ChordHoldState<COUNT> {
     // is the key event in the same side of current chord hold
     pub fn is_same(&self, key_event: KeyEvent) -> bool {
-        match self.hand {
-            ChordHoldHand::Left => (key_event.col as usize) < COLS / 2,
-            ChordHoldHand::Right => (key_event.col as usize) >= COLS / 2,
+        if self.is_vertical_chord {
+            return self.is_same_hand(key_event.row as usize);
+        } else {
+            return self.is_same_hand(key_event.col as usize);
         }
     }
 
-    pub(crate) fn create(event: KeyEvent, cols: usize) -> Self {
-        if (event.col as usize) < (cols / 2) {
-            ChordHoldState {
-                hand: ChordHoldHand::Left,
+    pub fn is_same_hand(&self, number: usize) -> bool {
+        match self.hand {
+            ChordHoldHand::Left => number < COUNT / 2,
+            ChordHoldHand::Right => number >= COUNT / 2,
+        }
+
+    }
+
+
+    pub(crate) fn create(event: KeyEvent, rows:usize, cols: usize) -> Self {
+        if cols > rows {
+            if (event.col as usize) < (cols / 2) {
+                ChordHoldState {
+                    is_vertical_chord: false, 
+                    hand: ChordHoldHand::Left,
+                }
+            } else {
+                ChordHoldState {
+                    is_vertical_chord: false, 
+                    hand: ChordHoldHand::Right,
+                }
             }
         } else {
-            ChordHoldState {
-                hand: ChordHoldHand::Right,
+            if (event.row as usize) < (rows / 2) {
+                ChordHoldState {
+                    is_vertical_chord: true, 
+                    hand: ChordHoldHand::Left,
+                }
+            } else {
+                ChordHoldState {
+                    is_vertical_chord: true, 
+                    hand: ChordHoldHand::Right,
+                }
             }
         }
     }
@@ -262,8 +289,6 @@ impl Default for KeyboardUsbConfig<'_> {
 
 mod tests {
     use super::*;
-    use ChordHoldHand::Left;
-    use ChordHoldHand::Right;
 
     #[test]
     fn test_chord_hold() {
@@ -274,10 +299,10 @@ mod tests {
                     col: 0,
                     pressed: true,
                 },
+                3,
                 6
-            )
-            .hand,
-            Left
+            ).hand,
+            ChordHoldHand::Left
         );
         assert_eq!(
             ChordHoldState::<6>::create(
@@ -286,10 +311,10 @@ mod tests {
                     col: 3,
                     pressed: true,
                 },
+                3,
                 6
-            )
-            .hand,
-            Right
+            ).hand,
+            ChordHoldHand::Right
         );
         assert_eq!(
             ChordHoldState::<6>::create(
@@ -298,13 +323,14 @@ mod tests {
                     col: 6,
                     pressed: true,
                 },
+                3,
                 6
-            )
-            .hand,
-            Right
+            ).hand,
+            ChordHoldHand::Right
         );
 
-        let chord = ChordHoldState::<6> { hand: Left };
+        let chord = ChordHoldState::<6> { is_vertical_chord:false, hand: ChordHoldHand::Left };
+        
 
         let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
         let result: Vec<_, 6> = vec

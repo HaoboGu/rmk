@@ -13,7 +13,7 @@ use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::{a, k, layer, mo, th};
 
 use heapless::Vec;
-use log::{debug, info};
+use log::{debug};
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use rmk::combo::Combo;
 use rmk::event::KeyEvent;
@@ -31,6 +31,7 @@ pub fn init_log() {
         .is_test(true)
         .try_init();
 }
+
 pub(crate) const KC_LSHIFT: u8 = 1 << 1;
 pub(crate) const KC_LGUI: u8 = 1 << 3;
 

@@ -5,7 +5,7 @@ use crate::input_device::Runnable;
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 use crate::combo::{Combo};
-use crate::config::{BehaviorConfig, ChordHoldState};
+use crate::config::ChordHoldState;
 use crate::event::TapHoldState::{PostHold, PostTap};
 use crate::event::{ControllerEvent, BufferedPressEvent, HoldingKey, HoldingKeyTrait, KeyEvent, PressedTapHold, TapHoldState};
 use crate::fork::{ActiveFork, StateBits};
@@ -89,7 +89,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         loop {
             debug!("new loop, buffer: {:?}", self.holding_buffer);
             //TODO add post time wait timer here
-            let hold_timeout_event = self.find_earliest_event();
+            let hold_timeout_event = self.find_next_timeout_event();
             let result: LoopState = match hold_timeout_event {
                 Some(event) => self.drain_unreleased_tap_hold_events(event, buffering).await,
                 _ => {
@@ -518,18 +518,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /**
-     * check if this keyboard is buffering new key events
-     */
-    fn tap_hold_is_buffering(&self) -> bool {
-        self.holding_buffer
-            .iter()
-            .find(|i| match i {
-                HoldingKey::TapHold(key) => key.state == TapHoldState::Hold || key.state == Initial,
-                _ => false,
-            })
-            .is_some()
-    }
 
     // calculate next state of tap hold
     // 1. turn into buffering state
@@ -889,7 +877,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let Some(e) = self.find_tap_hold_key_index(key_event_released) {
             let mut hold_state = self.holding_buffer.swap_remove(e);
             match hold_state {
-                HoldingKey::TapHold(mut tap_hold) => {
+                HoldingKey::TapHold(tap_hold) => {
                     debug!("TapHold {:?}] on release, current state {:?}", tap_hold.key_event, tap_hold.state);
                     //FIXME tap key press should happen before
                     match tap_hold.state {
@@ -1847,7 +1835,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         debug!("Save TapHold : {:?}", pressedKeyEvent);
         let _ = self.holding_buffer.push(HoldingKey::TapHold(pressedKeyEvent));
 
-        self.chord_state = Some(ChordHoldState::create(pressedKeyEvent.key_event, COL));
+        self.chord_state = Some(ChordHoldState::create(pressedKeyEvent.key_event, ROW, COL));
     }
 
     // buffer a single key press , wait for later eval
@@ -1901,7 +1889,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             })
         }
     }
-    fn find_earliest_event(&mut self) -> Option<PressedTapHold> {
+    fn find_next_timeout_event(&mut self) -> Option<PressedTapHold> {
         //release an unprocessed key
         if self.holding_buffer.len() > 0 {
             Some(
@@ -2091,7 +2079,7 @@ mod test {
     }
 
     async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static, 5, 14, 2>) {
-        let event = keyboard.find_earliest_event().unwrap();
+        let event = keyboard.find_next_timeout_event().unwrap();
         keyboard.drain_unreleased_tap_hold_events(event, false).await;
     }
 
