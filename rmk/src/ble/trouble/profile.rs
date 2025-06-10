@@ -2,6 +2,11 @@
 
 use core::sync::atomic::Ordering;
 
+#[cfg(feature = "_ble")]
+use bt_hci::{
+    cmd::le::{LeReadPhy, LeSetPhy},
+    controller::{ControllerCmdAsync, ControllerCmdSync},
+};
 use embassy_futures::select::{select3, Either3};
 use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
@@ -65,7 +70,11 @@ pub(crate) enum BleProfileAction {
 /// 3. Updating the bonding information of the active profile to the BLE stack
 /// 4. Handling profile switch, clear, and save operations
 #[cfg(feature = "_ble")]
-pub struct ProfileManager<'a, C: Controller, P: PacketPool> {
+pub struct ProfileManager<
+    'a,
+    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    P: PacketPool,
+> {
     /// List of bonded devices
     bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
     /// BLE stack
@@ -73,7 +82,9 @@ pub struct ProfileManager<'a, C: Controller, P: PacketPool> {
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
+impl<'a, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P: PacketPool>
+    ProfileManager<'a, C, P>
+{
     /// Create a new profile manager
     pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
         Self {

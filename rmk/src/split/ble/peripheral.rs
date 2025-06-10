@@ -1,3 +1,7 @@
+use bt_hci::{
+    cmd::le::{LeReadPhy, LeSetPhy},
+    controller::{ControllerCmdAsync, ControllerCmdSync},
+};
 use embassy_futures::join::join;
 use embassy_futures::select::select;
 use embassy_time::Timer;
@@ -5,10 +9,13 @@ use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
-use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::CONNECTION_STATE;
+use crate::{
+    ble::trouble::update_ble_phy,
+    split::driver::{SplitDriverError, SplitReader, SplitWriter},
+};
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -81,6 +88,19 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                     }
                     Err(e) => warn!("[gatt] error processing event: {:?}", e),
                 },
+                GattConnectionEvent::ConnectionParamsUpdated {
+                    conn_interval,
+                    peripheral_latency,
+                    supervision_timeout,
+                } => {
+                    info!(
+                        "Connection parameters updated: {:?}, {:?}, {:?}",
+                        conn_interval, peripheral_latency, supervision_timeout
+                    );
+                }
+                GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
+                    info!("PHY updated: {:?}, {:?}", tx_phy, rx_phy);
+                }
                 _ => (),
             }
         };
@@ -114,7 +134,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 pub async fn initialize_nrf_ble_split_peripheral_and_run<
     'stack,
     's,
-    C: Controller,
+    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
     F: NorFlash,
     const ROW: usize,
     const COL: usize,
@@ -148,7 +168,11 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
-                    info!("Conected to the central");
+                    info!("Connected to the central");
+
+                    // Use 2M Phy
+                    update_ble_phy(stack, conn.raw()).await;
+
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
                     if !central_saved {
@@ -214,7 +238,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
                 ],
                 &mut advertiser_data[..],
             )?;
-            info!("[error] advertising data: {:?}", advertiser_data);
+            trace!("advertising data: {:?}", advertiser_data);
             Advertisement::ConnectableScannableUndirected {
                 adv_data: &advertiser_data[..],
                 scan_data: &[],
@@ -232,7 +256,9 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
+async fn ble_task<C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    mut runner: Runner<'_, C, P>,
+) {
     loop {
         if let Err(e) = runner.run().await {
             panic!("[ble_task] error: {:?}", e);
