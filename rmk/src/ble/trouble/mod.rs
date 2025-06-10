@@ -3,6 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
+use bt_hci::cmd::le::LeSetPhy;
+use bt_hci::controller::ControllerCmdAsync;
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
@@ -50,13 +52,18 @@ pub(crate) mod profile;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-pub(crate) const CONNECTIONS_MAX: usize = 4;
+pub(crate) const CONNECTIONS_MAX: usize = 4; // Should be number of the peripheral + 1?
 
 /// Max number of L2CAP channels
-pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
+pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
 /// Build the BLE stack.
-pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + CryptoRng>(
+pub async fn build_ble_stack<
+    'a,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    P: PacketPool,
+    RNG: RngCore + CryptoRng,
+>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
@@ -72,7 +79,7 @@ pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + Cr
 pub(crate) async fn run_ble<
     'a,
     'b,
-    C: Controller,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -328,7 +335,9 @@ pub(crate) async fn run_ble<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
+pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    mut runner: Runner<'_, C, P>,
+) {
     loop {
         // Signal to indicate the stack is started
         #[cfg(feature = "split")]
@@ -466,8 +475,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 supervision_timeout,
             } => {
                 info!(
-                    "[gatt] ConnectionParamsUpdated: {:?}, {:?}, {:?}",
-                    conn_interval, peripheral_latency, supervision_timeout
+                    "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
+                    conn_interval.as_millis(),
+                    peripheral_latency,
+                    supervision_timeout.as_millis()
                 );
             }
         }
@@ -558,56 +569,34 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
     embassy_time::Timer::after_secs(5).await;
 
     // For macOS/iOS(aka Apple devices), both interval should be set to 15ms
-    if let Err(e) = conn
-        .raw()
-        .update_connection_params(
-            &stack,
-            &ConnectParams {
-                min_connection_interval: Duration::from_millis(15),
-                max_connection_interval: Duration::from_millis(15),
-                max_latency: 99,
-                event_length: Duration::from_secs(0),
-                supervision_timeout: Duration::from_secs(5),
-            },
-        )
-        .await
-    {
-        #[cfg(feature = "defmt")]
-        let e = defmt::Debug2Format(&e);
-        error!("[set_conn_params] error: {:?}", e);
-    }
+    update_conn_params(
+        stack,
+        conn.raw(),
+        &ConnectParams {
+            min_connection_interval: Duration::from_millis(15),
+            max_connection_interval: Duration::from_millis(15),
+            max_latency: 99,
+            event_length: Duration::from_secs(0),
+            supervision_timeout: Duration::from_secs(5),
+        },
+    )
+    .await;
 
     embassy_time::Timer::after_secs(5).await;
 
     // Setting the conn param the second time ensures that we have best performance on all platforms
-    loop {
-        match conn
-            .raw()
-            .update_connection_params(
-                &stack,
-                &ConnectParams {
-                    min_connection_interval: Duration::from_micros(7500),
-                    max_connection_interval: Duration::from_micros(7500),
-                    max_latency: 99,
-                    event_length: Duration::from_secs(0),
-                    supervision_timeout: Duration::from_secs(5),
-                },
-            )
-            .await
-        {
-            Err(BleHostError::BleHost(Error::Hci(error))) => {
-                if 0x2A == error.to_status().into_inner() {
-                    // Busy, retry
-                    info!("[set_conn_params] 2nd time HCI busy: {:?}", error);
-                    continue;
-                } else {
-                    error!("[set_conn_params] 2nd time HCI error: {:?}", error);
-                    break;
-                }
-            }
-            _ => break,
-        };
-    }
+    update_conn_params(
+        stack,
+        conn.raw(),
+        &ConnectParams {
+            min_connection_interval: Duration::from_micros(7500),
+            max_connection_interval: Duration::from_micros(7500),
+            max_latency: 99,
+            event_length: Duration::from_secs(0),
+            supervision_timeout: Duration::from_secs(5),
+        },
+    )
+    .await;
 
     // Wait forever. This is because we want the conn params setting can be interrupted when the connection is lost.
     // So this task shouldn't quit after setting the conn params.
@@ -620,7 +609,7 @@ async fn run_ble_keyboard<
     'b,
     'c,
     'd,
-    C: Controller,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
@@ -653,6 +642,9 @@ async fn run_ble_keyboard<
         }
     }
 
+    // Use 2M Phy
+    update_ble_phy(stack, conn.raw()).await;
+
     let communication_task = async {
         match select3(
             gatt_events_task(&server, &conn),
@@ -678,4 +670,59 @@ async fn run_ble_keyboard<
         rmk_config.vial_config,
     )
     .await;
+}
+
+// Update the PHY to 2M
+pub(crate) async fn update_ble_phy<P: PacketPool>(
+    stack: &Stack<'_, impl Controller + ControllerCmdAsync<LeSetPhy>, P>,
+    conn: &Connection<'_, P>,
+) {
+    loop {
+        match conn.set_phy(stack, PhyKind::Le2M).await {
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x2A == error.to_status().into_inner() {
+                    // Busy, retry
+                    info!("[update_ble_phy] HCI busy: {:?}", error);
+                    continue;
+                } else {
+                    error!("[update_ble_phy] HCI error: {:?}", error);
+                }
+            }
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("[update_ble_phy] error: {:?}", e);
+            }
+            _ => (),
+        }
+        break;
+    }
+}
+
+// Update the connection parameters
+pub(crate) async fn update_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+    stack: &Stack<'a, C, P>,
+    conn: &Connection<'b, P>,
+    params: &ConnectParams,
+) {
+    loop {
+        match conn.update_connection_params(&stack, params).await {
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x2A == error.to_status().into_inner() {
+                    // Busy, retry
+                    info!("[update_conn_params] HCI busy: {:?}", error);
+                    continue;
+                } else {
+                    error!("[update_conn_params] HCI error: {:?}", error);
+                }
+            }
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("[update_conn_params] BLE host error: {:?}", e);
+            }
+            _ => (),
+        }
+        break;
+    }
 }
