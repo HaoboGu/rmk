@@ -2,7 +2,7 @@
 
 ### My matrix is row2col, the matrix doesn't work
 
-RMK enables `col2row` as the default feature. To use the row2col matrix, you have to change your `Cargo.toml`, adds `default-features = false` to RMK crate, disabling the `col2row` feature.
+RMK enables `col2row` as the default feature. To use the row2col matrix, you have to change your `Cargo.toml`, adds `default-features = false` to RMK crate, disabling the `col2row` feature. Note that you should enable other default features of RMK manually, such as `col2row` and `storage` after disabling default features.
 
 ```toml
 # Cargo.toml
@@ -20,6 +20,34 @@ row2col = true
 [split.central.matrix]
 row2col = true
 ```
+
+### Unable to find libclang
+
+On some windows machines, you may get the following error when building the firmware:
+
+```
+error: failed to run custom build command for `nrf-mpsl-sys v0.1.1 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
+
+Caused by:
+  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-mpsl-sys-7601ddd28810dbeb\build-script-build` (exit code: 101)
+  --- stderr
+
+  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
+  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+error: failed to run custom build command for `nrf-sdc-sys v0.1.0 (https://github.com/alexmoon/nrf-sdc.git?rev=7be9b853e15ca0404d65c623d1ec5795fd96c204#7be9b853)`
+
+Caused by:
+  process didn't exit successfully: `C:\Users\User\Documents\rmk\target\release\build\nrf-sdc-sys-47ab10b68780c6ba\build-script-build` (exit code: 101)
+  --- stderr
+
+  thread 'main' panicked at C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\bindgen-0.70.1\lib.rs:622:27:
+  Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+```
+
+That's because you don't have LLVM(Clang) installed, or the system doesn't know the path of installed LLVM(Clang). You can try solution here: <https://rust-lang.github.io/rust-bindgen/requirements.html#windows>
 
 ### Where is my built firmware?
 

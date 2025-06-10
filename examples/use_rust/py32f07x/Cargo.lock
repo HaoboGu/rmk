@@ -607,11 +607,12 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90327bcc66333a507f89ecc4e2d911b265c45f5c9bc241f98eee076752d35ac6"
 dependencies = [
  "cortex-m",
  "critical-section",
- "defmt 1.0.1",
+ "defmt 0.3.100",
  "document-features",
  "embassy-executor-macros",
 ]
@@ -619,7 +620,8 @@ dependencies = [
 [[package]]
 name = "embassy-executor-macros"
 version = "0.6.2"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3577b1e9446f61381179a330fc5324b01d511624c55f25e3c66c9e3c626dbecf"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -630,9 +632,10 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.1"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
 dependencies = [
- "defmt 1.0.1",
+ "defmt 0.3.100",
 ]
 
 [[package]]
@@ -712,7 +715,8 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cef1a8a1ea892f9b656de0295532ac5d8067e9830d49ec75076291fd6066b136"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -1271,7 +1275,8 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "musb"
 version = "0.2.1"
-source = "git+https://github.com/decaday/musb.git#2f225326e923926d0e327f89cdde975df79bb347"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccbbe41a12fa05544697f35a9dace3a9bfc41e2afcd74a1d9e68fdc36487c848"
 dependencies = [
  "cfg-if",
  "defmt 0.3.100",
@@ -1369,7 +1374,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd402d00b0fb94c5aee000029204a46884b1262e0c443f166d86d2c0747e1a1a"
 dependencies = [
  "cortex-m",
- "defmt 1.0.1",
 ]
 
 [[package]]
@@ -1542,7 +1546,8 @@ dependencies = [
 [[package]]
 name = "py32-hal"
 version = "0.3.0"
-source = "git+https://github.com/py32-rs/py32-hal?rev=3ffc9c2#3ffc9c27fad66c9632ecbe8b25a8805689be9f64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78c4107866952c2f6676f752ba6cc285767f2b8a6b6aabdfe04b65be71da2ee2"
 dependencies = [
  "cfg-if",
  "cortex-m",
@@ -1577,7 +1582,8 @@ dependencies = [
 [[package]]
 name = "py32-metapac"
 version = "0.3.0"
-source = "git+https://github.com/py32-rs/py32-metapac.git#b4093de9d41c7ac705d66d24ed023c8adfb89306"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1745f2a0a78ed3acb1d665ac15cbbe5eca9d6293343aef0e55ed4c1310bffbf"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1610,7 +1616,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1650,7 +1656,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cargo_toml",
  "config",
@@ -1666,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "cargo_toml",
  "darling",

@@ -41,10 +41,10 @@ modifier_combination = { modifier_name ~ ("|" ~ modifier_name)* }
 simple_keycode = { keycode_name }
 
 // Rule 2: No Key
-no_action = { ^"No" } // Case-insensitive "No"
+no_action = { ^"No" ~ !ASCII_ALPHANUMERIC } // Case-insensitive "No" followed by non-alphanumeric
 
 // Rule 3: Transparent Key
-transparent_action = @{ ("_")+ | ^"Trns" } // One or more 
+transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or more underscores or "Trns" followed by non-alphanumeric 
 
 // Rule 1: WM(key, modifier) - Key with Modifier
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }

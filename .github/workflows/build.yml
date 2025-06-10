@@ -78,3 +78,4 @@ jobs:
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
         run: . /home/runner/export-esp.sh && cargo +esp build --release 
+  
