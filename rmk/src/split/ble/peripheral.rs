@@ -7,7 +7,6 @@ use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
-use crate::ble::trouble::update_ble_phy;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
