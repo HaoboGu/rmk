@@ -569,15 +569,16 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
     embassy_time::Timer::after_secs(5).await;
 
     // For macOS/iOS(aka Apple devices), both interval should be set to 15ms
+    // Reference: https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf
     update_conn_params(
         stack,
         conn.raw(),
         &ConnectParams {
             min_connection_interval: Duration::from_millis(15),
             max_connection_interval: Duration::from_millis(15),
-            max_latency: 99,
+            max_latency: 30,
             event_length: Duration::from_secs(0),
-            supervision_timeout: Duration::from_secs(5),
+            supervision_timeout: Duration::from_secs(6),
         },
     )
     .await;
@@ -647,8 +648,8 @@ async fn run_ble_keyboard<
 
     let communication_task = async {
         match select3(
-            gatt_events_task(&server, &conn),
-            set_conn_params(&stack, &conn),
+            gatt_events_task(server, conn),
+            set_conn_params(stack, conn),
             ble_battery_server.run(),
         )
         .await
@@ -708,9 +709,10 @@ pub(crate) async fn update_conn_params<'a, 'b, C: Controller, P: PacketPool>(
     loop {
         match conn.update_connection_params(&stack, params).await {
             Err(BleHostError::BleHost(Error::Hci(error))) => {
-                if 0x2A == error.to_status().into_inner() {
+                if 0x3A == error.to_status().into_inner() {
                     // Busy, retry
                     info!("[update_conn_params] HCI busy: {:?}", error);
+                    embassy_time::Timer::after_millis(100).await;
                     continue;
                 } else {
                     error!("[update_conn_params] HCI error: {:?}", error);

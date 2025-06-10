@@ -90,8 +90,10 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                     supervision_timeout,
                 } => {
                     info!(
-                        "Connection parameters updated: {:?}, {:?}, {:?}",
-                        conn_interval, peripheral_latency, supervision_timeout
+                        "Connection parameters updated: {:?}ms, {:?}, {:?}ms",
+                        conn_interval.as_millis(),
+                        peripheral_latency,
+                        supervision_timeout.as_millis()
                     );
                 }
                 GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
@@ -165,9 +167,6 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
                     info!("Connected to the central");
-
-                    // Use 2M Phy
-                    update_ble_phy(stack, conn.raw()).await;
 
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
