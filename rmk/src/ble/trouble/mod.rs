@@ -55,15 +55,12 @@ pub(crate) const CONNECTIONS_MAX: usize = 4;
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
 
-/// L2CAP MTU size
-pub(crate) const L2CAP_MTU: usize = 512;
-
 /// Build the BLE stack.
 pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + CryptoRng>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
+    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
