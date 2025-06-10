@@ -8,7 +8,6 @@ use embassy_time::Duration;
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::L2CAP_MTU;
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
@@ -284,7 +283,7 @@ async fn run_peripheral_manager<
 /// so we need this wrapper to forward split message to channel.
 pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller, P: PacketPool> {
     // Listener for split message from peripheral
-    listener: NotificationListener<'b, L2CAP_MTU>,
+    listener: NotificationListener<'b, 512>,
     // Characteristic to send split message to peripheral
     message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
     // Client
@@ -295,7 +294,7 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller, P: PacketPool
 
 impl<'a, 'b, 'c, C: Controller, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
     pub(crate) fn new(
-        listener: NotificationListener<'b, L2CAP_MTU>,
+        listener: NotificationListener<'b, 512>,
         message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
         client: &'c GattClient<'a, C, P, 10>,
     ) -> Self {
