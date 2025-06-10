@@ -3,8 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
-use bt_hci::cmd::le::{LeReadPhy, LeSetPhy};
-use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
+use bt_hci::cmd::le::LeSetPhy;
+use bt_hci::controller::ControllerCmdAsync;
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
@@ -60,7 +60,7 @@ pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + at
 /// Build the BLE stack.
 pub async fn build_ble_stack<
     'a,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     P: PacketPool,
     RNG: RngCore + CryptoRng,
 >(
@@ -79,7 +79,7 @@ pub async fn build_ble_stack<
 pub(crate) async fn run_ble<
     'a,
     'b,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -335,10 +335,7 @@ pub(crate) async fn run_ble<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
->(
+pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     mut runner: Runner<'_, C, P>,
 ) {
     loop {
@@ -564,12 +561,7 @@ pub(crate) async fn run_dummy_keyboard<
     dummy_writer.run_writer().await;
 }
 
-pub(crate) async fn set_conn_params<
-    'a,
-    'b,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
->(
+pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
     stack: &Stack<'_, C, P>,
     conn: &GattConnection<'a, 'b, P>,
 ) {
@@ -617,7 +609,7 @@ async fn run_ble_keyboard<
     'b,
     'c,
     'd,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
@@ -682,7 +674,7 @@ async fn run_ble_keyboard<
 
 // Update the PHY to 2M
 pub(crate) async fn update_ble_phy<P: PacketPool>(
-    stack: &Stack<'_, impl Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P>,
+    stack: &Stack<'_, impl Controller + ControllerCmdAsync<LeSetPhy>, P>,
     conn: &Connection<'_, P>,
 ) {
     loop {

@@ -1,8 +1,5 @@
 #[cfg(feature = "_ble")]
-use bt_hci::{
-    cmd::le::{LeReadPhy, LeSetPhy},
-    controller::{ControllerCmdAsync, ControllerCmdSync},
-};
+use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
@@ -30,7 +27,7 @@ use crate::CONNECTION_STATE;
 pub async fn run_rmk_split_peripheral<
     'a,
     #[cfg(feature = "_ble")] 'b,
-    #[cfg(feature = "_ble")] C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
     #[cfg(feature = "_ble")] F: NorFlash,
     #[cfg(feature = "_ble")] const ROW: usize,

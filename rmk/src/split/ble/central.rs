@@ -1,18 +1,14 @@
 use core::sync::atomic::Ordering;
 
-use bt_hci::cmd::le::LeReadPhy;
-use bt_hci::cmd::le::LeSetPhy;
-use bt_hci::cmd::le::LeSetScanParams;
-use bt_hci::controller::ControllerCmdAsync;
-use bt_hci::controller::ControllerCmdSync;
+use bt_hci::cmd::le::{LeSetPhy, LeSetScanParams};
+use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::update_ble_phy;
-use crate::ble::trouble::update_conn_params;
+use crate::ble::trouble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
@@ -99,7 +95,7 @@ impl EventHandler for ScanHandler {
 
 pub(crate) async fn run_ble_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeSetScanParams> + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdSync<LeSetScanParams> + ControllerCmdAsync<LeSetPhy>,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -186,7 +182,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 
 async fn connect_and_run_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
@@ -232,11 +228,7 @@ async fn connect_and_run_peripheral_manager<
     }
 }
 
-async fn ble_central_task<
-    'a,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
->(
+async fn ble_central_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     client: &GattClient<'a, C, P, 10>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
@@ -256,7 +248,7 @@ async fn ble_central_task<
 
 async fn run_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
@@ -310,13 +302,7 @@ async fn run_peripheral_manager<
 /// The BLE service should keep running, it processes the split message in the callback, which is not async.
 /// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
 /// so we need this wrapper to forward split message to channel.
-pub(crate) struct BleSplitCentralDriver<
-    'a,
-    'b,
-    'c,
-    C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
-> {
+pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> {
     // Listener for split message from peripheral
     listener: NotificationListener<'b, 512>,
     // Characteristic to send split message to peripheral
@@ -327,9 +313,7 @@ pub(crate) struct BleSplitCentralDriver<
     connection_state: bool,
 }
 
-impl<'a, 'b, 'c, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P: PacketPool>
-    BleSplitCentralDriver<'a, 'b, 'c, C, P>
-{
+impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
     pub(crate) fn new(
         listener: NotificationListener<'b, 512>,
         message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
@@ -344,7 +328,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsy
     }
 }
 
-impl<'a, 'b, 'c, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P: PacketPool> SplitReader
+impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> SplitReader
     for BleSplitCentralDriver<'a, 'b, 'c, C, P>
 {
     async fn read(&mut self) -> Result<SplitMessage, SplitDriverError> {
@@ -355,7 +339,7 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsy
     }
 }
 
-impl<'a, 'b, 'c, C: Controller + ControllerCmdSync<LeReadPhy> + ControllerCmdAsync<LeSetPhy>, P: PacketPool> SplitWriter
+impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> SplitWriter
     for BleSplitCentralDriver<'a, 'b, 'c, C, P>
 {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
