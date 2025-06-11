@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix ADC initialization for splits
+- Fix NonusHash parsing error
+- Fix wrong state after switching output
+- Fix py32 example
+
+### Added
+
+- Use 2M Phy by default
+
+### Changed
+
+- Move `Controller` behind a feature flag 
+
+
 ## [0.7.1] - 2025-06-04
 
 ### Fixed
