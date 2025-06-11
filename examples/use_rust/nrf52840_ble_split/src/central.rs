@@ -64,7 +64,7 @@ const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
 /// Size of L2CAP packets
-const L2CAP_MTU: usize = 255;
+const L2CAP_MTU: usize = 251;
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -77,11 +77,6 @@ fn build_sdc<'d, const N: usize>(
         .support_central()?
         .support_adv()?
         .support_peripheral()?
-        .support_dle_peripheral()?
-        .support_dle_central()?
-        .support_phy_update_central()?
-        .support_phy_update_peripheral()?
-        .support_le_2m_phy()?
         .central_count(1)?
         .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
