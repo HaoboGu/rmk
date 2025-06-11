@@ -88,6 +88,11 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_central()?
                     .support_adv()?
                     .support_peripheral()?
+                    .support_dle_peripheral()?
+                    .support_dle_central()?
+                    .support_phy_update_central()?
+                    .support_phy_update_peripheral()?
+                    .support_le_2m_phy()?
                     .central_count(1)?
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
@@ -97,6 +102,11 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     ::nrf_sdc::Builder::new()?
                     .support_adv()?
                     .support_peripheral()?
+                    .support_dle_peripheral()?
+                    .support_dle_central()?
+                    .support_phy_update_central()?
+                    .support_phy_update_peripheral()?
+                    .support_le_2m_phy()?
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
                     .build(p, rng, mpsl, mem)
@@ -125,7 +135,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                 const L2CAP_RXQ: u8 = 3;
 
                 /// Size of L2CAP packets
-                const L2CAP_MTU: usize = 72;
+                const L2CAP_MTU: usize = 251;
                 fn build_sdc<'d, const N: usize>(
                     p: ::nrf_sdc::Peripherals<'d>,
                     rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG, ::embassy_nrf::mode::Async>,

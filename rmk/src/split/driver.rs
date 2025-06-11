@@ -133,7 +133,7 @@ impl<
                 Either3::Third(_) => {
                     // Timer elapsed, sync the connection state
                     conn_state = CONNECTION_STATE.load(Ordering::Acquire);
-                    debug!("Syncing connection state to peripheral: {}", conn_state);
+                    trace!("Syncing connection state to peripheral: {}", conn_state);
                     if let Err(e) = self.transceiver.write(&SplitMessage::ConnectionState(conn_state)).await {
                         match e {
                             SplitDriverError::Disconnected => return,
