@@ -114,6 +114,9 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
     }
 
 
+    /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
+    /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
+    /// the chordal hold will be determined by user configuration in future.
     pub(crate) fn create(event: KeyEvent, rows:usize, cols: usize) -> Self {
         if cols > rows {
             if (event.col as usize) < (cols / 2) {
@@ -291,7 +294,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_chord_hold() {
+    fn test_chordal_hold() {
         assert_eq!(
             ChordHoldState::<6>::create(
                 KeyEvent {
@@ -311,7 +314,7 @@ mod tests {
                     col: 3,
                     pressed: true,
                 },
-                3,
+                4,
                 6
             ).hand,
             ChordHoldHand::Right
@@ -319,12 +322,24 @@ mod tests {
         assert_eq!(
             ChordHoldState::<6>::create(
                 KeyEvent {
-                    row: 5,
-                    col: 6,
+                    row: 3,
+                    col: 3,
                     pressed: true,
                 },
-                3,
-                6
+                6,
+                4
+            ).hand,
+            ChordHoldHand::Right
+        );
+        assert_eq!(
+            ChordHoldState::<6>::create(
+                KeyEvent {
+                    row: 6,
+                    col: 3,
+                    pressed: true,
+                },
+                5,
+                3
             ).hand,
             ChordHoldHand::Right
         );
