@@ -19,9 +19,9 @@ use trouble_host::prelude::*;
 use {
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
-    crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
+    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
-    crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
+    crate::usb::{add_usb_reader_writer, new_usb_builder, add_usb_writer},
     crate::usb::{USB_ENABLED, USB_SUSPENDED},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{select4, Either4},
@@ -100,7 +100,7 @@ pub(crate) async fn run_ble<
     let (mut usb_device, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
-        let other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
         let usb_device = usb_builder.build();

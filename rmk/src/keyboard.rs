@@ -9,6 +9,7 @@ use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport
 use crate::action::{Action, KeyAction};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
+use crate::descriptor::{KeyboardReport, ViaReport};
 use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
@@ -18,7 +19,6 @@ use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
-use crate::usb::descriptor::{KeyboardReport, ViaReport};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 #[cfg(feature = "controller")]
 use {

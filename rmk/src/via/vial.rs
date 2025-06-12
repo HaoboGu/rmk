@@ -6,7 +6,7 @@ use num_enum::FromPrimitive;
 use crate::action::KeyAction;
 use crate::combo::Combo;
 use crate::keymap::KeyMap;
-use crate::usb::descriptor::ViaReport;
+use crate::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]

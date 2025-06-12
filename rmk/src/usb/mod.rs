@@ -1,5 +1,3 @@
-pub mod descriptor;
-
 use core::sync::atomic::Ordering;
 
 use embassy_sync::signal::Signal;
@@ -12,9 +10,9 @@ use static_cell::StaticCell;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::KeyboardUsbConfig;
+use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
-use crate::usb::descriptor::CompositeReportType;
 use crate::CONNECTION_STATE;
 
 /// USB state
@@ -144,8 +142,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Key
     builder
 }
 
-#[cfg(not(feature = "_no_usb"))]
-macro_rules! register_usb_writer {
+macro_rules! add_usb_writer {
     ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
         // Initialize hid writer
         // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
@@ -170,7 +167,6 @@ macro_rules! register_usb_writer {
     }};
 }
 
-#[cfg(not(feature = "_no_usb"))]
 macro_rules! add_usb_reader_writer {
     ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
         // Initialize hid reader writer
@@ -195,10 +191,10 @@ macro_rules! add_usb_reader_writer {
         rw
     }};
 }
-#[cfg(not(feature = "_no_usb"))]
+
 pub(crate) use add_usb_reader_writer;
-#[cfg(not(feature = "_no_usb"))]
-pub(crate) use register_usb_writer;
+
+pub(crate) use add_usb_writer;
 
 pub(crate) struct UsbRequestHandler {}
 
