@@ -82,10 +82,10 @@ function nav() {
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
     {
-      text: `v0.7.0`,
+      text: `v0.7.2`,
       items: [
         {
-          items: [{ text: 'v0.7.0', link: '/docs/introduction' }]
+          items: [{ text: 'v0.7.2', link: '/docs/introduction' }]
         },
         {
           items: [{ text: 'Migration Guide', link: '/docs/migration_guide' }]
@@ -130,7 +130,7 @@ function sidebarGuide() {
     },
     {
       text: 'Migration Guide',
-      items: [{ text: 'From v0.6.1 to v0.7.0', link: 'migration_guide' }]
+      items: [{ text: 'From v0.6 to v0.7', link: 'migration_guide' }]
     },
     {
       text: 'Features',
