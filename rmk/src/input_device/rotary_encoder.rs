@@ -17,7 +17,7 @@ use crate::event::{Event, RotaryEncoderEvent};
 use crate::hid::Report;
 use crate::keycode::{ConsumerKey, KeyCode};
 use crate::keymap::KeyMap;
-use crate::usb::descriptor::KeyboardReport;
+use crate::descriptor::KeyboardReport;
 
 /// Holds current/old state and both [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)
 #[derive(Clone, Debug)]

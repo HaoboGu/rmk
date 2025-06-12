@@ -25,6 +25,7 @@ use core::sync::atomic::Ordering;
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use config::{RmkConfig, VialConfig};
+use descriptor::ViaReport;
 use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
@@ -42,7 +43,6 @@ use state::CONNECTION_STATE;
 use trouble_host::prelude::*;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::{DefaultPacketPool, HostResources};
-use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
@@ -56,12 +56,12 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 #[cfg(not(feature = "_ble"))]
 use {
-    usb::descriptor::{CompositeReport, KeyboardReport},
+    descriptor::{CompositeReport, KeyboardReport},
     via::UsbVialReaderWriter,
 };
+pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 
 use crate::light::LightController;
 use crate::state::ConnectionState;
@@ -76,6 +76,7 @@ pub mod config;
 #[cfg(feature = "controller")]
 pub mod controller;
 pub mod debounce;
+pub(crate) mod descriptor;
 pub mod direct_pin;
 pub mod event;
 pub mod fork;
@@ -94,6 +95,7 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
+#[cfg(not(feature = "_no_usb"))]
 pub(crate) mod usb;
 pub mod via;
 

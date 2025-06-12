@@ -19,7 +19,7 @@ use trouble_host::prelude::*;
 use {
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
-    crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
+    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
     crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
     crate::usb::{USB_ENABLED, USB_SUSPENDED},
