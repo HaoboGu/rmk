@@ -13,7 +13,7 @@ cd examples/use_rust/rp2350 && cargo update && cargo build --release && cd ../..
 cd examples/use_rust/stm32f1 && cargo update && cargo build --release && cd ../../..
 cd examples/use_rust/stm32f4 && cargo update && cargo build --release && cd ../../..
 cd examples/use_rust/stm32h7 && cargo update && cargo build --release && cd ../../.. 
-# cd examples/use_rust/py32f07x && cargo update && cargo build --release && cd ../../.. 
+cd examples/use_rust/py32f07x && cargo update && cargo build --release && cd ../../.. 
 
 cd examples/use_config/nrf52832_ble && cargo update && cargo build --release && cd ../../.. 
 cd examples/use_config/nrf52840_ble && cargo update && cargo build --release && cd ../../.. 
