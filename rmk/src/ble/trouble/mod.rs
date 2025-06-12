@@ -17,11 +17,11 @@ use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(not(feature = "_no_usb"))]
 use {
+    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
-    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
-    crate::usb::{add_usb_reader_writer, new_usb_builder, add_usb_writer},
+    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
     crate::usb::{USB_ENABLED, USB_SUSPENDED},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{select4, Either4},
@@ -41,6 +41,8 @@ use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
 use crate::state::{ConnectionState, ConnectionType};
+#[cfg(feature = "usb_log")]
+use crate::usb::add_usb_logger;
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
@@ -97,21 +99,27 @@ pub(crate) async fn run_ble<
 ) {
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (mut usb_device, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
+    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
-        let usb_device = usb_builder.build();
         (
-            usb_device,
+            usb_builder,
             keyboard_reader,
             keyboard_writer,
             other_writer,
             vial_reader_writer,
         )
     };
+
+    // Optional usb logger initialization
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    let usb_logger = add_usb_logger!(&mut _usb_builder);
+
+    #[cfg(not(feature = "_no_usb"))]
+    let mut usb_device = _usb_builder.build();
 
     // Load current connection type
     #[cfg(feature = "storage")]
@@ -177,8 +185,16 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
     let background_task = join(ble_task(runner), usb_device.run());
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    let background_task = join(
+        ble_task(runner),
+        select(
+            usb_device.run(),
+            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger),
+        ),
+    );
     #[cfg(feature = "_no_usb")]
     let background_task = ble_task(runner);
 

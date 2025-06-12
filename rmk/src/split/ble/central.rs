@@ -85,7 +85,7 @@ impl EventHandler for ScanHandler {
             {
                 // Uuid and manufacturer specific data check passed
                 let peripheral_id = report.data[25];
-                info!("Found split peripheral: id={}, addr={}", peripheral_id, report.addr);
+                info!("Found split peripheral: id={:?}, addr={:?}", peripheral_id, report.addr);
                 PERIPHERAL_FOUND.signal((peripheral_id, report.addr));
                 break;
             }
