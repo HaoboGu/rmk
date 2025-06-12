@@ -142,7 +142,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Key
     builder
 }
 
-macro_rules! register_usb_writer {
+macro_rules! add_usb_writer {
     ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
         // Initialize hid writer
         // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
@@ -194,7 +194,7 @@ macro_rules! add_usb_reader_writer {
 
 pub(crate) use add_usb_reader_writer;
 
-pub(crate) use register_usb_writer;
+pub(crate) use add_usb_writer;
 
 pub(crate) struct UsbRequestHandler {}
 

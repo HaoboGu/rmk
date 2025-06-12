@@ -47,7 +47,7 @@ use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
-    crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer, UsbKeyboardWriter},
+    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder, UsbKeyboardWriter},
 };
 #[cfg(feature = "storage")]
 use {
@@ -215,7 +215,7 @@ pub async fn run_rmk<
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
-        let mut other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
         let mut usb_device = usb_builder.build();
