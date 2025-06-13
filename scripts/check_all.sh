@@ -1,30 +1,29 @@
 #!/bin/bash
 
-# Build and clean examples under examples/use_rust
-for dir in examples/use_rust/*/; do
+# Build and clean examples (except ESP32S3)
+for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
-        cd "$dir"
-        # Handle ESP projects
+        # Skip ESP32S3 projects for now
         if [[ "$dir" == *"esp32s3"* ]]; then
-            cargo +esp build --release
-        else
-            cargo update && cargo build --release
+            continue
         fi
+        cd "$dir"
+        cargo build --release
         cd ../../..
     fi
 done
 
-# Build and clean examples under examples/use_config
-for dir in examples/use_config/*/; do
+# Setup ESP environment and build ESP32S3 projects
+. ~/export-esp.sh
+
+# Build ESP32S3 projects
+for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
-        cd "$dir"
-        # Handle ESP projects
         if [[ "$dir" == *"esp32s3"* ]]; then
+            cd "$dir"
             cargo +esp build --release
-        else
-            cargo update && cargo build --release
+            cd ../../..
         fi
-        cd ../../..
     fi
 done
 
