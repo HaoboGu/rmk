@@ -72,3 +72,9 @@ pub(crate) static SPLIT_MESSAGE_PUBLISHER: PubSubChannel<
     SPLIT_PERIPHERALS_NUM,
     1,
 > = PubSubChannel::new();
+
+#[cfg(feature = "controller")]
+pub fn send_controller_event(publisher: &mut ControllerPub<'_>, event: ControllerEvent) {
+    debug!("Sending ControllerEvent: {:?}", event);
+    publisher.publish_immediate(event);
+}

@@ -119,5 +119,5 @@ pub enum ControllerEvent {
     /// Usb or Ble connection
     ConnectionType(u8),
     /// Split peripheral connection
-    SplitPeripheral(u8, bool),
+    SplitPeripheral(usize, bool),
 }
