@@ -1360,10 +1360,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        {
+            let event = ControllerEvent::Modifier(
+                ModifierCombination::from_hid_modifiers(self.held_modifiers)
+            );
+            debug!("Sending ControllerEvent: {:?}", event);
+            self.controller_pub.publish_immediate(event);
+        }
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -1374,10 +1377,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        {
+            let event = ControllerEvent::Modifier(
+                ModifierCombination::from_hid_modifiers(self.held_modifiers)
+            );
+            debug!("Sending ControllerEvent: {:?}", event);
+            self.controller_pub.publish_immediate(event);
+        }
     }
 
     /// Register a modifier combination to be sent in hid report.
@@ -1385,10 +1391,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        {
+            let event = ControllerEvent::Modifier(
+                ModifierCombination::from_hid_modifiers(self.held_modifiers)
+            );
+            debug!("Sending ControllerEvent: {:?}", event);
+            self.controller_pub.publish_immediate(event);
+        }
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers.to_hid_modifiers();
@@ -1399,10 +1408,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        {
+            let event = ControllerEvent::Modifier(
+                ModifierCombination::from_hid_modifiers(self.held_modifiers)
+            );
+            debug!("Sending ControllerEvent: {:?}", event);
+            self.controller_pub.publish_immediate(event);
+        }
     }
 }
 
