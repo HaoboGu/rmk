@@ -105,7 +105,7 @@ pub enum ControllerEvent {
     /// Key event
     Key(KeyEvent),
     /// Battery percent changed
-    Battery(u8),
+    Battery(u16),
     /// Charging state changed
     ChargingState(bool),
     /// Ble profile changed
