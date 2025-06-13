@@ -99,10 +99,10 @@ pub mod storage;
 pub(crate) mod usb;
 pub mod via;
 
-pub async fn initialize_keymap<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    default_keymap: &mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+    default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: config::BehaviorConfig,
-) -> RefCell<KeyMap<ROW, COL, NUM_LAYER>> {
+) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
     RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await)
 }
 

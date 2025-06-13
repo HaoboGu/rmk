@@ -1,5 +1,10 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
@@ -9,11 +14,6 @@ use crate::keyboard_macros::MacroOperation;
 use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
-    crate::event::ControllerEvent,
-};
 
 /// Keymap represents the stack of layers.
 ///
@@ -36,7 +36,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) behavior: BehaviorConfig,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
-    controller_pub: ControllerPub<'a>,
+    controller_pub: ControllerPub,
 }
 
 fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
@@ -243,10 +243,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Layer(self.get_activated_layer()),
-        );
+        {
+            let layer = self.get_activated_layer();
+            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+        }
     }
 
     /// Activate given layer
@@ -288,10 +288,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Layer(self.get_activated_layer()),
-        );
+        {
+            let layer = self.get_activated_layer();
+            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+        }
     }
 
     //order combos by their actions length

@@ -7,6 +7,11 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 use crate::ble::trouble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
@@ -16,11 +21,6 @@ use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, Spl
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::storage::{FlashOperationMessage, Storage};
 use crate::CONNECTION_STATE;
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
-    crate::event::ControllerEvent,
-};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
@@ -209,7 +209,7 @@ async fn connect_and_run_peripheral_manager<
     stack: &'a Stack<'a, C, P>,
     central: &mut Central<'a, C, P>,
     config: &ConnectConfig<'_>,
-    #[cfg(feature = "controller")] controller_pub: &mut ControllerPub<'a>,
+    #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
 

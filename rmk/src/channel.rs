@@ -34,8 +34,14 @@ pub type ControllerSub<'a> = Subscriber<
     CONTROLLER_CHANNEL_PUBS,
 >;
 #[cfg(feature = "controller")]
-pub type ControllerPub<'a> =
-    Publisher<'a, RawMutex, ControllerEvent, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS, CONTROLLER_CHANNEL_PUBS>;
+pub type ControllerPub = Publisher<
+    'static,
+    RawMutex,
+    ControllerEvent,
+    CONTROLLER_CHANNEL_SIZE,
+    CONTROLLER_CHANNEL_SUBS,
+    CONTROLLER_CHANNEL_PUBS,
+>;
 
 /// Signal for control led indicator, it's used only in BLE keyboards, since BLE receiving is not async
 #[cfg(feature = "_ble")]
@@ -74,7 +80,7 @@ pub(crate) static SPLIT_MESSAGE_PUBLISHER: PubSubChannel<
 > = PubSubChannel::new();
 
 #[cfg(feature = "controller")]
-pub fn send_controller_event(publisher: &mut ControllerPub<'_>, event: ControllerEvent) {
+pub fn send_controller_event(publisher: &mut ControllerPub, event: ControllerEvent) {
     debug!("Sending ControllerEvent: {:?}", event);
     publisher.publish_immediate(event);
 }

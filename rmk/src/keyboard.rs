@@ -155,7 +155,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
-    controller_pub: ControllerPub<'a>,
+    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
