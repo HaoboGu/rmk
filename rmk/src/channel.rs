@@ -1,6 +1,8 @@
 //! Exposed channels which can be used to share data across devices & processors
 
 use embassy_sync::channel::Channel;
+#[cfg(any(feature = "split", feature = "controller"))]
+use embassy_sync::pubsub::PubSubChannel;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 #[cfg(feature = "_ble")]
 use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator, embassy_sync::signal::Signal};
@@ -8,13 +10,12 @@ use {crate::ble::trouble::profile::BleProfileAction, crate::light::LedIndicator,
 use {
     crate::event::ControllerEvent,
     crate::{CONTROLLER_CHANNEL_PUBS, CONTROLLER_CHANNEL_SIZE, CONTROLLER_CHANNEL_SUBS},
-    embassy_sync::pubsub::{PubSubChannel, Publisher, Subscriber},
+    embassy_sync::pubsub::{Publisher, Subscriber},
 };
 #[cfg(feature = "split")]
 use {
     crate::split::SplitMessage,
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
-    embassy_sync::pubsub::PubSubChannel,
 };
 
 use crate::event::{Event, KeyEvent};

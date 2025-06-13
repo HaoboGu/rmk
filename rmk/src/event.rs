@@ -2,6 +2,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
+#[cfg(feature = "controller")]
 use crate::keycode::ModifierCombination;
 
 /// Raw events from input devices and keyboards
@@ -96,6 +97,7 @@ pub struct KeyEvent {
 }
 
 /// Event for controllers
+#[cfg(feature = "controller")]
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
