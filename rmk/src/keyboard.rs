@@ -227,8 +227,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
                 debug!("Process key action after combo: {:?}, {:?}", key_action, key_event);
+
                 #[cfg(feature = "controller")]
                 send_controller_event(&mut self.controller_pub, ControllerEvent::Key(key_event));
+
                 self.process_key_action(key_action, key_event).await;
             }
         } else {
