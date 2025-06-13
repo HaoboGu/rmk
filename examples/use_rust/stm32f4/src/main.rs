@@ -12,7 +12,7 @@ use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB_OTG_FS;
 use embassy_stm32::usb::{Driver, InterruptHandler};
-use embassy_stm32::{Config, bind_interrupts};
+use embassy_stm32::{bind_interrupts, Config};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};

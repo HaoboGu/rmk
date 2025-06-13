@@ -22,7 +22,7 @@ use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
-use rmk::{HostResources, run_devices};
+use rmk::{run_devices, HostResources};
 use static_cell::StaticCell;
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
