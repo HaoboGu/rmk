@@ -212,8 +212,7 @@ macro_rules! add_usb_reader_writer {
 
 #[cfg(feature = "usb_log")]
 pub(crate) use add_usb_logger;
-pub(crate) use add_usb_reader_writer;
-pub(crate) use add_usb_writer;
+pub(crate) use {add_usb_reader_writer, add_usb_writer};
 
 pub(crate) struct UsbRequestHandler {}
 

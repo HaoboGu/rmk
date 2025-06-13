@@ -10,10 +10,10 @@ use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_V
 use vial::process_vial;
 
 use crate::config::VialConfig;
+use crate::descriptor::ViaReport;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
-use crate::descriptor::ViaReport;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{boot, CONNECTION_STATE, MACRO_SPACE_SIZE};
 #[cfg(feature = "storage")]

@@ -1,11 +1,5 @@
 //! Exposed channels which can be used to share data across devices & processors
 
-use crate::event::{Event, KeyEvent};
-use crate::hid::Report;
-use crate::RawMutex;
-#[cfg(feature = "storage")]
-use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
-use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
 use embassy_sync::channel::Channel;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 #[cfg(feature = "_ble")]
@@ -22,6 +16,12 @@ use {
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
     embassy_sync::pubsub::PubSubChannel,
 };
+
+use crate::event::{Event, KeyEvent};
+use crate::hid::Report;
+#[cfg(feature = "storage")]
+use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
+use crate::{RawMutex, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
 
 #[cfg(feature = "controller")]
 pub type ControllerSub<'a> = Subscriber<
