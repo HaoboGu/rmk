@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [Logging via USB](https://rmk.rs/docs/features/usb_logging.html)
+
 ## [0.7.2] - 2025-06-12
 
 ### Fixed
