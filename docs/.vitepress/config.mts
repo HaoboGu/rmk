@@ -183,6 +183,7 @@ function sidebarGuide() {
         { text: 'Low-Power', link: 'features/low_power' },
         { text: 'Storage', link: 'features/storage' },
         { text: 'Split Keyboard', link: 'features/split_keyboard' },
+        { text: 'USB Logging', link: 'features/usb_logging' },
         {
           text: 'Binary Size Optimization',
           link: 'features/binary_size_optimization'

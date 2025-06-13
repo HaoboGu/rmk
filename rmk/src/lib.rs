@@ -218,22 +218,34 @@ pub async fn run_rmk<
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
+
+        #[cfg(feature = "usb_log")]
+        let logger_fut = {
+            let usb_logger = crate::usb::add_usb_logger!(&mut usb_builder);
+            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger)
+        };
+        #[cfg(not(feature = "usb_log"))]
+        let logger_fut = async {};
         let mut usb_device = usb_builder.build();
+
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        loop {
-            run_keyboard(
-                keymap,
-                #[cfg(feature = "storage")]
-                storage,
-                async { usb_device.run().await },
-                light_controller,
-                UsbLedReader::new(&mut keyboard_reader),
-                UsbVialReaderWriter::new(&mut vial_reader_writer),
-                UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                rmk_config.vial_config,
-            )
-            .await;
-        }
+        embassy_futures::join::join(logger_fut, async {
+            loop {
+                run_keyboard(
+                    keymap,
+                    #[cfg(feature = "storage")]
+                    storage,
+                    async { usb_device.run().await },
+                    light_controller,
+                    UsbLedReader::new(&mut keyboard_reader),
+                    UsbVialReaderWriter::new(&mut vial_reader_writer),
+                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                    rmk_config.vial_config,
+                )
+                .await;
+            }
+        })
+        .await;
     }
 
     unreachable!("Should never reach here, wrong feature gate combination?");
