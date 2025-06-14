@@ -41,7 +41,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
-    if: needs.get_chip_name.outputs.chip_name != 'esp32s3
+    if: needs.get_chip_name.outputs.chip_name != 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
@@ -91,11 +91,11 @@ jobs:
         id: arch
         run: |
           if [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c3" ]; then
-            ARCH="riscv32imc-esp-espidf"
+            ARCH="riscv32imc-unknown-none-elf"
           elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32s3" ]; then
-            ARCH="riscv32imac-esp-espidf"
+            ARCH="xtensa-esp32s3-none-elf"
           elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c6" ]; then
-            ARCH="xtensa-esp32s3-espidf"
+            ARCH="riscv32imac-unknown-none-elf"
           else
             ARCH=""
           fi
