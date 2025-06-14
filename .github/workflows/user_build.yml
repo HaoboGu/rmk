@@ -41,7 +41,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
-    if: needs.get_chip_name.outputs.chip_name != 'esp32c3' && needs.get_chip_name.outputs.chip_name != 'esp32s3' && needs.get_chip_name.outputs.chip_name != 'esp32c6'
+    if: needs.get_chip_name.outputs.chip_name != 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
@@ -71,33 +71,31 @@ jobs:
   build_esp:
     runs-on: ubuntu-latest
     needs: get_chip_name
-    if: needs.get_chip_name.outputs.chip_name == 'esp32c3' || needs.get_chip_name.outputs.chip_name == 'esp32s3' || needs.get_chip_name.outputs.chip_name == 'esp32c6'
+    if: needs.get_chip_name.outputs.chip_name == 'esp32s3'
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
       - name: Install libssl
         run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
-      - name: Install rmkit and espflash
-        run: cargo binstall rmkit espflash -y
+      - name: Install rmkit, espflash and espup
+        run: cargo binstall rmkit espflash espup -y
       - name: Prepare esp environment
-        run: |
-          cargo binstall ldproxy espup -y
-          espup install
+        run: espup install
       - name: Create firmware project
         working-directory: .
         run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --target-dir rmk
       - name: Build firmware for esp32
         working-directory: ./rmk
-        run: cargo +esp build --release
+        run: . /home/runner/export-esp.sh && cargo +esp build --release 
       - name: Get target arch
         id: arch
         run: |
           if [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c3" ]; then
-            ARCH="riscv32imc-esp-espidf"
+            ARCH="riscv32imc-unknown-none-elf"
           elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32s3" ]; then
-            ARCH="riscv32imac-esp-espidf"
+            ARCH="xtensa-esp32s3-none-elf"
           elif [ "${{ needs.get_chip_name.outputs.chip_name }}" == "esp32c6" ]; then
-            ARCH="xtensa-esp32s3-espidf"
+            ARCH="riscv32imac-unknown-none-elf"
           else
             ARCH=""
           fi
