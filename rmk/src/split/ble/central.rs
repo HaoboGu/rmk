@@ -216,7 +216,7 @@ async fn connect_and_run_peripheral_manager<
     info!("Connected to peripheral");
 
     #[cfg(feature = "controller")]
-    send_controller_event(controller_pub, ControllerEvent::SplitPeripheral(id, false));
+    send_controller_event(controller_pub, ControllerEvent::SplitPeripheral(id, true));
 
     let client = GattClient::<C, P, 10>::new(&stack, &conn).await?;
 
