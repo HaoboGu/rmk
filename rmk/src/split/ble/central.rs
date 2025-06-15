@@ -7,6 +7,11 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 use crate::ble::trouble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
@@ -161,13 +166,24 @@ pub(crate) async fn run_ble_peripheral_manager<
         },
     };
     wait_for_stack_started().await;
+
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
+
     loop {
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut controller_pub,
+            ControllerEvent::SplitPeripheral(peripheral_id, false),
+        );
         info!("Connecting peripheral");
         if let Err(e) = connect_and_run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(
             peripheral_id,
             stack,
             &mut central,
             &config,
+            #[cfg(feature = "controller")]
+            &mut controller_pub,
         )
         .await
         {
@@ -193,10 +209,14 @@ async fn connect_and_run_peripheral_manager<
     stack: &'a Stack<'a, C, P>,
     central: &mut Central<'a, C, P>,
     config: &ConnectConfig<'_>,
+    #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
 
     info!("Connected to peripheral");
+
+    #[cfg(feature = "controller")]
+    send_controller_event(controller_pub, ControllerEvent::SplitPeripheral(id, true));
 
     let client = GattClient::<C, P, 10>::new(&stack, &conn).await?;
 
