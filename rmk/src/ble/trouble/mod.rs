@@ -15,6 +15,11 @@ use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 #[cfg(not(feature = "_no_usb"))]
 use {
     crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
@@ -121,6 +126,9 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))]
     let mut usb_device = _usb_builder.build();
 
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
+
     // Load current connection type
     #[cfg(feature = "storage")]
     {
@@ -136,10 +144,20 @@ pub(crate) async fn run_ble<
             #[cfg(not(feature = "_no_usb"))]
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
+
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut controller_pub,
+            ControllerEvent::ConnectionType(CONNECTION_TYPE.load(Ordering::SeqCst)),
+        );
     }
 
     // Create profile manager
-    let mut profile_manager = ProfileManager::new(&stack);
+    let mut profile_manager = ProfileManager::new(
+        &stack,
+        #[cfg(feature = "controller")]
+        controller_pub,
+    );
 
     #[cfg(feature = "storage")]
     // Load saved bonding information

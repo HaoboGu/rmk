@@ -15,7 +15,7 @@ use {
 };
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::channel::{send_controller_event, ControllerPub},
     crate::event::ControllerEvent,
 };
 
@@ -85,12 +85,12 @@ pub struct ProfileManager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: P
 #[cfg(feature = "_ble")]
 impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>, #[cfg(feature = "controller")] controller_pub: ControllerPub) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
             #[cfg(feature = "controller")]
-            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+            controller_pub,
         }
     }
 
@@ -321,7 +321,15 @@ impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileMan
                             let current = CONNECTION_TYPE.load(Ordering::SeqCst);
                             let updated = 1 - current;
                             CONNECTION_TYPE.store(updated, Ordering::SeqCst);
+
                             info!("Switching connection type to: {}", updated);
+
+                            #[cfg(feature = "controller")]
+                            send_controller_event(
+                                &mut self.controller_pub,
+                                ControllerEvent::ConnectionType(updated.into()),
+                            );
+
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }
