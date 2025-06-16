@@ -25,6 +25,8 @@ use core::sync::atomic::Ordering;
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use config::{RmkConfig, VialConfig};
+#[cfg(feature = "controller")]
+use controller::{wpm::WpmController, PollingController};
 use descriptor::ViaReport;
 use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
@@ -195,18 +197,29 @@ pub async fn run_rmk<
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
+    #[cfg(feature = "controller")]
+    let mut wpm_controller = WpmController::new();
+    #[cfg(feature = "controller")]
+    let controller_fut = wpm_controller.polling_loop();
+
+    #[cfg(not(feature = "controller"))]
+    let controller_fut = async {};
+
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
-    crate::ble::trouble::run_ble(
-        keymap,
-        #[cfg(not(feature = "_no_usb"))]
-        usb_driver,
-        #[cfg(feature = "_ble")]
-        stack,
-        #[cfg(feature = "storage")]
-        storage,
-        light_controller,
-        rmk_config,
+    embassy_futures::join::join(
+        controller_fut,
+        crate::ble::trouble::run_ble(
+            keymap,
+            #[cfg(not(feature = "_no_usb"))]
+            usb_driver,
+            #[cfg(feature = "_ble")]
+            stack,
+            #[cfg(feature = "storage")]
+            storage,
+            light_controller,
+            rmk_config,
+        ),
     )
     .await;
 
@@ -229,7 +242,7 @@ pub async fn run_rmk<
         let mut usb_device = usb_builder.build();
 
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        embassy_futures::join::join(logger_fut, async {
+        embassy_futures::join::join3(controller_fut, logger_fut, async {
             loop {
                 run_keyboard(
                     keymap,
