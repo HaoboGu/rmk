@@ -3,6 +3,8 @@
 //! This module defines the `Controller` trait and several macros for running output device controllers.
 //! The `Controller` trait provides the interface for individual output device controllers, and the macros facilitate their concurrent execution.
 
+pub(crate) mod wpm;
+
 use embassy_futures::select::{select, Either};
 
 /// Common trait for controllers.

@@ -25,8 +25,8 @@ use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
 use crate::{RawMutex, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
 
 #[cfg(feature = "controller")]
-pub type ControllerSub<'a> = Subscriber<
-    'a,
+pub type ControllerSub = Subscriber<
+    'static,
     RawMutex,
     ControllerEvent,
     CONTROLLER_CHANNEL_SIZE,
