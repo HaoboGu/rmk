@@ -1,5 +1,11 @@
 # USB Logging
 
+::: warning
+
+Some microcontrollers (like ESP32S3) does't have enough USB endpoints, so USB logging cannot enabled for those microcontrollers. To enable the USB logging, make sure that your microcontroller has at least 5 In + 4 OUT endpoints available(except control endpoint, EP0)
+
+:::
+
 RMK uses [defmt](https://defmt.ferrous-systems.com) as the default logger, which works great if you have a debug probe. However, if you don’t have a debug probe, you can still view logs over USB by configuring USB as a serial port. RMK supports USB logging by enabling the `usb_log` feature:
 
 ```toml
