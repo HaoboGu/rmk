@@ -33,7 +33,7 @@ impl Controller for WpmController {
     type Event = ControllerEvent;
 
     async fn process_event(&mut self, event: Self::Event) {
-        if let ControllerEvent::Key(KeyEvent { pressed: false, .. }) = event {
+        if let ControllerEvent::Key(KeyEvent { pressed: false, .. }, _) = event {
             self.keys_pressed += 1
         }
     }
