@@ -1,5 +1,5 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = ["probe-rs", "run", "--chip", "nRF52840_xxAA", "--log-format", "{L:severity} {t} {s}"]
+runner = "probe-rs run --chip nRF52840_xxAA"
 linker = "flip-link"
 
 [build]
