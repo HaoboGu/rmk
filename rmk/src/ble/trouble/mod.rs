@@ -406,80 +406,71 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 };
                 UPDATED_PROFILE.signal(profile_info);
             }
-            GattConnectionEvent::Gatt { event } => {
-                match event {
-                    Ok(event) => {
-                        let mut cccd_updated = false;
-                        let result = match &event {
-                            GattEvent::Read(event) => {
-                                if event.handle() == level.handle {
-                                    let value = server.get(&level);
-                                    debug!("Read GATT Event to Level: {:?}", value);
-                                } else {
-                                    debug!("Read GATT Event to Unknown: {:?}", event.handle());
-                                }
-
-                                if conn.raw().encrypted() {
-                                    None
-                                } else {
-                                    Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
-                                }
-                            }
-                            GattEvent::Write(event) => {
-                                if event.handle() == output_keyboard.handle {
-                                    let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                                    debug!("Got keyboard state: {:?}", led_indicator);
-                                    LED_SIGNAL.signal(led_indicator);
-                                } else if event.handle() == output_via.handle {
-                                    debug!("Got via packet: {:?}", event.data());
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                    VIAL_READ_CHANNEL.send(data).await;
-                                } else if event.handle()
-                                    == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                                    || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
-                                    || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
-                                    || event.handle() == media.cccd_handle.expect("No CCCD for media report")
-                                    || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
-                                    || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
-                                {
-                                    // CCCD write event
-                                    cccd_updated = true;
-                                } else {
-                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
-                                }
-
-                                if conn.raw().encrypted() {
-                                    None
-                                } else {
-                                    Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
-                                }
-                            }
-                        };
-
-                        // This step is also performed at drop(), but writing it explicitly is necessary
-                        // in order to ensure reply is sent.
-                        let result = if let Some(code) = result {
-                            event.reject(code)
+            GattConnectionEvent::Gatt { event: gatt_event } => {
+                let mut cccd_updated = false;
+                let result = match &gatt_event {
+                    GattEvent::Read(event) => {
+                        if event.handle() == level.handle {
+                            let value = server.get(&level);
+                            debug!("Read GATT Event to Level: {:?}", value);
                         } else {
-                            event.accept()
-                        };
-                        match result {
-                            Ok(reply) => {
-                                reply.send().await;
-                            }
-                            Err(e) => {
-                                warn!("[gatt] error sending response: {:?}", e);
-                            }
+                            debug!("Read GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        // Update CCCD table after processing the event
-                        if cccd_updated {
-                            if let Some(table) = server.get_cccd_table(conn.raw()) {
-                                UPDATED_CCCD_TABLE.signal(table);
-                            }
+                        if conn.raw().encrypted() {
+                            None
+                        } else {
+                            Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
                         }
                     }
-                    Err(e) => warn!("[gatt] error processing event: {:?}", e),
+                    GattEvent::Write(event) => {
+                        if event.handle() == output_keyboard.handle {
+                            let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                            debug!("Got keyboard state: {:?}", led_indicator);
+                            LED_SIGNAL.signal(led_indicator);
+                        } else if event.handle() == output_via.handle {
+                            debug!("Got via packet: {:?}", event.data());
+                            let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                            VIAL_READ_CHANNEL.send(data).await;
+                        } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
+                            || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
+                            || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
+                            || event.handle() == media.cccd_handle.expect("No CCCD for media report")
+                            || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
+                            || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
+                        {
+                            // CCCD write event
+                            cccd_updated = true;
+                        } else {
+                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                        }
+
+                        if conn.raw().encrypted() {
+                            None
+                        } else {
+                            Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
+                        }
+                    }
+                    GattEvent::Other(_) => None,
+                };
+
+                // This step is also performed at drop(), but writing it explicitly is necessary
+                // in order to ensure reply is sent.
+                let result = if let Some(code) = result {
+                    gatt_event.reject(code)
+                } else {
+                    gatt_event.accept()
+                };
+                match result {
+                    Ok(reply) => reply.send().await,
+                    Err(e) => warn!("[gatt] error sending response: {:?}", e),
+                }
+
+                // Update CCCD table after processing the event
+                if cccd_updated {
+                    if let Some(table) = server.get_cccd_table(conn.raw()) {
+                        UPDATED_CCCD_TABLE.signal(table);
+                    }
                 }
             }
             GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
