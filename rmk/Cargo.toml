@@ -58,6 +58,11 @@ trouble-host = { version = "0.1.0", git = "https://github.com/embassy-rs/trouble
     "scan",
     "derive",
     "security",
+    "connection-event-queue-size-4",
+    "l2cap-rx-queue-size-32",
+    "l2cap-tx-queue-size-32",
+    "default-packet-pool-size-64",
+    "gatt-client-notification-queue-size-16",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
