@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit on any error
+set -e
+
 # Build and clean examples (except ESP32S3)
 for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
