@@ -13,7 +13,6 @@ use crate::config::KeyboardUsbConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::{ConnectionState, CURRENT_CONNECTION};
-use crate::usb::descriptor::CompositeReportType;
 use crate::CONNECTION_STATE;
 
 /// USB state
