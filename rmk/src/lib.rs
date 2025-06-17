@@ -197,29 +197,18 @@ pub async fn run_rmk<
     light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
-    #[cfg(feature = "controller")]
-    let mut wpm_controller = WpmController::new();
-    #[cfg(feature = "controller")]
-    let controller_fut = wpm_controller.polling_loop();
-
-    #[cfg(not(feature = "controller"))]
-    let controller_fut = async {};
-
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
-    embassy_futures::join::join(
-        controller_fut,
-        crate::ble::trouble::run_ble(
-            keymap,
-            #[cfg(not(feature = "_no_usb"))]
-            usb_driver,
-            #[cfg(feature = "_ble")]
-            stack,
-            #[cfg(feature = "storage")]
-            storage,
-            light_controller,
-            rmk_config,
-        ),
+    crate::ble::trouble::run_ble(
+        keymap,
+        #[cfg(not(feature = "_no_usb"))]
+        usb_driver,
+        #[cfg(feature = "_ble")]
+        stack,
+        #[cfg(feature = "storage")]
+        storage,
+        light_controller,
+        rmk_config,
     )
     .await;
 
@@ -242,7 +231,7 @@ pub async fn run_rmk<
         let mut usb_device = usb_builder.build();
 
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        embassy_futures::join::join3(controller_fut, logger_fut, async {
+        embassy_futures::join::join(logger_fut, async {
             loop {
                 run_keyboard(
                     keymap,
@@ -298,12 +287,19 @@ pub(crate) async fn run_keyboard<
 
     #[cfg(feature = "storage")]
     let storage_fut = storage.run();
+
+    #[cfg(feature = "controller")]
+    let mut wpm_controller = WpmController::new();
+
     match select4(
         communication_task,
         #[cfg(feature = "storage")]
         select(storage_fut, via_fut),
         #[cfg(not(feature = "storage"))]
         via_fut,
+        #[cfg(feature = "controller")]
+        select(wpm_controller.polling_loop(), led_fut),
+        #[cfg(not(feature = "controller"))]
         led_fut,
         writer_fut,
     )
@@ -311,7 +307,7 @@ pub(crate) async fn run_keyboard<
     {
         Either4::First(_) => error!("Communication task has ended"),
         Either4::Second(_) => error!("Storage or vial task has ended"),
-        Either4::Third(_) => error!("Led task has ended"),
+        Either4::Third(_) => error!("Controller or led task has ended"),
         Either4::Fourth(_) => error!("Keyboard writer task has ended"),
     }
     CONNECTION_STATE.store(ConnectionState::Disconnected.into(), Ordering::Release);
