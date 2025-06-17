@@ -7,8 +7,8 @@ use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::descriptor::KeyboardReport;
 use crate::state::ConnectionState;
-use crate::usb::descriptor::KeyboardReport;
 use crate::CONNECTION_STATE;
 
 #[derive(Serialize, Debug)]

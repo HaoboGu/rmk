@@ -25,6 +25,7 @@ use core::sync::atomic::Ordering;
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use config::{RmkConfig, VialConfig};
+use descriptor::ViaReport;
 use embassy_futures::select::{select4, Either4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
@@ -42,12 +43,11 @@ use state::CONNECTION_STATE;
 use trouble_host::prelude::*;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::{DefaultPacketPool, HostResources};
-use usb::descriptor::ViaReport;
 use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
-    crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer, UsbKeyboardWriter},
+    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder, UsbKeyboardWriter},
 };
 #[cfg(feature = "storage")]
 use {
@@ -56,12 +56,12 @@ use {
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 #[cfg(not(feature = "_ble"))]
 use {
-    usb::descriptor::{CompositeReport, KeyboardReport},
+    descriptor::{CompositeReport, KeyboardReport},
     via::UsbVialReaderWriter,
 };
+pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 
 use crate::light::LightController;
 use crate::state::ConnectionState;
@@ -77,6 +77,7 @@ pub mod config;
 #[cfg(feature = "controller")]
 pub mod controller;
 pub mod debounce;
+pub(crate) mod descriptor;
 pub mod direct_pin;
 pub mod event;
 pub mod fork;
@@ -95,6 +96,7 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
+#[cfg(not(feature = "_no_usb"))]
 pub(crate) mod usb;
 pub mod via;
 
@@ -214,25 +216,37 @@ pub async fn run_rmk<
     {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
-        let mut other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
+
+        #[cfg(feature = "usb_log")]
+        let logger_fut = {
+            let usb_logger = crate::usb::add_usb_logger!(&mut usb_builder);
+            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger)
+        };
+        #[cfg(not(feature = "usb_log"))]
+        let logger_fut = async {};
         let mut usb_device = usb_builder.build();
+
         // Run all tasks, if one of them fails, wait 1 second and then restart
-        loop {
-            run_keyboard(
-                keymap,
-                #[cfg(feature = "storage")]
-                storage,
-                async { usb_device.run().await },
-                light_controller,
-                UsbLedReader::new(&mut keyboard_reader),
-                UsbVialReaderWriter::new(&mut vial_reader_writer),
-                UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
-                rmk_config.vial_config,
-            )
-            .await;
-        }
+        embassy_futures::join::join(logger_fut, async {
+            loop {
+                run_keyboard(
+                    keymap,
+                    #[cfg(feature = "storage")]
+                    storage,
+                    async { usb_device.run().await },
+                    light_controller,
+                    UsbLedReader::new(&mut keyboard_reader),
+                    UsbVialReaderWriter::new(&mut vial_reader_writer),
+                    UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                    rmk_config.vial_config,
+                )
+                .await;
+            }
+        })
+        .await;
     }
 
     unreachable!("Should never reach here, wrong feature gate combination?");

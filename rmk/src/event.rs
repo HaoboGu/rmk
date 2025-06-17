@@ -1,7 +1,8 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::{input_device::rotary_encoder::Direction, keycode::ModifierCombination};
+use crate::input_device::rotary_encoder::Direction;
+use crate::keycode::ModifierCombination;
 
 /// Raw events from input devices and keyboards
 ///

@@ -23,7 +23,7 @@ use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;

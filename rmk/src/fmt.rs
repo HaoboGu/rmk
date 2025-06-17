@@ -6,6 +6,9 @@ use core::fmt::{Debug, Display, LowerHex};
 #[cfg(all(feature = "defmt", feature = "log"))]
 compile_error!("You may not enable both `defmt` and `log` features.");
 
+#[cfg(all(feature = "_no_usb", feature = "usb_log"))]
+compile_error!("You may not enable `usb_log` for MCUs that don't have USB, or when USB is disabled.");
+
 #[collapse_debuginfo(yes)]
 macro_rules! assert {
     ($($x:tt)*) => {

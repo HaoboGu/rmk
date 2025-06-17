@@ -13,10 +13,12 @@ pub(crate) struct Initializer {
     pub(crate) var_name: Ident,
 }
 
+/// Expands the input device configuration.
+/// Returns a tuple containing: (device_and_processors_initialization, devices, processors)
 pub(crate) fn expand_input_device_config(
     keyboard_config: &KeyboardTomlConfig,
 ) -> (TokenStream, Vec<TokenStream>, Vec<TokenStream>) {
-    let mut config = TokenStream::new();
+    let mut initialization = TokenStream::new();
     let mut devices = Vec::new();
     let mut processors = Vec::new();
 
@@ -28,7 +30,7 @@ pub(crate) fn expand_input_device_config(
     };
     let board = keyboard_config.get_board_config().unwrap();
     let chip = keyboard_config.get_chip_model().unwrap();
-    let (adc_config, adc_processors) = match &board {
+    let (adc_initializers, adc_processors) = match &board {
         BoardConfig::UniBody(UniBodyConfig { input_device, .. }) => expand_adc_device(
             input_device.clone().joystick.unwrap_or(Vec::new()),
             ble_config,
@@ -46,11 +48,18 @@ pub(crate) fn expand_input_device_config(
             chip.series.clone(),
         ),
     };
-    config.extend(adc_config);
-    if !adc_processors.is_empty() {
-        devices.push(quote! {adc_device});
+
+    for initializer in adc_initializers {
+        initialization.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
     }
-    processors.extend(adc_processors);
+
+    for initializer in adc_processors {
+        initialization.extend(initializer.initializer);
+        let processor_name = initializer.var_name;
+        processors.push(quote! { #processor_name });
+    }
 
     // generate encoder configuration
     let (device_initializer, processor_initializer) = match &board {
@@ -70,16 +79,16 @@ pub(crate) fn expand_input_device_config(
         ),
     };
     for initializer in device_initializer {
-        config.extend(initializer.initializer);
+        initialization.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });
     }
 
     for initializer in processor_initializer {
-        config.extend(initializer.initializer);
+        initialization.extend(initializer.initializer);
         let processor_name = initializer.var_name;
         processors.push(quote! { #processor_name });
     }
 
-    (config, devices, processors)
+    (initialization, devices, processors)
 }

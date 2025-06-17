@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BleConfig, BoardConfig, KeyboardTomlConfig};
+use rmk_config::{BoardConfig, KeyboardTomlConfig};
 use syn::ItemMod;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
@@ -55,20 +55,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             }
         }
         rmk_config::ChipSeries::Nrf52 => {
-            // Adc interrupt
-            let saadc_interrupt = if let Some(BleConfig {
-                enabled: true,
-                battery_adc_pin: Some(_adc_pin),
-                charge_state: _,
-                charge_led: _,
-                adc_divider_measured: _,
-                adc_divider_total: _,
-            }) = communication.get_ble_config()
-            {
-                quote! { SAADC => ::embassy_nrf::saadc::InterruptHandler; }
-            } else {
-                quote! {}
-            };
             // Usb and clock interrupt
             let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
@@ -115,7 +101,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             quote! {
                 use ::embassy_nrf::bind_interrupts;
                 bind_interrupts!(struct Irqs {
-                    #saadc_interrupt
                     #usb_and_clock_interrupt
                     RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
                     EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;

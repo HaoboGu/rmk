@@ -4,7 +4,7 @@ The `[behavior]` section contains configuration for how different keyboard actio
 
 ```toml
 [behavior]
-tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+tri_layer = { upper = 1, lower = 2, adjust = 3 }
 one_shot = { timeout = "1s" }
 ```
 
@@ -16,7 +16,7 @@ You can enable Tri Layer by specifying the `upper`, `lower` and `adjust` layers 
 
 ```toml
 [behavior.tri_layer]
-uppper = 1
+upper = 1
 lower = 2
 adjust = 3
 ```

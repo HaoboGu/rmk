@@ -2,9 +2,9 @@
 
 ## `[light]`
 
-`[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually an input pin, so there are two fields available: `pin` and `low_active`.
+`[light]` section defines lights of the keyboard, aka `capslock`, `scrolllock` and `numslock`. They are actually output pins, so there are two fields available: `pin` and `low_active`.
 
-`pin` field is just like IO pins in `[matrix]`, `low_active` defines whether the light low-active or high-active(`true` means low-active).
+`pin` field is just like IO pins in [`[matrix]`](./keyboard_matrix.md#key-matrix), `low_active` defines whether the light low-active or high-active(`true` means low-active).
 
 You can safely ignore any of them, or the whole `[light]` section if you don't need them.
 

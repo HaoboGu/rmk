@@ -110,7 +110,7 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
 # Tri Layer configuration
-tri_layer = { uppper = 1, lower = 2, adjust = 3 }
+tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
 

@@ -10,11 +10,12 @@
 //!
 //! The build script also sets the linker flags to tell it which link script to use.
 
-use const_gen::*;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+
+use const_gen::*;
 use xz2::read::XzEncoder;
 
 fn main() {
