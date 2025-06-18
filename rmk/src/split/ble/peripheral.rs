@@ -54,35 +54,33 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                     CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
                     return Err(SplitDriverError::Disconnected);
                 }
-                GattConnectionEvent::Gatt { event } => match event {
-                    Ok(gatt_event) => {
-                        match &gatt_event {
-                            GattEvent::Read(event) => {
-                                info!("Gatt read event: {:?}", event.handle());
-                            }
-                            GattEvent::Write(event) => {
-                                // Write to peripheral
-                                if event.handle() == self.message_to_peripheral.handle {
-                                    trace!("Got message from central: {:?}", event.data());
-                                    match postcard::from_bytes::<SplitMessage>(&event.data()) {
-                                        Ok(message) => {
-                                            trace!("Message from central: {:?}", message);
-                                            break message;
-                                        }
-                                        Err(e) => error!("Postcard deserialize split message error: {}", e),
-                                    }
-                                } else {
-                                    info!("Gatt write other event: {:?}", event.handle());
-                                }
-                            }
-                        };
-                        match gatt_event.accept() {
-                            Ok(r) => r.send().await,
-                            Err(e) => warn!("[gatt] error sending response: {:?}", e),
+                GattConnectionEvent::Gatt { event: gatt_event } => {
+                    match &gatt_event {
+                        GattEvent::Read(event) => {
+                            info!("Gatt read event: {:?}", event.handle());
                         }
+                        GattEvent::Write(event) => {
+                            // Write to peripheral
+                            if event.handle() == self.message_to_peripheral.handle {
+                                trace!("Got message from central: {:?}", event.data());
+                                match postcard::from_bytes::<SplitMessage>(&event.data()) {
+                                    Ok(message) => {
+                                        trace!("Message from central: {:?}", message);
+                                        break message;
+                                    }
+                                    Err(e) => error!("Postcard deserialize split message error: {}", e),
+                                }
+                            } else {
+                                info!("Gatt write other event: {:?}", event.handle());
+                            }
+                        }
+                        _ => debug!("Other gatt event"),
+                    };
+                    match gatt_event.accept() {
+                        Ok(r) => r.send().await,
+                        Err(e) => warn!("[gatt] error sending response: {:?}", e),
                     }
-                    Err(e) => warn!("[gatt] error processing event: {:?}", e),
-                },
+                }
                 GattConnectionEvent::ConnectionParamsUpdated {
                     conn_interval,
                     peripheral_latency,

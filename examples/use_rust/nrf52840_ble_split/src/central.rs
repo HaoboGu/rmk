@@ -13,9 +13,9 @@ use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
-use embassy_nrf::{bind_interrupts, rng, usb, Peri};
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::{Peri, bind_interrupts, rng, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -28,15 +28,15 @@ use rmk::config::{
 };
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
+use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
-use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::split::ble::central::read_peripheral_addresses;
-use rmk::split::central::{run_peripheral_manager, CentralMatrix};
-use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
+use rmk::split::central::{CentralMatrix, run_peripheral_manager};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -77,6 +77,11 @@ fn build_sdc<'d, const N: usize>(
         .support_central()?
         .support_adv()?
         .support_peripheral()?
+        .support_dle_peripheral()?
+        .support_dle_central()?
+        .support_phy_update_central()?
+        .support_phy_update_peripheral()?
+        .support_le_2m_phy()?
         .central_count(1)?
         .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
@@ -166,7 +171,7 @@ async fn main(spawner: Spawner) {
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
-        start_addr: 0xA0000, // FIXME: use 0x70000 after we can build without softdevice controller
+        start_addr: 0xA0000,
         num_sectors: 6,
         ..Default::default()
     };
