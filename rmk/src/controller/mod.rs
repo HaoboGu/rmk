@@ -3,6 +3,8 @@
 //! This module defines the `Controller` trait and several macros for running output device controllers.
 //! The `Controller` trait provides the interface for individual output device controllers, and the macros facilitate their concurrent execution.
 
+pub(crate) mod wpm;
+
 use embassy_futures::select::{select, Either};
 
 /// Common trait for controllers.
@@ -101,12 +103,10 @@ pub trait PollingController: Controller {
     /// Polling loop
     async fn polling_loop(&mut self) {
         let mut last = embassy_time::Instant::now();
-        let mut elapsed;
 
         loop {
-            let now = embassy_time::Instant::now();
-            elapsed = now - last;
-            last = now;
+            let elapsed = last.elapsed();
+
             match select(
                 embassy_time::Timer::after(Self::INTERVAL - elapsed),
                 self.next_message(),

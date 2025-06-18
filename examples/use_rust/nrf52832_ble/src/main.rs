@@ -27,7 +27,7 @@ use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -65,8 +65,6 @@ fn build_sdc<'d, const N: usize>(
         .support_adv()?
         .support_peripheral()?
         .support_dle_peripheral()?
-        .support_dle_central()?
-        .support_phy_update_central()?
         .support_phy_update_peripheral()?
         .support_le_2m_phy()?
         .peripheral_count(1)?

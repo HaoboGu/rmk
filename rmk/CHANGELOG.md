@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2025-06-18
+
 ### Added
 
 - [Logging via USB](https://rmk.rs/docs/features/usb_logging.html)
+- Events for controllers
+
+### Changed
+
+- Update to TrouBLE v0.2.0
+
+### Fixed
+
+- Fixed sdc build error
+- Fixed cloud build script for ESP32
 
 ## [0.7.2] - 2025-06-12
 
