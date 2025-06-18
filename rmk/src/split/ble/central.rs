@@ -100,7 +100,11 @@ impl EventHandler for ScanHandler {
 
 pub(crate) async fn run_ble_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeSetScanParams> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller
+        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdAsync<LeSetPhy>
+        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
+        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -198,7 +202,10 @@ pub(crate) async fn run_ble_peripheral_manager<
 
 async fn connect_and_run_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
+        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
