@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit on any error
+set -e
+
 # Format rmk and rmk-macro
 cd rmk && cargo +nightly fmt && cd ..
 cd rmk-macro && cargo +nightly fmt && cd ..
