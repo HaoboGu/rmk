@@ -89,8 +89,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_adv()?
                     .support_peripheral()?
                     .support_dle_peripheral()?
-                    .support_dle_central()?
-                    .support_phy_update_central()?
                     .support_phy_update_peripheral()?
                     .support_le_2m_phy()?
                     .peripheral_count(1)?
