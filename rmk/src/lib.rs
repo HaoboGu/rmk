@@ -182,7 +182,10 @@ pub async fn initialize_keymap_and_storage<
 pub async fn run_rmk<
     'a,
     'b,
-    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
+    #[cfg(feature = "_ble")] C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
+        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
     Out: OutputPin,
