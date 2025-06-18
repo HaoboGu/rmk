@@ -7,7 +7,7 @@ use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{ControllerPub, CONTROLLER_CHANNEL},
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
     crate::event::ControllerEvent,
 };
 
@@ -155,7 +155,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
-    controller_pub: ControllerPub<'a>,
+    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -227,6 +227,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
                 debug!("Process key action after combo: {:?}, {:?}", key_action, key_event);
+
                 self.process_key_action(key_action, key_event).await;
             }
         } else {
@@ -299,6 +300,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) {
         let key_action = self.try_start_forks(original_key_action, key_event);
+
+        #[cfg(feature = "controller")]
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Key(key_event, key_action));
 
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
@@ -1360,10 +1364,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -1374,10 +1378,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
     }
 
     /// Register a modifier combination to be sent in hid report.
@@ -1385,10 +1389,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= modifiers.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers.to_hid_modifiers();
@@ -1399,10 +1403,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !modifiers.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        self.controller_pub
-            .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                self.held_modifiers,
-            )));
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
     }
 }
 
