@@ -1,6 +1,6 @@
 use core::sync::atomic::Ordering;
 
-use bt_hci::cmd::le::{LeSetPhy, LeSetScanParams};
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeReadRemoteFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
@@ -100,7 +100,11 @@ impl EventHandler for ScanHandler {
 
 pub(crate) async fn run_ble_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeSetScanParams> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller
+        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdAsync<LeReadRemoteFeatures>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -198,7 +202,10 @@ pub(crate) async fn run_ble_peripheral_manager<
 
 async fn connect_and_run_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdAsync<LeReadRemoteFeatures>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
