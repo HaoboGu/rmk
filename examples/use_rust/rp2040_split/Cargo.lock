@@ -2386,13 +2386,14 @@ checksum = "343e926fc669bc8cde4fa3129ab681c63671bae288b1f1081ceee6d9d37904fc"
 
 [[package]]
 name = "trouble-host"
-version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=cb4b2cd#cb4b2cd424cdb2af54bad52922798a58d8786d7f"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f759a3da7d8501bf4be7a11d0754f1da3d2bad226d64cdad9314cec00288fbc"
 dependencies = [
  "aes",
  "bt-hci",
  "cmac",
- "defmt 0.3.100",
+ "defmt 1.0.1",
  "embassy-futures",
  "embassy-sync 0.7.0",
  "embassy-time",
@@ -2409,8 +2410,9 @@ dependencies = [
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.1.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=cb4b2cd#cb4b2cd424cdb2af54bad52922798a58d8786d7f"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5c25c521a9a0cad8c62b86bd3ca9abd6c94842ecf62b64fc56f0d91bb1a426"
 dependencies = [
  "convert_case 0.8.0",
  "darling",
