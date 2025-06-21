@@ -162,7 +162,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         connect_params: ConnectParams {
             min_connection_interval: Duration::from_micros(7500), // 7.5ms
             max_connection_interval: Duration::from_micros(7500), // 7.5ms
-            max_latency: 400,                                     // 3s
+            max_latency: 399,                                     // 3s
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
         },
