@@ -4,7 +4,7 @@ use bt_hci::cmd::le::LeSetPhy;
 use bt_hci::controller::ControllerCmdAsync;
 use embassy_futures::join::join;
 use embassy_futures::select::select;
-use embassy_time::Timer;
+use embassy_time::{with_timeout, Duration, Timer};
 use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
@@ -212,6 +212,35 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     let mut advertiser_data = [0; 31];
+    let advertisement = get_peri_advertiser::<C>(id, central_addr, &mut advertiser_data)?;
+
+    let advertiser = peripheral
+        .advertise(&AdvertisementParameters::default(), advertisement)
+        .await?;
+
+    match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
+        Ok(conn_res) => {
+            let conn = conn_res?.with_attribute_server(server)?;
+            info!("[adv] connection established");
+            Ok(conn)
+        }
+        Err(_) => {
+            warn!("[adv] Try update central_addr");
+            // Advertise without central addr
+            let advertisement = get_peri_advertiser::<C>(id, None, &mut advertiser_data)?;
+            let advertiser = peripheral
+                .advertise(&AdvertisementParameters::default(), advertisement)
+                .await?;
+            Ok(advertiser.accept().await?.with_attribute_server(server)?)
+        }
+    }
+}
+
+fn get_peri_advertiser<'a, C: Controller>(
+    id: usize,
+    central_addr: Option<[u8; 6]>,
+    advertiser_data: &'a mut [u8; 31],
+) -> Result<Advertisement<'a>, BleHostError<C::Error>> {
     let advertisement = match central_addr {
         Some(addr) => Advertisement::ConnectableNonscannableDirected {
             peer: Address::random(addr),
@@ -243,14 +272,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             }
         }
     };
-
-    let advertiser = peripheral
-        .advertise(&AdvertisementParameters::default(), advertisement)
-        .await?;
-
-    let conn = advertiser.accept().await?.with_attribute_server(server)?;
-    info!("[adv] connection established");
-    Ok(conn)
+    Ok(advertisement)
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
