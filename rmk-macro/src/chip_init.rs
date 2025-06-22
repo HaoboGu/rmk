@@ -88,7 +88,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let mut rng = ::embassy_nrf::rng::Rng::new(p.RNG, Irqs);
                     use rand_core::SeedableRng;
                     let mut rng_gen = ::rand_chacha::ChaCha12Rng::from_rng(&mut rng).unwrap();
-                    let mut sdc_mem = ::nrf_sdc::Mem::<4096>::new();
+                    let mut sdc_mem = ::nrf_sdc::Mem::<6144>::new(); // 6KB is enough for both central and peripheral
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();

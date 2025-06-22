@@ -1,5 +1,10 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
@@ -29,6 +34,9 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     layer_cache: [[u8; COL]; ROW],
     /// Options for configurable action behavior
     pub(crate) behavior: BehaviorConfig,
+    /// Publisher for controller channel
+    #[cfg(feature = "controller")]
+    controller_pub: ControllerPub,
 }
 
 fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
@@ -67,6 +75,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             behavior,
+            #[cfg(feature = "controller")]
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
     #[cfg(feature = "storage")]
@@ -114,6 +124,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             default_layer: 0,
             layer_cache: [[0; COL]; ROW],
             behavior,
+            #[cfg(feature = "controller")]
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -229,6 +241,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.layer_state[tri_layer[2] as usize] =
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
+
+        #[cfg(feature = "controller")]
+        {
+            let layer = self.get_activated_layer();
+            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+        }
     }
 
     /// Activate given layer
@@ -268,6 +286,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
+
+        #[cfg(feature = "controller")]
+        {
+            let layer = self.get_activated_layer();
+            send_controller_event(&mut self.controller_pub, ControllerEvent::Layer(layer));
+        }
     }
 
     //order combos by their actions length
@@ -279,12 +303,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod test {
     use super::{Combo, _reorder_combos};
+    use crate::action::KeyAction;
     use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
-    use crate::k;
+    use crate::keycode::KeyCode;
     use crate::keymap::fill_vec;
-    use crate::{action::KeyAction, keycode::KeyCode};
-    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
+    use crate::{k, COMBO_MAX_NUM, FORK_MAX_NUM};
 
     #[test]
     fn test_fill_vec() {

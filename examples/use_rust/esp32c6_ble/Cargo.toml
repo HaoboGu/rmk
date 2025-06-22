@@ -12,18 +12,18 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "esp32c6_ble", "log", "storage"] }
 embassy-executor = { version = "0.7.0" }
-esp-backtrace = { version = "0.15", features = [
+esp-backtrace = { version = "0.16", features = [
     "esp32c6",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-storage = { version = "0.5.0", features = ["esp32c6", "nor-flash"] }
-esp-hal = { version = "1.0.0-beta.0", features = ["esp32c6", "unstable"] }
-esp-hal-embassy = { version = "0.7.0", features = ["esp32c6"] }
-esp-alloc = { version = "0.7.0" }
-esp-println = { version = "0.13.0", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.13.0", features = ["esp32c6", "ble"] }
+esp-storage = { version = "0.6.0", features = ["esp32c6"] }
+esp-hal = { version = "1.0.0-beta.1", features = ["esp32c6", "unstable"] }
+esp-hal-embassy = { version = "0.8.1", features = ["esp32c6"] }
+esp-alloc = { version = "0.8.0" }
+esp-println = { version = "0.14.0", features = ["esp32c6", "log-04"] }
+esp-wifi = { version = "0.14.1", features = ["esp32c6", "ble"] }
 bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 
@@ -57,12 +57,6 @@ opt-level = 3
 overflow-checks = false
 
 [patch.crates-io]
-esp-wifi = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
-esp-backtrace = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
-esp-hal = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
-esp-hal-embassy = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
-esp-alloc = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
-esp-println = {git = "https://github.com/esp-rs/esp-hal.git", rev = "56be259c41305f24276852d2af4fce16247107bd"}
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }

@@ -2,9 +2,11 @@ use embassy_time::Instant;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::{input_device::rotary_encoder::Direction, keycode::ModifierCombination};
-use crate::action::{KeyAction, Action};
+use crate::action::{Action, KeyAction};
 use crate::keycode::KeyCode::No;
+#[cfg(feature = "controller")]
+use crate::keycode::ModifierCombination;
+use crate::{input_device::rotary_encoder::Direction, keycode::ModifierCombination};
 
 /// Raw events from input devices and keyboards
 ///
@@ -98,14 +100,15 @@ pub struct KeyEvent {
 }
 
 /// Event for controllers
+#[cfg(feature = "controller")]
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ControllerEvent {
-    /// Key event
-    Key(KeyEvent),
+    /// Key event and action
+    Key(KeyEvent, KeyAction),
     /// Battery percent changed
-    Battery(u8),
+    Battery(u16),
     /// Charging state changed
     ChargingState(bool),
     /// Ble profile changed
@@ -119,7 +122,7 @@ pub enum ControllerEvent {
     /// Usb or Ble connection
     ConnectionType(u8),
     /// Split peripheral connection
-    SplitPeripheral(u8, bool),
+    SplitPeripheral(usize, bool),
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -1,3 +1,5 @@
+use bt_hci::cmd::le::LeSetPhy;
+use bt_hci::controller::ControllerCmdAsync;
 use embassy_futures::join::join;
 use embassy_futures::select::select;
 use embassy_time::Timer;
@@ -52,35 +54,48 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
                     CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
                     return Err(SplitDriverError::Disconnected);
                 }
-                GattConnectionEvent::Gatt { event } => match event {
-                    Ok(gatt_event) => {
-                        match &gatt_event {
-                            GattEvent::Read(event) => {
-                                info!("Gatt read event: {:?}", event.handle());
-                            }
-                            GattEvent::Write(event) => {
-                                // Write to peripheral
-                                if event.handle() == self.message_to_peripheral.handle {
-                                    trace!("Got message from central: {:?}", event.data());
-                                    match postcard::from_bytes::<SplitMessage>(&event.data()) {
-                                        Ok(message) => {
-                                            trace!("Message from central: {:?}", message);
-                                            break message;
-                                        }
-                                        Err(e) => error!("Postcard deserialize split message error: {}", e),
-                                    }
-                                } else {
-                                    info!("Gatt write other event: {:?}", event.handle());
-                                }
-                            }
-                        };
-                        match gatt_event.accept() {
-                            Ok(r) => r.send().await,
-                            Err(e) => warn!("[gatt] error sending response: {:?}", e),
+                GattConnectionEvent::Gatt { event: gatt_event } => {
+                    match &gatt_event {
+                        GattEvent::Read(event) => {
+                            info!("Gatt read event: {:?}", event.handle());
                         }
+                        GattEvent::Write(event) => {
+                            // Write to peripheral
+                            if event.handle() == self.message_to_peripheral.handle {
+                                trace!("Got message from central: {:?}", event.data());
+                                match postcard::from_bytes::<SplitMessage>(&event.data()) {
+                                    Ok(message) => {
+                                        trace!("Message from central: {:?}", message);
+                                        break message;
+                                    }
+                                    Err(e) => error!("Postcard deserialize split message error: {}", e),
+                                }
+                            } else {
+                                info!("Gatt write other event: {:?}", event.handle());
+                            }
+                        }
+                        _ => debug!("Other gatt event"),
+                    };
+                    match gatt_event.accept() {
+                        Ok(r) => r.send().await,
+                        Err(e) => warn!("[gatt] error sending response: {:?}", e),
                     }
-                    Err(e) => warn!("[gatt] error processing event: {:?}", e),
-                },
+                }
+                GattConnectionEvent::ConnectionParamsUpdated {
+                    conn_interval,
+                    peripheral_latency,
+                    supervision_timeout,
+                } => {
+                    info!(
+                        "Connection parameters updated: {:?}ms, {:?}, {:?}ms",
+                        conn_interval.as_millis(),
+                        peripheral_latency,
+                        supervision_timeout.as_millis()
+                    );
+                }
+                GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
+                    info!("PHY updated: {:?}, {:?}", tx_phy, rx_phy);
+                }
                 _ => (),
             }
         };
@@ -114,7 +129,7 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDrive
 pub async fn initialize_nrf_ble_split_peripheral_and_run<
     'stack,
     's,
-    C: Controller,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     F: NorFlash,
     const ROW: usize,
     const COL: usize,
@@ -148,7 +163,8 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
             CONNECTION_STATE.store(false, core::sync::atomic::Ordering::Release);
             match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
                 Ok(conn) => {
-                    info!("Conected to the central");
+                    info!("Connected to the central");
+
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
                     if !central_saved {
@@ -214,7 +230,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
                 ],
                 &mut advertiser_data[..],
             )?;
-            info!("[error] advertising data: {:?}", advertiser_data);
+            trace!("advertising data: {:?}", advertiser_data);
             Advertisement::ConnectableScannableUndirected {
                 adv_data: &advertiser_data[..],
                 scan_data: &[],
@@ -232,7 +248,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
+async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(mut runner: Runner<'_, C, P>) {
     loop {
         if let Err(e) = runner.run().await {
             panic!("[ble_task] error: {:?}", e);

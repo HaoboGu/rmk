@@ -1,5 +1,3 @@
-pub mod descriptor;
-
 use core::sync::atomic::Ordering;
 
 use embassy_sync::signal::Signal;
@@ -12,9 +10,9 @@ use static_cell::StaticCell;
 
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::KeyboardUsbConfig;
+use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
-use crate::usb::descriptor::CompositeReportType;
 use crate::CONNECTION_STATE;
 
 /// USB state
@@ -122,20 +120,25 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Key
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
+    #[cfg(feature = "usb_log")]
+    const USB_BUF_SIZE: usize = 256;
+    #[cfg(not(feature = "usb_log"))]
+    const USB_BUF_SIZE: usize = 128;
+
     // Create embassy-usb DeviceBuilder using the driver and config.
-    static CONFIG_DESC: StaticCell<[u8; 128]> = StaticCell::new();
+    static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
     static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
     static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static CONTROL_BUF: StaticCell<[u8; 128]> = StaticCell::new();
+    static CONTROL_BUF: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
 
     // UsbDevice builder
     let mut builder = Builder::new(
         driver,
         usb_config,
-        &mut CONFIG_DESC.init([0; 128])[..],
+        &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
         &mut BOS_DESC.init([0; 16])[..],
         &mut MSOS_DESC.init([0; 16])[..],
-        &mut CONTROL_BUF.init([0; 128])[..],
+        &mut CONTROL_BUF.init([0; USB_BUF_SIZE])[..],
     );
 
     static device_handler: StaticCell<UsbDeviceHandler> = StaticCell::new();
@@ -144,8 +147,20 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Key
     builder
 }
 
-#[cfg(not(feature = "_no_usb"))]
-macro_rules! register_usb_writer {
+#[cfg(feature = "usb_log")]
+macro_rules! add_usb_logger {
+    ($usb_builder:expr) => {{
+        use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+        use static_cell::StaticCell;
+
+        // The usb logger can be only initialized once, so just use a fixed name for the state
+        static LOGGER_STATE: StaticCell<State> = StaticCell::new();
+        let state = LOGGER_STATE.init(State::new());
+        CdcAcmClass::new($usb_builder, state, 64)
+    }};
+}
+
+macro_rules! add_usb_writer {
     ($usb_builder:expr, $descriptor:ty, $n:expr) => {{
         // Initialize hid writer
         // Current implementation requires the static STATE, so we need to use the paste crate to generate the static variable name.
@@ -170,7 +185,6 @@ macro_rules! register_usb_writer {
     }};
 }
 
-#[cfg(not(feature = "_no_usb"))]
 macro_rules! add_usb_reader_writer {
     ($usb_builder:expr, $descriptor:ty, $read_n:expr, $write_n:expr) => {{
         // Initialize hid reader writer
@@ -195,10 +209,10 @@ macro_rules! add_usb_reader_writer {
         rw
     }};
 }
-#[cfg(not(feature = "_no_usb"))]
-pub(crate) use add_usb_reader_writer;
-#[cfg(not(feature = "_no_usb"))]
-pub(crate) use register_usb_writer;
+
+#[cfg(feature = "usb_log")]
+pub(crate) use add_usb_logger;
+pub(crate) use {add_usb_reader_writer, add_usb_writer};
 
 pub(crate) struct UsbRequestHandler {}
 

@@ -1,3 +1,5 @@
+#[cfg(feature = "_ble")]
+use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::select3;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
@@ -25,7 +27,7 @@ use crate::CONNECTION_STATE;
 pub async fn run_rmk_split_peripheral<
     'a,
     #[cfg(feature = "_ble")] 'b,
-    #[cfg(feature = "_ble")] C: Controller,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
     #[cfg(feature = "_ble")] F: NorFlash,
     #[cfg(feature = "_ble")] const ROW: usize,
@@ -78,7 +80,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     // Currently only handle the central state message
                     Ok(split_message) => match split_message {
                         SplitMessage::ConnectionState(state) => {
-                            info!("Received connection state update: {}", state);
+                            trace!("Received connection state update: {}", state);
                             CONNECTION_STATE.store(state, core::sync::atomic::Ordering::Release);
                         }
                         #[cfg(all(feature = "_ble", feature = "storage"))]

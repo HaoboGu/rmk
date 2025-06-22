@@ -1,36 +1,42 @@
-use crate::action::{Action, KeyAction};
-use crate::keyboard_macros::MacroOperation;
-use crate::channel::{ControllerPub, CONTROLLER_CHANNEL, KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::input_device::Runnable;
-use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+use core::cell::RefCell;
 
-use crate::combo::{Combo};
+use embassy_futures::select::{select, Either};
+use embassy_futures::yield_now;
+use embassy_time::{Instant, Timer};
+use heapless::{Deque, FnvIndexMap, Vec};
+use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
+
+use crate::action::{Action, KeyAction};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::combo::Combo;
 use crate::config::ChordHoldState;
-use crate::event::TapHoldState::{PostHold, PostTap};
-use crate::event::{ControllerEvent, BufferedPressEvent, HoldingKey, HoldingKeyTrait, KeyEvent, PressedTapHold, TapHoldState};
+use crate::descriptor::{KeyboardReport, ViaReport};
+use crate::event::{BufferedPressEvent, HoldingKey, HoldingKeyTrait, KeyEvent, PressedTapHold, TapHoldState};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
+use crate::input_device::Runnable;
 use crate::keyboard::HoldDecision::{ChordHold, CleanBuffer, Hold};
-use crate::keyboard::LoopState::{Queue, OK, Stop};
+use crate::keyboard::LoopState::{Queue, Stop, OK};
+use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
-use crate::usb::descriptor::{KeyboardReport, ViaReport};
-use core::cell::RefCell;
+use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 use core::cmp::Ordering;
 use core::fmt::Debug;
-use embassy_futures::select::{select, Either};
-use embassy_futures::yield_now;
-use embassy_time::{Duration, Instant, Timer};
-use heapless::{Deque, FnvIndexMap, Vec};
-use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use embassy_time::Duration;
 use HoldDecision::{Buffering, Ignore, Timeout};
 use TapHoldState::Initial;
 
 #[derive(Debug)]
 enum LoopState {
-    OK,  // default state, fire and forgot current key event
+    OK,    // default state, fire and forgot current key event
     Queue, // save current event into buffer
     Flush, // flush event buffer
     Stop,  // stop keyboard running
@@ -112,8 +118,8 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                     return;
                 }
                 _ => {
-                    // stop buffering, clean all buffered events 
-                    
+                    // stop buffering, clean all buffered events
+
                     self.release_buffering_tap_keys_in_loop().await;
                     //fallback
                     // After processing the key change, check if there are unprocessed events
@@ -164,7 +170,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
 
-    /// The modifiers coming from (last) KeyAction::WithModifier  
+    /// The modifiers coming from (last) KeyAction::WithModifier
     with_modifiers: HidModifiers,
 
     /// Macro text typing state (affects the effective modifiers)
@@ -174,9 +180,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// The real state before fork activations is stored here
     fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
     fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
-
-    /// The previous held modifiers
-    prev_modifiers: HidModifiers,
 
     /// The held modifiers for the keyboard hid report
     held_modifiers: HidModifiers,
@@ -219,7 +222,8 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     combo_on: bool,
 
     /// Publisher for controller channel
-    controller_pub: ControllerPub<'a>,
+    #[cfg(feature = "controller")]
+    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -250,7 +254,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             unprocessed_events: Vec::new(),
             holding_buffer: Vec::new(),
             registered_keys: [None; 6],
-            prev_modifiers: HidModifiers::default(),
             held_modifiers: HidModifiers::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
@@ -272,6 +275,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+            #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             chord_state: None,
         }
@@ -305,10 +309,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Initial => {
                             hold_key.update_state(TapHoldState::Hold);
                             self.process_key_action_normal(event.hold_action(), event.key_event)
-                            .await;
+                                .await;
                             //marked as post hold
                             debug!("{:?} hold timeout processed", event.key_event);
-                            hold_key.update_state(PostHold);
+                            hold_key.update_state(TapHoldState::PostHold);
 
                             self.holding_buffer.push(hold_key).ok();
                         }
@@ -383,9 +387,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn drain_unreleased_tap_hold_events(&mut self, event: PressedTapHold, buffering: bool) -> LoopState {
         debug!("Draining unreleased TAP hold events, {:?}", event);
         let now = Instant::now();
-        let time_left:Duration = if event.deadline > now {
+        let time_left: Duration = if event.deadline > now {
             event.deadline - now
-        }  else {
+        } else {
             Duration::from_ticks(0)
         };
 
@@ -393,19 +397,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let post_hold_release = event.state == TapHoldState::Release;
 
         //wait hold timeout of new common key
-        match select(
-            Timer::after(time_left),
-            KEY_EVENT_CHANNEL.receive(),
-        )
-            .await
-        {
+        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
             Either::First(_) => {
                 // Process hold timeout
                 self.handle_tap_hold_timeout(event, buffering).await
             }
             Either::Second(key_event) => {
                 // Process key event
-                debug!("Interrupted into new key event: {:?}, post wait:{}", key_event, post_hold_release);
+                debug!(
+                    "Interrupted into new key event: {:?}, post wait:{}",
+                    key_event, post_hold_release
+                );
                 if buffering {
                     self.unprocessed_events.push(key_event).ok();
                 } else {
@@ -451,21 +453,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed);
 
-        if self.prev_modifiers != modifiers {
-            self.controller_pub
-                .publish_immediate(ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(
-                    modifiers,
-                )));
-            self.prev_modifiers = modifiers;
-        }
-
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers.into_bits(),
             reserved: 0,
             leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
             keycodes: self.held_keycodes.map(|k| k as u8),
         }))
-            .await;
+        .await;
 
         // Yield once after sending the report to channel
         yield_now().await;
@@ -517,7 +511,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             _ => (),
         }
     }
-
 
     // calculate next state of tap hold
     // 1. turn into buffering state
@@ -615,6 +608,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
         //start forks
         let key_action = self.try_start_forks(original_key_action, key_event);
+
+        #[cfg(feature = "controller")]
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Key(key_event, key_action));
 
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
@@ -878,7 +874,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let mut hold_state = self.holding_buffer.swap_remove(e);
             match hold_state {
                 HoldingKey::TapHold(tap_hold) => {
-                    debug!("TapHold {:?}] on release, current state {:?}", tap_hold.key_event, tap_hold.state);
+                    debug!(
+                        "TapHold {:?}] on release, current state {:?}",
+                        tap_hold.key_event, tap_hold.state
+                    );
                     //FIXME tap key press should happen before
                     match tap_hold.state {
                         // Initial => {
@@ -887,19 +886,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         //     debug!("tapped {:?}", e.tap_action());
                         //     self.process_key_action_normal(e.tap_action(), key_event_released).await;
                         // },
-                        TapHoldState::Hold | PostHold => {
-                            debug!( "|TH_RELEASE|TapHold {:?}] as Hold, releasing {:?}", tap_hold.key_event, tap_hold.hold_action());
+                        TapHoldState::Hold | TapHoldState::PostHold => {
+                            debug!(
+                                "|TH_RELEASE|TapHold {:?}] as Hold, releasing {:?}",
+                                tap_hold.key_event,
+                                tap_hold.hold_action()
+                            );
                             self.process_key_action_normal(tap_hold.hold_action(), key_event_released)
                                 .await;
                             self.tap_hold_release_key_from_buffer(key_event_released);
                         }
-                        PostTap => {
+                        TapHoldState::PostTap => {
                             debug!(
                                 "TapHold {:?}] post Tapping, releasing {:?}",
                                 tap_hold.key_event,
                                 tap_hold.tap_action()
                             );
-                            self.process_key_action_normal(tap_hold.tap_action(), key_event_released).await;
+                            self.process_key_action_normal(tap_hold.tap_action(), key_event_released)
+                                .await;
                             self.tap_hold_release_key_from_buffer(key_event_released);
                         }
                         TapHoldState::Initial => {
@@ -908,10 +912,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 tap_hold,
                                 tap_hold.tap_action()
                             );
-                            self.process_key_action_normal(tap_hold.tap_action(), tap_hold.key_event).await;
-                            self.process_key_action_normal(tap_hold.tap_action(), key_event_released).await;
+                            self.process_key_action_normal(tap_hold.tap_action(), tap_hold.key_event)
+                                .await;
+                            self.process_key_action_normal(tap_hold.tap_action(), key_event_released)
+                                .await;
                             // self.tap_hold_release_key_from_buffer(key_event_released, true);
-                            hold_state.update_state(PostTap);
+                            hold_state.update_state(TapHoldState::PostTap);
 
                             // sort by start time desc
                             self.sort_buffers();
@@ -945,7 +951,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             }
                         }
                         _ => {
-                            panic!("unexpected TapHoldState {:?}, while releasing {:?}", tap_hold.state, tap_hold)
+                            panic!(
+                                "unexpected TapHoldState {:?}, while releasing {:?}",
+                                tap_hold.state, tap_hold
+                            )
                         }
                     }
                 }
@@ -1810,14 +1819,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 match *item {
                     HoldingKey::TapHold(ref mut e) => {
                         if e.state == Initial && e.pressed_time <= pressed_time {
-                            e.state = PostHold;
+                            e.state = TapHoldState::PostHold;
                         } else {
                             debug!("ignore : {:?}, press_time {}", e, e.pressed_time.as_millis());
                         }
                     }
                     HoldingKey::Tapping(ref mut e) => {
                         //mark as tapped , should be removed from buffer
-                        e.state = PostTap;
+                        e.state = TapHoldState::PostTap;
                     }
                 }
             }
@@ -1967,6 +1976,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn register_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers |= key.to_hid_modifiers();
 
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
+
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
     }
@@ -1974,11 +1989,23 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier from hid report.
     fn unregister_modifier_key(&mut self, key: KeyCode) {
         self.held_modifiers &= !key.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
     }
 
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers |= modifiers.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= modifiers.to_hid_modifiers();
@@ -1987,6 +2014,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
         self.held_modifiers &= !modifiers.to_hid_modifiers();
+
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut self.controller_pub,
+            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
+        );
     }
 }
 

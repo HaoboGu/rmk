@@ -2,6 +2,8 @@
 
 use core::sync::atomic::Ordering;
 
+#[cfg(feature = "_ble")]
+use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{select3, Either3};
 use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
@@ -10,6 +12,11 @@ use trouble_host::{BondInformation, LongTermKey};
 use {
     crate::channel::FLASH_CHANNEL,
     crate::storage::{FlashOperationMessage, FLASH_OPERATION_FINISHED},
+};
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub},
+    crate::event::ControllerEvent,
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
@@ -65,20 +72,25 @@ pub(crate) enum BleProfileAction {
 /// 3. Updating the bonding information of the active profile to the BLE stack
 /// 4. Handling profile switch, clear, and save operations
 #[cfg(feature = "_ble")]
-pub struct ProfileManager<'a, C: Controller, P: PacketPool> {
+pub struct ProfileManager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> {
     /// List of bonded devices
     bonded_devices: heapless::Vec<ProfileInfo, NUM_BLE_PROFILE>,
     /// BLE stack
     stack: &'a Stack<'a, C, P>,
+    /// Publisher for controller channel
+    #[cfg(feature = "controller")]
+    controller_pub: ControllerPub,
 }
 
 #[cfg(feature = "_ble")]
-impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
+impl<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> ProfileManager<'a, C, P> {
     /// Create a new profile manager
-    pub fn new(stack: &'a Stack<'a, C, P>) -> Self {
+    pub fn new(stack: &'a Stack<'a, C, P>, #[cfg(feature = "controller")] controller_pub: ControllerPub) -> Self {
         Self {
             bonded_devices: heapless::Vec::new(),
             stack,
+            #[cfg(feature = "controller")]
+            controller_pub,
         }
     }
 
@@ -117,10 +129,16 @@ impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
         {
             debug!("Loaded active profile: {}", profile);
             ACTIVE_PROFILE.store(profile, Ordering::SeqCst);
+
+            #[cfg(feature = "controller")]
+            send_controller_event(&mut self.controller_pub, ControllerEvent::BleProfile(profile));
         } else {
             // If no saved active profile, use 0 as default
             debug!("Loaded default active profile",);
             ACTIVE_PROFILE.store(0, Ordering::SeqCst);
+
+            #[cfg(feature = "controller")]
+            send_controller_event(&mut self.controller_pub, ControllerEvent::BleProfile(0));
         };
     }
 
@@ -212,6 +230,8 @@ impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
 
     /// Clear bonding information of the specified slot
     pub async fn clear_bond(&mut self, slot_num: u8) {
+        info!("Clearing bonding information on profile: {}", slot_num);
+
         // Update bonding information in memory
         for bond_info in self.bonded_devices.iter_mut() {
             if bond_info.slot_num == slot_num {
@@ -230,7 +250,7 @@ impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
     }
 
     /// Switch to the specified profile, return true if the profile is switched
-    pub async fn switch_profile(&self, profile: u8) -> bool {
+    pub async fn switch_profile(&mut self, profile: u8) -> bool {
         let current = ACTIVE_PROFILE.load(core::sync::atomic::Ordering::SeqCst);
         if profile == current {
             return false;
@@ -247,6 +267,10 @@ impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
             .await;
 
         info!("Switched to BLE profile: {}", profile);
+
+        #[cfg(feature = "controller")]
+        send_controller_event(&mut self.controller_pub, ControllerEvent::BleProfile(profile));
+
         true
     }
 
@@ -297,6 +321,15 @@ impl<'a, C: Controller, P: PacketPool> ProfileManager<'a, C, P> {
                             let current = CONNECTION_TYPE.load(Ordering::SeqCst);
                             let updated = 1 - current;
                             CONNECTION_TYPE.store(updated, Ordering::SeqCst);
+
+                            info!("Switching connection type to: {}", updated);
+
+                            #[cfg(feature = "controller")]
+                            send_controller_event(
+                                &mut self.controller_pub,
+                                ControllerEvent::ConnectionType(updated.into()),
+                            );
+
                             #[cfg(feature = "storage")]
                             FLASH_CHANNEL.send(FlashOperationMessage::ConnectionType(updated)).await;
                         }

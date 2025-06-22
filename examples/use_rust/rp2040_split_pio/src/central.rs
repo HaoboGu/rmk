@@ -8,34 +8,26 @@ mod macros;
 mod vial;
 
 use defmt::info;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_rp::{
-    bind_interrupts,
-    flash::{Async, Flash},
-    gpio::{Input, Output},
-    peripherals::{PIO0, USB},
-    usb::{Driver, InterruptHandler},
-};
-use panic_probe as _;
-use rmk::{
-    channel::EVENT_CHANNEL,
-    config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join4,
-    initialize_keymap_and_storage,
-    input_device::Runnable,
-    keyboard::Keyboard,
-    light::LightController,
-    run_devices, run_rmk,
-    split::{
-        SPLIT_MESSAGE_MAX_SIZE,
-        central::{CentralMatrix, run_peripheral_manager},
-        rp::uart::{BufferedUart, UartInterruptHandler},
-    },
-};
+use embassy_rp::bind_interrupts;
+use embassy_rp::flash::{Async, Flash};
+use embassy_rp::gpio::{Input, Output};
+use embassy_rp::peripherals::{PIO0, USB};
+use embassy_rp::usb::{Driver, InterruptHandler};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join4;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::split::central::{run_peripheral_manager, CentralMatrix};
+use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
+use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;

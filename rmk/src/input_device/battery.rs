@@ -1,6 +1,11 @@
 use core::cell::RefCell;
 
 use embedded_hal::digital::InputPin;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 
 use super::{InputDevice, InputProcessor};
 use crate::event::Event;
@@ -59,6 +64,9 @@ pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LA
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
+    /// Publisher for controller channel
+    #[cfg(feature = "controller")]
+    controller_pub: ControllerPub,
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -73,6 +81,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             keymap,
             adc_divider_measured,
             adc_divider_total,
+            #[cfg(feature = "controller")]
+            controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
     }
 
@@ -121,6 +131,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Event::Battery(val) => {
                 debug!("Detected battery ADC value: {:?}", val);
 
+                #[cfg(feature = "controller")]
+                send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(val));
+
                 #[cfg(feature = "_ble")]
                 {
                     let current_value =
@@ -135,6 +148,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             Event::ChargingState(charging) => {
                 info!("Charging state changed: {:?}", charging);
+
+                #[cfg(feature = "controller")]
+                send_controller_event(&mut self.controller_pub, ControllerEvent::ChargingState(charging));
 
                 #[cfg(feature = "_ble")]
                 {

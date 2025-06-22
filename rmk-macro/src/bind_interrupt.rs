@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use rmk_config::{BleConfig, BoardConfig, KeyboardTomlConfig};
+use rmk_config::{BoardConfig, KeyboardTomlConfig};
 use syn::ItemMod;
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
@@ -55,20 +55,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             }
         }
         rmk_config::ChipSeries::Nrf52 => {
-            // Adc interrupt
-            let saadc_interrupt = if let Some(BleConfig {
-                enabled: true,
-                battery_adc_pin: Some(_adc_pin),
-                charge_state: _,
-                charge_led: _,
-                adc_divider_measured: _,
-                adc_divider_total: _,
-            }) = communication.get_ble_config()
-            {
-                quote! { SAADC => ::embassy_nrf::saadc::InterruptHandler; }
-            } else {
-                quote! {}
-            };
             // Usb and clock interrupt
             let usb_and_clock_interrupt = if let Some(usb_info) = communication.get_usb_info() {
                 let interrupt_name = format_ident!("{}", usb_info.interrupt_name);
@@ -88,6 +74,11 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_central()?
                     .support_adv()?
                     .support_peripheral()?
+                    .support_dle_peripheral()?
+                    .support_dle_central()?
+                    .support_phy_update_central()?
+                    .support_phy_update_peripheral()?
+                    .support_le_2m_phy()?
                     .central_count(1)?
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
@@ -97,6 +88,9 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     ::nrf_sdc::Builder::new()?
                     .support_adv()?
                     .support_peripheral()?
+                    .support_dle_peripheral()?
+                    .support_phy_update_peripheral()?
+                    .support_le_2m_phy()?
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
                     .build(p, rng, mpsl, mem)
@@ -105,7 +99,6 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             quote! {
                 use ::embassy_nrf::bind_interrupts;
                 bind_interrupts!(struct Irqs {
-                    #saadc_interrupt
                     #usb_and_clock_interrupt
                     RNG => ::embassy_nrf::rng::InterruptHandler<::embassy_nrf::peripherals::RNG>;
                     EGU0_SWI0 => ::nrf_sdc::mpsl::LowPrioInterruptHandler;
@@ -125,7 +118,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                 const L2CAP_RXQ: u8 = 3;
 
                 /// Size of L2CAP packets
-                const L2CAP_MTU: usize = 72;
+                const L2CAP_MTU: usize = 251;
                 fn build_sdc<'d, const N: usize>(
                     p: ::nrf_sdc::Peripherals<'d>,
                     rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG, ::embassy_nrf::mode::Async>,

@@ -3,6 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
+use bt_hci::cmd::le::LeSetPhy;
+use bt_hci::controller::ControllerCmdAsync;
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
@@ -13,13 +15,18 @@ use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{send_controller_event, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
 #[cfg(not(feature = "_no_usb"))]
 use {
+    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
-    crate::usb::descriptor::{CompositeReport, KeyboardReport, ViaReport},
     crate::usb::UsbKeyboardWriter,
-    crate::usb::{add_usb_reader_writer, new_usb_builder, register_usb_writer},
+    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
     crate::usb::{USB_ENABLED, USB_SUSPENDED},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{select4, Either4},
@@ -39,6 +46,8 @@ use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
 use crate::state::{ConnectionState, ConnectionType};
+#[cfg(feature = "usb_log")]
+use crate::usb::add_usb_logger;
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
@@ -50,20 +59,22 @@ pub(crate) mod profile;
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Max number of connections
-pub(crate) const CONNECTIONS_MAX: usize = 4;
+pub(crate) const CONNECTIONS_MAX: usize = 4; // Should be number of the peripheral + 1?
 
 /// Max number of L2CAP channels
-pub(crate) const L2CAP_CHANNELS_MAX: usize = 8; // Signal + att
-
-/// L2CAP MTU size
-pub(crate) const L2CAP_MTU: usize = 512;
+pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
 /// Build the BLE stack.
-pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + CryptoRng>(
+pub async fn build_ble_stack<
+    'a,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    P: PacketPool,
+    RNG: RngCore + CryptoRng,
+>(
     controller: C,
     host_address: [u8; 6],
     random_generator: &mut RNG,
-    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, L2CAP_MTU>,
+    resources: &'a mut HostResources<P, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX>,
 ) -> Stack<'a, C, P> {
     // Initialize trouble host stack
     trouble_host::new(controller, resources)
@@ -75,7 +86,7 @@ pub async fn build_ble_stack<'a, C: Controller, P: PacketPool, RNG: RngCore + Cr
 pub(crate) async fn run_ble<
     'a,
     'b,
-    C: Controller,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -93,21 +104,30 @@ pub(crate) async fn run_ble<
 ) {
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (mut usb_device, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
+    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
-        let other_writer = register_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
-        let usb_device = usb_builder.build();
         (
-            usb_device,
+            usb_builder,
             keyboard_reader,
             keyboard_writer,
             other_writer,
             vial_reader_writer,
         )
     };
+
+    // Optional usb logger initialization
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    let usb_logger = add_usb_logger!(&mut _usb_builder);
+
+    #[cfg(not(feature = "_no_usb"))]
+    let mut usb_device = _usb_builder.build();
+
+    #[cfg(feature = "controller")]
+    let mut controller_pub = unwrap!(CONTROLLER_CHANNEL.publisher());
 
     // Load current connection type
     #[cfg(feature = "storage")]
@@ -124,10 +144,20 @@ pub(crate) async fn run_ble<
             #[cfg(not(feature = "_no_usb"))]
             CONNECTION_TYPE.store(ConnectionType::Usb.into(), Ordering::SeqCst);
         }
+
+        #[cfg(feature = "controller")]
+        send_controller_event(
+            &mut controller_pub,
+            ControllerEvent::ConnectionType(CONNECTION_TYPE.load(Ordering::SeqCst)),
+        );
     }
 
     // Create profile manager
-    let mut profile_manager = ProfileManager::new(&stack);
+    let mut profile_manager = ProfileManager::new(
+        &stack,
+        #[cfg(feature = "controller")]
+        controller_pub,
+    );
 
     #[cfg(feature = "storage")]
     // Load saved bonding information
@@ -173,8 +203,16 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
     let background_task = join(ble_task(runner), usb_device.run());
+    #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
+    let background_task = join(
+        ble_task(runner),
+        select(
+            usb_device.run(),
+            embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger),
+        ),
+    );
     #[cfg(feature = "_no_usb")]
     let background_task = ble_task(runner);
 
@@ -331,7 +369,9 @@ pub(crate) async fn run_ble<
 }
 
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
+pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    mut runner: Runner<'_, C, P>,
+) {
     loop {
         // Signal to indicate the stack is started
         #[cfg(feature = "split")]
@@ -384,80 +424,71 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 };
                 UPDATED_PROFILE.signal(profile_info);
             }
-            GattConnectionEvent::Gatt { event } => {
-                match event {
-                    Ok(event) => {
-                        let mut cccd_updated = false;
-                        let result = match &event {
-                            GattEvent::Read(event) => {
-                                if event.handle() == level.handle {
-                                    let value = server.get(&level);
-                                    debug!("Read GATT Event to Level: {:?}", value);
-                                } else {
-                                    debug!("Read GATT Event to Unknown: {:?}", event.handle());
-                                }
-
-                                if conn.raw().encrypted() {
-                                    None
-                                } else {
-                                    Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
-                                }
-                            }
-                            GattEvent::Write(event) => {
-                                if event.handle() == output_keyboard.handle {
-                                    let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                                    debug!("Got keyboard state: {:?}", led_indicator);
-                                    LED_SIGNAL.signal(led_indicator);
-                                } else if event.handle() == output_via.handle {
-                                    debug!("Got via packet: {:?}", event.data());
-                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                    VIAL_READ_CHANNEL.send(data).await;
-                                } else if event.handle()
-                                    == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                                    || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
-                                    || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
-                                    || event.handle() == media.cccd_handle.expect("No CCCD for media report")
-                                    || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
-                                    || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
-                                {
-                                    // CCCD write event
-                                    cccd_updated = true;
-                                } else {
-                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
-                                }
-
-                                if conn.raw().encrypted() {
-                                    None
-                                } else {
-                                    Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
-                                }
-                            }
-                        };
-
-                        // This step is also performed at drop(), but writing it explicitly is necessary
-                        // in order to ensure reply is sent.
-                        let result = if let Some(code) = result {
-                            event.reject(code)
+            GattConnectionEvent::Gatt { event: gatt_event } => {
+                let mut cccd_updated = false;
+                let result = match &gatt_event {
+                    GattEvent::Read(event) => {
+                        if event.handle() == level.handle {
+                            let value = server.get(&level);
+                            debug!("Read GATT Event to Level: {:?}", value);
                         } else {
-                            event.accept()
-                        };
-                        match result {
-                            Ok(reply) => {
-                                reply.send().await;
-                            }
-                            Err(e) => {
-                                warn!("[gatt] error sending response: {:?}", e);
-                            }
+                            debug!("Read GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        // Update CCCD table after processing the event
-                        if cccd_updated {
-                            if let Some(table) = server.get_cccd_table(conn.raw()) {
-                                UPDATED_CCCD_TABLE.signal(table);
-                            }
+                        if conn.raw().encrypted() {
+                            None
+                        } else {
+                            Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
                         }
                     }
-                    Err(e) => warn!("[gatt] error processing event: {:?}", e),
+                    GattEvent::Write(event) => {
+                        if event.handle() == output_keyboard.handle {
+                            let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                            debug!("Got keyboard state: {:?}", led_indicator);
+                            LED_SIGNAL.signal(led_indicator);
+                        } else if event.handle() == output_via.handle {
+                            debug!("Got via packet: {:?}", event.data());
+                            let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                            VIAL_READ_CHANNEL.send(data).await;
+                        } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
+                            || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
+                            || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
+                            || event.handle() == media.cccd_handle.expect("No CCCD for media report")
+                            || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
+                            || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
+                        {
+                            // CCCD write event
+                            cccd_updated = true;
+                        } else {
+                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                        }
+
+                        if conn.raw().encrypted() {
+                            None
+                        } else {
+                            Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
+                        }
+                    }
+                    GattEvent::Other(_) => None,
+                };
+
+                // This step is also performed at drop(), but writing it explicitly is necessary
+                // in order to ensure reply is sent.
+                let result = if let Some(code) = result {
+                    gatt_event.reject(code)
+                } else {
+                    gatt_event.accept()
+                };
+                match result {
+                    Ok(reply) => reply.send().await,
+                    Err(e) => warn!("[gatt] error sending response: {:?}", e),
+                }
+
+                // Update CCCD table after processing the event
+                if cccd_updated {
+                    if let Some(table) = server.get_cccd_table(conn.raw()) {
+                        UPDATED_CCCD_TABLE.signal(table);
+                    }
                 }
             }
             GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
@@ -469,8 +500,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 supervision_timeout,
             } => {
                 info!(
-                    "[gatt] ConnectionParamsUpdated: {:?}, {:?}, {:?}",
-                    conn_interval, peripheral_latency, supervision_timeout
+                    "[gatt] ConnectionParamsUpdated: {:?}ms, {:?}, {:?}ms",
+                    conn_interval.as_millis(),
+                    peripheral_latency,
+                    supervision_timeout.as_millis()
                 );
             }
         }
@@ -561,56 +594,35 @@ pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
     embassy_time::Timer::after_secs(5).await;
 
     // For macOS/iOS(aka Apple devices), both interval should be set to 15ms
-    if let Err(e) = conn
-        .raw()
-        .update_connection_params(
-            &stack,
-            &ConnectParams {
-                min_connection_interval: Duration::from_millis(15),
-                max_connection_interval: Duration::from_millis(15),
-                max_latency: 99,
-                event_length: Duration::from_secs(0),
-                supervision_timeout: Duration::from_secs(5),
-            },
-        )
-        .await
-    {
-        #[cfg(feature = "defmt")]
-        let e = defmt::Debug2Format(&e);
-        error!("[set_conn_params] error: {:?}", e);
-    }
+    // Reference: https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf
+    update_conn_params(
+        stack,
+        conn.raw(),
+        &ConnectParams {
+            min_connection_interval: Duration::from_millis(15),
+            max_connection_interval: Duration::from_millis(15),
+            max_latency: 30,
+            event_length: Duration::from_secs(0),
+            supervision_timeout: Duration::from_secs(6),
+        },
+    )
+    .await;
 
     embassy_time::Timer::after_secs(5).await;
 
     // Setting the conn param the second time ensures that we have best performance on all platforms
-    loop {
-        match conn
-            .raw()
-            .update_connection_params(
-                &stack,
-                &ConnectParams {
-                    min_connection_interval: Duration::from_micros(7500),
-                    max_connection_interval: Duration::from_micros(7500),
-                    max_latency: 99,
-                    event_length: Duration::from_secs(0),
-                    supervision_timeout: Duration::from_secs(5),
-                },
-            )
-            .await
-        {
-            Err(BleHostError::BleHost(Error::Hci(error))) => {
-                if 0x2A == error.to_status().into_inner() {
-                    // Busy, retry
-                    info!("[set_conn_params] 2nd time HCI busy: {:?}", error);
-                    continue;
-                } else {
-                    error!("[set_conn_params] 2nd time HCI error: {:?}", error);
-                    break;
-                }
-            }
-            _ => break,
-        };
-    }
+    update_conn_params(
+        stack,
+        conn.raw(),
+        &ConnectParams {
+            min_connection_interval: Duration::from_micros(7500),
+            max_connection_interval: Duration::from_micros(7500),
+            max_latency: 99,
+            event_length: Duration::from_secs(0),
+            supervision_timeout: Duration::from_secs(5),
+        },
+    )
+    .await;
 
     // Wait forever. This is because we want the conn params setting can be interrupted when the connection is lost.
     // So this task shouldn't quit after setting the conn params.
@@ -623,7 +635,7 @@ async fn run_ble_keyboard<
     'b,
     'c,
     'd,
-    C: Controller,
+    C: Controller + ControllerCmdAsync<LeSetPhy>,
     Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
@@ -656,10 +668,13 @@ async fn run_ble_keyboard<
         }
     }
 
+    // Use 2M Phy
+    update_ble_phy(stack, conn.raw()).await;
+
     let communication_task = async {
         match select3(
-            gatt_events_task(&server, &conn),
-            set_conn_params(&stack, &conn),
+            gatt_events_task(server, conn),
+            set_conn_params(stack, conn),
             ble_battery_server.run(),
         )
         .await
@@ -681,4 +696,60 @@ async fn run_ble_keyboard<
         rmk_config.vial_config,
     )
     .await;
+}
+
+// Update the PHY to 2M
+pub(crate) async fn update_ble_phy<P: PacketPool>(
+    stack: &Stack<'_, impl Controller + ControllerCmdAsync<LeSetPhy>, P>,
+    conn: &Connection<'_, P>,
+) {
+    loop {
+        match conn.set_phy(stack, PhyKind::Le2M).await {
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x2A == error.to_status().into_inner() {
+                    // Busy, retry
+                    info!("[update_ble_phy] HCI busy: {:?}", error);
+                    continue;
+                } else {
+                    error!("[update_ble_phy] HCI error: {:?}", error);
+                }
+            }
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("[update_ble_phy] error: {:?}", e);
+            }
+            _ => (),
+        }
+        break;
+    }
+}
+
+// Update the connection parameters
+pub(crate) async fn update_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+    stack: &Stack<'a, C, P>,
+    conn: &Connection<'b, P>,
+    params: &ConnectParams,
+) {
+    loop {
+        match conn.update_connection_params(&stack, params).await {
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x3A == error.to_status().into_inner() {
+                    // Busy, retry
+                    info!("[update_conn_params] HCI busy: {:?}", error);
+                    embassy_time::Timer::after_millis(100).await;
+                    continue;
+                } else {
+                    error!("[update_conn_params] HCI error: {:?}", error);
+                }
+            }
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("[update_conn_params] BLE host error: {:?}", e);
+            }
+            _ => (),
+        }
+        break;
+    }
 }

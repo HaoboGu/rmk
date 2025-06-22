@@ -64,7 +64,7 @@ const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
 /// Size of L2CAP packets
-const L2CAP_MTU: usize = 255;
+const L2CAP_MTU: usize = 251;
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -77,6 +77,11 @@ fn build_sdc<'d, const N: usize>(
         .support_central()?
         .support_adv()?
         .support_peripheral()?
+        .support_dle_peripheral()?
+        .support_dle_central()?
+        .support_phy_update_central()?
+        .support_phy_update_peripheral()?
+        .support_le_2m_phy()?
         .central_count(1)?
         .peripheral_count(1)?
         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
@@ -166,7 +171,7 @@ async fn main(spawner: Spawner) {
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
     let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
-        start_addr: 0xA0000, // FIXME: use 0x70000 after we can build without softdevice controller
+        start_addr: 0xA0000,
         num_sectors: 6,
         ..Default::default()
     };

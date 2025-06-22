@@ -7,29 +7,23 @@ mod keymap;
 mod vial;
 
 use defmt::info;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_stm32::{
-    Config, bind_interrupts,
-    gpio::{Input, Output},
-    peripherals::USB,
-    usb::{Driver, InterruptHandler},
-};
+use embassy_stm32::gpio::{Input, Output};
+use embassy_stm32::peripherals::USB;
+use embassy_stm32::usb::{Driver, InterruptHandler};
+use embassy_stm32::{bind_interrupts, Config};
 use keymap::{COL, ROW};
-use panic_halt as _;
-use rmk::{
-    channel::EVENT_CHANNEL,
-    config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig},
-    debounce::default_debouncer::DefaultDebouncer,
-    futures::future::join3,
-    initialize_keymap,
-    input_device::Runnable,
-    keyboard::Keyboard,
-    light::LightController,
-    matrix::Matrix,
-    run_devices, run_rmk,
-};
+use rmk::channel::EVENT_CHANNEL;
+use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, VialConfig};
+use rmk::debounce::default_debouncer::DefaultDebouncer;
+use rmk::futures::future::join3;
+use rmk::input_device::Runnable;
+use rmk::keyboard::Keyboard;
+use rmk::light::LightController;
+use rmk::matrix::Matrix;
+use rmk::{initialize_keymap, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+use {defmt_rtt as _, panic_halt as _};
 bind_interrupts!(struct Irqs {
     USB_LP => InterruptHandler<USB>;
 });

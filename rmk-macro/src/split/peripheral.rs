@@ -82,7 +82,7 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                 const L2CAP_RXQ: u8 = 3;
 
                 /// Size of L2CAP packets
-                const L2CAP_MTU: usize = 72;
+                const L2CAP_MTU: usize = 251;
                 fn build_sdc<'d, const N: usize>(
                     p: ::nrf_sdc::Peripherals<'d>,
                     rng: &'d mut ::embassy_nrf::rng::Rng<::embassy_nrf::peripherals::RNG, ::embassy_nrf::mode::Async>,
@@ -92,6 +92,11 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                     ::nrf_sdc::Builder::new()?
                         .support_adv()?
                         .support_peripheral()?
+                        .support_dle_peripheral()?
+                        .support_dle_central()?
+                        .support_phy_update_central()?
+                        .support_phy_update_peripheral()?
+                        .support_le_2m_phy()?
                         .peripheral_count(1)?
                         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
                         .build(p, rng, mpsl, mem)
@@ -213,14 +218,14 @@ fn expand_split_peripheral(
     }
 
     // Peripherals don't need to run processors
-    let (input_device_config, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
+    let (device_initialization, devices, _processors) = expand_peripheral_input_device_config(id, keyboard_config);
     let run_rmk_peripheral = expand_split_peripheral_entry(id, &chip, split_config, peripheral_config, devices);
 
     quote! {
         #imports
         #chip_init
         #matrix_config
-        #input_device_config
+        #device_initialization
         #run_rmk_peripheral
     }
 }
@@ -287,13 +292,15 @@ fn expand_split_peripheral_entry(
     }
 }
 
+/// Returns (device initializations, device_names, processor_names)
 pub(crate) fn expand_peripheral_input_device_config(
     id: usize,
     keyboard_config: &KeyboardTomlConfig,
 ) -> (TokenStream2, Vec<TokenStream2>, Vec<TokenStream2>) {
-    let mut config = TokenStream2::new();
+    let mut initializations = TokenStream2::new();
     let mut devices = Vec::new();
-    let mut processors = Vec::new();
+    // Now no processors are used in split peripherals
+    let processors = Vec::new();
 
     let communication = keyboard_config.get_communication_config().unwrap();
     let ble_config = match &communication {
@@ -304,7 +311,7 @@ pub(crate) fn expand_peripheral_input_device_config(
     let chip = keyboard_config.get_chip_model().unwrap();
 
     // generate ADC configuration
-    let (adc_config, adc_processors) = match &board {
+    let (adc_devices, _adc_processors) = match &board {
         BoardConfig::Split(split_config) => expand_adc_device(
             split_config.peripheral[id]
                 .input_device
@@ -315,13 +322,14 @@ pub(crate) fn expand_peripheral_input_device_config(
             ble_config,
             chip.series.clone(),
         ),
-        _ => (quote! {}, vec![]),
+        _ => (vec![], vec![]),
     };
-    config.extend(adc_config);
-    if !adc_processors.is_empty() {
-        devices.push(quote! {adc_device});
+
+    for initializer in adc_devices {
+        initializations.extend(initializer.initializer);
+        let device_name = initializer.var_name;
+        devices.push(quote! { #device_name });
     }
-    processors.extend(adc_processors);
 
     // generate encoder configuration, processors are ignored
     let num_encoders = keyboard_config.get_board_config().unwrap().get_num_encoder();
@@ -342,10 +350,10 @@ pub(crate) fn expand_peripheral_input_device_config(
     };
 
     for initializer in encoder_devices {
-        config.extend(initializer.initializer);
+        initializations.extend(initializer.initializer);
         let device_name = initializer.var_name;
         devices.push(quote! { #device_name });
     }
 
-    (config, devices, processors)
+    (initializations, devices, processors)
 }
