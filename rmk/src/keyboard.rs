@@ -1,10 +1,14 @@
 use core::cell::RefCell;
+use core::cmp::Ordering;
+use core::fmt::Debug;
 
 use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
-use embassy_time::{Instant, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use HoldDecision::{Buffering, Ignore, Timeout};
+use TapHoldState::Initial;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
@@ -28,11 +32,6 @@ use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
-use core::cmp::Ordering;
-use core::fmt::Debug;
-use embassy_time::Duration;
-use HoldDecision::{Buffering, Ignore, Timeout};
-use TapHoldState::Initial;
 
 #[derive(Debug)]
 enum LoopState {

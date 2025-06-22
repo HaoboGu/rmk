@@ -78,7 +78,7 @@ pub mod config;
 #[cfg(feature = "controller")]
 pub mod controller;
 pub mod debounce;
-pub(crate) mod descriptor;
+pub mod descriptor;
 pub mod direct_pin;
 pub mod event;
 pub mod fork;

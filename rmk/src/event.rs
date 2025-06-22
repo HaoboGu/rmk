@@ -3,10 +3,10 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::action::{Action, KeyAction};
+use crate::input_device::rotary_encoder::Direction;
 use crate::keycode::KeyCode::No;
 #[cfg(feature = "controller")]
 use crate::keycode::ModifierCombination;
-use crate::{input_device::rotary_encoder::Direction, keycode::ModifierCombination};
 
 /// Raw events from input devices and keyboards
 ///

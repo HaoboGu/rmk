@@ -2,11 +2,9 @@ mod common;
 
 mod keyboard_test {
 
-
     use embassy_futures::block_on;
     use log::{debug, info};
     use rusty_fork::rusty_fork_test;
-
 
     #[test]
     #[ignore]

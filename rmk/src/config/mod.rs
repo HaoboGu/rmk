@@ -10,9 +10,9 @@ use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
+use crate::event::KeyEvent;
 use crate::fork::Fork;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
-use crate::event::KeyEvent;
 
 /// The config struct for RMK keyboard.
 ///
@@ -110,35 +110,33 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
             ChordHoldHand::Left => number < COUNT / 2,
             ChordHoldHand::Right => number >= COUNT / 2,
         }
-
     }
-
 
     /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
     /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
     /// the chordal hold will be determined by user configuration in future.
-    pub(crate) fn create(event: KeyEvent, rows:usize, cols: usize) -> Self {
+    pub(crate) fn create(event: KeyEvent, rows: usize, cols: usize) -> Self {
         if cols > rows {
             if (event.col as usize) < (cols / 2) {
                 ChordHoldState {
-                    is_vertical_chord: false, 
+                    is_vertical_chord: false,
                     hand: ChordHoldHand::Left,
                 }
             } else {
                 ChordHoldState {
-                    is_vertical_chord: false, 
+                    is_vertical_chord: false,
                     hand: ChordHoldHand::Right,
                 }
             }
         } else {
             if (event.row as usize) < (rows / 2) {
                 ChordHoldState {
-                    is_vertical_chord: true, 
+                    is_vertical_chord: true,
                     hand: ChordHoldHand::Left,
                 }
             } else {
                 ChordHoldState {
-                    is_vertical_chord: true, 
+                    is_vertical_chord: true,
                     hand: ChordHoldHand::Right,
                 }
             }
@@ -291,8 +289,6 @@ impl Default for KeyboardUsbConfig<'_> {
 }
 
 mod tests {
-    use super::*;
-
     #[test]
     fn test_chordal_hold() {
         assert_eq!(
@@ -304,7 +300,8 @@ mod tests {
                 },
                 3,
                 6
-            ).hand,
+            )
+            .hand,
             ChordHoldHand::Left
         );
         assert_eq!(
@@ -316,7 +313,8 @@ mod tests {
                 },
                 4,
                 6
-            ).hand,
+            )
+            .hand,
             ChordHoldHand::Right
         );
         assert_eq!(
@@ -328,7 +326,8 @@ mod tests {
                 },
                 6,
                 4
-            ).hand,
+            )
+            .hand,
             ChordHoldHand::Right
         );
         assert_eq!(
@@ -340,15 +339,18 @@ mod tests {
                 },
                 5,
                 3
-            ).hand,
+            )
+            .hand,
             ChordHoldHand::Right
         );
 
-        let chord = ChordHoldState::<6> { is_vertical_chord:false, hand: ChordHoldHand::Left };
-        
+        let chord = ChordHoldState::<6> {
+            is_vertical_chord: false,
+            hand: ChordHoldHand::Left,
+        };
 
-        let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
-        let result: Vec<_, 6> = vec
+        let vec: heapless::Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
+        let result: heapless::Vec<_, 6> = vec
             .iter()
             .map(|col| {
                 chord.is_same(KeyEvent {
@@ -359,7 +361,7 @@ mod tests {
             })
             .collect();
 
-        let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
+        let result2: heapless::Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
         assert_eq!(result, result2);
     }
 }

@@ -41,19 +41,18 @@ fn get_th_config_for_test() -> TapHoldConfig {
 
 mod tap_hold_test {
 
-    use super::*;
+    use std::cell::RefCell;
+
     use embassy_futures::block_on;
     use embassy_time::Duration;
-    use rmk::{
-        config::{BehaviorConfig, TapHoldConfig},
-        k,
-        keyboard::Keyboard,
-        keycode::KeyCode,
-        keymap::KeyMap,
-        th,
-    };
+    use rmk::config::{BehaviorConfig, TapHoldConfig};
+    use rmk::keyboard::Keyboard;
+    use rmk::keycode::KeyCode;
+    use rmk::keymap::KeyMap;
+    use rmk::{k, th};
     use rusty_fork::rusty_fork_test;
-    use std::cell::RefCell;
+
+    use super::*;
 
     rusty_fork_test! {
 
@@ -126,7 +125,7 @@ mod tap_hold_test {
 
                 let sequence = key_sequence![
                     [0, 0, true, 10],  // press th b
-                    [0, 1, true, 10],  // Press a 
+                    [0, 1, true, 10],  // Press a
                     [0, 0, false, 300], // Release th b
                     [0, 1, false, 10],  // Press a within post wait timeout
 

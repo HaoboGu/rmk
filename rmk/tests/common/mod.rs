@@ -1,27 +1,26 @@
 pub mod test_macro;
 
 use core::cell::RefCell;
+
 use embassy_futures::block_on;
 use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::{join, FutureExt};
-
-use rmk::action::KeyAction;
-use rmk::config::{BehaviorConfig, CombosConfig};
-use rmk::{a, k, layer, mo, th};
-
 use heapless::Vec;
-use log::{debug};
+use log::debug;
+use rmk::action::KeyAction;
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use rmk::combo::Combo;
+use rmk::config::{BehaviorConfig, CombosConfig};
+use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
-use rmk::usb::descriptor::KeyboardReport;
+use rmk::{a, k, layer, mo, th};
 
 // Init logger for tests
 #[ctor::ctor]

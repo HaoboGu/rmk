@@ -3,11 +3,12 @@ pub(crate) use crate::common::*;
 
 mod combo_test {
 
-    use super::*;
     use embassy_futures::block_on;
     use rmk::config::BehaviorConfig;
     use rmk::keycode::KeyCode;
     use rusty_fork::rusty_fork_test;
+
+    use super::*;
 
     // Init logger for tests
     #[ctor::ctor]

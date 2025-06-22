@@ -47,11 +47,11 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 Some(enable) => quote! { enable_hrm: #enable, },
                 None => quote! {},
             };
-            let permissive_hold = match tap_hold.permissive_hold{
+            let permissive_hold = match tap_hold.permissive_hold {
                 Some(enable) => quote! { permissive_hold: #enable, },
                 None => quote! {},
             };
-            let chordal_hold = match tap_hold.chordal_hold{
+            let chordal_hold = match tap_hold.chordal_hold {
                 Some(enable) => quote! { chordal_hold: #enable, },
                 None => quote! {},
             };
