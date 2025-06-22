@@ -42,7 +42,7 @@ pub struct TestKeyPress {
     pub delay: u64, // Delay before this key event in milliseconds
 }
 
-// run a keyboard  test input is seq of key input with delay, use expected report to verify
+// run a keyboard, test input is seq of key input with delay, use expected report to verify
 pub async fn run_key_sequence_test<'a, const N: usize, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     key_sequence: &[TestKeyPress],

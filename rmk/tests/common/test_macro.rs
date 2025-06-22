@@ -31,16 +31,15 @@ macro_rules! key_report {
 ( $([$modifier:expr, $keys:expr]),* $(,)? ) => {
     {
     // Count the number of elements at compile time
-
     const N: usize = {
         let arr = [$((($modifier, $keys)),)*];
         arr.len()
     };
 
 
-    let mut reports: heapless::Vec<rmk::usb::descriptor::KeyboardReport, N> = heapless::Vec::new();
+    let mut reports: heapless::Vec<rmk::descriptor::KeyboardReport, N> = heapless::Vec::new();
     $(
-        reports.push(rmk::usb::descriptor::KeyboardReport {
+        reports.push(rmk::descriptor::KeyboardReport {
             modifier: $modifier,
             keycodes: $keys,
             leds: 0,

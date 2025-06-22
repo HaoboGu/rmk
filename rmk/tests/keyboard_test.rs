@@ -3,7 +3,7 @@ mod common;
 mod keyboard_test {
 
     use embassy_futures::block_on;
-    use log::{debug, info};
+    use log::debug;
     use rusty_fork::rusty_fork_test;
 
     #[test]
@@ -14,16 +14,13 @@ mod keyboard_test {
     }
 
     rusty_fork_test! {
-
-    #[test]
-    #[ignore]
-    fn test_keyboard_example() {
-
-        let main = async {
-            debug!("hello")
-        };
-        block_on(main);
-    }
-
+        #[test]
+        #[ignore]
+        fn test_keyboard_example() {
+            let main = async {
+                debug!("hello")
+            };
+            block_on(main);
+        }
     }
 }

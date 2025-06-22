@@ -15,9 +15,7 @@ pub fn init_log() {
         .try_init();
 }
 
-/**
-* hrm config
-*/
+// Taphold config: enable permissive hold
 fn get_th_config_for_permissive_hold_test() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
