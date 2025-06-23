@@ -151,11 +151,10 @@ impl Default for TapHoldConfig {
         Self {
             enable_hrm: false,
             permissive_hold: false,
-
+            chordal_hold: false,
             prior_idle_time: Duration::from_millis(120),
             post_wait_time: Duration::from_millis(50),
             hold_timeout: Duration::from_millis(250),
-            chordal_hold: false,
         }
     }
 }

@@ -28,25 +28,16 @@ macro_rules! key_sequence {
 // a rust macro to create a key report that simulates key status change in hid
 #[macro_export]
 macro_rules! key_report {
-( $([$modifier:expr, $keys:expr]),* $(,)? ) => {
-    {
-    // Count the number of elements at compile time
-    const N: usize = {
-        let arr = [$((($modifier, $keys)),)*];
-        arr.len()
+    ($([$modifier:expr, $keys:expr]),* $(,)?) => {
+        vec![
+            $(
+                rmk::descriptor::KeyboardReport {
+                    modifier: $modifier,
+                    keycodes: $keys,
+                    leds: 0,
+                    reserved: 0,
+                },
+            )*
+        ]
     };
-
-
-    let mut reports: heapless::Vec<rmk::descriptor::KeyboardReport, N> = heapless::Vec::new();
-    $(
-        reports.push(rmk::descriptor::KeyboardReport {
-            modifier: $modifier,
-            keycodes: $keys,
-            leds: 0,
-            reserved: 0,
-        }).unwrap();
-    )*
-    reports
-    }
-
-}}
+}

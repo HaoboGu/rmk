@@ -8,12 +8,10 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::{join, FutureExt};
-use heapless::Vec;
 use log::debug;
 use rmk::action::KeyAction;
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig};
+use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyEvent;
 use rmk::hid::Report;
@@ -31,8 +29,8 @@ pub fn init_log() {
         .try_init();
 }
 
-pub(crate) const KC_LSHIFT: u8 = 1 << 1;
-pub(crate) const KC_LGUI: u8 = 1 << 3;
+pub const KC_LSHIFT: u8 = 1 << 1;
+pub const KC_LGUI: u8 = 1 << 3;
 
 #[derive(Debug, Clone)]
 pub struct TestKeyPress {
@@ -43,10 +41,10 @@ pub struct TestKeyPress {
 }
 
 // run a keyboard, test input is seq of key input with delay, use expected report to verify
-pub async fn run_key_sequence_test<'a, const N: usize, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
+pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     keyboard: &mut Keyboard<'a, ROW, COL, NUM_LAYER>,
     key_sequence: &[TestKeyPress],
-    expected_reports: Vec<KeyboardReport, N>,
+    expected_reports: &[KeyboardReport],
 ) {
     static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 
@@ -96,7 +94,7 @@ pub async fn run_key_sequence_test<'a, const N: usize, const ROW: usize, const C
                         report_index += 1;
                         // println!("Received {}th report from channel: {:?}", report_index, report);
                         assert_eq!(
-                            expected, report,
+                            *expected, report,
                             "on #{} reports, expected left but actually right",
                             report_index
                         );
@@ -132,34 +130,6 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
     ]
 }
 
-#[rustfmt::skip]
-pub fn get_combos_config() -> CombosConfig {
-    // Define the function to return the appropriate combo configuration
-    CombosConfig {
-        combos: Vec::from_iter([
-            Combo::new(
-                [
-                    k!(V), //3,4
-                    k!(B), //3,5
-                ]
-                .to_vec(),
-                k!(LShift),
-                Some(0),
-            ),
-            Combo::new(
-                [
-                    k!(R), //1,4
-                    k!(T), //1,5
-                ]
-                .to_vec(),
-                k!(LAlt),
-                Some(0),
-            ),
-        ]),
-        timeout: Duration::from_millis(100),
-    }
-}
-
 pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
     Keyboard::new(wrap_keymap(get_keymap(), config))
 }
@@ -179,7 +149,3 @@ pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
 pub fn create_test_keyboard() -> Keyboard<'static, 5, 14, 2> {
     create_test_keyboard_with_config(BehaviorConfig::default())
 }
-
-// pub fn key_event(row: u8, col: u8, pressed: bool) -> KeyEvent {
-//     KeyEvent { row, col, pressed }
-// }

@@ -1,22 +1,9 @@
-extern crate rmk;
+pub mod common;
 
 use embassy_time::Duration;
 use rmk::config::TapHoldConfig;
 
-mod common;
-pub(crate) use crate::common::*;
-
-// Init logger for tests
-#[ctor::ctor]
-pub fn init_log() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .is_test(true)
-        .try_init();
-}
-
-// Taphold config: enable permissive hold
-fn get_th_config_for_permissive_hold_test() -> TapHoldConfig {
+fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
         permissive_hold: true,
@@ -24,13 +11,10 @@ fn get_th_config_for_permissive_hold_test() -> TapHoldConfig {
         ..TapHoldConfig::default()
     }
 }
-/**
-* hrm config
-*/
-fn get_th_config_for_test() -> TapHoldConfig {
+
+fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
-        permissive_hold: false,
         chordal_hold: true,
         post_wait_time: Duration::from_millis(0),
         ..TapHoldConfig::default()
@@ -51,9 +35,11 @@ mod tap_hold_test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
+    use crate::common::{
+        create_test_keyboard, create_test_keyboard_with_config, run_key_sequence_test, wrap_keymap, KC_LGUI, KC_LSHIFT,
+    };
 
     rusty_fork_test! {
-
         #[test]
         fn test_taphold_tap() {
             let main = async {
@@ -70,11 +56,10 @@ mod tap_hold_test {
                     [0, [0x04, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
-
 
         #[test]
         fn test_taphold_hold() {
@@ -92,7 +77,7 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -137,10 +122,11 @@ mod tap_hold_test {
 
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
 
             });
         }
+
         #[test]
         fn test_tap_hold_key_post_wait_in_new_version_2() {
             block_on( async {
@@ -181,7 +167,7 @@ mod tap_hold_test {
                     [0, [ 0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             });
         }
 
@@ -208,11 +194,10 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
-
 
         //normal tap hold tests
         #[test]
@@ -221,7 +206,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
                     //perfer hold
-                    tap_hold:get_th_config_for_permissive_hold_test(),
+                    tap_hold:tap_hold_config_with_hrm_and_permissive_hold(),
                         .. BehaviorConfig::default()
                     });
 
@@ -243,11 +228,10 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
-
 
         //permissive hold test cases
         #[test]
@@ -255,7 +239,7 @@ mod tap_hold_test {
                 // eager hold
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: get_th_config_for_permissive_hold_test(),
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         .. BehaviorConfig::default()
                     });
 
@@ -279,7 +263,7 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
 
             };
             block_on(main);
@@ -289,7 +273,7 @@ mod tap_hold_test {
         fn test_tap_hold_hold_on_smesh_key_press() {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: get_th_config_for_permissive_hold_test(),
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         .. BehaviorConfig::default()
                     });
 
@@ -328,7 +312,7 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -338,7 +322,7 @@ mod tap_hold_test {
                 // eager hold
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: get_th_config_for_permissive_hold_test(),
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         .. BehaviorConfig::default()
                     });
 
@@ -360,7 +344,7 @@ mod tap_hold_test {
                     [0,  [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -370,7 +354,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_permissive_hold_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -392,18 +376,17 @@ mod tap_hold_test {
 
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
-
 
         #[test]
         fn test_tap_hold_key_chord_reversed_cross_tap_should_be_tap() {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_permissive_hold_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -426,7 +409,7 @@ mod tap_hold_test {
 
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -436,7 +419,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_permissive_hold_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -462,7 +445,7 @@ mod tap_hold_test {
 
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -472,7 +455,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_permissive_hold_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -494,7 +477,7 @@ mod tap_hold_test {
 
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -506,7 +489,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_permissive_hold_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -527,7 +510,7 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -537,7 +520,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -562,7 +545,7 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
@@ -572,7 +555,7 @@ mod tap_hold_test {
             let main = async {
                 let mut keyboard = create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: get_th_config_for_test(),
+                        tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
                         ..BehaviorConfig::default()
                     }
                 );
@@ -595,10 +578,9 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]],
                 ];
 
-                run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
+                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
             };
             block_on(main);
         }
-
-    } // forks end
+    }
 }
