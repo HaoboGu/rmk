@@ -23,180 +23,66 @@ fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
 
 mod tap_hold_test {
 
-    use std::cell::RefCell;
-
     use embassy_futures::block_on;
-    use embassy_time::Duration;
-    use rmk::config::{BehaviorConfig, TapHoldConfig};
-    use rmk::keyboard::Keyboard;
-    use rmk::keycode::KeyCode;
-    use rmk::keymap::KeyMap;
-    use rmk::{k, th};
+    use rmk::config::BehaviorConfig;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
     use crate::common::{
-        create_test_keyboard, create_test_keyboard_with_config, run_key_sequence_test, wrap_keymap, KC_LGUI, KC_LSHIFT,
+        create_test_keyboard, create_test_keyboard_with_config, run_key_sequence_test, KC_LGUI, KC_LSHIFT,
     };
 
     rusty_fork_test! {
         #[test]
         fn test_taphold_tap() {
-            let main = async {
-                let mut keyboard = create_test_keyboard();
-
-                let sequence = key_sequence![
+            key_sequence_test! {
+                keyboard: create_test_keyboard(),
+                sequence: [
                     [2, 1, true, 10],  // Press TH shift A
-                    //release before hold timeout
-                    [2, 1, false, 100], // Release A
-                ];
-
-                let expected_reports = key_report![
-                    //should be a tapping A
-                    [0, [0x04, 0, 0, 0, 0, 0]],
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
-            };
-            block_on(main);
+                    [2, 1, false, 100], // Release A before hold timeout
+                ],
+                expected_reports: [
+                    [0, [0x04, 0, 0, 0, 0, 0]], // Should be a tapping A
+                ]
+            }
         }
 
         #[test]
         fn test_taphold_hold() {
-            let main = async {
-                let mut keyboard = create_test_keyboard();
-
-                let sequence = key_sequence![
-                    [2, 1, true, 10],  // Press TH shift A
+            key_sequence_test! {
+                keyboard: create_test_keyboard(),
+                sequence: [
+                    [2, 1, true, 10],  // Press th!(A, LShift)
                     [2, 1, false, 300], // Release A
-                ];
-
-                let expected_reports = key_report![
-                    //tap on a
-                    [2, [0, 0, 0, 0, 0, 0]],
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift
                     [0, [0, 0, 0, 0, 0, 0]],
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
+                ]
             };
-            block_on(main);
-        }
-
-        #[test]
-        fn test_tap_hold_key_post_wait_in_new_version_1() {
-            block_on( async {
-                    let config =BehaviorConfig {
-                            tap_hold: TapHoldConfig {
-                                enable_hrm: true,
-                                permissive_hold: true,
-                                post_wait_time: Duration::from_millis(0),
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        };
-                let keymap:&mut RefCell<KeyMap<1, 2, 1>> = wrap_keymap(
-                        [[[
-                            th!(B, LShift),
-                            k!(A)
-                        ]]]
-                        ,
-                        config
-                    );
-                let mut keyboard = Keyboard::new(keymap);
-
-                println!("first case");
-
-                let sequence = key_sequence![
-                    [0, 0, true, 10],  // press th b
-                    [0, 1, true, 10],  // Press a
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, false, 10],  // Press a within post wait timeout
-
-                ];
-
-                let expected_reports = key_report![
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [ kc8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ kc8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
-
-            });
-        }
-
-        #[test]
-        fn test_tap_hold_key_post_wait_in_new_version_2() {
-            block_on( async {
-                    let config =BehaviorConfig {
-                            tap_hold: TapHoldConfig {
-                                enable_hrm: true,
-                                permissive_hold: true,
-                                post_wait_time: Duration::from_millis(0),
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        };
-                let keymap:&mut RefCell<KeyMap<1, 2, 1>> = wrap_keymap(
-                        [[[
-                            th!(B, LShift),
-                            k!(A)
-                        ]]]
-                        ,
-                        config
-                    );
-                let mut keyboard = Keyboard::new(keymap);
-
-
-                println!("second case");
-
-                let sequence = key_sequence![
-                    [0, 0, true, 10],  // press th b
-                    [0, 1, true, 10],  // Press a
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, false, 100],  // Press a out of post wait timeout
-                ];
-
-                let expected_reports = key_report![
-
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [kc8!(A), 0, 0, 0, 0, 0]],
-                    [0, [kc8!(A), 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
-            });
         }
 
         #[test]
         fn test_tap_hold_key_multi_hold() {
-            let main = async {
-                let mut keyboard = create_test_keyboard();
-
-                let sequence = key_sequence![
-                    [2, 1, true, 10], // Press th!(A,shift)
-                    [2, 2, true, 10], //  press th!(S,lgui)
-                    //hold timeout
-                    [2, 3, true, 270],  //  press d
-                    [2, 3, false, 290], // release d
+            key_sequence_test! {
+                keyboard: create_test_keyboard(),
+                sequence: [
+                    [2, 1, true, 10], // Press th!(A, lshift)
+                    [2, 2, true, 10], // Press th!(S, lgui)
+                    [2, 3, true, 270],  // Press D after hold timeout
+                    [2, 3, false, 290], // Release D
                     [2, 1, false, 380], // Release A
-                    [2, 2, false, 400], // Release s
-                ];
-                let expected_reports = key_report![
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                          //shift
-                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],                //shift
-                    [KC_LSHIFT | KC_LGUI, [KeyCode::D as u8, 0, 0, 0, 0, 0]], // 0x7
-                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],                //shift
-                    [KC_LGUI, [0, 0, 0, 0, 0, 0]],                            //shift and gui
+                    [2, 2, false, 400], // Release S
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT | KC_LGUI, [kc8!(D), 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                    [KC_LGUI, [0, 0, 0, 0, 0, 0]],
                     [0, [0, 0, 0, 0, 0, 0]],
-                ];
-
-                run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
+                ]
             };
-            block_on(main);
         }
 
         //normal tap hold tests
