@@ -80,7 +80,7 @@ pub(crate) struct LightService<'d, P: OutputPin, R: HidReaderTrait<ReportType = 
 impl<'d, P: OutputPin, R: HidReaderTrait<ReportType = LedIndicator>> LightService<'d, P, R> {
     pub(crate) fn new(light_controller: &'d mut LightController<P>, reader: R) -> Self {
         Self {
-            enabled: false,
+            enabled: light_controller.enabled(),
             light_controller,
             reader,
         }
@@ -224,5 +224,9 @@ impl<P: OutputPin> LightController<P> {
         self.set_scrolllock(led_indicator.scroll_lock())?;
 
         Ok(())
+    }
+
+    pub(crate) fn enabled(&self) -> bool {
+        self.capslock.is_some() || self.numslock.is_some() || self.scrolllock.is_some()
     }
 }
