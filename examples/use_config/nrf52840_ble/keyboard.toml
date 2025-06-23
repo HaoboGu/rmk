@@ -56,10 +56,6 @@ battery_adc_pin = "vddh"
 # battery_adc_pin = "P0_04"
 # adc_divider_measured = 2000
 # adc_divider_total = 2806
-charge_state.pin = "P0_25"
-charge_state.low_active = false
-charge_led.pin = "P0_29"
-charge_led.low_active = false
 
 [behavior.combo]
 timeout = "150ms"
