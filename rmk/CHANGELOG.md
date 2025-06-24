@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- Only the valid macro data is stored in the storage now. **Clearing storage is required to update**
+
 ### Fixed
 
 - Light service is wrongly disabled
