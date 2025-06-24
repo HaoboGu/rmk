@@ -290,6 +290,7 @@ impl Default for KeyboardUsbConfig<'_> {
 }
 
 mod tests {
+    use super::*;
     #[test]
     fn test_chordal_hold() {
         assert_eq!(

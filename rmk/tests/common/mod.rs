@@ -3,15 +3,16 @@ pub mod test_macro;
 use core::cell::RefCell;
 
 use embassy_futures::block_on;
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-use futures::{FutureExt, join};
+use futures::{join, FutureExt};
 use log::debug;
 use rmk::action::KeyAction;
-use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
-use rmk::config::BehaviorConfig;
+use rmk::config::{BehaviorConfig, CombosConfig};
+
+use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyEvent;
 use rmk::hid::Report;
@@ -89,7 +90,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
             let mut report_index = -1;
             for expected in expected_reports {
                 match select(Timer::after(Duration::from_secs(1)), KEYBOARD_REPORT_CHANNEL.receive()).await {
-                    Either::First(_) => panic!("report wait timeout reached"),
+                    Either::First(_) => panic!("ERROR: report wait timeout reached"),
                     Either::Second(Report::KeyboardReport(report)) => {
                         report_index += 1;
                         // println!("Received {}th report from channel: {:?}", report_index, report);
@@ -104,10 +105,15 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
                     }
                 }
             }
+
             // Set done flag after all reports are verified
             *REPORTS_DONE.lock().await = true;
         }
     );
+    let buffer = keyboard.copy_buffer();
+    if buffer.len() > 0 {
+        panic!("leak after buffer cleanup, buffer contains {:?}", buffer);
+    }
 }
 
 #[rustfmt::skip]

@@ -130,8 +130,8 @@ pub enum ControllerEvent {
 pub enum HoldingKey {
     // tap hold key
     TapHold(PressedTapHold),
-    // normal key
-    Tapping(BufferedPressEvent),
+    // non tap hold key right now
+    Others(KeyPress),
 }
 
 pub trait HoldingKeyTrait {
@@ -144,14 +144,14 @@ impl HoldingKey {
     pub(crate) fn start_time(&self) -> Instant {
         match self {
             HoldingKey::TapHold(h) => h.pressed_time,
-            HoldingKey::Tapping(h) => h.pressed_time,
+            HoldingKey::Others(h) => h.pressed_time,
         }
     }
 
     pub(crate) fn key_event(&self) -> KeyEvent {
         match self {
             HoldingKey::TapHold(h) => h.key_event,
-            HoldingKey::Tapping(h) => h.key_event,
+            HoldingKey::Others(h) => h.key_event,
         }
     }
 
@@ -166,7 +166,7 @@ impl HoldingKeyTrait for HoldingKey {
             HoldingKey::TapHold(h) => {
                 h.state = new_state;
             }
-            HoldingKey::Tapping(t) => {
+            HoldingKey::Others(t) => {
                 t.state = new_state;
             }
         }
@@ -175,14 +175,14 @@ impl HoldingKeyTrait for HoldingKey {
     fn press_time(&self) -> Instant {
         match self {
             HoldingKey::TapHold(h) => h.pressed_time,
-            HoldingKey::Tapping(t) => t.pressed_time,
+            HoldingKey::Others(t) => t.pressed_time,
         }
     }
 
     fn state(&self) -> TapHoldState {
         match self {
             HoldingKey::TapHold(h) => h.state,
-            HoldingKey::Tapping(t) => t.state,
+            HoldingKey::Others(t) => t.state,
         }
     }
 }
@@ -190,17 +190,18 @@ impl HoldingKeyTrait for HoldingKey {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldState {
-    //happen after press event arrives
+    //happen after a press event arrives
     Initial,
     //tapping event
     Tap,
-    //release tapping event
+    //state after a tap key is released
     PostTap,
-    //holding event
+    //state that a tap hold key is delete as hold
     Hold,
     //release holding event
     PostHold,
-    //reserved
+    //reserved:  a key need be release but still in the queue
+    //should be clean in the main loop, no matter
     Release,
 }
 
@@ -245,7 +246,7 @@ impl HoldingKeyTrait for PressedTapHold {
 //buffered pressing key event while TapHolding
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BufferedPressEvent {
+pub struct KeyPress {
     pub key_event: KeyEvent,
     pub key_action: KeyAction,
     pub pressed_time: Instant,
@@ -253,7 +254,7 @@ pub struct BufferedPressEvent {
     pub state: TapHoldState,
 }
 
-impl HoldingKeyTrait for BufferedPressEvent {
+impl HoldingKeyTrait for KeyPress {
     fn update_state(&mut self, new_state: TapHoldState) {
         self.state = new_state
     }

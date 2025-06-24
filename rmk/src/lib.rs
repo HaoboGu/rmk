@@ -98,7 +98,7 @@ pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
 #[cfg(not(feature = "_no_usb"))]
-pub(crate) mod usb;
+pub mod usb;
 pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
