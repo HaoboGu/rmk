@@ -236,8 +236,17 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::MacroData as u8;
-                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
-                Ok(MACRO_SPACE_SIZE + 1)
+                let mut idx = 0;
+                while let Some(b) = d.get(idx) {
+                    if *b == 0 {
+                        break;
+                    }
+                    buffer[idx + 3] = *b;
+                    idx += 1;
+                }
+                // Macro data length
+                buffer[1..3].copy_from_slice(&(idx as u16).to_le_bytes());
+                Ok(idx + 3)
             }
             StorageData::ComboData(combo) => {
                 if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
@@ -400,7 +409,12 @@ impl Value<'_> for StorageData {
                         return Err(SerializationError::InvalidData);
                     }
                     let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
+                    let macro_length = u16::from_le_bytes(buffer[1..3].try_into().unwrap()) as usize;
+                    if macro_length > MACRO_SPACE_SIZE + 1 {
+                        // Check length
+                        return Err(SerializationError::InvalidData);
+                    }
+                    buf.copy_from_slice(&buffer[3..macro_length]);
                     Ok(StorageData::MacroData(buf))
                 }
                 StorageKeys::ComboData => {
@@ -1238,6 +1252,7 @@ fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
         SSError::BufferTooBig => error!("Buffer too big"),
         SSError::BufferTooSmall(x) => error!("Buffer too small, needs {} bytes", x),
         SSError::SerializationError(e) => error!("Map value error: {}", e),
+        SSError::ItemTooBig => error!("Item too big"),
         _ => error!("Unknown storage error"),
     }
 }
