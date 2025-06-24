@@ -139,7 +139,6 @@ pub(crate) enum StorageData {
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey),
     EncoderConfig(EncoderConfig),
-    // TODO: To reduce the size of this enum, is it worth to store macro data in another storage?
     MacroData([u8; MACRO_SPACE_SIZE]),
     ComboData(ComboData),
     ConnectionType(u8),
