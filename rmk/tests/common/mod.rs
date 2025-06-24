@@ -3,14 +3,14 @@ pub mod test_macro;
 use core::cell::RefCell;
 
 use embassy_futures::block_on;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-use futures::{join, FutureExt};
+use futures::{FutureExt, join};
 use log::debug;
 use rmk::action::KeyAction;
-use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyEvent;

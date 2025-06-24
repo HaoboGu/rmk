@@ -1,5 +1,11 @@
 extern crate rmk;
 
+/// Macro for testing key sequence.
+///
+/// # Arguments:
+///     - keyboard: keyboard initialization
+///     - sequence: key sequence: [row, col, pressed, delay], where delay is the time interval in ms between last key action and current key
+///     - expected_reports: [modifiers, [keycodes; 6]], represents the hid report which will be sent to the host
 #[macro_export]
 macro_rules! key_sequence_test {
     (keyboard: $keyboard:expr, sequence: [$([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?], expected_reports: [$([$modifier:expr, $keys:expr]),* $(,)?]) => {
@@ -31,44 +37,11 @@ macro_rules! key_sequence_test {
     };
 }
 
-// a rust macro to map a str to k!(a) as u8
+/// Convert a key `k!(key)` to the u8 representation in hid report.
+/// For example, `KeyCode::A` will be converted to `0x04`.
 #[macro_export]
-macro_rules! kc8 {
+macro_rules! kc_to_u8 {
     ($key: ident) => {
         rmk::keycode::KeyCode::$key as u8
-    };
-}
-
-// a rust macro to create a key sequence to simulate key presses
-#[macro_export]
-macro_rules! key_sequence {
-    ($([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?) => {
-        vec![
-            $(
-                $crate::common::TestKeyPress {
-                    row: $row,
-                    col: $col,
-                    pressed: $pressed,
-                    delay: $delay,
-                },
-            )*
-        ]
-    };
-}
-
-// a rust macro to create a key report that simulates key status change in hid
-#[macro_export]
-macro_rules! key_report {
-    ($([$modifier:expr, $keys:expr]),* $(,)?) => {
-        vec![
-            $(
-                rmk::descriptor::KeyboardReport {
-                    modifier: $modifier,
-                    keycodes: $keys,
-                    leds: 0,
-                    reserved: 0,
-                },
-            )*
-        ]
     };
 }
