@@ -24,6 +24,8 @@ use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
+// A signal for indicating the sleep status for split central
+pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -238,7 +240,7 @@ async fn connect_and_run_peripheral_manager<
     .await;
 
     match select(
-        ble_central_task(&client, &conn),
+        ble_central_task(stack, &client, &conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
     )
     .await
@@ -248,13 +250,47 @@ async fn connect_and_run_peripheral_manager<
     }
 }
 
-async fn ble_central_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+async fn ble_central_task<'a, 's, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    stack: &Stack<'s, C, P>,
     client: &GattClient<'a, C, P, 10>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn_check = async {
         while conn.is_connected() {
-            embassy_time::Timer::after_secs(1).await;
+            match select(CENTRAL_SLEEP.wait(), embassy_time::Timer::after_secs(1)).await {
+                Either::First(is_sleep) => {
+                    if is_sleep {
+                        // Change connection parameter for saving power
+                        update_conn_params(
+                            stack,
+                            conn,
+                            &ConnectParams {
+                                min_connection_interval: Duration::from_millis(200), // 200ms
+                                max_connection_interval: Duration::from_millis(200), // 200ms
+                                max_latency: 25,                                     // 5s
+                                supervision_timeout: Duration::from_secs(11),        // 11s
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    } else {
+                        // Restore connection parameter when quiting sleep
+                        update_conn_params(
+                            stack,
+                            &conn,
+                            &ConnectParams {
+                                min_connection_interval: Duration::from_micros(7500), // 7.5ms
+                                max_connection_interval: Duration::from_micros(7500), // 7.5ms
+                                max_latency: 400,                                     // 3s
+                                supervision_timeout: Duration::from_secs(7),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    }
+                }
+                Either::Second(_) => continue,
+            }
         }
     };
     match select(client.task(), conn_check).await {
