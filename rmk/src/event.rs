@@ -129,9 +129,17 @@ pub enum ControllerEvent {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum HoldingKey {
     // tap hold key
-    TapHold(PressedTapHold),
+    TapHold {
+        meta: KeyMeta,
+        tap_action: Action,
+        hold_action: Action,
+        deadline: Instant,
+    },
     // non tap hold key right now
-    Others(KeyPress),
+    Others {
+        meta: KeyMeta,
+        key_action: KeyAction,
+    },
 }
 
 pub trait HoldingKeyTrait {
@@ -143,46 +151,46 @@ pub trait HoldingKeyTrait {
 impl HoldingKey {
     pub(crate) fn start_time(&self) -> Instant {
         match self {
-            HoldingKey::TapHold(h) => h.pressed_time,
-            HoldingKey::Others(h) => h.pressed_time,
+            HoldingKey::TapHold { meta, .. } => meta.pressed_time,
+            HoldingKey::Others { meta, .. } => meta.pressed_time,
         }
     }
 
     pub(crate) fn key_event(&self) -> KeyEvent {
         match self {
-            HoldingKey::TapHold(h) => h.key_event,
-            HoldingKey::Others(h) => h.key_event,
+            HoldingKey::TapHold { meta, .. } => meta.key_event,
+            HoldingKey::Others { meta, .. } => meta.key_event,
         }
     }
 
     pub(crate) fn is_tap_hold(&self) -> bool {
-        matches!(self, HoldingKey::TapHold(_))
+        matches!(self, HoldingKey::TapHold { .. })
     }
 }
 
 impl HoldingKeyTrait for HoldingKey {
     fn update_state(&mut self, new_state: TapHoldState) {
         match self {
-            HoldingKey::TapHold(h) => {
-                h.state = new_state;
+            HoldingKey::TapHold { meta: state, .. } => {
+                state.state = new_state;
             }
-            HoldingKey::Others(t) => {
-                t.state = new_state;
+            HoldingKey::Others { meta: state, .. } => {
+                state.state = new_state;
             }
         }
     }
 
     fn press_time(&self) -> Instant {
         match self {
-            HoldingKey::TapHold(h) => h.pressed_time,
-            HoldingKey::Others(t) => t.pressed_time,
+            HoldingKey::TapHold { meta, .. } => meta.pressed_time,
+            HoldingKey::Others { meta, .. } => meta.pressed_time,
         }
     }
 
     fn state(&self) -> TapHoldState {
         match self {
-            HoldingKey::TapHold(h) => h.state,
-            HoldingKey::Others(t) => t.state,
+            HoldingKey::TapHold { meta: state, .. } => state.state,
+            HoldingKey::Others { meta: state, .. } => state.state,
         }
     }
 }
@@ -208,62 +216,17 @@ pub enum TapHoldState {
 // record pressing tap hold keys
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct PressedTapHold {
+pub struct TapHoldTimer {
     pub key_event: KeyEvent,
-    pub tap_action: Action,
-    pub hold_action: Action,
-    pub pressed_time: Instant,
     pub deadline: Instant,
-    pub state: TapHoldState,
+    pub pressed_time: Instant,
 }
 
-impl PressedTapHold {
-    const NO: Action = Action::Key(No);
-
-    pub(crate) fn hold_action(&self) -> Action {
-        self.hold_action
-    }
-
-    pub(crate) fn tap_action(&self) -> Action {
-        self.tap_action
-    }
-}
-
-impl HoldingKeyTrait for PressedTapHold {
-    fn update_state(&mut self, new_state: TapHoldState) {
-        self.state = new_state
-    }
-
-    fn press_time(&self) -> Instant {
-        self.pressed_time
-    }
-
-    fn state(&self) -> TapHoldState {
-        self.state
-    }
-}
-
-//buffered pressing key event while TapHolding
+// the changable parts, can be update next
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyPress {
-    pub key_event: KeyEvent,
-    pub key_action: KeyAction,
-    pub pressed_time: Instant,
-    //initial -> tap -> post tap -> release
+pub struct KeyMeta {
     pub state: TapHoldState,
-}
-
-impl HoldingKeyTrait for KeyPress {
-    fn update_state(&mut self, new_state: TapHoldState) {
-        self.state = new_state
-    }
-
-    fn press_time(&self) -> Instant {
-        self.pressed_time
-    }
-
-    fn state(&self) -> TapHoldState {
-        self.state
-    }
+    pub key_event: KeyEvent,
+    pub pressed_time: Instant,
 }

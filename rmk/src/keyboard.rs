@@ -6,7 +6,7 @@ use crate::combo::Combo;
 use crate::config::ChordHoldState;
 use crate::descriptor::{KeyboardReport, ViaReport};
 use crate::event::TapHoldState::PostHold;
-use crate::event::{HoldingKey, HoldingKeyTrait, KeyEvent, KeyPress, PressedTapHold, TapHoldState};
+use crate::event::{HoldingKey, HoldingKeyTrait, KeyEvent, KeyMeta, TapHoldState, TapHoldTimer};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -39,7 +39,7 @@ use {
 };
 
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
-use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+use crate::{boot, state, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 #[derive(Debug)]
 enum LoopState {
@@ -50,7 +50,7 @@ enum LoopState {
 }
 
 #[derive(Debug)]
-enum HoldDecision {
+pub enum HoldDecision {
     Timeout,     // hold timeout, equals to hold
     CleanBuffer, // clean buffer key press
     Hold,        // should be holding
@@ -166,9 +166,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Record the timestamp of last release, (event, is_modifier, timestamp)
     last_release: (KeyEvent, bool, Option<Instant>),
 
-    /// Record last timer
-    last_tap_release_timer: (Option<PressedTapHold>, Option<Instant>),
-
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
 
@@ -250,7 +247,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 false,
                 None,
             ),
-            last_tap_release_timer: (None, None),
             hold_after_tap: Default::default(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
@@ -311,30 +307,33 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     // a tap hold key reach hold timeout, turning into hold press event
-    async fn handle_tap_hold_timeout(&mut self, event: PressedTapHold, _buffering: bool) -> LoopState {
-        if let Some(pos) = &self.find_tap_hold_key_index(event.key_event) {
-            trace!("{:?} hold timeout", event.key_event);
+    async fn handle_tap_hold_timeout(&mut self, timer: TapHoldTimer, _buffering: bool) -> LoopState {
+        if let Some(pos) = &self.find_tap_hold_key_index(timer.key_event) {
+            trace!("{:?} hold timeout", timer.key_event);
             let mut hold_key: HoldingKey = self.holding_buffer.swap_remove(*pos);
             match hold_key {
-                HoldingKey::TapHold(hold) => {
-                    match hold.state {
+                HoldingKey::TapHold {
+                    meta,
+                    tap_action,
+                    hold_action,
+                    ..
+                } => {
+                    match meta.state {
                         Initial => {
                             hold_key.update_state(TapHoldState::Hold);
-                            self.process_key_action_normal(event.hold_action(), event.key_event)
-                                .await;
+                            self.process_key_action_normal(hold_action, meta.key_event).await;
                             //marked as post hold
-                            debug!("{:?} timeout and send HOLD action", event.key_event);
+                            debug!("{:?} timeout and send HOLD action", timer.key_event);
                             hold_key.update_state(PostHold);
 
                             self.push_and_sort_buffers(hold_key).ok();
                         }
                         _ => {
                             //marked as post hold
-                            warn!("!fallback: {:?} key in post state {:?}", event.key_event, hold.state);
+                            warn!("!fallback: {:?} key in post state {:?}", timer.key_event, meta.state);
                             // post release maybe, there should not be other state right now
                             //release
-                            self.process_key_action_normal(event.hold_action(), event.key_event)
-                                .await;
+                            self.process_key_action_normal(hold_action, timer.key_event).await;
                         }
                     }
                 }
@@ -343,7 +342,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
             }
         } else {
-            panic!("Hold event not exists: {:?}", event);
+            panic!("Hold event not exists: {:?}", timer);
         }
         OK
     }
@@ -353,9 +352,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Remove any HoldingKey::Others in PostTap state from the buffer
 
         self.holding_buffer.retain(|e| match e {
-            HoldingKey::Others(tap) => match tap.state {
+            HoldingKey::Others { meta, .. } => match meta.state {
                 TapHoldState::PostTap => {
-                    debug!("processing buffering TAP keys with pos: {:?}", tap.key_event);
+                    debug!("processing buffering TAP keys with pos: {:?}", meta.key_event);
                     return false;
                 }
                 _ => {
@@ -367,17 +366,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     //from here , we wait first tap hold into hold or process next key
-    async fn process_buffered_taphold_event(&mut self, event: PressedTapHold, buffering: bool) -> LoopState {
+    async fn process_buffered_taphold_event(&mut self, timer: TapHoldTimer, buffering: bool) -> LoopState {
         let now = Instant::now();
-        let time_left: Duration = if event.deadline > now {
-            event.deadline - now
+        let time_left: Duration = if timer.deadline > now {
+            timer.deadline - now
         } else {
             Duration::from_ticks(0)
         };
 
         debug!(
             "[TAP-HOLD] Processing with TAP hold events: {:?}, timeout in {} ms",
-            event.key_event,
+            timer.key_event,
             time_left.as_millis()
         );
 
@@ -385,7 +384,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
             Either::First(_) => {
                 // Process hold timeout
-                self.handle_tap_hold_timeout(event, buffering).await
+                self.handle_tap_hold_timeout(timer, buffering).await
             }
             Either::Second(key_event) => {
                 // Process key event
@@ -488,8 +487,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // check if current key event is pressed before all keys
     fn is_releasing_as_hold(&mut self, key_event: KeyEvent) -> bool {
         if let Some(timer) = self.timer[key_event.col as usize][key_event.row as usize] {
-            if let Some(next_holding) = self.find_next_timeout_event() {
-                if next_holding.pressed_time < timer {
+            if let Some(timeout) = self.find_next_timeout_event() {
+                if timeout.pressed_time < timer {
                     true
                 } else {
                     false
@@ -514,8 +513,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .holding_buffer
             .iter()
             .find(|i| match i {
-                HoldingKey::TapHold(e) => {
-                    return e.state == TapHoldState::Initial;
+                HoldingKey::TapHold { meta: store, .. } => {
+                    return store.state == TapHoldState::Initial;
                 }
                 _ => {
                     return false;
@@ -591,12 +590,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Ignore => {}
             Buffering => {
                 //save into buffer, will be process in the future
-                self.tap_hold_buffering_new_key(KeyPress {
-                    key_event,
-                    key_action: original_key_action,
-                    pressed_time: self.timer[key_event.col as usize][key_event.row as usize].unwrap(),
-                    state: Initial,
-                });
+                self.tap_hold_buffering_new_key(key_event, original_key_action);
                 return Queue;
             }
             CleanBuffer | Hold | ChordHold => {
@@ -884,9 +878,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let Some(e) = self.find_tap_hold_key_index(key_event_released) {
             let hold_state = self.holding_buffer.swap_remove(e);
             match hold_state {
-                HoldingKey::TapHold(tap_hold) => {
+                HoldingKey::TapHold {
+                    meta,
+                    tap_action,
+                    hold_action,
+                    ..
+                } => {
                     //FIXME tap key press should happen before
-                    match tap_hold.state {
+                    match meta.state {
                         // Initial => {
                         //     self.process_key_action_normal(e.tap_action(), e.key_event).await;
                         //     e.update_state(TapHoldState::PostTap);
@@ -896,34 +895,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         TapHoldState::Hold | PostHold => {
                             debug!(
                                 "[TAP-HOLD] {:?} releasing with key event {:?}",
-                                tap_hold.state, key_event_released
+                                meta.state, key_event_released
                             );
 
-                            self.process_key_action_normal(tap_hold.hold_action(), key_event_released)
-                                .await;
+                            self.process_key_action_normal(hold_action, key_event_released).await;
 
                             self.tap_hold_release_key_from_buffer(key_event_released);
                         }
                         TapHoldState::PostTap => {
-                            debug!(
-                                "TapHold {:?}] post Tapping, releasing {:?}",
-                                tap_hold.key_event,
-                                tap_hold.tap_action()
-                            );
-                            self.process_key_action_normal(tap_hold.tap_action(), key_event_released)
-                                .await;
+                            debug!("TapHold {:?}] post Tapping, releasing {:?}", meta.key_event, tap_action);
+                            self.process_key_action_normal(tap_action, key_event_released).await;
                             self.tap_hold_release_key_from_buffer(key_event_released);
                         }
                         TapHoldState::Initial => {
                             //should be processed in tap hold decission stage
                             debug!(
                                 "[TAP-HOLD] quick release should be tapping, send tap action, {:?}",
-                                tap_hold.tap_action()
+                                tap_action
                             );
 
                             // Timer::after_millis(10).await;
-                            self.process_key_action_tap(tap_hold.tap_action, tap_hold.key_event)
-                                .await;
+                            self.process_key_action_tap(tap_action, meta.key_event).await;
 
                             // //release
                             // self.process_key_action_normal(tap_hold.tap_action(), key_event_released)
@@ -934,7 +926,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         _ => {
                             error!(
                                 "[TAP-HOLD] Unexpected TapHoldState {:?}, while releasing {:?}",
-                                tap_hold.state, tap_hold
+                                meta.state, meta.key_event
                             );
                         }
                     }
@@ -1096,16 +1088,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.process_key_action_normal(tap_action, key_event).await;
 
                         //push into buffer, process by order in loop
-                        self.holding_buffer
-                            .push(HoldingKey::TapHold(PressedTapHold {
-                                key_event,
-                                tap_action,
-                                hold_action,
-                                pressed_time: Instant::now(),
-                                deadline: Instant::now(),
-                                state: TapHoldState::PostTap,
-                            }))
-                            .ok();
+                        self.tap_hold_save_new_pressed(
+                            key_event,
+                            tap_action,
+                            hold_action,
+                            Instant::now(),
+                            TapHoldState::PostTap,
+                        );
                         return;
                     } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
                         && key_event.row == self.last_release.0.row
@@ -1130,17 +1119,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // Press
             let holdTimeOutValue = self.keymap.borrow().behavior.tap_hold.hold_timeout;
             let now = Instant::now();
-            let pressedKeyEvent: PressedTapHold = PressedTapHold {
-                state: Initial,
-                key_event,
-                tap_action,
-                hold_action,
-                pressed_time: self.timer[key_event.col as usize][key_event.row as usize].unwrap(),
-                deadline: now + holdTimeOutValue,
-            };
+            let deadline = now + holdTimeOutValue;
 
             //save unprocessed key
-            self.tap_hold_save_new_pressed(pressedKeyEvent);
+            self.tap_hold_save_new_pressed(key_event, tap_action, hold_action, deadline, Initial);
         } else {
             // Release a th key, should check timeout for tap
 
@@ -1752,54 +1734,65 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         for pos in hold_keys_to_flush {
             if let Some(item) = self.holding_buffer.get_mut(pos) {
                 match *item {
-                    HoldingKey::TapHold(e) => {
+                    HoldingKey::TapHold {
+                        meta,
+                        tap_action,
+                        hold_action,
+                        ..
+                    } => {
+                        let e = meta;
                         if e.key_event.col == key_event.col && e.key_event.row == key_event.row {
                             //self should be tap
-                            debug!("Current Key {:?} become {:?}", e.key_event, e.tap_action());
+                            debug!("Current Key {:?} become {:?}", e.key_event, tap_action);
                             // self.timer[e.key_event.col as usize][e.key_event.row as usize] = None;
-                            self.process_key_action_normal(e.tap_action(), e.key_event).await;
+                            self.process_key_action_normal(tap_action, e.key_event).await;
                         } else if e.state == Initial && e.pressed_time < pressed_time {
-                            debug!("Key {:?} become {:?}", e.key_event, e.hold_action());
+                            debug!("Key {:?} become {:?}", e.key_event, hold_action);
                             // self.timer[e.key_event.col as usize][e.key_event.row as usize] = None;
-                            self.process_key_action_normal(e.hold_action(), e.key_event).await;
+                            self.process_key_action_normal(hold_action, e.key_event).await;
                         } else if e.state == Initial && e.pressed_time >= pressed_time {
-                            debug!("Key {:?} become {:?}", e.key_event, e.tap_action());
-                            self.process_key_action_normal(e.tap_action(), e.key_event).await;
+                            debug!("Key {:?} become {:?}", e.key_event, tap_action);
+                            self.process_key_action_normal(tap_action, e.key_event).await;
                         } else {
                             debug!("ignore : {:?}, pressed_time {}", e, e.pressed_time.as_millis());
                         }
                     }
-                    HoldingKey::Others(e) => {
-                        debug!("Tap Key {:?} now press down", e.key_event);
+                    HoldingKey::Others { meta, key_action, .. } => {
+                        debug!("Tap Key {:?} now press down", meta.key_event);
                         //TODO ignored return value
-                        self.process_key_action(e.key_action, e.key_event).await;
+                        self.process_key_action(key_action, meta.key_event).await;
                     }
                 }
             }
             //update state in buffer
             if let Some(item) = self.holding_buffer.get_mut(pos) {
                 match *item {
-                    HoldingKey::TapHold(ref mut e) => {
-                        if e.key_event.col == key_event.col && e.key_event.row == key_event.row {
+                    HoldingKey::TapHold {
+                        ref mut meta,
+                        tap_action,
+                        hold_action,
+                        ..
+                    } => {
+                        if meta.key_event.col == key_event.col && meta.key_event.row == key_event.row {
                             //self should be tap
-                            debug!("Current Key {:?} mark {:?}", e.key_event, e.tap_action());
+                            debug!("Current Key {:?} mark {:?}", meta.key_event, tap_action);
                             // self.timer[e.key_event.col as usize][e.key_event.row as usize] = None;
-                            e.state = TapHoldState::PostTap;
-                        } else if e.state == Initial && e.pressed_time < pressed_time {
-                            debug!("Key {:?} become {:?}", e.key_event, e.hold_action());
+                            meta.state = TapHoldState::PostTap;
+                        } else if meta.state == Initial && meta.pressed_time < pressed_time {
+                            debug!("Key {:?} become {:?}", meta.key_event, hold_action);
                             // self.timer[e.key_event.col as usize][e.key_event.row as usize] = None;
-                            e.state = TapHoldState::PostHold;
-                        } else if e.state == Initial && e.pressed_time >= pressed_time {
-                            debug!("Key {:?} become {:?}", e.key_event, e.tap_action());
-                            e.state = TapHoldState::PostTap;
+                            meta.state = TapHoldState::PostHold;
+                        } else if meta.state == Initial && meta.pressed_time >= pressed_time {
+                            debug!("Key {:?} become {:?}", meta.key_event, tap_action);
+                            meta.state = TapHoldState::PostTap;
                         } else {
-                            debug!("ignore : {:?}, pressed_time {}", e, e.pressed_time.as_millis());
+                            debug!("ignore : {:?}, pressed_time {}", meta, meta.pressed_time.as_millis());
                         }
                     }
-                    HoldingKey::Others(ref mut e) => {
-                        debug!("Tap Key {:?} now press down", e.key_event);
+                    HoldingKey::Others { ref mut meta, .. } => {
+                        debug!("Tap Key {:?} now press down", meta.key_event);
                         //TODO ignored return value
-                        e.state = TapHoldState::PostTap;
+                        meta.state = TapHoldState::PostTap;
                     }
                 }
             }
@@ -1815,38 +1808,66 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     // save pressed tap hold key into waiting list
-    fn tap_hold_save_new_pressed(&mut self, pressedKeyEvent: PressedTapHold) {
+    fn tap_hold_save_new_pressed(
+        &mut self,
+        key_event: KeyEvent,
+        tap_action: Action,
+        hold_action: Action,
+        deadline: Instant,
+        state: TapHoldState,
+    ) {
+        let pressed_time = self.timer[key_event.col as usize][key_event.row as usize].unwrap();
+        let new_item = HoldingKey::TapHold {
+            meta: KeyMeta {
+                state: state,
+                key_event: key_event,
+                pressed_time: pressed_time,
+            },
+            tap_action: tap_action,
+            hold_action: hold_action,
+            deadline: deadline,
+        };
+        debug!("[TAP-HOLD] --> Save TapHold : {:?}", new_item);
         // If the slot is found, update the key in the slot
-        debug!("[TAP-HOLD] --> Save TapHold : {:?}", pressedKeyEvent.key_event);
-        let _ = self.push_and_sort_buffers(HoldingKey::TapHold(pressedKeyEvent));
+        let _ = self.push_and_sort_buffers(new_item);
 
-        self.chord_state = Some(ChordHoldState::create(pressedKeyEvent.key_event, ROW, COL));
+        self.chord_state = Some(ChordHoldState::create(key_event, ROW, COL));
     }
 
     // buffer a single key press , wait for later eval
-    fn tap_hold_buffering_new_key(&mut self, key_press: KeyPress) {
+    fn tap_hold_buffering_new_key(&mut self, key_event: KeyEvent, key_action: KeyAction) {
         // If the slot is found, update the key in the slot
+        let pressed_time = self.timer[key_event.col as usize][key_event.row as usize].unwrap();
+
+        let item = HoldingKey::Others {
+            meta: KeyMeta {
+                state: Initial,
+                key_event: key_event,
+                pressed_time: pressed_time,
+            },
+            key_action: key_action,
+        };
         debug!(
             "Save new Tapping key into buffer: {:?}, size({})",
-            key_press,
+            item,
             self.holding_buffer.len()
         );
-        let _ = self.push_and_sort_buffers(HoldingKey::Others(key_press));
+        let _ = self.push_and_sort_buffers(item);
     }
 
     /// only match tap hold key in buffer, ignore other key events
     fn find_tap_hold_key_index(&self, key_event: KeyEvent) -> Option<usize> {
         //release an unprocessed key
         self.holding_buffer.iter().enumerate().find_map(|(pos, i)| match i {
-            HoldingKey::TapHold(e) => {
-                if e.key_event.row == key_event.row && e.key_event.col == key_event.col {
+            HoldingKey::TapHold { meta, .. } => {
+                if meta.key_event.row == key_event.row && meta.key_event.col == key_event.col {
                     Some(pos)
                 } else {
                     None
                 }
             }
-            HoldingKey::Others(e) => {
-                if e.key_event.row == key_event.row && e.key_event.col == key_event.col {
+            HoldingKey::Others { meta, .. } => {
+                if meta.key_event.row == key_event.row && meta.key_event.col == key_event.col {
                     Some(pos)
                 } else {
                     None
@@ -1864,7 +1885,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .position(|e| e.is_tap_hold() && e.key_event().row == key_event.row && e.key_event().col == key_event.col)
         {
             return match self.holding_buffer.remove(pos) {
-                HoldingKey::TapHold(_) => true,
+                HoldingKey::TapHold { .. } => true,
                 _ => false,
             };
         }
@@ -1875,33 +1896,34 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         //find pre released key and remove from buffer
         if self.holding_buffer.len() > 0 {
             self.holding_buffer.iter().enumerate().for_each(|(_, e)| match e {
-                HoldingKey::Others(e) => if e.state == Initial && e.pressed_time <= release_time {},
-                HoldingKey::TapHold(_) => {}
+                HoldingKey::Others { meta, .. } => if meta.state == Initial && meta.pressed_time <= release_time {},
+                HoldingKey::TapHold { .. } => {}
             })
         }
     }
 
     //TODO improve performance
-    fn find_next_timeout_event(&mut self) -> Option<PressedTapHold> {
+    fn find_next_timeout_event(&mut self) -> Option<TapHoldTimer> {
         //release an unprocessed key
         if self.holding_buffer.len() > 0 {
-            Some(
-                self.holding_buffer
-                    .iter()
-                    .filter_map(|e| match e {
-                        HoldingKey::TapHold(e) => {
-                            //
-                            if e.state == Initial {
-                                Some(e)
-                            } else {
-                                None
-                            }
+            self.holding_buffer
+                .iter()
+                .filter_map(|e| match e {
+                    HoldingKey::TapHold { meta, deadline, .. } => {
+                        //
+                        if meta.state == Initial {
+                            Some(TapHoldTimer {
+                                key_event: meta.key_event,
+                                pressed_time: meta.pressed_time,
+                                deadline: deadline.clone(),
+                            })
+                        } else {
+                            None
                         }
-                        _ => None,
-                    })
-                    .min_by_key(|e| e.deadline)
-                    .cloned()?,
-            )
+                    }
+                    _ => None,
+                })
+                .min_by_key(|e| e.deadline)
         } else {
             None?
         }
