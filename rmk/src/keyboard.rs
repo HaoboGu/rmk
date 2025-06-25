@@ -326,7 +326,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             debug!("{:?} timeout and send HOLD action", event.key_event);
                             hold_key.update_state(PostHold);
 
-                            self.holding_buffer.push(hold_key).ok();
+                            self.push_and_sort_buffers(hold_key).ok();
                         }
                         _ => {
                             //marked as post hold
@@ -351,7 +351,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     // do clean up for leak keys
     pub(crate) async fn release_buffering_tap_keys_in_loop(&mut self) {
         // Remove any HoldingKey::Others in PostTap state from the buffer
-        self.sort_buffers();
 
         self.holding_buffer.retain(|e| match e {
             HoldingKey::Others(tap) => match tap.state {
@@ -840,6 +839,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter(|combo| !combo.is_triggered())
             .for_each(Combo::reset);
+    }
+
+    // sort buffer order by start_time ASC
+    fn push_and_sort_buffers(&mut self, item: HoldingKey) -> Result<(), ()> {
+        self.holding_buffer.push(item).ok();
+        self.sort_buffers();
+        Ok(())
     }
 
     fn sort_buffers(&mut self) {
@@ -1724,9 +1730,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Instant::now()
         };
 
-        // sort by start time desc
-        self.sort_buffers();
-
         let hold_keys_to_flush: Vec<_, HOLD_BUFFER_SIZE> = self
             .holding_buffer
             .iter()
@@ -1815,7 +1818,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn tap_hold_save_new_pressed(&mut self, pressedKeyEvent: PressedTapHold) {
         // If the slot is found, update the key in the slot
         debug!("[TAP-HOLD] --> Save TapHold : {:?}", pressedKeyEvent.key_event);
-        let _ = self.holding_buffer.push(HoldingKey::TapHold(pressedKeyEvent));
+        let _ = self.push_and_sort_buffers(HoldingKey::TapHold(pressedKeyEvent));
 
         self.chord_state = Some(ChordHoldState::create(pressedKeyEvent.key_event, ROW, COL));
     }
@@ -1828,7 +1831,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             key_press,
             self.holding_buffer.len()
         );
-        let _ = self.holding_buffer.push(HoldingKey::Others(key_press));
+        let _ = self.push_and_sort_buffers(HoldingKey::Others(key_press));
     }
 
     /// only match tap hold key in buffer, ignore other key events
