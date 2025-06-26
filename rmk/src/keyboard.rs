@@ -24,6 +24,8 @@ use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
+#[cfg(all(feature = "split", feature = "_ble"))]
+use crate::split::ble::central::update_activity_time;
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
 
 /// State machine for one shot keys
@@ -220,6 +222,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if key_event.pressed {
             self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
         }
+
+        // Update activity time for BLE split central sleep management
+        #[cfg(all(feature = "split", feature = "_ble"))]
+        update_activity_time();
 
         // Process key
         let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
