@@ -277,14 +277,14 @@ pub(crate) async fn run_ble<
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
-                                // Change the connection parameter to reduce the power consumption
+                                // Enter sleep mode to reduce the power consumption
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
                                 // Wait for the keyboard report for wake the keyboard
                                 let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
 
-                                // Restore the connection parameter
+                                // Quit from sleep mode
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(false);
                                 continue;
@@ -332,14 +332,14 @@ pub(crate) async fn run_ble<
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
-                                // Change the connection parameter to reduce the power consumption
+                                // Enter sleep mode to reduce the power consumption
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(true);
 
                                 // Wait for the keyboard report for wake the keyboard
                                 let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
 
-                                // Restore the connection parameter
+                                // Quit from sleep mode
                                 #[cfg(feature = "split")]
                                 CENTRAL_SLEEP.signal(false);
 
