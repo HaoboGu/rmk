@@ -93,12 +93,6 @@ pub(crate) fn rmk_entry_select(
                             #idx,
                             peripheral_addrs[#idx],
                             &stack,
-                            ::rmk::split::ble::central::SleepConfig {
-                                timeout_minutes: rmk_config.split_central_sleep_timeout_minutes,
-                                connected_interval_us: rmk_config.split_central_sleep_connected_interval_us,
-                                advertising_interval_us: rmk_config.split_central_sleep_advertising_interval_us,
-                                normal_interval_us: rmk_config.split_central_normal_interval_us,
-                            },
                         )
                     });
                 });

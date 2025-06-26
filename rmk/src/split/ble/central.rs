@@ -20,7 +20,10 @@ use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
 use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
 use crate::storage::{FlashOperationMessage, Storage};
-use crate::CONNECTION_STATE;
+use crate::{
+    CONNECTION_STATE, SPLIT_CENTRAL_NORMAL_INTERVAL_US, SPLIT_CENTRAL_SLEEP_ADVERTISING_INTERVAL_US,
+    SPLIT_CENTRAL_SLEEP_CONNECTED_INTERVAL_US, SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES,
+};
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
@@ -34,15 +37,6 @@ pub(crate) static ACTIVITY_WAKEUP: Signal<crate::RawMutex, ()> = Signal::new();
 enum SleepState {
     Awake,
     Sleeping,
-}
-
-/// Sleep configuration
-#[derive(Debug, Clone, Copy)]
-pub struct SleepConfig {
-    pub timeout_minutes: u32,
-    pub connected_interval_us: u32,
-    pub advertising_interval_us: u32,
-    pub normal_interval_us: u32,
 }
 
 /// Gatt service used in split central to send split message to peripheral
@@ -129,7 +123,6 @@ pub(crate) async fn run_ble_peripheral_manager<
     peripheral_id: usize,
     addr: Option<[u8; 6]>,
     stack: &'a Stack<'a, C, DefaultPacketPool>,
-    sleep_config: SleepConfig,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
     let address = match addr {
@@ -175,8 +168,8 @@ pub(crate) async fn run_ble_peripheral_manager<
     info!("Peripheral peer address: {:?}", address);
     let config = ConnectConfig {
         connect_params: ConnectParams {
-            min_connection_interval: Duration::from_micros(sleep_config.normal_interval_us as u64),
-            max_connection_interval: Duration::from_micros(sleep_config.normal_interval_us as u64),
+            min_connection_interval: Duration::from_micros(SPLIT_CENTRAL_NORMAL_INTERVAL_US as u64),
+            max_connection_interval: Duration::from_micros(SPLIT_CENTRAL_NORMAL_INTERVAL_US as u64),
             max_latency: 400, // 3s
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
@@ -203,7 +196,6 @@ pub(crate) async fn run_ble_peripheral_manager<
             stack,
             &mut central,
             &config,
-            sleep_config,
             #[cfg(feature = "controller")]
             &mut controller_pub,
         )
@@ -231,7 +223,6 @@ async fn connect_and_run_peripheral_manager<
     stack: &'a Stack<'a, C, P>,
     central: &mut Central<'a, C, P>,
     config: &ConnectConfig<'_>,
-    sleep_config: SleepConfig,
     #[cfg(feature = "controller")] controller_pub: &mut ControllerPub,
 ) -> Result<(), BleHostError<C::Error>> {
     let conn = central.connect(config).await?;
@@ -251,8 +242,8 @@ async fn connect_and_run_peripheral_manager<
         stack,
         &conn,
         &ConnectParams {
-            min_connection_interval: Duration::from_micros(sleep_config.normal_interval_us as u64),
-            max_connection_interval: Duration::from_micros(sleep_config.normal_interval_us as u64),
+            min_connection_interval: Duration::from_micros(SPLIT_CENTRAL_NORMAL_INTERVAL_US as u64),
+            max_connection_interval: Duration::from_micros(SPLIT_CENTRAL_NORMAL_INTERVAL_US as u64),
             max_latency: 400, // 3s
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
@@ -263,7 +254,7 @@ async fn connect_and_run_peripheral_manager<
     match select3(
         ble_central_task(&client, &conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
-        sleep_manager_task(stack, &conn, sleep_config),
+        sleep_manager_task(stack, &conn),
     )
     .await
     {
@@ -451,19 +442,21 @@ pub(crate) async fn wait_for_stack_started() {
 async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     stack: &'a Stack<'a, C, P>,
     conn: &Connection<'a, P>,
-    sleep_config: SleepConfig,
 ) -> Result<(), BleHostError<C::Error>> {
     // Skip sleep management if timeout is 0 (disabled)
-    if sleep_config.timeout_minutes == 0 {
+    if SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES == 0 {
         info!("Sleep management disabled (timeout = 0)");
         core::future::pending::<()>().await;
         return Ok(());
     }
 
     let mut sleep_state = SleepState::Awake;
-    let sleep_timeout_ms = sleep_config.timeout_minutes as u64 * 60 * 1000;
+    let sleep_timeout_ms = SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES as u64 * 60 * 1000;
 
-    info!("Sleep manager started with {}min timeout", sleep_config.timeout_minutes);
+    info!(
+        "Sleep manager started with {}min timeout",
+        SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES
+    );
 
     loop {
         match sleep_state {
@@ -477,7 +470,7 @@ async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P:
                         // Timeout: enter sleep mode
                         info!(
                             "Entering sleep mode after {}min of inactivity",
-                            sleep_config.timeout_minutes
+                            SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES
                         );
                         sleep_state = SleepState::Sleeping;
                         CENTRAL_SLEEP.signal(true);
@@ -485,9 +478,9 @@ async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P:
                         // Check if we're connected to host or advertising
                         let is_connected = CONNECTION_STATE.load(Ordering::Acquire);
                         let sleep_interval_us = if is_connected {
-                            sleep_config.connected_interval_us
+                            SPLIT_CENTRAL_SLEEP_CONNECTED_INTERVAL_US
                         } else {
-                            sleep_config.advertising_interval_us
+                            SPLIT_CENTRAL_SLEEP_ADVERTISING_INTERVAL_US
                         };
 
                         // Adjust connection parameters for sleep mode
@@ -508,7 +501,7 @@ async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P:
                 CENTRAL_SLEEP.signal(false);
 
                 // Restore normal connection parameters
-                adjust_peripheral_connection_params(stack, conn, false, sleep_config.normal_interval_us).await;
+                adjust_peripheral_connection_params(stack, conn, false, SPLIT_CENTRAL_NORMAL_INTERVAL_US).await;
             }
         }
     }

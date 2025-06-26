@@ -8,7 +8,7 @@
 2. **智能睡眠状态连接管理**：保留Central对主机的连接，根据连接状态动态调整与Peripheral的通信频率来节省电量
 3. **按键唤醒**：按下Central或Peripheral的任意按键，立即退出睡眠状态，恢复正常连接参数
 4. **可重复睡眠**：唤醒后如果再次超时没有按键活动，可以再次进入睡眠
-5. **完全可配置**：所有睡眠参数都可以在`keyboard.toml`中配置
+5. **完全可配置**：所有睡眠参数都可以在`keyboard.toml`中配置，编译时生成常量
 
 ## 实现细节
 
@@ -28,18 +28,21 @@ split_central_sleep_advertising_interval_us = 200000  # 200ms
 split_central_normal_interval_us = 7500  # 7.5ms
 ```
 
+### 编译时常量生成
+
+配置参数在构建时通过`build.rs`转换为编译时常量：
+
+```rust
+// 在build.rs中生成的常量
+pub(crate) const SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES: u32 = 30;
+pub(crate) const SPLIT_CENTRAL_SLEEP_CONNECTED_INTERVAL_US: u32 = 15000;
+pub(crate) const SPLIT_CENTRAL_SLEEP_ADVERTISING_INTERVAL_US: u32 = 200000;
+pub(crate) const SPLIT_CENTRAL_NORMAL_INTERVAL_US: u32 = 7500;
+```
+
 ### 核心数据结构
 
 ```rust
-/// 睡眠配置结构
-#[derive(Debug, Clone, Copy)]
-pub struct SleepConfig {
-    pub timeout_minutes: u32,           // 睡眠超时时间（分钟）
-    pub connected_interval_us: u32,     // 连接状态下的睡眠间隔
-    pub advertising_interval_us: u32,   // 广播状态下的睡眠间隔
-    pub normal_interval_us: u32,        // 正常工作间隔
-}
-
 /// 睡眠状态枚举
 enum SleepState {
     Awake,      // 清醒状态
@@ -74,6 +77,7 @@ pub(crate) fn update_activity_time() {
 - **按需超时**：只在需要时设置定时器，节省CPU资源
 - **智能连接参数**：根据连接状态动态选择睡眠间隔
 - **可配置超时**：支持通过配置禁用睡眠功能（设为0）
+- **编译时优化**：使用编译时常量，零运行时开销
 
 #### 3. 智能连接参数调整
 `adjust_peripheral_connection_params` 函数根据连接状态选择合适的睡眠参数：
@@ -92,17 +96,19 @@ pub(crate) fn update_activity_time() {
 - 每次处理按键事件时调用 `update_activity_time()`
 - 确保Central本地的按键也能重置睡眠计时器
 
-#### 3. 配置驱动的初始化
-在 `run_peripheral_manager()` 函数中：
-- 从`rmk_config`读取睡眠配置参数
-- 创建`SleepConfig`实例并传递给睡眠管理任务
+#### 3. 编译时常量集成
+在 `rmk/build.rs` 中：
+- 读取`keyboard.toml`配置参数
+- 使用`const_declaration!`宏生成编译时常量
+- 在代码中直接使用这些常量，无运行时开销
 
 ## 工作流程
 
 ### 事件驱动的睡眠流程
-1. Central连接到主机和Peripheral，睡眠管理器启动
-2. 系统等待第一个按键活动或超时
-3. 如果超时到达（默认30分钟无活动）：
+1. 编译时根据配置生成睡眠常量
+2. Central连接到主机和Peripheral，睡眠管理器启动
+3. 系统等待第一个按键活动或超时
+4. 如果超时到达（默认30分钟无活动）：
    - 进入睡眠状态，设置睡眠标志
    - 检查连接状态，选择合适的睡眠间隔：
      - 连接状态：15ms间隔，适合快速响应
@@ -133,6 +139,7 @@ pub(crate) fn update_activity_time() {
 - **零CPU浪费**：无定期轮询，CPU在无活动时完全休眠
 - **即时响应**：按键触发立即唤醒，无轮询延迟
 - **内存优化**：去除时间戳存储，减少RAM占用
+- **编译时优化**：所有配置都是编译时常量，零运行时开销
 
 ## 配置参数说明
 
@@ -158,8 +165,14 @@ split_central_normal_interval_us = 7500         # 正常7.5ms间隔
 # split_central_sleep_timeout_minutes = 0
 ```
 
-## 优势总结
+## 实现优势
 
+### 编译时优化
+- **零运行时配置开销**：所有参数都是编译时常量
+- **更好的编译器优化**：编译器可以进行更激进的优化
+- **减少二进制大小**：无需运行时配置解析代码
+
+### 架构设计
 1. **事件驱动架构**：零轮询，最大化CPU效率
 2. **智能功耗管理**：根据连接状态动态调整策略
 3. **即时响应**：按键唤醒无延迟
@@ -167,4 +180,4 @@ split_central_normal_interval_us = 7500         # 正常7.5ms间隔
 5. **内存优化**：减少RAM占用，适合嵌入式环境
 6. **渐进式节能**：在保持响应性的前提下最大化电池寿命
 
-这个实现提供了一个高度优化和用户友好的睡眠管理解决方案，在保持优秀响应性的同时显著延长电池寿命。
+这个实现提供了一个高度优化和用户友好的睡眠管理解决方案，通过编译时常量和事件驱动架构，在保持优秀响应性的同时显著延长电池寿命，且具有最小的运行时开销。

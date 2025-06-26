@@ -25,7 +25,6 @@ use crate::matrix::{KeyState, MatrixTrait};
 /// * `id` - peripheral id
 /// * `addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
 /// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
-/// * `sleep_config` - (optional) sleep configuration for BLE split central. This argument is enabled only for BLE split now
 pub async fn run_peripheral_manager<
     'a,
     const ROW: usize,
@@ -38,13 +37,12 @@ pub async fn run_peripheral_manager<
     id: usize,
     #[cfg(feature = "_ble")] addr: Option<[u8; 6]>,
     #[cfg(feature = "_ble")] stack: &'a Stack<'a, C, DefaultPacketPool>,
-    #[cfg(feature = "_ble")] sleep_config: crate::split::ble::central::SleepConfig,
     #[cfg(not(feature = "_ble"))] receiver: S,
 ) {
     #[cfg(feature = "_ble")]
     {
         use crate::split::ble::central::run_ble_peripheral_manager;
-        run_ble_peripheral_manager::<C, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr, stack, sleep_config).await;
+        run_ble_peripheral_manager::<C, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, addr, stack).await;
     };
 
     #[cfg(not(feature = "_ble"))]
