@@ -83,6 +83,18 @@ pub struct RmkConstantsConfig {
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
+    /// BLE Split Central sleep timeout in minutes (0 = disabled)
+    #[serde_inline_default(30)]
+    pub split_central_sleep_timeout_minutes: u32,
+    /// BLE Split Central sleep connection interval in microseconds when connected to host
+    #[serde_inline_default(15000)]
+    pub split_central_sleep_connected_interval_us: u32,
+    /// BLE Split Central sleep connection interval in microseconds when advertising
+    #[serde_inline_default(200000)]
+    pub split_central_sleep_advertising_interval_us: u32,
+    /// BLE Split Central normal connection interval in microseconds
+    #[serde_inline_default(7500)]
+    pub split_central_normal_interval_us: u32,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -128,6 +140,10 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 1,
             split_message_channel_size: 4,
             ble_profiles_num: 3,
+            split_central_sleep_timeout_minutes: 30,
+            split_central_sleep_connected_interval_us: 15000,
+            split_central_sleep_advertising_interval_us: 200000,
+            split_central_normal_interval_us: 7500,
         }
     }
 }
