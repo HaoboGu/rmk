@@ -2,9 +2,9 @@ use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{select, select3, Either, Either3};
 use embassy_sync::signal::Signal;
-use embassy_time::Duration;
+use embassy_time::{Duration, Instant, Timer};
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
 #[cfg(feature = "controller")]
@@ -24,6 +24,24 @@ use crate::CONNECTION_STATE;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
 pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
+
+// Sleep-related signals and states
+pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
+pub(crate) static LAST_ACTIVITY_TIME: Signal<crate::RawMutex, Instant> = Signal::new();
+
+// Sleep timeout: 30 minutes
+const SLEEP_TIMEOUT_MS: u64 = 30 * 60 * 1000;
+// Sleep connection interval: 50ms for peripheral communication
+const SLEEP_PERIPHERAL_INTERVAL_US: u64 = 50000;
+// Normal connection interval: 7.5ms
+const NORMAL_PERIPHERAL_INTERVAL_US: u64 = 7500;
+
+/// Sleep state for BLE Split Central
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SleepState {
+    Awake,
+    Sleeping,
+}
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -228,23 +246,28 @@ async fn connect_and_run_peripheral_manager<
         stack,
         &conn,
         &ConnectParams {
-            min_connection_interval: Duration::from_micros(7500), // 7.5ms
-            max_connection_interval: Duration::from_micros(7500), // 7.5ms
-            max_latency: 400,                                     // 3s
+            min_connection_interval: Duration::from_micros(NORMAL_PERIPHERAL_INTERVAL_US),
+            max_connection_interval: Duration::from_micros(NORMAL_PERIPHERAL_INTERVAL_US),
+            max_latency: 400, // 3s
             supervision_timeout: Duration::from_secs(7),
             ..Default::default()
         },
     )
     .await;
 
-    match select(
+    // Initialize last activity time
+    LAST_ACTIVITY_TIME.signal(Instant::now());
+
+    match select3(
         ble_central_task(&client, &conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
+        sleep_manager_task(stack, &conn),
     )
     .await
     {
-        Either::First(e) => e,
-        Either::Second(e) => e,
+        Either3::First(e) => e,
+        Either3::Second(e) => e,
+        Either3::Third(e) => e,
     }
 }
 
@@ -355,6 +378,20 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
         let data = self.listener.next().await;
         let message = postcard::from_bytes(&data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
         info!("Received split message: {:?}", message);
+
+        // Update last activity time when receiving key events from peripheral
+        match &message {
+            SplitMessage::Key(_) => {
+                debug!("Key activity detected from peripheral");
+                update_activity_time();
+            }
+            SplitMessage::Event(_) => {
+                debug!("Event activity detected from peripheral");
+                update_activity_time();
+            }
+            _ => {}
+        }
+
         Ok(message)
     }
 }
@@ -405,4 +442,96 @@ pub(crate) async fn wait_for_stack_started() {
         }
         embassy_time::Timer::after_millis(500).await;
     }
+}
+
+/// Sleep manager task for BLE Split Central
+/// Handles sleep timeout and connection parameter adjustments
+async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    stack: &'a Stack<'a, C, P>,
+    conn: &Connection<'a, P>,
+) -> Result<(), BleHostError<C::Error>> {
+    let mut sleep_state = SleepState::Awake;
+    let mut last_check = LAST_ACTIVITY_TIME.wait().await;
+
+    loop {
+        // Wait for either timeout or activity update
+        let timeout = Timer::after_millis(5000); // Check every 5 seconds
+        let activity_update = LAST_ACTIVITY_TIME.wait();
+
+        match select(timeout, activity_update).await {
+            Either::First(_) => {
+                // Timeout: check if we should sleep or wake up
+                let time_since_activity = last_check.elapsed().as_millis() as u64;
+
+                match sleep_state {
+                    SleepState::Awake => {
+                        if time_since_activity >= SLEEP_TIMEOUT_MS {
+                            info!("Entering sleep mode after {} ms of inactivity", time_since_activity);
+                            sleep_state = SleepState::Sleeping;
+                            CENTRAL_SLEEP.signal(true);
+
+                            // Adjust connection parameters for sleep mode
+                            adjust_peripheral_connection_params(stack, conn, true).await;
+                        }
+                    }
+                    SleepState::Sleeping => {
+                        // We're already sleeping, no action needed
+                    }
+                }
+            }
+            Either::Second(new_activity_time) => {
+                // Activity detected
+                if sleep_state == SleepState::Sleeping {
+                    info!("Waking up from sleep mode due to activity");
+                    sleep_state = SleepState::Awake;
+                    CENTRAL_SLEEP.signal(false);
+
+                    // Restore normal connection parameters
+                    adjust_peripheral_connection_params(stack, conn, false).await;
+                }
+                last_check = new_activity_time;
+            }
+        }
+    }
+}
+
+/// Adjust connection parameters between central and peripheral
+/// sleep_mode: true for sleep parameters, false for normal parameters
+async fn adjust_peripheral_connection_params<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+    stack: &'a Stack<'a, C, P>,
+    conn: &Connection<'a, P>,
+    sleep_mode: bool,
+) {
+    let (interval_us, max_latency, info_msg) = if sleep_mode {
+        (SLEEP_PERIPHERAL_INTERVAL_US, 800, "sleep mode (50ms interval)")
+    } else {
+        (NORMAL_PERIPHERAL_INTERVAL_US, 400, "normal mode (7.5ms interval)")
+    };
+
+    info!("Adjusting peripheral connection parameters for {}", info_msg);
+
+    update_conn_params(
+        stack,
+        conn,
+        &ConnectParams {
+            min_connection_interval: Duration::from_micros(interval_us),
+            max_connection_interval: Duration::from_micros(interval_us),
+            max_latency,
+            supervision_timeout: Duration::from_secs(7),
+            ..Default::default()
+        },
+    )
+    .await;
+}
+
+/// Update the last activity time to indicate user activity
+/// This function can be called from anywhere to update the activity time
+pub(crate) fn update_activity_time() {
+    LAST_ACTIVITY_TIME.signal(Instant::now());
+    debug!("Updated last activity time due to user activity");
+}
+
+/// Check if the central is currently in sleep mode
+pub(crate) fn is_central_sleeping() -> bool {
+    CENTRAL_SLEEP.signaled()
 }
