@@ -1,183 +1,183 @@
-# BLE Split Central 睡眠功能实现
+# BLE Split Central Sleep Feature Implementation
 
-## 功能概述
+## Feature Overview
 
-为BLE Split Central实现了基于按键超时的睡眠功能，除了现有的广播超时睡眠外，新增以下特性：
+Implemented key-timeout-based sleep functionality for BLE Split Central, adding the following features beyond the existing advertising timeout sleep:
 
-1. **按键超时睡眠**：在连接到主机后，如果指定时间（默认30分钟）没有任何按键活动（包括从Peripheral传来的按键），Central进入睡眠状态
-2. **智能睡眠状态连接管理**：保留Central对主机的连接，根据连接状态动态调整与Peripheral的通信频率来节省电量
-3. **按键唤醒**：按下Central或Peripheral的任意按键，立即退出睡眠状态，恢复正常连接参数
-4. **可重复睡眠**：唤醒后如果再次超时没有按键活动，可以再次进入睡眠
-5. **完全可配置**：所有睡眠参数都可以在`keyboard.toml`中配置，编译时生成常量
+1. **Key Timeout Sleep**: After connecting to the host, if there is no key activity (including keys from Peripheral) for a specified time (default 30 minutes), Central enters sleep state
+2. **Smart Sleep State Connection Management**: Maintains Central's connection to the host while dynamically adjusting communication frequency with Peripheral to save power based on connection state
+3. **Key Wake-up**: Pressing any key on Central or Peripheral immediately exits sleep state and restores normal connection parameters
+4. **Repeatable Sleep**: After waking up, if there is no key activity again for the timeout period, it can enter sleep again
+5. **Fully Configurable**: All sleep parameters can be configured in `keyboard.toml` and compiled into constants
 
-## 实现细节
+## Implementation Details
 
-### 新增的配置参数
+### New Configuration Parameters
 
-在`keyboard.toml`的`[rmk]`部分可以配置以下睡眠参数：
+The following sleep parameters can be configured in the `[rmk]` section of `keyboard.toml`:
 
 ```toml
 [rmk]
-# BLE Split Central 睡眠超时时间（分钟），0 = 禁用睡眠功能
+# BLE Split Central sleep timeout in minutes, 0 = disable sleep feature
 split_central_sleep_timeout_minutes = 30
-# 连接到主机时的睡眠连接间隔（微秒），确保快速打字不受影响
+# Sleep connection interval when connected to host (microseconds), ensures rapid typing is not affected
 split_central_sleep_connected_interval_us = 15000  # 15ms
-# 广播状态下的睡眠连接间隔（微秒），节省更多电量
+# Sleep connection interval when advertising (microseconds), saves more power
 split_central_sleep_advertising_interval_us = 200000  # 200ms
-# 正常工作时的连接间隔（微秒）
+# Normal working connection interval (microseconds)
 split_central_normal_interval_us = 7500  # 7.5ms
 ```
 
-### 编译时常量生成
+### Compile-time Constant Generation
 
-配置参数在构建时通过`build.rs`转换为编译时常量：
+Configuration parameters are converted to compile-time constants during build via `build.rs`:
 
 ```rust
-// 在build.rs中生成的常量
+// Constants generated in build.rs
 pub(crate) const SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES: u32 = 30;
 pub(crate) const SPLIT_CENTRAL_SLEEP_CONNECTED_INTERVAL_US: u32 = 15000;
 pub(crate) const SPLIT_CENTRAL_SLEEP_ADVERTISING_INTERVAL_US: u32 = 200000;
 pub(crate) const SPLIT_CENTRAL_NORMAL_INTERVAL_US: u32 = 7500;
 ```
 
-### 核心数据结构
+### Core Data Structures
 
 ```rust
-/// 睡眠状态枚举
+/// Sleep state enumeration
 enum SleepState {
-    Awake,      // 清醒状态
-    Sleeping,   // 睡眠状态
+    Awake,      // Awake state
+    Sleeping,   // Sleeping state
 }
 ```
 
-### 新增的信号管理
+### New Signal Management
 
 ```rust
-// 睡眠状态信号
+// Sleep state signal
 pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
-// 活动唤醒信号（事件驱动）
+// Activity wakeup signal (event-driven)
 pub(crate) static ACTIVITY_WAKEUP: Signal<crate::RawMutex, ()> = Signal::new();
 ```
 
-### 核心功能函数
+### Core Functions
 
-#### 1. 事件驱动的活动检测
+#### 1. Event-driven Activity Detection
 ```rust
-/// 更新活动时间以指示用户活动
-/// 这个函数触发活动唤醒信号用于睡眠管理
+/// Update activity time to indicate user activity
+/// This function triggers activity wakeup signal for sleep management
 pub(crate) fn update_activity_time() {
     ACTIVITY_WAKEUP.signal(());
     debug!("Activity detected, signaling wakeup");
 }
 ```
 
-#### 2. 事件驱动的睡眠管理任务
-`sleep_manager_task` 函数特性：
-- **零轮询设计**：完全基于事件驱动，没有定期轮询
-- **按需超时**：只在需要时设置定时器，节省CPU资源
-- **智能连接参数**：根据连接状态动态选择睡眠间隔
-- **可配置超时**：支持通过配置禁用睡眠功能（设为0）
-- **编译时优化**：使用编译时常量，零运行时开销
+#### 2. Event-driven Sleep Management Task
+`sleep_manager_task` function features:
+- **Zero Polling Design**: Completely event-driven with no periodic polling
+- **On-demand Timeout**: Only sets timers when needed, saving CPU resources
+- **Smart Connection Parameters**: Dynamically selects sleep intervals based on connection state
+- **Configurable Timeout**: Supports disabling sleep feature via configuration (set to 0)
+- **Compile-time Optimization**: Uses compile-time constants with zero runtime overhead
 
-#### 3. 智能连接参数调整
-`adjust_peripheral_connection_params` 函数根据连接状态选择合适的睡眠参数：
-- **连接状态下**：使用较短的睡眠间隔（默认15ms），确保突然的快速打字不受影响
-- **广播状态下**：使用较长的睡眠间隔（默认200ms），最大化节能效果
+#### 3. Smart Connection Parameter Adjustment
+`adjust_peripheral_connection_params` function selects appropriate sleep parameters based on connection state:
+- **When Connected**: Uses shorter sleep interval (default 15ms) to ensure sudden rapid typing is not affected
+- **When Advertising**: Uses longer sleep interval (default 200ms) to maximize power saving
 
-### 集成点
+### Integration Points
 
-#### 1. 在BLE Split Central驱动中检测按键活动
-在 `BleSplitCentralDriver::read()` 方法中：
-- 当接收到 `SplitMessage::Key` 或 `SplitMessage::Event` 时
-- 调用 `update_activity_time()` 触发唤醒信号
+#### 1. Key Activity Detection in BLE Split Central Driver
+In `BleSplitCentralDriver::read()` method:
+- When receiving `SplitMessage::Key` or `SplitMessage::Event`
+- Call `update_activity_time()` to trigger wakeup signal
 
-#### 2. 在键盘处理中检测本地按键活动
-在 `Keyboard::process_inner()` 方法中：
-- 每次处理按键事件时调用 `update_activity_time()`
-- 确保Central本地的按键也能重置睡眠计时器
+#### 2. Local Key Activity Detection in Keyboard Processing
+In `Keyboard::process_inner()` method:
+- Call `update_activity_time()` when processing each key event
+- Ensure Central's local keys can also reset the sleep timer
 
-#### 3. 编译时常量集成
-在 `rmk/build.rs` 中：
-- 读取`keyboard.toml`配置参数
-- 使用`const_declaration!`宏生成编译时常量
-- 在代码中直接使用这些常量，无运行时开销
+#### 3. Compile-time Constant Integration
+In `rmk/build.rs`:
+- Read configuration parameters from `keyboard.toml`
+- Generate compile-time constants using `const_declaration!` macro
+- Use these constants directly in code with no runtime overhead
 
-## 工作流程
+## Workflow
 
-### 事件驱动的睡眠流程
-1. 编译时根据配置生成睡眠常量
-2. Central连接到主机和Peripheral，睡眠管理器启动
-3. 系统等待第一个按键活动或超时
-4. 如果超时到达（默认30分钟无活动）：
-   - 进入睡眠状态，设置睡眠标志
-   - 检查连接状态，选择合适的睡眠间隔：
-     - 连接状态：15ms间隔，适合快速响应
-     - 广播状态：200ms间隔，最大化节能
-   - 调整Peripheral连接参数
+### Event-driven Sleep Process
+1. Generate sleep constants at compile time based on configuration
+2. Central connects to host and Peripheral, sleep manager starts
+3. System waits for first key activity or timeout
+4. If timeout is reached (default 30 minutes of no activity):
+   - Enter sleep state, set sleep flag
+   - Check connection state, select appropriate sleep interval:
+     - Connected state: 15ms interval, suitable for quick response
+     - Advertising state: 200ms interval, maximize power saving
+   - Adjust Peripheral connection parameters
 
-### 即时唤醒流程
-1. 检测到任何按键活动（Central或Peripheral）
-2. 立即触发唤醒信号，无延迟
-3. 退出睡眠状态：
-   - 清除睡眠标志
-   - 恢复正常连接参数（7.5ms间隔）
-   - 重新开始超时计时
+### Instant Wake-up Process
+1. Detect any key activity (Central or Peripheral)
+2. Immediately trigger wakeup signal with no delay
+3. Exit sleep state:
+   - Clear sleep flag
+   - Restore normal connection parameters (7.5ms interval)
+   - Restart timeout timer
 
-## 电量优化策略
+## Power Optimization Strategy
 
-### 连接状态下的优化
-- **适中节能**：15ms连接间隔，在节能和响应性之间取得平衡
-- **快速响应**：确保用户突然开始快速打字时不受影响
-- **保持连接**：维持与主机的连接，避免重新配对
+### Optimization When Connected
+- **Moderate Power Saving**: 15ms connection interval balances power saving and responsiveness
+- **Quick Response**: Ensures sudden rapid typing by user is not affected
+- **Maintain Connection**: Keep connection to host, avoid re-pairing
 
-### 广播状态下的优化
-- **最大节能**：200ms连接间隔，显著降低功耗
-- **可接受延迟**：广播状态下用户期望稍长的响应时间
-- **智能切换**：根据CONNECTION_STATE自动选择优化策略
+### Optimization When Advertising
+- **Maximum Power Saving**: 200ms connection interval significantly reduces power consumption
+- **Acceptable Delay**: Users expect slightly longer response time when advertising
+- **Smart Switching**: Automatically select optimization strategy based on CONNECTION_STATE
 
-### 事件驱动优势
-- **零CPU浪费**：无定期轮询，CPU在无活动时完全休眠
-- **即时响应**：按键触发立即唤醒，无轮询延迟
-- **内存优化**：去除时间戳存储，减少RAM占用
-- **编译时优化**：所有配置都是编译时常量，零运行时开销
+### Event-driven Advantages
+- **Zero CPU Waste**: No periodic polling, CPU completely sleeps when no activity
+- **Instant Response**: Key trigger immediately wakes up with no polling delay
+- **Memory Optimization**: Remove timestamp storage, reduce RAM usage
+- **Compile-time Optimization**: All configurations are compile-time constants with zero runtime overhead
 
-## 配置参数说明
+## Configuration Parameters
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `split_central_sleep_timeout_minutes` | 30 | 睡眠超时（分钟），设为0禁用 |
-| `split_central_sleep_connected_interval_us` | 15000 | 连接状态睡眠间隔（15ms） |
-| `split_central_sleep_advertising_interval_us` | 200000 | 广播状态睡眠间隔（200ms） |
-| `split_central_normal_interval_us` | 7500 | 正常工作间隔（7.5ms） |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `split_central_sleep_timeout_minutes` | 30 | Sleep timeout (minutes), set to 0 to disable |
+| `split_central_sleep_connected_interval_us` | 15000 | Connected state sleep interval (15ms) |
+| `split_central_sleep_advertising_interval_us` | 200000 | Advertising state sleep interval (200ms) |
+| `split_central_normal_interval_us` | 7500 | Normal working interval (7.5ms) |
 
-## 配置示例
+## Configuration Examples
 
 ```toml
 # keyboard.toml
 [rmk]
-# 睡眠相关配置
-split_central_sleep_timeout_minutes = 45       # 45分钟后睡眠
-split_central_sleep_connected_interval_us = 10000   # 连接时10ms间隔
-split_central_sleep_advertising_interval_us = 300000 # 广播时300ms间隔
-split_central_normal_interval_us = 7500         # 正常7.5ms间隔
+# Sleep-related configuration
+split_central_sleep_timeout_minutes = 45       # Sleep after 45 minutes
+split_central_sleep_connected_interval_us = 10000   # 10ms interval when connected
+split_central_sleep_advertising_interval_us = 300000 # 300ms interval when advertising
+split_central_normal_interval_us = 7500         # Normal 7.5ms interval
 
-# 禁用睡眠功能
+# Disable sleep feature
 # split_central_sleep_timeout_minutes = 0
 ```
 
-## 实现优势
+## Implementation Advantages
 
-### 编译时优化
-- **零运行时配置开销**：所有参数都是编译时常量
-- **更好的编译器优化**：编译器可以进行更激进的优化
-- **减少二进制大小**：无需运行时配置解析代码
+### Compile-time Optimization
+- **Zero Runtime Configuration Overhead**: All parameters are compile-time constants
+- **Better Compiler Optimization**: Compiler can perform more aggressive optimizations
+- **Reduced Binary Size**: No runtime configuration parsing code needed
 
-### 架构设计
-1. **事件驱动架构**：零轮询，最大化CPU效率
-2. **智能功耗管理**：根据连接状态动态调整策略
-3. **即时响应**：按键唤醒无延迟
-4. **完全可配置**：用户可根据需求调整所有参数
-5. **内存优化**：减少RAM占用，适合嵌入式环境
-6. **渐进式节能**：在保持响应性的前提下最大化电池寿命
+### Architecture Design
+1. **Event-driven Architecture**: Zero polling, maximize CPU efficiency
+2. **Smart Power Management**: Dynamically adjust strategy based on connection state
+3. **Instant Response**: Key wake-up with no delay
+4. **Fully Configurable**: Users can adjust all parameters according to needs
+5. **Memory Optimization**: Reduce RAM usage, suitable for embedded environments
+6. **Progressive Power Saving**: Maximize battery life while maintaining responsiveness
 
-这个实现提供了一个高度优化和用户友好的睡眠管理解决方案，通过编译时常量和事件驱动架构，在保持优秀响应性的同时显著延长电池寿命，且具有最小的运行时开销。
+This implementation provides a highly optimized and user-friendly sleep management solution that significantly extends battery life while maintaining excellent responsiveness through compile-time constants and event-driven architecture, with minimal runtime overhead.
