@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{Action, KeyAction};
 use crate::input_device::rotary_encoder::Direction;
-use crate::keycode::KeyCode::No;
 #[cfg(feature = "controller")]
 use crate::keycode::ModifierCombination;
 
@@ -127,19 +126,32 @@ pub enum ControllerEvent {
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum HoldingKey {
+pub struct TapHoldKey {
+    pub tap_action: KeyAction,
+    pub hold_action: KeyAction,
+    pub deadline: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum KeyKind {
     // tap hold key
     TapHold {
-        meta: KeyMeta,
         tap_action: Action,
         hold_action: Action,
         deadline: Instant,
     },
     // non tap hold key right now
-    Others {
-        meta: KeyMeta,
-        key_action: KeyAction,
-    },
+    Others(KeyAction),
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct HoldingKey {
+    pub state: TapHoldState,
+    pub key_event: KeyEvent,
+    pub pressed_time: Instant,
+    pub kind: KeyKind,
 }
 
 pub trait HoldingKeyTrait {
@@ -150,47 +162,47 @@ pub trait HoldingKeyTrait {
 
 impl HoldingKey {
     pub(crate) fn start_time(&self) -> Instant {
-        match self {
-            HoldingKey::TapHold { meta, .. } => meta.pressed_time,
-            HoldingKey::Others { meta, .. } => meta.pressed_time,
+        match self.kind {
+            KeyKind::TapHold { .. } => self.pressed_time,
+            KeyKind::Others(_) => self.pressed_time,
         }
     }
 
     pub(crate) fn key_event(&self) -> KeyEvent {
-        match self {
-            HoldingKey::TapHold { meta, .. } => meta.key_event,
-            HoldingKey::Others { meta, .. } => meta.key_event,
+        match self.kind {
+            KeyKind::TapHold { .. } => self.key_event,
+            KeyKind::Others(_) => self.key_event,
         }
     }
 
     pub(crate) fn is_tap_hold(&self) -> bool {
-        matches!(self, HoldingKey::TapHold { .. })
+        matches!(self.kind, KeyKind::TapHold { .. })
     }
 }
 
 impl HoldingKeyTrait for HoldingKey {
     fn update_state(&mut self, new_state: TapHoldState) {
-        match self {
-            HoldingKey::TapHold { meta: state, .. } => {
-                state.state = new_state;
+        match self.kind {
+            KeyKind::TapHold { .. } => {
+                self.state = new_state;
             }
-            HoldingKey::Others { meta: state, .. } => {
-                state.state = new_state;
+            KeyKind::Others(_) => {
+                self.state = new_state;
             }
         }
     }
 
     fn press_time(&self) -> Instant {
-        match self {
-            HoldingKey::TapHold { meta, .. } => meta.pressed_time,
-            HoldingKey::Others { meta, .. } => meta.pressed_time,
+        match self.kind {
+            KeyKind::TapHold { .. } => self.pressed_time,
+            KeyKind::Others(_) => self.pressed_time,
         }
     }
 
     fn state(&self) -> TapHoldState {
-        match self {
-            HoldingKey::TapHold { meta: state, .. } => state.state,
-            HoldingKey::Others { meta: state, .. } => state.state,
+        match self.kind {
+            KeyKind::TapHold { .. } => self.state,
+            KeyKind::Others(_) => self.state,
         }
     }
 }
@@ -219,14 +231,5 @@ pub enum TapHoldState {
 pub struct TapHoldTimer {
     pub key_event: KeyEvent,
     pub deadline: Instant,
-    pub pressed_time: Instant,
-}
-
-// the changable parts, can be update next
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyMeta {
-    pub state: TapHoldState,
-    pub key_event: KeyEvent,
     pub pressed_time: Instant,
 }
