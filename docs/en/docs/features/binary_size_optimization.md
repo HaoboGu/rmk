@@ -103,3 +103,14 @@ You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate a
 ```toml
 rmk = { version = "0.7", default-features = false, features = ["col2row"] }
 ```
+
+If you re using `keyboard.toml`, you'll also need to disable the storage or defmt in toml config:
+
+```toml
+# Disable storage and defmt in keyboard.toml
+[storage]
+enabled = false
+
+[dependency]
+defmt_log = false
+```

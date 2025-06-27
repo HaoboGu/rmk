@@ -187,7 +187,7 @@ pub async fn run_rmk<
         + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
         + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
     const ROW: usize,
     const COL: usize,

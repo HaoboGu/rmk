@@ -139,7 +139,6 @@ pub(crate) enum StorageData {
     KeymapConfig(EeKeymapConfig),
     KeymapKey(KeymapKey),
     EncoderConfig(EncoderConfig),
-    // TODO: To reduce the size of this enum, is it worth to store macro data in another storage?
     MacroData([u8; MACRO_SPACE_SIZE]),
     ComboData(ComboData),
     ConnectionType(u8),
@@ -236,8 +235,20 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::MacroData as u8;
-                buffer[1..MACRO_SPACE_SIZE + 1].copy_from_slice(d);
-                Ok(MACRO_SPACE_SIZE + 1)
+                let mut idx = MACRO_SPACE_SIZE - 1;
+                // Check from the end of the macro buffer, find the first non-zero byte
+                while let Some(b) = d.get(idx) {
+                    if *b != 0 || idx == 0 {
+                        break;
+                    }
+                    idx -= 1;
+                }
+                let data_len = idx + 1;
+                // Macro data length
+                buffer[1..3].copy_from_slice(&(data_len as u16).to_le_bytes());
+                // Macro data
+                buffer[3..3 + data_len].copy_from_slice(&d[..data_len]);
+                Ok(data_len + 3)
             }
             StorageData::ComboData(combo) => {
                 if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
@@ -396,11 +407,16 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::MacroData => {
-                    if buffer.len() < MACRO_SPACE_SIZE + 1 {
+                    if buffer.len() < 3 {
                         return Err(SerializationError::InvalidData);
                     }
                     let mut buf = [0_u8; MACRO_SPACE_SIZE];
-                    buf.copy_from_slice(&buffer[1..MACRO_SPACE_SIZE + 1]);
+                    let macro_length = u16::from_le_bytes(buffer[1..3].try_into().unwrap()) as usize;
+                    if macro_length > MACRO_SPACE_SIZE + 1 || buffer.len() < 3 + macro_length {
+                        // Check length
+                        return Err(SerializationError::InvalidData);
+                    }
+                    buf[0..macro_length].copy_from_slice(&buffer[3..3 + macro_length]);
                     Ok(StorageData::MacroData(buf))
                 }
                 StorageKeys::ComboData => {
@@ -1238,6 +1254,7 @@ fn print_storage_error<F: AsyncNorFlash>(e: SSError<F::Error>) {
         SSError::BufferTooBig => error!("Buffer too big"),
         SSError::BufferTooSmall(x) => error!("Buffer too small, needs {} bytes", x),
         SSError::SerializationError(e) => error!("Map value error: {}", e),
+        SSError::ItemTooBig => error!("Item too big"),
         _ => error!("Unknown storage error"),
     }
 }

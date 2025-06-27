@@ -76,7 +76,6 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
                     use defmt_rtt as _;
                 }
             } else {
-                // TODO: use panic_halt when defmt_log is disabled
                 quote! {
                     use panic_probe as _;
 

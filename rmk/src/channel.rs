@@ -69,7 +69,6 @@ pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
 // Channel for publish split messages to all peripherals
-// TODO: replace 3 to the number of the peripherals
 #[cfg(feature = "split")]
 pub(crate) static SPLIT_MESSAGE_PUBLISHER: PubSubChannel<
     RawMutex,

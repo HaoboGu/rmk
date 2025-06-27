@@ -15,6 +15,9 @@ use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
+
+#[cfg(feature = "split")]
+use crate::split::ble::central::CENTRAL_SLEEP;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{send_controller_event, CONTROLLER_CHANNEL},
@@ -282,8 +285,17 @@ pub(crate) async fn run_ble<
                                 BLE_CONNECTION_STATE.store(255, Ordering::Relaxed);
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+
+                                // Change the connection parameter to reduce the power consumption
+                                #[cfg(feature = "split")]
+                                CENTRAL_SLEEP.signal(true);
+
                                 // Wait for the keyboard report for wake the keyboard
                                 let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+
+                                // Restore the connection parameter
+                                #[cfg(feature = "split")]
+                                CENTRAL_SLEEP.signal(false);
                                 continue;
                             }
                             _ => {}
@@ -325,12 +337,25 @@ pub(crate) async fn run_ble<
                                 .await;
                             }
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
+                                #[cfg(feature = "split")]
+                                use crate::split::ble::central::CENTRAL_SLEEP;
+
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+
+                                // Change the connection parameter to reduce the power consumption
+                                #[cfg(feature = "split")]
+                                CENTRAL_SLEEP.signal(true);
+
                                 // Wait for the keyboard report for wake the keyboard
                                 let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+
+                                // Restore the connection parameter
+                                #[cfg(feature = "split")]
+                                CENTRAL_SLEEP.signal(false);
+
                                 continue;
                             }
                             _ => {}
