@@ -290,7 +290,9 @@ impl Default for KeyboardUsbConfig<'_> {
 }
 
 mod tests {
-    use super::*;
+    use super::{ChordHoldHand, ChordHoldState};
+    use crate::{event::KeyEvent, heapless::Vec};
+
     #[test]
     fn test_chordal_hold() {
         assert_eq!(
