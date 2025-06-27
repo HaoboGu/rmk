@@ -3,18 +3,20 @@ use crate::input_device::Runnable;
 use crate::keyboard_macros::MacroOperation;
 
 use crate::combo::Combo;
-use crate::config::ChordHoldState;
 use crate::descriptor::{KeyboardReport, ViaReport};
-use crate::event::TapHoldState::PostHold;
-use crate::event::{HoldingKey, HoldingKeyTrait, KeyEvent, KeyKind, TapHoldState, TapHoldTimer};
+use crate::event::KeyEvent;
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::keyboard::HoldDecision::{ChordHold, CleanBuffer, Hold};
 use crate::keyboard::LoopState::{Queue, Stop, OK};
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
+use crate::tap_hold::ChordHoldState;
+use crate::tap_hold::HoldDecision::{ChordHold, CleanBuffer, Hold};
+use crate::tap_hold::{
+    HoldDecision, HoldingKey, HoldingKeyTrait, KeyKind, TapHoldState, TapHoldState::PostHold, TapHoldTimer,
+};
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
@@ -47,26 +49,6 @@ enum LoopState {
     Queue, // save current event into buffer
     Flush, // flush event buffer
     Stop,  // stop keyboard running
-}
-
-#[derive(Debug)]
-pub enum HoldDecision {
-    Timeout,     // hold timeout, equals to hold
-    CleanBuffer, // clean buffer key press
-    Hold,        // should be holding
-    ChordHold,   // chordal holding
-    HoldOnPress, // hold on pressing, reserved
-    Buffering,   // save key event into buffer and skip key action processing
-    Ignore,      // continue processing as normal key event
-}
-
-impl HoldDecision {
-    fn is_hold(&self) -> bool {
-        match self {
-            Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress => true,
-            _ => false,
-        }
-    }
 }
 
 /// State machine for one shot keys
@@ -302,6 +284,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
+    // a data accessor for test purpose
+    #[cfg(any(test, feature = "std"))]
     pub fn copy_buffer(&mut self) -> Vec<HoldingKey, HOLD_BUFFER_SIZE> {
         return self.holding_buffer.clone();
     }
@@ -849,9 +833,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         });
     }
-    /*
-     * release hold key
-     */
+
+    // release hold key
     async fn tap_hold_process_key_release(
         &mut self,
         _hold_action: Action, //default hold action
@@ -943,25 +926,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.timer[col][row] = None;
         debug!("[TAP-HOLD] tap-hold key event {:?}, cleanup done", key_event_released);
     }
-
-    // async fn trigger_hold_key_action_unreleased(&mut self) {
-    //     if self.holding_events.len() == 0 {
-    //         return;
-    //     } else {
-    //         debug!("Trigger all un released key as hold");
-    //         //check if any key is held for too long
-    //         for i in 0..self.holding_events.len() {
-    //             match self.holding_events[i] {
-    //                 HoldingKey::TapHold(key) => {
-    //                     let action = key.hold_action();
-    //                     let key_event = key.key_event;
-    //                     self.process_key_action_normal(action, key_event).await;
-    //                     self.holding_events.remove(i);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
         match action {
@@ -1696,7 +1660,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    //=============== holding keys
+    //# holding keys
     // When a non-tap-hold key_event is released while the permissive-hold feature is enabled:
     // - If the corresponding key_action is a tap-hold, check that it is not already in a TapHold* state.
     // - For all tap-hold keys pressed before this event, trigger their hold action.

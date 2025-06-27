@@ -10,7 +10,6 @@ use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
-use crate::event::KeyEvent;
 use crate::fork::Fork;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
 
@@ -82,68 +81,6 @@ pub struct TapHoldConfig {
     pub permissive_hold: bool,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub chordal_hold: bool,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ChordHoldHand {
-    Left,
-    Right,
-}
-
-#[derive(Clone, Debug)]
-pub struct ChordHoldState<const COUNT: usize> {
-    pub is_vertical_chord: bool,
-    pub hand: ChordHoldHand,
-}
-
-impl<const COUNT: usize> ChordHoldState<COUNT> {
-    // is the key event in the same side of current chord hold
-    pub fn is_same(&self, key_event: KeyEvent) -> bool {
-        if self.is_vertical_chord {
-            return self.is_same_hand(key_event.row as usize);
-        } else {
-            return self.is_same_hand(key_event.col as usize);
-        }
-    }
-
-    pub fn is_same_hand(&self, number: usize) -> bool {
-        match self.hand {
-            ChordHoldHand::Left => number < COUNT / 2,
-            ChordHoldHand::Right => number >= COUNT / 2,
-        }
-    }
-
-    /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
-    /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
-    /// the chordal hold will be determined by user configuration in future.
-    pub(crate) fn create(event: KeyEvent, rows: usize, cols: usize) -> Self {
-        if cols > rows {
-            if (event.col as usize) < (cols / 2) {
-                ChordHoldState {
-                    is_vertical_chord: false,
-                    hand: ChordHoldHand::Left,
-                }
-            } else {
-                ChordHoldState {
-                    is_vertical_chord: false,
-                    hand: ChordHoldHand::Right,
-                }
-            }
-        } else {
-            if (event.row as usize) < (rows / 2) {
-                ChordHoldState {
-                    is_vertical_chord: true,
-                    hand: ChordHoldHand::Left,
-                }
-            } else {
-                ChordHoldState {
-                    is_vertical_chord: true,
-                    hand: ChordHoldHand::Right,
-                }
-            }
-        }
-    }
 }
 
 impl Default for TapHoldConfig {
@@ -286,86 +223,5 @@ impl Default for KeyboardUsbConfig<'_> {
             product_name: "RMK Keyboard",
             serial_number: "vial:f64c2b3c:000001",
         }
-    }
-}
-
-mod tests {
-    use super::{ChordHoldHand, ChordHoldState};
-    use crate::{event::KeyEvent, heapless::Vec};
-
-    #[test]
-    fn test_chordal_hold() {
-        assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 0,
-                    col: 0,
-                    pressed: true,
-                },
-                3,
-                6
-            )
-            .hand,
-            ChordHoldHand::Left
-        );
-        assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 3,
-                    col: 3,
-                    pressed: true,
-                },
-                4,
-                6
-            )
-            .hand,
-            ChordHoldHand::Right
-        );
-        assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 3,
-                    col: 3,
-                    pressed: true,
-                },
-                6,
-                4
-            )
-            .hand,
-            ChordHoldHand::Right
-        );
-        assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 6,
-                    col: 3,
-                    pressed: true,
-                },
-                5,
-                3
-            )
-            .hand,
-            ChordHoldHand::Right
-        );
-
-        let chord = ChordHoldState::<6> {
-            is_vertical_chord: false,
-            hand: ChordHoldHand::Left,
-        };
-
-        let vec: heapless::Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
-        let result: heapless::Vec<_, 6> = vec
-            .iter()
-            .map(|col| {
-                chord.is_same(KeyEvent {
-                    row: 0,
-                    col: 0 + col,
-                    pressed: true,
-                })
-            })
-            .collect();
-
-        let result2: heapless::Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
-        assert_eq!(result, result2);
     }
 }

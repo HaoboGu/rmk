@@ -14,12 +14,6 @@ use crate::CONNECTION_STATE;
 #[derive(Serialize, Debug)]
 pub enum Report {
     /// Normal keyboard hid report
-    /// The `KeyboardReport` struct is used in the code snippet provided to represent a specific type of
-    /// HID report for a keyboard. It is used as part of the `Report` enum to differentiate between
-    /// different types of HID reports that can be sent or received. The `KeyboardReport` struct likely
-    /// contains the necessary data fields and methods to represent the state of a keyboard input
-    /// report, such as key presses, modifiers, and other relevant information for keyboard input
-    /// communication over USB or other HID interfaces.
     KeyboardReport(KeyboardReport),
     /// Mouse hid report
     MouseReport(MouseReport),

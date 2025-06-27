@@ -97,6 +97,7 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
+pub mod tap_hold;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 pub mod via;
