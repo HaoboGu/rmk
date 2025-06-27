@@ -259,7 +259,15 @@ async fn connect_and_run_peripheral_manager<
     }
 }
 
-async fn ble_central_task<'a, 's, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+async fn ble_central_task<
+    'a,
+    's,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>
+        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>,
+    P: PacketPool,
+>(
     stack: &Stack<'s, C, P>,
     client: &GattClient<'a, C, P, 10>,
     conn: &Connection<'a, P>,
