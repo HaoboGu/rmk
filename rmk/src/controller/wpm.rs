@@ -1,9 +1,6 @@
-use crate::{
-    channel::{send_controller_event, ControllerPub, ControllerSub, CONTROLLER_CHANNEL},
-    event::{ControllerEvent, KeyEvent},
-};
-
 use super::{Controller, PollingController};
+use crate::channel::{send_controller_event, ControllerPub, ControllerSub, CONTROLLER_CHANNEL};
+use crate::event::{ControllerEvent, KeyEvent};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;

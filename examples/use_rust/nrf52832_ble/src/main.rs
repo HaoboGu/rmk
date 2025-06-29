@@ -27,7 +27,7 @@ use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
