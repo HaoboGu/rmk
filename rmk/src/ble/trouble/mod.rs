@@ -15,9 +15,6 @@ use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
-
-#[cfg(feature = "split")]
-use crate::split::ble::central::CENTRAL_SLEEP;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{send_controller_event, CONTROLLER_CHANNEL},
@@ -48,6 +45,8 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
+#[cfg(feature = "split")]
+use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
