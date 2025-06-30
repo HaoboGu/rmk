@@ -10,9 +10,8 @@ use embassy_time::{Duration, Timer};
 use futures::{join, FutureExt};
 use log::debug;
 use rmk::action::KeyAction;
-use rmk::config::{BehaviorConfig, CombosConfig};
-
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
 use rmk::event::KeyEvent;
 use rmk::hid::Report;
@@ -110,7 +109,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
             *REPORTS_DONE.lock().await = true;
         }
     );
-    let buffer = keyboard.copy_buffer();
+    let buffer = keyboard.holding_buffer.clone();
     if buffer.len() > 0 {
         panic!("leak after buffer cleanup, buffer contains {:?}", buffer);
     }

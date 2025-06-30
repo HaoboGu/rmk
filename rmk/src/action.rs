@@ -87,6 +87,7 @@ pub enum KeyAction {
     /// General tap/hold action. Because current BaseAction actually uses at most 7 bits, so we borrow 1 bit as the identifier of general tap/hold action.
     ///
     /// Serialized as 1|BasicAction(7bits)|BasicAction(8bits).
+    /// (tap_action, hold_action)
     TapHold(Action, Action),
 }
 
