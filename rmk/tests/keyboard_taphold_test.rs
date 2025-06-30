@@ -13,16 +13,6 @@ fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     }
 }
 
-fn tap_hold_config_with_hrm_and_chordal_hold_and_ignore() -> TapHoldConfig {
-    TapHoldConfig {
-        enable_hrm: true,
-        chordal_hold: true,
-        permissive_hold: false,
-        post_wait_time: Duration::from_millis(0),
-        ..TapHoldConfig::default()
-    }
-}
-
 fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
@@ -37,17 +27,17 @@ mod tap_hold_test {
 
     use std::cell::RefCell;
 
-    use super::*;
     use embassy_futures::block_on;
     use rmk::config::BehaviorConfig;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
+    use rmk::{k, th};
     use rusty_fork::rusty_fork_test;
 
+    use super::*;
     use crate::common::{
         create_test_keyboard, create_test_keyboard_with_config, run_key_sequence_test, wrap_keymap, KC_LGUI, KC_LSHIFT,
     };
-    use rmk::{k, th};
 
     rusty_fork_test! {
 
@@ -184,7 +174,7 @@ mod tap_hold_test {
             };
         }
 
-        //normal tap hold tests
+        // Normal tap hold tests
         #[test]
         fn test_tap_hold_key_release_rolling_should_tap_in_order() {
             key_sequence_test! {
@@ -238,6 +228,51 @@ mod tap_hold_test {
             }
         }
 
+        // Hold after tapping
+        #[test]
+        fn test_tap_hold_hold_after_tapping() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                    .. BehaviorConfig::default()
+                }),
+                sequence: [
+                    [2, 1, true, 10], // Tap th!(A,shift)
+                    [2, 1, false, 50],
+                    [2, 1, true, 100], // Hold th!(A,shift) after tapping
+                    [2, 1, false, 400],
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A
+                    [0, [0, 0, 0, 0, 0, 0]], // Release A
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold after tapping
+                    [0, [0, 0, 0, 0, 0, 0]], // Release A
+                ]
+            }
+        }
+
+        // Hold after tapping timeout
+        #[test]
+        fn test_tap_hold_hold_after_tapping_timeout() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                    .. BehaviorConfig::default()
+                }),
+                sequence: [
+                    [2, 1, true, 10], // Tap th!(A,shift)
+                    [2, 1, false, 50],
+                    [2, 1, true, 300], // Hold th!(A,shift) after tapping timeout
+                    [2, 1, false, 400],
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A
+                    [0, [0, 0, 0, 0, 0, 0]], // Release A
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold after tapping timeout
+                    [0, [0, 0, 0, 0, 0, 0]], // Release A
+                ]
+            }
+        }
 
         #[test]
         fn test_tap_hold_hold_on_smesh_key_press() {
