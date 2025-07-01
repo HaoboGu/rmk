@@ -271,8 +271,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             "[TAP-HOLD] TIMEOUT: tap hold event now reach timeout and should become hold: {:?}",
             key
         );
-        self.fire_all_holding_keys(TapHoldDecision::Timeout, key.key_event, true)
-            .await;
+        self.fire_holding_keys(TapHoldDecision::Timeout, key.key_event).await;
         LoopState::OK
     }
 
@@ -492,7 +491,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // CleanBuffer: permissive hold is triggered by a key release
                 // ChordHold: chordal hold is triggered by a key press
                 // Hold: impossible for now
-                self.fire_all_holding_keys(decision, key_event, false).await;
+                self.fire_holding_keys(decision, key_event).await;
             }
             _ => {
                 error!("Unexpected tap hold decision {:?}", decision);
@@ -1549,7 +1548,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - Other keys should send as normal
     ///
     /// This function forces all buffered keys to resolve immediately, ignoring their timeouts.
-    async fn fire_all_holding_keys(&mut self, reason: TapHoldDecision, key_event: KeyEvent, hold_current_key: bool) {
+    async fn fire_holding_keys(&mut self, reason: TapHoldDecision, key_event: KeyEvent) {
         // Press time of current key
         let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col as usize][key_event.row as usize] {
             inst
@@ -1564,14 +1563,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .enumerate()
             .filter_map(|(pos, e)| match reason {
                 TapHoldDecision::Timeout => {
-                    // if current stage is under holding  a tap hold key, other tap hold key should not included
+                    // A tap-hold key is timeout, flush current timeout keys and all other tapped normal keys
                     if e.state() == Initial {
                         if e.key_event.col == key_event.col && e.key_event.row == key_event.row {
                             Some(pos)
                         } else if !matches!(e.action, KeyAction::TapHold(..)) {
-                            //exclusive other tap hold keys
                             Some(pos)
                         } else {
+                            // Exclude other tap-hold keys
                             None
                         }
                     } else {
@@ -1579,7 +1578,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
                 _ => {
-                    //update all keys
+                    // CleanBuffer/Hold/ChordHold: fire all keys in Initial state in the buffer
                     if e.state() == Initial {
                         Some(pos)
                     } else {
@@ -1607,7 +1606,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyAction::TapHold(tap_action, hold_action) => {
                         if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
                             // The current tap-hold key updating
-                            let action = if hold_current_key { hold_action } else { tap_action };
+                            let action = if reason == TapHoldDecision::Timeout {
+                                hold_action
+                            } else {
+                                tap_action
+                            };
                             debug!("Current Key {:?} become {:?}", hold_key.key_event, action);
                             self.process_key_action_normal(action, hold_key.key_event).await;
                         } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
@@ -1640,7 +1643,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyAction::TapHold(tap_action, hold_action) => {
                         if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
                             // This is the key that triggered the flush; mark as PostTap (tap resolved).
-                            if hold_current_key {
+                            if reason == TapHoldDecision::Timeout {
                                 debug!("Current Key {:?} mark {:?}", hold_key.key_event, hold_action);
                                 hold_key.state = TapHoldState::PostHold;
                             } else {
@@ -1943,492 +1946,446 @@ mod test {
     }
 
     rusty_fork_test! {
+        #[test]
+        fn test_register_key() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+                keyboard.register_key(KeyCode::A, key_event(2, 1, true));
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
+            };
+            block_on(main);
+        }
 
-    #[test]
-    fn test_register_key() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
-            keyboard.register_key(KeyCode::A, key_event(2, 1, true));
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
-        };
-        block_on(main);
-    }
+        #[test]
+        fn test_basic_key_press_release() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
 
-    #[test]
-    fn test_basic_key_press_release() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
+                // Press A key
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Grave); // A key's HID code is 0x04
 
-            // Press A key
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Grave); // A key's HID code is 0x04
+                // Release A key
+                keyboard.process_inner(key_event(0, 0, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+            };
+            block_on(main);
+        }
 
-            // Release A key
-            keyboard.process_inner(key_event(0, 0, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-        };
-        block_on(main);
-    }
+        #[test]
+        fn test_modifier_key() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
 
-    #[test]
-    fn test_modifier_key() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
+                // Press Shift key
+                keyboard.register_key(KeyCode::LShift, key_event(3, 0, true));
+                assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
 
-            // Press Shift key
-            keyboard.register_key(KeyCode::LShift, key_event(3, 0, true));
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
+                // Release Shift key
+                keyboard.unregister_key(KeyCode::LShift, key_event(3, 0, false));
+                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
+            };
+            block_on(main);
+        }
 
-            // Release Shift key
-            keyboard.unregister_key(KeyCode::LShift, key_event(3, 0, false));
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new());
-        };
-        block_on(main);
-    }
+        #[test]
+        fn test_multiple_keys() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
 
-    #[test]
-    fn test_tap_hold_key_tap_and_single_hold() {
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert!(keyboard.held_keycodes.contains(&KeyCode::Grave));
 
-        let _main = async {
-            let mut keyboard = create_test_keyboard();
-            let tap_hold_action = KeyAction::TapHold(Action::Key(KeyCode::A), Action::Key(KeyCode::LShift));
-            // Tap
-            join!(
-                keyboard.process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, true)),
-                Timer::after(Duration::from_millis(0)).then( |_| async {
-                //send release event
-                  KEY_EVENT_CHANNEL.send(key_event(2, 1, false)).await;
-                })
-            );
+                keyboard.process_inner(key_event(1, 0, true)).await;
+                assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && keyboard.held_keycodes.contains(&KeyCode::Tab));
 
+                keyboard.process_inner(key_event(1, 0, false)).await;
+                assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && !keyboard.held_keycodes.contains(&KeyCode::Tab));
 
-            match KEYBOARD_REPORT_CHANNEL.receive().await {
-                Report::KeyboardReport(report) =>
-                    assert_eq!(report.keycodes[0], 0x4),  // A should be released
-                _ => panic!("Expected a Tap on A, but received a different report type"),
+                keyboard.process_inner(key_event(0, 0, false)).await;
+                assert!(!keyboard.held_keycodes.contains(&KeyCode::Grave));
+                assert!(keyboard.held_keycodes.iter().all(|&k| k == KeyCode::No));
             };
 
-            // a released
-            keyboard
-                .process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, false))
-                .await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should be released
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should not held
+            block_on(main);
+        }
 
-            // Hold
-            keyboard
-                .process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, true))
-                .await;
-            Timer::after(Duration::from_millis(200)).await; // wait for hold timeout
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // should activate Shift modifier
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should not be pressed
+        #[test]
+        fn test_repeat_key_single() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+                keyboard.keymap.borrow_mut().set_action_at(
+                    0,
+                    0,
+                    0,
+                    KeyAction::Single(Action::Key(KeyCode::Again)),
+                );
 
-            keyboard
-                .process_key_action_inner(tap_hold_action, key_event(2, 1, false))
-                .await;
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should be released
-        };
-    }
+                // first press ever of the Again issues KeyCode:No
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
 
+                // Press A key
+                keyboard.process_inner(key_event(2, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
 
-    #[test]
-    fn test_multiple_keys() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
+                // Release A key
+                keyboard.process_inner(key_event(2, 0, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave));
+                // after another key is pressed, that key is repeated
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
 
-            keyboard.process_inner(key_event(1, 0, true)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && keyboard.held_keycodes.contains(&KeyCode::Tab));
+                // releasing the repeat key
+                keyboard.process_inner(key_event(0, 0, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
 
-            keyboard.process_inner(key_event(1, 0, false)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && !keyboard.held_keycodes.contains(&KeyCode::Tab));
+                // Press S key
+                keyboard.process_inner(key_event(1, 2, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
 
-            keyboard.process_inner(key_event(0, 0, false)).await;
-            assert!(!keyboard.held_keycodes.contains(&KeyCode::Grave));
-            assert!(keyboard.held_keycodes.iter().all(|&k| k == KeyCode::No));
-        };
-
-        block_on(main);
-    }
-
-    #[test]
-    fn test_repeat_key_single() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
-            keyboard.keymap.borrow_mut().set_action_at(
-                0,
-                0,
-                0,
-                KeyAction::Single(Action::Key(KeyCode::Again)),
-            );
-
-            // first press ever of the Again issues KeyCode:No
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
-
-            // Press A key
-            keyboard.process_inner(key_event(2, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
-
-            // Release A key
-            keyboard.process_inner(key_event(2, 0, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-
-            // after another key is pressed, that key is repeated
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
-
-            // releasing the repeat key
-            keyboard.process_inner(key_event(0, 0, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
-
-            // Press S key
-            keyboard.process_inner(key_event(1, 2, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
-
-            // after another key is pressed, that key is repeated
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
-        };
-        block_on(main);
-    }
+                // after another key is pressed, that key is repeated
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
+            };
+            block_on(main);
+        }
 
 
-    #[test]
-    fn test_repeat_key_th() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
-            keyboard.keymap.borrow_mut().set_action_at(
-                0,
-                0,
-                0,
-                KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
-            );
-            keyboard.keymap.borrow_mut().set_action_at(
-                2,
-                1,
-                0,
-                KeyAction::Single(Action::Key(KeyCode::A)),
-            );
-            keyboard.keymap.borrow_mut().set_action_at(
-                2,
-                2,
-                0,
-                KeyAction::Single(Action::Key(KeyCode::S)),
-            );
+        #[test]
+        fn test_repeat_key_th() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+                keyboard.keymap.borrow_mut().set_action_at(
+                    0,
+                    0,
+                    0,
+                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
+                );
+                keyboard.keymap.borrow_mut().set_action_at(
+                    2,
+                    1,
+                    0,
+                    KeyAction::Single(Action::Key(KeyCode::A)),
+                );
+                keyboard.keymap.borrow_mut().set_action_at(
+                    2,
+                    2,
+                    0,
+                    KeyAction::Single(Action::Key(KeyCode::S)),
+                );
 
-            // Press down F
-            // first press ever of the Again issues KeyCode:No
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            keyboard
-                .send_keyboard_report_with_resolved_modifiers(true)
-                .await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
-            // Release F
-            keyboard.process_inner(key_event(0, 0, false)).await;
+                // Press down F
+                // first press ever of the Again issues KeyCode:No
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                keyboard
+                    .send_keyboard_report_with_resolved_modifiers(true)
+                    .await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+                // Release F
+                keyboard.process_inner(key_event(0, 0, false)).await;
 
-            // Press A key
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+                // Press A key
+                keyboard.process_inner(key_event(2, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
 
-            // Release A key
-            keyboard.process_inner(key_event(2, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                // Release A key
+                keyboard.process_inner(key_event(2, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
-            // Release F
-            keyboard.process_inner(key_event(0, 0, false)).await;
+                // Release F
+                keyboard.process_inner(key_event(0, 0, false)).await;
 
-            // Here release event should make again into hold
-
-
-            embassy_time::Timer::after_millis(200 as u64).await;
-            // after another key is pressed, that key is repeated
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            force_timeout_first_hold(&mut keyboard).await;
-
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
-
-            // releasing the repeat key
-            keyboard.process_inner(key_event(0, 0, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
-
-            // Press S key
-            keyboard.process_inner(key_event(2, 2, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
-
-            // after another key is pressed, that key is repeated
-            keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
-        };
-        block_on(main);
-    }
-
-    #[test]
-    fn test_key_action_transparent() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
-
-            // Activate layer 1
-            keyboard.process_action_layer_switch(1, key_event(0, 0, true));
-
-            // Press Transparent key (Q on lower layer)
-            keyboard.process_inner(key_event(1, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Q); // Q key's HID code is 0x14
-
-            // Release Transparent key
-            keyboard.process_inner(key_event(1, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-        };
-        block_on(main);
-    }
-
-    #[test]
-    fn test_key_action_no() {
-        let main = async {
-            let mut keyboard = create_test_keyboard();
-
-            // Press No key
-            keyboard.process_inner(key_event(4, 3, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-
-            // Release No key
-            keyboard.process_inner(key_event(4, 3, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-        };
-        block_on(main);
-    }
+                // Here release event should make again into hold
 
 
-    #[test]
-    fn test_fork_with_held_modifier() {
-        let main = async {
-            //{ trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
-            let fork1 = Fork {
-                trigger: KeyAction::Single(Action::Key(KeyCode::Dot)),
-                negative_output: KeyAction::Single(Action::Key(KeyCode::Dot)),
-                positive_output: KeyAction::WithModifier(
-                    Action::Key(KeyCode::Semicolon),
-                    ModifierCombination::default().with_shift(true),
-                ),
-                match_any: StateBits {
-                    modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
-                    leds: LedIndicator::default(),
-                    mouse: HidMouseButtons::default(),
-                },
-                match_none: StateBits::default(),
-                kept_modifiers: HidModifiers::default(),
-                bindable: false,
+                embassy_time::Timer::after_millis(200 as u64).await;
+                // after another key is pressed, that key is repeated
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                force_timeout_first_hold(&mut keyboard).await;
+
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+
+                // releasing the repeat key
+                keyboard.process_inner(key_event(0, 0, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+
+                // Press S key
+                keyboard.process_inner(key_event(2, 2, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+
+                // after another key is pressed, that key is repeated
+                keyboard.process_inner(key_event(0, 0, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+            };
+            block_on(main);
+        }
+
+        #[test]
+        fn test_key_action_transparent() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+
+                // Activate layer 1
+                keyboard.process_action_layer_switch(1, key_event(0, 0, true));
+
+                // Press Transparent key (Q on lower layer)
+                keyboard.process_inner(key_event(1, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Q); // Q key's HID code is 0x14
+
+                // Release Transparent key
+                keyboard.process_inner(key_event(1, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+            };
+            block_on(main);
+        }
+
+        #[test]
+        fn test_key_action_no() {
+            let main = async {
+                let mut keyboard = create_test_keyboard();
+
+                // Press No key
+                keyboard.process_inner(key_event(4, 3, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+                // Release No key
+                keyboard.process_inner(key_event(4, 3, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+            };
+            block_on(main);
+        }
+
+
+        #[test]
+        fn test_fork_with_held_modifier() {
+            let main = async {
+                //{ trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" },
+                let fork1 = Fork {
+                    trigger: KeyAction::Single(Action::Key(KeyCode::Dot)),
+                    negative_output: KeyAction::Single(Action::Key(KeyCode::Dot)),
+                    positive_output: KeyAction::WithModifier(
+                        Action::Key(KeyCode::Semicolon),
+                        ModifierCombination::default().with_shift(true),
+                    ),
+                    match_any: StateBits {
+                        modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                        leds: LedIndicator::default(),
+                        mouse: HidMouseButtons::default(),
+                    },
+                    match_none: StateBits::default(),
+                    kept_modifiers: HidModifiers::default(),
+                    bindable: false,
+                };
+
+                //{ trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift" },
+                let fork2 = Fork {
+                    trigger: KeyAction::Single(Action::Key(KeyCode::Comma)),
+                    negative_output: KeyAction::Single(Action::Key(KeyCode::Comma)),
+                    positive_output: KeyAction::Single(Action::Key(KeyCode::Semicolon)),
+                    match_any: StateBits {
+                        modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                        leds: LedIndicator::default(),
+                        mouse: HidMouseButtons::default(),
+                    },
+                    match_none: StateBits::default(),
+                    kept_modifiers: HidModifiers::default(),
+                    bindable: false,
+                };
+
+                let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
+
+                // Press Dot key, by itself it should emit '.'
+                keyboard.process_inner(key_event(3, 9, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Dot);
+
+                // Release Dot key
+                keyboard.process_inner(key_event(3, 9, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+                // Press LShift key
+                keyboard.process_inner(key_event(3, 0, true)).await;
+
+                // Press Dot key, with shift it should emit ':'
+                keyboard.process_inner(key_event(3, 9, true)).await;
+                assert_eq!(
+                    keyboard.resolve_modifiers(true),
+                    HidModifiers::new().with_left_shift(true)
+                );
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
+
+                //Release Dot key
+                keyboard.process_inner(key_event(3, 9, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(
+                    keyboard.resolve_modifiers(false),
+                    HidModifiers::new().with_left_shift(true)
+                );
+
+                // Release LShift key
+                keyboard.process_inner(key_event(3, 0, false)).await;
+                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
+                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+
+                // Press Comma key, by itself it should emit ','
+                keyboard.process_inner(key_event(3, 8, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Comma);
+
+                // Release Dot key
+                keyboard.process_inner(key_event(3, 8, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+
+                // Press LShift key
+                keyboard.process_inner(key_event(3, 0, true)).await;
+
+                // Press Comma key, with shift it should emit ';' (shift is suppressed)
+                keyboard.process_inner(key_event(3, 8, true)).await;
+                assert_eq!(keyboard.resolve_modifiers(true), HidModifiers::new());
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
+
+                // Release Comma key, shift is still held
+                keyboard.process_inner(key_event(3, 8, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(
+                    keyboard.resolve_modifiers(false),
+                    HidModifiers::new().with_left_shift(true)
+                );
+
+                // Release LShift key
+                keyboard.process_inner(key_event(3, 0, false)).await;
+                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
+                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
             };
 
-            //{ trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift" },
-            let fork2 = Fork {
-                trigger: KeyAction::Single(Action::Key(KeyCode::Comma)),
-                negative_output: KeyAction::Single(Action::Key(KeyCode::Comma)),
-                positive_output: KeyAction::Single(Action::Key(KeyCode::Semicolon)),
-                match_any: StateBits {
-                    modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
-                    leds: LedIndicator::default(),
-                    mouse: HidMouseButtons::default(),
-                },
-                match_none: StateBits::default(),
-                kept_modifiers: HidModifiers::default(),
-                bindable: false,
+            block_on(main);
+        }
+        #[test]
+        fn test_fork_with_held_mouse_button() {
+            let main = async {
+                //{ trigger = "Z", negative_output = "MouseBtn5", positive_output = "C", match_any = "LCtrl|RCtrl|LShift|RShift", kept_modifiers="LShift|RShift" },
+                let fork1 = Fork {
+                    trigger: KeyAction::Single(Action::Key(KeyCode::Z)),
+                    negative_output: KeyAction::Single(Action::Key(KeyCode::MouseBtn5)),
+                    positive_output: KeyAction::Single(Action::Key(KeyCode::C)),
+                    match_any: StateBits {
+                        modifiers: HidModifiers::default()
+                            .with_left_ctrl(true)
+                            .with_right_ctrl(true)
+                            .with_left_shift(true)
+                            .with_right_shift(true),
+                        leds: LedIndicator::default(),
+                        mouse: HidMouseButtons::default(),
+                    },
+                    match_none: StateBits::default(),
+                    kept_modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                    bindable: false,
+                };
+
+                //{ trigger = "A", negative_output = "S", positive_output = "D", match_any = "MouseBtn5" },
+                let fork2 = Fork {
+                    trigger: KeyAction::Single(Action::Key(KeyCode::A)),
+                    negative_output: KeyAction::Single(Action::Key(KeyCode::S)),
+                    positive_output: KeyAction::Single(Action::Key(KeyCode::D)),
+                    match_any: StateBits {
+                        modifiers: HidModifiers::default(),
+                        leds: LedIndicator::default(),
+                        mouse: HidMouseButtons::default().with_button5(true),
+                    },
+                    match_none: StateBits::default(),
+                    kept_modifiers: HidModifiers::default(),
+                    bindable: false,
+                };
+
+                let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
+
+                // disable th on a
+                keyboard.keymap.borrow_mut().set_action_at(
+                    2,
+                    1,
+                    0,
+                    KeyAction::Single(Action::Key(KeyCode::A)),
+                );
+
+
+                // Press Z key, by itself it should emit 'MouseBtn5'
+                keyboard.process_inner(key_event(3, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5
+
+                // Release Z key
+                keyboard.process_inner(key_event(3, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(keyboard.mouse_report.buttons, 0);
+
+                // Press LCtrl key
+                keyboard.process_inner(key_event(4, 0, true)).await;
+                // Press LShift key
+                keyboard.process_inner(key_event(3, 0, true)).await;
+                assert_eq!(
+                    keyboard.resolve_modifiers(true),
+                    HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
+                );
+
+                // Press 'Z' key, with Ctrl it should emit 'C', with suppressed ctrl, but kept shift
+                keyboard.process_inner(key_event(3, 1, true)).await;
+                assert_eq!(
+                    keyboard.resolve_modifiers(true),
+                    HidModifiers::new().with_left_shift(true)
+                );
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::C);
+                assert_eq!(keyboard.mouse_report.buttons, 0);
+
+                // Release 'Z' key, suppression of ctrl is removed
+                keyboard.process_inner(key_event(3, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(
+                    keyboard.resolve_modifiers(false),
+                    HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
+                );
+
+                // Release LCtrl key
+                keyboard.process_inner(key_event(4, 0, false)).await;
+                assert_eq!(
+                    keyboard.resolve_modifiers(false),
+                    HidModifiers::new().with_left_shift(true)
+                );
+
+                // Release LShift key
+                keyboard.process_inner(key_event(3, 0, false)).await;
+                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+
+                // Press 'A' key, by itself it should emit 'S'
+                keyboard.process_inner(key_event(2, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
+
+                // Release 'A' key
+                keyboard.process_inner(key_event(2, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+                assert_eq!(keyboard.mouse_report.buttons, 0);
+
+                Timer::after(Duration::from_millis(200)).await; // wait a bit
+
+                // Press Z key, by itself it should emit 'MouseBtn5'
+                keyboard.process_inner(key_event(3, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
+                assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5 //this fails, but ok in debug - why?
+
+                // Press 'A' key, with 'MouseBtn5' it should emit 'D'
+                keyboard.process_inner(key_event(2, 1, true)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::D);
+
+                // Release Z (MouseBtn1) key, 'D' is still held
+                keyboard.process_inner(key_event(3, 8, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::D);
+
+                // Release 'A' key -> releases 'D'
+                keyboard.process_inner(key_event(2, 1, false)).await;
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
             };
 
-            let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
-
-            // Press Dot key, by itself it should emit '.'
-            keyboard.process_inner(key_event(3, 9, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Dot);
-
-            // Release Dot key
-            keyboard.process_inner(key_event(3, 9, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-
-            // Press LShift key
-            keyboard.process_inner(key_event(3, 0, true)).await;
-
-            // Press Dot key, with shift it should emit ':'
-            keyboard.process_inner(key_event(3, 9, true)).await;
-            assert_eq!(
-                keyboard.resolve_modifiers(true),
-                HidModifiers::new().with_left_shift(true)
-            );
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
-
-            //Release Dot key
-            keyboard.process_inner(key_event(3, 9, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(
-                keyboard.resolve_modifiers(false),
-                HidModifiers::new().with_left_shift(true)
-            );
-
-            // Release LShift key
-            keyboard.process_inner(key_event(3, 0, false)).await;
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new());
-            assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
-
-            // Press Comma key, by itself it should emit ','
-            keyboard.process_inner(key_event(3, 8, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Comma);
-
-            // Release Dot key
-            keyboard.process_inner(key_event(3, 8, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-
-            // Press LShift key
-            keyboard.process_inner(key_event(3, 0, true)).await;
-
-            // Press Comma key, with shift it should emit ';' (shift is suppressed)
-            keyboard.process_inner(key_event(3, 8, true)).await;
-            assert_eq!(keyboard.resolve_modifiers(true), HidModifiers::new());
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
-
-            // Release Comma key, shift is still held
-            keyboard.process_inner(key_event(3, 8, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(
-                keyboard.resolve_modifiers(false),
-                HidModifiers::new().with_left_shift(true)
-            );
-
-            // Release LShift key
-            keyboard.process_inner(key_event(3, 0, false)).await;
-            assert_eq!(keyboard.held_modifiers, HidModifiers::new());
-            assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
-        };
-
-        block_on(main);
-    }
-    #[test]
-    fn test_fork_with_held_mouse_button() {
-        let main = async {
-            //{ trigger = "Z", negative_output = "MouseBtn5", positive_output = "C", match_any = "LCtrl|RCtrl|LShift|RShift", kept_modifiers="LShift|RShift" },
-            let fork1 = Fork {
-                trigger: KeyAction::Single(Action::Key(KeyCode::Z)),
-                negative_output: KeyAction::Single(Action::Key(KeyCode::MouseBtn5)),
-                positive_output: KeyAction::Single(Action::Key(KeyCode::C)),
-                match_any: StateBits {
-                    modifiers: HidModifiers::default()
-                        .with_left_ctrl(true)
-                        .with_right_ctrl(true)
-                        .with_left_shift(true)
-                        .with_right_shift(true),
-                    leds: LedIndicator::default(),
-                    mouse: HidMouseButtons::default(),
-                },
-                match_none: StateBits::default(),
-                kept_modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
-                bindable: false,
-            };
-
-            //{ trigger = "A", negative_output = "S", positive_output = "D", match_any = "MouseBtn5" },
-            let fork2 = Fork {
-                trigger: KeyAction::Single(Action::Key(KeyCode::A)),
-                negative_output: KeyAction::Single(Action::Key(KeyCode::S)),
-                positive_output: KeyAction::Single(Action::Key(KeyCode::D)),
-                match_any: StateBits {
-                    modifiers: HidModifiers::default(),
-                    leds: LedIndicator::default(),
-                    mouse: HidMouseButtons::default().with_button5(true),
-                },
-                match_none: StateBits::default(),
-                kept_modifiers: HidModifiers::default(),
-                bindable: false,
-            };
-
-            let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
-
-            // disable th on a
-            keyboard.keymap.borrow_mut().set_action_at(
-                2,
-                1,
-                0,
-                KeyAction::Single(Action::Key(KeyCode::A)),
-            );
-
-
-            // Press Z key, by itself it should emit 'MouseBtn5'
-            keyboard.process_inner(key_event(3, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5
-
-            // Release Z key
-            keyboard.process_inner(key_event(3, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(keyboard.mouse_report.buttons, 0);
-
-            // Press LCtrl key
-            keyboard.process_inner(key_event(4, 0, true)).await;
-            // Press LShift key
-            keyboard.process_inner(key_event(3, 0, true)).await;
-            assert_eq!(
-                keyboard.resolve_modifiers(true),
-                HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
-            );
-
-            // Press 'Z' key, with Ctrl it should emit 'C', with suppressed ctrl, but kept shift
-            keyboard.process_inner(key_event(3, 1, true)).await;
-            assert_eq!(
-                keyboard.resolve_modifiers(true),
-                HidModifiers::new().with_left_shift(true)
-            );
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::C);
-            assert_eq!(keyboard.mouse_report.buttons, 0);
-
-            // Release 'Z' key, suppression of ctrl is removed
-            keyboard.process_inner(key_event(3, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(
-                keyboard.resolve_modifiers(false),
-                HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
-            );
-
-            // Release LCtrl key
-            keyboard.process_inner(key_event(4, 0, false)).await;
-            assert_eq!(
-                keyboard.resolve_modifiers(false),
-                HidModifiers::new().with_left_shift(true)
-            );
-
-            // Release LShift key
-            keyboard.process_inner(key_event(3, 0, false)).await;
-            assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
-
-            // Press 'A' key, by itself it should emit 'S'
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
-
-            // Release 'A' key
-            keyboard.process_inner(key_event(2, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
-            assert_eq!(keyboard.mouse_report.buttons, 0);
-
-            Timer::after(Duration::from_millis(200)).await; // wait a bit
-
-            // Press Z key, by itself it should emit 'MouseBtn5'
-            keyboard.process_inner(key_event(3, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-            assert_eq!(keyboard.mouse_report.buttons, 1u8 << 4); // MouseBtn5 //this fails, but ok in debug - why?
-
-            // Press 'A' key, with 'MouseBtn5' it should emit 'D'
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::D);
-
-            // Release Z (MouseBtn1) key, 'D' is still held
-            keyboard.process_inner(key_event(3, 8, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::D);
-
-            // Release 'A' key -> releases 'D'
-            keyboard.process_inner(key_event(2, 1, false)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-        };
-
-        block_on(main);
-    }
+            block_on(main);
+        }
     }
 }

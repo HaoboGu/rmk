@@ -3,7 +3,7 @@ use embassy_time::Instant;
 use crate::action::KeyAction;
 use crate::event::KeyEvent;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldDecision {
     // Hold timeout, trigger the hold action
