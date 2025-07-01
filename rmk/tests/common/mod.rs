@@ -6,7 +6,7 @@ use embassy_futures::block_on;
 use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use futures::{join, FutureExt};
 use log::debug;
 use rmk::action::KeyAction;
@@ -88,6 +88,9 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         // Verify reports
         async {
             let mut report_index = -1;
+            let mut last_key_timestamp = Instant::now();
+            Timer::after_millis(10).await;
+        
             for expected in expected_reports {
                 match select(Timer::after(Duration::from_secs(1)), KEYBOARD_REPORT_CHANNEL.receive()).await {
                     Either::First(_) => panic!("ERROR: report wait timeout reached"),
@@ -104,6 +107,14 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
                         debug!("other reports {:?}", report)
                     }
                 }
+                let time_gap = Instant::now().as_millis() - last_key_timestamp.as_millis();
+                assert_eq!(
+                     time_gap >= 1, true,
+                    "on #{} reports, key report interval should larger than 1ms but actually {}ms",
+                    report_index, time_gap
+                );
+
+                last_key_timestamp = Instant::now();
             }
 
             // Set done flag after all reports are verified

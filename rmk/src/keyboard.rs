@@ -22,7 +22,7 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 
 use embassy_futures::select::{select, Either};
-use embassy_futures::yield_now;
+use embassy_futures::{join, yield_now};
 use embassy_time::{Duration, Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -805,6 +805,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
             debug!("Dispatching combo action: {:?}", action);
             self.process_key_action(action, event).await;
+            Timer::after_millis(1).await;
         }
 
         self.keymap
@@ -1726,8 +1727,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         debug!("Tap Key {:?} now press down", hold_key.key_event);
                         //TODO ignored return value
                         self.process_key_action(key_action, hold_key.key_event).await;
+                        //wait for hid send
                     }
                 }
+                Timer::after_millis(1).await;
             }
             // Update the state of the key in the buffer after firing its action.
             // This ensures that the buffer accurately reflects which keys have been resolved as tap or hold,
