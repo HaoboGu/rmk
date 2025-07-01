@@ -1,21 +1,28 @@
 use embassy_time::Instant;
 
-use crate::action::{Action, KeyAction};
+use crate::action::KeyAction;
 use crate::event::KeyEvent;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum HoldDecision {
-    Timeout,     // hold timeout, equals to hold
-    CleanBuffer, // clean buffer key press
-    Hold,        // should be holding
-    ChordHold,   // chordal holding
-    HoldOnPress, // hold on pressing, reserved
-    Buffering,   // save key event into buffer and skip key action processing
-    Ignore,      // continue processing as normal key event
+pub enum TapHoldDecision {
+    // Hold timeout, trigger the hold action
+    Timeout,
+    // Clean holding buffer
+    CleanBuffer,
+    // Holding
+    Hold,
+    // Chordal holding
+    ChordHold,
+    // Hold on pressing, reserved
+    HoldOnPress,
+    // Skip key action processing and buffer key event
+    Buffering,
+    // Continue processing as normal key event
+    Ignore,
 }
 
-impl HoldDecision {
+impl TapHoldDecision {
     fn is_hold(&self) -> bool {
         match self {
             Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress => true,
@@ -24,86 +31,31 @@ impl HoldDecision {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapHoldKey {
-    pub tap_action: KeyAction,
-    pub hold_action: KeyAction,
-    pub deadline: Instant,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum KeyKind {
-    // tap hold key
-    TapHold {
-        tap_action: Action,
-        hold_action: Action,
-        deadline: Instant,
-    },
-    // non tap hold key right now
-    Others(KeyAction),
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct HoldingKey {
     pub state: TapHoldState,
     pub key_event: KeyEvent,
+    // TODO: remove it, using `Keyboard.timer` instead
     pub pressed_time: Instant,
-    pub kind: KeyKind,
-}
-
-pub trait HoldingKeyTrait {
-    fn update_state(&mut self, new_state: TapHoldState);
-    fn press_time(&self) -> Instant;
-    fn state(&self) -> TapHoldState;
+    pub action: KeyAction,
 }
 
 impl HoldingKey {
-    pub(crate) fn start_time(&self) -> Instant {
-        match self.kind {
-            KeyKind::TapHold { .. } => self.pressed_time,
-            KeyKind::Others(_) => self.pressed_time,
-        }
-    }
-
-    pub(crate) fn key_event(&self) -> KeyEvent {
-        match self.kind {
-            KeyKind::TapHold { .. } => self.key_event,
-            KeyKind::Others(_) => self.key_event,
-        }
-    }
-
     pub(crate) fn is_tap_hold(&self) -> bool {
-        matches!(self.kind, KeyKind::TapHold { .. })
-    }
-}
-
-impl HoldingKeyTrait for HoldingKey {
-    fn update_state(&mut self, new_state: TapHoldState) {
-        match self.kind {
-            KeyKind::TapHold { .. } => {
-                self.state = new_state;
-            }
-            KeyKind::Others(_) => {
-                self.state = new_state;
-            }
-        }
+        matches!(self.action, KeyAction::TapHold(_, _))
     }
 
-    fn press_time(&self) -> Instant {
-        match self.kind {
-            KeyKind::TapHold { .. } => self.pressed_time,
-            KeyKind::Others(_) => self.pressed_time,
-        }
+    pub(crate) fn update_state(&mut self, new_state: TapHoldState) {
+        self.state = new_state;
     }
 
-    fn state(&self) -> TapHoldState {
-        match self.kind {
-            KeyKind::TapHold { .. } => self.state,
-            KeyKind::Others(_) => self.state,
-        }
+    pub(crate) fn press_time(&self) -> Instant {
+        self.pressed_time
+    }
+
+    pub(crate) fn state(&self) -> TapHoldState {
+        self.state
     }
 }
 
@@ -123,15 +75,6 @@ pub enum TapHoldState {
     /// Key needs to be released but is still in the queue;
     /// should be cleaned up in the main loop regardless
     Release,
-}
-
-// record pressing tap hold keys
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapHoldTimer {
-    pub key_event: KeyEvent,
-    pub deadline: Instant,
-    pub pressed_time: Instant,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -196,11 +139,13 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
         }
     }
 }
+
 #[allow(unused_imports)]
 mod tests {
+    use heapless::Vec;
+
     use super::{ChordHoldHand, ChordHoldState};
     use crate::event::KeyEvent;
-    use heapless::Vec;
 
     #[test]
     fn test_chordal_hold() {
