@@ -444,7 +444,11 @@ pub(crate) async fn wait_for_stack_started() {
 
 /// Sleep manager task for BLE Split Central
 /// Handles sleep timeout and connection parameter adjustments using event-driven approach
-async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+async fn sleep_manager_task<
+    'a,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    P: PacketPool,
+>(
     stack: &'a Stack<'a, C, P>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
