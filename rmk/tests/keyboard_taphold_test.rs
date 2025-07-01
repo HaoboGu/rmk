@@ -75,6 +75,28 @@ mod tap_hold_test {
         }
 
         #[test]
+        fn test_tap_hold_permissive_hold_timeout_and_release() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                .. BehaviorConfig::default()
+            }),
+            sequence: [
+                [2, 1, true, 10], // Press th!(A, lshift)
+                [2, 3, true, 200],  // Press D
+                [2, 3, false, 100], // Release D  <-- Release D after "permissive hold" interval, but also after the hold-timeout
+                [2, 1, false, 100], // Release A
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
+                [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release D
+                [0, [0, 0, 0, 0, 0, 0]], // All released
+            ]
+            };
+        }
+
+        #[test]
         fn test_tap_hold_key_post_wait_in_new_version_1() {
 
                     let config =BehaviorConfig {

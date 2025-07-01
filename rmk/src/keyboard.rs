@@ -272,34 +272,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // A tap hold key reaches timeout, turning into hold press event
     async fn process_tap_hold_timeout(&mut self, key: HoldingKey) -> LoopState {
-        if let Some(mut hold_key) = self.get_holding_key_from_buffer(key.key_event) {
-            match hold_key.action {
-                KeyAction::TapHold(_, hold_action) => {
-                    match hold_key.state {
-                        Initial => {
-                            hold_key.update_state(TapHoldState::BeforeHold);
-                            self.process_key_action_normal(hold_action, hold_key.key_event).await;
-                            debug!("{:?} timeout and send HOLD action", key.key_event);
-                            hold_key.update_state(TapHoldState::PostHold);
-
-                            self.push_and_sort_buffers(hold_key);
-                        }
-                        _ => {
-                            // Should not happen
-                            warn!("!fallback: {:?} key in post state {:?}", key.key_event, hold_key.state);
-                            // Post release maybe, there should not be other state right now
-                            // Release
-                            self.process_key_action_normal(hold_action, key.key_event).await;
-                        }
-                    }
-                }
-                _ => {
-                    // Never happen
-                }
-            }
-        } else {
-            error!("Hold event not exists: {:?}", key);
-        }
+        info!(
+            "[TAP-HOLD] TIMEOUT: tap hold event now reach timeout and should become hold: {:?}",
+            key
+        );
+        self.fire_all_holding_keys(TapHoldDecision::Timeout, key.key_event, true)
+            .await;
         LoopState::OK
     }
 
@@ -519,7 +497,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // CleanBuffer: permissive hold is triggered by a key release
                 // ChordHold: chordal hold is triggered by a key press
                 // Hold: impossible for now
-                self.fire_all_holding_keys(decision, key_event).await;
+                self.fire_all_holding_keys(decision, key_event, false).await;
             }
             _ => {
                 error!("Unexpected tap hold decision {:?}", decision);
@@ -792,7 +770,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         trace!("[TAP-HOLD] current buffer queue to process {:?}", self.holding_buffer);
 
         // While tap hold key is releasing, pressed key event should be updating into PostTap or PostHold state
-        if let Some(hold_key) = self.get_holding_key_from_buffer(key_event) {
+        if let Some(hold_key) = self.remove_holding_key_from_buffer(key_event) {
             match hold_key.action {
                 KeyAction::TapHold(tap_action, hold_action) => {
                     match hold_key.state {
@@ -1562,12 +1540,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
+    /// ## On timeout decision
+    /// When a tap-hold key_event is reach timeout
+    /// - Current key press down as hold and become PostHold
+    /// - Ignore all tap-hold keys, keep they state and timer
+    /// - For all non tap-hold keys pressed, trigger their tap action.
+    ///
+    /// ## Other decision
     /// When a non-tap-hold key_event is released while the permissive-hold feature is enabled:
     /// - If the corresponding key_action is a tap-hold, check that it is not already in a TapHold* state.
     /// - For all tap-hold keys pressed before this event, trigger their hold action.
     /// - For all tap-hold keys pressed after this event, trigger their tap action.
-    /// This function forces all buffered tap-hold keys to resolve immediately, ignoring their timeouts.
-    async fn fire_all_holding_keys(&mut self, _reason: TapHoldDecision, key_event: KeyEvent) {
+    /// - Other keys should send as normal
+    ///
+    /// This function forces all buffered keys to resolve immediately, ignoring their timeouts.
+    async fn fire_all_holding_keys(&mut self, reason: TapHoldDecision, key_event: KeyEvent, hold_current_key: bool) {
         // Press time of current key
         let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col as usize][key_event.row as usize] {
             inst
@@ -1580,7 +1567,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .holding_buffer
             .iter()
             .enumerate()
-            .filter_map(|(pos, e)| if e.state() == Initial { Some(pos) } else { None })
+            .filter_map(|(pos, e)| match reason {
+                TapHoldDecision::Timeout => {
+                    // if current stage is under holding  a tap hold key, other tap hold key should not included
+                    if e.state() == Initial {
+                        if e.key_event.col == key_event.col && e.key_event.row == key_event.row {
+                            Some(pos)
+                        } else if !matches!(e.action, KeyAction::TapHold(..)) {
+                            //exclusive other tap hold keys
+                            Some(pos)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => {
+                    //update all keys
+                    if e.state() == Initial {
+                        Some(pos)
+                    } else {
+                        None
+                    }
+                }
+            })
             .collect();
 
         if hold_keys_to_flush.is_empty() {
@@ -1600,9 +1611,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 match hold_key.action {
                     KeyAction::TapHold(tap_action, hold_action) => {
                         if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
-                            // The same tap-hold key is released, trigger tap action
-                            debug!("Current Key {:?} become {:?}", hold_key.key_event, tap_action);
-                            self.process_key_action_normal(tap_action, hold_key.key_event).await;
+                            // The current tap-hold key updating
+                            let action = if hold_current_key { hold_action } else { tap_action };
+                            debug!("Current Key {:?} become {:?}", hold_key.key_event, action);
+                            self.process_key_action_normal(action, hold_key.key_event).await;
                         } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
                             debug!("Key {:?} become {:?}", hold_key.key_event, hold_action);
                             self.process_key_action_normal(hold_action, hold_key.key_event).await;
@@ -1633,8 +1645,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyAction::TapHold(tap_action, hold_action) => {
                         if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
                             // This is the key that triggered the flush; mark as PostTap (tap resolved).
-                            debug!("Current Key {:?} mark {:?}", hold_key.key_event, tap_action);
-                            hold_key.state = TapHoldState::PostTap;
+                            if hold_current_key {
+                                debug!("Current Key {:?} mark {:?}", hold_key.key_event, hold_action);
+                                hold_key.state = TapHoldState::PostHold;
+                            } else {
+                                debug!("Current Key {:?} mark {:?}", hold_key.key_event, tap_action);
+                                hold_key.state = TapHoldState::PostTap;
+                            };
                         } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
                             // This key was pressed before the triggering key; mark as PostHold (hold resolved).
                             debug!("Key {:?} become {:?}", hold_key.key_event, hold_action);
@@ -1698,7 +1715,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// This function searches for both TapHold and Others key kinds, but is primarily
     /// intended for use with tap-hold keys. Returns the holding key if a matching key is found,
     /// otherwise returns None.
-    fn get_holding_key_from_buffer(&mut self, key_event: KeyEvent) -> Option<HoldingKey> {
+    fn remove_holding_key_from_buffer(&mut self, key_event: KeyEvent) -> Option<HoldingKey> {
         if let Some(i) = self.holding_buffer.iter().position(|e| {
             if e.key_event.row == key_event.row && e.key_event.col == key_event.col {
                 true
