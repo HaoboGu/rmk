@@ -100,6 +100,7 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
+pub(crate) mod tap_dance;
 pub mod tap_hold;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;

@@ -11,6 +11,7 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
+use crate::tap_dance::TapDance;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM};
 
 /// The config struct for RMK keyboard.
@@ -70,11 +71,18 @@ pub struct BehaviorConfig {
     pub keyboard_macros: KeyboardMacrosConfig,
 }
 
+/// Configuration for tap dance behavior
+#[derive(Clone, Debug)]
+pub struct TapDanceConfig {
+    pub tap_dances: Vec<TapDance, 16>,
+}
+
 /// Configurations for tap hold behavior
 #[derive(Clone, Copy, Debug)]
 pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
+    /// Depreciated
     pub post_wait_time: Duration,
     pub hold_timeout: Duration,
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes

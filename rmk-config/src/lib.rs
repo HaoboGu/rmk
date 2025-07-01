@@ -342,6 +342,7 @@ pub struct TapHoldConfig {
     pub permissive_hold: Option<bool>,
     pub chordal_hold: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
+    /// Depreciated
     pub post_wait_time: Option<DurationMillis>,
     pub hold_timeout: Option<DurationMillis>,
 }
