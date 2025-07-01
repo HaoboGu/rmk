@@ -259,7 +259,7 @@ pub(crate) async fn process_vial<
                             info!("Setting counter-clockwise action: {:?}", action);
                             encoder.set_counter_clockwise(action);
                         }
-                        Some(encoder.clone())
+                        Some(*encoder)
                     } else {
                         None
                     }

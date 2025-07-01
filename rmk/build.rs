@@ -21,7 +21,7 @@ fn main() {
 
     // Read keyboard.toml if it's present
     let user_config_str = if let Ok(toml_path) = std::env::var("KEYBOARD_TOML_PATH") {
-        println!("cargo:rerun-if-changed={}", toml_path);
+        println!("cargo:rerun-if-changed={toml_path}");
         fs::read_to_string(&toml_path).expect("Failed to read user config file")
     } else {
         "".to_string()
@@ -65,7 +65,7 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) SPLIT_MESSAGE_CHANNEL_SIZE = constants.split_message_channel_size),
         const_declaration!(pub(crate) NUM_BLE_PROFILE = constants.ble_profiles_num),
         const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES = constants.split_central_sleep_timeout_minutes),
-        format!("pub(crate) const BUILD_HASH: u32 = {:#010x};\n", build_hash),
+        format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ]
     .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())
     .join("\n")
@@ -90,9 +90,8 @@ fn compute_build_hash() -> u32 {
     let now = chrono::Local::now();
 
     // Combine data and compute CRC32
-    let combined = format!("{}_{}", commit_id, now);
+    let combined = format!("{commit_id}_{now}");
     let mut hasher = crc32fast::Hasher::new();
     hasher.update(combined.as_bytes());
-    let build_hash = hasher.finalize();
-    build_hash
+    hasher.finalize()
 }

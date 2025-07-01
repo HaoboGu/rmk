@@ -24,10 +24,7 @@ pub enum TapHoldDecision {
 
 impl TapHoldDecision {
     fn is_hold(&self) -> bool {
-        match self {
-            Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress => true,
-            _ => false,
-        }
+        matches!(self, Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress)
     }
 }
 
@@ -95,9 +92,9 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
     // is the key event in the same side of current chord hold
     pub fn is_same(&self, key_event: KeyEvent) -> bool {
         if self.is_vertical_chord {
-            return self.is_same_hand(key_event.row as usize);
+            self.is_same_hand(key_event.row as usize)
         } else {
-            return self.is_same_hand(key_event.col as usize);
+            self.is_same_hand(key_event.col as usize)
         }
     }
 
@@ -124,17 +121,15 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
                     hand: ChordHoldHand::Right,
                 }
             }
+        } else if (event.row as usize) < (rows / 2) {
+            ChordHoldState {
+                is_vertical_chord: true,
+                hand: ChordHoldHand::Left,
+            }
         } else {
-            if (event.row as usize) < (rows / 2) {
-                ChordHoldState {
-                    is_vertical_chord: true,
-                    hand: ChordHoldHand::Left,
-                }
-            } else {
-                ChordHoldState {
-                    is_vertical_chord: true,
-                    hand: ChordHoldHand::Right,
-                }
+            ChordHoldState {
+                is_vertical_chord: true,
+                hand: ChordHoldHand::Right,
             }
         }
     }

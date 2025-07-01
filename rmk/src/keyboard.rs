@@ -418,14 +418,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let permissive = self.keymap.borrow().behavior.tap_hold.permissive_hold;
 
         // Check if there's buffered tap-hold key
-        let is_buffered = self
-            .holding_buffer
-            .iter()
-            .find(|i| match i.action {
-                KeyAction::TapHold(_, _) => i.state == TapHoldState::Initial,
-                _ => false,
-            })
-            .is_some();
+        let is_buffered = self.holding_buffer.iter().any(|i| match i.action {
+            KeyAction::TapHold(_, _) => i.state == TapHoldState::Initial,
+            _ => false,
+        });
 
         debug!(
             "\x1b[34m[TAP-HOLD] tap_hold_decision\x1b[0m: permissive={}, is_tap_hold_buffered={}, is_pressed={}, action={:?}",
@@ -765,43 +761,40 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // While tap hold key is releasing, pressed key event should be updating into PostTap or PostHold state
         if let Some(hold_key) = self.remove_holding_key_from_buffer(key_event) {
-            match hold_key.action {
-                KeyAction::TapHold(tap_action, hold_action) => {
-                    match hold_key.state {
-                        TapHoldState::BeforeHold | TapHoldState::PostHold => {
-                            debug!(
-                                "[TAP-HOLD] {:?} releasing with key event {:?}",
-                                hold_key.state, key_event
-                            );
-                            self.process_key_action_normal(hold_action, key_event).await;
-                        }
-                        TapHoldState::PostTap => {
-                            debug!(
-                                "TapHold {:?}] post Tapping, releasing {:?}",
-                                hold_key.key_event, tap_action
-                            );
-                            // The tap-hold key is already "pressed" as tap, release it here.
-                            // This is a special case, because the "tap_action" isn't tapped, it's triggered by "pressing" the tap-action
-                            self.process_key_action_normal(tap_action, key_event).await;
-                        }
-                        TapHoldState::Initial => {
-                            // Release tap-hold key as tap action
-                            debug!(
-                                "[TAP-HOLD] quick release should be tapping, send tap action, {:?}",
-                                tap_action
-                            );
-                            // Use hold_key.key_event(whose pressed value should be true) to process tap action
-                            self.process_key_action_tap(tap_action, hold_key.key_event).await;
-                        }
-                        _ => {
-                            error!(
-                                "[TAP-HOLD] Unexpected TapHoldState {:?}, while releasing {:?}",
-                                hold_key.state, hold_key.key_event
-                            );
-                        }
+            if let KeyAction::TapHold(tap_action, hold_action) = hold_key.action {
+                match hold_key.state {
+                    TapHoldState::BeforeHold | TapHoldState::PostHold => {
+                        debug!(
+                            "[TAP-HOLD] {:?} releasing with key event {:?}",
+                            hold_key.state, key_event
+                        );
+                        self.process_key_action_normal(hold_action, key_event).await;
+                    }
+                    TapHoldState::PostTap => {
+                        debug!(
+                            "TapHold {:?}] post Tapping, releasing {:?}",
+                            hold_key.key_event, tap_action
+                        );
+                        // The tap-hold key is already "pressed" as tap, release it here.
+                        // This is a special case, because the "tap_action" isn't tapped, it's triggered by "pressing" the tap-action
+                        self.process_key_action_normal(tap_action, key_event).await;
+                    }
+                    TapHoldState::Initial => {
+                        // Release tap-hold key as tap action
+                        debug!(
+                            "[TAP-HOLD] quick release should be tapping, send tap action, {:?}",
+                            tap_action
+                        );
+                        // Use hold_key.key_event(whose pressed value should be true) to process tap action
+                        self.process_key_action_tap(tap_action, hold_key.key_event).await;
+                    }
+                    _ => {
+                        error!(
+                            "[TAP-HOLD] Unexpected TapHoldState {:?}, while releasing {:?}",
+                            hold_key.state, hold_key.key_event
+                        );
                     }
                 }
-                _ => {}
             }
         }
 
@@ -1170,10 +1163,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // The triggered forks suppress the 'match_any' modifiers automatically
         // unless they are configured as the 'kept_modifiers'
         let mut fork_suppress = HidModifiers::default();
-        for fork_state in &self.fork_states {
-            if let Some(active) = fork_state {
-                fork_suppress |= active.suppress;
-            }
+        for fork_state in self.fork_states.iter().flatten() {
+            fork_suppress |= fork_state.suppress;
         }
 
         // Some of these suppressions could have been canceled after the fork activation
@@ -1565,9 +1556,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 TapHoldDecision::Timeout => {
                     // A tap-hold key is timeout, flush current timeout keys and all other tapped normal keys
                     if e.state() == Initial {
-                        if e.key_event.col == key_event.col && e.key_event.row == key_event.row {
-                            Some(pos)
-                        } else if !matches!(e.action, KeyAction::TapHold(..)) {
+                        if (e.key_event.col == key_event.col && e.key_event.row == key_event.row)
+                            || (!matches!(e.action, KeyAction::TapHold(..)))
+                        {
                             Some(pos)
                         } else {
                             // Exclude other tap-hold keys
@@ -1714,13 +1705,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// intended for use with tap-hold keys. Returns the holding key if a matching key is found,
     /// otherwise returns None.
     fn remove_holding_key_from_buffer(&mut self, key_event: KeyEvent) -> Option<HoldingKey> {
-        if let Some(i) = self.holding_buffer.iter().position(|e| {
-            if e.key_event.row == key_event.row && e.key_event.col == key_event.col {
-                true
-            } else {
-                false
-            }
-        }) {
+        if let Some(i) = self
+            .holding_buffer
+            .iter()
+            .position(|e| e.key_event.row == key_event.row && e.key_event.col == key_event.col)
+        {
             Some(self.holding_buffer.swap_remove(i))
         } else {
             None

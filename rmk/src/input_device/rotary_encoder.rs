@@ -91,7 +91,7 @@ impl ResolutionPhase {
         // Each entry corresponds to a state transition and provides +1, -1, or 0 pulse
         let mut lut = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
         if reverse {
-            lut = lut.map(|x| x * -1);
+            lut = lut.map(|x| -x);
         }
         Self {
             resolution,
