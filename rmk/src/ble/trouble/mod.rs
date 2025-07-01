@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeReadRemoteFeatures, LeSetPhy};
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
@@ -86,10 +86,7 @@ pub async fn build_ble_stack<
 pub(crate) async fn run_ble<
     'a,
     'b,
-    C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdAsync<LeReadRemoteFeatures>
-        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -592,7 +589,7 @@ pub(crate) async fn run_dummy_keyboard<
 pub(crate) async fn set_conn_params<
     'a,
     'b,
-    C: Controller + ControllerCmdAsync<LeReadRemoteFeatures> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
 >(
     stack: &Stack<'_, C, P>,
@@ -643,10 +640,7 @@ async fn run_ble_keyboard<
     'b,
     'c,
     'd,
-    C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdAsync<LeReadRemoteFeatures>
-        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
@@ -740,7 +734,7 @@ pub(crate) async fn update_ble_phy<P: PacketPool>(
 pub(crate) async fn update_conn_params<
     'a,
     'b,
-    C: Controller + ControllerCmdAsync<LeReadRemoteFeatures> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
 >(
     stack: &Stack<'a, C, P>,

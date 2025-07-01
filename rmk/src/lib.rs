@@ -24,7 +24,7 @@ use core::sync::atomic::Ordering;
 
 #[cfg(feature = "_ble")]
 use bt_hci::{
-    cmd::le::{LeReadLocalSupportedFeatures, LeReadRemoteFeatures, LeSetPhy},
+    cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
 use config::{RmkConfig, VialConfig};
@@ -184,10 +184,7 @@ pub async fn initialize_keymap_and_storage<
 pub async fn run_rmk<
     'a,
     'b,
-    #[cfg(feature = "_ble")] C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdAsync<LeReadRemoteFeatures>
-        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>, // TODO: remove the static lifetime
     Out: OutputPin,

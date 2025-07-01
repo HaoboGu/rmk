@@ -1,6 +1,6 @@
 use core::sync::atomic::Ordering;
 
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeReadRemoteFeatures, LeSetPhy, LeSetScanParams};
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{select, Either};
 use embassy_sync::signal::Signal;
@@ -103,7 +103,6 @@ pub(crate) async fn run_ble_peripheral_manager<
     C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdAsync<LeReadRemoteFeatures>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     const ROW: usize,
     const COL: usize,
@@ -202,10 +201,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 
 async fn connect_and_run_peripheral_manager<
     'a,
-    C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdAsync<LeReadRemoteFeatures>
-        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
@@ -255,7 +251,11 @@ async fn connect_and_run_peripheral_manager<
     }
 }
 
-async fn ble_central_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+async fn ble_central_task<
+    'a,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    P: PacketPool,
+>(
     client: &GattClient<'a, C, P, 10>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
