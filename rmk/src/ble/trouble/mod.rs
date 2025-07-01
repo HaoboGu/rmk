@@ -3,8 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
-use bt_hci::cmd::le::LeSetPhy;
-use bt_hci::controller::ControllerCmdAsync;
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
+use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
@@ -88,7 +88,7 @@ pub async fn build_ble_stack<
 pub(crate) async fn run_ble<
     'a,
     'b,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
@@ -610,7 +610,12 @@ pub(crate) async fn run_dummy_keyboard<
     dummy_writer.run_writer().await;
 }
 
-pub(crate) async fn set_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+pub(crate) async fn set_conn_params<
+    'a,
+    'b,
+    C: Controller + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    P: PacketPool,
+>(
     stack: &Stack<'_, C, P>,
     conn: &GattConnection<'a, 'b, P>,
 ) {
@@ -659,7 +664,7 @@ async fn run_ble_keyboard<
     'b,
     'c,
     'd,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
@@ -750,7 +755,12 @@ pub(crate) async fn update_ble_phy<P: PacketPool>(
 }
 
 // Update the connection parameters
-pub(crate) async fn update_conn_params<'a, 'b, C: Controller, P: PacketPool>(
+pub(crate) async fn update_conn_params<
+    'a,
+    'b,
+    C: Controller + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    P: PacketPool,
+>(
     stack: &Stack<'a, C, P>,
     conn: &Connection<'b, P>,
     params: &ConnectParams,

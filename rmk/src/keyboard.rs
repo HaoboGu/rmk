@@ -14,11 +14,6 @@ use {
     crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
     crate::event::ControllerEvent,
 };
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{ControllerPub, CONTROLLER_CHANNEL},
-    crate::event::ControllerEvent,
-};
 
 use crate::action::{Action, KeyAction};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};

@@ -1,6 +1,6 @@
 use core::sync::atomic::Ordering;
 
-use bt_hci::cmd::le::{LeSetPhy, LeSetScanParams};
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::select::{select, select3, Either, Either3};
 use embassy_sync::signal::Signal;
@@ -114,7 +114,10 @@ impl EventHandler for ScanHandler {
 
 pub(crate) async fn run_ble_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdSync<LeSetScanParams> + ControllerCmdAsync<LeSetPhy>,
+    C: Controller
+        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     const ROW: usize,
     const COL: usize,
     const ROW_OFFSET: usize,
@@ -212,7 +215,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 
 async fn connect_and_run_peripheral_manager<
     'a,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
     const ROW: usize,
     const COL: usize,
@@ -441,7 +444,11 @@ pub(crate) async fn wait_for_stack_started() {
 
 /// Sleep manager task for BLE Split Central
 /// Handles sleep timeout and connection parameter adjustments using event-driven approach
-async fn sleep_manager_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+async fn sleep_manager_task<
+    'a,
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    P: PacketPool,
+>(
     stack: &'a Stack<'a, C, P>,
     conn: &Connection<'a, P>,
 ) -> Result<(), BleHostError<C::Error>> {
