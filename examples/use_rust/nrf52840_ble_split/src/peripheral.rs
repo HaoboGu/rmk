@@ -11,7 +11,7 @@ use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::{Peri, bind_interrupts, rng, usb};
+use embassy_nrf::{bind_interrupts, rng, usb, Peri};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -25,7 +25,7 @@ use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
-use rmk::{HostResources, run_devices};
+use rmk::{run_devices, HostResources};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -121,7 +121,7 @@ async fn main(spawner: Spawner) {
     );
     let mut rng = rng::Rng::new(p.RNG, Irqs);
     let mut rng_generator = ChaCha12Rng::from_rng(&mut rng).unwrap();
-    let mut sdc_mem = sdc::Mem::<4096>::new();
+    let mut sdc_mem = sdc::Mem::<4616>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
     let mut resources = HostResources::new();

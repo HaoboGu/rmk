@@ -1,6 +1,4 @@
 pub fn jump_to_bootloader() {
-    // TODO: support more MCUs
-
     #[cfg(feature = "adafruit_bl")]
     // Reference: https://github.com/adafruit/Adafruit_nRF52_Bootloader/blob/d6b28e66053eea467166f44875e3c7ec741cb471/src/main.c#L107
     embassy_nrf::pac::POWER

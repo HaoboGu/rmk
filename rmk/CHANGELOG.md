@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- Only the valid macro data is stored in the storage now. **Clearing storage is required to update**
+
+### Fixed
+
+- Light service is wrongly disabled
+
 ## [0.7.3] - 2025-06-18
 
 ### Added
@@ -20,8 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed sdc build error
-- Fixed cloud build script for ESP32
+- Fix sdc build error
+- Fix cloud build script for ESP32
 
 ## [0.7.2] - 2025-06-12
 

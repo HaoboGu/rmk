@@ -50,7 +50,7 @@ transparent_action = @{ ("_")+ | (^"Trns" ~ !ASCII_ALPHANUMERIC) } // One or mor
 wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
 
 // Rule 4.6: OSM(modifier) - One-Shot Modifier (requires quotes)
-osm_action = { ^"OSM" ~ "(" ~ "\"" ~ modifier_combination ~ "\"" ~ ")" }
+osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
 
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }

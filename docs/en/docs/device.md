@@ -137,9 +137,6 @@ pub trait InputProcessor {
 
 The `process` method is responsible for processing input events and sending HID reports through the report channel. All processors share a common keymap state through `&'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>>`.
 
-### Rotary encoder
-
-TODO: The encoder list is represented separately in vial, different from normal matrix. But layers still have effect on encoder. The behavior of rotary encoder could be changed by vial.
 
 # Input Devices
 
