@@ -78,7 +78,7 @@ pub mod config;
 #[cfg(feature = "controller")]
 pub mod controller;
 pub mod debounce;
-pub(crate) mod descriptor;
+pub mod descriptor;
 pub mod direct_pin;
 pub mod event;
 pub mod fork;
@@ -97,8 +97,9 @@ pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
+pub mod tap_hold;
 #[cfg(not(feature = "_no_usb"))]
-pub(crate) mod usb;
+pub mod usb;
 pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(

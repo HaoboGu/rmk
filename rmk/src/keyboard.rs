@@ -1,13 +1,22 @@
 use core::cell::RefCell;
+use core::cmp::Ordering;
+use core::fmt::Debug;
 
 use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
-use embassy_time::{Instant, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use heapless::{Deque, FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use TapHoldDecision::{Buffering, Ignore};
+use TapHoldState::Initial;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::event::ControllerEvent,
+};
+#[cfg(feature = "controller")]
+use {
+    crate::channel::{ControllerPub, CONTROLLER_CHANNEL},
     crate::event::ControllerEvent,
 };
 
@@ -26,7 +35,27 @@ use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
+use crate::tap_hold::TapHoldDecision::{ChordHold, CleanBuffer, Hold};
+use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
 use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+
+const HOLD_BUFFER_SIZE: usize = 16;
+
+/// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
+/// LedIndicator type would be nicer, but that does not have const expr constructor
+pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
+
+#[derive(Debug)]
+enum LoopState {
+    /// Default state, fire and forget current key event
+    OK,
+    /// Save current event into buffer
+    Queue,
+    /// Flush event buffer
+    Flush,
+    /// Stop keyboard running
+    Stop,
+}
 
 /// State machine for one shot keys
 #[derive(Default)]
@@ -59,28 +88,46 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     /// The report is sent using `send_report`.
     async fn run(&mut self) {
         loop {
-            let key_event = KEY_EVENT_CHANNEL.receive().await;
-
-            // Process the key change
-            self.process_inner(key_event).await;
-
-            // After processing the key change, check if there are unprocessed events
-            // This will happen if there's recursion in key processing
-            loop {
-                if self.unprocessed_events.is_empty() {
-                    break;
+            let result: LoopState = match self.next_tap_hold_event() {
+                Some(event) => self.process_buffered_tap_hold_event(event).await,
+                None => {
+                    // No buffered tap-hold event, wait for new key
+                    let key_event = KEY_EVENT_CHANNEL.receive().await;
+                    // Process the key event
+                    self.process_inner(key_event).await
                 }
-                // Process unprocessed events
-                let e = self.unprocessed_events.remove(0);
-                self.process_inner(e).await;
+            };
+
+            match result {
+                LoopState::Queue => {
+                    // keep unprocessed key events
+                    // every key should be buffered into event list, check in every turn in future
+                    continue;
+                }
+                LoopState::Stop => {
+                    return;
+                }
+                _ => {
+                    // Stop buffering, clean all buffered events
+                    self.clean_buffered_tap_keys();
+
+                    // After processing the key event, check if there are unprocessed events
+                    // This will happen if there's recursion in key processing
+                    if self.holding_buffer.is_empty() && !self.unprocessed_events.is_empty() {
+                        while !self.unprocessed_events.is_empty() {
+                            // Process unprocessed events
+                            let e = self.unprocessed_events.remove(0);
+                            debug!("Unprocessed event: {:?}", e);
+                            self.process_inner(e).await;
+                        }
+                    }
+                }
             }
+
+            embassy_time::Timer::after_micros(500).await;
         }
     }
 }
-
-/// led states for the keyboard hid report (its value is received by by the light service in a hid report)
-/// LedIndicator type would be nicer, but that does not have const expr constructor
-pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
 
 pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Keymap
@@ -88,6 +135,11 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Unprocessed events
     unprocessed_events: Vec<KeyEvent, 16>,
+
+    /// Buffered holding keys
+    pub holding_buffer: Vec<HoldingKey, HOLD_BUFFER_SIZE>,
+
+    chord_state: Option<ChordHoldState<COL>>,
 
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
@@ -185,6 +237,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             fork_states: [None; FORK_MAX_NUM],
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
+            holding_buffer: Vec::new(),
             registered_keys: [None; 6],
             held_modifiers: HidModifiers::default(),
             held_keycodes: [KeyCode::No; 6],
@@ -209,6 +262,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             combo_on: true,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+            chord_state: None,
         }
     }
 
@@ -216,8 +270,83 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
+    // A tap hold key reaches timeout, turning into hold press event
+    async fn process_tap_hold_timeout(&mut self, tap_hold: HoldingKey) -> LoopState {
+        if let Some(mut hold_key) = self.get_holding_key_from_buffer(tap_hold.key_event) {
+            match hold_key.action {
+                KeyAction::TapHold(_, hold_action) => {
+                    match hold_key.state {
+                        Initial => {
+                            hold_key.update_state(TapHoldState::BeforeHold);
+                            self.process_key_action_normal(hold_action, hold_key.key_event).await;
+                            debug!("{:?} timeout and send HOLD action", tap_hold.key_event);
+                            hold_key.update_state(TapHoldState::PostHold);
+
+                            self.push_and_sort_buffers(hold_key);
+                        }
+                        _ => {
+                            // Marked as post hold
+                            warn!(
+                                "!fallback: {:?} key in post state {:?}",
+                                tap_hold.key_event, hold_key.state
+                            );
+                            // post release maybe, there should not be other state right now
+                            //release
+                            self.process_key_action_normal(hold_action, tap_hold.key_event).await;
+                        }
+                    }
+                }
+                _ => {
+                    //never happen
+                }
+            }
+        } else {
+            error!("Hold event not exists: {:?}", tap_hold);
+        }
+        LoopState::OK
+    }
+
+    // Clean up for leak keys, remove non-tap-hold keys in PostTap state from the buffer
+    pub(crate) fn clean_buffered_tap_keys(&mut self) {
+        self.holding_buffer.retain(|e| match e.action {
+            KeyAction::TapHold(_, _) => true,
+            _ => match e.state {
+                TapHoldState::PostTap => {
+                    debug!("Processing buffering TAP keys with post tap: {:?}", e.key_event);
+                    false
+                }
+                _ => true,
+            },
+        });
+    }
+
+    async fn process_buffered_tap_hold_event(&mut self, tap_hold: HoldingKey) -> LoopState {
+        let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > tap_hold.pressed_time.elapsed() {
+            self.keymap.borrow().behavior.tap_hold.hold_timeout - tap_hold.pressed_time.elapsed()
+        } else {
+            Duration::from_ticks(0)
+        };
+
+        debug!(
+            "[TAP-HOLD] Processing with TAP hold events: {:?}, timeout in {} ms",
+            tap_hold.key_event,
+            time_left.as_millis()
+        );
+
+        // Wait for hold timeout or new key event
+        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+            Either::First(_) => self.process_tap_hold_timeout(tap_hold).await,
+            Either::Second(key_event) => {
+                // Process new key event
+                debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
+                self.process_inner(key_event).await;
+                LoopState::OK
+            }
+        }
+    }
+
     /// Process key changes at (row, col)
-    async fn process_inner(&mut self, key_event: KeyEvent) {
+    async fn process_inner(&mut self, key_event: KeyEvent) -> LoopState {
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_event.pressed {
             self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
@@ -232,12 +361,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                debug!("Process key action after combo: {:?}, {:?}", key_action, key_event);
-
-                self.process_key_action(key_action, key_event).await;
+                debug!(
+                    "Process key action after combo processing: {:?}, {:?}",
+                    key_action, key_event
+                );
+                self.process_key_action(key_action, key_event).await
+            } else {
+                LoopState::OK
             }
         } else {
-            self.process_key_action(key_action, key_event).await;
+            self.process_key_action(key_action, key_event).await
         }
     }
 
@@ -304,7 +437,101 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) {
+    // Calculate next state of tap hold
+    // 1. turn into buffering state
+    // 2. clean buffer
+    // 3. ignore
+    fn make_tap_hold_decision(&mut self, key_action: KeyAction, key_event: KeyEvent) -> TapHoldDecision {
+        let permissive = self.keymap.borrow().behavior.tap_hold.permissive_hold;
+
+        // Check if there's buffered tap-hold key
+        let is_buffered = self
+            .holding_buffer
+            .iter()
+            .find(|i| match i.action {
+                KeyAction::TapHold(_, _) => i.state == TapHoldState::Initial,
+                _ => false,
+            })
+            .is_some();
+
+        debug!(
+            "\x1b[34m[TAP-HOLD] tap_hold_decision\x1b[0m: permissive={}, is_tap_hold_buffered={}, is_pressed={}, action={:?}",
+            permissive, is_buffered, key_event.pressed, key_action
+        );
+
+        if is_buffered {
+            if key_event.pressed {
+                // New key pressed after a tap-hold key.
+
+                // 1. Check chordal hold
+                if let Some(hand) = &self.chord_state {
+                    // TODO: add more chordal configuration and behaviors here
+                    if !hand.is_same(key_event) {
+                        debug!("Is chordal hold hand: {:?}, raise", hand);
+                        return ChordHold;
+                    }
+                }
+
+                // 2. Permissive hold
+                //
+                // Permissive hold checks the key release, so the pressed key should be buffered when pressed.
+                if permissive {
+                    // Buffer pressed keys if permissive hold is enabled.
+                    return match key_action {
+                        KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+                            // Ignore following tap-hold keys, they will be always checked
+                            Ignore
+                        }
+                        _ => {
+                            // Buffer keys and wait for key release
+                            debug!("key {:?} press down while BUFFERING, save it into buffer", key_action);
+                            Buffering
+                        }
+                    };
+                }
+            } else {
+                // Key releasing while tap-holding
+                if permissive {
+                    // PERMISSIVE HOLDING, which means any key press-and-release after a tap-hold key will raise hold decision
+                    // Key release while permissive hold is enabled, hold will be triggered
+                    return CleanBuffer;
+                };
+            }
+        }
+
+        // Default decision
+        Ignore
+    }
+
+    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
+        let decision = self.make_tap_hold_decision(original_key_action, key_event);
+
+        debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
+        match decision {
+            Ignore => {}
+            Buffering => {
+                // Save into buffer, will be process in the future
+                self.buffer_holding_key(key_event, original_key_action, Initial);
+                return LoopState::Queue;
+            }
+            CleanBuffer | Hold | ChordHold => {
+                // CleanBuffer: permissive hold is triggered by a key release
+                // ChordHold: chordal hold is triggered by a key press
+                // Hold: impossible for now
+                self.fire_all_holding_keys(decision, key_event).await;
+            }
+            _ => {
+                error!("Unexpected tap hold decision {:?}", decision);
+                return LoopState::OK;
+            }
+        }
+
+        // Process current key action after tap-hold decision and (optional) all holding keys are resolved
+        self.process_key_action_inner(original_key_action, key_event).await
+    }
+
+    async fn process_key_action_inner(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
+        // Start forks
         let key_action = self.try_start_forks(original_key_action, key_event);
 
         #[cfg(feature = "controller")]
@@ -312,7 +539,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
-            KeyAction::Single(a) => self.process_key_action_normal(a, key_event).await,
+            KeyAction::Single(a) => {
+                debug!("Process Single key action: {:?}, {:?}", a, key_event);
+                self.process_key_action_normal(a, key_event).await;
+            }
             KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_event).await,
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_event).await,
             KeyAction::TapHold(tap_action, hold_action) => {
@@ -332,19 +562,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
+        // Release to early
         if !key_event.pressed {
             // Record release of current key, which will be used in tap/hold processing
+            debug!("Record released key event: {:?}", key_event);
             let mut is_mod = false;
             if let KeyAction::Single(Action::Key(k)) = key_action {
+                // TODO: Use if-let chain
                 if k.is_modifier() {
                     is_mod = true;
                 }
             }
             // Record the last release event
+            // TODO: check key action, should be a-z/space/enter
             self.last_release = (key_event, is_mod, Some(Instant::now()));
         }
 
         self.try_finish_forks(original_key_action, key_event);
+
+        LoopState::OK
     }
 
     /// Replaces the incoming key_action if a fork is configured for that key.
@@ -361,6 +597,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if let Some(active) = self.fork_states[i] {
                         // If the originating key of a fork is released, simply release the replacement key
                         // (The fork deactivation is delayed, will happen after the release hid report is sent)
+                        debug!("replace input with fork action {:?}", active);
                         return active.replacement;
                     }
                 }
@@ -473,7 +710,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 error!("Combo actions buffer overflowed! This is a bug and should not happen!");
             }
 
-            //FIXME last combo is not checked
+            // FIXME: last combo is not checked
             let next_action = self
                 .keymap
                 .borrow_mut()
@@ -513,7 +750,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn dispatch_combos(&mut self) {
         while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
             debug!("Dispatching combo action: {:?}", action);
-            self.process_key_action(action, event).await;
+            self.process_key_action_inner(action, event).await;
         }
 
         self.keymap
@@ -524,6 +761,80 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .iter_mut()
             .filter(|combo| !combo.is_triggered())
             .for_each(Combo::reset);
+    }
+
+    // sort buffer order by start_time ASC
+    fn push_and_sort_buffers(&mut self, item: HoldingKey) {
+        if let Err(e) = self.holding_buffer.push(item) {
+            error!("Holding buffer overflowed, cannot save: {:?}", e);
+        }
+        self.sort_buffers();
+    }
+
+    fn sort_buffers(&mut self) {
+        self.holding_buffer.sort_unstable_by(|l, r| {
+            if l.pressed_time.as_millis() >= r.pressed_time.as_millis() {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        });
+    }
+
+    // Release hold key
+    async fn release_tap_hold_key(&mut self, key_event: KeyEvent) {
+        debug!("[TAP-HOLD] On Releasing: tap-hold key event {:?}", key_event);
+
+        let col = key_event.col as usize;
+        let row = key_event.row as usize;
+
+        trace!("[TAP-HOLD] current buffer queue to process {:?}", self.holding_buffer);
+
+        // While tap hold key is releasing, pressed key event should be updating into PostTap or PostHold state
+        if let Some(hold_key) = self.get_holding_key_from_buffer(key_event) {
+            match hold_key.action {
+                KeyAction::TapHold(tap_action, hold_action) => {
+                    match hold_key.state {
+                        TapHoldState::BeforeHold | TapHoldState::PostHold => {
+                            debug!(
+                                "[TAP-HOLD] {:?} releasing with key event {:?}",
+                                hold_key.state, key_event
+                            );
+                            self.process_key_action_normal(hold_action, key_event).await;
+                        }
+                        TapHoldState::PostTap => {
+                            debug!(
+                                "TapHold {:?}] post Tapping, releasing {:?}",
+                                hold_key.key_event, tap_action
+                            );
+                            // The tap-hold key is already "pressed" as tap, release it here.
+                            // This is a special case, because the "tap_action" isn't tapped, it's triggered by "pressing" the tap-action
+                            self.process_key_action_normal(tap_action, key_event).await;
+                        }
+                        TapHoldState::Initial => {
+                            // Release tap-hold key as tap action
+                            debug!(
+                                "[TAP-HOLD] quick release should be tapping, send tap action, {:?}",
+                                tap_action
+                            );
+                            // Use hold_key.key_event(whose pressed value should be true) to process tap action
+                            self.process_key_action_tap(tap_action, hold_key.key_event).await;
+                        }
+                        _ => {
+                            error!(
+                                "[TAP-HOLD] Unexpected TapHoldState {:?}, while releasing {:?}",
+                                hold_key.state, hold_key.key_event
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Clear timer
+        self.timer[col][row] = None;
+        debug!("[TAP-HOLD] tap-hold key event {:?}, cleanup done", key_event);
     }
 
     async fn process_key_action_normal(&mut self, action: Action, key_event: KeyEvent) {
@@ -596,6 +907,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Tap action, send a key when the key is pressed, then release the key.
     async fn process_key_action_tap(&mut self, action: Action, mut key_event: KeyEvent) {
+        debug!("TAP action: {:?}, {:?}", action, key_event);
+
         if key_event.pressed {
             self.process_key_action_normal(action, key_event).await;
 
@@ -639,18 +952,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if self.keymap.borrow().behavior.tap_hold.enable_hrm {
             // If HRM is enabled, check whether it's a different key is in key streak
             if let Some(last_release_time) = self.last_release.2 {
+                //ignore hold within pre idle time for quick typing
                 if key_event.pressed {
                     if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
                         && !(key_event.row == self.last_release.0.row && key_event.col == self.last_release.0.col)
                     {
                         // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
-                        self.process_key_action_tap(tap_action, key_event).await;
+                        self.process_key_action_normal(tap_action, key_event).await;
+
+                        //push into buffer, process by order in loop
+                        self.buffer_holding_key(
+                            key_event,
+                            KeyAction::TapHold(tap_action, hold_action),
+                            TapHoldState::PostTap,
+                        );
                         return;
                     } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
                         && key_event.row == self.last_release.0.row
                         && key_event.col == self.last_release.0.col
                     {
+                        //quick tapping to repeat
+
                         // Pressed a same key after tapped it within `hold_timeout`
                         // Trigger the tap action just as it's pressed
                         self.process_key_action_normal(tap_action, key_event).await;
@@ -663,61 +986,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        let row = key_event.row as usize;
-        let col = key_event.col as usize;
+        // New hold key pressed, should push into unreleased events
         if key_event.pressed {
-            // Press
-            self.timer[col][row] = Some(Instant::now());
-
-            let hold_timeout =
-                embassy_time::Timer::after_millis(self.keymap.borrow().behavior.tap_hold.hold_timeout.as_millis());
-            match select(hold_timeout, KEY_EVENT_CHANNEL.receive()).await {
-                Either::First(_) => {
-                    // Timeout, trigger hold
-                    debug!("Hold timeout, got HOLD: {:?}, {:?}", hold_action, key_event);
-                    self.process_key_action_normal(hold_action, key_event).await;
-                }
-                Either::Second(e) => {
-                    if e.row == key_event.row && e.col == key_event.col {
-                        // If it's same key event and releasing within `hold_timeout`, trigger tap
-                        if !e.pressed {
-                            let elapsed = self.timer[col][row].unwrap().elapsed().as_millis();
-                            debug!("TAP action: {:?}, time elapsed: {}ms", tap_action, elapsed);
-                            self.process_key_action_tap(tap_action, key_event).await;
-
-                            // Clear timer
-                            self.timer[col][row] = None;
-                        }
-                    } else {
-                        // A different key comes
-                        // If it's a release event, the key is pressed BEFORE tap/hold key, so it should be regarded as a normal key
-                        self.unprocessed_events.push(e).ok();
-                        if !e.pressed {
-                            // we push the current tap/hold event again, the loop will process the release first, then re-process current tap/hold
-                            self.unprocessed_events.push(key_event).ok();
-                            return;
-                        }
-
-                        // Wait for key release, record all pressed keys during this
-                        loop {
-                            let next_key_event = KEY_EVENT_CHANNEL.receive().await;
-                            self.unprocessed_events.push(next_key_event).ok();
-                            if !next_key_event.pressed {
-                                break;
-                            }
-                        }
-
-                        // Process hold action
-                        self.process_key_action_normal(hold_action, key_event).await;
-
-                        // All other unprocessed events will be processed later
-                    }
-                }
-            }
+            // Save unprocessed key
+            self.buffer_holding_key(key_event, KeyAction::TapHold(tap_action, hold_action), Initial);
         } else {
-            // Release
+            // Release a tap-hold key, should check timeout for tap
 
-            // find holding_after_tap key_event
+            // Find holding_after_tap key_event
             if let Some(index) = self.hold_after_tap.iter().position(|&k| {
                 if let Some(ke) = k {
                     return ke.row == key_event.row && ke.col == key_event.col;
@@ -728,45 +1004,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 info!("Releasing hold after tap: {:?} {:?}", tap_action, key_event);
                 self.process_key_action_normal(tap_action, key_event).await;
                 self.hold_after_tap[index] = None;
-                return;
-            }
-            if self.timer[col][row].is_some() {
-                // Release hold action, wait for `post_wait_time`, then clear timer
-                debug!(
-                    "HOLD releasing: {:?}, {}, wait for `post_wait_time` for new releases",
-                    hold_action, key_event.pressed
-                );
-                let wait_release = async {
-                    loop {
-                        let next_key_event = KEY_EVENT_CHANNEL.receive().await;
-                        if !next_key_event.pressed {
-                            self.unprocessed_events.push(next_key_event).ok();
-                        } else {
-                            break next_key_event;
-                        }
-                    }
-                };
-
-                let wait_timeout = embassy_time::Timer::after_millis(
-                    self.keymap.borrow().behavior.tap_hold.post_wait_time.as_millis(),
-                );
-                match select(wait_timeout, wait_release).await {
-                    Either::First(_) => {
-                        // Wait timeout, release the hold key finally
-                        self.process_key_action_normal(hold_action, key_event).await;
-                    }
-                    Either::Second(next_press) => {
-                        // Next press event comes, add hold release to unprocessed list first, then add next press
-                        self.unprocessed_events.push(key_event).ok();
-                        self.unprocessed_events.push(next_press).ok();
-                    }
-                };
-                // Clear timer
-                self.timer[col][row] = None;
             } else {
-                // The timer has been reset, fire hold release event
-                debug!("HOLD releasing: {:?}, {}", hold_action, key_event.pressed);
-                self.process_key_action_normal(hold_action, key_event).await;
+                // Check unreleased event and remove key with same rol and col
+                self.release_tap_hold_key(key_event).await;
             }
         }
     }
@@ -797,7 +1037,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 OneShotState::Initial(m) | OneShotState::Single(m) => {
                     self.osm_state = OneShotState::Single(m);
 
-                    let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
+                    let timeout = Timer::after(self.keymap.borrow().behavior.one_shot.timeout);
                     match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
                         Either::First(_) => {
                             // Timeout, release modifiers
@@ -879,7 +1119,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_action_keycode(&mut self, mut key: KeyCode, key_event: KeyEvent) {
         if key == KeyCode::Again {
             key = self.last_key_code;
-        } else {
+            debug!("Repeat last key code: {:?} , {:?}", key, key_event);
+        } else if key_event.pressed {
+            //TODO should save releasing key only
+            debug!(
+                "Last key code changed from  {:?} to {:?}(pressed: {:?})",
+                self.last_key_code, key, key_event.pressed
+            );
             self.last_key_code = key;
         }
 
@@ -905,7 +1151,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// calculates the combined effect of "explicit modifiers":
+    /// Calculates the combined effect of "explicit modifiers":
     /// - registered modifiers
     /// - one-shot modifiers
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> HidModifiers {
@@ -935,7 +1181,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - effect of KeyAction::WithModifiers (while they are pressed)
     /// - possible fork related modifier suppressions
     pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
-        // text typing macro should not be affected by any modifiers,
+        // Text typing macro should not be affected by any modifiers,
         // only its own capitalization
         if self.macro_texting {
             if self.macro_caps {
@@ -973,7 +1219,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         result
     }
 
-    // process a basic keypress/release and also take care of applying one shot modifiers
+    // Process a basic keypress/release and also take care of applying one shot modifiers
     async fn process_basic(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key_event.pressed {
             self.register_key(key, key_event);
@@ -985,7 +1231,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .await;
     }
 
-    // process action key
+    // Process action key
     async fn process_action_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         let key = match key {
             KeyCode::GraveEscape => {
@@ -1315,6 +1561,165 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
+    /// When a non-tap-hold key_event is released while the permissive-hold feature is enabled:
+    /// - If the corresponding key_action is a tap-hold, check that it is not already in a TapHold* state.
+    /// - For all tap-hold keys pressed before this event, trigger their hold action.
+    /// - For all tap-hold keys pressed after this event, trigger their tap action.
+    /// This function forces all buffered tap-hold keys to resolve immediately, ignoring their timeouts.
+    async fn fire_all_holding_keys(&mut self, _reason: TapHoldDecision, key_event: KeyEvent) {
+        // Press time of current key
+        let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col as usize][key_event.row as usize] {
+            inst
+        } else {
+            // Fire all
+            Instant::now()
+        };
+
+        let hold_keys_to_flush: Vec<_, HOLD_BUFFER_SIZE> = self
+            .holding_buffer
+            .iter()
+            .enumerate()
+            .filter_map(|(pos, e)| if e.state() == Initial { Some(pos) } else { None })
+            .collect();
+
+        if hold_keys_to_flush.is_empty() {
+            debug!("non tap-hold-key hold before current release key, ignore and skip");
+            return;
+        } else {
+            debug!(
+                "[TAP-HOLD] Flush keys {:?} in {:?}",
+                hold_keys_to_flush, self.holding_buffer,
+            );
+        }
+
+        // Iterate buffer twice, since i just can borrow self twice
+        for pos in hold_keys_to_flush {
+            // First, trigger keys in holding buffer
+            if let Some(hold_key) = self.holding_buffer.get(pos) {
+                match hold_key.action {
+                    KeyAction::TapHold(tap_action, hold_action) => {
+                        if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
+                            // The same tap-hold key is released, trigger tap action
+                            debug!("Current Key {:?} become {:?}", hold_key.key_event, tap_action);
+                            self.process_key_action_normal(tap_action, hold_key.key_event).await;
+                        } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
+                            debug!("Key {:?} become {:?}", hold_key.key_event, hold_action);
+                            self.process_key_action_normal(hold_action, hold_key.key_event).await;
+                        } else if hold_key.state == Initial && hold_key.pressed_time >= pressed_time {
+                            debug!("Key {:?} become {:?}", hold_key.key_event, tap_action);
+                            self.process_key_action_normal(tap_action, hold_key.key_event).await;
+                        } else {
+                            debug!(
+                                "ignore : {:?}, pressed_time {}",
+                                hold_key,
+                                hold_key.pressed_time.as_millis()
+                            );
+                        }
+                    }
+                    _ => {
+                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        // TODO: ignored return value
+                        self.process_key_action_inner(hold_key.action, hold_key.key_event).await;
+                    }
+                }
+            }
+
+            // Second, update state of the key in the buffer
+            // This ensures that the buffer accurately reflects which keys have been resolved as tap or hold,
+            // so that subsequent processing (e.g., releases or further key events) can handle them correctly.
+            if let Some(hold_key) = self.holding_buffer.get_mut(pos) {
+                match hold_key.action {
+                    KeyAction::TapHold(tap_action, hold_action) => {
+                        if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
+                            // This is the key that triggered the flush; mark as PostTap (tap resolved).
+                            debug!("Current Key {:?} mark {:?}", hold_key.key_event, tap_action);
+                            hold_key.state = TapHoldState::PostTap;
+                        } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
+                            // This key was pressed before the triggering key; mark as PostHold (hold resolved).
+                            debug!("Key {:?} become {:?}", hold_key.key_event, hold_action);
+                            hold_key.state = TapHoldState::PostHold;
+                        } else if hold_key.state == Initial && hold_key.pressed_time >= pressed_time {
+                            // This key was pressed after or at the same time as the triggering key; mark as PostTap.
+                            debug!("Key {:?} become {:?}", hold_key.key_event, tap_action);
+                            hold_key.state = TapHoldState::PostTap;
+                        } else {
+                            // No state change needed; already resolved.
+                            debug!(
+                                "ignore : {:?}, pressed_time {}",
+                                hold_key,
+                                hold_key.pressed_time.as_millis()
+                            );
+                        }
+                    }
+                    _ => {
+                        // For non-tap-hold keys, mark as PostTap to indicate they've been processed.
+                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        hold_key.state = TapHoldState::PostTap;
+                    }
+                }
+            }
+        }
+
+        debug!(
+            "[TAP-HOLD] After flush keys, current hold buffer: {:?}",
+            self.holding_buffer
+        );
+
+        // Reset chord state
+        self.chord_state = None;
+    }
+
+    /// When a key is pressed, add it to the holding buffer,
+    /// if the current key action is a tap-hold, or the evaluation of current key action should be deferred by tap-hold.
+    fn buffer_holding_key(&mut self, key_event: KeyEvent, action: KeyAction, state: TapHoldState) {
+        let pressed_time = self.timer[key_event.col as usize][key_event.row as usize].unwrap_or(Instant::now());
+        let new_item = HoldingKey {
+            state,
+            key_event,
+            pressed_time,
+            action,
+        };
+        debug!("Saving action: {:?} to holding buffer", new_item);
+        self.push_and_sort_buffers(new_item);
+        match action {
+            KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+                // If this is the first tap-hold key, initialize the chord state for possible chordal hold detection.
+                if self.chord_state.is_none() {
+                    self.chord_state = Some(ChordHoldState::create(key_event, ROW, COL));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Finds the holding key in the buffer that matches the given key_event.
+    ///
+    /// This function searches for both TapHold and Others key kinds, but is primarily
+    /// intended for use with tap-hold keys. Returns the holding key if a matching key is found,
+    /// otherwise returns None.
+    fn get_holding_key_from_buffer(&mut self, key_event: KeyEvent) -> Option<HoldingKey> {
+        if let Some(i) = self.holding_buffer.iter().position(|e| {
+            if e.key_event.row == key_event.row && e.key_event.col == key_event.col {
+                true
+            } else {
+                false
+            }
+        }) {
+            Some(self.holding_buffer.swap_remove(i))
+        } else {
+            None
+        }
+    }
+
+    // TODO: improve performance
+    fn next_tap_hold_event(&mut self) -> Option<HoldingKey> {
+        // Release an unprocessed key
+        self.holding_buffer
+            .iter()
+            .filter_map(|key| if key.state == Initial { Some(key.clone()) } else { None })
+            .min_by_key(|e| e.pressed_time) // TODO: If per-key timeout is added, sort by the timeout time here
+    }
+
     /// Register a key to be sent in hid report.
     fn register_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
         // First, find the key event slot according to the position
@@ -1418,10 +1823,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+
     use embassy_futures::block_on;
-    use embassy_futures::select::select;
-    use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-    use embassy_sync::mutex::Mutex;
     use embassy_time::{Duration, Timer};
     use futures::{join, FutureExt};
     use rusty_fork::rusty_fork_test;
@@ -1431,118 +1834,7 @@ mod test {
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
-    use crate::{a, k, layer, mo};
-
-    // mod key values
-    const KC_LSHIFT: u8 = 1 << 1;
-
-    #[derive(Debug, Clone)]
-    struct TestKeyPress {
-        row: u8,
-        col: u8,
-        pressed: bool,
-        delay: u64, // Delay before this key event in milliseconds
-    }
-
-    async fn run_key_sequence_test<const N: usize>(
-        keyboard: &mut Keyboard<'_, 5, 14, 2>,
-        key_sequence: &[TestKeyPress],
-        expected_reports: Vec<KeyboardReport, N>,
-    ) {
-        static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
-
-        KEY_EVENT_CHANNEL.clear();
-        KEYBOARD_REPORT_CHANNEL.clear();
-
-        join!(
-            // Run keyboard until all reports are received
-            async {
-                select(keyboard.run(), async {
-                    select(
-                        Timer::after(Duration::from_secs(5)).then(|_| async {
-                            panic!("Test timed out");
-                        }),
-                        async {
-                            while !*REPORTS_DONE.lock().await {
-                                Timer::after(Duration::from_millis(10)).await;
-                            }
-                        },
-                    )
-                    .await;
-                })
-                .await;
-            },
-            // Send all key events with delays
-            async {
-                for key in key_sequence {
-                    Timer::after(Duration::from_millis(key.delay)).await;
-                    KEY_EVENT_CHANNEL
-                        .send(KeyEvent {
-                            row: key.row,
-                            col: key.col,
-                            pressed: key.pressed,
-                        })
-                        .await;
-                }
-            },
-            // Verify reports
-            async {
-                for expected in expected_reports {
-                    match KEYBOARD_REPORT_CHANNEL.receive().await {
-                        Report::KeyboardReport(report) => {
-                            assert_eq!(report, expected, "Expected {:?} but actually {:?}", expected, report);
-
-                            println!("Received expected key report: {:?}", report);
-                        }
-                        _ => panic!("Expected a KeyboardReport"),
-                    }
-                }
-                // Set done flag after all reports are verified
-                *REPORTS_DONE.lock().await = true;
-            }
-        );
-
-        // Reset the done flag for next test
-        *REPORTS_DONE.lock().await = false;
-    }
-
-    macro_rules! key_sequence {
-    ($([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?) => {
-        vec![
-            $(
-                TestKeyPress {
-                    row: $row,
-                    col: $col,
-                    pressed: $pressed,
-                    delay: $delay,
-                },
-            )*
-        ]
-    };
-    }
-
-    macro_rules! key_report {
-    ( $([$modifier:expr, $keys:expr]),* $(,)? ) => {{
-        // Count the number of elements at compile time
-
-        const N: usize = {
-            let arr = [$((($modifier, $keys)),)*];
-            arr.len()
-        };
-
-
-        let mut reports: Vec<KeyboardReport, N> = Vec::new();
-        $(
-            reports.push(KeyboardReport {
-                modifier: $modifier,
-                keycodes: $keys,
-                leds: 0,
-                reserved: 0,
-            }).unwrap();
-        )*
-        reports
-    }};
-    }
+    use crate::{a, k, layer, mo, th};
 
     // Init logger for tests
     #[ctor::ctor]
@@ -1559,7 +1851,7 @@ mod test {
             layer!([
                 [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
                 [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
-                [k!(Escape), k!(A), k!(S), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
+                [k!(Escape), th!(A, LShift), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
                 [k!(LShift), k!(Z), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
                 [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
             ]),
@@ -1573,6 +1865,7 @@ mod test {
         ]
     }
 
+    #[rustfmt::skip]
     fn get_combos_config() -> CombosConfig {
         // Define the function to return the appropriate combo configuration
         CombosConfig {
@@ -1616,11 +1909,27 @@ mod test {
         create_test_keyboard_with_config(BehaviorConfig::default())
     }
 
+    async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static, 5, 14, 2>) {
+        let event = keyboard.next_tap_hold_event().unwrap();
+        keyboard.process_buffered_tap_hold_event(event).await;
+    }
+
+    fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static, 5, 14, 2> {
+        let mut cfg = ForksConfig::default();
+        let _ = cfg.forks.push(fork1);
+        let _ = cfg.forks.push(fork2);
+        create_test_keyboard_with_config(BehaviorConfig {
+            fork: cfg,
+            ..BehaviorConfig::default()
+        })
+    }
+
     fn key_event(row: u8, col: u8, pressed: bool) -> KeyEvent {
         KeyEvent { row, col, pressed }
     }
 
     rusty_fork_test! {
+
     #[test]
     fn test_register_key() {
         let main = async {
@@ -1630,25 +1939,23 @@ mod test {
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
     fn test_basic_key_press_release() {
         let main = async {
             let mut keyboard = create_test_keyboard();
 
             // Press A key
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::Grave); // A key's HID code is 0x04
 
             // Release A key
-            keyboard.process_inner(key_event(2, 1, false)).await;
+            keyboard.process_inner(key_event(0, 0, false)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
     fn test_modifier_key() {
         let main = async {
@@ -1664,152 +1971,74 @@ mod test {
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
-    fn test_tap_hold_key() {
-        let main = async {
+    fn test_tap_hold_key_tap_and_single_hold() {
+
+        let _main = async {
             let mut keyboard = create_test_keyboard();
             let tap_hold_action = KeyAction::TapHold(Action::Key(KeyCode::A), Action::Key(KeyCode::LShift));
-
             // Tap
+            join!(
+                keyboard.process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, true)),
+                Timer::after(Duration::from_millis(0)).then( |_| async {
+                //send release event
+                  KEY_EVENT_CHANNEL.send(key_event(2, 1, false)).await;
+                })
+            );
+
+
+            match KEYBOARD_REPORT_CHANNEL.receive().await {
+                Report::KeyboardReport(report) =>
+                    assert_eq!(report.keycodes[0], 0x4),  // A should be released
+                _ => panic!("Expected a Tap on A, but received a different report type"),
+            };
+
+            // a released
             keyboard
-                .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
-                .await;
-            Timer::after(Duration::from_millis(10)).await;
-            keyboard
-                .process_key_action(tap_hold_action.clone(), key_event(2, 1, false))
+                .process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, false))
                 .await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should be released
             assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should not held
 
             // Hold
             keyboard
-                .process_key_action(tap_hold_action.clone(), key_event(2, 1, true))
+                .process_key_action_inner(tap_hold_action.clone(), key_event(2, 1, true))
                 .await;
             Timer::after(Duration::from_millis(200)).await; // wait for hold timeout
             assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // should activate Shift modifier
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A should not be pressed
 
             keyboard
-                .process_key_action(tap_hold_action, key_event(2, 1, false))
+                .process_key_action_inner(tap_hold_action, key_event(2, 1, false))
                 .await;
             assert_eq!(keyboard.held_modifiers, HidModifiers::new()); // Shift should be released
         };
-        block_on(main);
-    }
-    }
-    rusty_fork_test! {
-    #[test]
-    fn test_combo_timeout_and_ignore() {
-        let main = async {
-            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                combo: get_combos_config(),
-                ..Default::default()
-            });
-
-            let sequence = key_sequence![
-                [3, 4, true, 10],   // Press V
-                [3, 4, false, 100], // Release V
-            ];
-
-            let expected_reports = key_report![
-                [0, [KeyCode::V as u8, 0, 0, 0, 0, 0]],
-            ];
-
-            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-        };
-
-        block_on(main);
-    }
-    }
-    rusty_fork_test! {
-    #[test]
-    fn test_combo_with_mod_then_mod_timeout() {
-        let main = async {
-            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                combo: get_combos_config(),
-                ..Default::default()
-            });
-            let sequence = key_sequence![
-                [3, 4, true, 10], // Press V
-                [3, 5, true, 10], // Press B
-                [1, 4, true, 50], // Press R
-                [1, 4, false, 90], // Release R
-                [3, 4, false, 150], // Release V
-                [3, 5, false, 170], // Release B
-            ];
-
-            let expected_reports = key_report![
-                [KC_LSHIFT, [0; 6]],
-                [KC_LSHIFT, [KeyCode::R as u8, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [0; 6]],
-                [0, [0; 6]],
-            ];
-
-            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-        };
-
-        block_on(main);
-    }
     }
 
-    rusty_fork_test! {
-    #[test]
-    fn test_combo_with_mod() {
-        let main = async {
-            let mut keyboard = create_test_keyboard_with_config(BehaviorConfig {
-                combo: get_combos_config(),
-                ..Default::default()
-            });
 
-            let sequence = key_sequence![
-                [3, 4, true, 10],   // Press V
-                [3, 5, true, 10],   // Press B
-                [3, 6, true, 50],   // Press N
-                [3, 6, false, 70],  // Release N
-                [3, 4, false, 100], // Release V
-                [3, 5, false, 110], // Release B
-            ];
-
-            let expected_reports = key_report![
-                [KC_LSHIFT, [0; 6]],
-                [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [0; 6]],
-                [0, [0; 6]],
-            ];
-
-            run_key_sequence_test(&mut keyboard, &sequence, expected_reports).await;
-        };
-
-        block_on(main);
-    }
-    }
-
-    rusty_fork_test! {
     #[test]
     fn test_multiple_keys() {
         let main = async {
             let mut keyboard = create_test_keyboard();
 
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::A));
+            keyboard.process_inner(key_event(0, 0, true)).await;
+            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave));
 
-            keyboard.process_inner(key_event(3, 5, true)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && keyboard.held_keycodes.contains(&KeyCode::B));
+            keyboard.process_inner(key_event(1, 0, true)).await;
+            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && keyboard.held_keycodes.contains(&KeyCode::Tab));
 
-            keyboard.process_inner(key_event(3, 5, false)).await;
-            assert!(keyboard.held_keycodes.contains(&KeyCode::A) && !keyboard.held_keycodes.contains(&KeyCode::B));
+            keyboard.process_inner(key_event(1, 0, false)).await;
+            assert!(keyboard.held_keycodes.contains(&KeyCode::Grave) && !keyboard.held_keycodes.contains(&KeyCode::Tab));
 
-            keyboard.process_inner(key_event(2, 1, false)).await;
-            assert!(!keyboard.held_keycodes.contains(&KeyCode::A));
+            keyboard.process_inner(key_event(0, 0, false)).await;
+            assert!(!keyboard.held_keycodes.contains(&KeyCode::Grave));
             assert!(keyboard.held_keycodes.iter().all(|&k| k == KeyCode::No));
         };
 
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
     fn test_repeat_key_single() {
         let main = async {
@@ -1826,33 +2055,33 @@ mod test {
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
 
             // Press A key
-            keyboard.process_inner(key_event(2, 1, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+            keyboard.process_inner(key_event(2, 0, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
 
             // Release A key
-            keyboard.process_inner(key_event(2, 1, false)).await;
+            keyboard.process_inner(key_event(2, 0, false)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
             // after another key is pressed, that key is repeated
             keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::Escape); // A key's HID code is 0x04
 
             // releasing the repeat key
             keyboard.process_inner(key_event(0, 0, false)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
 
             // Press S key
-            keyboard.process_inner(key_event(2, 2, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+            keyboard.process_inner(key_event(1, 2, true)).await;
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
 
             // after another key is pressed, that key is repeated
             keyboard.process_inner(key_event(0, 0, true)).await;
-            assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+            assert_eq!(keyboard.held_keycodes[0], KeyCode::W); // A key's HID code is 0x04
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
+
     #[test]
     fn test_repeat_key_th() {
         let main = async {
@@ -1863,13 +2092,28 @@ mod test {
                 0,
                 KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
             );
+            keyboard.keymap.borrow_mut().set_action_at(
+                2,
+                1,
+                0,
+                KeyAction::Single(Action::Key(KeyCode::A)),
+            );
+            keyboard.keymap.borrow_mut().set_action_at(
+                2,
+                2,
+                0,
+                KeyAction::Single(Action::Key(KeyCode::S)),
+            );
 
+            // Press down F
             // first press ever of the Again issues KeyCode:No
             keyboard.process_inner(key_event(0, 0, true)).await;
             keyboard
                 .send_keyboard_report_with_resolved_modifiers(true)
                 .await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+            // Release F
+            keyboard.process_inner(key_event(0, 0, false)).await;
 
             // Press A key
             keyboard.process_inner(key_event(2, 1, true)).await;
@@ -1879,8 +2123,17 @@ mod test {
             keyboard.process_inner(key_event(2, 1, false)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
+            // Release F
+            keyboard.process_inner(key_event(0, 0, false)).await;
+
+            // Here release event should make again into hold
+
+
+            embassy_time::Timer::after_millis(200 as u64).await;
             // after another key is pressed, that key is repeated
             keyboard.process_inner(key_event(0, 0, true)).await;
+            force_timeout_first_hold(&mut keyboard).await;
+
             assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
 
             // releasing the repeat key
@@ -1897,8 +2150,7 @@ mod test {
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
     fn test_key_action_transparent() {
         let main = async {
@@ -1917,8 +2169,7 @@ mod test {
         };
         block_on(main);
     }
-    }
-    rusty_fork_test! {
+
     #[test]
     fn test_key_action_no() {
         let main = async {
@@ -1934,19 +2185,8 @@ mod test {
         };
         block_on(main);
     }
-    }
 
-    fn create_test_keyboard_with_forks(fork1: Fork, fork2: Fork) -> Keyboard<'static, 5, 14, 2> {
-        let mut cfg = ForksConfig::default();
-        let _ = cfg.forks.push(fork1);
-        let _ = cfg.forks.push(fork2);
-        create_test_keyboard_with_config(BehaviorConfig {
-            fork: cfg,
-            ..BehaviorConfig::default()
-        })
-    }
 
-    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_modifier() {
         let main = async {
@@ -2049,8 +2289,6 @@ mod test {
 
         block_on(main);
     }
-    }
-    rusty_fork_test! {
     #[test]
     fn test_fork_with_held_mouse_button() {
         let main = async {
@@ -2090,6 +2328,15 @@ mod test {
 
             let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
 
+            // disable th on a
+            keyboard.keymap.borrow_mut().set_action_at(
+                2,
+                1,
+                0,
+                KeyAction::Single(Action::Key(KeyCode::A)),
+            );
+
+
             // Press Z key, by itself it should emit 'MouseBtn5'
             keyboard.process_inner(key_event(3, 1, true)).await;
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
@@ -2106,9 +2353,7 @@ mod test {
             keyboard.process_inner(key_event(3, 0, true)).await;
             assert_eq!(
                 keyboard.resolve_modifiers(true),
-                HidModifiers::new()
-                    .with_left_ctrl(true)
-                    .with_left_shift(true)
+                HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
             );
 
             // Press 'Z' key, with Ctrl it should emit 'C', with suppressed ctrl, but kept shift
@@ -2125,9 +2370,7 @@ mod test {
             assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
             assert_eq!(
                 keyboard.resolve_modifiers(false),
-                HidModifiers::new()
-                    .with_left_ctrl(true)
-                    .with_left_shift(true)
+                HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
             );
 
             // Release LCtrl key
