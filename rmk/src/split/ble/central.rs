@@ -442,7 +442,7 @@ pub(crate) async fn wait_for_stack_started() {
     }
 }
 
-/// Sleep manager task for BLE Split Central
+/// Sleep manager task for connection between split central and peripheral
 /// Handles sleep timeout and connection parameter adjustments using event-driven approach
 async fn sleep_manager_task<
     'a,
