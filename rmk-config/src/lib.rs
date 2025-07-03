@@ -84,7 +84,7 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
-    #[serde_inline_default(30)]
+    #[serde_inline_default(0)]
     pub split_central_sleep_timeout_minutes: u32,
 }
 
@@ -131,7 +131,7 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 1,
             split_message_channel_size: 4,
             ble_profiles_num: 3,
-            split_central_sleep_timeout_minutes: 30,
+            split_central_sleep_timeout_minutes: 0,
         }
     }
 }
