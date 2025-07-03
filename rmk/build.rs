@@ -65,6 +65,7 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) SPLIT_MESSAGE_CHANNEL_SIZE = constants.split_message_channel_size),
         const_declaration!(pub(crate) NUM_BLE_PROFILE = constants.ble_profiles_num),
         const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES = constants.split_central_sleep_timeout_minutes),
+        const_declaration!(pub(crate) TAP_DANCE_MAX_NUM = constants.tap_dance_max_num),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ]
     .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())
