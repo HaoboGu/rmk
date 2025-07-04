@@ -61,34 +61,22 @@ pub enum KeyAction {
     /// Transparent action, next layer will be checked. Serialized as 0x0001.
     Transparent,
     /// A single action, such as triggering a key, or activating a layer. Action is triggered when pressed and cancelled when released.
-    ///
-    /// Serialized as 0000|Action(12bits).
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
-    ///
-    /// Serialized as 0001|Action(12bits).
     Tap(Action),
     /// Keep current key pressed until the next key is triggered.
-    ///
-    /// Serialized as 0010|Action(12bits).
     OneShot(Action),
     /// Layer tap/hold will trigger different actions: tap for basic action, hold for layer activation.
-    ///
-    /// Serialized as 0011|layer(4bits)|BasicAction(8bits).
     LayerTapHold(Action, u8),
     /// Action with the modifier combination triggered.
-    ///
-    /// Serialized as 010|modifier(5bits)|BasicAction(8bits).
     WithModifier(Action, ModifierCombination),
     /// Modifier tap/hold will trigger different actions: tap for basic action, hold for modifier activation.
-    ///
-    /// Serialized as 011|modifier(5bits)|BasicAction(8bits).
     ModifierTapHold(Action, ModifierCombination),
     /// General tap/hold action. Because current BaseAction actually uses at most 7 bits, so we borrow 1 bit as the identifier of general tap/hold action.
-    ///
-    /// Serialized as 1|BasicAction(7bits)|BasicAction(8bits).
     /// (tap_action, hold_action)
     TapHold(Action, Action),
+    /// Tap dance action, references a tap dance configuration by index.
+    TapDance(u8),
 }
 
 impl KeyAction {
@@ -111,6 +99,7 @@ impl KeyAction {
                 }
             }
             KeyAction::TapHold(tap, hold) => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
+            KeyAction::TapDance(index) => 0x5000 | (index as u16),
         }
     }
 }

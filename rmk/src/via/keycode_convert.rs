@@ -86,6 +86,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             warn!("Tap hold action is not supported: tap: {:?}, hold: {:?}", tap, hold);
             0
         }
+        KeyAction::TapDance(index) => {
+            // Tap dance keycodes: 0x5700..=0x57FF
+            0x5700 | (index as u16)
+        }
     }
 }
 
@@ -151,9 +155,9 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x5700..=0x57FF => {
-            // TODO: Tap dance
-            warn!("Tap dance {:#X} not supported", via_keycode);
-            KeyAction::No
+            // Tap dance
+            let index = (via_keycode & 0xFF) as u8;
+            KeyAction::TapDance(index)
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
@@ -571,6 +575,18 @@ mod test {
             KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
             from_via_keycode(via_keycode)
         );
+
+        // TapDance(0)
+        let via_keycode = 0x5700;
+        assert_eq!(KeyAction::TapDance(0), from_via_keycode(via_keycode));
+
+        // TapDance(5)
+        let via_keycode = 0x5705;
+        assert_eq!(KeyAction::TapDance(5), from_via_keycode(via_keycode));
+
+        // TapDance(255)
+        let via_keycode = 0x57FF;
+        assert_eq!(KeyAction::TapDance(255), from_via_keycode(via_keycode));
     }
 
     #[test]
@@ -672,6 +688,16 @@ mod test {
         // RepeatKey
         let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
         assert_eq!(0x7C79, to_via_keycode(a));
+
+        // TapDance
+        let a = KeyAction::TapDance(0);
+        assert_eq!(0x5700, to_via_keycode(a));
+
+        let a = KeyAction::TapDance(5);
+        assert_eq!(0x5705, to_via_keycode(a));
+
+        let a = KeyAction::TapDance(255);
+        assert_eq!(0x57FF, to_via_keycode(a));
     }
 
     #[test]
