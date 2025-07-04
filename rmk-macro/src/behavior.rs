@@ -2,7 +2,9 @@
 //!
 
 use quote::quote;
-use rmk_config::{CombosConfig, ForksConfig, KeyboardTomlConfig, OneShotConfig, TapHoldConfig, TriLayerConfig};
+use rmk_config::{
+    CombosConfig, ForksConfig, KeyboardTomlConfig, OneShotConfig, TapDancesConfig, TapHoldConfig, TriLayerConfig,
+};
 
 use crate::layout::parse_key;
 
@@ -120,6 +122,47 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
                     combos: ::rmk::heapless::Vec::from_iter([#(#combos_def),*]),
                     #timeout
                     ..Default::default()
+                }
+            }
+        }
+        None => default,
+    }
+}
+
+fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+    match tap_dance {
+        Some(tap_dance) => {
+            let tap_dances_def = tap_dance.tap_dances.iter().map(|td| {
+                // Parse each action, using "No" as default if not specified
+                let tap = parse_key(td.tap.clone().unwrap_or_else(|| "No".to_string()));
+                let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
+                let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
+                let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
+
+                // Parse tapping term, default to 200ms if not specified
+                let tapping_term = match &td.tapping_term {
+                    Some(duration) => {
+                        let millis = duration.0;
+                        quote! { ::embassy_time::Duration::from_millis(#millis) }
+                    }
+                    None => quote! { ::embassy_time::Duration::from_millis(200) },
+                };
+
+                quote! {
+                    ::rmk::tap_dance::TapDance::new(
+                        #tap,
+                        #hold,
+                        #hold_after_tap,
+                        #double_tap,
+                        #tapping_term
+                    )
+                }
+            });
+
+            quote! {
+                ::rmk::config::TapDancesConfig {
+                    tap_dances: ::rmk::heapless::Vec::from_iter([#(#tap_dances_def),*]),
                 }
             }
         }
@@ -290,6 +333,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
     let forks = expand_forks(&behavior.fork);
+    let tap_dance = expand_tap_dance(&behavior.tap_dance);
 
     quote! {
         let behavior_config = ::rmk::config::BehaviorConfig {
@@ -298,7 +342,8 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             one_shot: #one_shot,
             combo: #combos,
             fork: #forks,
-            //TODO implement macro for configuring Keyboard-Macro-Sequences
+            tap_dance: #tap_dance,
+            // TODO: implement macro for configuring Keyboard-Macro-Sequences
             keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
         };
     }
