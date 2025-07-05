@@ -207,7 +207,7 @@ impl<
                 boot::jump_to_bootloader();
             }
             ViaCommand::DynamicKeymapMacroGetCount => {
-                report.input_data[1] = 8;
+                report.input_data[1] = 32;
                 warn!("Macro get count -- to be implemented")
             }
             ViaCommand::DynamicKeymapMacroGetBufferSize => {
