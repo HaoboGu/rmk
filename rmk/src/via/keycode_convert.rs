@@ -63,29 +63,27 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             };
             ((m.into_bits() as u16) << 8) | keycode
         }
-        KeyAction::LayerTapHold(a, l) => {
-            // LayerTapHold is now included in TapHold Action, it can be safely removed in the future
-            if l > 16 {
-                0
-            } else {
-                let keycode = match a {
+        KeyAction::TapHold(tap, hold) => match hold {
+            Action::LayerOn(l) => {
+                if l > 16 {
+                    0
+                } else {
+                    let keycode = match tap {
+                        Action::Key(k) => k as u16,
+                        _ => 0,
+                    };
+                    0x4000 | ((l as u16) << 8) | keycode
+                }
+            }
+            Action::Modifier(m) => {
+                let keycode = match tap {
                     Action::Key(k) => k as u16,
                     _ => 0,
                 };
-                0x4000 | ((l as u16) << 8) | keycode
+                0x2000 | ((m.into_bits() as u16) << 8) | keycode
             }
-        }
-        KeyAction::ModifierTapHold(a, m) => {
-            let keycode = match a {
-                Action::Key(k) => k as u16,
-                _ => 0,
-            };
-            0x2000 | ((m.into_bits() as u16) << 8) | keycode
-        }
-        KeyAction::TapHold(tap, hold) => {
-            warn!("Tap hold action is not supported: tap: {:?}, hold: {:?}", tap, hold);
-            0
-        }
+            _ => 0x0000,
+        },
     }
 }
 
@@ -106,14 +104,14 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // The via equivalent of Modifier tap/hold is called Mod-tap, whose keycode representation is same with RMK
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
-            KeyAction::ModifierTapHold(Action::Key(keycode), modifier)
+            KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier))
         }
         0x4000..=0x4FFF => {
             // Layer tap/hold
             // The via equivalent of Modifier tap/hold is called Mod-tap,
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            KeyAction::LayerTapHold(Action::Key(keycode), layer as u8)
+            KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8))
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
@@ -500,23 +498,23 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::LayerTapHold(Action::Key(KeyCode::A), 0),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0)),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::LayerTapHold(Action::Key(KeyCode::A), 3),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3)),
             from_via_keycode(via_keycode)
         );
 
         // LSA_T(A) ->
         let via_keycode = 0x2604;
         assert_eq!(
-            KeyAction::ModifierTapHold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, false, true, true, false)
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, false))
             ),
             from_via_keycode(via_keycode)
         );
@@ -524,9 +522,9 @@ mod test {
         // RCAG_T(A) ->
         let via_keycode = 0x3D04;
         assert_eq!(
-            KeyAction::ModifierTapHold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(true, true, true, false, true)
+                Action::Modifier(ModifierCombination::new_from(true, true, true, false, true))
             ),
             from_via_keycode(via_keycode)
         );
@@ -534,9 +532,9 @@ mod test {
         // ALL_T(A) ->
         let via_keycode: u16 = 0x2F04;
         assert_eq!(
-            KeyAction::ModifierTapHold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, true, true, true, true)
+                Action::Modifier(ModifierCombination::new_from(false, true, true, true, true))
             ),
             from_via_keycode(via_keycode)
         );
@@ -544,9 +542,9 @@ mod test {
         // Meh_T(A) ->
         let via_keycode = 0x2704;
         assert_eq!(
-            KeyAction::ModifierTapHold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, false, true, true, true)
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, true))
             ),
             from_via_keycode(via_keycode)
         );
@@ -626,38 +624,38 @@ mod test {
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::LayerTapHold(Action::Key(KeyCode::A), 0);
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0));
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::LayerTapHold(Action::Key(KeyCode::A), 3);
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3));
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
-        let a = KeyAction::ModifierTapHold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, false),
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
         );
         assert_eq!(0x2604, to_via_keycode(a));
 
         // RCAG_T(A) ->
-        let a = KeyAction::ModifierTapHold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(true, true, true, false, true),
+            Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
         );
         assert_eq!(0x3D04, to_via_keycode(a));
 
         // ALL_T(A) ->
-        let a = KeyAction::ModifierTapHold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, true, true, true, true),
+            Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
         );
         assert_eq!(0x2F04, to_via_keycode(a));
 
         // Meh_T(A) ->
-        let a = KeyAction::ModifierTapHold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, true),
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
         );
         assert_eq!(0x2704, to_via_keycode(a));
 

@@ -17,8 +17,9 @@ use rmk::event::KeyEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
+use rmk::keycode::ModifierCombination;
 use rmk::keymap::KeyMap;
-use rmk::{a, k, layer, mo, th};
+use rmk::{a, k, layer, lt, mo, shifted, th, wm};
 
 // Init logger for tests
 #[ctor::ctor]
@@ -47,6 +48,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
     expected_reports: &[KeyboardReport],
 ) {
     static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
+    static SEQ_SEND_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 
     KEY_EVENT_CHANNEL.clear();
     KEYBOARD_REPORT_CHANNEL.clear();
@@ -83,6 +85,9 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
                     })
                     .await;
             }
+
+            // Set done flag after all key events are sent
+            *SEQ_SEND_DONE.lock().await = true;
         },
         // Verify reports
         async {
@@ -105,6 +110,11 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
                 }
             }
 
+            // Wait for all key events to be sent
+            while !*SEQ_SEND_DONE.lock().await {
+                Timer::after(Duration::from_millis(50)).await;
+            }
+
             // Set done flag after all reports are verified
             *REPORTS_DONE.lock().await = true;
         }
@@ -123,13 +133,13 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
             [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
             [k!(Escape), th!(A, LShift), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
             [k!(LShift), th!(Z, LAlt), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
-            [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
+            [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), lt!(1, Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
             [a!(No), a!(Transparent), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
-            [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
+            [a!(No), a!(No), shifted!(X), wm!(X, ModifierCombination::new_from(false, false, false, true, false)), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]
         ]),
     ]
