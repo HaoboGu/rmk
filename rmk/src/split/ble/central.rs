@@ -496,14 +496,16 @@ async fn sleep_manager_task<
                 info!("Entering sleep mode");
 
                 // Connection parameters are different when central is broadcasting and connected to host
-                let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
-                    ConnectParams {
-                        min_connection_interval: Duration::from_millis(20),
-                        max_connection_interval: Duration::from_millis(20),
-                        max_latency: 200, // 4s
-                        supervision_timeout: Duration::from_secs(9),
-                        ..Default::default()
-                    }
+                let conn_params = if crate::state::BLE_CONNECTION_STATE.load(Ordering::Acquire) < 3 {
+                    info!("Do nothing");
+                    continue;
+                    // ConnectParams {
+                    //     min_connection_interval: Duration::from_millis(20),
+                    //     max_connection_interval: Duration::from_millis(20),
+                    //     max_latency: 200, // 4s
+                    //     supervision_timeout: Duration::from_secs(9),
+                    //     ..Default::default()
+                    // }
                 } else {
                     ConnectParams {
                         min_connection_interval: Duration::from_millis(200),
