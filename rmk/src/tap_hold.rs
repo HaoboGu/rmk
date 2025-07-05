@@ -43,6 +43,10 @@ impl HoldingKey {
         matches!(self.action, KeyAction::TapHold(_, _))
     }
 
+    pub(crate) fn is_tap_dance(&self) -> bool {
+        matches!(self.action, KeyAction::TapDance(_))
+    }
+
     pub(crate) fn update_state(&mut self, new_state: TapHoldState) {
         self.state = new_state;
     }
@@ -54,6 +58,13 @@ impl HoldingKey {
     pub(crate) fn state(&self) -> TapHoldState {
         self.state
     }
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TapDanceState {
+    pub tap_count: u8,
+    pub last_tap_time: Option<Instant>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,6 +85,11 @@ pub enum TapHoldState {
     /// Key needs to be released but is still in the queue;
     /// should be cleaned up in the main loop regardless
     Release,
+    /// Tap-dance state: represents the number of taps completed
+    /// Tap(1) = first tap completed, Tap(2) = second tap completed, etc.
+    Tap(u8),
+    /// Hold after tap(x) state for tap-dance keys
+    HoldAfterTap(u8),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
