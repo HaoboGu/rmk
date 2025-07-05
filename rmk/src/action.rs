@@ -89,6 +89,10 @@ pub enum KeyAction {
     /// Serialized as 1|BasicAction(7bits)|BasicAction(8bits).
     /// (tap_action, hold_action)
     TapHold(Action, Action),
+    /// Tap dance action. References a tap dance configuration by index.
+    ///
+    /// Serialized as 0100|tap_dance_index(12bits).
+    TapDance(u8),
 }
 
 impl KeyAction {
@@ -111,6 +115,7 @@ impl KeyAction {
                 }
             }
             KeyAction::TapHold(tap, hold) => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
+            KeyAction::TapDance(index) => 0x4000 | (index as u16),
         }
     }
 }

@@ -32,13 +32,41 @@ use crate::light::LedIndicator;
 use crate::split::ble::central::update_activity_time;
 use crate::tap_hold::TapHoldDecision::{ChordHold, CleanBuffer, Hold};
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
-use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
 /// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
 /// LedIndicator type would be nicer, but that does not have const expr constructor
 pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
+
+/// State machine for tap dance keys
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TapDanceState {
+    /// Initial state - tap dance key is pressed for the first time
+    Initial,
+    /// Waiting for next tap or timeout after first tap
+    WaitingForNext,
+    /// Second press received, waiting for release or timeout  
+    SecondPress,
+    /// Tap dance has been resolved, waiting for cleanup
+    Resolved,
+}
+
+/// Tap dance instance tracking
+#[derive(Clone, Copy, Debug)]
+pub struct TapDanceInstance {
+    /// Current state of the tap dance
+    pub state: TapDanceState,
+    /// Key event that triggered this tap dance
+    pub key_event: KeyEvent,
+    /// Timestamp of the last event
+    pub last_event_time: Instant,
+    /// Index of the tap dance configuration
+    pub tap_dance_index: u8,
+    /// Number of taps performed
+    pub tap_count: u8,
+}
 
 #[derive(Debug)]
 enum LoopState {
@@ -202,6 +230,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Used for temporarily disabling combos
     combo_on: bool,
 
+    /// Tap dance instances for tracking active tap dances
+    tap_dance_instances: [Option<TapDanceInstance>; TAP_DANCE_MAX_NUM],
+
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -255,6 +286,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             mouse_wheel_move_delta: 1,
             combo_actions_buffer: Deque::new(),
             combo_on: true,
+            tap_dance_instances: [None; TAP_DANCE_MAX_NUM],
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
             chord_state: None,
@@ -275,10 +307,88 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         LoopState::OK
     }
 
+    // A tap dance key reaches timeout
+    async fn process_tap_dance_timeout(&mut self, tap_dance_index: u8, key_event: KeyEvent) -> LoopState {
+        debug!("[TAP-DANCE] TIMEOUT: tap dance {} at {:?}", tap_dance_index, key_event);
+        
+        let tap_dance_config = if let Some(config) = self.keymap.borrow().behavior.tap_dance.tap_dances.get(tap_dance_index as usize) {
+            config.clone()
+        } else {
+            error!("Invalid tap dance index: {}", tap_dance_index);
+            return LoopState::OK;
+        };
+
+        if let Some(instance_index) = self.find_tap_dance_instance(tap_dance_index, key_event) {
+            let instance = &mut self.tap_dance_instances[instance_index];
+            if let Some(ref mut inst) = instance {
+                debug!("[TAP-DANCE] Timeout in state: {:?}, tap_count: {}", inst.state, inst.tap_count);
+                
+                match inst.state {
+                    TapDanceState::Initial => {
+                        // Single press timeout -> hold
+                        debug!("[TAP-DANCE] Single press timeout, executing hold action");
+                        self.execute_tap_dance_action(tap_dance_config.hold, key_event).await;
+                        inst.state = TapDanceState::Resolved;
+                    }
+                    TapDanceState::WaitingForNext => {
+                        // Waiting for second tap timeout -> tap
+                        debug!("[TAP-DANCE] Waiting for second tap timeout, executing tap action");
+                        self.execute_tap_dance_action(tap_dance_config.tap, key_event).await;
+                        inst.state = TapDanceState::Resolved;
+                    }
+                    TapDanceState::SecondPress => {
+                        // Second press timeout -> hold_after_tap
+                        debug!("[TAP-DANCE] Second press timeout, executing hold_after_tap action");
+                        self.execute_tap_dance_action(tap_dance_config.hold_after_tap, key_event).await;
+                        inst.state = TapDanceState::Resolved;
+                    }
+                    _ => {
+                        debug!("[TAP-DANCE] Timeout in unexpected state: {:?}", inst.state);
+                    }
+                }
+            }
+        }
+
+        // Get timeout based on tap dance configuration
+        let timeout = tap_dance_config.tapping_term;
+        
+        // Wait for timeout or new key event
+        match select(Timer::after(timeout), KEY_EVENT_CHANNEL.receive()).await {
+            Either::First(_) => {
+                // Continue processing timeout
+                LoopState::OK
+            }
+            Either::Second(new_key_event) => {
+                // Process new key event
+                debug!("[TAP-DANCE] Interrupted by new key event: {:?}", new_key_event);
+                
+                // Check if this is an interrupting key that should resolve tap dance
+                if new_key_event.pressed && 
+                   (new_key_event.row != key_event.row || new_key_event.col != key_event.col) {
+                    // Different key pressed, resolve current tap dance as tap
+                    if let Some(instance_index) = self.find_tap_dance_instance(tap_dance_index, key_event) {
+                        let instance = &mut self.tap_dance_instances[instance_index];
+                        if let Some(ref mut inst) = instance {
+                            if inst.state == TapDanceState::WaitingForNext {
+                                debug!("[TAP-DANCE] Interrupted by other key, resolving as tap");
+                                self.execute_tap_dance_action(tap_dance_config.tap, key_event).await;
+                                inst.state = TapDanceState::Resolved;
+                            }
+                        }
+                    }
+                }
+                
+                self.process_inner(new_key_event).await;
+                LoopState::OK
+            }
+        }
+    }
+
     // Clean up for leak keys, remove non-tap-hold keys in PostTap state from the buffer
     pub(crate) fn clean_buffered_tap_keys(&mut self) {
         self.holding_buffer.retain(|e| match e.action {
             KeyAction::TapHold(_, _) => true,
+            KeyAction::TapDance(_) => true,
             _ => match e.state {
                 TapHoldState::PostTap => {
                     debug!("Processing buffering TAP keys with post tap: {:?}", e.key_event);
@@ -287,33 +397,43 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 _ => true,
             },
         });
+        
+        // Clean up resolved tap dance instances
+        self.cleanup_tap_dance_instances();
     }
 
     /// Process the latest buffered key.
     ///
-    /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
-    /// TODO: process other type of buffered holding keys
+    /// The given holding key is a copy of the buffered key. Process tap-hold and tap-dance keys.
     async fn process_buffered_key(&mut self, key: HoldingKey) -> LoopState {
-        let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
-            self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
-        } else {
-            Duration::from_ticks(0)
-        };
+        match key.action {
+            KeyAction::TapDance(tap_dance_index) => {
+                self.process_tap_dance_timeout(tap_dance_index, key.key_event).await
+            }
+            _ => {
+                // Original tap-hold logic
+                let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
+                    self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
+                } else {
+                    Duration::from_ticks(0)
+                };
 
-        debug!(
-            "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
-            key.key_event,
-            time_left.as_millis()
-        );
+                debug!(
+                    "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
+                    key.key_event,
+                    time_left.as_millis()
+                );
 
-        // Wait for hold timeout or new key event
-        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
-            Either::First(_) => self.process_tap_hold_timeout(key).await,
-            Either::Second(key_event) => {
-                // Process new key event
-                debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
-                self.process_inner(key_event).await;
-                LoopState::OK
+                // Wait for hold timeout or new key event
+                match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+                    Either::First(_) => self.process_tap_hold_timeout(key).await,
+                    Either::Second(key_event) => {
+                        // Process new key event
+                        debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
+                        self.process_inner(key_event).await;
+                        LoopState::OK
+                    }
+                }
             }
         }
     }
@@ -420,6 +540,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Check if there's buffered tap-hold key
         let is_buffered = self.holding_buffer.iter().any(|i| match i.action {
             KeyAction::TapHold(_, _) => i.state == TapHoldState::Initial,
+            KeyAction::TapDance(_) => i.state == TapHoldState::Initial,
             _ => false,
         });
 
@@ -447,8 +568,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // Buffer pressed keys if permissive hold is enabled.
                     return match key_action {
-                        KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
-                            // Ignore following tap-hold keys, they will be always checked
+                        KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) | KeyAction::TapDance(_) => {
+                            // Ignore following tap-hold and tap-dance keys, they will be always checked
                             Ignore
                         }
                         _ => {
@@ -527,6 +648,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyAction::ModifierTapHold(tap_action, modifier) => {
                 let modifier_action = Action::Modifier(modifier);
                 self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
+                    .await;
+            }
+            KeyAction::TapDance(tap_dance_index) => {
+                self.process_key_action_tap_dance(tap_dance_index, key_event)
                     .await;
             }
         }
@@ -983,6 +1108,188 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Action::Modifier(m) => self.process_action_osm(m.to_hid_modifiers(), key_event).await,
             Action::LayerOn(l) => self.process_action_osl(l, key_event).await,
             _ => self.process_key_action_normal(oneshot_action, key_event).await,
+        }
+    }
+
+    /// Process tap dance action
+    async fn process_key_action_tap_dance(&mut self, tap_dance_index: u8, key_event: KeyEvent) {
+        let tap_dance_config = if let Some(config) = self.keymap.borrow().behavior.tap_dance.tap_dances.get(tap_dance_index as usize) {
+            config.clone()
+        } else {
+            error!("Invalid tap dance index: {}", tap_dance_index);
+            return;
+        };
+
+        debug!("[TAP-DANCE] Processing tap dance {} with event {:?}", tap_dance_index, key_event);
+
+        if key_event.pressed {
+            self.handle_tap_dance_press(tap_dance_index, tap_dance_config, key_event).await;
+        } else {
+            self.handle_tap_dance_release(tap_dance_index, tap_dance_config, key_event).await;
+        }
+    }
+
+    /// Handle tap dance key press
+    async fn handle_tap_dance_press(&mut self, tap_dance_index: u8, tap_dance_config: crate::tap_dance::TapDance, key_event: KeyEvent) {
+        let current_time = Instant::now();
+        
+        // Find existing instance or create new one
+        let instance_index = self.find_tap_dance_instance(tap_dance_index, key_event);
+        
+        match instance_index {
+            Some(idx) => {
+                // Existing instance found
+                let instance = &mut self.tap_dance_instances[idx];
+                if let Some(ref mut inst) = instance {
+                    debug!("[TAP-DANCE] Existing instance found, state: {:?}, tap_count: {}", inst.state, inst.tap_count);
+                    
+                    match inst.state {
+                        TapDanceState::WaitingForNext => {
+                            // Check if within tapping term
+                            if current_time.duration_since(inst.last_event_time) <= tap_dance_config.tapping_term {
+                                // Second press within tapping term
+                                inst.state = TapDanceState::SecondPress;
+                                inst.last_event_time = current_time;
+                                inst.tap_count += 1;
+                                debug!("[TAP-DANCE] Second press within tapping term, tap_count: {}", inst.tap_count);
+                            } else {
+                                // Timeout, resolve as tap and start new tap dance
+                                debug!("[TAP-DANCE] Timeout on second press, resolving as tap");
+                                self.execute_tap_dance_action(tap_dance_config.tap, key_event).await;
+                                
+                                // Reset for new tap dance
+                                inst.state = TapDanceState::Initial;
+                                inst.last_event_time = current_time;
+                                inst.tap_count = 1;
+                                
+                                // Add to buffer for timeout handling
+                                self.add_holding_key_to_buffer(key_event, KeyAction::TapDance(tap_dance_index), TapHoldState::Initial);
+                            }
+                        }
+                        TapDanceState::Resolved => {
+                            // Previous tap dance resolved, start new one
+                            debug!("[TAP-DANCE] Previous resolved, starting new tap dance");
+                            inst.state = TapDanceState::Initial;
+                            inst.last_event_time = current_time;
+                            inst.tap_count = 1;
+                            
+                            // Add to buffer for timeout handling
+                            self.add_holding_key_to_buffer(key_event, KeyAction::TapDance(tap_dance_index), TapHoldState::Initial);
+                        }
+                        _ => {
+                            // Already in progress, ignore
+                            debug!("[TAP-DANCE] Already in progress, ignoring press");
+                        }
+                    }
+                }
+            }
+            None => {
+                // Create new instance
+                let free_slot = self.tap_dance_instances.iter().position(|slot| slot.is_none());
+                if let Some(slot_idx) = free_slot {
+                    debug!("[TAP-DANCE] Creating new tap dance instance in slot {}", slot_idx);
+                    self.tap_dance_instances[slot_idx] = Some(TapDanceInstance {
+                        state: TapDanceState::Initial,
+                        key_event,
+                        last_event_time: current_time,
+                        tap_dance_index,
+                        tap_count: 1,
+                    });
+                    
+                    // Add to buffer for timeout handling
+                    self.add_holding_key_to_buffer(key_event, KeyAction::TapDance(tap_dance_index), TapHoldState::Initial);
+                } else {
+                    error!("[TAP-DANCE] No free slots for tap dance instances");
+                }
+            }
+        }
+    }
+
+    /// Handle tap dance key release
+    async fn handle_tap_dance_release(&mut self, tap_dance_index: u8, tap_dance_config: crate::tap_dance::TapDance, key_event: KeyEvent) {
+        let current_time = Instant::now();
+        
+        if let Some(instance_index) = self.find_tap_dance_instance(tap_dance_index, key_event) {
+            let instance = &mut self.tap_dance_instances[instance_index];
+            if let Some(ref mut inst) = instance {
+                debug!("[TAP-DANCE] Release for state: {:?}, tap_count: {}", inst.state, inst.tap_count);
+                
+                match inst.state {
+                    TapDanceState::Initial => {
+                        // First tap completed, wait for next tap or timeout
+                        inst.state = TapDanceState::WaitingForNext;
+                        inst.last_event_time = current_time;
+                        debug!("[TAP-DANCE] First tap completed, waiting for next");
+                    }
+                    TapDanceState::SecondPress => {
+                        // Second tap completed, resolve as double tap
+                        debug!("[TAP-DANCE] Second tap completed, resolving as double tap");
+                        self.execute_tap_dance_action(tap_dance_config.double_tap, key_event).await;
+                        
+                        // Mark as resolved
+                        inst.state = TapDanceState::Resolved;
+                        inst.last_event_time = current_time;
+                        
+                        // Remove from buffer
+                        self.remove_holding_key_from_buffer(key_event);
+                    }
+                    _ => {
+                        debug!("[TAP-DANCE] Release in unexpected state: {:?}", inst.state);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Find existing tap dance instance by index and key event
+    fn find_tap_dance_instance(&self, tap_dance_index: u8, key_event: KeyEvent) -> Option<usize> {
+        self.tap_dance_instances.iter().position(|instance| {
+            if let Some(inst) = instance {
+                inst.tap_dance_index == tap_dance_index && 
+                inst.key_event.row == key_event.row && 
+                inst.key_event.col == key_event.col
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Execute a tap dance action
+    async fn execute_tap_dance_action(&mut self, action: KeyAction, key_event: KeyEvent) {
+        debug!("[TAP-DANCE] Executing action: {:?}", action);
+        
+        // Create press event
+        let press_event = KeyEvent {
+            row: key_event.row,
+            col: key_event.col,
+            pressed: true,
+        };
+        
+        // Create release event
+        let release_event = KeyEvent {
+            row: key_event.row,
+            col: key_event.col,
+            pressed: false,
+        };
+        
+        // Execute press
+        self.process_key_action_inner(action, press_event).await;
+        
+        // Small delay
+        embassy_time::Timer::after_millis(10).await;
+        
+        // Execute release
+        self.process_key_action_inner(action, release_event).await;
+    }
+
+    /// Clean up resolved tap dance instances
+    fn cleanup_tap_dance_instances(&mut self) {
+        for instance in self.tap_dance_instances.iter_mut() {
+            if let Some(ref mut inst) = instance {
+                if inst.state == TapDanceState::Resolved {
+                    *instance = None;
+                }
+            }
         }
     }
 
@@ -1695,6 +2002,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.chord_state = Some(ChordHoldState::create(key_event, ROW, COL));
                 }
             }
+            KeyAction::TapDance(_) => {
+                // Tap dance keys don't need chord state
+            }
             _ => {}
         }
     }
@@ -1716,14 +2026,37 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// Get a copy of the next tap-hold key in the buffer.
-    // TODO: improve performance
+    /// Get a copy of the next buffered key (tap-hold or tap-dance).
     fn next_buffered_key(&mut self) -> Option<HoldingKey> {
-        // Release an unprocessed key
+        // Find the next key to process based on timeout
         self.holding_buffer
             .iter()
-            .filter_map(|key| if key.state == Initial { Some(key.clone()) } else { None }) // Now only tap-hold keys are considered actually
-            .min_by_key(|e| e.pressed_time) // TODO: If per-key timeout is added, sort by the timeout time here
+            .filter_map(|key| {
+                if key.state == Initial {
+                    match key.action {
+                        KeyAction::TapDance(tap_dance_index) => {
+                            // Check if any tap dance instance needs processing
+                            if let Some(instance_index) = self.find_tap_dance_instance(tap_dance_index, key.key_event) {
+                                let instance = &self.tap_dance_instances[instance_index];
+                                if let Some(inst) = instance {
+                                    // Get tap dance config to determine timeout
+                                    if let Some(config) = self.keymap.borrow().behavior.tap_dance.tap_dances.get(tap_dance_index as usize) {
+                                        let elapsed = inst.last_event_time.elapsed();
+                                        if elapsed >= config.tapping_term {
+                                            return Some(key.clone());
+                                        }
+                                    }
+                                }
+                            }
+                            None
+                        }
+                        _ => Some(key.clone()) // tap-hold and other keys
+                    }
+                } else {
+                    None
+                }
+            })
+            .min_by_key(|e| e.pressed_time)
     }
 
     /// Register a key to be sent in hid report.

@@ -73,6 +73,14 @@ macro_rules! th {
     };
 }
 
+/// Create a tap dance action. For example, `td!(0)` creates a tap dance referencing index 0.
+#[macro_export]
+macro_rules! td {
+    ($index: literal) => {
+        $crate::action::KeyAction::TapDance($index)
+    };
+}
+
 /// Create an oneshot layer key in keymap
 #[macro_export]
 macro_rules! osl {

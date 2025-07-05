@@ -86,6 +86,10 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             warn!("Tap hold action is not supported: tap: {:?}, hold: {:?}", tap, hold);
             0
         }
+        KeyAction::TapDance(index) => {
+            // VIA tap dance support  
+            0x5700 | (index as u16)
+        }
     }
 }
 
@@ -151,9 +155,9 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::No
         }
         0x5700..=0x57FF => {
-            // TODO: Tap dance
-            warn!("Tap dance {:#X} not supported", via_keycode);
-            KeyAction::No
+            // Tap dance
+            let tap_dance_index = (via_keycode & 0xFF) as u8;
+            KeyAction::TapDance(tap_dance_index)
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
