@@ -7,13 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2025-07-03
+
+### Added
+
+- Add sleep mode for split central after connected to the host
+
 ### Updated
 
+- Refactor key processing, fix tap-hold issues
 - Only the valid macro data is stored in the storage now. **Clearing storage is required to update**
 
 ### Fixed
 
 - Light service is wrongly disabled
+- Correctly update connection parameters after connected to the host
+- Remove need for quotes on OSM 
 
 ## [0.7.3] - 2025-06-18
 

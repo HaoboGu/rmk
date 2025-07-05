@@ -8,6 +8,27 @@ tri_layer = { upper = 1, lower = 2, adjust = 3 }
 one_shot = { timeout = "1s" }
 ```
 
+## Tap Hold
+
+In the `tap_hold` sub-table, you can configure the following parameters:
+
+- `enable_hrm`: Enables or disables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
+- `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_hrm` is set to true.
+- `chordal_hold`: (Experimental) Enables chordal hold mode. When enabled, hold action will be triggered when a key from "opposite" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
+- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
+- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
+- `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
+
+The following are the typical configurations:
+
+```toml
+[behavior]
+# Enable HRM
+tap_hold = { enable_hrm = true, permissive_hold = true, chordal_hold = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+# Disable HRM, you can safely ignore any fields if you don't want to change them
+tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
+```
+
 ## Tri Layer
 
 `Tri Layer` works by enabling a layer (called `adjust`) when other two layers (`upper` and `lower`) are both enabled.
@@ -24,25 +45,6 @@ adjust = 3
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
 Note that `"#layer_name"` could also be used in place of layer numbers.
-
-## Tap Hold
-
-In the `tap_hold` sub-table, you can configure the following parameters:
-
-- `enable_hrm`: Enables or disables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
-- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
-- `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
-- `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
-
-The following are the typical configurations:
-
-```toml
-[behavior]
-# Enable HRM
-tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
-# Disable HRM, you can safely ignore any fields if you don't want to change them
-tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
-```
 
 ## One Shot
 

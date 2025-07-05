@@ -47,6 +47,10 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
+    /// Maximum number of tap dances keyboard can store
+    #[serde_inline_default(8)]
+    #[serde(deserialize_with = "check_tap_dance_max_num")]
+    pub tap_dance_max_num: usize,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -84,7 +88,7 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
     /// BLE Split Central sleep timeout in minutes (0 = disabled)
-    #[serde_inline_default(30)]
+    #[serde_inline_default(0)]
     pub split_central_sleep_timeout_minutes: u32,
 }
 
@@ -95,6 +99,17 @@ where
     let value = SerdeDeserialize::deserialize(deserializer)?;
     if value > 256 {
         panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
+    }
+    Ok(value)
+}
+
+fn check_tap_dance_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = SerdeDeserialize::deserialize(deserializer)?;
+    if value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: tap_dance_max_num must be between 0 and 256, got {value}");
     }
     Ok(value)
 }
@@ -119,6 +134,7 @@ impl Default for RmkConstantsConfig {
             combo_max_num: 8,
             combo_max_length: 4,
             fork_max_num: 8,
+            tap_dance_max_num: 8,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
@@ -131,7 +147,7 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 1,
             split_message_channel_size: 4,
             ble_profiles_num: 3,
-            split_central_sleep_timeout_minutes: 30,
+            split_central_sleep_timeout_minutes: 0,
         }
     }
 }
@@ -332,6 +348,7 @@ pub struct BehaviorConfig {
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
     pub fork: Option<ForksConfig>,
+    pub tap_dance: Option<TapDancesConfig>,
 }
 
 /// Configurations for tap hold
@@ -342,6 +359,7 @@ pub struct TapHoldConfig {
     pub permissive_hold: Option<bool>,
     pub chordal_hold: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
+    /// Depreciated
     pub post_wait_time: Option<DurationMillis>,
     pub hold_timeout: Option<DurationMillis>,
 }
@@ -395,6 +413,23 @@ pub struct ForkConfig {
     pub match_none: Option<String>,
     pub kept_modifiers: Option<String>,
     pub bindable: Option<bool>,
+}
+
+/// Configurations for tap dances
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TapDancesConfig {
+    pub tap_dances: Vec<TapDanceConfig>,
+}
+
+/// Configurations for tap dance
+#[derive(Clone, Debug, Deserialize)]
+pub struct TapDanceConfig {
+    pub tap: Option<String>,
+    pub hold: Option<String>,
+    pub hold_after_tap: Option<String>,
+    pub double_tap: Option<String>,
+    pub tapping_term: Option<DurationMillis>,
 }
 
 /// Configurations for split keyboards
