@@ -510,6 +510,26 @@ mod tap_hold_test {
         }
 
         #[test]
+        fn test_taphold_with_layer_tap() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    ..BehaviorConfig::default()
+                }),
+                sequence: [
+                    [4, 5, true, 10],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [3, 2, false, 10],  // Press shifted x
+                    [4, 5, false, 10],  // Release lt!(1, Space)
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Shifted X
+                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
+                ]
+            }
+        }
+
+        #[test]
         fn test_chordal_multi_hold_key_cross_hand_should_be_hold() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
@@ -642,11 +662,6 @@ mod tap_hold_test {
                         tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         combo: CombosConfig {
                             combos: heapless::Vec::from_iter([
-                                // Combo::new(
-                                //     [th!(A, LShift), th!(S, LGui)],
-                                //     k!(B),
-                                //     None,
-                                // ),
                                 Combo::new(
                                     [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
                                     k!(C),
