@@ -494,7 +494,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Ignore
     }
 
-    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
+    async fn process_key_action(&mut self, mut original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
         let decision = self.make_tap_hold_decision(original_key_action, key_event);
 
         debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
@@ -510,6 +510,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // ChordHold: chordal hold is triggered by a key press
                 // Hold: impossible for now
                 self.fire_holding_keys(decision, key_event).await;
+                // Because the layer/keymap state might be changed after `fire_holding_keys`, so we need to get the key action again
+                original_key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
             }
             _ => {
                 error!("Unexpected tap hold decision {:?}", decision);
@@ -517,6 +519,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
+        debug!("current buffer: {:?}", self.holding_buffer);
+        debug!("Processing key action: {:?}", original_key_action);
         // Process current key action after tap-hold decision and (optional) all holding keys are resolved
         self.process_key_action_inner(original_key_action, key_event).await
     }
@@ -965,6 +969,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         && key_event.col == self.last_release.0.col
                     {
                         // Quick tapping to repeat
+                        debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
 
                         // Pressed a same key after tapped it within `hold_timeout`
                         // Trigger the tap action just as it's pressed
@@ -1202,9 +1207,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Apply the modifiers from KeyAction::WithModifiers
         // the suppression effect of forks should not apply on these
-        if pressed {
-            result |= self.with_modifiers;
-        }
+        result |= self.with_modifiers;
 
         result
     }
