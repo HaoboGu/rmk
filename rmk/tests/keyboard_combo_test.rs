@@ -37,8 +37,9 @@ pub fn get_combos_config() -> CombosConfig {
 mod combo_test {
 
     use embassy_futures::block_on;
-    use rmk::config::BehaviorConfig;
+    use rmk::config::TapHoldConfig;
     use rmk::keycode::KeyCode;
+    use rmk::{config::BehaviorConfig, th};
     use rusty_fork::rusty_fork_test;
 
     use super::*;
@@ -108,6 +109,47 @@ mod combo_test {
                     [0, [0; 6]],
                 ]
             }
+        }
+
+        #[test]
+        fn test_taphold_with_combo_3() {
+            key_sequence_test! {
+                keyboard: {
+                    let behavior_config = BehaviorConfig {
+                        tap_hold: TapHoldConfig {
+                            enable_hrm: true,
+                            permissive_hold: true,
+                            chordal_hold: false,
+                            post_wait_time: Duration::from_millis(0),
+                            ..TapHoldConfig::default()
+                        },
+                        combo: CombosConfig {
+                            combos: heapless::Vec::from_iter([
+                                Combo::new(
+                                    [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
+                                    k!(C),
+                                    None,
+                                )
+                            ]),
+                            timeout: Duration::from_millis(50),
+                        },
+                        ..BehaviorConfig::default()
+                    };
+                    create_test_keyboard_with_config(behavior_config)
+                },
+                sequence: [
+                    [2, 1, true, 20],  // Press th!(A,shift)
+                    [2, 2, true, 20],  // Press th!(S,LGui)
+                    [3, 1, true, 20],  // Press th!(Z,LAlt)
+                    [2, 1, false, 10], // Release A
+                    [2, 2, false, 10], // Release S
+                    [3, 1, false, 10], // Release Z
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                    [0, [0, 0, 0, 0, 0, 0]],
+                ]
+            };
         }
 
     }

@@ -5,7 +5,7 @@ use core::fmt::Debug;
 use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
 use embassy_time::{Duration, Instant, Timer};
-use heapless::{Deque, FnvIndexMap, Vec};
+use heapless::{FnvIndexMap, Vec};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 use TapHoldDecision::{Buffering, Ignore};
 use TapHoldState::Initial;
@@ -32,7 +32,7 @@ use crate::light::LedIndicator;
 use crate::split::ble::central::update_activity_time;
 use crate::tap_hold::TapHoldDecision::{ChordHold, CleanBuffer, Hold};
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
-use crate::{boot, COMBO_MAX_LENGTH, FORK_MAX_NUM};
+use crate::{boot, FORK_MAX_NUM};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -196,9 +196,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     mouse_key_move_delta: i8,
     mouse_wheel_move_delta: i8,
 
-    /// Buffer for pressed `KeyAction` and `KeyEvents` in combos
-    combo_actions_buffer: Deque<(KeyAction, KeyEvent), COMBO_MAX_LENGTH>,
-
     /// Used for temporarily disabling combos
     combo_on: bool,
 
@@ -253,7 +250,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             last_mouse_tick: FnvIndexMap::new(),
             mouse_key_move_delta: 8,
             mouse_wheel_move_delta: 1,
-            combo_actions_buffer: Deque::new(),
             combo_on: true,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
@@ -294,26 +290,52 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// The given holding key is a copy of the buffered key. Only tap-hold keys are considered now.
     /// TODO: process other type of buffered holding keys
     async fn process_buffered_key(&mut self, key: HoldingKey) -> LoopState {
-        let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
-            self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
-        } else {
-            Duration::from_ticks(0)
-        };
+        debug!("Processing buffered key: {:?}", key);
+        match key.state {
+            TapHoldState::WaitingCombo => {
+                let time_left = if self.keymap.borrow().behavior.combo.timeout > key.pressed_time.elapsed() {
+                    self.keymap.borrow().behavior.combo.timeout - key.pressed_time.elapsed()
+                } else {
+                    Duration::from_ticks(0)
+                };
+                debug!("time_left: {:?}ms", time_left.as_millis());
+                match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+                    Either::First(_) => {
+                        // Timeout, dispatch combo
+                        self.dispatch_combos().await;
+                        LoopState::OK
+                    }
+                    Either::Second(key_event) => {
+                        // Process new key event
+                        debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
+                        self.process_inner(key_event).await;
+                        LoopState::OK
+                    }
+                }
+            }
+            _ => {
+                let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
+                    self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
+                } else {
+                    Duration::from_ticks(0)
+                };
 
-        debug!(
-            "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
-            key.key_event,
-            time_left.as_millis()
-        );
+                debug!(
+                    "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
+                    key.key_event,
+                    time_left.as_millis()
+                );
 
-        // Wait for hold timeout or new key event
-        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
-            Either::First(_) => self.process_tap_hold_timeout(key).await,
-            Either::Second(key_event) => {
-                // Process new key event
-                debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
-                self.process_inner(key_event).await;
-                LoopState::OK
+                // Wait for hold timeout or new key event
+                match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+                    Either::First(_) => self.process_tap_hold_timeout(key).await,
+                    Either::Second(key_event) => {
+                        // Process new key event
+                        debug!("[TAP-HOLD] Interrupted into new key event: {:?}", key_event);
+                        self.process_inner(key_event).await;
+                        LoopState::OK
+                    }
+                }
             }
         }
     }
@@ -447,7 +469,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // Buffer pressed keys if permissive hold is enabled.
                     return match key_action {
-                        KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+                        KeyAction::TapHold(_, _) => {
                             // Ignore following tap-hold keys, they will be always checked
                             Ignore
                         }
@@ -472,7 +494,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Ignore
     }
 
-    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
+    async fn process_key_action(&mut self, mut original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
         let decision = self.make_tap_hold_decision(original_key_action, key_event);
 
         debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
@@ -488,6 +510,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // ChordHold: chordal hold is triggered by a key press
                 // Hold: impossible for now
                 self.fire_holding_keys(decision, key_event).await;
+                // Because the layer/keymap state might be changed after `fire_holding_keys`, so we need to get the key action again
+                original_key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
             }
             _ => {
                 error!("Unexpected tap hold decision {:?}", decision);
@@ -495,6 +519,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
+        debug!("current buffer: {:?}", self.holding_buffer);
+        debug!("Processing key action: {:?}", original_key_action);
         // Process current key action after tap-hold decision and (optional) all holding keys are resolved
         self.process_key_action_inner(original_key_action, key_event).await
     }
@@ -519,16 +545,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .await;
             }
             KeyAction::OneShot(oneshot_action) => self.process_key_action_oneshot(oneshot_action, key_event).await,
-            KeyAction::LayerTapHold(tap_action, layer_num) => {
-                let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action, key_event)
-                    .await;
-            }
-            KeyAction::ModifierTapHold(tap_action, modifier) => {
-                let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
-                    .await;
-            }
         }
 
         // Release to early
@@ -675,8 +691,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         if key_event.pressed && is_combo_action {
-            if self.combo_actions_buffer.push_back((key_action, key_event)).is_err() {
-                error!("Combo actions buffer overflowed! This is a bug and should not happen!");
+            if self
+                .holding_buffer
+                .push(HoldingKey {
+                    state: TapHoldState::WaitingCombo,
+                    key_event,
+                    pressed_time: Instant::now(),
+                    action: key_action,
+                })
+                .is_err()
+            {
+                error!("Holding buffer overflowed when saving combo action");
             }
 
             // FIXME: last combo is not checked
@@ -690,14 +715,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .find_map(|combo| (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger()));
 
             if next_action.is_some() {
-                self.combo_actions_buffer.clear();
+                self.holding_buffer
+                    .retain(|item| item.state != TapHoldState::WaitingCombo);
                 debug!("Combo action {:?} matched:: clearing combo buffer", next_action);
-            } else {
-                let timeout = embassy_time::Timer::after(self.keymap.borrow().behavior.combo.timeout);
-                match select(timeout, KEY_EVENT_CHANNEL.receive()).await {
-                    Either::First(_) => self.dispatch_combos().await,
-                    Either::Second(event) => self.unprocessed_events.push(event).unwrap(),
-                }
             }
             next_action
         } else {
@@ -717,9 +737,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Dispatch combo into key action
     async fn dispatch_combos(&mut self) {
-        while let Some((action, event)) = self.combo_actions_buffer.pop_front() {
-            debug!("Dispatching combo action: {:?}", action);
-            self.process_key_action_inner(action, event).await;
+        debug!("Dispatching combos");
+        // For each WaitingCombo in the holding buffer, dispatch it
+        // Note that the process_key_action_inner is an async function, so the retain doesn't work
+        let mut i = 0;
+        while i < self.holding_buffer.len() {
+            if self.holding_buffer[i].state == TapHoldState::WaitingCombo {
+                let key = self.holding_buffer.swap_remove(i);
+                debug!("Dispatching combo: {:?}", key);
+                self.process_key_action_inner(key.action, key.key_event).await;
+                debug!("Current buffer: {:?}", self.holding_buffer);
+            } else {
+                i += 1;
+            }
         }
 
         self.keymap
@@ -939,6 +969,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         && key_event.col == self.last_release.0.col
                     {
                         // Quick tapping to repeat
+                        debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
 
                         // Pressed a same key after tapped it within `hold_timeout`
                         // Trigger the tap action just as it's pressed
@@ -1176,9 +1207,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Apply the modifiers from KeyAction::WithModifiers
         // the suppression effect of forks should not apply on these
-        if pressed {
-            result |= self.with_modifiers;
-        }
+        result |= self.with_modifiers;
 
         result
     }
@@ -1619,9 +1648,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                     }
                     _ => {
-                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        let action = self.keymap.borrow_mut().get_action_with_layer_cache(hold_key.key_event);
+                        debug!("Tap Key {:?} now press down, action: {:?}", hold_key.key_event, action);
                         // TODO: ignored return value
-                        self.process_key_action_inner(hold_key.action, hold_key.key_event).await;
+                        self.process_key_action_inner(action, hold_key.key_event).await;
                     }
                 }
             }
@@ -1660,7 +1690,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     _ => {
                         // For non-tap-hold keys, mark as PostTap to indicate they've been processed.
-                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        debug!("Tap Key {:?} now marked as PostTap", hold_key.key_event);
                         hold_key.state = TapHoldState::PostTap;
                     }
                 }
@@ -1689,7 +1719,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         debug!("Saving action: {:?} to holding buffer", new_item);
         self.push_and_sort_buffers(new_item);
         match action {
-            KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+            KeyAction::TapHold(_, _) => {
                 // If this is the first tap-hold key, initialize the chord state for possible chordal hold detection.
                 if self.chord_state.is_none() {
                     self.chord_state = Some(ChordHoldState::create(key_event, ROW, COL));
@@ -1722,7 +1752,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Release an unprocessed key
         self.holding_buffer
             .iter()
-            .filter_map(|key| if key.state == Initial { Some(key.clone()) } else { None }) // Now only tap-hold keys are considered actually
+            .filter_map(|key| {
+                if key.state == Initial || key.state == TapHoldState::WaitingCombo {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            }) // Now only tap-hold keys are considered actually
             .min_by_key(|e| e.pressed_time) // TODO: If per-key timeout is added, sort by the timeout time here
     }
 
@@ -1832,7 +1868,6 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
-    use futures::{join, FutureExt};
     use rusty_fork::rusty_fork_test;
 
     use super::*;

@@ -61,6 +61,8 @@ impl HoldingKey {
 pub enum TapHoldState {
     /// After a press event is received
     Initial,
+    /// Waiting for combo
+    WaitingCombo,
     /// Key is marked as Tap, waiting to be processed
     BeforeTap,
     /// Tap key has been processed and sent to HID, but not yet released

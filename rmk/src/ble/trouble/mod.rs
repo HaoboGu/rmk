@@ -748,7 +748,9 @@ pub(crate) async fn update_ble_phy<P: PacketPool>(
                 let e = defmt::Debug2Format(&e);
                 error!("[update_ble_phy] error: {:?}", e);
             }
-            _ => (),
+            Ok(_) => {
+                info!("[update_ble_phy] PHY updated");
+            }
         }
         break;
     }
