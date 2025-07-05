@@ -89,6 +89,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
         fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.tap_dance.tap_dances);
 
         if let Some(storage) = storage {
             if {
@@ -105,6 +106,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_combos(&mut behavior.combo.combos).await)
                     // Read fork cache
                     .and(storage.read_forks(&mut behavior.fork.forks).await)
+                    // Read tap dance cache
+                    .and(storage.read_tap_dances(&mut behavior.tap_dance.tap_dances).await)
             }
             .is_err()
             {

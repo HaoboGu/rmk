@@ -529,6 +529,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
                     .await;
             }
+            KeyAction::TapDance(index) => {
+                self.process_key_action_tap_dance(index, key_event).await;
+            }
         }
 
         // Release to early
@@ -983,6 +986,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Action::Modifier(m) => self.process_action_osm(m.to_hid_modifiers(), key_event).await,
             Action::LayerOn(l) => self.process_action_osl(l, key_event).await,
             _ => self.process_key_action_normal(oneshot_action, key_event).await,
+        }
+    }
+
+    /// Process tap dance action.
+    async fn process_key_action_tap_dance(&mut self, index: u8, _key_event: KeyEvent) {
+        let tap_dances = &self.keymap.borrow().behavior.tap_dance.tap_dances;
+
+        if let Some(tap_dance) = tap_dances.get(index as usize) {
+            // TODO: Implement full tap dance functionality with timing, double tap, hold, etc.
+            warn!("Tap dance index {}: {:?} is triggered", index, tap_dance);
+        } else {
+            warn!("Tap dance index {} not found", index);
         }
     }
 
