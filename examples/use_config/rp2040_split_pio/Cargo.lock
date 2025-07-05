@@ -1867,7 +1867,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.7.2"
+version = "0.7.4"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1914,7 +1914,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.5.1"
+version = "0.5.3"
 dependencies = [
  "cargo_toml",
  "config",
@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.6.2"
+version = "0.6.4"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -2390,9 +2390,8 @@ checksum = "343e926fc669bc8cde4fa3129ab681c63671bae288b1f1081ceee6d9d37904fc"
 
 [[package]]
 name = "trouble-host"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f759a3da7d8501bf4be7a11d0754f1da3d2bad226d64cdad9314cec00288fbc"
+version = "0.2.3"
+source = "git+https://github.com/embassy-rs/trouble?rev=90c6359#90c6359aff5ad80e80c008517a966c5682b0993b"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2415,8 +2414,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5c25c521a9a0cad8c62b86bd3ca9abd6c94842ecf62b64fc56f0d91bb1a426"
+source = "git+https://github.com/embassy-rs/trouble?rev=90c6359#90c6359aff5ad80e80c008517a966c5682b0993b"
 dependencies = [
  "convert_case 0.8.0",
  "darling",

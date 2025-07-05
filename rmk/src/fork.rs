@@ -49,11 +49,7 @@ impl Not for StateBits {
 
 impl StateBits {
     pub const fn new_from(modifiers: HidModifiers, leds: LedIndicator, mouse: HidMouseButtons) -> Self {
-        StateBits {
-            modifiers: modifiers,
-            leds: leds,
-            mouse: mouse,
-        }
+        StateBits { modifiers, leds, mouse }
     }
 }
 

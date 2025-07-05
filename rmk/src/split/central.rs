@@ -9,7 +9,7 @@ use embedded_hal_async::digital::Wait;
 use embedded_io_async::{Read, Write};
 #[cfg(feature = "_ble")]
 use {
-    bt_hci::cmd::le::{LeSetPhy, LeSetScanParams},
+    bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams},
     bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync},
     trouble_host::prelude::*,
 };
@@ -34,8 +34,7 @@ pub async fn run_peripheral_manager<
     #[cfg(feature = "_ble")] C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
-        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
-        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,

@@ -23,7 +23,10 @@ use core::future::Future;
 use core::sync::atomic::Ordering;
 
 #[cfg(feature = "_ble")]
-use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
+use bt_hci::{
+    cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
+    controller::{ControllerCmdAsync, ControllerCmdSync},
+};
 use config::{RmkConfig, VialConfig};
 #[cfg(feature = "controller")]
 use controller::{wpm::WpmController, PollingController};
@@ -182,11 +185,8 @@ pub async fn initialize_keymap_and_storage<
 #[allow(unreachable_code)]
 pub async fn run_rmk<
     'a,
-    'b,
-    #[cfg(feature = "_ble")] C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + bt_hci::controller::ControllerCmdAsync<bt_hci::cmd::le::LeReadRemoteFeatures>
-        + bt_hci::controller::ControllerCmdSync<bt_hci::cmd::le::LeReadLocalSupportedFeatures>,
+    #[cfg(feature = "_ble")] 'b,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
     Out: OutputPin,
