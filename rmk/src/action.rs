@@ -96,6 +96,7 @@ impl KeyAction {
                 Action::Modifier(m) => 0x6000 | ((m.into_bits() as u16) << 8) | tap.to_basic_action_code(),
                 _ => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
             },
+            KeyAction::TapDance(index) => 0x5700 | (index as u16),
         }
     }
 }

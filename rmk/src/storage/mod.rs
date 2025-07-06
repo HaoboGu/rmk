@@ -302,7 +302,7 @@ impl Value<'_> for StorageData {
                 Ok(15)
             }
             StorageData::TapDanceData(tap_dance) => {
-                if buffer.len() < 13 {
+                if buffer.len() < 11 {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::TapDanceData as u8;
@@ -311,7 +311,7 @@ impl Value<'_> for StorageData {
                 BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(tap_dance.hold_after_tap));
                 BigEndian::write_u16(&mut buffer[7..9], to_via_keycode(tap_dance.double_tap));
                 BigEndian::write_u16(&mut buffer[9..11], tap_dance.tapping_term_ms);
-                Ok(13)
+                Ok(11)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -512,7 +512,7 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::TapDanceData => {
-                    if buffer.len() < 13 {
+                    if buffer.len() < 11 {
                         return Err(SerializationError::InvalidData);
                     }
                     let tap = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));

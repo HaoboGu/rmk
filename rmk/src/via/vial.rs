@@ -140,7 +140,7 @@ pub(crate) async fn process_vial<
                             tap_dance.tapping_term.as_millis() as u16,
                         );
                     } else {
-                        report.input_data[1..13].fill(0);
+                        report.input_data[1..11].fill(0);
                     }
                 }
                 VialDynamic::DynamicVialTapDanceSet => {
