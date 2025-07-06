@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use pest::Parser;
 use pest_derive::Parser;
 
 use crate::{KeyboardTomlConfig, LayoutConfig};
-use std::collections::HashMap;
 
 // Pest parser using the grammar files
 #[derive(Parser)]
@@ -437,7 +438,7 @@ mod tests {
         for (input, expected) in test_cases {
             let result = ConfigParser::parse(Rule::key_map, input);
             assert!(result.is_ok(), "Failed to parse: {}", input);
-            
+
             let mut actions = Vec::new();
             for pair in result.unwrap() {
                 if pair.as_rule() == Rule::key_map {
@@ -452,7 +453,7 @@ mod tests {
                     }
                 }
             }
-            
+
             assert_eq!(actions, expected, "Input: {}", input);
         }
     }
@@ -471,7 +472,7 @@ mod tests {
         for (input, expected_rule) in test_cases {
             let result = ConfigParser::parse(Rule::key_map, input);
             assert!(result.is_ok(), "Failed to parse: {}", input);
-            
+
             let mut found_rule = None;
             for pair in result.unwrap() {
                 if pair.as_rule() == Rule::key_map {
@@ -485,8 +486,14 @@ mod tests {
                     }
                 }
             }
-            
-            assert_eq!(found_rule, Some(expected_rule), "Input: {} should be parsed as {:?}", input, expected_rule);
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
         }
     }
 
@@ -494,13 +501,16 @@ mod tests {
     fn test_keymap_parser_with_no_actions() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
-        
+
         // Test parsing a keymap string with "No" actions
         let keymap = "A B No C No NoUsSlash NonUsSlash D No";
         let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
-        
+
         assert!(result.is_ok());
         let actions = result.unwrap();
-        assert_eq!(actions, vec!["A", "B", "No", "C", "No", "NoUsSlash", "NonUsSlash", "D", "No"]);
+        assert_eq!(
+            actions,
+            vec!["A", "B", "No", "C", "No", "NoUsSlash", "NonUsSlash", "D", "No"]
+        );
     }
 }

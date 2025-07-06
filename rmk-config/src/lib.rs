@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use config::{Config, File, FileFormat};
-use serde::de;
-use serde::Deserialize as SerdeDeserialize;
+use serde::{de, Deserialize as SerdeDeserialize};
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
 
