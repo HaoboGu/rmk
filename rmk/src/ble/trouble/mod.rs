@@ -45,7 +45,7 @@ use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
 use crate::light::{LedIndicator, LightController};
-#[cfg(feature = "split")]
+#[cfg(all(not(feature = "_no_usb"), feature = "split"))]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
@@ -323,9 +323,6 @@ pub(crate) async fn run_ble<
                                 .await;
                             }
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                #[cfg(feature = "split")]
-                                use crate::split::ble::central::CENTRAL_SLEEP;
-
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral

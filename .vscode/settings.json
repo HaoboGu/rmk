@@ -27,7 +27,7 @@
         // "examples/use_config/esp32s3_ble/Cargo.toml",
         // "examples/use_config/nef52832_ble/Cargo.toml",
         // "examples/use_config/nrf52840_ble/Cargo.toml",
-        // "examples/use_config/nrf52840_ble_split/Cargo.toml",
+        "examples/use_config/nrf52840_ble_split/Cargo.toml",
         // "examples/use_config/nrf52840_ble_split_direct_pin/Cargo.toml",
         // "examples/use_config/pi_pico_w_ble/Cargo.toml"
         // "examples/use_config/pi_pico_w_ble_split/Cargo.toml"
