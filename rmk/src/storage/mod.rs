@@ -1179,8 +1179,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         )
         .await
         {
-            // if config.enable && config.build_hash == BUILD_HASH {
-            if config.enable {
+            if config.enable && config.build_hash == BUILD_HASH {
+                // if config.enable {
                 return true;
             }
         }
