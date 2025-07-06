@@ -28,7 +28,8 @@ mod tap_hold_test {
     use std::cell::RefCell;
 
     use embassy_futures::block_on;
-    use rmk::config::BehaviorConfig;
+    use rmk::combo::Combo;
+    use rmk::config::{BehaviorConfig, CombosConfig};
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
     use rmk::{k, th};
@@ -46,13 +47,13 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard(),
 
-                sequence : [
+                sequence: [
                     [2, 1, true, 10],  // Press TH shift A
                     // Release before hold timeout
                     [2, 1, false, 100], // Release A
                 ],
 
-                expected_reports : [
+                expected_reports: [
                     // Should be a tapping A
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                 ]
@@ -139,14 +140,14 @@ mod tap_hold_test {
             );
             key_sequence_test! {
                 keyboard: Keyboard::new(keymap),
-                sequence : [
+                sequence: [
                     [0, 0, true, 10],  // press th b
                     [0, 1, true, 10],  // Press a
                     [0, 0, false, 300], // Release th b
                     [0, 1, false, 10],  // Press a within post wait timeout
 
                 ],
-                expected_reports : [
+                expected_reports: [
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [ kc_to_u8!(A) , 0, 0, 0, 0, 0]],
                     [0, [ kc_to_u8!(A) , 0, 0, 0, 0, 0]],
@@ -175,14 +176,14 @@ mod tap_hold_test {
             );
 
             key_sequence_test! {
-                keyboard : Keyboard::new(keymap),
-                sequence : [
+                keyboard: Keyboard::new(keymap),
+                sequence: [
                     [0, 0, true, 10],  // press th b
                     [0, 1, true, 10],  // Press a
                     [0, 0, false, 300], // Release th b
                     [0, 1, false, 100],  // Press a out of post wait timeout
                 ],
-                expected_reports : [
+                expected_reports: [
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
@@ -230,7 +231,7 @@ mod tap_hold_test {
                     [2, 2, false, 100], // Release s
                     [2, 3, false, 100],  //  press d
                 ],
-                expected_reports : [
+                expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                     [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]],
                     [0, [kc_to_u8!(A), kc_to_u8!(S), kc_to_u8!(D), 0, 0, 0]],
@@ -317,12 +318,12 @@ mod tap_hold_test {
         #[test]
         fn test_tap_hold_hold_on_smesh_key_press() {
             key_sequence_test! {
-                keyboard : create_test_keyboard_with_config(BehaviorConfig {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         .. BehaviorConfig::default()
                     }),
 
-                sequence :[
+                sequence:[
                     [2, 5, true, 30], // Press G
                     [2, 1, true, 10], // Press th!(A,shift)
                     [2, 5, false, 10], // Release G
@@ -333,7 +334,7 @@ mod tap_hold_test {
                     [2, 2, false, 100], // Release S
                 ],
 
-                expected_reports : [
+                expected_reports: [
                     [0, [kc_to_u8!(G), 0, 0, 0, 0, 0]], // #0
                     [0, [kc_to_u8!(G), kc_to_u8!(A),  0, 0, 0, 0]],
                     [0, [0, kc_to_u8!(A),  0, 0, 0, 0]],
@@ -377,7 +378,7 @@ mod tap_hold_test {
         #[test]
         fn test_tap_hold_key_chord_cross_hand_should_be_hold() {
             key_sequence_test! {
-                keyboard : create_test_keyboard_with_config(
+                keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
                         tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
                         ..BehaviorConfig::default()
@@ -385,7 +386,7 @@ mod tap_hold_test {
                 ),
 
                 // rolling A , then ctrl d
-                sequence : [
+                sequence: [
                     [2, 1, true, 200], // Press th!(A,shift)
                     [2, 8, true, 50],  // Press K
                     [2, 1, false, 20], // Release A
@@ -454,7 +455,7 @@ mod tap_hold_test {
         #[test]
         fn test_chordal_reversed_rolling_should_tap() {
             key_sequence_test!  {
-                keyboard : create_test_keyboard_with_config(
+                keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
                         tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
                         ..BehaviorConfig::default()
@@ -462,14 +463,14 @@ mod tap_hold_test {
                 ),
 
                 // rolling A , then ctrl d
-                sequence : [
+                sequence: [
                     [2, 8, true, 50],  // Press K
                     [2, 1, true, 20],  // Press th!(A,shift)
                     [2, 8, false, 50], // Release k
                     [2, 1, false, 20], // Release A
 
                 ],
-                expected_reports : [
+                expected_reports: [
                     [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]],  // Tap K
                     [0, [kc_to_u8!(K), kc_to_u8!(A),  0, 0, 0, 0]], // Rolling Tap A
                     [0, [0, kc_to_u8!(A),  0, 0, 0, 0]], // Release K
@@ -484,7 +485,7 @@ mod tap_hold_test {
             //core case
             //should buffer next key and output
             key_sequence_test! {
-                keyboard : create_test_keyboard_with_config(
+                keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
                         tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
                         ..BehaviorConfig::default()
@@ -492,14 +493,14 @@ mod tap_hold_test {
                 ),
 
                 // rolling A , then ctrl d
-                sequence : [
+                sequence: [
                     [2, 1, true, 200], // Press th!(A,shift)
                     [2, 5, true, 50],  // Press g
                     [2, 1, false, 20], // Release A
                     [2, 5, false, 50],  // Release g
 
                 ],
-                expected_reports : [
+                expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                     [0, [kc_to_u8!(A),kc_to_u8!(G), 0, 0, 0, 0]],
                     [0, [0 ,kc_to_u8!(G),  0, 0, 0, 0]],
@@ -507,6 +508,73 @@ mod tap_hold_test {
                 ]
             };
         }
+
+        #[test]
+        fn test_taphold_with_layer_tap() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    ..BehaviorConfig::default()
+                }),
+                sequence: [
+                    [4, 5, true, 10],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [3, 2, false, 10],  // Press shifted x
+                    [4, 5, false, 10],  // Release lt!(1, Space)
+                    [0, 1, true, 10],  // Press 1
+                    [0, 1, false, 10],  // Release 1
+                    [4, 5, true, 250],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [3, 2, false, 10],  // Press shifted x
+                    [4, 5, false, 10],  // Release lt!(1, Space)
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Shifted X
+                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
+                    [0, [kc_to_u8!(Kc1), 0, 0, 0, 0, 0]], // Shifted X
+                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
+                    [KC_LSHIFT, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Shifted X
+                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
+                ]
+            }
+        }
+
+        #[test]
+        fn test_taphold_rolling_with_layer_tap() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    ..BehaviorConfig::default()
+                }),
+                sequence: [
+                    [4, 5, true, 10],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [4, 5, false, 100],  // Release lt!(1, Space)
+                    [3, 2, false, 10],  // Release shifted x
+                    [4, 5, true, 250],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [3, 2, false, 10],  // Release shifted x
+                    [4, 5, false, 100],  // Release lt!(1, Space)
+                    [4, 5, true, 250],  // Press lt!(1, Space)
+                    [3, 2, true, 10],
+                    [4, 5, false, 100],  // Release lt!(1, Space)
+                    [3, 2, false, 10],  // Release shifted x
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(Space), 0, 0, 0, 0, 0]], // Space
+                    [0, [kc_to_u8!(Space), kc_to_u8!(X), 0, 0, 0, 0]], // Space + X
+                    [0, [0, kc_to_u8!(X), 0, 0, 0, 0]], // Release Space
+                    [0, [0, 0, 0, 0, 0, 0]], // Release X
+                    [KC_LSHIFT, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Shifted X
+                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
+                    [0, [kc_to_u8!(Space), 0, 0, 0, 0, 0]], // Space
+                    [0, [kc_to_u8!(Space), kc_to_u8!(X), 0, 0, 0, 0]], // Space + X
+                    [0, [0, kc_to_u8!(X), 0, 0, 0, 0]], // Release Space
+                    [0, [0, 0, 0, 0, 0, 0]], // Release X
+                ]
+            }
+        }
+
 
         #[test]
         fn test_chordal_multi_hold_key_cross_hand_should_be_hold() {
@@ -537,14 +605,14 @@ mod tap_hold_test {
         #[test]
         fn test_taphold_flow_tap() {
             key_sequence_test! {
-                keyboard : create_test_keyboard_with_config(
+                keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
                         tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     }
                 ),
 
-                sequence : [
+                sequence: [
                     [2, 3, true, 30],  // Press d
                     [2, 3, false, 30], // Release d
                     [2, 1, true, 20],  // Press th!(A,shift)
@@ -552,7 +620,7 @@ mod tap_hold_test {
                     [2, 1, false, 40], // Release A
                     [2, 2, false, 10], // Release S
                 ],
-                expected_reports : [
+                expected_reports: [
                     [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Tap d
                     [0, [0, 0, 0, 0, 0, 0]], // Release D
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // quick tapping, Tap A
@@ -562,5 +630,115 @@ mod tap_hold_test {
                 ]
             };
         }
+
+        #[test]
+        fn test_taphold_with_combo() {
+            key_sequence_test! {
+                keyboard: {
+                    let behavior_config = BehaviorConfig {
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                        combo: CombosConfig {
+                            combos: heapless::Vec::from_iter([
+                                Combo::new(
+                                    [th!(A, LShift), th!(S, LGui)],
+                                    k!(B),
+                                    None,
+                                )
+                            ]),
+                            timeout: Duration::from_millis(50),
+                        },
+                        ..BehaviorConfig::default()
+                    };
+                    create_test_keyboard_with_config(behavior_config)
+                },
+                sequence: [
+                    [2, 1, true, 20],  // Press th!(A,shift)
+                    [2, 2, true, 60],  // Press th!(S,LGui)
+                    [2, 2, false, 10], // Release S
+                    [2, 1, false, 300], // Release A
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT, [kc_to_u8!(S), 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                    [0, [0, 0, 0, 0, 0, 0]],
+                ]
+            };
+        }
+
+        #[test]
+        fn test_taphold_with_combo_2() {
+            key_sequence_test! {
+                keyboard: {
+                    let behavior_config = BehaviorConfig {
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                        combo: CombosConfig {
+                            combos: heapless::Vec::from_iter([
+                                Combo::new(
+                                    [th!(A, LShift), th!(S, LGui)],
+                                    k!(B),
+                                    None,
+                                )
+                            ]),
+                            timeout: Duration::from_millis(50),
+                        },
+                        ..BehaviorConfig::default()
+                    };
+                    create_test_keyboard_with_config(behavior_config)
+                },
+                sequence: [
+                    [2, 1, true, 20],  // Press th!(A,shift)
+                    [2, 2, true, 60],  // Press th!(S,LGui)
+                    [2, 1, false, 10], // Release A
+                    [2, 2, false, 10], // Release S
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                    [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]],
+                    [0, [0, kc_to_u8!(S), 0, 0, 0, 0]],
+                    [0, [0, 0, 0, 0, 0, 0]],
+                ]
+            };
+        }
+
+        #[test]
+        fn test_taphold_with_combo_3() {
+            key_sequence_test! {
+                keyboard: {
+                    let behavior_config = BehaviorConfig {
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                        combo: CombosConfig {
+                            combos: heapless::Vec::from_iter([
+                                Combo::new(
+                                    [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
+                                    k!(C),
+                                    None,
+                                )
+                            ]),
+                            timeout: Duration::from_millis(50),
+                        },
+                        ..BehaviorConfig::default()
+                    };
+                    create_test_keyboard_with_config(behavior_config)
+                },
+                sequence: [
+                    [2, 1, true, 20],  // Press th!(A,shift)
+                    [2, 2, true, 20],  // Press th!(S,LGui)
+                    [3, 1, true, 100],  // Press th!(Z,LAlt)
+                    [2, 1, false, 10], // Release A
+                    [2, 2, false, 10], // Release S
+                    [3, 1, false, 10], // Release Z
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                    [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]],
+                    [0, [kc_to_u8!(A), kc_to_u8!(S), kc_to_u8!(Z), 0, 0, 0]],
+                    [0, [0, kc_to_u8!(S), kc_to_u8!(Z), 0, 0, 0]],
+                    [0, [0, 0, kc_to_u8!(Z), 0, 0, 0]],
+                    [0, [0, 0, 0, 0, 0, 0]],
+                ]
+            };
+        }
+
     }
 }
