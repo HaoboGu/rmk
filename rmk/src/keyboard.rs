@@ -469,7 +469,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // Buffer pressed keys if permissive hold is enabled.
                     return match key_action {
-                        KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+                        KeyAction::TapHold(_, _) => {
                             // Ignore following tap-hold keys, they will be always checked
                             Ignore
                         }
@@ -494,7 +494,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Ignore
     }
 
-    async fn process_key_action(&mut self, original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
+    async fn process_key_action(&mut self, mut original_key_action: KeyAction, key_event: KeyEvent) -> LoopState {
         let decision = self.make_tap_hold_decision(original_key_action, key_event);
 
         debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
@@ -510,6 +510,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // ChordHold: chordal hold is triggered by a key press
                 // Hold: impossible for now
                 self.fire_holding_keys(decision, key_event).await;
+                // Because the layer/keymap state might be changed after `fire_holding_keys`, so we need to get the key action again
+                original_key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
             }
             _ => {
                 error!("Unexpected tap hold decision {:?}", decision);
@@ -517,6 +519,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
+        debug!("current buffer: {:?}", self.holding_buffer);
+        debug!("Processing key action: {:?}", original_key_action);
         // Process current key action after tap-hold decision and (optional) all holding keys are resolved
         self.process_key_action_inner(original_key_action, key_event).await
     }
@@ -541,16 +545,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .await;
             }
             KeyAction::OneShot(oneshot_action) => self.process_key_action_oneshot(oneshot_action, key_event).await,
-            KeyAction::LayerTapHold(tap_action, layer_num) => {
-                let layer_action = Action::LayerOn(layer_num);
-                self.process_key_action_tap_hold(tap_action, layer_action, key_event)
-                    .await;
-            }
-            KeyAction::ModifierTapHold(tap_action, modifier) => {
-                let modifier_action = Action::Modifier(modifier);
-                self.process_key_action_tap_hold(tap_action, modifier_action, key_event)
-                    .await;
-            }
             KeyAction::TapDance(index) => {
                 self.process_key_action_tap_dance(index, key_event).await;
             }
@@ -978,6 +972,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         && key_event.col == self.last_release.0.col
                     {
                         // Quick tapping to repeat
+                        debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
 
                         // Pressed a same key after tapped it within `hold_timeout`
                         // Trigger the tap action just as it's pressed
@@ -1227,9 +1222,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Apply the modifiers from KeyAction::WithModifiers
         // the suppression effect of forks should not apply on these
-        if pressed {
-            result |= self.with_modifiers;
-        }
+        result |= self.with_modifiers;
 
         result
     }
@@ -1670,9 +1663,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                     }
                     _ => {
-                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        let action = self.keymap.borrow_mut().get_action_with_layer_cache(hold_key.key_event);
+                        debug!("Tap Key {:?} now press down, action: {:?}", hold_key.key_event, action);
                         // TODO: ignored return value
-                        self.process_key_action_inner(hold_key.action, hold_key.key_event).await;
+                        self.process_key_action_inner(action, hold_key.key_event).await;
                     }
                 }
             }
@@ -1711,7 +1705,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     _ => {
                         // For non-tap-hold keys, mark as PostTap to indicate they've been processed.
-                        debug!("Tap Key {:?} now press down", hold_key.key_event);
+                        debug!("Tap Key {:?} now marked as PostTap", hold_key.key_event);
                         hold_key.state = TapHoldState::PostTap;
                     }
                 }
@@ -1740,7 +1734,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         debug!("Saving action: {:?} to holding buffer", new_item);
         self.push_and_sort_buffers(new_item);
         match action {
-            KeyAction::TapHold(_, _) | KeyAction::LayerTapHold(_, _) | KeyAction::ModifierTapHold(_, _) => {
+            KeyAction::TapHold(_, _) => {
                 // If this is the first tap-hold key, initialize the chord state for possible chordal hold detection.
                 if self.chord_state.is_none() {
                     self.chord_state = Some(ChordHoldState::create(key_event, ROW, COL));
@@ -1889,7 +1883,6 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
-    use futures::{join, FutureExt};
     use rusty_fork::rusty_fork_test;
 
     use super::*;

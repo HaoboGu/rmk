@@ -66,14 +66,9 @@ pub enum KeyAction {
     Tap(Action),
     /// Keep current key pressed until the next key is triggered.
     OneShot(Action),
-    /// Layer tap/hold will trigger different actions: tap for basic action, hold for layer activation.
-    LayerTapHold(Action, u8),
     /// Action with the modifier combination triggered.
     WithModifier(Action, ModifierCombination),
-    /// Modifier tap/hold will trigger different actions: tap for basic action, hold for modifier activation.
-    ModifierTapHold(Action, ModifierCombination),
-    /// General tap/hold action. Because current BaseAction actually uses at most 7 bits, so we borrow 1 bit as the identifier of general tap/hold action.
-    /// (tap_action, hold_action)
+    /// General tap/hold action: (tap_action, hold_action)
     TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
@@ -89,17 +84,18 @@ impl KeyAction {
             KeyAction::Tap(a) => 0x0001 | a.to_action_code(),
             KeyAction::OneShot(a) => 0x0010 | a.to_action_code(),
             KeyAction::WithModifier(a, m) => 0x4000 | ((m.into_bits() as u16) << 8) | a.to_basic_action_code(),
-            KeyAction::ModifierTapHold(a, m) => 0x6000 | ((m.into_bits() as u16) << 8) | a.to_basic_action_code(),
-            KeyAction::LayerTapHold(action, layer) => {
-                if layer < 16 {
-                    0x3000 | ((layer as u16) << 15) | action.to_basic_action_code()
-                } else {
-                    error!("LayerTapHold supports only layer 0~15, got {}", layer);
-                    0x0000
+            KeyAction::TapHold(tap, hold) => match hold {
+                Action::LayerOn(layer) => {
+                    if layer < 16 {
+                        0x3000 | ((layer as u16) << 15) | tap.to_basic_action_code()
+                    } else {
+                        error!("LayerTapHold supports only layer 0~15, got {}", layer);
+                        0x0000
+                    }
                 }
-            }
-            KeyAction::TapHold(tap, hold) => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
-            KeyAction::TapDance(index) => 0x5000 | (index as u16),
+                Action::Modifier(m) => 0x6000 | ((m.into_bits() as u16) << 8) | tap.to_basic_action_code(),
+                _ => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
+            },
         }
     }
 }
