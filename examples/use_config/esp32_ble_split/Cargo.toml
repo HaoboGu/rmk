@@ -9,27 +9,46 @@ readme = "../../README.md"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[features]
+default = []
+central = [
+    "rmk/esp32c6_ble",
+    "esp-backtrace/esp32c6",
+    "esp-storage/esp32c6", 
+    "esp-hal/esp32c6",
+    "esp-hal-embassy/esp32c6",
+    "esp-println/esp32c6",
+    "esp-wifi/esp32c6",
+]
+peripheral = [
+    "rmk/esp32c3_ble",
+    "esp-backtrace/esp32c3",
+    "esp-storage/esp32c3",
+    "esp-hal/esp32c3", 
+    "esp-hal-embassy/esp32c3",
+    "esp-println/esp32c3",
+    "esp-wifi/esp32c3",
+]
+
 [dependencies]
 rmk = { path = "../../../rmk", default-features = false, features = [
     "col2row",
-    "esp32c3_ble",
     "log",
     "split",
     "storage",
 ] }
 embassy-executor = { version = "0.7.0" }
 esp-backtrace = { version = "0.16", features = [
-    "esp32c3",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-storage = { version = "0.6.0", features = ["esp32c3"] }
-esp-hal = { version = "1.0.0-beta.1", features = ["esp32c3", "unstable"] }
-esp-hal-embassy = { version = "0.8.1", features = ["esp32c3"] }
+esp-storage = { version = "0.6.0" }
+esp-hal = { version = "1.0.0-beta.1", features = ["unstable"] }
+esp-hal-embassy = { version = "0.8.1" }
 esp-alloc = { version = "0.8.0" }
-esp-println = { version = "0.14.0", features = ["esp32c3", "log-04"] }
-esp-wifi = { version = "0.14.1", features = ["esp32c3", "ble"] }
+esp-println = { version = "0.14.0", features = ["log-04"] }
+esp-wifi = { version = "0.14.1", features = ["ble"] }
 bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 
@@ -44,10 +63,12 @@ cc = "1.2.9"
 [[bin]]
 name = "central"
 path = "src/central.rs"
+required-features = ["central"]
 
 [[bin]]
 name = "peripheral"
 path = "src/peripheral.rs"
+required-features = ["peripheral"]
 
 
 [profile.dev.package.esp-storage]
