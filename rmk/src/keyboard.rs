@@ -1993,12 +1993,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn calculate_mouse_move_unit(&self) -> i8 {
         let config = &self.keymap.borrow().behavior.mouse_key;
 
-        let unit = if self.mouse_accel & (1 << 0) != 0 {
-            4
+        let unit = if self.mouse_accel & (1 << 2) != 0 {
+            20
         } else if self.mouse_accel & (1 << 1) != 0 {
             12
-        } else if self.mouse_accel & (1 << 2) != 0 {
-            20
+        } else if self.mouse_accel & (1 << 0) != 0 {
+            4
         } else if self.mouse_repeat == 0 {
             config.move_delta as u16
         } else if self.mouse_repeat >= config.time_to_max {
@@ -2036,12 +2036,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn calculate_mouse_wheel_unit(&self) -> i8 {
         let config = &self.keymap.borrow().behavior.mouse_key;
 
-        let unit = if self.mouse_accel & (1 << 0) != 0 {
-            1
+        let unit = if self.mouse_accel & (1 << 2) != 0 {
+            4
         } else if self.mouse_accel & (1 << 1) != 0 {
             2
-        } else if self.mouse_accel & (1 << 2) != 0 {
-            4
+        } else if self.mouse_accel & (1 << 0) != 0 {
+            1
         } else if self.mouse_wheel_repeat == 0 {
             config.wheel_delta as u16
         } else if self.mouse_wheel_repeat >= config.wheel_time_to_max {
