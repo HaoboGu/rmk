@@ -1994,42 +1994,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let config = &self.keymap.borrow().behavior.mouse_key;
 
         let unit = if self.mouse_accel & (1 << 0) != 0 {
-            // Acceleration level 0 - slowest (precision mode)
-            // Target: ~200 pixels/second = 4 pixels/move at 20ms interval
             4
         } else if self.mouse_accel & (1 << 1) != 0 {
-            // Acceleration level 1 - medium speed
-            // Target: ~600 pixels/second = 12 pixels/move at 20ms interval
             12
         } else if self.mouse_accel & (1 << 2) != 0 {
-            // Acceleration level 2 - fast but controllable
-            // Target: ~1000 pixels/second = 20 pixels/move at 20ms interval
             20
         } else if self.mouse_repeat == 0 {
-            // Initial press - use base move_delta
             config.move_delta as u16
         } else if self.mouse_repeat >= config.time_to_max {
-            // Maximum speed reached through natural acceleration
-            config.move_delta as u16 * config.max_speed as u16
+            (config.move_delta as u16).saturating_mul(config.max_speed as u16)
         } else {
-            // Natural acceleration with smooth unit progression from 6 to 18 pixels
-            // Directly calculate unit values with smooth interpolation for better control
+            // Natural acceleration with smooth unit progression.
+            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x².
+            // Where x = repeat_count / time_to_max, giving smooth progression from 0 to 1
             let repeat_count = self.mouse_repeat as u16;
             let time_to_max = config.time_to_max as u16;
             let min_unit = config.move_delta as u16;
-            let max_unit = config.move_delta as u16 * config.max_speed as u16;
+            let max_unit = (config.move_delta as u16).saturating_mul(config.max_speed as u16);
             let unit_range = max_unit - min_unit;
 
-            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x²
-            // Where x = repeat_count / time_to_max, giving smooth progression from 0 to 1
-            let linear_term = 2 * repeat_count * time_to_max;
-            let quadratic_term = repeat_count * repeat_count;
-            let progress_numerator = linear_term - quadratic_term;
-            let progress_denominator = time_to_max * time_to_max;
-
-            // Direct unit calculation: min_unit + progress * unit_range
-            // This ensures smooth progression through all integer values (6,7,8,9,10,11,12,13,14,15,16,17,18)
-            min_unit + (unit_range * progress_numerator) / progress_denominator
+            // Use saturating operations to handle overflow cases
+            let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(time_to_max);
+            let quadratic_term = repeat_count.saturating_mul(repeat_count);
+            let progress_numerator = linear_term.saturating_sub(quadratic_term);
+            let progress_denominator = time_to_max.saturating_mul(time_to_max);
+            min_unit + (unit_range.saturating_mul(progress_numerator) / progress_denominator.max(1))
         };
 
         let final_unit = if unit > config.move_max as u16 {
@@ -2040,7 +2029,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             unit
         };
 
-        final_unit as i8
+        final_unit.min(i8::MAX as u16) as i8
     }
 
     /// Calculate mouse wheel movement distance based on current repeat count and acceleration settings
@@ -2048,39 +2037,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let config = &self.keymap.borrow().behavior.mouse_key;
 
         let unit = if self.mouse_accel & (1 << 0) != 0 {
-            // Acceleration level 0 - slowest (precise scrolling)
-            // Single line scrolling for precision
             1
         } else if self.mouse_accel & (1 << 1) != 0 {
-            // Acceleration level 1 - medium speed
-            // 2-3 lines per scroll for comfortable browsing
             2
         } else if self.mouse_accel & (1 << 2) != 0 {
-            // Acceleration level 2 - fast scrolling
-            // 4-5 lines per scroll for quick navigation
             4
         } else if self.mouse_wheel_repeat == 0 {
-            // Initial press - use base wheel_delta
             config.wheel_delta as u16
         } else if self.mouse_wheel_repeat >= config.wheel_time_to_max {
-            // Maximum speed reached through natural acceleration
-            config.wheel_delta as u16 * config.wheel_max_speed_multiplier as u16
+            (config.wheel_delta as u16).saturating_mul(config.wheel_max_speed_multiplier as u16)
         } else {
-            // Natural acceleration with smooth unit progression for wheel (1 to 3 lines)
+            // Natural acceleration with smooth unit progression.
             let repeat_count = self.mouse_wheel_repeat as u16;
             let time_to_max = config.wheel_time_to_max as u16;
             let min_unit = config.wheel_delta as u16;
-            let max_unit = config.wheel_delta as u16 * config.wheel_max_speed_multiplier as u16;
+            let max_unit = (config.wheel_delta as u16).saturating_mul(config.wheel_max_speed_multiplier as u16);
             let unit_range = max_unit - min_unit;
 
-            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x²
-            let linear_term = 2 * repeat_count * time_to_max;
-            let quadratic_term = repeat_count * repeat_count;
-            let progress_numerator = linear_term - quadratic_term;
-            let progress_denominator = time_to_max * time_to_max;
+            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x².
+            // Use saturating operations to handle overflow cases.
+            let linear_term = 2u16.saturating_mul(repeat_count).saturating_mul(time_to_max);
+            let quadratic_term = repeat_count.saturating_mul(repeat_count);
+            let progress_numerator = linear_term.saturating_sub(quadratic_term);
+            let progress_denominator = time_to_max.saturating_mul(time_to_max);
 
-            // Direct unit calculation for smooth wheel progression (1,2,3)
-            min_unit + (unit_range * progress_numerator) / progress_denominator
+            min_unit + (unit_range.saturating_mul(progress_numerator) / progress_denominator.max(1))
         };
 
         let final_unit = if unit > config.wheel_max as u16 {
@@ -2091,7 +2072,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             unit
         };
 
-        final_unit as i8
+        final_unit.min(i8::MAX as u16) as i8
     }
 
     /// Apply diagonal movement compensation (approximation of 1/sqrt(2))
