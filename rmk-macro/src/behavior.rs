@@ -345,6 +345,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             tap_dance: #tap_dance,
             // TODO: implement macro for configuring Keyboard-Macro-Sequences
             keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
+            mouse_key: ::rmk::config::MouseKeyConfig::default(),
         };
     }
 }
