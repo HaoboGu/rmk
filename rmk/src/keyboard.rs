@@ -192,9 +192,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// The key is mouse keycode, the value is the last action and its timestamp.
     last_mouse_tick: FnvIndexMap<KeyCode, (bool, Instant), 4>,
 
-    /// The current distance of mouse key moving
-    mouse_key_move_delta: i8,
-    mouse_wheel_move_delta: i8,
+    /// Mouse acceleration state
+    mouse_accel: u8,
+    mouse_repeat: u8,
+    mouse_wheel_repeat: u8,
 
     /// Used for temporarily disabling combos
     combo_on: bool,
@@ -248,8 +249,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             },
             last_key_code: KeyCode::No,
             last_mouse_tick: FnvIndexMap::new(),
-            mouse_key_move_delta: 8,
-            mouse_wheel_move_delta: 1,
+            mouse_accel: 0,
+            mouse_repeat: 0,
+            mouse_wheel_repeat: 0,
             combo_on: true,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
@@ -1292,7 +1294,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// Process mouse key action.
+    /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_mouse_key() {
             // Check whether the key is held, or it's released within the time interval
@@ -1303,29 +1305,67 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     return;
                 }
             }
-            // Reference(qmk): https://github.com/qmk/qmk_firmware/blob/382c3bd0bd49fc0d53358f45477c48f5ae47f2ff/quantum/mousekey.c#L410
-            // https://github.com/qmk/qmk_firmware/blob/fb598e7e617692be0bf562afaf3c852c8db1c349/quantum/action.c#L332
+
+            let config = &self.keymap.borrow().behavior.mouse_key;
+
             if key_event.pressed {
                 match key {
-                    // TODO: Add accelerated mode when pressing the mouse key
-                    // https://github.com/qmk/qmk_firmware/blob/master/docs/feature_mouse_keys.md#accelerated-mode
                     KeyCode::MouseUp => {
-                        self.mouse_report.y = -self.mouse_key_move_delta;
+                        // Reset repeat counter for direction change
+                        if self.mouse_report.y > 0 {
+                            self.mouse_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_move_unit();
+                        self.mouse_report.y = -unit;
                     }
                     KeyCode::MouseDown => {
-                        self.mouse_report.y = self.mouse_key_move_delta;
+                        if self.mouse_report.y < 0 {
+                            self.mouse_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_move_unit();
+                        self.mouse_report.y = unit;
                     }
                     KeyCode::MouseLeft => {
-                        self.mouse_report.x = -self.mouse_key_move_delta;
+                        if self.mouse_report.x > 0 {
+                            self.mouse_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_move_unit();
+                        self.mouse_report.x = -unit;
                     }
                     KeyCode::MouseRight => {
-                        self.mouse_report.x = self.mouse_key_move_delta;
+                        if self.mouse_report.x < 0 {
+                            self.mouse_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_move_unit();
+                        self.mouse_report.x = unit;
                     }
                     KeyCode::MouseWheelUp => {
-                        self.mouse_report.wheel = self.mouse_wheel_move_delta;
+                        if self.mouse_report.wheel < 0 {
+                            self.mouse_wheel_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_wheel_unit();
+                        self.mouse_report.wheel = unit;
                     }
                     KeyCode::MouseWheelDown => {
-                        self.mouse_report.wheel = -self.mouse_wheel_move_delta;
+                        if self.mouse_report.wheel > 0 {
+                            self.mouse_wheel_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_wheel_unit();
+                        self.mouse_report.wheel = -unit;
+                    }
+                    KeyCode::MouseWheelLeft => {
+                        if self.mouse_report.pan > 0 {
+                            self.mouse_wheel_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_wheel_unit();
+                        self.mouse_report.pan = -unit;
+                    }
+                    KeyCode::MouseWheelRight => {
+                        if self.mouse_report.pan < 0 {
+                            self.mouse_wheel_repeat = 0;
+                        }
+                        let unit = self.calculate_mouse_wheel_unit();
+                        self.mouse_report.pan = unit;
                     }
                     KeyCode::MouseBtn1 => self.mouse_report.buttons |= 1 << 0,
                     KeyCode::MouseBtn2 => self.mouse_report.buttons |= 1 << 1,
@@ -1335,30 +1375,58 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyCode::MouseBtn6 => self.mouse_report.buttons |= 1 << 5,
                     KeyCode::MouseBtn7 => self.mouse_report.buttons |= 1 << 6,
                     KeyCode::MouseBtn8 => self.mouse_report.buttons |= 1 << 7,
-                    KeyCode::MouseWheelLeft => {
-                        self.mouse_report.pan = -self.mouse_wheel_move_delta;
+                    KeyCode::MouseAccel0 => {
+                        self.mouse_accel |= 1 << 0;
                     }
-                    KeyCode::MouseWheelRight => {
-                        self.mouse_report.pan = self.mouse_wheel_move_delta;
+                    KeyCode::MouseAccel1 => {
+                        self.mouse_accel |= 1 << 1;
                     }
-                    KeyCode::MouseAccel0 => {}
-                    KeyCode::MouseAccel1 => {}
-                    KeyCode::MouseAccel2 => {}
+                    KeyCode::MouseAccel2 => {
+                        self.mouse_accel |= 1 << 2;
+                    }
                     _ => {}
                 }
             } else {
                 match key {
-                    KeyCode::MouseUp | KeyCode::MouseDown => {
-                        self.mouse_report.y = 0;
+                    KeyCode::MouseUp => {
+                        if self.mouse_report.y < 0 {
+                            self.mouse_report.y = 0;
+                        }
                     }
-                    KeyCode::MouseLeft | KeyCode::MouseRight => {
-                        self.mouse_report.x = 0;
+                    KeyCode::MouseDown => {
+                        if self.mouse_report.y > 0 {
+                            self.mouse_report.y = 0;
+                        }
                     }
-                    KeyCode::MouseWheelUp | KeyCode::MouseWheelDown => {
-                        self.mouse_report.wheel = 0;
+                    KeyCode::MouseLeft => {
+                        if self.mouse_report.x < 0 {
+                            self.mouse_report.x = 0;
+                        }
                     }
-                    KeyCode::MouseWheelLeft | KeyCode::MouseWheelRight => {
-                        self.mouse_report.pan = 0;
+                    KeyCode::MouseRight => {
+                        if self.mouse_report.x > 0 {
+                            self.mouse_report.x = 0;
+                        }
+                    }
+                    KeyCode::MouseWheelUp => {
+                        if self.mouse_report.wheel > 0 {
+                            self.mouse_report.wheel = 0;
+                        }
+                    }
+                    KeyCode::MouseWheelDown => {
+                        if self.mouse_report.wheel < 0 {
+                            self.mouse_report.wheel = 0;
+                        }
+                    }
+                    KeyCode::MouseWheelLeft => {
+                        if self.mouse_report.pan < 0 {
+                            self.mouse_report.pan = 0;
+                        }
+                    }
+                    KeyCode::MouseWheelRight => {
+                        if self.mouse_report.pan > 0 {
+                            self.mouse_report.pan = 0;
+                        }
                     }
                     KeyCode::MouseBtn1 => self.mouse_report.buttons &= !(1 << 0),
                     KeyCode::MouseBtn2 => self.mouse_report.buttons &= !(1 << 1),
@@ -1368,9 +1436,41 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyCode::MouseBtn6 => self.mouse_report.buttons &= !(1 << 5),
                     KeyCode::MouseBtn7 => self.mouse_report.buttons &= !(1 << 6),
                     KeyCode::MouseBtn8 => self.mouse_report.buttons &= !(1 << 7),
+                    KeyCode::MouseAccel0 => {
+                        self.mouse_accel &= !(1 << 0);
+                    }
+                    KeyCode::MouseAccel1 => {
+                        self.mouse_accel &= !(1 << 1);
+                    }
+                    KeyCode::MouseAccel2 => {
+                        self.mouse_accel &= !(1 << 2);
+                    }
                     _ => {}
                 }
+
+                // Reset repeat counters when movement stops
+                if self.mouse_report.x == 0 && self.mouse_report.y == 0 {
+                    self.mouse_repeat = 0;
+                }
+                if self.mouse_report.wheel == 0 && self.mouse_report.pan == 0 {
+                    self.mouse_wheel_repeat = 0;
+                }
             }
+
+            // Apply diagonal compensation for movement
+            if self.mouse_report.x != 0 && self.mouse_report.y != 0 {
+                let (x, y) = self.apply_diagonal_compensation(self.mouse_report.x, self.mouse_report.y);
+                self.mouse_report.x = x;
+                self.mouse_report.y = y;
+            }
+
+            // Apply diagonal compensation for wheel
+            if self.mouse_report.wheel != 0 && self.mouse_report.pan != 0 {
+                let (wheel, pan) = self.apply_diagonal_compensation(self.mouse_report.wheel, self.mouse_report.pan);
+                self.mouse_report.wheel = wheel;
+                self.mouse_report.pan = pan;
+            }
+
             self.send_mouse_report().await;
 
             if self
@@ -1381,14 +1481,41 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 error!("The buffer for last mouse tick is full");
             }
 
-            // Send the key event back to channel again, to keep processing the mouse key until release
+            // Continue processing ONLY for movement and wheel keys
             if key_event.pressed {
-                // FIXME: The ideal approach is to spawn another task and send the event after 20ms.
-                // But it requires embassy-executor, which is not available for esp-idf-svc.
-                // So now we just block for 20ms for mouse keys.
-                // In the future, we're going to use esp-hal once it have good support for BLE
-                embassy_time::Timer::after_millis(crate::MOUSE_KEY_INTERVAL as u64).await;
-                KEY_EVENT_CHANNEL.try_send(key_event).ok();
+                let is_movement_key = matches!(
+                    key,
+                    KeyCode::MouseUp | KeyCode::MouseDown | KeyCode::MouseLeft | KeyCode::MouseRight
+                );
+                let is_wheel_key = matches!(
+                    key,
+                    KeyCode::MouseWheelUp
+                        | KeyCode::MouseWheelDown
+                        | KeyCode::MouseWheelLeft
+                        | KeyCode::MouseWheelRight
+                );
+
+                // Only continue processing for movement and wheel keys
+                if is_movement_key || is_wheel_key {
+                    // Determine the delay for the next repeat using convenience methods
+                    let delay = if is_movement_key {
+                        config.get_movement_delay(self.mouse_repeat)
+                    } else {
+                        config.get_wheel_delay(self.mouse_wheel_repeat)
+                    };
+
+                    // Increment the appropriate repeat counter
+                    if is_movement_key && self.mouse_repeat < u8::MAX {
+                        self.mouse_repeat += 1;
+                    }
+                    if is_wheel_key && self.mouse_wheel_repeat < u8::MAX {
+                        self.mouse_wheel_repeat += 1;
+                    }
+
+                    // Schedule next movement after the delay
+                    embassy_time::Timer::after_millis(delay as u64).await;
+                    KEY_EVENT_CHANNEL.try_send(key_event).ok();
+                }
             }
         }
     }
@@ -1860,6 +1987,141 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             &mut self.controller_pub,
             ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
         );
+    }
+
+    /// Calculate mouse movement distance based on current repeat count and acceleration settings
+    fn calculate_mouse_move_unit(&self) -> i8 {
+        let config = &self.keymap.borrow().behavior.mouse_key;
+
+        let unit = if self.mouse_accel & (1 << 0) != 0 {
+            // Acceleration level 0 - slowest (precision mode)
+            // Target: ~200 pixels/second = 4 pixels/move at 20ms interval
+            4
+        } else if self.mouse_accel & (1 << 1) != 0 {
+            // Acceleration level 1 - medium speed
+            // Target: ~600 pixels/second = 12 pixels/move at 20ms interval
+            12
+        } else if self.mouse_accel & (1 << 2) != 0 {
+            // Acceleration level 2 - fast but controllable
+            // Target: ~1000 pixels/second = 20 pixels/move at 20ms interval
+            20
+        } else if self.mouse_repeat == 0 {
+            // Initial press - use base move_delta
+            config.move_delta as u16
+        } else if self.mouse_repeat >= config.time_to_max {
+            // Maximum speed reached through natural acceleration
+            config.move_delta as u16 * config.max_speed as u16
+        } else {
+            // Natural acceleration with smooth unit progression from 6 to 18 pixels
+            // Directly calculate unit values with smooth interpolation for better control
+            let repeat_count = self.mouse_repeat as u16;
+            let time_to_max = config.time_to_max as u16;
+            let min_unit = config.move_delta as u16;
+            let max_unit = config.move_delta as u16 * config.max_speed as u16;
+            let unit_range = max_unit - min_unit;
+
+            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x²
+            // Where x = repeat_count / time_to_max, giving smooth progression from 0 to 1
+            let linear_term = 2 * repeat_count * time_to_max;
+            let quadratic_term = repeat_count * repeat_count;
+            let progress_numerator = linear_term - quadratic_term;
+            let progress_denominator = time_to_max * time_to_max;
+
+            // Direct unit calculation: min_unit + progress * unit_range
+            // This ensures smooth progression through all integer values (6,7,8,9,10,11,12,13,14,15,16,17,18)
+            min_unit + (unit_range * progress_numerator) / progress_denominator
+        };
+
+        let final_unit = if unit > config.move_max as u16 {
+            config.move_max as u16
+        } else if unit == 0 {
+            1
+        } else {
+            unit
+        };
+
+        final_unit as i8
+    }
+
+    /// Calculate mouse wheel movement distance based on current repeat count and acceleration settings
+    fn calculate_mouse_wheel_unit(&self) -> i8 {
+        let config = &self.keymap.borrow().behavior.mouse_key;
+
+        let unit = if self.mouse_accel & (1 << 0) != 0 {
+            // Acceleration level 0 - slowest (precise scrolling)
+            // Single line scrolling for precision
+            1
+        } else if self.mouse_accel & (1 << 1) != 0 {
+            // Acceleration level 1 - medium speed
+            // 2-3 lines per scroll for comfortable browsing
+            2
+        } else if self.mouse_accel & (1 << 2) != 0 {
+            // Acceleration level 2 - fast scrolling
+            // 4-5 lines per scroll for quick navigation
+            4
+        } else if self.mouse_wheel_repeat == 0 {
+            // Initial press - use base wheel_delta
+            config.wheel_delta as u16
+        } else if self.mouse_wheel_repeat >= config.wheel_time_to_max {
+            // Maximum speed reached through natural acceleration
+            config.wheel_delta as u16 * config.wheel_max_speed_multiplier as u16
+        } else {
+            // Natural acceleration with smooth unit progression for wheel (1 to 3 lines)
+            let repeat_count = self.mouse_wheel_repeat as u16;
+            let time_to_max = config.wheel_time_to_max as u16;
+            let min_unit = config.wheel_delta as u16;
+            let max_unit = config.wheel_delta as u16 * config.wheel_max_speed_multiplier as u16;
+            let unit_range = max_unit - min_unit;
+
+            // Calculate smooth progress using asymptotic curve: f(x) = 2x - x²
+            let linear_term = 2 * repeat_count * time_to_max;
+            let quadratic_term = repeat_count * repeat_count;
+            let progress_numerator = linear_term - quadratic_term;
+            let progress_denominator = time_to_max * time_to_max;
+
+            // Direct unit calculation for smooth wheel progression (1,2,3)
+            min_unit + (unit_range * progress_numerator) / progress_denominator
+        };
+
+        let final_unit = if unit > config.wheel_max as u16 {
+            config.wheel_max as u16
+        } else if unit == 0 {
+            1
+        } else {
+            unit
+        };
+
+        final_unit as i8
+    }
+
+    /// Apply diagonal movement compensation (approximation of 1/sqrt(2))
+    fn apply_diagonal_compensation(&self, mut x: i8, mut y: i8) -> (i8, i8) {
+        if x != 0 && y != 0 {
+            // Apply 1/sqrt(2) approximation using 181/256 (0.70703125)
+            let x_compensated = (x as i16 * 181 + 128) / 256;
+            let y_compensated = (y as i16 * 181 + 128) / 256;
+
+            x = if x_compensated == 0 && x != 0 {
+                if x > 0 {
+                    1
+                } else {
+                    -1
+                }
+            } else {
+                x_compensated as i8
+            };
+
+            y = if y_compensated == 0 && y != 0 {
+                if y > 0 {
+                    1
+                } else {
+                    -1
+                }
+            } else {
+                y_compensated as i8
+            };
+        }
+        (x, y)
     }
 }
 
