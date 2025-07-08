@@ -467,13 +467,21 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     }
                     GattEvent::Write(event) => {
                         if event.handle() == output_keyboard.handle {
-                            let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                            debug!("Got keyboard state: {:?}", led_indicator);
-                            LED_SIGNAL.signal(led_indicator);
+                            if event.data().len() == 1 {
+                                let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                                debug!("Got keyboard state: {:?}", led_indicator);
+                                LED_SIGNAL.signal(led_indicator);
+                            } else {
+                                warn!("Wrong keyboard state data: {:?}", event.data());
+                            }
                         } else if event.handle() == output_via.handle {
                             debug!("Got via packet: {:?}", event.data());
-                            let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                            VIAL_READ_CHANNEL.send(data).await;
+                            if event.data().len() == 32 {
+                                let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                VIAL_READ_CHANNEL.send(data).await;
+                            } else {
+                                warn!("Wrong via packet data: {:?}", event.data());
+                            }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
                             || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
