@@ -46,3 +46,6 @@ scrolllock.low_active = false
 [storage]
 # Storage feature is enabled by default
 # enabled = false
+
+[dependency]
+defmt_log = false
