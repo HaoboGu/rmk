@@ -46,6 +46,12 @@ impl crate::KeyboardTomlConfig {
                         return Err("keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section".to_string());
                     }
                 }
+                behavior.tap_dance = behavior.tap_dance.or(default.tap_dance);
+                if let Some(tap_dance) = &behavior.tap_dance {
+                    if tap_dance.tap_dances.len() > self.rmk.tap_dance_max_num {
+                        return Err("keyboard.toml: number of tap dances is greater than tap_dance_max_num configured under [rmk] section".to_string());
+                    }
+                }
                 Ok(behavior)
             }
             None => Ok(default),

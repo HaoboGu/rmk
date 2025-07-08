@@ -37,9 +37,9 @@ pub fn get_combos_config() -> CombosConfig {
 mod combo_test {
 
     use embassy_futures::block_on;
-    use rmk::config::TapHoldConfig;
+    use rmk::config::{BehaviorConfig, TapHoldConfig};
     use rmk::keycode::KeyCode;
-    use rmk::{config::BehaviorConfig, th};
+    use rmk::th;
     use rusty_fork::rusty_fork_test;
 
     use super::*;

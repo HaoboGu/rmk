@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2025-07-06
+
+### Fixed
+
+- "No" key with tailing whitespace cannot be parsed
+- Key processing error when using tap-hold keys in combo
+
 ## [0.7.4] - 2025-07-03
 
 ### Added

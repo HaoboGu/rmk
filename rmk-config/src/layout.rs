@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use pest::Parser;
 use pest_derive::Parser;
 
 use crate::{KeyboardTomlConfig, LayoutConfig};
-use std::collections::HashMap;
 
 // Pest parser using the grammar files
 #[derive(Parser)]
@@ -415,5 +416,101 @@ impl KeyboardTomlConfig {
         }
 
         Ok(key_action_sequence)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_action_parsing() {
+        // Test "No" followed by whitespace
+        let test_cases = vec![
+            ("No ", vec!["No"]),
+            ("No\n", vec!["No"]),
+            ("No\t", vec!["No"]),
+            ("No  A", vec!["No", "A"]),
+            ("A No B", vec!["A", "No", "B"]),
+            ("No No No", vec!["No", "No", "No"]),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut actions = Vec::new();
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::no_action | Rule::simple_keycode => {
+                                actions.push(inner_pair.as_str().to_string());
+                            }
+                            Rule::EOI | Rule::WHITESPACE => {}
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(actions, expected, "Input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_no_vs_no_prefixed_keycodes() {
+        // Test that "No" is parsed as no_action but "NoUsSlash" is parsed as simple_keycode
+        let test_cases = vec![
+            ("No", Rule::no_action),
+            ("NoUsSlash", Rule::simple_keycode),
+            ("NonUsSlash", Rule::simple_keycode),
+            ("NoReturn", Rule::simple_keycode),
+            ("NoBrake", Rule::simple_keycode),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::no_action | Rule::simple_keycode => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
+    }
+
+    #[test]
+    fn test_keymap_parser_with_no_actions() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Test parsing a keymap string with "No" actions
+        let keymap = "A B No C No NoUsSlash NonUsSlash D No";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(
+            actions,
+            vec!["A", "B", "No", "C", "No", "NoUsSlash", "NonUsSlash", "D", "No"]
+        );
     }
 }

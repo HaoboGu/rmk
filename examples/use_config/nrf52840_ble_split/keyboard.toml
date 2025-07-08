@@ -31,7 +31,18 @@ keymap = [
 enabled = true
 
 [behavior]
-tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
+tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms" }
+
+[[behavior.tap_dance.tap_dances]]
+tap = "A"
+hold = "WM(A, LShift)"
+double_tap = "CapsLock"
+hold_after_tap = "A"
+tapping_term = "150ms"
+
+[[behavior.tap_dance.tap_dances]]
+tap = "Space"
+hold = "LCtrl"
 
 [split]
 connection = "ble"

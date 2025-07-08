@@ -24,7 +24,7 @@ The following are the typical configurations:
 ```toml
 [behavior]
 # Enable HRM
-tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms"}
+tap_hold = { enable_hrm = true, permissive_hold = true, chordal_hold = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 # Disable HRM, you can safely ignore any fields if you don't want to change them
 tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
 ```

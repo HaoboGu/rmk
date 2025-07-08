@@ -6,6 +6,7 @@ set -e
 # Format rmk and rmk-macro
 cd rmk && cargo +nightly fmt && cd ..
 cd rmk-macro && cargo +nightly fmt && cd ..
+cd rmk-config && cargo +nightly fmt && cd ..
 
 # Format all directories under examples/use_rust
 for dir in examples/use_rust/*/; do
