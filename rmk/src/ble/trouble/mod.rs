@@ -338,6 +338,7 @@ pub(crate) async fn run_ble<
 
                                 warn!("Advertising timeout, sleep and wait for any key");
 
+                                BLE_CONNECTION_STATE.store(255, Ordering::Relaxed);
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                                 CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
 
