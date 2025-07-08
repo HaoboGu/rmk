@@ -5,7 +5,7 @@ use core::fmt::Debug;
 use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
 use embassy_time::{Duration, Instant, Timer};
-use heapless::{FnvIndexMap, Vec};
+use heapless::Vec;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 use TapHoldDecision::{Buffering, Ignore};
 use TapHoldState::Initial;
@@ -186,12 +186,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
     last_key_code: KeyCode,
 
-    /// Mouse key is different from other keyboard keys, it should be sent continuously while the key is pressed.
-    /// `last_mouse_tick` tracks at most 8 mouse keys, with its recent state.
-    /// It can be used to control the mouse report rate and release mouse key properly.
-    /// The key is mouse keycode, the value is the last action and its timestamp.
-    last_mouse_tick: FnvIndexMap<KeyCode, (bool, Instant), 4>,
-
     /// Mouse acceleration state
     mouse_accel: u8,
     mouse_repeat: u8,
@@ -248,7 +242,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 output_data: [0; 32],
             },
             last_key_code: KeyCode::No,
-            last_mouse_tick: FnvIndexMap::new(),
             mouse_accel: 0,
             mouse_repeat: 0,
             mouse_wheel_repeat: 0,
@@ -1297,17 +1290,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process mouse key action with acceleration support.
     async fn process_action_mouse(&mut self, key: KeyCode, key_event: KeyEvent) {
         if key.is_mouse_key() {
-            // Check whether the key is held, or it's released within the time interval
-            if let Some((pressed, last_tick)) = self.last_mouse_tick.get(&key) {
-                if !pressed && last_tick.elapsed().as_millis() <= 30 {
-                    // The key is just released, ignore the key event, use a slightly longer time interval
-                    self.last_mouse_tick.remove(&key);
-                    return;
-                }
-            }
-
-            let config = &self.keymap.borrow().behavior.mouse_key;
-
             if key_event.pressed {
                 match key {
                     KeyCode::MouseUp => {
@@ -1455,6 +1437,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if self.mouse_report.wheel == 0 && self.mouse_report.pan == 0 {
                     self.mouse_wheel_repeat = 0;
                 }
+
+                // Clear all mouse keys in the KEY_EVENT_CHANNEL
+                let len = KEY_EVENT_CHANNEL.len();
+                for _ in 0..len {
+                    let queued_event = KEY_EVENT_CHANNEL.receive().await;
+                    if queued_event.col != key_event.col || queued_event.row != key_event.row {
+                        KEY_EVENT_CHANNEL.send(queued_event).await;
+                    }
+                }
             }
 
             // Apply diagonal compensation for movement
@@ -1473,14 +1464,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
             self.send_mouse_report().await;
 
-            if self
-                .last_mouse_tick
-                .insert(key, (key_event.pressed, Instant::now()))
-                .is_err()
-            {
-                error!("The buffer for last mouse tick is full");
-            }
-
             // Continue processing ONLY for movement and wheel keys
             if key_event.pressed {
                 let is_movement_key = matches!(
@@ -1498,10 +1481,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Only continue processing for movement and wheel keys
                 if is_movement_key || is_wheel_key {
                     // Determine the delay for the next repeat using convenience methods
-                    let delay = if is_movement_key {
-                        config.get_movement_delay(self.mouse_repeat)
-                    } else {
-                        config.get_wheel_delay(self.mouse_wheel_repeat)
+                    let delay = {
+                        let config = &self.keymap.borrow().behavior.mouse_key;
+                        if is_movement_key {
+                            config.get_movement_delay(self.mouse_repeat)
+                        } else {
+                            config.get_wheel_delay(self.mouse_wheel_repeat)
+                        }
                     };
 
                     // Increment the appropriate repeat counter
@@ -1514,7 +1500,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     // Schedule next movement after the delay
                     embassy_time::Timer::after_millis(delay as u64).await;
-                    KEY_EVENT_CHANNEL.try_send(key_event).ok();
+
+                    KEY_EVENT_CHANNEL.send(key_event).await;
                 }
             }
         }
