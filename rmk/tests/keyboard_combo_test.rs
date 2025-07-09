@@ -4,7 +4,8 @@ use embassy_time::Duration;
 use heapless::Vec;
 use rmk::combo::Combo;
 use rmk::config::CombosConfig;
-use rmk::k;
+use rmk::keycode::ModifierCombination;
+use rmk::{k, osm};
 
 // Get tested combo config
 pub fn get_combos_config() -> CombosConfig {
@@ -27,6 +28,15 @@ pub fn get_combos_config() -> CombosConfig {
                 ]
                 .to_vec(),
                 k!(LAlt),
+                Some(0),
+            ),
+            Combo::new(
+                [
+                    k!(E), //1,3
+                    k!(T), //1,5
+                ]
+                .to_vec(),
+                osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
             ),
         ]),
@@ -87,6 +97,29 @@ mod combo_test {
             }
         }
 
+
+        #[test]
+        fn test_combo_with_one_shot_mod() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    combo: get_combos_config(),
+                    ..Default::default()
+                }),
+                sequence: [
+                    [1, 3, true, 10],
+                    [1, 5, true, 10],
+                    [1, 3, false, 50],
+                    [1, 5, false, 70],
+                    [1, 3, true, 50],
+                    [1, 3, false, 110],
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
+                    [0, [0; 6]],
+                ]
+            }
+        }
+
         #[test]
         fn test_combo_with_mod() {
             key_sequence_test! {
@@ -112,7 +145,7 @@ mod combo_test {
         }
 
         #[test]
-        fn test_taphold_with_combo_3() {
+        fn test_taphold_with_combo() {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {

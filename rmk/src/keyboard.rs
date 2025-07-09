@@ -514,7 +514,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        debug!("current buffer: {:?}", self.holding_buffer);
         debug!("Processing key action: {:?}", original_key_action);
         // Process current key action after tap-hold decision and (optional) all holding keys are resolved
         self.process_key_action_inner(original_key_action, key_event).await
@@ -722,8 +721,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if !key_event.pressed {
                 for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
                     if combo.is_triggered() && combo.actions.contains(&key_action) {
-                        combo.reset();
-                        return Some(combo.output);
+                        // Release the combo key
+                        combo.update_released(key_action);
+                        // `is_triggered` is updated after `update_released`, emit the release of the combo
+                        if !combo.is_triggered() {
+                            return Some(combo.output);
+                        } else {
+                            return None;
+                        }
                     }
                 }
             }
@@ -744,7 +749,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let key = self.holding_buffer.swap_remove(i);
                 debug!("Dispatching combo: {:?}", key);
                 self.process_key_action_inner(key.action, key.key_event).await;
-                debug!("Current buffer: {:?}", self.holding_buffer);
             } else {
                 i += 1;
             }
@@ -1009,8 +1013,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Process one shot action.
     async fn process_key_action_oneshot(&mut self, oneshot_action: Action, key_event: KeyEvent) {
         match oneshot_action {
-            Action::Modifier(m) => self.process_action_osm(m.to_hid_modifiers(), key_event).await,
-            Action::LayerOn(l) => self.process_action_osl(l, key_event).await,
+            Action::Modifier(m) => {
+                self.process_action_osm(m.to_hid_modifiers(), key_event).await;
+                // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
+                self.update_osl(key_event);
+            }
+            Action::LayerOn(l) => {
+                self.process_action_osl(l, key_event).await;
+                // Process OSM to avoid the OSL state stuck when an OSL is followed by an OSM
+                self.update_osm(key_event);
+            }
             _ => self.process_key_action_normal(oneshot_action, key_event).await,
         }
     }
