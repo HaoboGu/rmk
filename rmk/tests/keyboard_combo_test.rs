@@ -39,15 +39,23 @@ pub fn get_combos_config() -> CombosConfig {
                 osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
             ),
+            Combo::new(
+                [
+                    k!(E), //1,3
+                    k!(R), //1,4
+                ]
+                .to_vec(),
+                k!(A), // A
+                Some(0),
+            ),
         ]),
         timeout: Duration::from_millis(100),
     }
 }
 
 mod combo_test {
-
     use embassy_futures::block_on;
-    use rmk::config::{BehaviorConfig, TapHoldConfig};
+    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
     use rmk::keycode::KeyCode;
     use rmk::th;
     use rusty_fork::rusty_fork_test;
@@ -103,6 +111,7 @@ mod combo_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     combo: get_combos_config(),
+                    one_shot: OneShotConfig { timeout: Duration::from_millis(300) },
                     ..Default::default()
                 }),
                 sequence: [
@@ -139,6 +148,30 @@ mod combo_test {
                     [KC_LSHIFT, [0; 6]],
                     [KC_LSHIFT, [KeyCode::N as u8, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [0; 6]],
+                    [0, [0; 6]],
+                ]
+            }
+        }
+
+        #[test]
+        fn test_overlapped_combo() {
+            key_sequence_test! {
+                keyboard: create_test_keyboard_with_config(BehaviorConfig {
+                    combo: get_combos_config(),
+                    ..Default::default()
+                }),
+                sequence: [
+                    [1, 3, true, 10],
+                    [1, 5, true, 10],
+                    [1, 3, false, 50],
+                    [1, 5, false, 10],
+                    [1, 4, true, 100],
+                    [1, 3, true, 10],
+                    [1, 4, false, 50],
+                    [1, 3, false, 10],
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [KeyCode::A as u8, 0, 0, 0, 0, 0]],
                     [0, [0; 6]],
                 ]
             }

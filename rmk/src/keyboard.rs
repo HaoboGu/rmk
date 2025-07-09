@@ -293,7 +293,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 } else {
                     Duration::from_ticks(0)
                 };
-                debug!("time_left: {:?}ms", time_left.as_millis());
+                debug!("[COMBO] Waiting combo, timeout in: {:?}ms", time_left.as_millis());
                 match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
                     Either::First(_) => {
                         // Timeout, dispatch combo
@@ -351,10 +351,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         if self.combo_on {
             if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                debug!(
-                    "Process key action after combo processing: {:?}, {:?}",
-                    key_action, key_event
-                );
                 self.process_key_action(key_action, key_event).await
             } else {
                 LoopState::OK
@@ -712,24 +708,37 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .find_map(|combo| (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger()));
 
             if next_action.is_some() {
+                debug!("[COMBO] {:?} triggered", next_action);
                 self.holding_buffer
                     .retain(|item| item.state != TapHoldState::WaitingCombo);
-                debug!("Combo action {:?} matched:: clearing combo buffer", next_action);
             }
             next_action
         } else {
             if !key_event.pressed {
+                let mut combo_output = None;
+                let mut releasing_triggered_combo = false;
+
                 for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
-                    if combo.is_triggered() && combo.actions.contains(&key_action) {
+                    if combo.actions.contains(&key_action) {
+                        let is_triggered = combo.is_triggered();
+                        releasing_triggered_combo |= is_triggered;
                         // Release the combo key
                         combo.update_released(key_action);
-                        // `is_triggered` is updated after `update_released`, emit the release of the combo
-                        if !combo.is_triggered() {
-                            return Some(combo.output);
-                        } else {
-                            return None;
+                        // The combo was triggered, but now it's fully released
+                        if is_triggered && !combo.is_triggered() {
+                            debug!("[COMBO] {:?} is released", combo.output);
+                            if combo_output.is_none() {
+                                combo_output = Some(combo.output);
+                            }
                         }
                     }
+                }
+
+                // Releasing a triggered combo
+                // - Return the output of the triggered combo when the combo is fully released
+                // - Return None when the combo is not fully released yet
+                if releasing_triggered_combo {
+                    return combo_output;
                 }
             }
 
@@ -740,14 +749,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Dispatch combo into key action
     async fn dispatch_combos(&mut self) {
-        debug!("Dispatching combos");
         // For each WaitingCombo in the holding buffer, dispatch it
         // Note that the process_key_action_inner is an async function, so the retain doesn't work
         let mut i = 0;
         while i < self.holding_buffer.len() {
             if self.holding_buffer[i].state == TapHoldState::WaitingCombo {
                 let key = self.holding_buffer.swap_remove(i);
-                debug!("Dispatching combo: {:?}", key);
+                debug!("[COMBO] Dispatching combo: {:?}", key);
                 self.process_key_action_inner(key.action, key.key_event).await;
             } else {
                 i += 1;
@@ -1142,7 +1150,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         } else if key_event.pressed {
             //TODO should save releasing key only
             debug!(
-                "Last key code changed from  {:?} to {:?}(pressed: {:?})",
+                "Last key code changed from {:?} to {:?}(pressed: {:?})",
                 self.last_key_code, key, key_event.pressed
             );
             self.last_key_code = key;
