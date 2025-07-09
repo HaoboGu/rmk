@@ -22,6 +22,14 @@
 
   --vp-c-divider-to: var(--vp-c-gray-1);
 
+  --vp-sidebar-text-1: #6c757d; /* 默认 */
+  --vp-sidebar-text-2: #495057; /* hover */
+  --vp-sidebar-text-3: #343a40; /* active */
+
+  --vp-sidebar-bg-1: #fff0df; /* 默认 */
+  --vp-sidebar-bg-2: #efefef; /* hover */
+  --vp-sidebar-bg-3: #e9ecef; /* active */
+
   --vp-sidebar-bg-color: #ffffff;
   --vp-sidebar-width: 300px;
 }
@@ -52,6 +60,14 @@
   --vp-c-divider: #ffffff1a;
   --vp-c-divider-to: var(--vp-c-gray-1);
   --vp-c-surface-0: #00000066;
+
+  --vp-sidebar-text-1: #a6adbb; /* 默认 */
+  --vp-sidebar-text-2: #d9d9d9; /* hover */
+  --vp-sidebar-text-3: #ffffff; /* active */
+
+  --vp-sidebar-bg-1: #1f2937; /* 默认 */
+  --vp-sidebar-bg-2: #2d3748; /* hover */
+  --vp-sidebar-bg-3: #3b4452; /* active */
 
   --vp-sidebar-bg-color: #191d24;
 }
@@ -204,4 +220,33 @@ aside:hover {
   left: -1px;
   top: 0;
   height: 32px;
+}
+
+/* color */
+/* item：hover */
+.VPSidebarItem .item:hover {
+  background-color: var(--vp-sidebar-bg-2);
+  .text {
+    font-weight: 500;
+    color: var(--vp-sidebar-text-2) !important;
+  }
+}
+/* item:pick */
+.VPSidebarItem .item:active {
+  background-color: var(--vp-sidebar-bg-3);
+  .text {
+    font-weight: 500;
+    color: var(--vp-sidebar-text-3) !important;
+  }
+}
+/* item:is_active */
+.VPSidebarItem {
+  &.is-active > .item:first-child {
+    opacity: 1 !important;
+    background-color: var(--vp-c-brand-4-bg) !important;
+    .text {
+      font-weight: 500;
+      color: var(--vp-c-brand-1) !important;
+    }
+  }
 }
