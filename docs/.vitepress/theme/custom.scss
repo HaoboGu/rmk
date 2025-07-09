@@ -215,14 +215,14 @@
         div.title {
           padding-left: calc(2 * var(--default));
           padding-right: calc(2 * var(--default));
-          width: calc(17 * var(--default));
+          width: calc(300 / 16 * var(--default));
         }
         .content {
-          padding-left: calc(17 * var(--default));
+          padding-left: calc(300 / 16 * var(--default));
           padding-right: calc(2 * var(--default));
         }
         .divider {
-          padding-left: calc(17 * var(--default));
+          padding-left: calc(300 / 16 * var(--default));
         }
       }
       .home {
@@ -239,8 +239,8 @@
       .VPNavBar {
         div.title {
           .logo {
-            width: calc(2 * var(--default));
-            height: calc(2 * var(--default));
+            width: calc(24 / 16 * var(--default));
+            height: calc(24 / 16 * var(--default));
             margin-right: calc(0.5 * var(--default));
           }
           span {
@@ -294,6 +294,46 @@
           .VPNavBarMenuLink {
             padding: 0 calc(0.75 * var(--default));
             font-size: calc(0.875 * var(--default));
+          }
+          .VPNavBarMenuGroup {
+            padding: 0 calc(0.75 * var(--default));
+            .button {
+              padding: 0;
+              .text {
+                font-size: calc(0.875 * var(--default));
+                span[class^="vpi-"] {
+                  width: calc(1 * var(--default));
+                  height: calc(1 * var(--default));
+                }
+              }
+            }
+            .menu {
+              top: calc((var(--vp-nav-height) / 2) + (20 / 16 * var(--default)));
+              .VPMenu {
+                border-radius: calc(12 / 16 * var(--default));
+                padding: calc(12 / 16 * var(--default));
+                min-width: calc(128 / 16 * var(--default));
+                border: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                .items {
+                  gap: calc(2 / 16 * var(--default));
+                  .VPMenuGroup {
+                    .VPMenuLink {
+                      .link {
+                        border-radius: calc(6 / 16 * var(--default));
+                        padding: 0 calc(8 / 16 * var(--default));
+                        line-height: calc(36 / 16 * var(--default));
+                        font-size: calc(14 / 16 * var(--default));
+                      }
+                    }
+                  }
+                  .VPMenuGroup:not(:first-child) {
+                    margin: calc(8 / 16 * var(--default)) calc(-8 / 16 * var(--default)) 0;
+                    border-top: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
+                    padding: calc(8 / 16 * var(--default)) calc(8 / 16 * var(--default)) 0;
+                  }
+                }
+              }
+            }
           }
         }
         // 暗黑模式
