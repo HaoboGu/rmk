@@ -5,6 +5,16 @@
   --vp-nav-height: calc(4 * var(--default));
 }
 
+@media (min-width: 960px) {
+  .VPHero {
+    .container {
+      .tagline {
+        max-width: 540px;
+      }
+    }
+  }
+}
+
 @media (min-width: 1440px) {
   :root {
     --vp-layout-max-width: min(92vw, 3600px);
@@ -438,7 +448,7 @@
                     letter-spacing: 0;
                     line-height: calc(2 * var(--default));
                   }
-                  .VPDocOutlineItem{
+                  .VPDocOutlineItem {
                     padding: 0 calc(16 / 16 * var(--default));
                   }
                 }
