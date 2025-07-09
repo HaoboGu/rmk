@@ -114,11 +114,7 @@ mod combo_test {
                     [1, 3, false, 110],
                 ],
                 expected_reports: [
-                    // [0, [0; 6]],
-                    // [KC_LSHIFT, [0; 6]],
                     [KC_LSHIFT, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
-                    // [0, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
-                    // [0, [KeyCode::E as u8, 0, 0, 0, 0, 0]],
                     [0, [0; 6]],
                 ]
             }
