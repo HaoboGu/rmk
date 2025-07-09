@@ -18,7 +18,10 @@ macro_rules! k {
 #[macro_export]
 macro_rules! wm {
     ($x: ident, $m: expr) => {
-        $crate::action::KeyAction::WithModifier($crate::action::Action::Key($crate::keycode::KeyCode::$x), $m)
+        $crate::action::KeyAction::Single($crate::action::Action::KeyWithModifier(
+            $crate::keycode::KeyCode::$x,
+            $m,
+        ))
     };
 }
 
@@ -42,7 +45,8 @@ macro_rules! mo {
 #[macro_export]
 macro_rules! lm {
     ($x: literal, $m: expr) => {
-        $crate::action::KeyAction::WithModifier($crate::action::Action::LayerOn($x), $m)
+        todo!()
+        // $crate::action::KeyAction::WithModifier($crate::action::Action::LayerOn($x), $m)
     };
 }
 

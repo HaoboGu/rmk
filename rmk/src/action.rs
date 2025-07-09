@@ -56,8 +56,6 @@ pub enum KeyAction {
     Tap(Action),
     /// Keep current key pressed until the next key is triggered.
     OneShot(Action),
-    /// Action with the modifier combination triggered.
-    WithModifier(Action, ModifierCombination),
     /// General tap/hold action: (tap_action, hold_action)
     TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.
@@ -72,6 +70,8 @@ pub enum Action {
     Key(KeyCode),
     /// Modifier Combination, used for oneshot keyaction.
     Modifier(ModifierCombination),
+    /// Key stroke with modifier combination triggered.
+    KeyWithModifier(KeyCode, ModifierCombination),
     /// Activate a layer
     LayerOn(u8),
     /// Deactivate a layer
