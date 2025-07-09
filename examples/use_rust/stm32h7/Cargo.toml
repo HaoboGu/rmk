@@ -28,7 +28,8 @@ embassy-executor = { version = "0.7", features = [
 static_cell = "2"
 defmt = "1.0"
 defmt-rtt = "1.0"
-panic-probe = { version = "1.0", features = ["print-defmt"] }
+# panic-probe = { version = "1.0", features = ["print-defmt"] }
+panic-halt = "1.0"
 
 [patch.crates-io]
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
