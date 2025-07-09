@@ -48,17 +48,12 @@ impl Combo {
             }
         }
 
-        debug!("combo {:?} search key action {:?} ", self.output, key_action);
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
+            debug!("[COMBO] {:?} registered {:?} ", self.output, key_action);
             self.state |= 1 << i;
-            debug!(
-                "combo {:?} found index {} updated state: {}",
-                self.output, i, self.state
-            );
         } else if !self.is_all_pressed() {
             self.reset();
-            debug!("combo {:?} reset state: {}", self.output, self.state);
         }
         action_idx.is_some()
     }
@@ -67,10 +62,6 @@ impl Combo {
     pub(crate) fn update_released(&mut self, key_action: KeyAction) {
         if let Some(i) = self.actions.iter().position(|&a| a == key_action) {
             self.state &= !(1 << i);
-            debug!(
-                "combo {:?} update_released: {:?}, updated state: {}",
-                self.output, key_action, self.state
-            );
         }
 
         // Reset the combo if all keys are released
@@ -91,7 +82,6 @@ impl Combo {
 
         if self.is_all_pressed() {
             self.is_triggered = true;
-            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
         }
         self.output
     }
