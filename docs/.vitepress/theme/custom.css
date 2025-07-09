@@ -72,6 +72,11 @@
   --vp-sidebar-bg-color: #191d24;
 }
 
+/* 图片保护色 */
+.dark img:not(.no-multiply) {
+  opacity: 0.8;
+}
+
 /* 链接样式 */
 .action a {
   color: var(--vp-c-ant-text) !important;
