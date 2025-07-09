@@ -398,6 +398,9 @@
                     letter-spacing: 0;
                     line-height: calc(2 * var(--default));
                   }
+                  .VPDocOutlineItem{
+                    padding: 0 calc(16 / 16 * var(--default));
+                  }
                 }
               }
             }
