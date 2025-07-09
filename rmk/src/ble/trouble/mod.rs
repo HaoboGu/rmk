@@ -1,5 +1,5 @@
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
@@ -59,6 +59,11 @@ pub(crate) mod profile;
 
 /// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
+
+/// Global state of sleep management
+/// - `true`: Indicates central is sleeping
+/// - `false`: Indicates central is awake
+pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Max number of connections
 pub(crate) const CONNECTIONS_MAX: usize = 4; // Should be number of the peripheral + 1?

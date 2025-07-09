@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
-use crate::split::ble::central::SLEEPING_STATE;
+use crate::ble::trouble::SLEEPING_STATE;
 
 use super::ble_server::Server;
 

@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -13,7 +13,7 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::ble::trouble::{update_ble_phy, update_conn_params};
+use crate::ble::trouble::{update_ble_phy, update_conn_params, SLEEPING_STATE};
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
@@ -31,11 +31,6 @@ pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Sign
 /// - `signal(true)`: Indicates central has entered sleep mode
 /// - `signal(false)`: Indicates activity detected, wake up or reset sleep timer
 pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
-
-/// Global state of sleep management
-/// - `true`: Indicates central is sleeping
-/// - `false`: Indicates central is awake
-pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
