@@ -323,9 +323,6 @@ pub(crate) async fn run_ble<
                                 .await;
                             }
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                #[cfg(feature = "split")]
-                                use crate::split::ble::central::CENTRAL_SLEEP;
-
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
@@ -374,8 +371,17 @@ pub(crate) async fn run_ble<
 
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+
+                    // Enter sleep mode to reduce the power consumption
+                    #[cfg(feature = "split")]
+                    CENTRAL_SLEEP.signal(true);
+
                     // Wait for the keyboard report for wake the keyboard
                     let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+
+                    // Quit from sleep mode
+                    #[cfg(feature = "split")]
+                    CENTRAL_SLEEP.signal(false);
                     continue;
                 }
                 Err(e) => {
