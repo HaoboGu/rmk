@@ -3,6 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
+use crate::ble::trouble::SLEEPING_STATE;
+
 use super::ble_server::Server;
 
 /// Battery level global value.
@@ -40,20 +42,13 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
         let report_battery_level = async {
             loop {
                 let val = BATTERY_LEVEL.load(Ordering::Relaxed);
-                if val <= 100 {
-                    match self.battery_level.notify(self.conn, &val).await {
-                        Ok(_) => {}
-                        Err(_) => {
-                            error!("Failed to notify battery level");
-                        }
+                if val <= 100 && !SLEEPING_STATE.load(Ordering::Acquire) {
+                    if let Err(e) = self.battery_level.notify(self.conn, &val).await {
+                        error!("Failed to notify battery level: {:?}", e);
                     }
-                } else if val < 255 {
-                    debug!("Charging, val: {}", val);
-                } else {
-                    debug!("Battery level not available");
                 }
-                // Report battery level every 30s
-                Timer::after_secs(30).await
+                // Report battery level every 120s
+                Timer::after_secs(120).await
             }
         };
 

@@ -129,7 +129,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process(&mut self, event: Event) -> ProcessResult {
         match event {
             Event::Battery(val) => {
-                debug!("Detected battery ADC value: {:?}", val);
+                trace!("Detected battery ADC value: {:?}", val);
 
                 #[cfg(feature = "controller")]
                 send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(val));
