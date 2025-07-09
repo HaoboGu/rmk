@@ -124,33 +124,50 @@
         }
       }
     }
-
     // 侧边栏
     .VPSidebar {
       padding-left: calc(2 * var(--default));
       padding-right: calc(2 * var(--default));
-      width: calc((272 / 16) * var(--default));
+      width: calc((300 / 16) * var(--default));
+      .curtain {
+        top: calc((-64 / 16) * var(--default));
+        z-index: 1;
+        margin-right: calc((-32 / 16) * var(--default));
+        margin-left: calc((-32 / 16) * var(--default));
+      }
       .nav {
+        .group > .VPSidebarItem:first-child > .item:first-child {
+          margin-left: calc(-10 / 16 * var(--default));
+        }
+        .VPSidebarItem {
+          gap: calc(2 / 16 * var(--default));
+        }
+        /* 统一设置每个item之间的间距 */
+        .items {
+          gap: calc(2 / 16 * var(--default));
+        }
         .group {
-          padding-top: calc(5 / 8 * var(--default));
-          width: calc((272 / 16 - 4) * var(--default));
+          padding-top: calc(10 / 16 * var(--default));
+          padding-bottom: calc(9 / 16 * var(--default));
+          width: calc((300 / 16 - 4) * var(--default));
           .text {
             font-size: calc(14 / 16 * var(--default));
-            padding: calc(4 / 16 * var(--default)) 0;
+            padding: 0;
             letter-spacing: 0;
             line-height: calc(24 / 16 * var(--default));
           }
-          .item a {
-            margin-top: calc(1 / 8 * var(--default));
-            padding-left: calc(5 / 16 * var(--default));
-            border-top-right-radius: var(--default);
-            border-bottom-right-radius: var(--default);
+          .item {
+            margin-top: 0;
+            border-top-right-radius: calc(24 / 16 * var(--default));
+            border-bottom-right-radius: calc(24 / 16 * var(--default));
+            padding: calc(4 / 16 * var(--default)) calc(12 / 16 * var(--default)) calc(4 / 16 * var(--default))
+              calc(8 / 16 * var(--default));
           }
           .indicator {
-            top: calc(6 / 16 * var(--default));
-            bottom: calc(6 / 16 * var(--default));
-            left: calc(-17 / 16 * var(--default));
+            top: 0;
+            left: calc(-1 / 16 * var(--default));
             width: calc(2 / 16 * var(--default));
+            height: calc(32 / 16 * var(--default));
             border-radius: calc(2 / 16 * var(--default));
           }
         }
@@ -160,27 +177,35 @@
       }
 
       .VPSidebarItem {
-        &.level-1 .items,
-        &.level-2 .items,
-        &.level-3 .items,
-        &.level-4 .items,
-        &.level-5 .items {
-          border-left: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
-          padding-left: var(--default);
+        &.level-1,
+        &.level-2,
+        &.level-3,
+        &.level-4,
+        &.level-5 {
+          .items {
+            padding-left: 0;
+            margin-left: calc(16 / 16 * var(--default));
+            border-left: calc(1 / 16 * var(--default)) solid var(--vp-c-gray-3);
+          }
+          .item {
+            .text {
+              height: calc(24 / 16 * var(--default));
+              padding: 0;
+              line-height: calc(24 / 16 * var(--default));
+              flex-grow: none;
+            }
+          }
         }
         &.level-0 {
-          padding-bottom: calc(1.5 * var(--default));
+          padding-bottom: 0;
         }
         .caret-icon {
           font-size: calc(1.2 * var(--default));
         }
         .caret {
-          width: calc(2 * var(--default));
-          height: calc(2 * var(--default));
+          width: calc(24 / 16 * var(--default));
+          height: calc(24 / 16 * var(--default));
         }
-      }
-      .curtain {
-        top: calc(-4 * var(--default));
       }
     }
 
@@ -555,11 +580,11 @@
                     line-height: calc(24 / 16 * var(--default));
                     .custom-block-title {
                       margin: calc(0.5 * var(--default)) calc(0 * var(--default));
-                      padding:  calc(0 * var(--default)) calc(1 * var(--default) );
+                      padding: calc(0 * var(--default)) calc(1 * var(--default));
                       line-height: calc(1.5 * var(--default));
                     }
                     p {
-                        padding:  calc(0 * var(--default)) calc(1 * var(--default) );
+                      padding: calc(0 * var(--default)) calc(1 * var(--default));
                     }
                     div[class*="language-"] {
                       margin: calc(1 * var(--default)) calc(1 * var(--default));
@@ -570,7 +595,7 @@
                         height: calc(2 * var(--default));
                       }
                     }
-                    summary{
+                    summary {
                       font-size: calc(1 * var(--default));
                     }
                   }
