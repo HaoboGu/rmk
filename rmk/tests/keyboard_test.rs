@@ -1,5 +1,3 @@
-mod common;
-
 mod keyboard_test {
 
     use embassy_futures::block_on;
