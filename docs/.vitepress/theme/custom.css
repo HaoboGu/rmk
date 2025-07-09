@@ -72,6 +72,11 @@
   --vp-sidebar-bg-color: #191d24;
 }
 
+::selection {
+  background: var(--vp-c-brand-4-bg); 
+  color: var(--vp-c-brand-1);
+}
+
 /* 图片保护色 */
 .dark img:not(.no-multiply) {
   opacity: 0.8;
