@@ -215,7 +215,7 @@ aside:hover {
   margin-top: 0;
   border-top-right-radius: 24px;
   border-bottom-right-radius: 24px;
-  padding: 4px 8px;
+  padding: 4px 12px 4px 8px;
   display: flex;
   justify-content: center;
   align-items: center;
