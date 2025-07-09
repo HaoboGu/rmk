@@ -122,3 +122,86 @@ aside:hover {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
+
+/* Nav */
+
+/* 二级标题固定色彩 */
+.group > .VPSidebarItem:first-child > .item:first-child {
+  background-color: var(--vp-sidebar-bg-color) !important;
+  margin-left: -10px;
+  .text {
+    font-weight: 700;
+    color: var(--vp-text-1) !important;
+  }
+}
+/* 二级以下标题样式重设 */
+.nav .VPSidebarItem {
+  &.level-1,
+  &.level-2,
+  &.level-3,
+  &.level-4,
+  &.level-5 {
+    .items {
+      padding-left: 0;
+      margin-left: 16px;
+      border-left: 1px solid var(--vp-c-gray-3);
+    }
+    .item {
+      .text {
+        font-weight: 500;
+        color: var(--vp-sidebar-text-1) !important;
+        height: 24px;
+        padding: 0;
+        line-height: 24px;
+        flex-grow: none;
+      }
+    }
+  }
+  &.level-0 {
+    padding-bottom: 0;
+  }
+  .caret-icon {
+    font-size: calc(1.2 * var(--default));
+  }
+  .caret {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+}
+/* 为每个Group设置buttom */
+.nav .group {
+  padding-bottom: 9px;
+}
+/* 统一设置item与items之间的间距 */
+.VPSidebarItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 统一设置每个item之间的间距 */
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+}
+/* 统一设置每个item的样式 */
+.VPSidebarItem .item {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0;
+  border-top-right-radius: 24px;
+  border-bottom-right-radius: 24px;
+  padding: 4px 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+/* is_active下的光标样式 */
+.item .indicator {
+  left: -1px;
+  top: 0;
+  height: 32px;
+}
