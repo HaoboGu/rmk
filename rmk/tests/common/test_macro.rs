@@ -32,7 +32,7 @@ macro_rules! key_sequence_test {
                 )*
             ];
 
-            run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
+            $crate::common::run_key_sequence_test(&mut keyboard, &sequence, &expected_reports).await;
         });
     };
 }
