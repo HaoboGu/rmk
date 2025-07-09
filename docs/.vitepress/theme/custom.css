@@ -260,5 +260,8 @@ aside:hover {
       font-weight: 500;
       color: var(--vp-c-brand-1) !important;
     }
+    .indicator{
+      background-color: var(--vp-c-brand-1) !important;
+    }
   }
 }
