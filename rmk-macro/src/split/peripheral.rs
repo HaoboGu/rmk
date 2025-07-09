@@ -36,10 +36,13 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
         quote! {
             use {esp_alloc as _, esp_backtrace as _};
             #[esp_hal_embassy::main]
-            async fn main(_s: Spawner)
+            async fn main(_s: ::embassy_executor::Spawner)
         }
     } else {
         quote! {
+            use defmt_rtt as _;
+            use panic_probe as _;
+
             #bind_interrupts
             #[::embassy_executor::main]
             async fn main(spawner: ::embassy_executor::Spawner)
@@ -47,9 +50,6 @@ pub(crate) fn parse_split_peripheral_mod(id: usize, _attr: proc_macro::TokenStre
     };
 
     quote! {
-        use defmt_rtt as _;
-        use panic_probe as _;
-
         #main_function_sig {
             // ::defmt::info!("RMK start!");
             #main_function

@@ -1,5 +1,5 @@
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
 use ble_server::{BleHidServer, BleViaServer, Server};
@@ -59,6 +59,11 @@ pub(crate) mod profile;
 
 /// The number of the active profile
 pub static ACTIVE_PROFILE: AtomicU8 = AtomicU8::new(0);
+
+/// Global state of sleep management
+/// - `true`: Indicates central is sleeping
+/// - `false`: Indicates central is awake
+pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
 
 /// Max number of connections
 pub(crate) const CONNECTIONS_MAX: usize = 4; // Should be number of the peripheral + 1?
@@ -323,9 +328,6 @@ pub(crate) async fn run_ble<
                                 .await;
                             }
                             Either3::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                                #[cfg(feature = "split")]
-                                use crate::split::ble::central::CENTRAL_SLEEP;
-
                                 warn!("Advertising timeout, sleep and wait for any key");
 
                                 // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
@@ -374,8 +376,17 @@ pub(crate) async fn run_ble<
 
                     // Set CONNECTION_STATE to true to keep receiving messages from the peripheral
                     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
+
+                    // Enter sleep mode to reduce the power consumption
+                    #[cfg(feature = "split")]
+                    CENTRAL_SLEEP.signal(true);
+
                     // Wait for the keyboard report for wake the keyboard
                     let _ = KEYBOARD_REPORT_CHANNEL.receive().await;
+
+                    // Quit from sleep mode
+                    #[cfg(feature = "split")]
+                    CENTRAL_SLEEP.signal(false);
                     continue;
                 }
                 Err(e) => {
@@ -423,12 +434,15 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
 async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, DefaultPacketPool>) -> Result<(), Error> {
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
+    let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
     let output_via = server.via_service.output_via;
     let input_via = server.via_service.input_via;
+    let via_control_point = server.via_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
     let media = server.composite_service.media_report;
+    let media_control_point = server.composite_service.hid_control_point;
     let system_control = server.composite_service.system_report;
 
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
@@ -467,13 +481,21 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     }
                     GattEvent::Write(event) => {
                         if event.handle() == output_keyboard.handle {
-                            let led_indicator = LedIndicator::from_bits(event.data()[0]);
-                            debug!("Got keyboard state: {:?}", led_indicator);
-                            LED_SIGNAL.signal(led_indicator);
+                            if event.data().len() == 1 {
+                                let led_indicator = LedIndicator::from_bits(event.data()[0]);
+                                debug!("Got keyboard state: {:?}", led_indicator);
+                                LED_SIGNAL.signal(led_indicator);
+                            } else {
+                                warn!("Wrong keyboard state data: {:?}", event.data());
+                            }
                         } else if event.handle() == output_via.handle {
                             debug!("Got via packet: {:?}", event.data());
-                            let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                            VIAL_READ_CHANNEL.send(data).await;
+                            if event.data().len() == 32 {
+                                let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                VIAL_READ_CHANNEL.send(data).await;
+                            } else {
+                                warn!("Wrong via packet data: {:?}", event.data());
+                            }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
                             || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
@@ -483,6 +505,22 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         {
                             // CCCD write event
                             cccd_updated = true;
+                        } else if event.handle() == hid_control_point.handle
+                            || event.handle() == via_control_point.handle
+                            || event.handle() == media_control_point.handle
+                        {
+                            info!("Write GATT Event to Control Point: {:?}", event.handle());
+                            #[cfg(feature = "split")]
+                            if event.data().len() == 1 {
+                                let data = event.data()[0];
+                                if data == 0 {
+                                    // Enter sleep mode
+                                    CENTRAL_SLEEP.signal(true);
+                                } else if data == 1 {
+                                    // Wake up
+                                    CENTRAL_SLEEP.signal(false);
+                                }
+                            }
                         } else {
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
@@ -510,6 +548,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
                 // Update CCCD table after processing the event
                 if cccd_updated {
+                    // When macOS wakes up from sleep mode, it won't send EXIT SUSPEND command
+                    // So we need to monitor the sleep state by using CCCD write event
+                    #[cfg(feature = "split")]
+                    CENTRAL_SLEEP.signal(false);
+
                     if let Some(table) = server.get_cccd_table(conn.raw()) {
                         UPDATED_CCCD_TABLE.signal(table);
                     }

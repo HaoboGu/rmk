@@ -9,7 +9,10 @@ pub struct Combo {
     pub(crate) actions: Vec<KeyAction, COMBO_MAX_LENGTH>,
     pub(crate) output: KeyAction,
     pub(crate) layer: Option<u8>,
+    /// The state records the pressed keys of the combo
     state: u8,
+    /// The flag indicates whether the combo is triggered
+    is_triggered: bool,
 }
 
 impl Default for Combo {
@@ -18,9 +21,6 @@ impl Default for Combo {
     }
 }
 
-// magic code for marking the combo as triggered
-const COMBO_TRIGGERED: u8 = u8::MAX;
-
 impl Combo {
     pub fn new<I: IntoIterator<Item = KeyAction>>(actions: I, output: KeyAction, layer: Option<u8>) -> Self {
         Self {
@@ -28,6 +28,7 @@ impl Combo {
             output,
             layer,
             state: 0,
+            is_triggered: false,
         }
     }
 
@@ -36,8 +37,8 @@ impl Combo {
     }
 
     pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
-        if !key_event.pressed || self.actions.is_empty() || self.state == COMBO_TRIGGERED {
-            //ignore combo that without actions
+        if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
+            // Ignore combo that without actions
             return false;
         }
 
@@ -47,19 +48,26 @@ impl Combo {
             }
         }
 
-        debug!("combo {:?} search key action {:?} ", self.output, key_action);
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
+            debug!("[COMBO] {:?} registered {:?} ", self.output, key_action);
             self.state |= 1 << i;
-            debug!(
-                "combo {:?} found index {} updated state: {}",
-                self.output, i, self.state
-            );
         } else if !self.is_all_pressed() {
             self.reset();
-            debug!("combo {:?} reset state: {}", self.output, self.state);
         }
         action_idx.is_some()
+    }
+
+    /// Update the combo's state when a key is released
+    pub(crate) fn update_released(&mut self, key_action: KeyAction) {
+        if let Some(i) = self.actions.iter().position(|&a| a == key_action) {
+            self.state &= !(1 << i);
+        }
+
+        // Reset the combo if all keys are released
+        if self.state == 0 {
+            self.reset();
+        }
     }
 
     /// Mark the combo as done, if all actions are satisfied
@@ -73,15 +81,14 @@ impl Combo {
         }
 
         if self.is_all_pressed() {
-            self.state = COMBO_TRIGGERED;
-            debug!("combo {:?} mark triggered, updated state: {}", self.output, self.state);
+            self.is_triggered = true;
         }
         self.output
     }
 
     // Check if the combo is dispatched into key event
     pub(crate) fn is_triggered(&self) -> bool {
-        self.state == COMBO_TRIGGERED
+        self.is_triggered
     }
 
     // Check if all keys of this combo are pressed, but it does not mean the combo key event is sent
@@ -99,5 +106,6 @@ impl Combo {
 
     pub(crate) fn reset(&mut self) {
         self.state = 0;
+        self.is_triggered = false;
     }
 }

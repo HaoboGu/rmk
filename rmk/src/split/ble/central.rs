@@ -13,7 +13,7 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::ble::trouble::{update_ble_phy, update_conn_params};
+use crate::ble::trouble::{update_ble_phy, update_conn_params, SLEEPING_STATE};
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
@@ -31,13 +31,6 @@ pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Sign
 /// - `signal(true)`: Indicates central has entered sleep mode
 /// - `signal(false)`: Indicates activity detected, wake up or reset sleep timer
 pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
-
-/// Sleep state for BLE Split Central
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum SleepState {
-    Awake,
-    Sleeping,
-}
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -459,7 +452,6 @@ async fn sleep_manager_task<
         return Ok(());
     }
 
-    let mut sleep_state = SleepState::Awake;
     let sleep_timeout = SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES as u64 * 60;
 
     info!(
@@ -468,70 +460,67 @@ async fn sleep_manager_task<
     );
 
     loop {
-        match sleep_state {
-            SleepState::Awake => {
-                // Wait for timeout or activity (false signal means activity/wakeup)
-                match select(Timer::after_secs(sleep_timeout), CENTRAL_SLEEP.wait()).await {
-                    Either::First(_) => {
-                        // Timeout: enter sleep mode
-                    }
-                    Either::Second(signal_value) => {
-                        // Received signal - if false, it means activity detected
-                        if !signal_value {
-                            debug!("Activity detected, resetting sleep timeout");
-                            continue;
-                        }
-                        // True, enter sleep mode
-                    }
+        if !SLEEPING_STATE.load(Ordering::Acquire) {
+            // Wait for timeout or activity (false signal means activity/wakeup)
+            match select(Timer::after_secs(sleep_timeout), CENTRAL_SLEEP.wait()).await {
+                Either::First(_) => {
+                    // Timeout: enter sleep mode
                 }
-
-                // Timeout or received true from CENTRAL_SLEEP signal, enter sleep mode
-                info!("Entering sleep mode");
-
-                // Connection parameters are different when central is broadcasting and connected to host
-                let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
-                    ConnectParams {
-                        min_connection_interval: Duration::from_millis(20),
-                        max_connection_interval: Duration::from_millis(20),
-                        max_latency: 200, // 4s
-                        supervision_timeout: Duration::from_secs(9),
-                        ..Default::default()
+                Either::Second(signal_value) => {
+                    // Received signal - if false, it means activity detected
+                    if !signal_value {
+                        debug!("Activity detected, resetting sleep timeout");
+                        continue;
                     }
-                } else {
-                    ConnectParams {
-                        min_connection_interval: Duration::from_millis(200),
-                        max_connection_interval: Duration::from_millis(200),
-                        max_latency: 25, // 5s
-                        supervision_timeout: Duration::from_secs(11),
-                        ..Default::default()
-                    }
-                };
-
-                // Update connection parameters
-                update_conn_params(stack, conn, &conn_params).await;
-                sleep_state = SleepState::Sleeping;
+                    // True, enter sleep mode
+                }
             }
-            SleepState::Sleeping => {
-                // Wait for activity to wake up (false signal means activity/wakeup)
-                let signal_value = CENTRAL_SLEEP.wait().await;
-                if !signal_value {
-                    info!("Waking up from sleep mode due to activity");
-                    sleep_state = SleepState::Awake;
 
-                    // Restore normal connection parameters
-                    update_conn_params(
-                        stack,
-                        conn,
-                        &ConnectParams {
-                            min_connection_interval: Duration::from_micros(7500),
-                            max_connection_interval: Duration::from_micros(7500),
-                            max_latency: 400, // 3s
-                            supervision_timeout: Duration::from_secs(7),
-                            ..Default::default()
-                        },
-                    )
-                    .await;
+            // Timeout or received true from CENTRAL_SLEEP signal, enter sleep mode
+            info!("Entering sleep mode");
+
+            // Connection parameters are different when central is broadcasting and connected to host
+            let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
+                ConnectParams {
+                    min_connection_interval: Duration::from_millis(20),
+                    max_connection_interval: Duration::from_millis(20),
+                    max_latency: 200, // 4s
+                    supervision_timeout: Duration::from_secs(9),
+                    ..Default::default()
                 }
+            } else {
+                ConnectParams {
+                    min_connection_interval: Duration::from_millis(200),
+                    max_connection_interval: Duration::from_millis(200),
+                    max_latency: 25, // 5s
+                    supervision_timeout: Duration::from_secs(11),
+                    ..Default::default()
+                }
+            };
+
+            // Update connection parameters
+            update_conn_params(stack, conn, &conn_params).await;
+            SLEEPING_STATE.store(true, Ordering::Release);
+        } else {
+            // Wait for activity to wake up (false signal means activity/wakeup)
+            let signal_value = CENTRAL_SLEEP.wait().await;
+            if !signal_value {
+                info!("Waking up from sleep mode due to activity");
+                SLEEPING_STATE.store(false, Ordering::Release);
+
+                // Restore normal connection parameters
+                update_conn_params(
+                    stack,
+                    conn,
+                    &ConnectParams {
+                        min_connection_interval: Duration::from_micros(7500),
+                        max_connection_interval: Duration::from_micros(7500),
+                        max_latency: 400, // 3s
+                        supervision_timeout: Duration::from_secs(7),
+                        ..Default::default()
+                    },
+                )
+                .await;
             }
         }
     }

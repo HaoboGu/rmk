@@ -15,7 +15,7 @@ use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB_OTG_HS;
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::{Driver, InterruptHandler};
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};
@@ -29,7 +29,7 @@ use rmk::storage::async_flash_wrapper;
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
-use {defmt_rtt as _, panic_probe as _};
+use {defmt_rtt as _, panic_halt as _};
 
 bind_interrupts!(struct Irqs {
     OTG_HS => InterruptHandler<USB_OTG_HS>;

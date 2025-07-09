@@ -69,7 +69,7 @@ impl<S: Read + Write> SplitReader for SerialSplitDriver<S> {
         }
 
         let (result, n_bytes_unused) =
-            match postcard::take_from_bytes_cobs::<SplitMessage>(&mut self.buffer.clone()[..self.n_bytes_part]) {
+            match postcard::take_from_bytes_cobs::<SplitMessage>(&mut self.buffer[..self.n_bytes_part]) {
                 Ok((message, unused_bytes)) => (Ok(message), unused_bytes.len()),
                 Err(e) => {
                     error!("Postcard deserialize split message error: {}", e);
