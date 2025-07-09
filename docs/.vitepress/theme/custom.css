@@ -203,7 +203,7 @@ aside:hover {
   gap: 2px;
 }
 /* 统一设置每个item之间的间距 */
-.items {
+.nav .items {
   display: flex;
   flex-direction: column;
   gap: 2px;
