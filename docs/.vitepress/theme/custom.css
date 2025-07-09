@@ -211,7 +211,8 @@ aside:hover {
 }
 /* 统一设置每个item的样式 */
 .VPSidebarItem .item {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-top: 0;
   border-top-right-radius: 24px;
   border-bottom-right-radius: 24px;
