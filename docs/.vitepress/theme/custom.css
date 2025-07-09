@@ -168,13 +168,19 @@ aside:hover {
       border-left: 1px solid var(--vp-c-gray-3);
     }
     .item {
-      .text {
-        font-weight: 500;
-        color: var(--vp-sidebar-text-1) !important;
-        height: 24px;
-        padding: 0;
-        line-height: 24px;
-        flex-grow: none;
+      .VPLink {
+        max-width: 100%;
+        .text {
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          font-weight: 500;
+          color: var(--vp-sidebar-text-1) !important;
+          height: 24px;
+          padding: 0;
+          line-height: 24px;
+          flex-grow: none;
+        }
       }
     }
   }
