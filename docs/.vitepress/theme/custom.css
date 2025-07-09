@@ -175,7 +175,7 @@ aside:hover {
           white-space: nowrap;
           text-overflow: ellipsis;
           font-weight: 500;
-          color: var(--vp-sidebar-text-1) !important;
+          color: var(--vp-sidebar-text-1);
           height: 24px;
           padding: 0;
           line-height: 24px;
