@@ -59,15 +59,21 @@ impl Combo {
     }
 
     /// Update the combo's state when a key is released
-    pub(crate) fn update_released(&mut self, key_action: KeyAction) {
+    /// When the combo is fully released from triggered state, this function returns true
+    pub(crate) fn update_released(&mut self, key_action: KeyAction) -> bool {
         if let Some(i) = self.actions.iter().position(|&a| a == key_action) {
             self.state &= !(1 << i);
         }
 
         // Reset the combo if all keys are released
         if self.state == 0 {
+            if self.is_triggered {
+                self.reset();
+                return true;
+            }
             self.reset();
         }
+        false
     }
 
     /// Mark the combo as done, if all actions are satisfied
