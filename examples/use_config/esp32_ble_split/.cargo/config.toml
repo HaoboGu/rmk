@@ -1,0 +1,25 @@
+# ESP32C6 build configuration
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --chip esp32c6 --monitor"
+
+# ESP32C3 build configuration
+[target.riscv32imc-unknown-none-elf]
+runner = "espflash flash --chip esp32c3 --monitor"
+
+
+[alias]
+build-central = "build --bin central --features central --target riscv32imac-unknown-none-elf"
+build-peripheral = "build --bin peripheral --features peripheral --target riscv32imc-unknown-none-elf"
+run-central = "run --target riscv32imac-unknown-none-elf --bin central --features central"
+run-peripheral = "run --bin peripheral --features peripheral --target riscv32imc-unknown-none-elf"
+
+[build]
+rustflags = [
+  # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+  # NOTE: May negatively impact performance of produced code
+  "-C", "force-frame-pointers",
+]
+
+[env]
+ESP_LOG = "info"
+KEYBOARD_TOML_PATH = { value = "keyboard.toml", relative = true }

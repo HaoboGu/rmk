@@ -70,6 +70,13 @@ pub(crate) fn rmk_entry_select(
         TokenStream2::new()
     };
     let board = keyboard_config.get_board_config().unwrap();
+    let communication = keyboard_config.get_communication_config().unwrap();
+    let usb_driver_arg = match communication {
+        CommunicationConfig::Usb(_) | CommunicationConfig::Both(_, _) => quote! { driver, },
+        CommunicationConfig::Ble(_) => quote! {},
+        CommunicationConfig::None => panic!("USB and BLE are both disabled"),
+    };
+
     let entry = match &board {
         BoardConfig::Split(split_config) => {
             let keyboard_task = quote! {
@@ -77,7 +84,7 @@ pub(crate) fn rmk_entry_select(
             };
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, &stack, #storage &mut light_controller, rmk_config),
+                    ::rmk::run_rmk(&keymap, #usb_driver_arg &stack, #storage &mut light_controller, rmk_config),
                 };
                 let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                 if !processors.is_empty() {
@@ -99,7 +106,7 @@ pub(crate) fn rmk_entry_select(
                 join_all_tasks(tasks)
             } else if split_config.connection == "serial" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config),
+                    ::rmk::run_rmk(&keymap, #usb_driver_arg #storage &mut light_controller, rmk_config),
                 };
                 let mut tasks = vec![devices_task, rmk_task, keyboard_task];
                 if !processors.is_empty() {
