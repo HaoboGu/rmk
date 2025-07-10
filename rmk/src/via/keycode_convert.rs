@@ -22,6 +22,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16
                 }
             }
+            Action::KeyWithModifier(k, m) => ((m.into_bits() as u16) << 8) | k as u16,
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
@@ -56,13 +57,6 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             _ => 0x0000,
         },
-        KeyAction::WithModifier(a, m) => {
-            let keycode = match a {
-                Action::Key(k) => k as u16,
-                _ => 0,
-            };
-            ((m.into_bits() as u16) << 8) | keycode
-        }
         KeyAction::TapHold(tap, hold) => match hold {
             Action::LayerOn(l) => {
                 if l > 16 {
@@ -101,7 +95,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // WithModifier
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             let modifier = ModifierCombination::from_bits((via_keycode >> 8) as u8);
-            KeyAction::WithModifier(Action::Key(keycode), modifier)
+            KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
         }
         0x2000..=0x3FFF => {
             // Modifier tap/hold
@@ -462,40 +456,40 @@ mod test {
         // LCtrl(A) -> WithModifier(A)
         let via_keycode = 0x104;
         assert_eq!(
-            KeyAction::WithModifier(
-                Action::Key(KeyCode::A),
+            KeyAction::Single(Action::KeyWithModifier(
+                KeyCode::A,
                 ModifierCombination::new_from(false, false, false, false, true)
-            ),
+            )),
             from_via_keycode(via_keycode)
         );
 
         // RCtrl(A) -> WithModifier(A)
         let via_keycode = 0x1104;
         assert_eq!(
-            KeyAction::WithModifier(
-                Action::Key(KeyCode::A),
+            KeyAction::Single(Action::KeyWithModifier(
+                KeyCode::A,
                 ModifierCombination::new_from(true, false, false, false, true)
-            ),
+            )),
             from_via_keycode(via_keycode)
         );
 
         // Meh(A) -> WithModifier(A)
         let via_keycode = 0x704;
         assert_eq!(
-            KeyAction::WithModifier(
-                Action::Key(KeyCode::A),
+            KeyAction::Single(Action::KeyWithModifier(
+                KeyCode::A,
                 ModifierCombination::new_from(false, false, true, true, true)
-            ),
+            )),
             from_via_keycode(via_keycode)
         );
 
         // Hypr(A) -> WithModifier(A)
         let via_keycode = 0xF04;
         assert_eq!(
-            KeyAction::WithModifier(
-                Action::Key(KeyCode::A),
+            KeyAction::Single(Action::KeyWithModifier(
+                KeyCode::A,
                 ModifierCombination::new_from(false, true, true, true, true)
-            ),
+            )),
             from_via_keycode(via_keycode)
         );
 
@@ -612,31 +606,31 @@ mod test {
         assert_eq!(0x52B1, to_via_keycode(a));
 
         // LCtrl(A) -> WithModifier(A)
-        let a = KeyAction::WithModifier(
-            Action::Key(KeyCode::A),
+        let a = KeyAction::Single(Action::KeyWithModifier(
+            KeyCode::A,
             ModifierCombination::new_from(false, false, false, false, true),
-        );
+        ));
         assert_eq!(0x104, to_via_keycode(a));
 
         // RCtrl(A) -> WithModifier(A)
-        let a = KeyAction::WithModifier(
-            Action::Key(KeyCode::A),
+        let a = KeyAction::Single(Action::KeyWithModifier(
+            KeyCode::A,
             ModifierCombination::new_from(true, false, false, false, true),
-        );
+        ));
         assert_eq!(0x1104, to_via_keycode(a));
 
         // Meh(A) -> WithModifier(A)
-        let a = KeyAction::WithModifier(
-            Action::Key(KeyCode::A),
+        let a = KeyAction::Single(Action::KeyWithModifier(
+            KeyCode::A,
             ModifierCombination::new_from(false, false, true, true, true),
-        );
+        ));
         assert_eq!(0x704, to_via_keycode(a));
 
         // Hypr(A) -> WithModifier(A)
-        let a = KeyAction::WithModifier(
-            Action::Key(KeyCode::A),
+        let a = KeyAction::Single(Action::KeyWithModifier(
+            KeyCode::A,
             ModifierCombination::new_from(false, true, true, true, true),
-        );
+        ));
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
