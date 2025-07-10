@@ -270,3 +270,12 @@ aside:hover {
     }
   }
 }
+.divider{
+  position: relative;
+}
+.divider-line{
+  position: absolute;
+  z-index: 100;
+  top:-1px;
+  background-color: var(--vp-c-divider) !important;
+}
