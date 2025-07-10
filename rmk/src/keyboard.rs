@@ -720,16 +720,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
                     if combo.actions.contains(&key_action) {
-                        let is_triggered = combo.is_triggered();
-                        releasing_triggered_combo |= is_triggered;
-                        // Release the combo key
-                        combo.update_released(key_action);
-                        // The combo was triggered, but now it's fully released
-                        if is_triggered && !combo.is_triggered() {
+                        // Releasing a combo key in triggered combo
+                        releasing_triggered_combo |= combo.is_triggered();
+
+                        // Release the combo key, check whether the combo is fully released
+                        if combo.update_released(key_action) {
+                            // If the combo is fully released, update the combo output
                             debug!("[COMBO] {:?} is released", combo.output);
-                            if combo_output.is_none() {
-                                combo_output = Some(combo.output);
-                            }
+                            combo_output = combo_output.or(Some(combo.output));
                         }
                     }
                 }
