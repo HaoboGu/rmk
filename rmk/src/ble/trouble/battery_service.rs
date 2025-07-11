@@ -47,8 +47,8 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
                         error!("Failed to notify battery level: {:?}", e);
                     }
                 }
-                // Report battery level every 120s
-                Timer::after_secs(120).await
+                // Report battery level every 20 min
+                Timer::after_secs(1200).await
             }
         };
 
