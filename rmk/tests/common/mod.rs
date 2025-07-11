@@ -13,7 +13,7 @@ use rmk::action::KeyAction;
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
-use rmk::event::KeyEvent;
+use rmk::event::{Event, KeyEvent};
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
@@ -79,11 +79,11 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
             for key in key_sequence {
                 Timer::after(Duration::from_millis(key.delay)).await;
                 KEY_EVENT_CHANNEL
-                    .send(KeyEvent {
+                    .send(Event::Key(KeyEvent {
                         row: key.row,
                         col: key.col,
                         pressed: key.pressed,
-                    })
+                    }))
                     .await;
             }
 
