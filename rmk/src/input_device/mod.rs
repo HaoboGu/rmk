@@ -132,12 +132,12 @@ macro_rules! run_devices {
                                 // For KeyEvent, send it to KEY_EVENT_CHANNEL
                                 match e {
                                     $crate::event::Event::Key(key_event) => {
-                                        $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
+                                        $crate::channel::KEY_EVENT_CHANNEL.send($crate::event::Event::Key(key_event)).await;
                                     }
                                     _ => {
                                         // Drop the oldest event if the channel is full
                                         if $channel.is_full() {
-                                           let _ = $channel.receive().await;
+                                            let _ = $channel.receive().await;
                                         }
                                         $channel.send(e).await;
                                     }

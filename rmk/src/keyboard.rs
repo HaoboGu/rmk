@@ -19,7 +19,7 @@ use crate::action::{Action, KeyAction};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::{KeyboardReport, ViaReport};
-use crate::event::KeyEvent;
+use crate::event::{Event, KeyEvent};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -87,9 +87,9 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 Some(key) => self.process_buffered_key(key).await,
                 None => {
                     // No buffered tap-hold event, wait for new key
-                    let key_event = KEY_EVENT_CHANNEL.receive().await;
+                    let event = KEY_EVENT_CHANNEL.receive().await;
                     // Process the key event
-                    self.process_inner(key_event).await
+                    self.process_inner(event).await
                 }
             };
 
@@ -129,7 +129,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 
     /// Unprocessed events
-    unprocessed_events: Vec<KeyEvent, 16>,
+    unprocessed_events: Vec<Event, 16>,
 
     /// Buffered holding keys
     pub holding_buffer: Vec<HoldingKey, HOLD_BUFFER_SIZE>,
@@ -336,27 +336,36 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Process key changes at (row, col)
-    async fn process_inner(&mut self, key_event: KeyEvent) -> LoopState {
-        // Matrix should process key pressed event first, record the timestamp of key changes
-        if key_event.pressed {
-            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
-        }
+    async fn process_inner(&mut self, event: Event) -> LoopState {
+        match event {
+            Event::Key(key_event) => {
+                // Matrix should process key pressed event first, record the timestamp of key changes
+                if key_event.pressed {
+                    self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
+                }
 
-        // Update activity time for BLE split central sleep management
-        #[cfg(all(feature = "split", feature = "_ble"))]
-        update_activity_time();
+                // Update activity time for BLE split central sleep management
+                #[cfg(all(feature = "split", feature = "_ble"))]
+                update_activity_time();
 
-        // Process key
-        let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
+                // Process key
+                let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(key_event);
 
-        if self.combo_on {
-            if let Some(key_action) = self.process_combo(key_action, key_event).await {
-                self.process_key_action(key_action, key_event).await
-            } else {
+                if self.combo_on {
+                    if let Some(key_action) = self.process_combo(key_action, key_event).await {
+                        self.process_key_action(key_action, key_event).await
+                    } else {
+                        LoopState::OK
+                    }
+                } else {
+                    self.process_key_action(key_action, key_event).await
+                }
+            }
+            Event::RotaryEncoder(_encoder_event) => {
+                debug!("rotary encoder event");
                 LoopState::OK
             }
-        } else {
-            self.process_key_action(key_action, key_event).await
+            _ => LoopState::OK,
         }
     }
 
@@ -1475,8 +1484,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let len = KEY_EVENT_CHANNEL.len();
                 for _ in 0..len {
                     let queued_event = KEY_EVENT_CHANNEL.receive().await;
-                    if queued_event.col != key_event.col || queued_event.row != key_event.row {
-                        KEY_EVENT_CHANNEL.send(queued_event).await;
+                    if let Event::Key(queued_key_event) = queued_event {
+                        if queued_key_event.col != key_event.col || queued_key_event.row != key_event.row {
+                            KEY_EVENT_CHANNEL.send(queued_event).await;
+                        }
                     }
                 }
             }
@@ -1534,7 +1545,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // Schedule next movement after the delay
                     embassy_time::Timer::after_millis(delay as u64).await;
 
-                    KEY_EVENT_CHANNEL.send(key_event).await;
+                    KEY_EVENT_CHANNEL.send(Event::Key(key_event)).await;
                 }
             }
         }

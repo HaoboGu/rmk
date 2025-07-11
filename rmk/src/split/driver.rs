@@ -99,7 +99,7 @@ impl<
             .await
             {
                 Either3::First(event) => match event {
-                    Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
+                    Event::Key(key_event) => KEY_EVENT_CHANNEL.send(Event::Key(key_event)).await,
                     _ => {
                         if EVENT_CHANNEL.is_full() {
                             let _ = EVENT_CHANNEL.receive().await;
