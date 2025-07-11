@@ -489,6 +489,7 @@ async fn sleep_manager_task<
             // Connection parameters are different when central is broadcasting and connected to host
             let conn_params = if CONNECTION_STATE.load(Ordering::Acquire) {
                 info!("Do nothing");
+                SLEEPING_STATE.store(true, Ordering::Release);
                 continue;
                 // ConnectParams {
                 //     min_connection_interval: Duration::from_millis(20),
