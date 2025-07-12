@@ -899,6 +899,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 self.process_action_key(key_code, key_event).await
             }
+            Action::LayerOnWithModifier(layer_num, modifiers) => {
+                if key_event.pressed {
+                    // These modifiers will be combined into the hid report, so
+                    // they will be "pressed" the same time as the key (in same hid report)
+                    self.with_modifiers |= modifiers.to_hid_modifiers();
+                } else {
+                    // The modifiers will not be part of the hid report, so
+                    // they will be "released" the same time as the key (in same hid report)
+                    self.with_modifiers &= !(modifiers.to_hid_modifiers());
+                }
+                self.process_action_layer_switch(layer_num, key_event)
+            }
         }
     }
 

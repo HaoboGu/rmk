@@ -45,8 +45,7 @@ macro_rules! mo {
 #[macro_export]
 macro_rules! lm {
     ($x: literal, $m: expr) => {
-        todo!()
-        // $crate::action::KeyAction::WithModifier($crate::action::Action::LayerOn($x), $m)
+        $crate::action::KeyAction::Single($crate::action::Action::LayerOnWithModifier($x, $m))
     };
 }
 

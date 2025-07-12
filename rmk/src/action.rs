@@ -74,6 +74,8 @@ pub enum Action {
     KeyWithModifier(KeyCode, ModifierCombination),
     /// Activate a layer
     LayerOn(u8),
+    /// Activate a layer with modifier combination triggered.
+    LayerOnWithModifier(u8, ModifierCombination),
     /// Deactivate a layer
     LayerOff(u8),
     /// Toggle a layer
