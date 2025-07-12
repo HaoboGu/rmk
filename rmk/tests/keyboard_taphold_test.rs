@@ -8,6 +8,7 @@ fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
         enable_hrm: true,
         permissive_hold: true,
         chordal_hold: false,
+        hold_on_other_press: false,
         post_wait_time: Duration::from_millis(0),
         ..TapHoldConfig::default()
     }
@@ -18,6 +19,7 @@ fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
         enable_hrm: true,
         chordal_hold: true,
         permissive_hold: true,
+        hold_on_other_press: false,
         post_wait_time: Duration::from_millis(0),
         ..TapHoldConfig::default()
     }
@@ -278,6 +280,7 @@ mod tap_hold_test {
                 sequence: [
                     [2, 1, true, 10], // Tap th!(A,shift)
                     [2, 1, false, 50],
+                    // last release should record as tap
                     [2, 1, true, 100], // Hold th!(A,shift) after tapping
                     [2, 1, false, 400],
                 ],
@@ -385,17 +388,17 @@ mod tap_hold_test {
 
                 // rolling A , then ctrl d
                 sequence: [
-                    [2, 1, true, 200], // Press th!(A,shift)
+                    [2, 1, true, 20], // Press th!(A,shift)
                     [2, 8, true, 50],  // Press K
-                    [2, 1, false, 20], // Release A
                     [2, 8, false, 50],  //Release K
+                    [2, 1, false, 20], // Release A
 
                 ],
                 expected_reports: [
                     // chord hold , should become (shift x)
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [KC_LSHIFT, [kc_to_u8!(K), 0, 0, 0, 0, 0]],
-                    [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [0, [0, 0, 0, 0, 0, 0]],
 
                 ]
@@ -492,7 +495,7 @@ mod tap_hold_test {
 
                 // rolling A , then ctrl d
                 sequence: [
-                    [2, 1, true, 200], // Press th!(A,shift)
+                    [2, 1, true, 20], // Press th!(A,shift)
                     [2, 5, true, 50],  // Press g
                     [2, 1, false, 20], // Release A
                     [2, 5, false, 50],  // Release g
@@ -501,7 +504,7 @@ mod tap_hold_test {
                 expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                     [0, [kc_to_u8!(A),kc_to_u8!(G), 0, 0, 0, 0]],
-                    [0, [0 ,kc_to_u8!(G),  0, 0, 0, 0]],
+                    [0, [0 ,kc_to_u8!(G), 0, 0, 0, 0]],
                     [0, [0, 0, 0, 0, 0, 0]],
                 ]
             };
@@ -511,7 +514,7 @@ mod tap_hold_test {
         fn test_taphold_with_layer_tap() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                     ..BehaviorConfig::default()
                 }),
                 sequence: [
@@ -541,7 +544,7 @@ mod tap_hold_test {
         fn test_taphold_rolling_with_layer_tap() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
                     ..BehaviorConfig::default()
                 }),
                 sequence: [
@@ -582,20 +585,20 @@ mod tap_hold_test {
                     ..BehaviorConfig::default()
                 }),
                 sequence: [
-                    [2, 1, true, 200],  // Press th!(A,shift)
+                    [2, 1, true, 20],  // Press th!(A,shift)
                     [2, 2, true, 10],   // Press th!(S,lgui)
-                    [2, 8, true, 50],   // Press K
+                    [2, 8, true, 20],   // Press K
+                    [2, 8, false, 20],  // Release K should trigger permissive hold
                     [2, 1, false, 20],  // Release A
-                    [2, 8, false, 50],  // Release K
-                    [2, 2, false, 400], // Release S
+                    [2, 2, false, 20], // Release S
                 ],
                 expected_reports: [
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
                     [KC_LSHIFT| KC_LGUI, [0, 0, 0, 0, 0, 0]], // Hold LShift + LGui
                     [KC_LSHIFT| KC_LGUI, [kc_to_u8!(K), 0, 0, 0, 0, 0]], // Press K
-                    [KC_LGUI, [kc_to_u8!(K), 0, 0, 0, 0, 0]], // Release A
-                    [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release K
-                    [0, [0, 0, 0, 0, 0, 0]], // Release S
+                    [KC_LSHIFT|KC_LGUI , [0, 0, 0, 0, 0, 0]], // Release K
+                    [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release S
+                    [0, [0, 0, 0, 0, 0, 0]], // Release A
                 ]
             }
         }

@@ -8,14 +8,16 @@ use crate::event::KeyEvent;
 pub enum TapHoldDecision {
     // Hold timeout, trigger the hold action
     Timeout,
-    // Clean holding buffer
+    // Clean holding buffer and hold
     CleanBuffer,
     // Holding
     Hold,
     // Chordal holding
     ChordHold,
-    // Hold on pressing, reserved
-    HoldOnPress,
+    // A tap hold key is release as tap
+    BufferTapping,
+    // Hold on other key press
+    HoldOnOtherPress,
     // Skip key action processing and buffer key event
     Buffering,
     // Continue processing as normal key event
@@ -24,7 +26,10 @@ pub enum TapHoldDecision {
 
 impl TapHoldDecision {
     fn is_hold(&self) -> bool {
-        matches!(self, Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress)
+        matches!(
+            self,
+            Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnOtherPress
+        )
     }
 }
 
