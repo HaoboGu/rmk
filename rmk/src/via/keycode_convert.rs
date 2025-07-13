@@ -1,3 +1,5 @@
+#![cfg(feature = "vial")]
+
 use num_enum::FromPrimitive;
 
 use crate::action::{Action, KeyAction};
@@ -204,6 +206,8 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::keycode::{from_ascii, to_ascii};
 
     #[test]
     fn test_convert_via_keycode_to_key_action() {

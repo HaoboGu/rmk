@@ -1,5 +1,4 @@
 #[cfg(feature = "storage")]
-use embedded_storage_async::nor_flash::NorFlash;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
@@ -15,8 +14,11 @@ use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 #[cfg(feature = "matrix_tester")]
 use crate::matrix::MatrixState;
-#[cfg(feature = "storage")]
-use crate::{boot::reboot_keyboard, storage::Storage};
+#[cfg(feature = "vial")]
+use {
+    crate::{boot::reboot_keyboard, storage::Storage},
+    embedded_storage_async::nor_flash::NorFlash,
+};
 
 /// Keymap represents the stack of layers.
 ///
@@ -88,7 +90,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             matrix_state: MatrixState::new(),
         }
     }
-    #[cfg(feature = "storage")]
+    #[cfg(all(feature = "storage", feature = "vial"))]
     pub async fn new_from_storage<F: NorFlash>(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,

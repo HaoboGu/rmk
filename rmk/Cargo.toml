@@ -108,10 +108,13 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage", "vial_lock"]
+default = ["col2row", "defmt", "storage", "vial", "vial_lock"]
+
+## Enable for vial support
+vial = ["storage"]
 
 ## the matrix tester is optional to store matrix state
-matrix_tester = []
+matrix_tester = ["vial"]
 
 ## the vial lock is optional to lock the vial
 vial_lock = ["matrix_tester"]

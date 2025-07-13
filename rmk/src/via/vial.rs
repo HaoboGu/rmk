@@ -1,3 +1,5 @@
+#![cfg(feature = "vial")]
+
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};

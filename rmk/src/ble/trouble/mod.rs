@@ -1,8 +1,7 @@
-use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use battery_service::BleBatteryServer;
-use ble_server::{BleHidServer, BleViaServer, Server};
+use ble_server::{BleHidServer, Server};
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
@@ -22,13 +21,12 @@ use {
 };
 #[cfg(not(feature = "_no_usb"))]
 use {
-    crate::descriptor::{CompositeReport, KeyboardReport, ViaReport},
+    crate::descriptor::{CompositeReport, KeyboardReport},
     crate::light::UsbLedReader,
     crate::state::get_connection_type,
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    crate::via::UsbVialReaderWriter,
     embassy_futures::select::{Either, Either4, select4},
     embassy_usb::driver::Driver,
 };
@@ -40,10 +38,9 @@ use {
 };
 
 use crate::ble::led::BleLedReader;
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
-use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
@@ -51,6 +48,11 @@ use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
+
+#[cfg(feature = "vial")]
+use {crate::channel::VIAL_READ_CHANNEL, crate::keymap::KeyMap, ble_server::BleViaServer, core::cell::RefCell};
+#[cfg(all(not(feature = "_no_usb"), feature = "vial"))]
+use {crate::descriptor::ViaReport, crate::via::UsbVialReaderWriter};
 
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
@@ -112,7 +114,7 @@ pub(crate) async fn run_ble<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "vial")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -124,7 +126,7 @@ pub(crate) async fn run_ble<
     }
 
     // Initialize usb device and usb hid reader/writer
-    #[cfg(not(feature = "_no_usb"))]
+    #[cfg(all(not(feature = "_no_usb"), feature = "vial"))]
     let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
@@ -138,6 +140,14 @@ pub(crate) async fn run_ble<
             other_writer,
             vial_reader_writer,
         )
+    };
+    #[cfg(all(not(feature = "_no_usb"), not(feature = "vial")))]
+    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer) = {
+        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
+        let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
+        let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        let (keyboard_reader, keyboard_writer) = keyboard_reader_writer.split();
+        (usb_builder, keyboard_reader, keyboard_writer, other_writer)
     };
 
     // Optional usb logger initialization
@@ -283,13 +293,16 @@ pub(crate) async fn run_ble<
                                 // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
+                                    #[cfg(feature = "vial")]
                                     keymap,
                                     #[cfg(feature = "storage")]
                                     storage,
                                     USB_SUSPENDED.wait(),
                                     UsbLedReader::new(&mut keyboard_reader),
+                                    #[cfg(feature = "vial")]
                                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                                    #[cfg(feature = "vial")]
                                     rmk_config.vial_config,
                                 );
                                 select(usb_fut, profile_manager.update_profile()).await;
@@ -303,7 +316,9 @@ pub(crate) async fn run_ble<
                                     &server,
                                     &conn,
                                     &stack,
+                                    #[cfg(feature = "vial")]
                                     keymap,
+                                    #[cfg(feature = "vial")]
                                     &mut rmk_config,
                                     #[cfg(feature = "storage")]
                                     storage,
@@ -338,13 +353,16 @@ pub(crate) async fn run_ble<
                     ConnectionType::Ble => {
                         info!("BLE priority mode, running USB keyboard while advertising");
                         let usb_fut = run_keyboard(
+                            #[cfg(feature = "vial")]
                             keymap,
                             #[cfg(feature = "storage")]
                             storage,
                             core::future::pending::<()>(), // Run forever until BLE connected
                             UsbLedReader::new(&mut keyboard_reader),
+                            #[cfg(feature = "vial")]
                             UsbVialReaderWriter::new(&mut vial_reader_writer),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                            #[cfg(feature = "vial")]
                             rmk_config.vial_config,
                         );
                         match select3(adv_fut, usb_fut, profile_manager.update_profile()).await {
@@ -355,7 +373,9 @@ pub(crate) async fn run_ble<
                                         &server,
                                         &conn,
                                         &stack,
+                                        #[cfg(feature = "vial")]
                                         keymap,
+                                        #[cfg(feature = "vial")]
                                         &mut rmk_config,
                                         #[cfg(feature = "storage")]
                                         storage,
@@ -402,7 +422,9 @@ pub(crate) async fn run_ble<
                             &server,
                             &conn,
                             &stack,
+                            #[cfg(feature = "vial")]
                             keymap,
+                            #[cfg(feature = "vial")]
                             &mut rmk_config,
                             #[cfg(feature = "storage")]
                             storage,
@@ -476,8 +498,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
+    #[cfg(feature = "vial")]
     let output_via = server.via_service.output_via;
+    #[cfg(feature = "vial")]
     let input_via = server.via_service.input_via;
+    #[cfg(feature = "vial")]
     let via_control_point = server.via_service.hid_control_point;
     let battery_level = server.battery_service.level;
     let mouse = server.composite_service.mouse_report;
@@ -542,26 +567,28 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             } else {
                                 warn!("Wrong keyboard state data: {:?}", event.data());
                             }
-                        } else if event.handle() == output_via.handle {
-                            debug!("Got via packet: {:?}", event.data());
-                            if event.data().len() == 32 {
-                                let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
-                                VIAL_READ_CHANNEL.send(data).await;
-                            } else {
-                                warn!("Wrong via packet data: {:?}", event.data());
-                            }
                         } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                            || event.handle() == input_via.cccd_handle.expect("No CCCD for input via")
                             || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
                             || event.handle() == media.cccd_handle.expect("No CCCD for media report")
                             || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
                             || event.handle() == battery_level.cccd_handle.expect("No CCCD for battery level")
+                            || (|| {
+                                #[cfg(feature = "vial")]
+                                return event.handle() == input_via.cccd_handle.expect("No CCCD for input via");
+                                #[cfg(not(feature = "vial"))]
+                                return false;
+                            })()
                         {
                             // CCCD write event
                             cccd_updated = true;
                         } else if event.handle() == hid_control_point.handle
-                            || event.handle() == via_control_point.handle
                             || event.handle() == media_control_point.handle
+                            || (|| {
+                                #[cfg(feature = "vial")]
+                                return event.handle() == via_control_point.handle;
+                                #[cfg(not(feature = "vial"))]
+                                return false;
+                            })()
                         {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
                             #[cfg(feature = "split")]
@@ -575,7 +602,24 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                     CENTRAL_SLEEP.signal(false);
                                 }
                             }
+                        } else if (|| {
+                            #[cfg(feature = "vial")]
+                            return event.handle() == output_via.handle;
+                            #[cfg(not(feature = "vial"))]
+                            return false;
+                        })() {
+                            #[cfg(feature = "vial")]
+                            {
+                                debug!("Got via packet: {:?}", event.data());
+                                if event.data().len() == 32 {
+                                    let data = unsafe { *(event.data().as_ptr() as *const [u8; 32]) };
+                                    VIAL_READ_CHANNEL.send(data).await;
+                                } else {
+                                    warn!("Wrong via packet data: {:?}", event.data());
+                                }
+                            }
                         } else {
+                            #[cfg(not(feature = "vial"))]
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
@@ -782,11 +826,12 @@ async fn run_ble_keyboard<
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-    rmk_config: &'d mut RmkConfig<'static>,
+    #[cfg(feature = "vial")] keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "vial")] rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
     let ble_hid_server = BleHidServer::new(&server, &conn);
+    #[cfg(feature = "vial")]
     let ble_via_server = BleViaServer::new(&server, &conn);
     let ble_led_reader = BleLedReader {};
     let mut ble_battery_server = BleBatteryServer::new(&server, &conn);
@@ -820,13 +865,16 @@ async fn run_ble_keyboard<
     };
 
     run_keyboard(
+        #[cfg(feature = "vial")]
         keymap,
         #[cfg(feature = "storage")]
         storage,
         communication_task,
         ble_led_reader,
+        #[cfg(feature = "vial")]
         ble_via_server,
         ble_hid_server,
+        #[cfg(feature = "vial")]
         rmk_config.vial_config,
     )
     .await;

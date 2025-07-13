@@ -1,3 +1,5 @@
+#![cfg(feature = "vial")]
+
 use num_enum::{FromPrimitive, TryFromPrimitive};
 
 pub(crate) const VIA_PROTOCOL_VERSION: u16 = 0x0009;
