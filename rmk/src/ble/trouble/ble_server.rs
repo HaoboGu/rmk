@@ -4,19 +4,36 @@ use usbd_hid::descriptor::SerializedDescriptor;
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceInformationService;
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, VIAL_READ_CHANNEL};
-use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport, ViaReport};
-use crate::hid::{HidError, HidReaderTrait, HidWriterTrait, Report, RunnableHidWriter};
+use crate::channel::KEYBOARD_REPORT_CHANNEL;
+use crate::descriptor::{CompositeReport, CompositeReportType, KeyboardReport};
+use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
+#[cfg(feature = "vial")]
+use crate::{channel::VIAL_READ_CHANNEL, descriptor::ViaReport, hid::HidReaderTrait};
 
 // Used for saving the CCCD table
 pub(crate) const CCCD_TABLE_SIZE: usize = _CCCD_TABLE_SIZE;
 
 // GATT Server definition
+// NOTE: ideally we would conditionally add the `via_service` member, based on the
+// `vial` feature flag. But when doing that, rust still compiles the member as if
+// the flag was on, for some reason. I suspect it might have something to do with
+// the `gatt_server` macro, but I'm not sure. So we need 2 versions of the Server
+// struct, one with vial support, and one without.
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
     pub(crate) via_service: ViaService,
+    pub(crate) composite_service: CompositeService,
+    pub(crate) device_info_service: DeviceInformationService,
+}
+
+#[cfg(not(feature = "vial"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
     pub(crate) composite_service: CompositeService,
     pub(crate) device_info_service: DeviceInformationService,
 }
@@ -61,6 +78,7 @@ pub(crate) struct CompositeService {
 }
 
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
+#[cfg(feature = "vial")]
 pub(crate) struct ViaService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
     pub(crate) hid_info: [u8; 4],
@@ -149,12 +167,14 @@ impl<P: PacketPool> RunnableHidWriter for BleHidServer<'_, '_, '_, P> {
     }
 }
 
+#[cfg(feature = "vial")]
 pub(crate) struct BleViaServer<'stack, 'server, 'conn, P: PacketPool> {
     pub(crate) input_via: Characteristic<[u8; 32]>,
     pub(crate) output_via: Characteristic<[u8; 32]>,
     pub(crate) conn: &'conn GattConnection<'stack, 'server, P>,
 }
 
+#[cfg(feature = "vial")]
 impl<'stack, 'server, 'conn, P: PacketPool> BleViaServer<'stack, 'server, 'conn, P> {
     pub(crate) fn new(server: &Server, conn: &'conn GattConnection<'stack, 'server, P>) -> Self {
         Self {
@@ -165,6 +185,7 @@ impl<'stack, 'server, 'conn, P: PacketPool> BleViaServer<'stack, 'server, 'conn,
     }
 }
 
+#[cfg(feature = "vial")]
 impl<P: PacketPool> HidWriterTrait for BleViaServer<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
@@ -180,6 +201,7 @@ impl<P: PacketPool> HidWriterTrait for BleViaServer<'_, '_, '_, P> {
     }
 }
 
+#[cfg(feature = "vial")]
 impl<P: PacketPool> HidReaderTrait for BleViaServer<'_, '_, '_, P> {
     type ReportType = ViaReport;
 
