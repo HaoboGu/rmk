@@ -109,6 +109,11 @@ pub(crate) async fn run_ble<
     light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
 ) {
+    #[cfg(feature = "_nrf_ble")]
+    {
+        rmk_config.usb_config.serial_number = crate::hid::get_serial_number();
+    }
+
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
     let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
