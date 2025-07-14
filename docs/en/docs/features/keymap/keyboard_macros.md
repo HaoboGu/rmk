@@ -225,7 +225,7 @@ pub(crate) fn get_forks() -> ForksConfig {
                 k!(Macro0),
                 k!(Macro1),
                 StateBits::new_from(
-                    HidModifiers::new_from(false, true, false, false, false, false, false, false),
+                    HidModifiers::LSHIFT,
                     LedIndicator::default(),
                     HidMouseButtons::default(),
                 ),
