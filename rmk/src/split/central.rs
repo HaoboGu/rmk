@@ -132,11 +132,7 @@ impl<
                             );
 
                             self.scan_pos = (out_idx, in_idx);
-                            return Event::Key(KeyEvent {
-                                row,
-                                col,
-                                pressed: key_state.pressed,
-                            });
+                            return Event::Key(KeyEvent::key(col, row, key_state.pressed));
                         }
                         _ => (),
                     }
@@ -335,11 +331,7 @@ impl<
                                 );
 
                                 self.scan_pos = (row_idx, col_idx);
-                                return Event::Key(KeyEvent {
-                                    row,
-                                    col,
-                                    pressed: key_state.pressed,
-                                });
+                                return Event::Key(KeyEvent::key(col, row, key_state.pressed));
                             }
                             _ => (),
                         }

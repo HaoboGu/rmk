@@ -154,11 +154,7 @@ impl<
                         let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
                         self.scan_pos = (out_idx, in_idx);
-                        return Event::Key(KeyEvent {
-                            row: row as u8,
-                            col: col as u8,
-                            pressed: key_state.pressed,
-                        });
+                        return Event::Key(KeyEvent::key(col as u8, row as u8, key_state.pressed));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -262,10 +258,6 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
         }
         self.last = !self.last;
         // info!("Read event: {:?}", self.last);
-        Event::Key(KeyEvent {
-            row: 0,
-            col: 0,
-            pressed: self.last,
-        })
+        Event::Key(KeyEvent::key(0, 0, self.last))
     }
 }

@@ -79,11 +79,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
             for key in key_sequence {
                 Timer::after(Duration::from_millis(key.delay)).await;
                 KEY_EVENT_CHANNEL
-                    .send(KeyEvent {
-                        row: key.row,
-                        col: key.col,
-                        pressed: key.pressed,
-                    })
+                    .send(KeyEvent::key(key.col, key.row, key.pressed))
                     .await;
             }
 
