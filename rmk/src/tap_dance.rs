@@ -1,6 +1,13 @@
-use embassy_time::Duration;
+use embassy_time::{Duration, Instant};
 
 use crate::action::KeyAction;
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TapDanceState {
+    pub tap_count: u8,
+    pub last_tap_time: Option<Instant>,
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

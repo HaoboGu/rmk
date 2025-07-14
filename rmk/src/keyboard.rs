@@ -19,7 +19,7 @@ use crate::action::{Action, KeyAction};
 use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::{KeyboardReport, ViaReport};
-use crate::event::KeyEvent;
+use crate::event::{KeyEvent, KeyId};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -140,7 +140,12 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
     /// Record the timestamp of last release, (event, is_modifier, timestamp)
+    /// Now it's used in tap-hold prior-idle-time check
     last_release: (KeyEvent, bool, Option<Instant>),
+
+    /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
+    /// Used in repeat-key
+    last_key_code: KeyCode,
 
     /// Record whether the keyboard is in hold-after-tap state
     hold_after_tap: [Option<KeyEvent>; 6],
@@ -168,8 +173,9 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// The held keys for the keyboard hid report, except the modifiers
     held_keycodes: [KeyCode; 6],
 
-    /// Registered key position
-    registered_keys: [Option<(u8, u8)>; 6],
+    /// Registered key position.
+    /// This is still needed besides `held_keycodes` because multiple keys with same keycode can be registered.
+    registered_keys: [Option<KeyId>; 6],
 
     /// Internal mouse report buf
     mouse_report: MouseReport,
@@ -182,9 +188,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Via report
     via_report: ViaReport,
-
-    /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
-    last_key_code: KeyCode,
 
     /// Mouse acceleration state
     mouse_accel: u8,
@@ -206,15 +209,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Keyboard {
             keymap,
             timer: [[None; ROW]; COL],
-            last_release: (
-                KeyEvent {
-                    row: 0,
-                    col: 0,
-                    pressed: false,
-                },
-                false,
-                None,
-            ),
+            last_release: (KeyEvent::key(0, 0, false), false, None),
             hold_after_tap: Default::default(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
@@ -339,7 +334,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_inner(&mut self, key_event: KeyEvent) -> LoopState {
         // Matrix should process key pressed event first, record the timestamp of key changes
         if key_event.pressed {
-            self.timer[key_event.col as usize][key_event.row as usize] = Some(Instant::now());
+            self.timer[key_event.col() as usize][key_event.row() as usize] = Some(Instant::now());
         }
 
         // Update activity time for BLE split central sleep management
@@ -792,8 +787,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn release_tap_hold_key(&mut self, key_event: KeyEvent) {
         debug!("[TAP-HOLD] On Releasing: tap-hold key event {:?}", key_event);
 
-        let col = key_event.col as usize;
-        let row = key_event.row as usize;
+        let col = key_event.col() as usize;
+        let row = key_event.row() as usize;
 
         trace!("[TAP-HOLD] current buffer queue to process {:?}", self.holding_buffer);
 
@@ -959,7 +954,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Ignore hold within pre idle time for quick typing
                 if key_event.pressed {
                     if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
-                        && !(key_event.row == self.last_release.0.row && key_event.col == self.last_release.0.col)
+                        && !(key_event.id == self.last_release.0.id)
                     {
                         // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
@@ -973,8 +968,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         );
                         return;
                     } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
-                        && key_event.row == self.last_release.0.row
-                        && key_event.col == self.last_release.0.col
+                        && key_event.id == self.last_release.0.id
                     {
                         // Quick tapping to repeat
                         debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
@@ -1001,7 +995,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // Find holding_after_tap key_event
             if let Some(index) = self.hold_after_tap.iter().position(|&k| {
                 if let Some(ke) = k {
-                    return ke.row == key_event.row && ke.col == key_event.col;
+                    return ke.id == key_event.id;
                 }
                 false
             }) {
@@ -1475,7 +1469,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let len = KEY_EVENT_CHANNEL.len();
                 for _ in 0..len {
                     let queued_event = KEY_EVENT_CHANNEL.receive().await;
-                    if queued_event.col != key_event.col || queued_event.row != key_event.row {
+                    if queued_event.id != key_event.id {
                         KEY_EVENT_CHANNEL.send(queued_event).await;
                     }
                 }
@@ -1717,7 +1711,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// This function forces all buffered keys to resolve immediately, ignoring their timeouts.
     async fn fire_holding_keys(&mut self, reason: TapHoldDecision, key_event: KeyEvent) {
         // Press time of current key
-        let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col as usize][key_event.row as usize] {
+        let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col() as usize][key_event.row() as usize] {
             inst
         } else {
             // Fire all
@@ -1732,9 +1726,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 TapHoldDecision::Timeout => {
                     // A tap-hold key is timeout, flush current timeout keys and all other tapped normal keys
                     if e.state() == Initial {
-                        if (e.key_event.col == key_event.col && e.key_event.row == key_event.row)
-                            || (!matches!(e.action, KeyAction::TapHold(..)))
-                        {
+                        if e.key_event.id == key_event.id || (!matches!(e.action, KeyAction::TapHold(..))) {
                             Some(pos)
                         } else {
                             // Exclude other tap-hold keys
@@ -1771,7 +1763,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if let Some(hold_key) = self.holding_buffer.get(pos) {
                 match hold_key.action {
                     KeyAction::TapHold(tap_action, hold_action) => {
-                        if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
+                        if hold_key.key_event.id == key_event.id {
                             // The current tap-hold key updating
                             let action = if reason == TapHoldDecision::Timeout {
                                 hold_action
@@ -1809,7 +1801,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if let Some(hold_key) = self.holding_buffer.get_mut(pos) {
                 match hold_key.action {
                     KeyAction::TapHold(tap_action, hold_action) => {
-                        if hold_key.key_event.col == key_event.col && hold_key.key_event.row == key_event.row {
+                        if hold_key.key_event.id == key_event.id {
                             // This is the key that triggered the flush; mark as PostTap (tap resolved).
                             if reason == TapHoldDecision::Timeout {
                                 debug!("Current Key {:?} mark {:?}", hold_key.key_event, hold_action);
@@ -1856,7 +1848,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// When a key is pressed, add it to the holding buffer,
     /// if the current key action is a tap-hold, or the evaluation of current key action should be deferred by tap-hold.
     fn add_holding_key_to_buffer(&mut self, key_event: KeyEvent, action: KeyAction, state: TapHoldState) {
-        let pressed_time = self.timer[key_event.col as usize][key_event.row as usize].unwrap_or(Instant::now());
+        let pressed_time = self.timer[key_event.col() as usize][key_event.row() as usize].unwrap_or(Instant::now());
         let new_item = HoldingKey {
             state,
             key_event,
@@ -1882,11 +1874,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// intended for use with tap-hold keys. Returns the holding key if a matching key is found,
     /// otherwise returns None.
     fn remove_holding_key_from_buffer(&mut self, key_event: KeyEvent) -> Option<HoldingKey> {
-        if let Some(i) = self
-            .holding_buffer
-            .iter()
-            .position(|e| e.key_event.row == key_event.row && e.key_event.col == key_event.col)
-        {
+        if let Some(i) = self.holding_buffer.iter().position(|e| e.key_event.id == key_event.id) {
             Some(self.holding_buffer.swap_remove(i))
         } else {
             None
@@ -1913,8 +1901,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn register_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
-            if let Some((row, col)) = k {
-                if key_event.row == *row && key_event.col == *col {
+            if let Some(id) = k {
+                if key_event.id == *id {
                     return Some(i);
                 }
             }
@@ -1924,12 +1912,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // If the slot is found, update the key in the slot
         if let Some(index) = slot {
             self.held_keycodes[index] = key;
-            self.registered_keys[index] = Some((key_event.row, key_event.col));
+            self.registered_keys[index] = Some(key_event.id);
         } else {
             // Otherwise, find the first free slot
             if let Some(index) = self.held_keycodes.iter().position(|&k| k == KeyCode::No) {
                 self.held_keycodes[index] = key;
-                self.registered_keys[index] = Some((key_event.row, key_event.col));
+                self.registered_keys[index] = Some(key_event.id);
             }
         }
     }
@@ -1938,8 +1926,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn unregister_keycode(&mut self, key: KeyCode, key_event: KeyEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
-            if let Some((row, col)) = k {
-                if key_event.row == *row && key_event.col == *col {
+            if let Some(id) = k {
+                if key_event.id == *id {
                     return Some(i);
                 }
             }
@@ -2229,7 +2217,7 @@ mod test {
     }
 
     fn key_event(row: u8, col: u8, pressed: bool) -> KeyEvent {
-        KeyEvent { row, col, pressed }
+        KeyEvent::key(col, row, pressed)
     }
 
     rusty_fork_test! {

@@ -88,12 +88,112 @@ pub enum Axis {
     // .. More is allowed
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyEvent {
+    pub id: KeyId,
+    pub pressed: bool,
+}
+
+impl KeyEvent {
+    pub fn key(col: u8, row: u8, pressed: bool) -> Self {
+        Self {
+            id: KeyId::Key(KeyPos { row, col }),
+            pressed,
+        }
+    }
+
+    pub fn rotary_encoder(id: u8, direction: Direction) -> Self {
+        Self {
+            id: KeyId::RotaryEncoder(id, direction),
+            pressed: true,
+        }
+    }
+}
+
+impl KeyEvent {
+    /// Get the row if this is a Key variant, otherwise panic
+    pub fn row(&self) -> u8 {
+        self.id.row().expect("KeyEvent::row() called on non-Key variant")
+    }
+
+    /// Get the column if this is a Key variant, otherwise panic
+    pub fn col(&self) -> u8 {
+        self.id.col().expect("KeyEvent::col() called on non-Key variant")
+    }
+
+    /// Check if this is a Key variant
+    pub fn is_key(&self) -> bool {
+        self.id.is_key()
+    }
+
+    /// Check if this is a RotaryEncoder variant
+    pub fn is_rotary_encoder(&self) -> bool {
+        self.id.is_rotary_encoder()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyPos {
     pub row: u8,
     pub col: u8,
-    pub pressed: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum KeyId {
+    Key(KeyPos),
+    RotaryEncoder(u8, Direction),
+}
+
+impl From<KeyId> for usize {
+    /// Convert KeyId to a unique usize representation
+    ///
+    /// Encoding scheme:
+    /// - Key(KeyPos): 0..65536 (row * 256 + col)
+    /// - RotaryEncoder(u8, Direction): 65536.. (65536 + encoder_id * 3 + direction)
+    fn from(key_id: KeyId) -> Self {
+        match key_id {
+            KeyId::Key(KeyPos { row, col }) => (row as usize) * 256 + (col as usize),
+            KeyId::RotaryEncoder(encoder_id, direction) => {
+                let direction_value = match direction {
+                    Direction::Clockwise => 0,
+                    Direction::CounterClockwise => 1,
+                    Direction::None => 2,
+                };
+                65536 + (encoder_id as usize) * 3 + direction_value
+            }
+        }
+    }
+}
+
+impl KeyId {
+    /// Get the row if this is a Key variant, otherwise return None
+    pub fn row(&self) -> Option<u8> {
+        match self {
+            KeyId::Key(KeyPos { row, .. }) => Some(*row),
+            KeyId::RotaryEncoder(_, _) => None,
+        }
+    }
+
+    /// Get the column if this is a Key variant, otherwise return None
+    pub fn col(&self) -> Option<u8> {
+        match self {
+            KeyId::Key(KeyPos { col, .. }) => Some(*col),
+            KeyId::RotaryEncoder(_, _) => None,
+        }
+    }
+
+    /// Check if this is a Key variant
+    pub fn is_key(&self) -> bool {
+        matches!(self, KeyId::Key(_))
+    }
+
+    /// Check if this is a RotaryEncoder variant
+    pub fn is_rotary_encoder(&self) -> bool {
+        matches!(self, KeyId::RotaryEncoder(_, _))
+    }
 }
 
 /// Event for controllers

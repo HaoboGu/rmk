@@ -98,11 +98,7 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            return Event::Key(KeyEvent {
-                                row: row_idx as u8,
-                                col: col_idx as u8,
-                                pressed: key_state.pressed,
-                            });
+                            return Event::Key(KeyEvent::key(col_idx as u8, row_idx as u8, key_state.pressed));
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start
