@@ -30,6 +30,7 @@ embassy-nrf = { version = "0.3.1", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
+    "nfc-pins-as-gpio",
     "gpiote",
     "unstable-pac",
     "time",
