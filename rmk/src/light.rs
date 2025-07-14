@@ -10,9 +10,9 @@ use crate::config::{LightConfig, LightPinConfig};
 use crate::hid::{HidError, HidReaderTrait};
 use crate::keyboard::LOCK_LED_STATES;
 
-#[bitfield(u8)]
+#[bitfield(u8, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct LedIndicator {
     #[bits(1)]
     num_lock: bool,
