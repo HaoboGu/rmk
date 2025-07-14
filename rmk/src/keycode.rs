@@ -40,6 +40,13 @@ impl BitOr for ModifierCombination {
 }
 
 impl ModifierCombination {
+    pub const CTRL: Self = Self::new().with_ctrl(true);
+    pub const SHIFT: Self = Self::new().with_shift(true);
+    pub const ALT: Self = Self::new().with_alt(true);
+    pub const GUI: Self = Self::new().with_gui(true);
+
+    pub const RIGHT: Self = Self::new().with_right(true);
+
     pub const fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
         ModifierCombination::new()
             .with_right(right)
