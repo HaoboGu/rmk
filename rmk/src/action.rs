@@ -43,16 +43,6 @@ impl EncoderAction {
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
-///
-/// Each `KeyAction` can be serialized to a u16 action code. There are 2 patterns of action code's bit-field composition of `KeyAction`:
-///
-/// - KeyActionType(8bits) + BasicAction(8bits)
-///
-/// - KeyActionType(4bits) + Action(12bits)
-///
-/// The `BasicAction` represents only a single key action of keycodes defined in HID spec. The `Action` represents all actions defined in the following `Action` enum, including modifier combination and layer switch.
-///
-/// The KeyActionType bits varies between different types of a KeyAction, see docs of each enum variant.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyAction {
@@ -66,73 +56,33 @@ pub enum KeyAction {
     Tap(Action),
     /// Keep current key pressed until the next key is triggered.
     OneShot(Action),
-    /// Action with the modifier combination triggered.
-    WithModifier(Action, ModifierCombination),
     /// General tap/hold action: (tap_action, hold_action)
     TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
 }
 
-impl KeyAction {
-    /// Convert a `KeyAction` to corresponding key action code.
-    pub(crate) fn to_key_action_code(self) -> u16 {
-        match self {
-            KeyAction::No => 0x0000,
-            KeyAction::Transparent => 0x0001,
-            KeyAction::Single(a) => a.to_action_code(),
-            KeyAction::Tap(a) => 0x0001 | a.to_action_code(),
-            KeyAction::OneShot(a) => 0x0010 | a.to_action_code(),
-            KeyAction::WithModifier(a, m) => 0x4000 | ((m.into_bits() as u16) << 8) | a.to_basic_action_code(),
-            KeyAction::TapHold(tap, hold) => match hold {
-                Action::LayerOn(layer) => {
-                    if layer < 16 {
-                        0x3000 | ((layer as u16) << 15) | tap.to_basic_action_code()
-                    } else {
-                        error!("LayerTapHold supports only layer 0~15, got {}", layer);
-                        0x0000
-                    }
-                }
-                Action::Modifier(m) => 0x6000 | ((m.into_bits() as u16) << 8) | tap.to_basic_action_code(),
-                _ => 0x8000 | (hold.to_basic_action_code() << 15) | tap.to_basic_action_code(),
-            },
-            KeyAction::TapDance(index) => 0x5700 | (index as u16),
-        }
-    }
-}
-
 /// A single basic action that a keyboard can execute.
-/// An Action can be represented in 12 bits, aka 0x000 ~ 0xFFF
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Action {
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
-    ///
-    /// Uses 0x000 ~ 0xCFF
     Key(KeyCode),
     /// Modifier Combination, used for oneshot keyaction.
-    ///
-    /// Uses 0xE00 ~ 0xE1F. Serialized as 1110|000|modifier(5bits)
     Modifier(ModifierCombination),
+    /// Key stroke with modifier combination triggered.
+    KeyWithModifier(KeyCode, ModifierCombination),
     /// Activate a layer
-    ///
-    /// Uses 0xE20 ~ 0xE3F. Serialized as 1110|001|layer_num(5bits)
     LayerOn(u8),
+    /// Activate a layer with modifier combination triggered.
+    LayerOnWithModifier(u8, ModifierCombination),
     /// Deactivate a layer
-    ///
-    /// Uses 0xE40 ~ 0xE5F. Serialized as 1110|010|layer_num(5bits)
     LayerOff(u8),
     /// Toggle a layer
-    ///
-    /// Uses 0xE60 ~ 0xE7F. Serialized as 1110|011|layer_num(5bits)
     LayerToggle(u8),
     /// Set default layer
-    ///
-    /// Uses 0xE80 ~ 0xE9F. Serialized as 1110|100|layer_num(5bits)
     DefaultLayer(u8),
     /// Activate a layer and deactivate all other layers(except default layer)
-    ///
-    /// Uses 0xEA0 ~ 0xEBF. Serialized as 1110|101|layer_num(5bits)
     LayerToggleOnly(u8),
     /// Triggers the Macro at the 'index'.
     /// this is an alternative trigger to
@@ -140,37 +90,5 @@ pub enum Action {
     /// e.g. `Action::TriggerMacro(6)`` will trigger the same Macro as `Action::Key(KeyCode::Macro6)`
     /// the main purpose for this enum variant is to easily extend to more than 32 macros (to 256)
     /// without introducing new Keycodes.
-    ///
-    /// Uses 0xF00 ~ 0xFFF. Serialized as 1111|macro_idx(8bits)
     TriggerMacro(u8),
-}
-
-impl Action {
-    /// Convert an `Action` to 12-bit action code
-    pub(crate) fn to_action_code(self) -> u16 {
-        match self {
-            Action::Key(k) => k as u16,
-            Action::Modifier(m) => 0xE00 | (m.into_bits() as u16),
-            Action::LayerOn(layer) => 0xE20 | (layer as u16),
-            Action::LayerOff(layer) => 0xE40 | (layer as u16),
-            Action::LayerToggle(layer) => 0xE60 | (layer as u16),
-            Action::DefaultLayer(layer) => 0xE80 | (layer as u16),
-            Action::LayerToggleOnly(layer) => 0xEA0 | (layer as u16),
-            Action::TriggerMacro(macro_idx) => 0xF00 | (macro_idx as u16),
-        }
-    }
-
-    /// Convert an `Action` to 8-bit basic action code, only applicable for `Key(BasicKeyCode)`
-    pub(crate) fn to_basic_action_code(self) -> u16 {
-        match self {
-            Action::Key(kc) => {
-                if kc.is_basic() {
-                    kc as u16
-                } else {
-                    0
-                }
-            }
-            _ => 0,
-        }
-    }
 }

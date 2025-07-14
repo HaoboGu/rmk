@@ -60,13 +60,6 @@ impl HoldingKey {
     }
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapDanceState {
-    pub tap_count: u8,
-    pub last_tap_time: Option<Instant>,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldState {
@@ -110,9 +103,9 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
     // is the key event in the same side of current chord hold
     pub fn is_same(&self, key_event: KeyEvent) -> bool {
         if self.is_vertical_chord {
-            self.is_same_hand(key_event.row as usize)
+            self.is_same_hand(key_event.row() as usize)
         } else {
-            self.is_same_hand(key_event.col as usize)
+            self.is_same_hand(key_event.col() as usize)
         }
     }
 
@@ -128,7 +121,7 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
     /// the chordal hold will be determined by user configuration in future.
     pub(crate) fn create(event: KeyEvent, rows: usize, cols: usize) -> Self {
         if cols > rows {
-            if (event.col as usize) < (cols / 2) {
+            if (event.col() as usize) < (cols / 2) {
                 ChordHoldState {
                     is_vertical_chord: false,
                     hand: ChordHoldHand::Left,
@@ -139,7 +132,7 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
                     hand: ChordHoldHand::Right,
                 }
             }
-        } else if (event.row as usize) < (rows / 2) {
+        } else if (event.row() as usize) < (rows / 2) {
             ChordHoldState {
                 is_vertical_chord: true,
                 hand: ChordHoldHand::Left,
@@ -163,55 +156,19 @@ mod tests {
     #[test]
     fn test_chordal_hold() {
         assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 0,
-                    col: 0,
-                    pressed: true,
-                },
-                3,
-                6
-            )
-            .hand,
+            ChordHoldState::<6>::create(KeyEvent::key(0, 0, true), 3, 6).hand,
             ChordHoldHand::Left
         );
         assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 3,
-                    col: 3,
-                    pressed: true,
-                },
-                4,
-                6
-            )
-            .hand,
+            ChordHoldState::<6>::create(KeyEvent::key(3, 3, true), 4, 6).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 3,
-                    col: 3,
-                    pressed: true,
-                },
-                6,
-                4
-            )
-            .hand,
+            ChordHoldState::<6>::create(KeyEvent::key(3, 3, true), 6, 4).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(
-                KeyEvent {
-                    row: 6,
-                    col: 3,
-                    pressed: true,
-                },
-                5,
-                3
-            )
-            .hand,
+            ChordHoldState::<6>::create(KeyEvent::key(3, 6, true), 5, 3).hand,
             ChordHoldHand::Right
         );
 
@@ -223,13 +180,7 @@ mod tests {
         let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
         let result: Vec<_, 6> = vec
             .iter()
-            .map(|col| {
-                chord.is_same(KeyEvent {
-                    row: 0,
-                    col: 0 + col,
-                    pressed: true,
-                })
-            })
+            .map(|col| chord.is_same(KeyEvent::key(*col, 0, true)))
             .collect();
 
         let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();

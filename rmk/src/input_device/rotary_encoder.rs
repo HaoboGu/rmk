@@ -32,7 +32,7 @@ pub struct RotaryEncoder<A, B, P> {
 }
 
 /// The encoder direction is either `Clockwise`, `CounterClockwise`, or `None`
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     /// A clockwise turn

@@ -10,9 +10,9 @@ use crate::config::{LightConfig, LightPinConfig};
 use crate::hid::{HidError, HidReaderTrait};
 use crate::keyboard::LOCK_LED_STATES;
 
-#[bitfield(u8)]
+#[bitfield(u8, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct LedIndicator {
     #[bits(1)]
     num_lock: bool,
@@ -61,6 +61,12 @@ impl BitOrAssign for LedIndicator {
 }
 
 impl LedIndicator {
+    pub const NUM_LOCK: Self = Self::new().with_num_lock(true);
+    pub const CAPS_LOCK: Self = Self::new().with_caps_lock(true);
+    pub const SCROLL_LOCK: Self = Self::new().with_scroll_lock(true);
+    pub const COMPOSE: Self = Self::new().with_compose(true);
+    pub const KANA: Self = Self::new().with_kana(true);
+
     pub const fn new_from(num_lock: bool, caps_lock: bool, scroll_lock: bool, compose: bool, kana: bool) -> Self {
         Self::new()
             .with_num_lock(num_lock)

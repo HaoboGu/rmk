@@ -160,18 +160,15 @@ impl<
             match self.transceiver.read().await {
                 Ok(SplitMessage::Key(e)) => {
                     // Verify the row/col
-                    if e.row as usize > ROW || e.col as usize > COL {
-                        error!("Invalid peripheral row/col: {} {}", e.row, e.col);
+                    if e.row() as usize > ROW || e.col() as usize > COL {
+                        error!("Invalid peripheral row/col: {} {}", e.row(), e.col());
                         continue;
                     }
 
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         // Only when the connection is established, send the key event.
-                        let adjusted_key_event = KeyEvent {
-                            row: e.row + ROW_OFFSET as u8,
-                            col: e.col + COL_OFFSET as u8,
-                            pressed: e.pressed,
-                        };
+                        let adjusted_key_event =
+                            KeyEvent::key(e.col() + COL_OFFSET as u8, e.row() + ROW_OFFSET as u8, e.pressed);
                         return Event::Key(adjusted_key_event);
                     } else {
                         warn!("Key event from peripheral is ignored because the connection is not established.");
