@@ -2,9 +2,9 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct HidModifiers {
     #[bits(1)]
     pub(crate) left_ctrl: bool,
@@ -79,9 +79,9 @@ impl HidModifiers {
     }
 }
 
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct HidMouseButtons {
     #[bits(1)]
     pub(crate) button1: bool, //left
