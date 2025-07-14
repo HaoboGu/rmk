@@ -156,7 +156,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
 
-    /// The modifiers coming from (last) KeyAction::WithModifier
+    /// The modifiers coming from (last) Action::KeyWithModifier
     with_modifiers: HidModifiers,
 
     /// Macro text typing state (affects the effective modifiers)
@@ -523,7 +523,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Process Single key action: {:?}, {:?}", a, key_event);
                 self.process_key_action_normal(a, key_event).await;
             }
-            KeyAction::WithModifier(a, m) => self.process_key_action_with_modifier(a, m, key_event).await,
             KeyAction::Tap(a) => self.process_key_action_tap(a, key_event).await,
             KeyAction::TapHold(tap_action, hold_action) => {
                 self.process_key_action_tap_hold(tap_action, hold_action, key_event)
@@ -606,7 +605,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     combined_suppress |= suppress;
 
-                    // Suppress the previously activated KeyAction::WithModifiers
+                    // Suppress the previously activated Action::KeyWithModifiers
                     // (even if they held for a long time, a new keypress arrived
                     // since then, which breaks the key repeat, so losing their
                     // effect likely will not cause problem...)
@@ -883,25 +882,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.update_osl(key_event);
             }
             Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, key_event).await,
+            Action::KeyWithModifier(key_code, modifiers) => {
+                if key_event.pressed {
+                    // These modifiers will be combined into the hid report, so
+                    // they will be "pressed" the same time as the key (in same hid report)
+                    self.with_modifiers |= modifiers.to_hid_modifiers();
+                } else {
+                    // The modifiers will not be part of the hid report, so
+                    // they will be "released" the same time as the key (in same hid report)
+                    self.with_modifiers &= !(modifiers.to_hid_modifiers());
+                }
+                self.process_action_key(key_code, key_event).await
+            }
+            Action::LayerOnWithModifier(layer_num, modifiers) => {
+                if key_event.pressed {
+                    // These modifiers will be combined into the hid report, so
+                    // they will be "pressed" the same time as the key (in same hid report)
+                    self.with_modifiers |= modifiers.to_hid_modifiers();
+                } else {
+                    // The modifiers will not be part of the hid report, so
+                    // they will be "released" the same time as the key (in same hid report)
+                    self.with_modifiers &= !(modifiers.to_hid_modifiers());
+                }
+                self.process_action_layer_switch(layer_num, key_event)
+            }
         }
-    }
-
-    async fn process_key_action_with_modifier(
-        &mut self,
-        action: Action,
-        modifiers: ModifierCombination,
-        key_event: KeyEvent,
-    ) {
-        if key_event.pressed {
-            // These modifiers will be combined into the hid report, so
-            // they will be "pressed" the same time as the key (in same hid report)
-            self.with_modifiers |= modifiers.to_hid_modifiers();
-        } else {
-            // The modifiers will not be part of the hid report, so
-            // they will be "released" the same time as the key (in same hid report)
-            self.with_modifiers &= !(modifiers.to_hid_modifiers());
-        }
-        self.process_key_action_normal(action, key_event).await;
     }
 
     /// Tap action, send a key when the key is pressed, then release the key.
@@ -1197,7 +1202,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - text macro related modifier suppressions + capitalization
     /// - registered (held) modifiers keys
     /// - one-shot modifiers
-    /// - effect of KeyAction::WithModifiers (while they are pressed)
+    /// - effect of Action::KeyWithModifiers (while they are pressed)
     /// - possible fork related modifier suppressions
     pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
         // Text typing macro should not be affected by any modifiers,
@@ -1227,7 +1232,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Execute the remaining suppressions
         result &= !fork_suppress;
 
-        // Apply the modifiers from KeyAction::WithModifiers
+        // Apply the modifiers from Action::KeyWithModifiers
         // the suppression effect of forks should not apply on these
         result |= self.with_modifiers;
 
@@ -2440,9 +2445,9 @@ mod test {
                 let fork1 = Fork {
                     trigger: KeyAction::Single(Action::Key(KeyCode::Dot)),
                     negative_output: KeyAction::Single(Action::Key(KeyCode::Dot)),
-                    positive_output: KeyAction::WithModifier(
-                        Action::Key(KeyCode::Semicolon),
-                        ModifierCombination::default().with_shift(true),
+                    positive_output: KeyAction::Single(
+                        Action::KeyWithModifier(KeyCode::Semicolon,
+                        ModifierCombination::default().with_shift(true),)
                     ),
                     match_any: StateBits {
                         modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),

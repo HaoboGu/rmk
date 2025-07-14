@@ -306,7 +306,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod test {
     use super::{Combo, _reorder_combos};
-    use crate::action::KeyAction;
+    use crate::action::{Action, KeyAction};
     use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
     use crate::keycode::KeyCode;
@@ -374,17 +374,26 @@ mod test {
         _reorder_combos(&mut combos);
         fill_vec(&mut combos);
 
-        let result: Vec<u16> = combos
+        let result: Vec<Option<Action>> = combos
             .iter()
             .enumerate()
             .map(|(_, c)| match c.output {
-                KeyAction::Single(k) => k.to_action_code(),
-                _ => KeyCode::No as u16,
+                KeyAction::Single(a) => Some(a),
+                _ => None,
             })
             .collect();
         assert_eq!(
             result,
-            vec![KeyCode::Z as u16, KeyCode::Y as u16, KeyCode::X as u16, 0, 0, 0, 0, 0]
+            vec![
+                Some(Action::Key(KeyCode::Z)),
+                Some(Action::Key(KeyCode::Y)),
+                Some(Action::Key(KeyCode::X)),
+                None,
+                None,
+                None,
+                None,
+                None
+            ]
         );
     }
 }
