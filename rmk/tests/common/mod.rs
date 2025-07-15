@@ -13,7 +13,7 @@ use rmk::action::KeyAction;
 use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
-use rmk::event::{Event, KeyboardEvent};
+use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
