@@ -72,7 +72,7 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
       - name: Install espup
-        run: cargo binstall espup -y
+        run: cargo binstall espup --locked -y
       - name: Install esp toolchain
         run: espup install
       - name: Build
