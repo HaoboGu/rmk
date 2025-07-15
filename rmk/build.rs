@@ -14,7 +14,7 @@ fn main() {
     common::set_target_cfgs(&mut cfgs);
 
     // Ensure build.rs is re-run if files change
-    // println!("cargo:rerun-if-changed=.git/HEAD");
+    println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
@@ -45,6 +45,7 @@ fn main() {
 fn get_constants_str(constants: RmkConstantsConfig) -> String {
     // Compute build hash according to the latest git commit
     let build_hash = compute_build_hash();
+    eprintln!("BUILD_HASH: {build_hash:#010x}");
     // Add other constants
     [
         const_declaration!(pub(crate) MOUSE_KEY_INTERVAL = constants.mouse_key_interval),
