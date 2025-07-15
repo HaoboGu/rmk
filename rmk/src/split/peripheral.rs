@@ -10,14 +10,11 @@ use {crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash, troub
 
 use super::driver::{SplitReader, SplitWriter};
 use super::SplitMessage;
+use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL};
 #[cfg(not(feature = "_ble"))]
 use crate::split::serial::SerialSplitDriver;
 use crate::state::ConnectionState;
 use crate::CONNECTION_STATE;
-use crate::{
-    channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL},
-    event::Event,
-};
 
 /// Run the split peripheral service.
 ///
@@ -111,9 +108,7 @@ impl<S: SplitWriter + SplitReader> SplitPeripheral<S> {
                     // Only send the key event if the connection is established
                     if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
                         debug!("Writing split key event to central");
-                        if let Event::Key(key_event) = e {
-                            self.split_driver.write(&SplitMessage::Key(key_event)).await.ok();
-                        }
+                        self.split_driver.write(&SplitMessage::Key(e)).await.ok();
                     } else {
                         debug!("Connection not established, skipping key event");
                     }

@@ -1,7 +1,7 @@
 use heapless::Vec;
 
 use crate::action::KeyAction;
-use crate::event::KeyEvent;
+use crate::event::KeyboardEvent;
 use crate::COMBO_MAX_LENGTH;
 
 #[derive(Clone, Debug)]
@@ -38,7 +38,7 @@ impl Combo {
 
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
-    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
+    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
             // Ignore combo that without actions
             return false;
