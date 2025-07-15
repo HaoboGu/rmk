@@ -31,7 +31,7 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
-use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
+use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder};
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
@@ -211,8 +211,6 @@ async fn main(spawner: Spawner) {
     );
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
-    let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
-
     // Initialize the light controller
     let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
@@ -221,7 +219,7 @@ async fn main(spawner: Spawner) {
             (matrix, encoder, adc_device) => EVENT_CHANNEL,
         ),
         run_processor_chain! {
-            EVENT_CHANNEL => [encoder_processor, batt_proc],
+            EVENT_CHANNEL => [batt_proc],
         },
         keyboard.run(), // Keyboard is special
         run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),

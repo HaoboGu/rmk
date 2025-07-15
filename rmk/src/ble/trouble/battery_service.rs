@@ -3,9 +3,8 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use embassy_time::Timer;
 use trouble_host::prelude::*;
 
-use crate::ble::trouble::SLEEPING_STATE;
-
 use super::ble_server::Server;
+use crate::ble::trouble::SLEEPING_STATE;
 
 /// Battery level global value.
 /// The range of battery level is 0-100, 255 > level > 100 means the battery is charging. 255 means the battery level is not available.

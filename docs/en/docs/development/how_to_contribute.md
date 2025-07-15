@@ -34,11 +34,11 @@ Generally, there are 4-5 running tasks in the meanwhile, according to the user's
 
 - `FLASH_CHANNEL`: a multi-sender, single-receiver channel. There are many tasks send the `FlashOperationMessage`, such as BLE task(which saves bond info), vial task(which saves key), etc.
 - `KEY_EVENT_CHANNEL`: a multi-sender, single-receiver channel. The sender can be a matrix task which scans the key matrix or a split peripheral manager which receives key event from split peripheral. The receiver, i.e. keyboard task, receives the key event and processes the key
-- `EVENT_CHANNEL`: a multi-sender, single-receiver channel. It's used for all events from input devices except `KeyEvent`
+- `EVENT_CHANNEL`: a multi-sender, single-receiver channel. It's used for all events from input devices except `KeyboardEvent`
 - `KEYBOARD_REPORT_CHANNEL`: a single-sender, single-receiver channel, keyboard task sends keyboard report to channel after the key event is processed, and USB/BLE task receives the keyboard report and sends the key to the host.
 
 ### Matrix scanning & key processing
 
 An important part of a keyboard firmware is how it performs [matrix scanning](https://en.wikipedia.org/wiki/Keyboard_matrix_circuit) and how it processes the scanning result to generate keys.
 
-In RMK, this work is done in `Matrix` and `Keyboard` respectively. The `Matrix` scans the key matrix and send `KeyEvent` if there's a key change in matrix. Then the `Keyboard` receives the `KeyEvent` and processes it into actual keyboard report. Finally, the keyboard report is sent to USB/BLE tasks and forwarded to the host via USB/BLE.
+In RMK, this work is done in `Matrix` and `Keyboard` respectively. The `Matrix` scans the key matrix and send `KeyboardEvent` if there's a key change in matrix. Then the `Keyboard` receives the `KeyboardEvent` and processes it into actual keyboard report. Finally, the keyboard report is sent to USB/BLE tasks and forwarded to the host via USB/BLE.

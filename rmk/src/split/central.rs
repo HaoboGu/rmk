@@ -15,7 +15,7 @@ use {
 };
 
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyEvent};
+use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::matrix::{KeyState, MatrixTrait};
 
@@ -132,7 +132,7 @@ impl<
                             );
 
                             self.scan_pos = (out_idx, in_idx);
-                            return Event::Key(KeyEvent::key(col, row, key_state.pressed));
+                            return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
                         }
                         _ => (),
                     }
@@ -331,7 +331,7 @@ impl<
                                 );
 
                                 self.scan_pos = (row_idx, col_idx);
-                                return Event::Key(KeyEvent::key(col, row, key_state.pressed));
+                                return Event::Key(KeyboardEvent::key(row, col, key_state.pressed));
                             }
                             _ => (),
                         }

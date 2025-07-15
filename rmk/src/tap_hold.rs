@@ -1,7 +1,7 @@
 use embassy_time::Instant;
 
 use crate::action::KeyAction;
-use crate::event::KeyEvent;
+use crate::event::{KeyPos, KeyboardEvent};
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -32,7 +32,7 @@ impl TapHoldDecision {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct HoldingKey {
     pub state: TapHoldState,
-    pub key_event: KeyEvent,
+    pub event: KeyboardEvent,
     // TODO: remove it, using `Keyboard.timer` instead
     pub pressed_time: Instant,
     pub action: KeyAction,
@@ -101,11 +101,11 @@ pub struct ChordHoldState<const COUNT: usize> {
 
 impl<const COUNT: usize> ChordHoldState<COUNT> {
     // is the key event in the same side of current chord hold
-    pub fn is_same(&self, key_event: KeyEvent) -> bool {
+    pub fn is_same(&self, pos: KeyPos) -> bool {
         if self.is_vertical_chord {
-            self.is_same_hand(key_event.row() as usize)
+            self.is_same_hand(pos.row as usize)
         } else {
-            self.is_same_hand(key_event.col() as usize)
+            self.is_same_hand(pos.col as usize)
         }
     }
 
@@ -119,9 +119,9 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
     /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
     /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
     /// the chordal hold will be determined by user configuration in future.
-    pub(crate) fn create(event: KeyEvent, rows: usize, cols: usize) -> Self {
+    pub(crate) fn create(pos: KeyPos, rows: usize, cols: usize) -> Self {
         if cols > rows {
-            if (event.col() as usize) < (cols / 2) {
+            if (pos.col as usize) < (cols / 2) {
                 ChordHoldState {
                     is_vertical_chord: false,
                     hand: ChordHoldHand::Left,
@@ -132,7 +132,7 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
                     hand: ChordHoldHand::Right,
                 }
             }
-        } else if (event.row() as usize) < (rows / 2) {
+        } else if (pos.row as usize) < (rows / 2) {
             ChordHoldState {
                 is_vertical_chord: true,
                 hand: ChordHoldHand::Left,
@@ -150,25 +150,25 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
 mod tests {
     use heapless::Vec;
 
-    use super::{ChordHoldHand, ChordHoldState};
-    use crate::event::KeyEvent;
+    use super::{ChordHoldHand, ChordHoldState, KeyPos};
+    use crate::event::KeyboardEvent;
 
     #[test]
     fn test_chordal_hold() {
         assert_eq!(
-            ChordHoldState::<6>::create(KeyEvent::key(0, 0, true), 3, 6).hand,
+            ChordHoldState::<6>::create(KeyPos { row: 0, col: 0 }, 3, 6).hand,
             ChordHoldHand::Left
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyEvent::key(3, 3, true), 4, 6).hand,
+            ChordHoldState::<6>::create(KeyPos { row: 3, col: 3 }, 4, 6).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyEvent::key(3, 3, true), 6, 4).hand,
+            ChordHoldState::<6>::create(KeyPos { row: 3, col: 3 }, 6, 4).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyEvent::key(3, 6, true), 5, 3).hand,
+            ChordHoldState::<6>::create(KeyPos { row: 3, col: 6 }, 5, 3).hand,
             ChordHoldHand::Right
         );
 
@@ -180,7 +180,7 @@ mod tests {
         let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
         let result: Vec<_, 6> = vec
             .iter()
-            .map(|col| chord.is_same(KeyEvent::key(*col, 0, true)))
+            .map(|col| chord.is_same(KeyPos { row: 0, col: *col }))
             .collect();
 
         let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
