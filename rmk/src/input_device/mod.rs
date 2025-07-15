@@ -129,7 +129,7 @@ macro_rules! run_devices {
                         async {
                             loop {
                                 let e = $dev.read_event().await;
-                                // For KeyEvent, send it to KEY_EVENT_CHANNEL
+                                // For KeyboardEvent, send it to KEY_EVENT_CHANNEL
                                 match e {
                                     $crate::event::Event::Key(key_event) => {
                                         $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
@@ -137,7 +137,7 @@ macro_rules! run_devices {
                                     _ => {
                                         // Drop the oldest event if the channel is full
                                         if $channel.is_full() {
-                                           let _ = $channel.receive().await;
+                                            let _ = $channel.receive().await;
                                         }
                                         $channel.send(e).await;
                                     }

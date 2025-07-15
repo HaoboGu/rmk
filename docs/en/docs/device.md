@@ -2,26 +2,39 @@
 
 The definition of input devices varies, but for RMK, we focus on two categories: keys and sensors.
 
-- Keys are straightforward—they are essentially switches with two states (pressed/released).
+- Keys are straightforward — they are essentially switches with two states (pressed/released).
 - Sensors are more complex devices that can produce various types of data, such as joysticks, mice, trackpads, and trackballs.
+
+## Events
+
+The event from input devices are defined in `rmk/src/event.rs`. The `Event` is an enum with many variants, but in RMK, there are two types of `Event`:
+
+- `KeyboardEvent`: `KeyboardEvent` is the event processed by built-in `Keyboard` with default key processing logic. `Key` and `RotaryEncoder` are now processed as `KeyboardEvent`.
+- Other Events: All other events in the system, such as events from joystick or trackpad. For those events, a custom `Processor` is needed for processing the event.
 
 ## Usage
 
 RMK uses a standard pattern for running the entire system:
 
 ```rust
-// Create a rotary encoder input device and a processor which processes encoder's event
-let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
-let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
+// Create an adc input device and a battery processor which processes adc's event
+let mut adc_device = NrfAdc::new(
+    saadc,
+    [AnalogEventType::Battery],
+    embassy_time::Duration::from_secs(12),
+    None,
+);
+let mut batt_processor = BatteryProcessor::new(2000, 2806, &keymap);
+
 // Start the system with three concurrent tasks
 join3(
     // Run all input devices and send events to EVENT_CHANNEL
     run_devices! (
-        (matrix, encoder) => rmk::channel::EVENT_CHANNEL,
+        (matrix, encoder, adc_device) => EVENT_CHANNEL,
     ),
     // Use `encoder_processor` to process the events.
     run_processor_chain! {
-        rmk::channel::EVENT_CHANNEL => [encoder_processor],
+        rmk::channel::EVENT_CHANNEL => [batt_processor],
     },
     // Run the keyboard processor
     keyboard.run(),
@@ -33,11 +46,11 @@ join3(
 
 Notes:
 
-- If the input devices emit only `KeyEvent`, use only `run_device!((matrix, dev) => EVENT_CHANNEL))` is enough, no `run_processor_chain` is needed. Because all `KeyEvent`s are automatically processed by `keyboard.run()`
+- If the input devices emit only `KeyboardEvent`, use only `run_device!((matrix, device) => EVENT_CHANNEL))` is enough, no `run_processor_chain` is needed. Because all `KeyboardEvent`s are automatically processed by `Keyboard`
 - `EVENT_CHANNEL` are built-in, you can also use your own local channels
 - The events are processed in a chained way, until the processor's `process()` returns `ProcessResult::Stop`. So the order of processors in the `run_processor_chain` matters
 - For advanced use cases, developers can define custom events and procesors to fully control the input logic
-- The keyboard is special -- it receives events only from `KEY_EVENT_CHANNEL` and processes `KeyEvent`s only. `KeyEvent` from ALL devices are handled by the `Keyboard` processor, then the other events are dispatched to binded processors
+- The keyboard is special -- it receives events only from `KEY_EVENT_CHANNEL` and processes `KeyboardEvent`s only. `KeyboardEvent` from ALL devices are handled by the `Keyboard` processor, then the other events are dispatched to binded processors
 
 ## Implementation new devices
 
@@ -96,9 +109,7 @@ RMK provides a default `Event` enum that is compatible with built-in `InputProce
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Event {
     /// Keyboard event
-    Key(KeyEvent),
-    /// Rotary encoder, ec11 compatible models
-    RotaryEncoder(RotaryEncoderEvent),
+    Key(KeyboardEvent),
     /// Multi-touch touchpad
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
@@ -156,7 +167,7 @@ impl InputDevice for MyEncoder {
     async fn read_event(&mut self) -> Event {
         // Read encoder and return events
         embassy_time::Timer::after_secs(1).await;
-        Event::RotaryEncoder(RotaryEncoderEvent::Clockwise)
+        Event::Key(KeyboardEvent::rotary_encoder(self.id, direction, true));
     }
 }
 ```

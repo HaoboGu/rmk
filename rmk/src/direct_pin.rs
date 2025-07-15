@@ -7,7 +7,7 @@ use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, h
 #[cfg(feature = "rapid_debouncer")]
 use crate::debounce::fast_debouncer::RapidDebouncer;
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyEvent};
+use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::matrix::KeyState;
 use crate::MatrixTrait;
@@ -98,11 +98,7 @@ impl<
                             let key_state = self.key_states[row_idx][col_idx];
 
                             self.scan_pos = (row_idx, col_idx);
-                            return Event::Key(KeyEvent {
-                                row: row_idx as u8,
-                                col: col_idx as u8,
-                                pressed: key_state.pressed,
-                            });
+                            return Event::Key(KeyboardEvent::key(row_idx as u8, col_idx as u8, key_state.pressed));
                         }
 
                         // If there's key still pressed, always refresh the self.scan_start

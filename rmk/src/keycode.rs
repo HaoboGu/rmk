@@ -13,9 +13,9 @@ use crate::hid_state::HidModifiers;
 /// | bit4 | bit3 | bit2 | bit1 | bit0 |
 /// | --- | --- | --- | --- | --- |
 /// | L/R | GUI | ALT |SHIFT| CTRL|
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct ModifierCombination {
     #[bits(1)]
     pub(crate) ctrl: bool,
@@ -40,6 +40,13 @@ impl BitOr for ModifierCombination {
 }
 
 impl ModifierCombination {
+    pub const CTRL: Self = Self::new().with_ctrl(true);
+    pub const SHIFT: Self = Self::new().with_shift(true);
+    pub const ALT: Self = Self::new().with_alt(true);
+    pub const GUI: Self = Self::new().with_gui(true);
+
+    pub const RIGHT: Self = Self::new().with_right(true);
+
     pub const fn new_from(right: bool, gui: bool, alt: bool, shift: bool, ctrl: bool) -> Self {
         ModifierCombination::new()
             .with_right(right)

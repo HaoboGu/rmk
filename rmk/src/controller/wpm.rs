@@ -1,6 +1,6 @@
 use super::{Controller, PollingController};
 use crate::channel::{send_controller_event, ControllerPub, ControllerSub, CONTROLLER_CHANNEL};
-use crate::event::{ControllerEvent, KeyEvent};
+use crate::event::{ControllerEvent, KeyboardEvent};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
@@ -30,7 +30,7 @@ impl Controller for WpmController {
     type Event = ControllerEvent;
 
     async fn process_event(&mut self, event: Self::Event) {
-        if let ControllerEvent::Key(KeyEvent { pressed: false, .. }, _) = event {
+        if let ControllerEvent::Key(KeyboardEvent { pressed: false, .. }, _) = event {
             self.keys_pressed += 1
         }
     }

@@ -54,8 +54,8 @@ mod tap_dance_test {
     }
 
     rusty_fork_test! {
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_single_tap() {
             // Test single tap -> should trigger tap action
             key_sequence_test! {
@@ -71,8 +71,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_hold() {
             // Test hold -> should trigger hold action
             key_sequence_test! {
@@ -88,8 +88,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_double_tap() {
             // Test double tap -> should trigger double_tap action
             key_sequence_test! {
@@ -107,8 +107,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_hold_after_tap() {
             // Test tap then hold -> should trigger hold_after_tap action
             key_sequence_test! {
@@ -126,8 +126,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_timeout_single_tap() {
             // Test single tap with timeout -> should trigger tap action
             key_sequence_test! {
@@ -135,17 +135,20 @@ mod tap_dance_test {
                 sequence: [
                     [0, 0, true, 10],   // Press TapDance key
                     [0, 0, false, 50],  // Quick release
-                    // Wait for timeout (200ms + some buffer)
+                    [0, 1, true, 250], // Tap another key
+                    [0, 1, false, 50], // Release another key
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap action (A) after timeout
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                    [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Tap action (X)
                     [0, [0, 0, 0, 0, 0, 0]], // Release
                 ]
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_triple_tap() {
             // Test triple tap -> should trigger tap action (fallback for > double tap)
             key_sequence_test! {
@@ -159,14 +162,16 @@ mod tap_dance_test {
                     [0, 0, false, 30],  // Third release
                 ],
                 expected_reports: [
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap action (A) for triple tap
+                    [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Tap action (C) for double tap
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap action (A) for the third tap
                     [0, [0, 0, 0, 0, 0, 0]], // Release
                 ]
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_interrupt_by_other_key() {
             // Test tap dance interrupted by other key
             key_sequence_test! {
@@ -186,8 +191,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_multiple_tap_dance_keys() {
             // Test multiple tap dance keys pressed simultaneously
             key_sequence_test! {
@@ -207,8 +212,8 @@ mod tap_dance_test {
             };
         }
 
-        #[ignore]
         #[test]
+        #[ignore]
         fn test_tap_dance_different_timing() {
             // Test with different tapping_term (TapDance 1 has 150ms)
             key_sequence_test! {

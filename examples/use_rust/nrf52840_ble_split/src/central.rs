@@ -30,7 +30,7 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
-use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
+use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
@@ -199,7 +199,7 @@ async fn main(spawner: Spawner) {
 
     let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
-    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
+    let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 0);
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<4, 7>::new();
@@ -208,13 +208,12 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 1>(&mut storage).await;
+    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
 
     // Initialize the light controller
     let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     // Initialize the encoder processor
-    let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
 
     let mut adc_device = NrfAdc::new(
         saadc,
@@ -230,7 +229,7 @@ async fn main(spawner: Spawner) {
             (matrix, encoder, adc_device) => EVENT_CHANNEL,
         ),
         run_processor_chain! {
-            EVENT_CHANNEL => [encoder_processor, batt_proc],
+            EVENT_CHANNEL => [batt_proc],
         },
         keyboard.run(),
         join(

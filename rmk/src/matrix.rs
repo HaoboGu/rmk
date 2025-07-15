@@ -7,7 +7,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use {embassy_futures::select::select_slice, embedded_hal_async::digital::Wait, heapless::Vec};
 
 use crate::debounce::{DebounceState, DebouncerTrait};
-use crate::event::{Event, KeyEvent};
+use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 use crate::CONNECTION_STATE;
@@ -154,11 +154,7 @@ impl<
                         let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
 
                         self.scan_pos = (out_idx, in_idx);
-                        return Event::Key(KeyEvent {
-                            row: row as u8,
-                            col: col as u8,
-                            pressed: key_state.pressed,
-                        });
+                        return Event::Key(KeyboardEvent::key(row as u8, col as u8, key_state.pressed));
                     }
 
                     // If there's key still pressed, always refresh the self.scan_start
@@ -262,10 +258,6 @@ impl<const ROW: usize, const COL: usize> InputDevice for TestMatrix<ROW, COL> {
         }
         self.last = !self.last;
         // info!("Read event: {:?}", self.last);
-        Event::Key(KeyEvent {
-            row: 0,
-            col: 0,
-            pressed: self.last,
-        })
+        Event::Key(KeyboardEvent::key(0, 0, self.last))
     }
 }

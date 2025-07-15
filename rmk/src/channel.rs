@@ -18,7 +18,7 @@ use {
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
 };
 
-use crate::event::{Event, KeyEvent};
+use crate::event::{Event, KeyboardEvent};
 use crate::hid::Report;
 #[cfg(feature = "storage")]
 use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
@@ -47,7 +47,7 @@ pub type ControllerPub = Publisher<
 #[cfg(feature = "_ble")]
 pub static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
 /// Channel for key events only
-pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyEvent, EVENT_CHANNEL_SIZE> = Channel::new();
+pub static KEY_EVENT_CHANNEL: Channel<RawMutex, KeyboardEvent, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for all other events
 pub static EVENT_CHANNEL: Channel<RawMutex, Event, EVENT_CHANNEL_SIZE> = Channel::new();
 /// Channel for keyboard report from input processors to hid writer/reader

@@ -9,7 +9,7 @@ use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::stora
 
 use super::SplitMessage;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL, SPLIT_MESSAGE_PUBLISHER};
-use crate::event::{Event, KeyEvent};
+use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
 use crate::CONNECTION_STATE;
 
@@ -159,22 +159,34 @@ impl<
         loop {
             match self.transceiver.read().await {
                 Ok(SplitMessage::Key(e)) => {
-                    // Verify the row/col
-                    if e.row as usize > ROW || e.col as usize > COL {
-                        error!("Invalid peripheral row/col: {} {}", e.row, e.col);
-                        continue;
-                    }
+                    match e.pos {
+                        KeyboardEventPos::Key(key_pos) => {
+                            // Verify the row/col
+                            if key_pos.row as usize > ROW || key_pos.col as usize > COL {
+                                error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
+                                continue;
+                            }
 
-                    if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
-                        // Only when the connection is established, send the key event.
-                        let adjusted_key_event = KeyEvent {
-                            row: e.row + ROW_OFFSET as u8,
-                            col: e.col + COL_OFFSET as u8,
-                            pressed: e.pressed,
-                        };
-                        return Event::Key(adjusted_key_event);
-                    } else {
-                        warn!("Key event from peripheral is ignored because the connection is not established.");
+                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                // Only when the connection is established, send the key event.
+                                let adjusted_key_event = KeyboardEvent::key(
+                                    key_pos.row + ROW_OFFSET as u8,
+                                    key_pos.col + COL_OFFSET as u8,
+                                    e.pressed,
+                                );
+                                return Event::Key(adjusted_key_event);
+                            } else {
+                                warn!(
+                                    "Key event from peripheral is ignored because the connection is not established."
+                                );
+                            }
+                        }
+                        _ => {
+                            if CONNECTION_STATE.load(core::sync::atomic::Ordering::Acquire) {
+                                // Only when the connection is established, send the key event.
+                                return Event::Key(e);
+                            }
+                        }
                     }
                 }
                 Ok(SplitMessage::Event(event)) => {

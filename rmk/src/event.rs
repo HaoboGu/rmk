@@ -15,9 +15,7 @@ use crate::keycode::ModifierCombination;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     /// Keyboard event
-    Key(KeyEvent),
-    /// Rotary encoder, ec11 compatible models
-    RotaryEncoder(RotaryEncoderEvent),
+    Key(KeyboardEvent),
     /// Multi-touch touchpad
     Touchpad(TouchpadEvent),
     /// Joystick, suppose we have x,y,z axes for this joystick
@@ -36,10 +34,65 @@ pub enum Event {
     Custom([u8; 16]),
 }
 
-/// Event for rotary encoder
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
+/// `KeyboardEvent` is the event whose `KeyAction` is stored in the keymap.
+///
+/// `KeyboardEvent` is different from events from pointing devices,
+/// events from pointing devices are processed directly by the corresponding processors,
+/// while `KeyboardEvent` is processed by the keyboard with the keymap.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct RotaryEncoderEvent {
+pub struct KeyboardEvent {
+    pub(crate) pressed: bool,
+    pub(crate) pos: KeyboardEventPos,
+}
+
+impl KeyboardEvent {
+    pub fn key(row: u8, col: u8, pressed: bool) -> Self {
+        Self {
+            pressed,
+            pos: KeyboardEventPos::Key(KeyPos { row, col }),
+        }
+    }
+
+    pub fn rotary_encoder(id: u8, direction: Direction, pressed: bool) -> Self {
+        Self {
+            pressed,
+            pos: KeyboardEventPos::RotaryEncoder(RotaryEncoderPos { id, direction }),
+        }
+    }
+}
+
+/// The position of the keyboard event.
+///
+/// The position can be either a key (row, col), or a rotary encoder (id, direction)
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum KeyboardEventPos {
+    Key(KeyPos),
+    RotaryEncoder(RotaryEncoderPos),
+}
+
+impl KeyboardEventPos {
+    pub(crate) fn key_pos(col: u8, row: u8) -> Self {
+        Self::Key(KeyPos { row, col })
+    }
+
+    pub(crate) fn rotary_encoder_pos(id: u8, direction: Direction) -> Self {
+        Self::RotaryEncoder(RotaryEncoderPos { id, direction })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyPos {
+    pub row: u8,
+    pub col: u8,
+}
+
+/// Event for rotary encoder
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct RotaryEncoderPos {
     /// The id of the rotary encoder
     pub id: u8,
     /// The direction of the rotary encoder
@@ -88,14 +141,6 @@ pub enum Axis {
     // .. More is allowed
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyEvent {
-    pub row: u8,
-    pub col: u8,
-    pub pressed: bool,
-}
-
 /// Event for controllers
 #[cfg(feature = "controller")]
 #[non_exhaustive]
@@ -103,7 +148,7 @@ pub struct KeyEvent {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ControllerEvent {
     /// Key event and action
-    Key(KeyEvent, KeyAction),
+    Key(KeyboardEvent, KeyAction),
     /// Battery percent changed
     Battery(u16),
     /// Charging state changed

@@ -22,6 +22,7 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
+use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
@@ -150,10 +151,14 @@ async fn main(spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, 4, 7>::new(input_pins, output_pins, debouncer);
     // let mut matrix = rmk::matrix::TestMatrix::<4, 7>::new();
 
+    let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
+    let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
+    let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 1);
+
     // Start
     join(
         run_devices! (
-            (matrix) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
+            (matrix, encoder) => EVENT_CHANNEL, // Peripheral uses EVENT_CHANNEL to send events to central
         ),
         run_rmk_split_peripheral(0, &stack, &mut storage),
     )
