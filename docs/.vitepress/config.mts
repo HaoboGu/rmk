@@ -82,10 +82,10 @@ function nav() {
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
     {
-      text: `v0.7.5`,
+      text: `v0.7.6`,
       items: [
         {
-          items: [{ text: 'v0.7.5', link: '/docs/introduction' }]
+          items: [{ text: 'v0.7.6', link: '/docs/introduction' }]
         },
         {
           items: [{ text: 'Migration Guide', link: '/docs/migration_guide' }]

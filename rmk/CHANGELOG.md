@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2025-07-15
+
+### Changed
+
+- Move encoder events processing to `Keyboard`
+- Use bitfield_struct's native defmt formatting 
+- Use device id as the serial number for nRF 
+- Move `KeyAction::WithModifier` to `Action::KeyWithModifier`
+- ​​Reset the sidebar style in user documentation​
+
+### Added
+
+- Add ESP32 heterogeneous example, which uses ESP32C6 as central and ESP32C3 as peripheral
+- Add mouse acceleration support
+- Add consts for single-bit structs 
+
+### Fixed
+
+- Repeat message from periphral for serial split
+- Crash when the host returns empty data
+- Key trigger issue when combo is used with one-shot key
+- Key trigger issue when there's overlapped combo
+- Don't send battery notification according to control point value from host
+- Update addr stored in peripheral after re-pairing 
+- Repeat mouse key when multiple mouse keys are pressed
+
 ## [0.7.5] - 2025-07-06
 
 ### Fixed
@@ -20,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add sleep mode for split central after connected to the host
 
-### Updated
+### Changed
 
 - Refactor key processing, fix tap-hold issues
 - Only the valid macro data is stored in the storage now. **Clearing storage is required to update**
