@@ -336,7 +336,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Event::Key(key_event) => {
                 // Matrix should process key pressed event first, record the timestamp of key changes
                 if key_event.pressed {
-                    self.timer[key_event.col() as usize][key_event.row() as usize] = Some(Instant::now());
+                    self.set_timer_value(key_event, Some(Instant::now()));
                 }
 
                 // Update activity time for BLE split central sleep management
@@ -795,9 +795,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn release_tap_hold_key(&mut self, key_event: KeyEvent) {
         debug!("[TAP-HOLD] On Releasing: tap-hold key event {:?}", key_event);
 
-        let col = key_event.col() as usize;
-        let row = key_event.row() as usize;
-
         trace!("[TAP-HOLD] current buffer queue to process {:?}", self.holding_buffer);
 
         // While tap hold key is releasing, pressed key event should be updating into PostTap or PostHold state
@@ -840,7 +837,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Clear timer
-        self.timer[col][row] = None;
+        self.set_timer_value(key_event, None);
         debug!("[TAP-HOLD] tap-hold key event {:?}, cleanup done", key_event);
     }
 
@@ -1727,12 +1724,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// This function forces all buffered keys to resolve immediately, ignoring their timeouts.
     async fn fire_holding_keys(&mut self, reason: TapHoldDecision, key_event: KeyEvent) {
         // Press time of current key
-        let pressed_time: Instant = if let Some(inst) = self.timer[key_event.col() as usize][key_event.row() as usize] {
-            inst
-        } else {
-            // Fire all
-            Instant::now()
-        };
+        let pressed_time = self.get_timer_value(key_event).unwrap_or(Instant::now());
 
         let hold_keys_to_flush: Vec<_, HOLD_BUFFER_SIZE> = self
             .holding_buffer
@@ -1864,7 +1856,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// When a key is pressed, add it to the holding buffer,
     /// if the current key action is a tap-hold, or the evaluation of current key action should be deferred by tap-hold.
     fn add_holding_key_to_buffer(&mut self, key_event: KeyEvent, action: KeyAction, state: TapHoldState) {
-        let pressed_time = self.timer[key_event.col() as usize][key_event.row() as usize].unwrap_or(Instant::now());
+        let pressed_time = self.get_timer_value(key_event).unwrap_or(Instant::now());
         let new_item = HoldingKey {
             state,
             key_event,
@@ -1882,6 +1874,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             _ => {}
         }
+    }
+
+    /// Set the timer value for a key event
+    fn set_timer_value(&mut self, key_event: KeyEvent, value: Option<Instant>) {
+        self.timer[key_event.col() as usize][key_event.row() as usize] = value;
+    }
+
+    /// Get the timer value for a key event, if the key event is not in the timer, return the current time
+    fn get_timer_value(&self, key_event: KeyEvent) -> Option<Instant> {
+        self.timer[key_event.col() as usize][key_event.row() as usize]
     }
 
     /// Finds the holding key in the buffer that matches the given key_event.
