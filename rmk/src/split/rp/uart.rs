@@ -12,7 +12,7 @@ use embassy_rp::pio::{
     Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin, ShiftDirection, StateMachine,
 };
 use embassy_rp::uart::Error;
-use embassy_rp::Peripheral;
+use embassy_rp::Peri;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::waitqueue::AtomicWaker;
@@ -105,17 +105,13 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     /// # Returns
     ///
     /// A new instance of 'BufferedUart' driver
-    pub fn new_half_duplex<T, P>(
-        pio: impl Peripheral<P = PIO> + 'a,
-        pin: T,
+    pub fn new_half_duplex<T: PioPin>(
+        pio: Peri<'a, PIO>,
+        pin: Peri<'a, T>,
         rx_buf: &mut [u8],
         irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
-    ) -> Self
-    where
-        T: Peripheral<P = P> + 'a,
-        P: PioPin,
-    {
-        Self::new(pio, pin, None::<T>, rx_buf, None, false, irq)
+    ) -> Self {
+        Self::new(pio, pin, None::<Peri<'a, T>>, rx_buf, None, false, irq)
     }
 
     /// Create a new full-duplex 'BufferedUart' serial driver instance
@@ -133,9 +129,9 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     ///
     /// A new instance of 'BufferedUart' driver
     pub fn new_full_duplex(
-        pio: impl Peripheral<P = PIO> + 'a,
-        pin_tx: impl Peripheral<P = impl PioPin> + 'a,
-        pin_rx: impl Peripheral<P = impl PioPin> + 'a,
+        pio: Peri<'a, PIO>,
+        pin_tx: Peri<'a, impl PioPin>,
+        pin_rx: Peri<'a, impl PioPin>,
         tx_buf: &mut [u8],
         rx_buf: &mut [u8],
         irq: impl Binding<PIO::Interrupt, UartInterruptHandler<PIO>>,
@@ -144,9 +140,9 @@ impl<'a, PIO: Instance + UartPioAccess> BufferedUart<'a, PIO> {
     }
 
     fn new(
-        pio: impl Peripheral<P = PIO> + 'a,
-        pin_rx: impl Peripheral<P = impl PioPin> + 'a,
-        pin_tx: Option<impl Peripheral<P = impl PioPin> + 'a>,
+        pio: Peri<'a, PIO>,
+        pin_rx: Peri<'a, impl PioPin>,
+        pin_tx: Option<Peri<'a, impl PioPin>>,
         rx_buf: &mut [u8],
         tx_buf: Option<&mut [u8]>,
         full_duplex: bool,

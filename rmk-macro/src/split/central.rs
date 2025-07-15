@@ -61,9 +61,9 @@ pub(crate) fn expand_serial_init(chip: &ChipModel, serial: Vec<SerialConfig>) ->
                             });
                             let #uart_name = ::embassy_rp::uart::BufferedUart::new(
                                 p.#uart_instance,
-                                #irq_name,
                                 p.#tx_pin,
                                 p.#rx_pin,
+                                #irq_name,
                                 #tx_buf_name,
                                 #rx_buf_name,
                                 ::embassy_rp::uart::Config::default(),
