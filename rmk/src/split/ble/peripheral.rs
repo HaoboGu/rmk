@@ -167,7 +167,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
 
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
                     // Save central address to storage if the central address is not saved
-                    if !central_saved {
+                    if !central_saved || conn.raw().peer_address().into_inner() != central_addr.unwrap_or_default() {
                         info!("Saving central address to storage");
                         if let Ok(()) = storage
                             .write_peer_address(PeerAddress {
