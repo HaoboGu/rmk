@@ -73,7 +73,7 @@
 }
 
 ::selection {
-  background: var(--vp-c-brand-4-bg); 
+  background: var(--vp-c-brand-4-bg);
   color: var(--vp-c-brand-1);
 }
 
@@ -265,17 +265,26 @@ aside:hover {
       font-weight: 500;
       color: var(--vp-c-brand-1) !important;
     }
-    .indicator{
+    .indicator {
       background-color: var(--vp-c-brand-1) !important;
     }
   }
 }
-.divider{
+.divider {
   position: relative;
 }
-.divider-line{
+.divider-line {
   position: absolute;
   z-index: 100;
-  top:-1px;
+  top: -1px;
   background-color: var(--vp-c-divider) !important;
+}
+
+.VPNavBar {
+  div.title {
+    .logo {
+      width: 48px;
+      height: 48px;
+    }
+  }
 }
