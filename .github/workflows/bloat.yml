@@ -1,12 +1,9 @@
 name: Bloat
 
 on:
-  push:
-    branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   pull_request:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
+    paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   workflow_dispatch:
 
 
@@ -260,11 +257,11 @@ jobs:
           if: always()
           continue-on-error: true
   collect-and-comment:
+    if: always() # Always upload the size results even if some builds fail
     needs: 
       - binary-size
       - binary-size-split
     runs-on: ubuntu-latest
-    if: always() # Always upload the size results even if some builds fail
     permissions:
       actions: read
       pull-requests: write
@@ -295,10 +292,10 @@ jobs:
           cat combined-sizes.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Add a PR comment with all size results
-        if: ${{ github.event.pull_request }}
         continue-on-error: true
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PAT }}
           script: |
             const commentIdentifier = '# Binary Size Report';
             // Get all comments for the PR
