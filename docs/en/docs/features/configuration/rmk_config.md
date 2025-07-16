@@ -16,6 +16,10 @@ combo_max_num = 8
 combo_max_length = 4
 # Maximum number of forks for conditional key actions
 fork_max_num = 8
+# Maximum number of tap dances keyboard can store
+tap_dance_max_num = 8
+# Maximum number of taps per tap dance (default: 2, min: 2, max: 256)
+tap_dance_max_tap = 2
 # Macro space size in bytes for storing sequences. The maximum number of Macros depends on the size of each sequence: All sequences combined need to fit into macro_space_size, the number of macro sequences doesn't matter.
 macro_space_size = 256
 # Default debounce time in ms
@@ -47,13 +51,15 @@ ble_profiles_num = 3
 
 ::: info
 
-Increasing the number of combos, forks and macros will increase memory usage.
+Increasing the number of combos, forks, tap dances and macros will increase memory usage.
 
 :::
 
 - `combo_max_num`: Maximum number of combos that the keyboard can store, default value is 8. This value must be between 0 and 256.
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
+- `tap_dance_max_num`: Maximum number of tap dances that can be stored, default value is 8. This value must be between 0 and 256.
+- `tap_dance_max_tap`: Maximum number of taps per tap dance, default value is 2. This value must be between 2 and 256. If you want to support triple/quadruple tap, increase this value accordingly.
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration
