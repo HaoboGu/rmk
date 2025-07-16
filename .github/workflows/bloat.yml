@@ -3,10 +3,13 @@ name: Bloat
 on:
   push:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
+    paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   pull_request:
     branches: ["main"]
-    paths: ["examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
+    paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
+  pull_request_target:
+    branches: ["main"]
+    paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   workflow_dispatch:
 
 
@@ -37,6 +40,7 @@ jobs:
           - stm32h7
         example_type:
           - use_config
+    if: github.event_name == 'pull_request'
     outputs:
       size-results: ${{ steps.collect-sizes.outputs.size-results }}
     steps:
@@ -260,11 +264,11 @@ jobs:
           if: always()
           continue-on-error: true
   collect-and-comment:
+    if: github.event_name == 'pull_request_target'
     needs: 
       - binary-size
       - binary-size-split
     runs-on: ubuntu-latest
-    if: always() # Always upload the size results even if some builds fail
     permissions:
       actions: read
       pull-requests: write
