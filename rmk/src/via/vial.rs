@@ -172,7 +172,7 @@ pub(crate) async fn process_vial<
                             let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
                             let tapping_term_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
-                            let tap_dance = TapDance::new_from_vial(
+                            let new_tap_dance = TapDance::new_from_vial(
                                 tap,
                                 hold,
                                 hold_after_tap,
@@ -182,12 +182,12 @@ pub(crate) async fn process_vial<
 
                             // Update the tap dance in keymap
                             if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
-                                *tap_dance = tap_dance.clone();
+                                *tap_dance = new_tap_dance.clone();
                             }
 
                             // Save to storage
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, tap_dance))
+                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, new_tap_dance))
                                 .await;
                         }
                     }

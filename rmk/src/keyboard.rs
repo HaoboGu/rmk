@@ -1110,15 +1110,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // TODO: Check whether it's pressed?
                                 if k.pressed_time.elapsed() > tap_dance.tapping_term {
                                     // Timeout, release current hold action
-                                    Some(tap_dance.hold_actions[t as usize])
+                                    Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
                                 } else {
                                     k.state = TapHoldState::IdleAfterTap(t);
                                     k.pressed_time = pressed_time;
                                     None
                                 }
                             }
-                            TapHoldState::PostHold(t) => Some(tap_dance.hold_actions[t as usize]),
-                            TapHoldState::PostTap(t) => Some(tap_dance.tap_actions[t as usize]),
+                            TapHoldState::PostHold(t) => {
+                                Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                            }
+                            TapHoldState::PostTap(t) => {
+                                Some(*tap_dance.tap_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                            }
                             _ => {
                                 // Release when tap-dance key is in other state, ignore
                                 None
@@ -1911,12 +1915,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 debug!("Tap-dance key {:?} timeout, trigger action", hold_key.event);
                                 // Get tapped num, determine the action
                                 match hold_key.state {
-                                    TapHoldState::Tap(tapped_num) => {
-                                        Some(tap_dance_action.hold_actions[tapped_num as usize])
-                                    }
-                                    TapHoldState::IdleAfterTap(tapped_num) => {
-                                        Some(tap_dance_action.tap_actions[tapped_num as usize])
-                                    }
+                                    TapHoldState::Tap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .hold_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    TapHoldState::IdleAfterTap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
                                     _ => None,
                                 }
                             } else {
@@ -1924,12 +1934,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 debug!("Tap-dance key {:?} flush, trigger tap action", hold_key.event);
                                 // Get tapped num, determine the action
                                 match hold_key.state {
-                                    TapHoldState::Tap(tapped_num) => {
-                                        Some(tap_dance_action.tap_actions[tapped_num as usize])
-                                    }
-                                    TapHoldState::IdleAfterTap(tapped_num) => {
-                                        Some(tap_dance_action.tap_actions[tapped_num as usize])
-                                    }
+                                    TapHoldState::Tap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    TapHoldState::IdleAfterTap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
                                     _ => None,
                                 }
                             };
@@ -1948,10 +1964,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                             let action = if hold_key.pressed_time < pressed_time {
                                 debug!("Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, trigger hold action", hold_key.event);
-                                tap_dance_action.hold_actions[tapped_num as usize]
+                                *tap_dance_action
+                                    .hold_actions
+                                    .get(tapped_num as usize)
+                                    .unwrap_or(&KeyAction::No)
                             } else {
                                 debug!("Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, trigger tap action", hold_key.event);
-                                tap_dance_action.tap_actions[tapped_num as usize]
+                                *tap_dance_action
+                                    .tap_actions
+                                    .get(tapped_num as usize)
+                                    .unwrap_or(&KeyAction::No)
                             };
 
                             // Trigger the tap-dance action

@@ -537,9 +537,7 @@ impl Value<'_> for StorageData {
                     let mut tap_actions = Vec::new();
                     for i in 0..TAP_DANCE_MAX_TAP {
                         let action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
-                        if action != KeyAction::No {
-                            tap_actions.push(action).ok();
-                        }
+                        tap_actions.push(action).ok();
                     }
 
                     // Deserialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
@@ -548,9 +546,7 @@ impl Value<'_> for StorageData {
                         let action = from_via_keycode(BigEndian::read_u16(
                             &buffer[3 + TAP_DANCE_MAX_TAP * 2 + i * 2..5 + TAP_DANCE_MAX_TAP * 2 + i * 2],
                         ));
-                        if action != KeyAction::No {
-                            hold_actions.push(action).ok();
-                        }
+                        hold_actions.push(action).ok();
                     }
 
                     let tap_dance = TapDance {
