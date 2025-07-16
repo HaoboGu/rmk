@@ -46,6 +46,15 @@ export default defineConfig({
       }
     ]
   },
+  vite: {
+    css: { 
+      preprocessorOptions: {
+        scss: {
+          api: 'modern',
+        }
+      }
+    }
+  },
 
   transformHead: ({ assets }) => {
     const textFont = assets.find((file) => /OpenSans\.[\w-]+\.ttf/.test(file))
