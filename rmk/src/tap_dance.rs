@@ -2,6 +2,7 @@ use embassy_time::{Duration, Instant};
 use heapless::Vec;
 
 use crate::action::KeyAction;
+use crate::TAP_DANCE_MAX_TAP;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -9,8 +10,6 @@ pub struct TapDanceState {
     pub tap_count: u8,
     pub last_tap_time: Option<Instant>,
 }
-
-pub(crate) const TAP_DANCE_MAX_TAP: usize = 2;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

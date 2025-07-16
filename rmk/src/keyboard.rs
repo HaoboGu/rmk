@@ -30,9 +30,9 @@ use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::tap_dance::TAP_DANCE_MAX_TAP;
+
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
-use crate::{boot, FORK_MAX_NUM};
+use crate::{boot, FORK_MAX_NUM, TAP_DANCE_MAX_TAP};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 

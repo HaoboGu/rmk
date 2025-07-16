@@ -50,6 +50,10 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_tap_dance_max_num")]
     pub tap_dance_max_num: usize,
+    /// Maximum number of taps per tap dance
+    #[serde_inline_default(2)]
+    #[serde(deserialize_with = "check_tap_dance_max_tap")]
+    pub tap_dance_max_tap: usize,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -113,6 +117,17 @@ where
     Ok(value)
 }
 
+fn check_tap_dance_max_tap<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = SerdeDeserialize::deserialize(deserializer)?;
+    if value < 2 || value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: tap_dance_max_tap must be between 2 and 256, got {value}");
+    }
+    Ok(value)
+}
+
 fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -134,6 +149,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             tap_dance_max_num: 8,
+            tap_dance_max_tap: 2,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,

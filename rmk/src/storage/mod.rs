@@ -31,9 +31,11 @@ use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
-use crate::tap_dance::{TapDance, TAP_DANCE_MAX_TAP};
+use crate::tap_dance::TapDance;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM};
+use crate::{
+    BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM, TAP_DANCE_MAX_TAP,
+};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
