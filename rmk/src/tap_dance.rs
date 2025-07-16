@@ -10,7 +10,7 @@ pub struct TapDanceState {
     pub last_tap_time: Option<Instant>,
 }
 
-const TAP_DANCE_MAX_TAP: usize = 2;
+pub(crate) const TAP_DANCE_MAX_TAP: usize = 2;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -31,7 +31,7 @@ impl Default for TapDance {
 }
 
 impl TapDance {
-    pub fn new(
+    pub fn new_from_vial(
         tap: KeyAction,
         hold: KeyAction,
         hold_after_tap: KeyAction,

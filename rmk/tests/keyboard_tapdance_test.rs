@@ -9,7 +9,7 @@ use rmk::tap_dance::TapDance;
 fn create_tap_dance_config() -> TapDancesConfig {
     let mut config = TapDancesConfig::default();
     // TapDance 0: Tap A, Hold B, HoldAfterTap C, DoubleTap D
-    let td0 = TapDance::new(
+    let td0 = TapDance::new_from_vial(
         KeyAction::Single(Action::Key(KeyCode::A)),
         KeyAction::Single(Action::Key(KeyCode::B)),
         KeyAction::Single(Action::Key(KeyCode::C)),
@@ -19,7 +19,7 @@ fn create_tap_dance_config() -> TapDancesConfig {
     config.tap_dances.push(td0).unwrap();
 
     // TapDance 1: Different actions for testing
-    let td1 = TapDance::new(
+    let td1 = TapDance::new_from_vial(
         KeyAction::Single(Action::Key(KeyCode::X)),
         KeyAction::Single(Action::Key(KeyCode::Y)),
         KeyAction::Single(Action::Key(KeyCode::Z)),

@@ -150,7 +150,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                 };
 
                 quote! {
-                    ::rmk::tap_dance::TapDance::new(
+                    ::rmk::tap_dance::TapDance::new_from_vial(
                         #tap,
                         #hold,
                         #hold_after_tap,

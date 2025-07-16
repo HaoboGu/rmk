@@ -30,6 +30,7 @@ use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
+use crate::tap_dance::TAP_DANCE_MAX_TAP;
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
 use crate::{boot, FORK_MAX_NUM};
 
@@ -1083,9 +1084,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Some(k) => {
                             // Current tap-dance key is already in the buffer, update it
                             if let TapHoldState::IdleAfterTap(t) = k.state {
-                                if t + 1 >= tap_dance.tap_actions.len() as u8 {
+                                if t + 1 >= TAP_DANCE_MAX_TAP as u8 {
                                     // Reach maximum tapping number
-                                    k.state = TapHoldState::Tap(tap_dance.tap_actions.len() as u8 - 1);
+                                    k.state = TapHoldState::Tap(TAP_DANCE_MAX_TAP as u8 - 1);
                                 } else {
                                     k.state = TapHoldState::Tap(t + 1);
                                 }

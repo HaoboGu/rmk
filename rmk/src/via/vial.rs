@@ -11,7 +11,7 @@ use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
     channel::FLASH_CHANNEL,
-    storage::{ComboData, FlashOperationMessage, TapDanceData},
+    storage::{ComboData, FlashOperationMessage},
     COMBO_MAX_LENGTH,
 };
 use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
@@ -130,16 +130,22 @@ pub(crate) async fn process_vial<
                     let tap_dances = &keymap.borrow().behavior.tap_dance.tap_dances;
                     if let Some(tap_dance) = tap_dances.get(tap_dance_idx) {
                         // Pack tap dance data into report
-                        LittleEndian::write_u16(&mut report.input_data[1..3], to_via_keycode(tap_dance.tap_actions[0]));
+                        LittleEndian::write_u16(
+                            &mut report.input_data[1..3],
+                            to_via_keycode(*tap_dance.tap_actions.get(0).unwrap_or(&KeyAction::No)),
+                        );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(tap_dance.hold_actions[0]),
+                            to_via_keycode(*tap_dance.hold_actions.get(0).unwrap_or(&KeyAction::No)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(tap_dance.hold_actions[1]),
+                            to_via_keycode(*tap_dance.hold_actions.get(1).unwrap_or(&KeyAction::No)),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[7..9], to_via_keycode(tap_dance.tap_actions[1]));
+                        LittleEndian::write_u16(
+                            &mut report.input_data[7..9],
+                            to_via_keycode(*tap_dance.tap_actions.get(1).unwrap_or(&KeyAction::No)),
+                        );
                         LittleEndian::write_u16(
                             &mut report.input_data[9..11],
                             tap_dance.tapping_term.as_millis() as u16,
@@ -166,27 +172,22 @@ pub(crate) async fn process_vial<
                             let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
                             let tapping_term_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
+                            let tap_dance = TapDance::new_from_vial(
+                                tap,
+                                hold,
+                                hold_after_tap,
+                                double_tap,
+                                embassy_time::Duration::from_millis(tapping_term_ms as u64),
+                            );
+
                             // Update the tap dance in keymap
                             if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
-                                *tap_dance = TapDance::new(
-                                    tap,
-                                    hold,
-                                    hold_after_tap,
-                                    double_tap,
-                                    embassy_time::Duration::from_millis(tapping_term_ms as u64),
-                                );
+                                *tap_dance = tap_dance.clone();
                             }
 
                             // Save to storage
                             FLASH_CHANNEL
-                                .send(FlashOperationMessage::WriteTapDance(TapDanceData {
-                                    idx: tap_dance_idx,
-                                    tap,
-                                    hold,
-                                    hold_after_tap,
-                                    double_tap,
-                                    tapping_term_ms,
-                                }))
+                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, tap_dance))
                                 .await;
                         }
                     }
