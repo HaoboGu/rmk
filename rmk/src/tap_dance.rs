@@ -50,4 +50,23 @@ impl TapDance {
             tapping_term,
         }
     }
+
+    /// Create a new tap dance with custom actions for each tap count
+    /// This allows for more flexible tap dance configurations
+    pub fn new_with_actions(
+        tap_actions: Vec<KeyAction, TAP_DANCE_MAX_TAP>,
+        hold_actions: Vec<KeyAction, TAP_DANCE_MAX_TAP>,
+        tapping_term: Duration,
+    ) -> Self {
+        Self {
+            tap_actions,
+            hold_actions,
+            tapping_term,
+        }
+    }
+
+    /// Check if this tap dance has any actions defined
+    pub fn has_actions(&self) -> bool {
+        !self.tap_actions.is_empty() || !self.hold_actions.is_empty()
+    }
 }

@@ -444,6 +444,11 @@ pub struct TapDanceConfig {
     pub hold: Option<String>,
     pub hold_after_tap: Option<String>,
     pub double_tap: Option<String>,
+    /// Array of tap actions for each tap count (0-indexed)
+    pub tap_actions: Option<Vec<String>>,
+    /// Array of hold actions for each tap count (0-indexed)
+    pub hold_actions: Option<Vec<String>>,
+
     pub tapping_term: Option<DurationMillis>,
 }
 
