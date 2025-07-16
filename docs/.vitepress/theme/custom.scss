@@ -1,5 +1,5 @@
 :root {
-  --default: clamp(1rem, 0.9vw , 1.2rem);
+  --default: clamp(1rem, 1.1vw , 2rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
@@ -689,25 +689,25 @@
   }
 }
 @media (min-width: 2560px) { 
-  .VPSidebar {
-    margin-left:  calc(10 * var(--default)); 
-  }
-  .VPNav {
-    padding: 0 calc(10 * var(--default)) ;
-  }
+  // .VPSidebar {
+  //   margin-left:  calc(10 * var(--default)); 
+  // }
+  // .VPNav {
+  //   padding: 0 calc(10 * var(--default)) ;
+  // }
 
-  .Layout .VPContent.has-sidebar {
-      padding-left: calc(27 * var(--default));
-      padding-right: calc(12 * var(--default));
-  }
+  // .Layout .VPContent.has-sidebar {
+  //     padding-left: calc(27 * var(--default));
+  //     padding-right: calc(12 * var(--default));
+  // }
 }
 @media (min-width: 3860px) { 
-  .VPSidebar {
-    margin-left:  calc(15 * var(--default)); 
-  }
-  .VPNav {
-    padding: 0 calc(15 * var(--default)) ;
-  }
+  // .VPSidebar {
+  //   margin-left:  calc(15 * var(--default)); 
+  // }
+  // .VPNav {
+  //   padding: 0 calc(15 * var(--default)) ;
+  // }
 
   .Layout .VPContent.has-sidebar {
       padding-left: calc(32 * var(--default));
