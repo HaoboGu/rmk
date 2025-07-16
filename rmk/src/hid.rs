@@ -6,10 +6,10 @@ use embassy_usb::driver::EndpointError;
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
+use crate::CONNECTION_STATE;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::descriptor::KeyboardReport;
 use crate::state::ConnectionState;
-use crate::CONNECTION_STATE;
 
 #[derive(Serialize, Debug)]
 pub enum Report {

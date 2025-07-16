@@ -2,16 +2,16 @@
 //!
 use core::sync::atomic::Ordering;
 
-use embassy_futures::select::{select3, Either3};
+use embassy_futures::select::{Either3, select3};
 use embassy_time::{Instant, Timer};
 #[cfg(all(feature = "storage", feature = "_ble"))]
 use {crate::channel::FLASH_CHANNEL, crate::split::ble::PeerAddress, crate::storage::FlashOperationMessage};
 
 use super::SplitMessage;
+use crate::CONNECTION_STATE;
 use crate::channel::{EVENT_CHANNEL, KEY_EVENT_CHANNEL, SPLIT_MESSAGE_PUBLISHER};
 use crate::event::{Event, KeyboardEvent, KeyboardEventPos};
 use crate::input_device::InputDevice;
-use crate::CONNECTION_STATE;
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -54,13 +54,8 @@ pub(crate) struct PeripheralManager<
     id: usize,
 }
 
-impl<
-        const ROW: usize,
-        const COL: usize,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        T: SplitReader + SplitWriter,
-    > PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, T>
+impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, T: SplitReader + SplitWriter>
+    PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, T>
 {
     pub(crate) fn new(transceiver: T, id: usize) -> Self {
         Self { transceiver, id }
@@ -147,13 +142,8 @@ impl<
     }
 }
 
-impl<
-        const ROW: usize,
-        const COL: usize,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        R: SplitReader + SplitWriter,
-    > InputDevice for PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
+impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, R: SplitReader + SplitWriter>
+    InputDevice for PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, R>
 {
     async fn read_event(&mut self) -> Event {
         loop {

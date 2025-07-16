@@ -10,14 +10,14 @@ use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use sequential_storage::cache::NoCache;
-use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
 use sequential_storage::Error as SSError;
+use sequential_storage::cache::NoCache;
+use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
 #[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
-    trouble_host::{prelude::*, BondInformation, IdentityResolvingKey, LongTermKey},
+    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
 use self::eeconfig::EeKeymapConfig;

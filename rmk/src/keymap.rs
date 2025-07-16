@@ -2,17 +2,17 @@
 use embedded_storage_async::nor_flash::NorFlash;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
+use crate::COMBO_MAX_NUM;
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
-use crate::COMBO_MAX_NUM;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 
@@ -398,13 +398,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
-    use super::{Combo, _reorder_combos};
+    use super::{_reorder_combos, Combo};
     use crate::action::{Action, KeyAction};
     use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
     use crate::keycode::KeyCode;
     use crate::keymap::fill_vec;
-    use crate::{k, COMBO_MAX_NUM, FORK_MAX_NUM};
+    use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
     #[test]
     fn test_fill_vec() {
