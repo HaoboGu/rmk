@@ -124,17 +124,22 @@ pub(crate) async fn process_vial<
                 }
                 VialDynamic::DynamicVialTapDanceGet => {
                     debug!("DynamicEntryOp - DynamicVialTapDanceGet");
-                    // FIXME: Check the protocol
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let tap_dance_idx = report.output_data[3] as usize;
                     let tap_dances = &keymap.borrow().behavior.tap_dance.tap_dances;
                     if let Some(tap_dance) = tap_dances.get(tap_dance_idx) {
                         // Pack tap dance data into report
-                        LittleEndian::write_u16(&mut report.input_data[1..3], to_via_keycode(tap_dance.tap));
-                        LittleEndian::write_u16(&mut report.input_data[3..5], to_via_keycode(tap_dance.hold));
-                        LittleEndian::write_u16(&mut report.input_data[5..7], to_via_keycode(tap_dance.hold_after_tap));
-                        LittleEndian::write_u16(&mut report.input_data[7..9], to_via_keycode(tap_dance.double_tap));
+                        LittleEndian::write_u16(&mut report.input_data[1..3], to_via_keycode(tap_dance.tap_actions[0]));
+                        LittleEndian::write_u16(
+                            &mut report.input_data[3..5],
+                            to_via_keycode(tap_dance.hold_actions[0]),
+                        );
+                        LittleEndian::write_u16(
+                            &mut report.input_data[5..7],
+                            to_via_keycode(tap_dance.hold_actions[1]),
+                        );
+                        LittleEndian::write_u16(&mut report.input_data[7..9], to_via_keycode(tap_dance.tap_actions[1]));
                         LittleEndian::write_u16(
                             &mut report.input_data[9..11],
                             tap_dance.tapping_term.as_millis() as u16,
