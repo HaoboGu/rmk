@@ -1,9 +1,6 @@
 name: Bloat
 
 on:
-  push:
-    branches: ["main"]
-    paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
   pull_request:
     branches: ["main"]
     paths: [".github/**", "examples/**", "rmk/**", "rmk-macro/**", "rmk-config/**"]
@@ -40,7 +37,7 @@ jobs:
           - stm32h7
         example_type:
           - use_config
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
     outputs:
       size-results: ${{ steps.collect-sizes.outputs.size-results }}
     steps:
@@ -264,7 +261,7 @@ jobs:
           if: always()
           continue-on-error: true
   collect-and-comment:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
     needs: 
       - binary-size
       - binary-size-split
