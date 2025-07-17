@@ -357,7 +357,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             }
                             Either::Second(event) => {
                                 // Process new key event
-                                debug!("[TAP-DANCE] Interrupted into new key event: {:?}", event);
+                                if event.pos != key.event.pos && event.pressed {
+                                    // If the tap-dance key is interrupted by other key press-down,
+                                    // Fire the tap-dance key first, and then process the other key
+                                    debug!("[TAP-DANCE] Interrupted by other key event: {:?}", event);
+                                    self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
+                                }
                                 self.process_inner(event).await;
                             }
                         }
@@ -470,9 +475,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn make_tap_hold_decision(&mut self, key_action: KeyAction, event: KeyboardEvent) -> TapHoldDecision {
         let permissive = self.keymap.borrow().behavior.tap_hold.permissive_hold;
 
-        // Check if there's buffered tap-hold key
+        // Check if there's buffered tap-hold key or tap-dance key
         let is_buffered = self.holding_buffer.iter().any(|i| match i.action {
             KeyAction::TapHold(_, _) => matches!(i.state, TapHoldState::Tap(_)),
+            KeyAction::TapDance(_) => matches!(i.state, TapHoldState::Tap(_)),
             _ => false,
         });
 
@@ -502,7 +508,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // Buffer pressed keys if permissive hold is enabled.
                     return match key_action {
-                        KeyAction::TapHold(_, _) => {
+                        KeyAction::TapHold(_, _) | KeyAction::TapDance(_) => {
                             // Ignore following tap-hold keys, they will be always checked
                             Ignore
                         }
@@ -518,7 +524,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // PERMISSIVE HOLDING, which means any key press-and-release after a tap-hold key will raise hold decision
                     // Key release while permissive hold is enabled, hold will be triggered
+                    match key_action {
+                        KeyAction::TapDance(_) => {
+                            // Ignore following tap-dance keys, they will be always checked
+                            return Ignore;
+                        }
+                        _ => {
+                            // Buffer keys and wait for key release
                     return TapHoldDecision::CleanBuffer;
+                        }
+                    }
                 };
             }
         }
@@ -1112,7 +1127,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
                                 } else {
                                     k.state = TapHoldState::IdleAfterTap(t);
-                                    k.pressed_time = pressed_time;
+                                    // Use current release time for `IdleAfterTap` state
+                                    k.pressed_time = Instant::now();
                                     None
                                 }
                             }
@@ -1145,6 +1161,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             _ => {}
                         }
                     }
+                    // Clear timer
+                    self.set_timer_value(event, None);
                 }
             }
             None => {
@@ -2163,11 +2181,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.holding_buffer
             .iter()
             .filter_map(|key| {
-                if matches!(
-                    key.state,
-                    TapHoldState::Tap(_) | TapHoldState::IdleAfterTap(_) | TapHoldState::WaitingCombo
-                ) {
+                if matches!(key.state, TapHoldState::IdleAfterTap(_) | TapHoldState::WaitingCombo) {
                     Some(key.clone())
+                } else if matches!(key.state, TapHoldState::Tap(_)) {
+                    if key.is_tap_dance() | key.is_tap_hold() {
+                    Some(key.clone())
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }

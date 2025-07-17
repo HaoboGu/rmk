@@ -21,7 +21,7 @@ mod one_shot_test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{run_key_sequence_test, wrap_keymap, KC_LCTRL, KC_LGUI, KC_LSHIFT};
+    use crate::common::{wrap_keymap, KC_LCTRL, KC_LGUI, KC_LSHIFT};
 
     const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
         [[

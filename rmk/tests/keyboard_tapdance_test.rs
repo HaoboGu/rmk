@@ -22,7 +22,7 @@ fn create_tap_dance_config() -> TapDancesConfig {
     let td1 = TapDance::new_from_vial(
         KeyAction::Single(Action::Key(KeyCode::X)),
         KeyAction::Single(Action::Key(KeyCode::Y)),
-        KeyAction::Single(Action::Key(KeyCode::Z)),
+        KeyAction::Single(Action::Key(KeyCode::LShift)),
         KeyAction::Single(Action::Key(KeyCode::Space)),
         Duration::from_millis(150),
     );
@@ -33,21 +33,27 @@ fn create_tap_dance_config() -> TapDancesConfig {
 
 mod tap_dance_test {
     use embassy_futures::block_on;
-    use rmk::keyboard::Keyboard;
+    use rmk::{config::TapHoldConfig, keyboard::Keyboard};
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::wrap_keymap;
+    use crate::common::{wrap_keymap, KC_LSHIFT};
 
-    fn create_simple_tap_dance_keyboard() -> Keyboard<'static, 1, 2, 1> {
+    fn create_simple_tap_dance_keyboard() -> Keyboard<'static, 1, 3, 1> {
         let keymap = [[[
-            KeyAction::TapDance(0), // TapDance 0 at (0,0)
-            KeyAction::TapDance(1), // TapDance 1 at (0,1)
+            KeyAction::TapDance(0),                     // TapDance 0 at (0,0)
+            KeyAction::TapDance(1),                     // TapDance 1 at (0,1)
+            KeyAction::Single(Action::Key(KeyCode::A)), // A at (0,2)
         ]]];
 
         let config = BehaviorConfig {
             tap_dance: create_tap_dance_config(),
-            ..BehaviorConfig::default()
+            tap_hold: TapHoldConfig {
+                enable_hrm: true,
+                permissive_hold: true,
+                ..Default::default()
+            },
+            ..Default::default()
         };
 
         Keyboard::new(wrap_keymap(keymap, config))
@@ -93,9 +99,9 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // First press
-                    [0, 0, false, 50],  // First release (quick)
-                    [0, 0, true, 50],   // Second press within tapping_term
-                    [0, 0, false, 50],  // Second release (quick)
+                    [0, 0, false, 190],  // First release (quick)
+                    [0, 0, true, 190],   // Second press within tapping_term
+                    [0, 0, false, 190],  // Second release (quick)
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Double tap action (D)
@@ -112,7 +118,7 @@ mod tap_dance_test {
                 sequence: [
                     [0, 0, true, 10],   // First press
                     [0, 0, false, 50],  // First release (quick)
-                    [0, 0, true, 50],   // Second press within tapping_term
+                    [0, 0, true, 190],   // Second press within tapping_term
                     [0, 0, false, 250], // Hold second press
                 ],
                 expected_reports: [
@@ -129,9 +135,9 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // Press TapDance key
-                    [0, 0, false, 50],  // Quick release
+                    [0, 0, false, 190],  // Quick release
                     [0, 1, true, 250], // Tap another key
-                    [0, 1, false, 50], // Release another key
+                    [0, 1, false, 140], // Release another key
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap action (A) after timeout
@@ -149,11 +155,11 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // First press
-                    [0, 0, false, 30],  // First release
-                    [0, 0, true, 30],   // Second press
-                    [0, 0, false, 30],  // Second release
-                    [0, 0, true, 30],   // Third press
-                    [0, 0, false, 30],  // Third release
+                    [0, 0, false, 190],  // First release
+                    [0, 0, true, 190],   // Second press
+                    [0, 0, false, 190],  // Second release
+                    [0, 0, true, 190],   // Third press
+                    [0, 0, false, 190],  // Third release
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Tap action (D) for double tap
@@ -168,11 +174,11 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // First press
-                    [0, 0, false, 30],  // First release
+                    [0, 0, false, 190],  // First release
                     [0, 0, true, 30],   // Second press
-                    [0, 0, false, 30],  // Second release
+                    [0, 0, false, 190],  // Second release
                     [0, 0, true, 300],   // Third press
-                    [0, 0, false, 30],  // Third release
+                    [0, 0, false, 190],  // Third release
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Tap action (D) for double tap
@@ -215,9 +221,8 @@ mod tap_dance_test {
                     [0, 1, false, 50],  // Release second (quick)
                 ],
                 expected_reports: [
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // First tap action
-                    [0, [0, 0, 0, 0, 0, 0]], // All released
-                    [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Second tap action
+                    [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // First tap action
+                    [0, [kc_to_u8!(B), kc_to_u8!(Y), 0, 0, 0, 0]], // Second tap action
                     [0, [0, 0, 0, 0, 0, 0]], // All released
                 ]
             };
@@ -234,6 +239,90 @@ mod tap_dance_test {
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                ]
+            };
+        }
+
+        #[test]
+        fn test_tap_dance_hold_with_other_key() {
+            key_sequence_test! {
+                keyboard: create_simple_tap_dance_keyboard(),
+                sequence: [
+                    [0, 1, true, 10],   // Press TapDance 1
+                    [0, 1, false, 140], // Tap
+                    [0, 1, true, 130],   // Then hold TapDance 1
+                    [0, 2, true, 160],   // Press A
+                    [0, 2, false, 140],   // Release A
+                    [0, 1, false, 140], // Release TapDance 1
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                ]
+            };
+        }
+
+        #[test]
+        fn test_tap_dance_hold_with_other_key_reversed() {
+            key_sequence_test! {
+                keyboard: create_simple_tap_dance_keyboard(),
+                sequence: [
+                    [0, 1, true, 10],   // Press TapDance 1
+                    [0, 1, false, 140], // Tap
+                    [0, 1, true, 130],   // Then hold TapDance 1
+                    [0, 2, true, 160],   // Press A
+                    [0, 1, false, 140], // Release TapDance 1
+                    [0, 2, false, 140],   // Release A
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                ]
+            };
+        }
+
+        #[test]
+        fn test_tap_dance_hold_with_permissive_hold() {
+            key_sequence_test! {
+                keyboard: create_simple_tap_dance_keyboard(),
+                sequence: [
+                    [0, 1, true, 10],   // Press TapDance 1
+                    [0, 1, false, 140], // Tap
+                    [0, 1, true, 130],  // Then hold TapDance 1
+                    [0, 2, true, 10],   // Press A
+                    [0, 2, false, 140], // Release A
+                    [0, 1, false, 140], // Release TapDance 1
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [0, 0, 0, 0, 0, 0]], // Release
+                ]
+            };
+        }
+
+        #[test]
+        fn test_tap_dance_hold_with_tap() {
+            key_sequence_test! {
+                keyboard: create_simple_tap_dance_keyboard(),
+                sequence: [
+                    [0, 1, true, 10],   // Press TapDance 1
+                    [0, 1, false, 140], // Tap
+                    [0, 1, true, 130],  // Then hold TapDance 1
+                    [0, 2, true, 10],   // Press A
+                    [0, 1, false, 120], // Release TapDance 1
+                    [0, 2, false, 140], // Release A
+                ],
+                expected_reports: [
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
+                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1
                     [0, [0, 0, 0, 0, 0, 0]], // Release
                 ]
             };
