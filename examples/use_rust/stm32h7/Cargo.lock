@@ -1432,14 +1432,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "panic-probe"
+name = "panic-halt"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd402d00b0fb94c5aee000029204a46884b1262e0c443f166d86d2c0747e1a1a"
-dependencies = [
- "cortex-m",
- "defmt 1.0.1",
-]
+checksum = "a513e167849a384b7f9b746e517604398518590a9142f4846a32e3c2a4de7b11"
 
 [[package]]
 name = "paste"
@@ -1632,7 +1628,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rmk"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1690,7 +1686,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "cargo_toml",
  "darling",
@@ -1720,7 +1716,7 @@ dependencies = [
  "embassy-stm32",
  "embassy-time",
  "json",
- "panic-probe",
+ "panic-halt",
  "rmk",
  "static_cell",
  "xz2",
