@@ -37,6 +37,8 @@ use crate::{boot, FORK_MAX_NUM};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
+const MACRO_TEXT_DELAY: u16 = 2;
+
 /// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
 /// LedIndicator type would be nicer, but that does not have const expr constructor
 pub(crate) static LOCK_LED_STATES: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0u8);
@@ -1654,10 +1656,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     MacroOperation::Text(k, is_cap) => {
                         self.macro_texting = true;
+                        let mut delay = MACRO_TEXT_DELAY;
+                        if is_cap != self.macro_caps {
+                            // If caps is changed, wait extra 20ms for not tapping shift key
+                            delay += 20;
+                        }
                         self.macro_caps = is_cap;
                         self.register_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        embassy_time::Timer::after_millis(2).await;
+                        embassy_time::Timer::after_millis(delay as u64).await;
                         self.unregister_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                     }
@@ -1678,6 +1685,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
                     break;
                 }
+                embassy_time::Timer::after_millis(1).await;
             }
         } else {
             error!("Macro not found");
