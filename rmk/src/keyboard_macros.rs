@@ -74,7 +74,8 @@ impl MacroOperation {
             (1, 4) => {
                 // SS_QMK_PREFIX + SS_DELAY_CODE
                 if idx + 3 < macro_sequences.len() {
-                    let delay_ms = (macro_sequences[idx + 2] as u16 - 1) + (macro_sequences[idx + 3] as u16 - 1) * 255;
+                    let delay_ms = (macro_sequences[idx + 2].max(1) as u16 - 1)
+                        + (macro_sequences[idx + 3].max(1) as u16 - 1) * 255;
                     (MacroOperation::Delay(delay_ms), offset + 4)
                 } else {
                     (MacroOperation::End, offset + 4)
