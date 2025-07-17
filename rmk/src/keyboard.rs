@@ -359,7 +359,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // Process new key event
                                 if event.pos != key.event.pos && event.pressed {
                                     // If the tap-dance key is interrupted by other key press-down,
-                                    // Fire the tap-dance key first, and then process the other key
+                                    // fire the tap-dance key first, and then process the other key
+                                    // That is, the tap-dance key's action is in `decide-on-other-press` mode
                                     debug!("[TAP-DANCE] Interrupted by other key event: {:?}", event);
                                     self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
                                 }

@@ -215,15 +215,18 @@ mod tap_dance_test {
             key_sequence_test! {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
-                    [0, 0, true, 10],   // Press first TapDance key
-                    [0, 1, true, 50],   // Press second TapDance key
-                    [0, 0, false, 50],  // Release first (quick)
-                    [0, 1, false, 50],  // Release second (quick)
+                    [0, 1, true, 10],   // Press TD(1)
+                    [0, 1, false, 10],   // Release TD(1)
+                    [0, 1, true, 10],   // Press TD(1)
+                    [0, 0, true, 50],   // Press TD(0)
+                    [0, 1, false, 210],  // Release TD(1)
+                    [0, 0, false, 50],  // Release TD(0)
                 ],
                 expected_reports: [
-                    [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // First tap action
-                    [0, [kc_to_u8!(B), kc_to_u8!(Y), 0, 0, 0, 0]], // Second tap action
-                    [0, [0, 0, 0, 0, 0, 0]], // All released
+                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                    [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // First tap action
+                    [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release TD(0)
+                    [0, [0, 0, 0, 0, 0, 0]],
                 ]
             };
         }
@@ -315,7 +318,7 @@ mod tap_dance_test {
                     [0, 1, true, 10],   // Press TapDance 1
                     [0, 1, false, 140], // Tap
                     [0, 1, true, 130],  // Then hold TapDance 1
-                    [0, 2, true, 10],   // Press A
+                    [0, 2, true, 10],   // Press A, TD(1)'s decision is "hold"
                     [0, 1, false, 120], // Release TapDance 1
                     [0, 2, false, 140], // Release A
                 ],
