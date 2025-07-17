@@ -1,7 +1,7 @@
 use embassy_time::Instant;
 
 use crate::action::KeyAction;
-use crate::event::{KeyPos, KeyboardEvent};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -10,8 +10,14 @@ pub enum TapHoldDecision {
     Timeout,
     // Clean holding buffer due to permissive hold or chordal hold is triggered
     CleanBuffer,
-    // Hold on pressing, reserved
-    HoldOnPress,
+    // Holding
+    Hold,
+    // Chordal holding
+    ChordHold,
+    // A tap hold key is release as tap
+    BufferTapping,
+    // Hold on other key press
+    HoldOnOtherPress,
     // Skip key action processing and buffer key event
     Buffering,
     // Continue processing as normal key event
@@ -96,11 +102,23 @@ pub struct ChordHoldState<const COUNT: usize> {
 
 impl<const COUNT: usize> ChordHoldState<COUNT> {
     // is the key event in the same side of current chord hold
-    pub fn is_same(&self, pos: KeyPos) -> bool {
+    pub fn is_same_hand_key_pos(&self, key_pos: KeyPos) -> bool {
         if self.is_vertical_chord {
-            self.is_same_hand(pos.row as usize)
+            return self.is_same_hand(key_pos.row as usize);
         } else {
-            self.is_same_hand(pos.col as usize)
+            return self.is_same_hand(key_pos.col as usize);
+        }
+    }
+
+    pub fn is_same_event_pos(&self, event_pos: KeyboardEventPos) -> bool {
+        if let KeyboardEventPos::Key(KeyPos { row, col }) = event_pos {
+            if self.is_vertical_chord {
+                return self.is_same_hand(row as usize);
+            } else {
+                return self.is_same_hand(col as usize);
+            }
+        } else {
+            return false;
         }
     }
 
@@ -175,7 +193,7 @@ mod tests {
         let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
         let result: Vec<_, 6> = vec
             .iter()
-            .map(|col| chord.is_same(KeyPos { row: 0, col: *col }))
+            .map(|col| chord.is_same_hand_key_pos(KeyPos { row: 0, col: *col }))
             .collect();
 
         let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();
