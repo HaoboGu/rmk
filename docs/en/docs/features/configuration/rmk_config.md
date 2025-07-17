@@ -59,7 +59,7 @@ Increasing the number of combos, forks, tap dances and macros will increase memo
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
 - `tap_dance_max_num`: Maximum number of tap dances that can be stored, default value is 8. This value must be between 0 and 256.
-- `tap_dance_max_tap`: Maximum number of taps per tap dance, default value is 2. This value must be between 2 and 256. If you want to support triple/quadruple tap, increase this value accordingly.
+- `tap_dance_max_tap`: Maximum number of taps per tap dance, default value is 2. This value must be between 2 and 256. If `tap_actions` or `hold_actions` in [tap-dance config](./behavior.md#tap-dance) is set, the `tap_dance_max_tap` will be automatically set to the maximum length of `tap_actions` or `hold_actions`.
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration
@@ -77,7 +77,7 @@ In RMK there are several channels used for communication between tasks. The leng
 
 ### Split Keyboard Configuration
 
-- `split_peripherals_num`: The number of split peripherals, default value is 1.
+- `split_peripherals_num`: The number of split peripherals, default value is 1. If multiple peripherals are specified in the toml, this field will be automatically set to the actual peripherals number.
 - `split_message_channel_size`: The length of the split message channel, default value is 4.
 
 ### Wireless Configuration

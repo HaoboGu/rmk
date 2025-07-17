@@ -202,7 +202,29 @@ pub struct KeyboardTomlConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn new_from_toml_str<P: AsRef<Path>>(config_toml_path: P) -> Self {
+    pub fn new_from_toml_str(config_toml_str: &str) -> Self {
+        // The first run, load chip model only
+        let user_config: KeyboardTomlConfig = match toml::from_str::<KeyboardTomlConfig>(config_toml_str) {
+            Ok(c) => c,
+            Err(e) => panic!("Parse keyboard.toml error: {}", e.message()),
+        };
+
+        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+
+        // The second run, load the user config and merge with the default config
+        let mut config: KeyboardTomlConfig = Config::builder()
+            .add_source(File::from_str(default_config_str, FileFormat::Toml))
+            .add_source(File::from_str(config_toml_str, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        config.auto_calculate_parameters();
+
+        config
+    }
+    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
         // The first run, load chip model only
         let user_config = match std::fs::read_to_string(config_toml_path.as_ref()) {
             Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
@@ -214,13 +236,47 @@ impl KeyboardTomlConfig {
         let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
 
         // The second run, load the user config and merge with the default config
-        Config::builder()
+        let mut config: KeyboardTomlConfig = Config::builder()
             .add_source(File::from_str(default_config_str, FileFormat::Toml))
             .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
             .build()
             .unwrap()
             .try_deserialize()
-            .unwrap()
+            .unwrap();
+
+        config.auto_calculate_parameters();
+
+        config
+    }
+
+    /// Auto calculate some parameters in toml:
+    /// - Update tap_dance_max_tap to fit the max length of tap_actions and hold_actions
+    /// - Update peripheral number based on the number of split boards
+    /// - TODO: Update controller number based on the number of split boards
+    fn auto_calculate_parameters(&mut self) {
+        // Update the number of peripherals
+        if let Some(split) = &self.split {
+            if split.peripheral.len() > self.rmk.split_peripherals_num {
+                self.rmk.split_peripherals_num = split.peripheral.len();
+            }
+        }
+
+        // Update tap_dance_max_tap
+        if let Some(behavior) = &self.behavior {
+            if let Some(tap_dance) = &behavior.tap_dance {
+                let mut max_required_taps = self.rmk.tap_dance_max_tap;
+
+                for td in &tap_dance.tap_dances {
+                    let tap_actions_len = td.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    let hold_actions_len = td.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    max_required_taps = max_required_taps.max(tap_actions_len).max(hold_actions_len);
+                }
+
+                if max_required_taps > self.rmk.tap_dance_max_tap {
+                    self.rmk.tap_dance_max_tap = max_required_taps;
+                }
+            }
+        }
     }
 }
 

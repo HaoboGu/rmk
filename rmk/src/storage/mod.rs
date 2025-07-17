@@ -1399,11 +1399,12 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
+    use embassy_time::Duration;
+    use sequential_storage::map::Value;
+
     use super::*;
     use crate::action::{Action, KeyAction};
     use crate::keycode::KeyCode;
-    use embassy_time::Duration;
-    use sequential_storage::map::Value;
 
     #[test]
     fn test_tap_dance_serialization_deserialization() {
