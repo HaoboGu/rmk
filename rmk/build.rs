@@ -28,11 +28,11 @@ fn main() {
     };
 
     // Parse user configuration
-    let user_toml: KeyboardTomlConfig =
+    let mut user_toml: KeyboardTomlConfig =
         toml::from_str(&user_config_str).expect("Failed to parse KEYBOARD_TOML_PATH file\n");
 
-    // FIXME: calculate the number of split peripherals automatically
     // FIXME: calculate the number of controllers automatically
+    user_toml.auto_calculate_parameters();
 
     let constants = get_constants_str(user_toml.rmk);
 
