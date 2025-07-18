@@ -8,9 +8,9 @@ use rmk::macros::rmk_keyboard;
 /// There is an example of full customization of the keyboard with `rmk_keyboard` macro
 #[rmk_keyboard]
 mod my_keyboard {
+    use embassy_stm32::Config;
     use embassy_stm32::time::Hertz;
     use embassy_stm32::usb::Driver;
-    use embassy_stm32::Config;
     use rmk::channel::EVENT_CHANNEL;
     use rmk::futures::future::join3;
     use rmk::input_device::Runnable;

@@ -4,26 +4,26 @@ use core::sync::atomic::Ordering;
 
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
-use embassy_futures::select::{select3, Either3};
+use embassy_futures::select::{Either3, select3};
 use embassy_sync::signal::Signal;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 #[cfg(feature = "storage")]
 use {
     crate::channel::FLASH_CHANNEL,
-    crate::storage::{FlashOperationMessage, FLASH_OPERATION_FINISHED},
+    crate::storage::{FLASH_OPERATION_FINISHED, FlashOperationMessage},
 };
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, ControllerPub},
+    crate::channel::{ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
 use super::ble_server::CCCD_TABLE_SIZE;
+use crate::NUM_BLE_PROFILE;
 use crate::ble::trouble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
-use crate::NUM_BLE_PROFILE;
 
 pub(crate) static UPDATED_PROFILE: Signal<crate::RawMutex, ProfileInfo> = Signal::new();
 pub(crate) static UPDATED_CCCD_TABLE: Signal<crate::RawMutex, CccdTable<CCCD_TABLE_SIZE>> = Signal::new();

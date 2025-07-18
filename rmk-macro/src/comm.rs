@@ -3,7 +3,7 @@
 
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use rmk_config::{ChipSeries, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 

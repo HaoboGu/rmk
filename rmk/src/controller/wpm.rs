@@ -1,5 +1,5 @@
 use super::{Controller, PollingController};
-use crate::channel::{send_controller_event, ControllerPub, ControllerSub, CONTROLLER_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, ControllerPub, ControllerSub, send_controller_event};
 use crate::event::{ControllerEvent, KeyboardEvent};
 
 const CHARS_PER_WORD: u8 = 5;

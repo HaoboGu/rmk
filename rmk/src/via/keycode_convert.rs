@@ -49,11 +49,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             Action::LayerOn(l) => {
                 // One-shot layer
-                if l < 16 {
-                    0x5280 | l as u16
-                } else {
-                    0x0000
-                }
+                if l < 16 { 0x5280 | l as u16 } else { 0x0000 }
             }
             _ => 0x0000,
         },

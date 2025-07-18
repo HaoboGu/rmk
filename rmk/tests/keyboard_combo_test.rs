@@ -61,7 +61,7 @@ mod combo_test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{create_test_keyboard_with_config, KC_LSHIFT};
+    use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};
 
     rusty_fork_test! {
         #[test]

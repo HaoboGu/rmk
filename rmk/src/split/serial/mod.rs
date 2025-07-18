@@ -2,7 +2,7 @@ use embedded_io_async::{Read, Write};
 
 use super::driver::SplitDriverError;
 use crate::split::driver::{PeripheralManager, SplitReader, SplitWriter};
-use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
+use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
 // Receive split message from peripheral via serial and process it
 ///
