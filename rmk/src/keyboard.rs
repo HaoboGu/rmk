@@ -1657,7 +1657,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.macro_caps = is_cap;
                         if is_cap {
                             self.send_keyboard_report_with_resolved_modifiers(true).await;
-                            embassy_time::Timer::after_millis(2).await;
+                            embassy_time::Timer::after_millis(12).await;
                         }
                         self.register_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(true).await;
@@ -1666,7 +1666,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                         if is_cap {
                             self.macro_caps = false;
-                            embassy_time::Timer::after_millis(2).await;
+                            embassy_time::Timer::after_millis(12).await;
                             self.send_keyboard_report_with_resolved_modifiers(false).await;
                         }
                     }
