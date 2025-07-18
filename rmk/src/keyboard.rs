@@ -1655,11 +1655,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     MacroOperation::Text(k, is_cap) => {
                         self.macro_texting = true;
                         self.macro_caps = is_cap;
+                        if is_cap {
+                            self.send_keyboard_report_with_resolved_modifiers(true).await;
+                            embassy_time::Timer::after_millis(12).await;
+                        }
                         self.register_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        embassy_time::Timer::after_millis(2).await;
+                        embassy_time::Timer::after_millis(12).await;
                         self.unregister_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        if is_cap {
+                            self.macro_caps = false;
+                            embassy_time::Timer::after_millis(12).await;
+                            self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        }
                     }
                     MacroOperation::Delay(t) => {
                         embassy_time::Timer::after_millis(t as u64).await;
@@ -1678,6 +1687,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
                     break;
                 }
+                embassy_time::Timer::after_millis(1).await;
             }
         } else {
             error!("Macro not found");
