@@ -1,5 +1,5 @@
 :root {
-  --default: clamp(1rem, 0.9vw, 3rem);
+  --default: clamp(1rem, 1.1vw , 2rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
@@ -14,10 +14,9 @@
     }
   }
 }
-
 @media (min-width: 1440px) {
   :root {
-    --vp-layout-max-width: min(92vw, 3600px);
+    --vp-layout-max-width: min(92vw, 2400px);
     --vp-sidebar-width: var(--vp-fluid-sidebar);
     --vp-content-padding: calc(2.5 * var(--default));
   }
@@ -249,8 +248,8 @@
       .VPNavBar {
         div.title {
           .logo {
-            width: calc(24 / 16 * var(--default));
-            height: calc(24 / 16 * var(--default));
+            width: calc(48 / 16 * var(--default));
+            height: calc(48 / 16 * var(--default));
             margin-right: calc(0.5 * var(--default));
           }
           span {
@@ -460,7 +459,7 @@
             padding: 0 calc(2 * var(--default)) calc(8 * var(--default));
             min-width: calc(40 * var(--default));
             .content-container {
-              max-width: calc(688 / 16 * clamp(1rem, 1.3vw, 6rem));
+              max-width: calc(688 / 16 * clamp(1rem, 1.1vw, 6rem));
               margin: 0 auto;
               // main
               .main {
@@ -687,5 +686,31 @@
         }
       }
     }
+  }
+}
+@media (min-width: 2560px) { 
+  // .VPSidebar {
+  //   margin-left:  calc(10 * var(--default)); 
+  // }
+  // .VPNav {
+  //   padding: 0 calc(10 * var(--default)) ;
+  // }
+
+  // .Layout .VPContent.has-sidebar {
+  //     padding-left: calc(27 * var(--default));
+  //     padding-right: calc(12 * var(--default));
+  // }
+}
+@media (min-width: 3860px) { 
+  // .VPSidebar {
+  //   margin-left:  calc(15 * var(--default)); 
+  // }
+  // .VPNav {
+  //   padding: 0 calc(15 * var(--default)) ;
+  // }
+
+  .Layout .VPContent.has-sidebar {
+      padding-left: calc(32 * var(--default));
+      padding-right: calc(17 * var(--default));
   }
 }
