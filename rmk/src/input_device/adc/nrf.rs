@@ -48,16 +48,16 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> InputDevice for NrfAdc<'a
             // filling for the first polling
             self.saadc.sample(&mut self.buf[1]).await;
             self.active_instant = Instant::now();
-        }
-
-        if let Some(light_sleep) = self.light_sleep {
-            if self.adc_state == AdcState::LightSleep {
-                embassy_time::Timer::after(light_sleep).await;
+        } else {
+            if let Some(light_sleep) = self.light_sleep {
+                if self.adc_state == AdcState::LightSleep {
+                    embassy_time::Timer::after(light_sleep).await;
+                } else {
+                    embassy_time::Timer::after(self.polling_interval).await;
+                }
             } else {
                 embassy_time::Timer::after(self.polling_interval).await;
             }
-        } else {
-            embassy_time::Timer::after(self.polling_interval).await;
         }
 
         if self.active_instant.elapsed().as_millis() > 1200 {
