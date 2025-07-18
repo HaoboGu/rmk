@@ -7,10 +7,10 @@ use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
+use crate::CONNECTION_STATE;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
-use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
-use crate::CONNECTION_STATE;
+use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]

@@ -29,9 +29,9 @@ use bt_hci::{
 };
 use config::{RmkConfig, VialConfig};
 #[cfg(feature = "controller")]
-use controller::{wpm::WpmController, PollingController};
+use controller::{PollingController, wpm::WpmController};
 use descriptor::ViaReport;
-use embassy_futures::select::{select4, Either4};
+use embassy_futures::select::{Either4, select4};
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
@@ -52,7 +52,7 @@ use via::VialService;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
-    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder, UsbKeyboardWriter},
+    crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
 #[cfg(feature = "storage")]
 use {

@@ -1,6 +1,6 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use rmk_config::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 

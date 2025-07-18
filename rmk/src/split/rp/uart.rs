@@ -1,20 +1,20 @@
 use core::cell::RefCell;
-use core::future::{poll_fn, Future};
+use core::future::{Future, poll_fn};
 use core::marker::PhantomData;
 use core::task::Poll;
 
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
+use embassy_rp::Peri;
 use embassy_rp::clocks::clk_sys_freq;
 use embassy_rp::gpio::{Drive, Level, Pull, SlewRate};
-use embassy_rp::interrupt::typelevel::{Binding, Handler, Interrupt};
 use embassy_rp::interrupt::Priority;
+use embassy_rp::interrupt::typelevel::{Binding, Handler, Interrupt};
 use embassy_rp::pio::{
     Common, Config, Direction, FifoJoin, Instance, InterruptHandler, Pin, Pio, PioPin, ShiftDirection, StateMachine,
 };
 use embassy_rp::uart::Error;
-use embassy_rp::Peri;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};

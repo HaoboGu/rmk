@@ -1,7 +1,7 @@
 [package]
 name = "rmk-config"
 version = "0.5.4"
-edition = "2021"
+edition = "2024"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Config crate of RMK"
 homepage = "https://github.com/haobogu/rmk"
