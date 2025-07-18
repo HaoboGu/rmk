@@ -1661,7 +1661,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                         self.register_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        embassy_time::Timer::after_millis(2).await;
+                        embassy_time::Timer::after_millis(12).await;
                         self.unregister_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                         if is_cap {
