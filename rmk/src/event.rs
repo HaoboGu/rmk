@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
-use crate::keycode::ModifierCombination;
+use crate::{action::KeyAction, keycode::ModifierCombination};
 
 /// Raw events from input devices and keyboards
 ///
@@ -150,7 +150,7 @@ pub enum ControllerEvent {
     /// Key event and action
     Key(KeyboardEvent, KeyAction),
     /// Battery percent changed
-    Battery(u16),
+    Battery(u8),
     /// Charging state changed
     ChargingState(bool),
     /// Ble profile changed

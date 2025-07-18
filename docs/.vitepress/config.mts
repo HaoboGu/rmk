@@ -3,7 +3,7 @@ import taskLists from 'markdown-it-task-lists'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: 'RMK',
+  title: ' ',
   description: 'RMK keyboard firmware',
   head: [['link', { rel: 'icon', href: '/images/rmk_logo.svg' }]],
   rewrites: {
@@ -45,6 +45,15 @@ export default defineConfig({
         postprocess: (html) => html.replace(/^(\s*)<pre>/gm, '<pre>')
       }
     ]
+  },
+  vite: {
+    css: { 
+      preprocessorOptions: {
+        scss: {
+          api: 'modern',
+        }
+      }
+    }
   },
 
   transformHead: ({ assets }) => {

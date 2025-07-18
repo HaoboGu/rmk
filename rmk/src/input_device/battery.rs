@@ -131,17 +131,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Event::Battery(val) => {
                 trace!("Detected battery ADC value: {:?}", val);
 
-                #[cfg(feature = "controller")]
-                send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(val));
-
                 #[cfg(feature = "_ble")]
                 {
                     let current_value =
                         crate::ble::trouble::battery_service::BATTERY_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
                     if current_value < 100 || current_value == 255 {
+                        let battery_percent = self.get_battery_percent(val);
+
+                        #[cfg(feature = "controller")]
+                        send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(battery_percent));
+
                         // When charging, don't update the battery level(which is inaccurate)
                         crate::ble::trouble::battery_service::BATTERY_LEVEL
-                            .store(self.get_battery_percent(val), core::sync::atomic::Ordering::Relaxed);
+                            .store(battery_percent, core::sync::atomic::Ordering::Relaxed);
                     }
                 }
                 ProcessResult::Stop
@@ -149,11 +151,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             Event::ChargingState(charging) => {
                 info!("Charging state changed: {:?}", charging);
 
-                #[cfg(feature = "controller")]
-                send_controller_event(&mut self.controller_pub, ControllerEvent::ChargingState(charging));
-
                 #[cfg(feature = "_ble")]
                 {
+                    #[cfg(feature = "controller")]
+                    send_controller_event(&mut self.controller_pub, ControllerEvent::ChargingState(charging));
+
                     if charging {
                         crate::ble::trouble::battery_service::BATTERY_LEVEL
                             .store(101, core::sync::atomic::Ordering::Relaxed);
