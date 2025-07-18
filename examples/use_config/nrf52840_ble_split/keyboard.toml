@@ -18,8 +18,8 @@ keymap = [
         ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
     ],
     [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
+        ["TD(1)", "TT(1)", "TG(2)"],
+        ["TD(0)", "_", "_"],
         ["_", "_", "_"],
         ["_", "_", "_"]
     ],
@@ -43,6 +43,16 @@ tapping_term = "150ms"
 [[behavior.tap_dance.tap_dances]]
 tap = "Space"
 hold = "LCtrl"
+
+[[behavior.tap_dance.tap_dances]]
+tap_actions = ["F1", "F2", "F3", "F4"]  # 1 tap = F1, 2 taps = F2, 3 taps = F3, 4 taps = F4
+hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)"]  # Hold after 1 tap = layer 1, etc.
+tapping_term = "200ms"
+
+[[behavior.tap_dance.tap_dances]]
+tap_actions = ["Tab", "Escape", "CapsLock"]  # 1 tap = Tab, 2 taps = Escape, 3 taps = CapsLock
+hold_actions = ["LCtrl", "LAlt", "LShift"]  # Hold after 1 tap = Ctrl, etc.
+tapping_term = "250ms"
 
 [split]
 connection = "ble"

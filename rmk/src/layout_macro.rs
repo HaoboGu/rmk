@@ -151,3 +151,11 @@ macro_rules! encoder {
         $crate::action::EncoderAction::new($clockwise, $counter_clockwise)
     };
 }
+
+/// Create a tap dance action
+#[macro_export]
+macro_rules! td {
+    ($index: literal) => {
+        $crate::action::KeyAction::TapDance($index)
+    };
+}

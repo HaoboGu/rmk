@@ -6,7 +6,7 @@ pub(crate) fn read_keyboard_toml_config() -> KeyboardTomlConfig {
     let config_toml_path =
         std::env::var("KEYBOARD_TOML_PATH").expect("[ERROR]: KEYBOARD_TOML_PATH should be set in `.cargo/config.toml`");
 
-    KeyboardTomlConfig::new_from_toml_str(&config_toml_path)
+    KeyboardTomlConfig::new_from_toml_path(&config_toml_path)
 }
 
 pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {

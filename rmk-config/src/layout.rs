@@ -395,15 +395,20 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
+                                Rule::tap_dance_action => {
+                                    let action = inner_pair.as_str().to_string();
+                                    key_action_sequence.push(action);
+                                }
+
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End of input marker
                                 }
                                 _ => {
                                     // This case should not be reached
-                                    return Err(format!(
+                                    panic!(
                                         "Unexpected rule encountered during layer.keys processing:{:?}",
                                         inner_pair.as_rule()
-                                    ));
+                                    );
                                 }
                             }
                         }
@@ -411,7 +416,7 @@ impl KeyboardTomlConfig {
                 }
             }
             Err(e) => {
-                return Err(format!("Invalid keymap format: {}", e));
+                panic!("Invalid keymap format: {}", e);
             }
         }
 
@@ -512,5 +517,58 @@ mod tests {
             actions,
             vec!["A", "B", "No", "C", "No", "NoUsSlash", "NonUsSlash", "D", "No"]
         );
+    }
+
+    #[test]
+    fn test_tap_dance_action_parsing() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        // Test parsing a keymap string with TD actions
+        let keymap = "A TD(0) B TD(1) C TD(255)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", "TD(0)", "B", "TD(1)", "C", "TD(255)"]);
+    }
+
+    #[test]
+    fn test_tap_dance_action_grammar() {
+        // Test that TD actions are parsed correctly by the grammar
+        let test_cases = vec![
+            ("TD(0)", Rule::tap_dance_action),
+            ("TD(1)", Rule::tap_dance_action),
+            ("TD(255)", Rule::tap_dance_action),
+            ("td(0)", Rule::tap_dance_action), // Case insensitive
+            ("td(1)", Rule::tap_dance_action),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::tap_dance_action => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
     }
 }

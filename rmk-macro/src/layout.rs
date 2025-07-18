@@ -156,13 +156,13 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
             }
         }
         s if s.to_lowercase().starts_with("mo(") => {
-            let layer = get_layer(s.clone(), s.get(0..3).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::mo!(#layer)
             }
         }
         s if s.to_lowercase().starts_with("osl(") => {
-            let layer = get_layer(s.clone(), s.get(0..4).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..4).unwrap(), ")");
             quote! {
                 ::rmk::osl!(#layer)
             }
@@ -226,25 +226,25 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
             }
         }
         s if s.to_lowercase().starts_with("tt(") => {
-            let layer = get_layer(s.clone(), s.get(0..3).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::tt!(#layer)
             }
         }
         s if s.to_lowercase().starts_with("tg(") => {
-            let layer = get_layer(s.clone(), s.get(0..3).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::tg!(#layer)
             }
         }
         s if s.to_lowercase().starts_with("to(") => {
-            let layer = get_layer(s.clone(), s.get(0..3).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::to!(#layer)
             }
         }
         s if s.to_lowercase().starts_with("df(") => {
-            let layer = get_layer(s.clone(), s.get(0..3).unwrap(), ")");
+            let layer = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::df!(#layer)
             }
@@ -306,6 +306,12 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 panic!("\n❌ keyboard.toml: SHIFTED(key) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html");
             }
         }
+        s if s.to_lowercase().starts_with("td(") => {
+            let index = get_number(s.clone(), s.get(0..3).unwrap(), ")");
+            quote! {
+                ::rmk::td!(#index)
+            }
+        }
         _ => {
             let ident = get_key_with_alias(key);
             quote! { ::rmk::k!(#ident) }
@@ -313,9 +319,9 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
     }
 }
 
-/// Parse the string literal like `MO(1)`, `OSL(1)`, get the layer number in it.
+/// Parse the string literal like `MO(1)`, `OSL(1)`, `TD(0)`, etc, get the number in it.
 /// The caller should pass the trimmed prefix and suffix
-fn get_layer(key: String, prefix: &str, suffix: &str) -> u8 {
+fn get_number(key: String, prefix: &str, suffix: &str) -> u8 {
     let layer_str = key.trim_start_matches(prefix).trim_end_matches(suffix);
     layer_str.parse::<u8>().unwrap()
 }
