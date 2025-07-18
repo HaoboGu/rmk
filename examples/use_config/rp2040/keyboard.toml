@@ -43,8 +43,9 @@ keymap = [
 # numslock.pin = "PA5"
 # numslock.low_active = true
 
-
-
 [storage]
 # Storage feature is enabled by default
 # enabled = false
+
+[rmk]
+tap_dance_max_tap = 4
