@@ -55,7 +55,7 @@
 
   --vp-c-gray-1: #78787826;
   --vp-c-gray-2: #5a5a5a;
-  --vp-c-gray-3: #3d3d3d;
+  --vp-c-gray-3: #818181ff;
 
   --vp-c-divider: #ffffff1a;
   --vp-c-divider-to: var(--vp-c-gray-1);
@@ -73,7 +73,7 @@
 }
 
 ::selection {
-  background: var(--vp-c-brand-4-bg); 
+  background: var(--vp-c-brand-4-bg);
   color: var(--vp-c-brand-1);
 }
 
@@ -265,8 +265,26 @@ aside:hover {
       font-weight: 500;
       color: var(--vp-c-brand-1) !important;
     }
-    .indicator{
+    .indicator {
       background-color: var(--vp-c-brand-1) !important;
+    }
+  }
+}
+.divider {
+  position: relative;
+}
+.divider-line {
+  position: absolute;
+  z-index: 100;
+  top: -1px;
+  background-color: var(--vp-c-divider) !important;
+}
+
+.VPNavBar {
+  div.title {
+    .logo {
+      width: 48px;
+      height: 48px;
     }
   }
 }
