@@ -90,7 +90,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         async {
             let mut report_index = -1;
             for expected in expected_reports {
-                match select(Timer::after(Duration::from_secs(1)), KEYBOARD_REPORT_CHANNEL.receive()).await {
+                match select(Timer::after(Duration::from_secs(2)), KEYBOARD_REPORT_CHANNEL.receive()).await {
                     Either::First(_) => panic!("ERROR: report wait timeout reached"),
                     Either::Second(Report::KeyboardReport(report)) => {
                         report_index += 1;

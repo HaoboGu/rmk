@@ -8,24 +8,14 @@ use crate::event::{KeyPos, KeyboardEvent};
 pub enum TapHoldDecision {
     // Hold timeout, trigger the hold action
     Timeout,
-    // Clean holding buffer
+    // Clean holding buffer due to permissive hold or chordal hold is triggered
     CleanBuffer,
-    // Holding
-    Hold,
-    // Chordal holding
-    ChordHold,
     // Hold on pressing, reserved
     HoldOnPress,
     // Skip key action processing and buffer key event
     Buffering,
     // Continue processing as normal key event
     Ignore,
-}
-
-impl TapHoldDecision {
-    fn is_hold(&self) -> bool {
-        matches!(self, Self::Timeout | Self::Hold | Self::ChordHold | Self::HoldOnPress)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -58,31 +48,36 @@ impl HoldingKey {
     pub(crate) fn state(&self) -> TapHoldState {
         self.state
     }
+
+    pub(crate) fn tap_num(&self) -> u8 {
+        match self.state {
+            TapHoldState::Tap(num) => num,
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldState {
-    /// After a press event is received
-    Initial,
+    /// After a press event is received.
+    /// The number represents the number of completed "tap".
+    Tap(u8),
     /// Waiting for combo
     WaitingCombo,
-    /// Key is marked as Tap, waiting to be processed
-    BeforeTap,
     /// Tap key has been processed and sent to HID, but not yet released
-    PostTap,
+    /// The number is used for tap-dance keys, represents the number of completed "tap"
+    PostTap(u8),
     /// Tap-hold key has been determined as Hold, waiting to be processed
     BeforeHold,
     /// Key is being held, but not yet released
-    PostHold,
+    /// The number is used for tap-dance keys, represents the number of completed "tap"
+    PostHold(u8),
     /// Key needs to be released but is still in the queue;
     /// should be cleaned up in the main loop regardless
     Release,
-    /// Tap-dance state: represents the number of taps completed
-    /// Tap(1) = first tap completed, Tap(2) = second tap completed, etc.
-    Tap(u8),
-    /// Hold after tap(x) state for tap-dance keys
-    HoldAfterTap(u8),
+    /// Idle state after tap u8 times for tap-dance keys
+    IdleAfterTap(u8),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]

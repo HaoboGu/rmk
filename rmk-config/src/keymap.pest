@@ -95,12 +95,15 @@ tap_hold_action = _{ mt_action | th_action }
 // Rule 7: SHIFTED(key)
 shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
 
+// Rule 8: TD(n) - Tap Dance
+tap_dance_action = { ^"TD" ~ "(" ~ number ~ ")" }
+
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | osm_action | layer_action | tap_hold_action | shifted_action | no_action | transparent_action | simple_keycode
+    wm_action | osm_action | layer_action | tap_hold_action | shifted_action | tap_dance_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

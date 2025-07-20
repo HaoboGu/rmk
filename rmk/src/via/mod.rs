@@ -247,8 +247,6 @@ impl<
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
-                #[cfg(feature = "defmt")]
-                info!("Data: {:x}", report.output_data[4..]);
                 self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 

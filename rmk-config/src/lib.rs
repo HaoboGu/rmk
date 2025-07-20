@@ -50,6 +50,10 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_tap_dance_max_num")]
     pub tap_dance_max_num: usize,
+    /// Maximum number of taps per tap dance
+    #[serde_inline_default(2)]
+    #[serde(deserialize_with = "check_tap_dance_max_tap")]
+    pub tap_dance_max_tap: usize,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -113,6 +117,17 @@ where
     Ok(value)
 }
 
+fn check_tap_dance_max_tap<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = SerdeDeserialize::deserialize(deserializer)?;
+    if value < 2 || value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: tap_dance_max_tap must be between 2 and 256, got {value}");
+    }
+    Ok(value)
+}
+
 fn check_fork_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -134,6 +149,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             tap_dance_max_num: 8,
+            tap_dance_max_tap: 2,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
@@ -186,7 +202,7 @@ pub struct KeyboardTomlConfig {
 }
 
 impl KeyboardTomlConfig {
-    pub fn new_from_toml_str<P: AsRef<Path>>(config_toml_path: P) -> Self {
+    pub fn new_from_toml_path<P: AsRef<Path>>(config_toml_path: P) -> Self {
         // The first run, load chip model only
         let user_config = match std::fs::read_to_string(config_toml_path.as_ref()) {
             Ok(s) => match toml::from_str::<KeyboardTomlConfig>(&s) {
@@ -198,13 +214,60 @@ impl KeyboardTomlConfig {
         let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
 
         // The second run, load the user config and merge with the default config
-        Config::builder()
+        let mut config: KeyboardTomlConfig = Config::builder()
             .add_source(File::from_str(default_config_str, FileFormat::Toml))
             .add_source(File::with_name(config_toml_path.as_ref().to_str().unwrap()))
             .build()
             .unwrap()
             .try_deserialize()
-            .unwrap()
+            .unwrap();
+
+        config.auto_calculate_parameters();
+
+        config
+    }
+
+    /// Auto calculate some parameters in toml:
+    /// - Update tap_dance_max_tap to fit the max length of tap_actions and hold_actions
+    /// - Update peripheral number based on the number of split boards
+    /// - TODO: Update controller number based on the number of split boards
+    pub fn auto_calculate_parameters(&mut self) {
+        // Update the number of peripherals
+        if let Some(split) = &self.split {
+            if split.peripheral.len() > self.rmk.split_peripherals_num {
+                // eprintln!(
+                //     "The number of split peripherals is updated to {} from {}",
+                //     split.peripheral.len(),
+                //     self.rmk.split_peripherals_num
+                // );
+                self.rmk.split_peripherals_num = split.peripheral.len();
+            }
+        }
+
+        // Update tap_dance_max_tap
+        if let Some(behavior) = &self.behavior {
+            if let Some(tap_dance) = &behavior.tap_dance {
+                let mut max_required_taps = self.rmk.tap_dance_max_tap;
+
+                for td in &tap_dance.tap_dances {
+                    let tap_actions_len = td.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    let hold_actions_len = td.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    max_required_taps = max_required_taps.max(tap_actions_len).max(hold_actions_len);
+                }
+
+                if max_required_taps > 256 {
+                    panic!("The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}");
+                }
+
+                if max_required_taps > self.rmk.tap_dance_max_tap {
+                    // eprintln!(
+                    //     "The number of taps per tap dance is updated to {} from {}",
+                    //     max_required_taps, self.rmk.tap_dance_max_tap
+                    // );
+                    self.rmk.tap_dance_max_tap = max_required_taps;
+                }
+            }
+        }
     }
 }
 
@@ -428,6 +491,11 @@ pub struct TapDanceConfig {
     pub hold: Option<String>,
     pub hold_after_tap: Option<String>,
     pub double_tap: Option<String>,
+    /// Array of tap actions for each tap count (0-indexed)
+    pub tap_actions: Option<Vec<String>>,
+    /// Array of hold actions for each tap count (0-indexed)
+    pub hold_actions: Option<Vec<String>>,
+
     pub tapping_term: Option<DurationMillis>,
 }
 
