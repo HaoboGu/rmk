@@ -33,11 +33,12 @@ fn create_tap_dance_config() -> TapDancesConfig {
 
 mod tap_dance_test {
     use embassy_futures::block_on;
-    use rmk::{config::TapHoldConfig, keyboard::Keyboard};
+    use rmk::config::TapHoldConfig;
+    use rmk::keyboard::Keyboard;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{wrap_keymap, KC_LSHIFT};
+    use crate::common::{KC_LSHIFT, wrap_keymap};
 
     fn create_simple_tap_dance_keyboard() -> Keyboard<'static, 1, 3, 1> {
         let keymap = [[[

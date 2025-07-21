@@ -1,8 +1,8 @@
 use embassy_time::{Duration, Instant};
 use heapless::Vec;
 
-use crate::action::KeyAction;
 use crate::TAP_DANCE_MAX_TAP;
+use crate::action::KeyAction;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -2,30 +2,27 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_futures::yield_now;
 use embassy_time::{Duration, Instant, Timer};
 use heapless::Vec;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
-use TapHoldDecision::{Buffering, Ignore};
-use TapHoldDecision::{Buffering, Ignore};
-use TapHoldState::Initial;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
 use crate::action::{Action, KeyAction};
-use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::{KeyboardReport, ViaReport};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::input_device::rotary_encoder::Direction;
 use crate::input_device::Runnable;
+use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
@@ -33,7 +30,7 @@ use crate::light::LedIndicator;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
-use crate::{boot, FORK_MAX_NUM, TAP_DANCE_MAX_TAP};
+use crate::{FORK_MAX_NUM, TAP_DANCE_MAX_TAP, boot};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -513,12 +510,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     return match key_action {
                         KeyAction::TapHold(_, _) | KeyAction::TapDance(_) => {
                             // Ignore following tap-hold keys, they will be always checked
-                            Ignore
+                            TapHoldDecision::Ignore
                         }
                         _ => {
                             // Buffer keys and wait for key release
                             debug!("key {:?} press down while BUFFERING, save it into buffer", key_action);
-                            Buffering
+                            TapHoldDecision::Buffering
                         }
                     };
                 }
@@ -530,7 +527,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     match key_action {
                         KeyAction::TapDance(_) => {
                             // Ignore following tap-dance keys, they will be always checked
-                            return Ignore;
+                            return TapHoldDecision::Ignore;
                         }
                         _ => {
                             // Buffer keys and wait for key release
@@ -542,7 +539,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         // Default decision
-        Ignore
+        TapHoldDecision::Ignore
     }
 
     async fn process_key_action(&mut self, mut original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {
@@ -1679,9 +1676,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         debug!("Processing user key: {:?}, event: {:?}", key, event);
         #[cfg(feature = "_ble")]
         {
+            use crate::NUM_BLE_PROFILE;
             use crate::ble::trouble::profile::BleProfileAction;
             use crate::channel::BLE_PROFILE_CHANNEL;
-            use crate::NUM_BLE_PROFILE;
             // Get user key id
             let id = key as u8 - KeyCode::User0 as u8;
             if event.pressed {
@@ -1993,13 +1990,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             let tap_dance_action = &self.keymap.borrow().behavior.tap_dance.tap_dances[i as usize];
 
                             let action = if hold_key.pressed_time < pressed_time {
-                                debug!("Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, trigger hold action", hold_key.event);
+                                debug!(
+                                    "Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, trigger hold action",
+                                    hold_key.event
+                                );
                                 *tap_dance_action
                                     .hold_actions
                                     .get(tapped_num as usize)
                                     .unwrap_or(&KeyAction::No)
                             } else {
-                                debug!("Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, trigger tap action", hold_key.event);
+                                debug!(
+                                    "Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, trigger tap action",
+                                    hold_key.event
+                                );
                                 *tap_dance_action
                                     .tap_actions
                                     .get(tapped_num as usize)
@@ -2075,10 +2078,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             }
                         } else if let TapHoldState::Tap(t) = hold_key.state {
                             if hold_key.pressed_time < pressed_time {
-                                debug!("Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, mark as PostHold", hold_key.event);
+                                debug!(
+                                    "Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, mark as PostHold",
+                                    hold_key.event
+                                );
                                 hold_key.state = TapHoldState::PostHold(t);
                             } else {
-                                debug!("Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, mark as PostTap", hold_key.event);
+                                debug!(
+                                    "Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, mark as PostTap",
+                                    hold_key.event
+                                );
                                 hold_key.state = TapHoldState::PostTap(t);
                             }
                         } else {
@@ -2403,21 +2412,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let y_compensated = (y as i16 * 181 + 128) / 256;
 
             x = if x_compensated == 0 && x != 0 {
-                if x > 0 {
-                    1
-                } else {
-                    -1
-                }
+                if x > 0 { 1 } else { -1 }
             } else {
                 x_compensated as i8
             };
 
             y = if y_compensated == 0 && y != 0 {
-                if y > 0 {
-                    1
-                } else {
-                    -1
-                }
+                if y > 0 { 1 } else { -1 }
             } else {
                 y_compensated as i8
             };

@@ -10,9 +10,9 @@ use crate::keymap::KeyMap;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
+    COMBO_MAX_LENGTH,
     channel::FLASH_CHANNEL,
     storage::{ComboData, FlashOperationMessage},
-    COMBO_MAX_LENGTH, COMBO_MAX_LENGTH,
 };
 use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
 
@@ -119,7 +119,7 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
                     report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
-                                                                                     // TODO: Support dynamic key override
+                    // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                 }
                 VialDynamic::DynamicVialTapDanceGet => {

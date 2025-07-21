@@ -256,7 +256,9 @@ impl KeyboardTomlConfig {
                 }
 
                 if max_required_taps > 256 {
-                    panic!("The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}");
+                    panic!(
+                        "The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}"
+                    );
                 }
 
                 if max_required_taps > self.rmk.tap_dance_max_tap {
