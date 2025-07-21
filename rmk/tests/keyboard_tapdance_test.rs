@@ -33,7 +33,8 @@ fn create_tap_dance_config() -> TapDancesConfig {
 
 mod tap_dance_test {
     use embassy_futures::block_on;
-    use rmk::{config::TapHoldConfig, keyboard::Keyboard};
+    use rmk::config::TapHoldConfig;
+    use rmk::keyboard::Keyboard;
     use rusty_fork::rusty_fork_test;
 
     use super::*;

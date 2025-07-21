@@ -532,7 +532,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                         _ => {
                             // Buffer keys and wait for key release
-                    return TapHoldDecision::CleanBuffer;
+                            return TapHoldDecision::CleanBuffer;
                         }
                     }
                 };
@@ -2196,7 +2196,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     Some(key.clone())
                 } else if matches!(key.state, TapHoldState::Tap(_)) {
                     if key.is_tap_dance() | key.is_tap_hold() {
-                    Some(key.clone())
+                        Some(key.clone())
                     } else {
                         None
                     }

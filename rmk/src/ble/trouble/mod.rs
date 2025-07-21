@@ -7,7 +7,7 @@ use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select3, Either, Either3};
+use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{with_timeout, Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
@@ -27,9 +27,9 @@ use {
     crate::state::get_connection_type,
     crate::usb::UsbKeyboardWriter,
     crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
-    crate::usb::{USB_ENABLED, USB_SUSPENDED},
+    crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
     crate::via::UsbVialReaderWriter,
-    embassy_futures::select::{select4, Either4},
+    embassy_futures::select::{select4, Either, Either4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -50,7 +50,6 @@ use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
-use crate::usb::USB_REMOTE_WAKEUP;
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
@@ -216,6 +215,7 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
+    #[cfg(not(feature = "_no_usb"))]
     let usb_task = async {
         loop {
             usb_device.run_until_suspend().await;
