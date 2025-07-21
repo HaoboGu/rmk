@@ -1,10 +1,10 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 
-use embassy_time::Timer;
+use embassy_time::{Instant, Timer};
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
-use crate::ble::trouble::SLEEPING_STATE;
+use crate::{ble::trouble::SLEEPING_STATE, keyboard::LAST_KEY_TIMESTAMP};
 
 /// Battery level global value.
 /// The range of battery level is 0-100, 255 > level > 100 means the battery is charging. 255 means the battery level is not available.
@@ -42,12 +42,16 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
             loop {
                 let val = BATTERY_LEVEL.load(Ordering::Relaxed);
                 if val <= 100 && !SLEEPING_STATE.load(Ordering::Acquire) {
-                    if let Err(e) = self.battery_level.notify(self.conn, &val).await {
-                        error!("Failed to notify battery level: {:?}", e);
+                    let current_time = Instant::now().as_secs() as u32;
+                    if current_time - LAST_KEY_TIMESTAMP.load(Ordering::Acquire) < 30 {
+                        // Only report battery level if the last key action is less than 30 seconds ago
+                        if let Err(e) = self.battery_level.notify(self.conn, &val).await {
+                            error!("Failed to notify battery level: {:?}", e);
+                        }
                     }
                 }
-                // Report battery level every 120s
-                Timer::after_secs(120).await
+                // Report battery level every 5 minutes
+                Timer::after_secs(300).await
             }
         };
 
