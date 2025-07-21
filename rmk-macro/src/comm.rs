@@ -55,7 +55,7 @@ pub(crate) fn usb_config_default(keyboard_config: &KeyboardTomlConfig) -> TokenS
                 } else {
                     quote! {
                         {
-                            let _dp = ::embassy_stm32::gpio::Output::new(&mut p.#dp, ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::Low);
+                            let _dp = ::embassy_stm32::gpio::Output::new(p.#dp.reborrow(), ::embassy_stm32::gpio::Level::Low, ::embassy_stm32::gpio::Speed::Low);
                             ::embassy_time::Timer::after_millis(10).await;
                         }
                         // Usb driver

@@ -566,7 +566,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 dependencies = [
  "critical-section",
  "document-features",
@@ -576,7 +576,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor-macros"
 version = "0.6.2"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -587,23 +587,21 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.1"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 
 [[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 
 [[package]]
 name = "embassy-net-driver-channel"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4818c32afec43e3cae234f324bad9a976c9aa7501022d26ff60a4017a1a006b7"
+version = "0.3.1"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 dependencies = [
  "embassy-futures",
  "embassy-net-driver",
- "embassy-sync 0.6.2",
+ "embassy-sync 0.7.0",
 ]
 
 [[package]]
@@ -623,13 +621,13 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=f35aa4005a63e8d478b2b95aaa2bfb316b72dece#f35aa4005a63e8d478b2b95aaa2bfb316b72dece"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 dependencies = [
  "cfg-if",
  "critical-section",
  "embedded-io-async",
+ "futures-core",
  "futures-sink",
- "futures-util",
  "heapless 0.8.0",
 ]
 
@@ -670,14 +668,14 @@ dependencies = [
 
 [[package]]
 name = "embassy-usb"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e651b9b7b47b514e6e6d1940a6e2e300891a2c33641917130643602a0cb6386"
+version = "0.5.0"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
 dependencies = [
  "embassy-futures",
  "embassy-net-driver-channel",
- "embassy-sync 0.6.2",
- "embassy-usb-driver",
+ "embassy-sync 0.7.0",
+ "embassy-usb-driver 0.2.0",
+ "embedded-io-async",
  "heapless 0.8.0",
  "ssmarshal",
  "usbd-hid",
@@ -690,6 +688,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fc247028eae04174b6635104a35b1ed336aabef4654f5e87a8f32327d231970"
 
 [[package]]
+name = "embassy-usb-driver"
+version = "0.2.0"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
+dependencies = [
+ "embedded-io-async",
+]
+
+[[package]]
 name = "embassy-usb-synopsys-otg"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -697,7 +703,7 @@ checksum = "08e753b23799329780c7ac434264026d0422044d6649ed70a73441b14a6436d7"
 dependencies = [
  "critical-section",
  "embassy-sync 0.6.2",
- "embassy-usb-driver",
+ "embassy-usb-driver 0.1.0",
 ]
 
 [[package]]
@@ -848,6 +854,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-bootloader-esp-idf"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a093dbdc64b0288baacc214c2e8c2f3f13ecbf979c36ee2f63797ecf22538f1"
+dependencies = [
+ "cfg-if",
+ "document-features",
+ "embedded-storage",
+ "esp-config",
+ "esp-rom-sys",
+ "jiff",
+ "log",
+ "strum",
+]
+
+[[package]]
 name = "esp-config"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -877,7 +899,7 @@ dependencies = [
  "embassy-embedded-hal",
  "embassy-futures",
  "embassy-sync 0.6.2",
- "embassy-usb-driver",
+ "embassy-usb-driver 0.1.0",
  "embassy-usb-synopsys-otg",
  "embedded-can",
  "embedded-hal 1.0.0",
@@ -1486,6 +1508,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "jiff"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be1f93b8b1eb69c77f24bbb0afdf66f54b632ee39af40ca21c4365a1d7347e49"
+dependencies = [
+ "jiff-static",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde",
+]
+
+[[package]]
+name = "jiff-static"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03343451ff899767262ec32146f6d559dd759fdadf42ff0e227c7c48f72594b4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1748,6 +1794,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
 
 [[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
+
+[[package]]
 name = "portable_atomic_enum"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1999,6 +2054,7 @@ dependencies = [
  "embuild",
  "esp-alloc",
  "esp-backtrace",
+ "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-hal-embassy",
  "esp-println",

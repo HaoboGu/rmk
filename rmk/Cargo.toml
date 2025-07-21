@@ -20,7 +20,7 @@ embedded-storage-async = { version = "0.4", optional = true }
 
 embassy-embedded-hal = { version = "0.3" }
 embassy-time = { version = "0.4" }
-embassy-usb = { version = "0.4", features = [
+embassy-usb = { version = "0.5", features = [
     "usbd-hid",
     "max-interface-count-8",
     "max-handler-count-8",
@@ -63,13 +63,13 @@ rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.4.1", features = [
+embassy-nrf = { version = "0.5", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
 # RP2040 dependencies
-embassy-rp = { version = "0.5", optional = true }
+embassy-rp = { version = "0.6", optional = true }
 embassy-hal-internal = { version = "0.3.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
