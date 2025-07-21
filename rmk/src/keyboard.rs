@@ -2,38 +2,38 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 
-use TapHoldDecision::{Buffering, Ignore};
-use TapHoldState::Initial;
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
 use embassy_time::{Duration, Instant, Timer};
 use heapless::Vec;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+use TapHoldDecision::{Buffering, Ignore};
+use TapHoldDecision::{Buffering, Ignore};
+use TapHoldState::Initial;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
+    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
     crate::event::ControllerEvent,
 };
 
 use crate::action::{Action, KeyAction};
-use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
+use crate::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::{KeyboardReport, ViaReport};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
+use crate::input_device::Runnable;
 use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::tap_hold::TapHoldDecision::{ChordHold, CleanBuffer, Hold};
 use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState};
-use crate::{FORK_MAX_NUM, boot};
+use crate::{boot, FORK_MAX_NUM, TAP_DANCE_MAX_TAP};
 
 const HOLD_BUFFER_SIZE: usize = 16;
 
@@ -256,22 +256,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
-    // A tap hold key reaches timeout, turning into hold press event
-    async fn process_tap_hold_timeout(&mut self, key: HoldingKey) -> LoopState {
-        info!(
-            "[TAP-HOLD] TIMEOUT: tap hold event now reach timeout and should become hold: {:?}",
-            key
-        );
-        self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
-        LoopState::OK
-    }
-
     // Clean up for leak keys, remove non-tap-hold keys in PostTap state from the buffer
     pub(crate) fn clean_buffered_tap_keys(&mut self) {
         self.holding_buffer.retain(|e| match e.action {
             KeyAction::TapHold(_, _) => true,
             _ => match e.state {
-                TapHoldState::PostTap => {
+                TapHoldState::PostTap(_) => {
                     debug!("Processing buffering TAP keys with post tap: {:?}", e.event);
                     false
                 }
@@ -308,30 +298,83 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
-            _ => {
-                let time_left = if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
-                    self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
-                } else {
-                    Duration::from_ticks(0)
-                };
+            TapHoldState::Tap(_) | TapHoldState::IdleAfterTap(_) => {
+                // Process the timeout for both tap-hold and tap-dance key
+                match key.action {
+                    KeyAction::TapHold(_, _) => {
+                        let time_left =
+                            if self.keymap.borrow().behavior.tap_hold.hold_timeout > key.pressed_time.elapsed() {
+                                self.keymap.borrow().behavior.tap_hold.hold_timeout - key.pressed_time.elapsed()
+                            } else {
+                                Duration::from_ticks(0)
+                            };
 
-                debug!(
-                    "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
-                    key.event,
-                    time_left.as_millis()
-                );
+                        debug!(
+                            "[TAP-HOLD] Processing buffered tap-hold key: {:?}, timeout in {} ms",
+                            key.event,
+                            time_left.as_millis()
+                        );
 
-                // Wait for hold timeout or new key event
-                match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
-                    Either::First(_) => self.process_tap_hold_timeout(key).await,
-                    Either::Second(event) => {
-                        // Process new key event
-                        debug!("[TAP-HOLD] Interrupted into new key event: {:?}", event);
-                        self.process_inner(event).await;
-                        LoopState::OK
+                        // Wait for hold timeout or new key event
+                        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+                            Either::First(_) => {
+                                info!(
+                                    "[TAP-HOLD] TIMEOUT: tap hold event now reach timeout and should become hold: {:?}",
+                                    key
+                                );
+                                self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
+                            }
+                            Either::Second(event) => {
+                                // Process new key event
+                                debug!("[TAP-HOLD] Interrupted into new key event: {:?}", event);
+                                self.process_inner(event).await;
+                            }
+                        }
                     }
+                    KeyAction::TapDance(index) => {
+                        // Process the timeout for the tap-dance key
+                        let time_left = {
+                            let tap_dance = &self.keymap.borrow().behavior.tap_dance.tap_dances[index as usize];
+                            if tap_dance.tapping_term > key.pressed_time.elapsed() {
+                                tap_dance.tapping_term - key.pressed_time.elapsed()
+                            } else {
+                                Duration::from_ticks(0)
+                            }
+                        };
+
+                        debug!(
+                            "[TAP-DANCE] Tap-dance key {:?} timeout in {:?}ms",
+                            key,
+                            time_left.as_millis()
+                        );
+
+                        // Wait for timeout or new key event
+                        match select(Timer::after(time_left), KEY_EVENT_CHANNEL.receive()).await {
+                            Either::First(_) => {
+                                debug!(
+                                    "[TAP-DANCE] TIMEOUT: tap-dance key now reach timeout and should become hold: {:?}",
+                                    key
+                                );
+                                self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
+                            }
+                            Either::Second(event) => {
+                                // Process new key event
+                                if event.pos != key.event.pos && event.pressed {
+                                    // If the tap-dance key is interrupted by other key press-down,
+                                    // fire the tap-dance key first, and then process the other key
+                                    // That is, the tap-dance key's action is in `decide-on-other-press` mode
+                                    debug!("[TAP-DANCE] Interrupted by other key event: {:?}", event);
+                                    self.fire_holding_keys(TapHoldDecision::Timeout, key.event).await;
+                                }
+                                self.process_inner(event).await;
+                            }
+                        }
+                    }
+                    _ => {}
                 }
+                LoopState::OK
             }
+            _ => LoopState::OK,
         }
     }
 
@@ -422,16 +465,23 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    // Calculate next state of tap hold
-    // 1. turn into buffering state
-    // 2. clean buffer
-    // 3. ignore
+    /// Make tap-hold decision for the current key event.
+    ///
+    /// If there's buffered tap-hold key, calculate the next state of tap hold:
+    /// - If the key is pressed
+    ///     - Check if current event is chordal hold, return `ChordHold` if true
+    ///     - Then, check if permissive hold is enabled and current event is non-tap-hold key, return `Buffering` if true.
+    ///       `Buffering` means that when permissive hold is enabled, the tap-hold decision is deferred to the next key release.
+    /// - If the key is released
+    ///     - Check if permissive hold is enabled, if true, return `CleanBuffer`, fire buffered tap-hold keys. `CleanBuffer` means that the tap-hold decision is deferred to the next key press.
+    /// - Otherwise, return `Ignore`, continue processing as normal.
     fn make_tap_hold_decision(&mut self, key_action: KeyAction, event: KeyboardEvent) -> TapHoldDecision {
         let permissive = self.keymap.borrow().behavior.tap_hold.permissive_hold;
 
-        // Check if there's buffered tap-hold key
+        // Check if there's buffered tap-hold key or tap-dance key
         let is_buffered = self.holding_buffer.iter().any(|i| match i.action {
-            KeyAction::TapHold(_, _) => i.state == TapHoldState::Initial,
+            KeyAction::TapHold(_, _) => matches!(i.state, TapHoldState::Tap(_)),
+            KeyAction::TapDance(_) => matches!(i.state, TapHoldState::Tap(_)),
             _ => false,
         });
 
@@ -450,10 +500,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if let KeyboardEventPos::Key(pos) = event.pos {
                         if !hand.is_same(pos) {
                             debug!("Is chordal hold hand: {:?}, raise", hand);
-                            return ChordHold;
+                            return TapHoldDecision::CleanBuffer;
                         }
                     }
-                    // TODO: handle rotary encoder chordal hold
                 }
 
                 // 2. Permissive hold
@@ -462,7 +511,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // Buffer pressed keys if permissive hold is enabled.
                     return match key_action {
-                        KeyAction::TapHold(_, _) => {
+                        KeyAction::TapHold(_, _) | KeyAction::TapDance(_) => {
                             // Ignore following tap-hold keys, they will be always checked
                             Ignore
                         }
@@ -478,7 +527,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if permissive {
                     // PERMISSIVE HOLDING, which means any key press-and-release after a tap-hold key will raise hold decision
                     // Key release while permissive hold is enabled, hold will be triggered
-                    return CleanBuffer;
+                    match key_action {
+                        KeyAction::TapDance(_) => {
+                            // Ignore following tap-dance keys, they will be always checked
+                            return Ignore;
+                        }
+                        _ => {
+                            // Buffer keys and wait for key release
+                            return TapHoldDecision::CleanBuffer;
+                        }
+                    }
                 };
             }
         }
@@ -492,18 +550,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
         match decision {
-            Ignore => {}
-            Buffering => {
+            TapHoldDecision::Ignore => {}
+            TapHoldDecision::Buffering => {
                 // Save into buffer, will be process in the future
-                self.add_holding_key_to_buffer(event, original_key_action, Initial);
+                // The buffered key is impossible to be a tap-hold key, so use `Tap(0)` is fine
+                self.add_holding_key_to_buffer(event, original_key_action, TapHoldState::Tap(0));
                 return LoopState::Queue;
             }
-            CleanBuffer | Hold | ChordHold => {
-                // CleanBuffer: permissive hold is triggered by a key release
-                // ChordHold: chordal hold is triggered by a key press
-                // Hold: impossible for now
+            TapHoldDecision::CleanBuffer => {
+                // Clean current holding buffer due to:
+                // 1. permissive hold is triggered by a key release
+                // 2. chordal hold is triggered by a key press
                 self.fire_holding_keys(decision, event).await;
-                // Because the layer/keymap state might be changed after `fire_holding_keys`, so we need to get the key action again
+                // Because the layer/keymap state might be changed after `fire_holding_keys`,
+                // we need to get the current key action again
                 original_key_action = self.keymap.borrow_mut().get_action_with_layer_cache(event);
             }
             _ => {
@@ -798,17 +858,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let Some(hold_key) = self.remove_holding_key_from_buffer(event) {
             if let KeyAction::TapHold(tap_action, hold_action) = hold_key.action {
                 match hold_key.state {
-                    TapHoldState::BeforeHold | TapHoldState::PostHold => {
+                    TapHoldState::BeforeHold | TapHoldState::PostHold(_) => {
                         debug!("[TAP-HOLD] {:?} releasing with key event {:?}", hold_key.state, event);
                         self.process_key_action_normal(hold_action, event).await;
                     }
-                    TapHoldState::PostTap => {
+                    TapHoldState::PostTap(_) => {
                         debug!("TapHold {:?}] post Tapping, releasing {:?}", hold_key.event, tap_action);
                         // The tap-hold key is already "pressed" as tap, release it here.
                         // This is a special case, because the "tap_action" isn't tapped, it's triggered by "pressing" the tap-action
                         self.process_key_action_normal(tap_action, event).await;
                     }
-                    TapHoldState::Initial => {
+                    TapHoldState::Tap(_t) => {
                         // Release tap-hold key as tap action
                         debug!(
                             "[TAP-HOLD] quick release should be tapping, send tap action, {:?}",
@@ -965,7 +1025,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.add_holding_key_to_buffer(
                             event,
                             KeyAction::TapHold(tap_action, hold_action),
-                            TapHoldState::PostTap,
+                            TapHoldState::PostTap(0),
                         );
                         return;
                     } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
@@ -989,7 +1049,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // New hold key pressed, should push into unreleased events
         if event.pressed {
             // Save unprocessed key
-            self.add_holding_key_to_buffer(event, KeyAction::TapHold(tap_action, hold_action), Initial);
+            self.add_holding_key_to_buffer(event, KeyAction::TapHold(tap_action, hold_action), TapHoldState::Tap(0));
         } else {
             // Release a tap-hold key, should check timeout for tap
 
@@ -1029,14 +1089,88 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Process tap dance action.
-    async fn process_key_action_tap_dance(&mut self, index: u8, _event: KeyboardEvent) {
+    async fn process_key_action_tap_dance(&mut self, index: u8, event: KeyboardEvent) {
         let tap_dances = &self.keymap.borrow().behavior.tap_dance.tap_dances;
+        let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
+        match tap_dances.get(index as usize) {
+            Some(tap_dance) => {
+                if event.pressed {
+                    // Pressed a tap-dance key.
+                    // Check the holding buffer, if current key is in the buffer, update the tap state.
+                    match self.holding_buffer.iter_mut().find(|k| k.event.pos == event.pos) {
+                        Some(k) => {
+                            // Current tap-dance key is already in the buffer, update it
+                            if let TapHoldState::IdleAfterTap(t) = k.state {
+                                if t + 1 >= TAP_DANCE_MAX_TAP as u8 {
+                                    // Reach maximum tapping number
+                                    k.state = TapHoldState::Tap(TAP_DANCE_MAX_TAP as u8 - 1);
+                                } else {
+                                    k.state = TapHoldState::Tap(t + 1);
+                                }
+                                k.pressed_time = pressed_time;
+                            }
+                        }
+                        None => {
+                            // Add to buffer
+                            self.add_holding_key_to_buffer(event, KeyAction::TapDance(index), TapHoldState::Tap(0));
+                        }
+                    };
+                    debug!("Tap dance index {}: {:?} is pressed", index, tap_dance);
+                } else {
+                    // Release a tap-dance key.
+                    // If it's already timeout, get the action to be released.
+                    // Otherwise, update the tap state to idle, wait for the next tap or idle timeout
+                    let action = if let Some(k) = self.holding_buffer.iter_mut().find(|k| k.event.pos == event.pos) {
+                        match k.state {
+                            TapHoldState::Tap(t) => {
+                                // If the current pressed key is timeout when releasing it, release the hold action
+                                // TODO: Check whether it's pressed?
+                                if k.pressed_time.elapsed() > tap_dance.tapping_term {
+                                    // Timeout, release current hold action
+                                    Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                                } else {
+                                    k.state = TapHoldState::IdleAfterTap(t);
+                                    // Use current release time for `IdleAfterTap` state
+                                    k.pressed_time = Instant::now();
+                                    None
+                                }
+                            }
+                            TapHoldState::PostHold(t) => {
+                                Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                            }
+                            TapHoldState::PostTap(t) => {
+                                Some(*tap_dance.tap_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                            }
+                            _ => {
+                                // Release when tap-dance key is in other state, ignore
+                                None
+                            }
+                        }
+                    } else {
+                        // Release the tap-dance key which is not in the holding buffer, ignore
+                        None
+                    };
 
-        if let Some(tap_dance) = tap_dances.get(index as usize) {
-            // TODO: Implement full tap dance functionality with timing, double tap, hold, etc.
-            warn!("Tap dance index {}: {:?} is triggered", index, tap_dance);
-        } else {
-            warn!("Tap dance index {} not found", index);
+                    // If there's an action determined to be triggered, process it
+                    if let Some(action) = action {
+                        debug!("[TAP-DANCE] Releasing tap-dance key: {:?}", event);
+                        let _ = self.remove_holding_key_from_buffer(event);
+                        // Don't call process_key_action_inner to avoid recursion
+                        match action {
+                            KeyAction::Single(action) => self.process_key_action_normal(action, event).await,
+                            KeyAction::Tap(action) => self.process_key_action_tap(action, event).await,
+                            KeyAction::OneShot(action) => self.process_key_action_oneshot(action, event).await,
+                            KeyAction::TapHold(tap, hold) => self.process_key_action_tap_hold(tap, hold, event).await,
+                            _ => {}
+                        }
+                    }
+                    // Clear timer
+                    self.set_timer_value(event, None);
+                }
+            }
+            None => {
+                warn!("Tap dance index {} not found", index);
+            }
         }
     }
 
@@ -1545,9 +1679,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         debug!("Processing user key: {:?}, event: {:?}", key, event);
         #[cfg(feature = "_ble")]
         {
-            use crate::NUM_BLE_PROFILE;
             use crate::ble::trouble::profile::BleProfileAction;
             use crate::channel::BLE_PROFILE_CHANNEL;
+            use crate::NUM_BLE_PROFILE;
             // Get user key id
             let id = key as u8 - KeyCode::User0 as u8;
             if event.pressed {
@@ -1655,11 +1789,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     MacroOperation::Text(k, is_cap) => {
                         self.macro_texting = true;
                         self.macro_caps = is_cap;
+                        if is_cap {
+                            self.send_keyboard_report_with_resolved_modifiers(true).await;
+                            embassy_time::Timer::after_millis(12).await;
+                        }
                         self.register_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(true).await;
-                        embassy_time::Timer::after_millis(2).await;
+                        embassy_time::Timer::after_millis(12).await;
                         self.unregister_keycode(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        if is_cap {
+                            self.macro_caps = false;
+                            embassy_time::Timer::after_millis(12).await;
+                            self.send_keyboard_report_with_resolved_modifiers(false).await;
+                        }
                     }
                     MacroOperation::Delay(t) => {
                         embassy_time::Timer::after_millis(t as u64).await;
@@ -1678,6 +1821,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if offset > self.keymap.borrow().behavior.keyboard_macros.macro_sequences.len() {
                     break;
                 }
+                embassy_time::Timer::after_millis(1).await;
             }
         } else {
             error!("Macro not found");
@@ -1702,18 +1846,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// ## On timeout decision
+    /// ## On Timeout decision
     /// When a tap-hold event is reach timeout
     /// - Current key press down as hold and become PostHold
     /// - Ignore all tap-hold keys, keep they state and timer
     /// - For all non tap-hold keys pressed, trigger their tap action.
     ///
-    /// ## Other decision
-    /// When a non-tap-hold event is released while the permissive-hold feature is enabled:
-    /// - If the corresponding key_action is a tap-hold, check that it is not already in a TapHold* state.
+    /// ## Other decision: CleanBuffer | Hold | ChordHold
+    /// `Hold` is triggered because of another key press/release.
+    /// When a non-tap-hold event is released and the permissive-hold feature is enabled:
+    /// - If the corresponding key_action is a tap-hold, check that it is not already in a TapHold state.
     /// - For all tap-hold keys pressed before this event, trigger their hold action.
     /// - For all tap-hold keys pressed after this event, trigger their tap action.
-    /// - Other keys should send as normal
+    /// - Other keys should be sent as normal
     ///
     /// This function forces all buffered keys to resolve immediately, ignoring their timeouts.
     async fn fire_holding_keys(&mut self, reason: TapHoldDecision, event: KeyboardEvent) {
@@ -1724,23 +1869,23 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .holding_buffer
             .iter()
             .enumerate()
-            .filter_map(|(pos, e)| match reason {
-                TapHoldDecision::Timeout => {
-                    // A tap-hold key is timeout, flush current timeout keys and all other tapped normal keys
-                    if e.state() == Initial {
-                        if e.event.pos == event.pos || (!matches!(e.action, KeyAction::TapHold(..))) {
+            .filter_map(|(pos, e)| {
+                if !matches!(e.state(), TapHoldState::Tap(_)) && !matches!(e.state(), TapHoldState::IdleAfterTap(_)) {
+                    return None;
+                }
+                match reason {
+                    TapHoldDecision::Timeout => {
+                        if e.event.pos == event.pos
+                            || (!matches!(e.action, KeyAction::TapHold(..))
+                                && !matches!(e.action, KeyAction::TapDance(..)))
+                        {
+                            // When timeout, flush current key and all other normal keys(not tap-hold or tap-dance)
                             Some(pos)
                         } else {
-                            // Exclude other tap-hold keys
                             None
                         }
-                    } else {
-                        None
                     }
-                }
-                _ => {
-                    // CleanBuffer/Hold/ChordHold: fire all keys in Initial state in the buffer
-                    if e.state() == Initial { Some(pos) } else { None }
+                    _ => Some(pos),
                 }
             })
             .collect();
@@ -1755,7 +1900,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             );
         }
 
-        // Iterate buffer twice, since i just can borrow self twice
+        let mut removed_events: Vec<(KeyAction, KeyboardEvent), HOLD_BUFFER_SIZE> = Vec::new();
+
+        // Process hold key
         for pos in hold_keys_to_flush {
             // First, trigger keys in holding buffer
             if let Some(hold_key) = self.holding_buffer.get(pos) {
@@ -1770,10 +1917,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             };
                             debug!("Current Key {:?} become {:?}", hold_key.event, action);
                             self.process_key_action_normal(action, hold_key.event).await;
-                        } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
+                        } else if matches!(hold_key.state, TapHoldState::Tap(_)) && hold_key.pressed_time < pressed_time
+                        {
                             debug!("Key {:?} become {:?}", hold_key.event, hold_action);
                             self.process_key_action_normal(hold_action, hold_key.event).await;
-                        } else if hold_key.state == Initial && hold_key.pressed_time >= pressed_time {
+                        } else if matches!(hold_key.state, TapHoldState::Tap(_))
+                            && hold_key.pressed_time >= pressed_time
+                        {
                             debug!("Key {:?} become {:?}", hold_key.event, tap_action);
                             self.process_key_action_normal(tap_action, hold_key.event).await;
                         } else {
@@ -1784,6 +1934,82 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             );
                         }
                     }
+                    KeyAction::TapDance(i) => {
+                        if hold_key.event.pos == event.pos {
+                            // Get tap-dance action according to the index
+                            let tap_dance_action = &self.keymap.borrow().behavior.tap_dance.tap_dances[i as usize];
+
+                            // Get action according to the reason: hold when timeout, tap when flush
+                            let action = if reason == TapHoldDecision::Timeout {
+                                // Hold timeout for current tap-dance key
+                                debug!("Tap-dance key {:?} timeout, trigger action", hold_key.event);
+                                // Get tapped num, determine the action
+                                match hold_key.state {
+                                    TapHoldState::Tap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .hold_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    TapHoldState::IdleAfterTap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    _ => None,
+                                }
+                            } else {
+                                // Flush hold key and it's not timeout, it's tap action
+                                debug!("Tap-dance key {:?} flush, trigger tap action", hold_key.event);
+                                // Get tapped num, determine the action
+                                match hold_key.state {
+                                    TapHoldState::Tap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    TapHoldState::IdleAfterTap(tapped_num) => Some(
+                                        *tap_dance_action
+                                            .tap_actions
+                                            .get(tapped_num as usize)
+                                            .unwrap_or(&KeyAction::No),
+                                    ),
+                                    _ => None,
+                                }
+                            };
+
+                            // Trigger the tap-dance action
+                            if let Some(action) = action {
+                                if let TapHoldState::IdleAfterTap(_) = hold_key.state {
+                                    removed_events.push((action, hold_key.event.clone())).ok();
+                                }
+                                self.process_key_action_inner(action, hold_key.event).await;
+                            }
+                        } else if let TapHoldState::Tap(tapped_num) = hold_key.state {
+                            // Another key triggers `CleanBuffer` while current tap-dance key is pressed.
+                            // Release the current tap-dance key according to the time
+                            let tap_dance_action = &self.keymap.borrow().behavior.tap_dance.tap_dances[i as usize];
+
+                            let action = if hold_key.pressed_time < pressed_time {
+                                debug!("Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, trigger hold action", hold_key.event);
+                                *tap_dance_action
+                                    .hold_actions
+                                    .get(tapped_num as usize)
+                                    .unwrap_or(&KeyAction::No)
+                            } else {
+                                debug!("Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, trigger tap action", hold_key.event);
+                                *tap_dance_action
+                                    .tap_actions
+                                    .get(tapped_num as usize)
+                                    .unwrap_or(&KeyAction::No)
+                            };
+
+                            // Trigger the tap-dance action
+                            self.process_key_action_inner(action, hold_key.event).await;
+                        }
+                    }
                     _ => {
                         let action = self.keymap.borrow_mut().get_action_with_layer_cache(hold_key.event);
                         debug!("Tap Key {:?} now press down, action: {:?}", hold_key.event, action);
@@ -1791,7 +2017,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.process_key_action_inner(action, hold_key.event).await;
                     }
                 }
-            }
+            };
 
             // Second, update state of the key in the buffer
             // This ensures that the buffer accurately reflects which keys have been resolved as tap or hold,
@@ -1803,19 +2029,58 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // This is the key that triggered the flush; mark as PostTap (tap resolved).
                             if reason == TapHoldDecision::Timeout {
                                 debug!("Current Key {:?} mark {:?}", hold_key.event, hold_action);
-                                hold_key.state = TapHoldState::PostHold;
+                                hold_key.state = TapHoldState::PostHold(0);
                             } else {
                                 debug!("Current Key {:?} mark {:?}", hold_key.event, tap_action);
-                                hold_key.state = TapHoldState::PostTap;
+                                hold_key.state = TapHoldState::PostTap(0);
                             };
-                        } else if hold_key.state == Initial && hold_key.pressed_time < pressed_time {
+                        } else if matches!(hold_key.state, TapHoldState::Tap(_)) && hold_key.pressed_time < pressed_time
+                        {
                             // This key was pressed before the triggering key; mark as PostHold (hold resolved).
                             debug!("Key {:?} become {:?}", hold_key.event, hold_action);
-                            hold_key.state = TapHoldState::PostHold;
-                        } else if hold_key.state == Initial && hold_key.pressed_time >= pressed_time {
+                            hold_key.state = TapHoldState::PostHold(0);
+                        } else if matches!(hold_key.state, TapHoldState::Tap(_))
+                            && hold_key.pressed_time >= pressed_time
+                        {
                             // This key was pressed after or at the same time as the triggering key; mark as PostTap.
                             debug!("Key {:?} become {:?}", hold_key.event, tap_action);
-                            hold_key.state = TapHoldState::PostTap;
+                            // Just Tap the key and remove current tap-dance key from buffer
+                            hold_key.state = TapHoldState::PostTap(0);
+                        } else {
+                            // No state change needed; already resolved.
+                            debug!(
+                                "ignore : {:?}, pressed_time {}",
+                                hold_key,
+                                hold_key.pressed_time.as_millis()
+                            );
+                        }
+                    }
+                    KeyAction::TapDance(_) => {
+                        // Get tap-dance action according to the index
+                        if hold_key.event.pos == event.pos {
+                            if reason == TapHoldDecision::Timeout {
+                                debug!("Tap-dance key {:?} timeout", hold_key.event);
+                                match hold_key.state {
+                                    TapHoldState::Tap(t) => hold_key.state = TapHoldState::PostHold(t),
+                                    TapHoldState::IdleAfterTap(t) => hold_key.state = TapHoldState::PostTap(t),
+                                    _ => {}
+                                }
+                            } else {
+                                debug!("Tap-dance key {:?} flush, mark as PostTap", hold_key.event);
+                                match hold_key.state {
+                                    TapHoldState::Tap(t) => hold_key.state = TapHoldState::PostTap(t),
+                                    TapHoldState::IdleAfterTap(t) => hold_key.state = TapHoldState::PostTap(t),
+                                    _ => {}
+                                }
+                            }
+                        } else if let TapHoldState::Tap(t) = hold_key.state {
+                            if hold_key.pressed_time < pressed_time {
+                                debug!("Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, mark as PostHold", hold_key.event);
+                                hold_key.state = TapHoldState::PostHold(t);
+                            } else {
+                                debug!("Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, mark as PostTap", hold_key.event);
+                                hold_key.state = TapHoldState::PostTap(t);
+                            }
                         } else {
                             // No state change needed; already resolved.
                             debug!(
@@ -1828,9 +2093,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     _ => {
                         // For non-tap-hold keys, mark as PostTap to indicate they've been processed.
                         debug!("Tap Key {:?} now marked as PostTap", hold_key.event);
-                        hold_key.state = TapHoldState::PostTap;
+                        hold_key.state = TapHoldState::PostTap(0);
                     }
                 }
+            }
+        }
+
+        // Fire released tap-dance keys, remove them from buffer
+        for (action, mut event) in removed_events {
+            if let Some(_) = self.remove_holding_key_from_buffer(event) {
+                event.pressed = false;
+                self.process_key_action_inner(action, event).await;
             }
         }
 
@@ -1921,8 +2194,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.holding_buffer
             .iter()
             .filter_map(|key| {
-                if key.state == Initial || key.state == TapHoldState::WaitingCombo {
+                if matches!(key.state, TapHoldState::IdleAfterTap(_) | TapHoldState::WaitingCombo) {
                     Some(key.clone())
+                } else if matches!(key.state, TapHoldState::Tap(_)) {
+                    if key.is_tap_dance() | key.is_tap_hold() {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -2124,13 +2403,21 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let y_compensated = (y as i16 * 181 + 128) / 256;
 
             x = if x_compensated == 0 && x != 0 {
-                if x > 0 { 1 } else { -1 }
+                if x > 0 {
+                    1
+                } else {
+                    -1
+                }
             } else {
                 x_compensated as i8
             };
 
             y = if y_compensated == 0 && y != 0 {
-                if y > 0 { 1 } else { -1 }
+                if y > 0 {
+                    1
+                } else {
+                    -1
+                }
             } else {
                 y_compensated as i8
             };

@@ -134,12 +134,6 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
     match tap_dance {
         Some(tap_dance) => {
             let tap_dances_def = tap_dance.tap_dances.iter().map(|td| {
-                // Parse each action, using "No" as default if not specified
-                let tap = parse_key(td.tap.clone().unwrap_or_else(|| "No".to_string()));
-                let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
-                let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
-                let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
-
                 // Parse tapping term, default to 200ms if not specified
                 let tapping_term = match &td.tapping_term {
                     Some(duration) => {
@@ -149,14 +143,55 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     None => quote! { ::embassy_time::Duration::from_millis(200) },
                 };
 
-                quote! {
-                    ::rmk::tap_dance::TapDance::new(
-                        #tap,
-                        #hold,
-                        #hold_after_tap,
-                        #double_tap,
-                        #tapping_term
-                    )
+                if td.tap_actions.is_some() || td.hold_actions.is_some() {
+                    // Check first
+                    if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() {
+                        panic!("\n❌ keyboard.toml: `tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#tap-dance");
+                    }
+                    let tap_actions_def = match &td.tap_actions {
+                        Some(tap_actions) => {
+                            let actions = tap_actions.iter().map(|action| {
+                                let parsed_action = parse_key(action.clone());
+                                quote! { #parsed_action }
+                            });
+                            quote! { ::rmk::heapless::Vec::from_iter([#(#actions),*]) }
+                        }
+                        None => quote! { ::rmk::heapless::Vec::new() },
+                    };
+
+                    let hold_actions_def = match &td.hold_actions {
+                        Some(hold_actions) => {
+                            let actions = hold_actions.iter().map(|action| {
+                                let parsed_action = parse_key(action.clone());
+                                quote! { #parsed_action }
+                            });
+                            quote! { ::rmk::heapless::Vec::from_iter([#(#actions),*]) }
+                        }
+                        None => quote! { ::rmk::heapless::Vec::new() },
+                    };
+
+                    quote! {
+                        ::rmk::tap_dance::TapDance::new_with_actions(
+                            #tap_actions_def,
+                            #hold_actions_def,
+                            #tapping_term
+                        )
+                    }
+                } else {
+                    let tap = parse_key(td.tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
+                    let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
+
+                    quote! {
+                        ::rmk::tap_dance::TapDance::new_from_vial(
+                            #tap,
+                            #hold,
+                            #hold_after_tap,
+                            #double_tap,
+                            #tapping_term
+                        )
+                    }
                 }
             });
 

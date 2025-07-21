@@ -154,6 +154,42 @@ adc_divider_total = 2806
 # [Depreciated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
 
+# RMK internal configuration
+[rmk]
+# Mouse key interval (ms) - controls mouse movement speed
+mouse_key_interval = 20
+# Mouse wheel interval (ms) - controls scrolling speed
+mouse_wheel_interval = 80
+# Maximum number of combos keyboard can store
+combo_max_num = 8
+# Maximum number of keys pressed simultaneously in a combo
+combo_max_length = 4
+# Maximum number of forks for conditional key actions
+fork_max_num = 8
+# Maximum number of tap dances keyboard can store
+# (Each tap dance is a programmable multi-tap/hold key)
+tap_dance_max_num = 8
+# Maximum number of taps per tap dance (default: 2, min: 2, max: 256)
+tap_dance_max_tap = 2
+# Macro space size in bytes for storing sequences
+macro_space_size = 256
+# Default debounce time in ms
+debounce_time = 20
+# Event channel size
+event_channel_size = 16
+# Report channel size
+report_channel_size = 16
+# Vial channel size
+vial_channel_size = 4
+# Flash channel size
+flash_channel_size = 4
+# The number of the split peripherals
+split_peripherals_num = 1
+# The size of the split message channel
+split_message_channel_size = 4
+# The number of available BLE profiles
+ble_profiles_num = 3
+
 # Split configuration
 # This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH
 [split]
