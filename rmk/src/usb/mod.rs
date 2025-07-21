@@ -13,8 +13,7 @@ use crate::config::KeyboardUsbConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
-use crate::RawMutex;
-use crate::CONNECTION_STATE;
+use crate::{RawMutex, CONNECTION_STATE};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 

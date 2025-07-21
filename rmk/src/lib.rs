@@ -240,8 +240,9 @@ pub async fn run_rmk<
             loop {
                 let usb_task = async {
                     loop {
-                        use crate::usb::USB_REMOTE_WAKEUP;
                         use embassy_futures::select::{select, Either};
+
+                        use crate::usb::USB_REMOTE_WAKEUP;
 
                         usb_device.run_until_suspend().await;
                         match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
