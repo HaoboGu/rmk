@@ -7,7 +7,7 @@ use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select3, Either3};
+use embassy_futures::select::{select, select3, Either, Either3};
 use embassy_time::{with_timeout, Duration, Timer};
 use embedded_hal::digital::OutputPin;
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
@@ -50,6 +50,7 @@ use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
+use crate::usb::USB_REMOTE_WAKEUP;
 use crate::{run_keyboard, CONNECTION_STATE};
 
 pub(crate) mod battery_service;
@@ -215,13 +216,28 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
+    let usb_task = async {
+        loop {
+            usb_device.run_until_suspend().await;
+            match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
+                Either::First(_) => continue,
+                Either::Second(_) => {
+                    info!("USB wakeup remote");
+                    if let Err(e) = usb_device.remote_wakeup().await {
+                        info!("USB wakeup remote error: {:?}", e)
+                    }
+                }
+            }
+        }
+    };
+
     #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
-    let background_task = join(ble_task(runner), usb_device.run());
+    let background_task = join(ble_task(runner), usb_task);
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
     let background_task = join(
         ble_task(runner),
         select(
-            usb_device.run(),
+            usb_task,
             embassy_usb_logger::with_class!(1024, log::LevelFilter::Debug, usb_logger),
         ),
     );
