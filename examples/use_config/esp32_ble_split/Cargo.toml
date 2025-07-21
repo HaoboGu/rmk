@@ -38,17 +38,17 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "storage",
 ] }
 embassy-executor = { version = "0.7.0" }
-esp-backtrace = { version = "0.16", features = [
+esp-backtrace = { version = "0.17", features = [
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-storage = { version = "0.6.0" }
-esp-hal = { version = "1.0.0-beta.1", features = ["unstable"] }
-esp-hal-embassy = { version = "0.8.1" }
+esp-storage = { version = "0.7.0" }
+esp-hal = { version = "1.0.0-rc.0", features = ["unstable"] }
+esp-hal-embassy = { version = "0.9" }
 esp-alloc = { version = "0.8.0" }
-esp-println = { version = "0.14.0", features = ["log-04"] }
-esp-wifi = { version = "0.14.1", features = ["ble"] }
+esp-println = { version = "0.15.0", features = ["log-04"] }
+esp-wifi = { version = "0.15.0", features = ["ble"] }
 bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 

@@ -171,7 +171,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
-                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone(), p.RADIO_CLK).unwrap();
+                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone()).unwrap();
                 let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
                 ::esp_hal_embassy::init(systimer.alarm0);
                 let bluetooth = p.BT;
