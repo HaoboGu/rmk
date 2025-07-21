@@ -43,15 +43,15 @@ impl<P: PacketPool> BleBatteryServer<'_, '_, '_, P> {
                 let val = BATTERY_LEVEL.load(Ordering::Relaxed);
                 if val <= 100 && !SLEEPING_STATE.load(Ordering::Acquire) {
                     let current_time = Instant::now().as_secs() as u32;
-                    if current_time.saturating_sub(LAST_KEY_TIMESTAMP.load(Ordering::Acquire)) < 30 {
-                        // Only report battery level if the last key action is less than 30 seconds ago
+                    if current_time.saturating_sub(LAST_KEY_TIMESTAMP.load(Ordering::Acquire)) < 60 {
+                        // Only report battery level if the last key action is less than 60 seconds ago
                         if let Err(e) = self.battery_level.notify(self.conn, &val).await {
                             error!("Failed to notify battery level: {:?}", e);
                         }
                     }
                 }
-                // Report battery level every 5 minutes
-                Timer::after_secs(300).await
+                // Report battery level every 2 minutes
+                Timer::after_secs(120).await
             }
         };
 
