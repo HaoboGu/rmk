@@ -71,6 +71,7 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
     let imports = match config.get_chip_model().unwrap().series {
         ChipSeries::Esp32 => quote! {
             use {esp_alloc as _, esp_backtrace as _};
+            ::esp_bootloader_esp_idf::esp_app_desc!();
         },
         _ => {
             // If defmt_log is disabled, add an empty defmt logger impl

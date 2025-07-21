@@ -29,6 +29,8 @@ use {esp_alloc as _, esp_backtrace as _};
 use crate::keymap::*;
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
+::esp_bootloader_esp_idf::esp_app_desc!();
+
 #[esp_hal_embassy::main]
 async fn main(_s: Spawner) {
     // Initialize the peripherals and bluetooth controller
