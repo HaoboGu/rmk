@@ -19,7 +19,7 @@ central = [
     "esp-hal-embassy/esp32c6",
     "esp-println/esp32c6",
     "esp-wifi/esp32c6",
-    "esp_bootloader_esp_idf/esp32c6",
+    "esp-bootloader-esp-idf/esp32c6",
 ]
 peripheral = [
     "rmk/esp32c3_ble",
@@ -29,7 +29,7 @@ peripheral = [
     "esp-hal-embassy/esp32c3",
     "esp-println/esp32c3",
     "esp-wifi/esp32c3",
-    "esp_bootloader_esp_idf/esp32c3",
+    "esp-bootloader-esp-idf/esp32c3",
 ]
 
 [dependencies]
