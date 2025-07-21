@@ -8,12 +8,14 @@ use embassy_usb::{Builder, Handler};
 use ssmarshal::serialize;
 use static_cell::StaticCell;
 
-use crate::CONNECTION_STATE;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::config::KeyboardUsbConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
+use crate::{CONNECTION_STATE, RawMutex};
+
+pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
 /// USB state
 #[repr(u8)]
@@ -277,5 +279,9 @@ impl Handler for UsbDeviceHandler {
             );
             USB_SUSPENDED.reset();
         }
+    }
+
+    fn remote_wakeup_enabled(&mut self, enabled: bool) {
+        info!("Remote wakeup enabled state: {}", enabled);
     }
 }

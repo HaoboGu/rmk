@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7] - 2025-07-21
+
+### Added
+
+- [TapDance](https://rmk.rs/docs/features/configuration/behavior.html#tap-dance) support
+- Extra delay when executing macros
+
+### Changed
+
+- CI bloat workflow can comment on PR now  
+- Report battery percentage instead of adc value, and do the report instantly after boot
+- Report battery level via BLE only when there's a key action recently
+
+### Fixed
+
+- USB remote wakeup failure
+- Overflow in `PollingController`
+
 ## [0.7.6] - 2025-07-15
 
 ### Changed
