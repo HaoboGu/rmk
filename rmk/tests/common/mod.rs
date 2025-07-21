@@ -30,9 +30,10 @@ pub fn init_log() {
         .try_init();
 }
 
+pub const KC_LCTRL: u8 = 1 << 0;
 pub const KC_LSHIFT: u8 = 1 << 1;
+pub const KC_LALT: u8 = 1 << 2;
 pub const KC_LGUI: u8 = 1 << 3;
-pub const KC_LCTRL: u8 = 1;
 
 #[derive(Debug, Clone)]
 pub struct TestKeyPress {
