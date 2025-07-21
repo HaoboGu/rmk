@@ -1,6 +1,8 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+#[cfg(feature = "_ble")]
+use core::sync::atomic::AtomicU32;
 
 use embassy_futures::select::{select, Either};
 use embassy_futures::yield_now;
@@ -34,6 +36,10 @@ use crate::tap_hold::{ChordHoldState, HoldingKey, TapHoldDecision, TapHoldState}
 use crate::{boot, FORK_MAX_NUM, TAP_DANCE_MAX_TAP};
 
 const HOLD_BUFFER_SIZE: usize = 16;
+
+// Timestamp of the last key action, the value is the number of seconds since the boot
+#[cfg(feature = "_ble")]
+pub(crate) static LAST_KEY_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
 
 /// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
 /// LedIndicator type would be nicer, but that does not have const expr constructor
@@ -532,7 +538,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                         _ => {
                             // Buffer keys and wait for key release
-                    return TapHoldDecision::CleanBuffer;
+                            return TapHoldDecision::CleanBuffer;
                         }
                     }
                 };
@@ -578,6 +584,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action_inner(&mut self, original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {
         // Start forks
         let key_action = self.try_start_forks(original_key_action, event);
+
+        #[cfg(feature = "_ble")]
+        LAST_KEY_TIMESTAMP.store(Instant::now().as_secs() as u32, core::sync::atomic::Ordering::Release);
 
         #[cfg(feature = "controller")]
         send_controller_event(&mut self.controller_pub, ControllerEvent::Key(event, key_action));
@@ -2196,7 +2205,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     Some(key.clone())
                 } else if matches!(key.state, TapHoldState::Tap(_)) {
                     if key.is_tap_dance() | key.is_tap_hold() {
-                    Some(key.clone())
+                        Some(key.clone())
                     } else {
                         None
                     }
