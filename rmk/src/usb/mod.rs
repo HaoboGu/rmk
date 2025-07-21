@@ -13,7 +13,9 @@ use crate::config::KeyboardUsbConfig;
 use crate::descriptor::CompositeReportType;
 use crate::hid::{HidError, HidWriterTrait, Report, RunnableHidWriter};
 use crate::state::ConnectionState;
-use crate::CONNECTION_STATE;
+use crate::{RawMutex, CONNECTION_STATE};
+
+pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
 /// USB state
 #[repr(u8)]
@@ -273,5 +275,9 @@ impl Handler for UsbDeviceHandler {
             info!("Device resumed, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled).");
             USB_SUSPENDED.reset();
         }
+    }
+
+    fn remote_wakeup_enabled(&mut self, enabled: bool) {
+        info!("Remote wakeup enabled state: {}", enabled);
     }
 }

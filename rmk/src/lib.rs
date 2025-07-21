@@ -238,11 +238,27 @@ pub async fn run_rmk<
         // Run all tasks, if one of them fails, wait 1 second and then restart
         embassy_futures::join::join(logger_fut, async {
             loop {
+                let usb_task = async {
+                    loop {
+                        use embassy_futures::select::{select, Either};
+
+                        use crate::usb::USB_REMOTE_WAKEUP;
+
+                        usb_device.run_until_suspend().await;
+                        match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
+                            Either::First(_) => continue,
+                            Either::Second(_) => {
+                                info!("USB wakeup remote");
+                            }
+                        }
+                    }
+                };
+
                 run_keyboard(
                     keymap,
                     #[cfg(feature = "storage")]
                     storage,
-                    async { usb_device.run().await },
+                    usb_task,
                     light_controller,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbVialReaderWriter::new(&mut vial_reader_writer),
