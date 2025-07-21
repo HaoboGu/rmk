@@ -19,6 +19,7 @@ central = [
     "esp-hal-embassy/esp32c6",
     "esp-println/esp32c6",
     "esp-wifi/esp32c6",
+    "esp_bootloader_esp_idf/esp32c6",
 ]
 peripheral = [
     "rmk/esp32c3_ble",
@@ -28,6 +29,7 @@ peripheral = [
     "esp-hal-embassy/esp32c3",
     "esp-println/esp32c3",
     "esp-wifi/esp32c3",
+    "esp_bootloader_esp_idf/esp32c3",
 ]
 
 [dependencies]
@@ -49,6 +51,7 @@ esp-hal-embassy = { version = "0.9" }
 esp-alloc = { version = "0.8.0" }
 esp-println = { version = "0.15.0", features = ["log-04"] }
 esp-wifi = { version = "0.15.0", features = ["ble"] }
+esp-bootloader-esp-idf = { version = "0.2.0", features = ["log-04"] }
 bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 

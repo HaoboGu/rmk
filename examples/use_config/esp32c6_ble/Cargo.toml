@@ -29,6 +29,7 @@ esp-hal-embassy = { version = "0.9", features = ["esp32c6"] }
 esp-alloc = { version = "0.8.0" }
 esp-println = { version = "0.15.0", features = ["esp32c6", "log-04"] }
 esp-wifi = { version = "0.15.0", features = ["esp32c6", "ble"] }
+esp-bootloader-esp-idf = { version = "0.2.0", features = ["esp32c6", "log-04"] }
 bt-hci = { version = "0.3" }
 rand_core = { version = "0.6", default-features = false }
 
