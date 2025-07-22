@@ -664,7 +664,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyAction::TapHold(tap_action, hold_action) => {
                 release_taphold_state = self.process_key_action_tap_hold(tap_action, hold_action, event).await;
             }
-            KeyAction::OneShot(oneshot_action) => self.process_key_action_oneshot(oneshot_action, event).await,
             KeyAction::TapDance(index) => {
                 self.process_key_action_tap_dance(index, event).await;
             }
@@ -1051,6 +1050,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 self.process_action_layer_switch(layer_num, event)
             }
+            Action::OneShotLayer(l) => {
+                self.process_action_osl(l, event).await;
+                // Process OSM to avoid the OSL state stuck when an OSL is followed by an OSM
+                self.update_osm(event);
+            }
+            Action::OneShotModifier(m) => {
+                self.process_action_osm(m.to_hid_modifiers(), event).await;
+                // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
+                self.update_osl(event);
+            }
+            Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
         }
     }
 
@@ -1185,23 +1195,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    /// Process one shot action.
-    async fn process_key_action_oneshot(&mut self, oneshot_action: Action, event: KeyboardEvent) {
-        match oneshot_action {
-            Action::Modifier(m) => {
-                self.process_action_osm(m.to_hid_modifiers(), event).await;
-                // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
-                self.update_osl(event);
-            }
-            Action::LayerOn(l) => {
-                self.process_action_osl(l, event).await;
-                // Process OSM to avoid the OSL state stuck when an OSL is followed by an OSM
-                self.update_osm(event);
-            }
-            _ => self.process_key_action_normal(oneshot_action, event).await,
-        }
-    }
-
     /// Process tap dance action.
     async fn process_key_action_tap_dance(&mut self, index: u8, event: KeyboardEvent) {
         let tap_dances = &self.keymap.borrow().behavior.tap_dance.tap_dances;
@@ -1273,8 +1266,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         match action {
                             KeyAction::Single(action) => self.process_key_action_normal(action, event).await,
                             KeyAction::Tap(action) => self.process_key_action_tap(action, event).await,
-                            KeyAction::OneShot(action) => self.process_key_action_oneshot(action, event).await,
-                            KeyAction::TapHold(tap, hold) => _ = self.process_key_action_tap_hold(tap, hold, event).await,
+                            KeyAction::TapHold(tap, hold) => {
+                                _ = self.process_key_action_tap_hold(tap, hold, event).await
+                            }
                             _ => {}
                         }
                     }
@@ -2001,7 +1995,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     _ => {
                         // CleanBuffer/Hold/ChordHold/HoldOnOtherRelease: fire all keys in Initial state in the buffer
-                        if e.state() == TapHoldState::Tap(0){
+                        if e.state() == TapHoldState::Tap(0) {
                             Some(pos)
                         } else {
                             None
