@@ -498,12 +498,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         let enable_hrm = self.keymap.borrow().behavior.tap_hold.enable_hrm;
 
-        let is_one_hand_chord: bool = if let KeyboardEventPos::Key(pos) = event.pos {
-            self.chord_state.as_ref().is_some_and(|s| s.is_same_hand_key_pos(pos))
-        } else {
-            false
+        let (is_one_hand_chord, is_two_hand_chord) = match (event.pos, self.chord_state.as_ref()) {
+            (KeyboardEventPos::Key(pos), Some(s)) => {
+                let same_hand = s.is_same_hand_key_pos(pos);
+                (same_hand, !same_hand)
+            }
+            _ => (false, false),
         };
-        let is_two_hand_chord: bool = !is_one_hand_chord;
 
         if is_buffered {
             if event.pressed {
