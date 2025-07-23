@@ -3,6 +3,8 @@
 //! This module defines the `Controller` trait and several macros for running output device controllers.
 //! The `Controller` trait provides the interface for individual output device controllers, and the macros facilitate their concurrent execution.
 
+pub mod battery_led;
+pub mod led_indicator;
 pub(crate) mod wpm;
 
 use embassy_futures::select::{select, Either};
@@ -57,6 +59,9 @@ pub trait EventController: Controller {
         }
     }
 }
+
+// Auto impl `EventController` trait for all `Controller`
+impl<T: Controller> EventController for T {}
 
 /// The trait for polling controllers.
 ///

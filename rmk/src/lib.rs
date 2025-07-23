@@ -38,10 +38,9 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
-use embedded_hal::digital::OutputPin;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
-use light::{LedIndicator, LightService};
+use light::LedIndicator;
 use matrix::MatrixTrait;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
@@ -68,7 +67,7 @@ use {
 };
 pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 
-use crate::light::LightController;
+use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
 pub mod action;
@@ -83,6 +82,7 @@ pub mod controller;
 pub mod debounce;
 pub mod descriptor;
 pub mod direct_pin;
+pub mod driver;
 pub mod event;
 pub mod fork;
 pub mod hid;
@@ -189,7 +189,6 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -199,7 +198,6 @@ pub async fn run_rmk<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    light_controller: &mut LightController<Out>,
     rmk_config: RmkConfig<'static>,
 ) -> ! {
     // Dispatch the keyboard runner
@@ -212,7 +210,6 @@ pub async fn run_rmk<
         stack,
         #[cfg(feature = "storage")]
         storage,
-        light_controller,
         rmk_config,
     )
     .await;
@@ -259,7 +256,6 @@ pub async fn run_rmk<
                     #[cfg(feature = "storage")]
                     storage,
                     usb_task,
-                    light_controller,
                     UsbLedReader::new(&mut keyboard_reader),
                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -282,7 +278,6 @@ pub(crate) async fn run_keyboard<
     W: RunnableHidWriter,
     Fu: Future<Output = ()>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -291,8 +286,7 @@ pub(crate) async fn run_keyboard<
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     communication_task: Fu,
-    light_controller: &mut LightController<Out>,
-    led_reader: R,
+    mut led_reader: R,
     vial_reader_writer: Rw,
     mut keyboard_writer: W,
     vial_config: VialConfig<'static>,
@@ -300,10 +294,34 @@ pub(crate) async fn run_keyboard<
     // The state will be changed to true after the keyboard starts running
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
-    let mut light_service = LightService::new(light_controller, led_reader);
     let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
 
-    let led_fut = light_service.run();
+    let led_fut = async {
+        #[cfg(feature = "controller")]
+        let mut controller_pub = unwrap!(crate::channel::CONTROLLER_CHANNEL.publisher());
+        loop {
+            match led_reader.read_report().await {
+                Ok(led_indicator) => {
+                    info!("Got led indicator");
+                    LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
+                    #[cfg(feature = "controller")]
+                    {
+                        info!("publishing led indicator");
+                        // Publish the event
+                        crate::channel::send_controller_event(
+                            &mut controller_pub,
+                            crate::event::ControllerEvent::KeyboardIndicator(led_indicator),
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!("Read HID LED indicator error: {}", e);
+                    embassy_time::Timer::after_millis(1000).await
+                }
+            }
+        }
+    };
+
     let via_fut = vial_service.run();
 
     #[cfg(feature = "storage")]

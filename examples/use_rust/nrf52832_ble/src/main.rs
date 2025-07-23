@@ -25,9 +25,8 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -154,15 +153,12 @@ async fn main(spawner: Spawner) {
     // let mut matrix = TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap);
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
+        run_rmk(&keymap, &stack, &mut storage, rmk_config),
     )
     .await;
 }

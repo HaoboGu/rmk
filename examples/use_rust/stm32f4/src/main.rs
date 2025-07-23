@@ -20,7 +20,6 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
@@ -80,8 +79,6 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
 
     // Start
     join3(
@@ -89,7 +86,7 @@ async fn main(_spawner: Spawner) {
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
+        run_rmk(&keymap, driver, &mut storage, rmk_config),
     )
     .await;
 }

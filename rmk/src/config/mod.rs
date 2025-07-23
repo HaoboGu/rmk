@@ -5,7 +5,7 @@ pub mod macro_config;
 #[cfg(feature = "_ble")]
 pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::StatefulOutputPin;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 
@@ -20,12 +20,12 @@ use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
 /// 1. `ChannelConfig`: Configurations for channels used in RMK.
 /// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
 /// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
-pub struct KeyboardConfig<'a, O: OutputPin> {
+pub struct KeyboardConfig<'a, O: StatefulOutputPin> {
     pub controller_config: ControllerConfig<O>,
     pub rmk_config: RmkConfig<'a>,
 }
 
-impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
+impl<O: StatefulOutputPin> Default for KeyboardConfig<'_, O> {
     fn default() -> Self {
         Self {
             controller_config: ControllerConfig::default(),
@@ -37,11 +37,11 @@ impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
 /// Config for controllers.
 ///
 /// Controllers are used for controlling other devices on the board, such as lights, RGB, etc.
-pub struct ControllerConfig<O: OutputPin> {
+pub struct ControllerConfig<O: StatefulOutputPin> {
     pub light_config: LightConfig<O>,
 }
 
-impl<O: OutputPin> Default for ControllerConfig<O> {
+impl<O: StatefulOutputPin> Default for ControllerConfig<O> {
     fn default() -> Self {
         Self {
             light_config: LightConfig::default(),
@@ -179,18 +179,18 @@ impl Default for StorageConfig {
 }
 
 /// Config for lights
-pub struct LightConfig<O: OutputPin> {
+pub struct LightConfig<O: StatefulOutputPin> {
     pub capslock: Option<LightPinConfig<O>>,
     pub scrolllock: Option<LightPinConfig<O>>,
     pub numslock: Option<LightPinConfig<O>>,
 }
 
-pub struct LightPinConfig<O: OutputPin> {
+pub struct LightPinConfig<O: StatefulOutputPin> {
     pub pin: O,
     pub low_active: bool,
 }
 
-impl<O: OutputPin> Default for LightConfig<O> {
+impl<O: StatefulOutputPin> Default for LightConfig<O> {
     fn default() -> Self {
         Self {
             capslock: None,

@@ -3,6 +3,7 @@ mod bind_interrupt;
 mod ble;
 mod chip_init;
 mod comm;
+mod controller;
 mod entry;
 mod feature;
 mod flash;
@@ -12,7 +13,6 @@ mod input_device;
 mod keyboard;
 mod keyboard_config;
 mod layout;
-mod light;
 mod matrix;
 mod split;
 

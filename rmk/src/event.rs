@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
-use crate::{action::KeyAction, keycode::ModifierCombination};
+use crate::{action::KeyAction, keycode::ModifierCombination, light::LedIndicator};
 
 /// Raw events from input devices and keyboards
 ///
@@ -151,7 +151,7 @@ pub enum ControllerEvent {
     Key(KeyboardEvent, KeyAction),
     /// Battery percent changed
     Battery(u8),
-    /// Charging state changed
+    /// Charging state changed, true means charging, false means not charging
     ChargingState(bool),
     /// Ble profile changed
     BleProfile(u8),
@@ -165,4 +165,6 @@ pub enum ControllerEvent {
     ConnectionType(u8),
     /// Split peripheral connection
     SplitPeripheral(usize, bool),
+    /// Lock state led indicator
+    KeyboardIndicator(LedIndicator),
 }
