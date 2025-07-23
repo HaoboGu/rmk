@@ -30,7 +30,6 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 

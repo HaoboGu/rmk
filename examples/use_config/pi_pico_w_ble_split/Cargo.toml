@@ -37,7 +37,6 @@ rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
