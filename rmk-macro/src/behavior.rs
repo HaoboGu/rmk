@@ -49,29 +49,21 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 Some(enable) => quote! { enable_hrm: #enable, },
                 None => quote! {},
             };
-            let permissive_hold = match tap_hold.permissive_hold {
-                Some(enable) => quote! { permissive_hold: #enable, },
-                None => quote! {},
+            let tap_hold_mode = if let Some(true) = tap_hold.permissive_hold {
+                quote! { mode: ::rmk::config::TapHoldMode::PermissiveHold, }
+            } else if let Some(true) = tap_hold.hold_on_other_press {
+                quote! { mode: ::rmk::config::TapHoldMode::HoldOnOtherPress, }
+            } else {
+                quote! { mode: ::rmk::config::TapHoldMode::Normal,}
             };
             let chordal_hold = match tap_hold.chordal_hold {
                 Some(enable) => quote! { chordal_hold: #enable, },
-                None => quote! {},
-            };
-            let hold_on_other_press = match tap_hold.hold_on_other_press {
-                Some(enable) => quote! { hold_on_other_press: #enable, },
                 None => quote! {},
             };
             let prior_idle_time = match &tap_hold.prior_idle_time {
                 Some(t) => {
                     let timeout = t.0;
                     quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#timeout), }
-                }
-                None => quote! {},
-            };
-            let post_wait_time = match &tap_hold.post_wait_time {
-                Some(t) => {
-                    let timeout = t.0;
-                    quote! { post_wait_time: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
@@ -87,11 +79,9 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 ::rmk::config::TapHoldConfig {
                     #enable_hrm
                     #prior_idle_time
-                    #post_wait_time
                     #hold_timeout
-                    #permissive_hold
+                    #tap_hold_mode
                     #chordal_hold
-                    #hold_on_other_press
                     ..Default::default()
                 }
             }

@@ -5,33 +5,29 @@
 
 pub mod common;
 
-use rmk::config::{BehaviorConfig, TapHoldConfig};
+use rmk::config::{BehaviorConfig, TapHoldConfig, TapHoldMode};
 use rmk::{k, lt, th};
 use rusty_fork::rusty_fork_test;
 
 /// Helper to create tap-hold config with hold-on-other-key-press enabled
 fn tap_hold_config_with_hold_on_other_press() -> TapHoldConfig {
     TapHoldConfig {
-        hold_on_other_press: true,
+        mode: TapHoldMode::HoldOnOtherPress,
         enable_hrm: false,
-        permissive_hold: false,
         chordal_hold: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
         prior_idle_time: embassy_time::Duration::from_millis(120),
-        post_wait_time: embassy_time::Duration::from_millis(80),
     }
 }
 
 /// Helper to create tap-hold config with both hold-on-other-press and permissive hold
 fn tap_hold_config_with_hold_on_other_press_and_permissive() -> TapHoldConfig {
     TapHoldConfig {
-        hold_on_other_press: true,
-        permissive_hold: true,
+        mode: TapHoldMode::PermissiveHold,
         enable_hrm: false,
         chordal_hold: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
         prior_idle_time: embassy_time::Duration::from_millis(120),
-        post_wait_time: embassy_time::Duration::from_millis(80),
     }
 }
 
@@ -39,7 +35,7 @@ mod hold_on_other_press_tests {
     use super::*;
     use crate::common::{create_test_keyboard_with_config, wrap_keymap, KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT};
     use embassy_futures::block_on;
-    use rmk::keyboard::Keyboard;
+    use rmk::{config::TapHoldMode, keyboard::Keyboard};
 
     rusty_fork_test! {
         #[test]
@@ -70,10 +66,7 @@ mod hold_on_other_press_tests {
             // When disabled, should wait for timeout
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: TapHoldConfig {
-                        hold_on_other_press: false,  // Disabled
-                        ..tap_hold_config_with_hold_on_other_press()
-                    },
+                    tap_hold: TapHoldConfig::default(),
                     ..BehaviorConfig::default()
                 }),
                 sequence: [
@@ -325,18 +318,14 @@ mod hold_on_other_press_tests {
 
         #[test]
         fn test_hold_on_other_press_priority_with_hrm_disabled() {
-            // When HRM is disabled and permissive hold is enabled,
-            // hold-on-other-press should be disabled (permissive hold takes precedence)
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     tap_hold: TapHoldConfig {
-                        hold_on_other_press: true,
-                        permissive_hold: true,
+                        mode: TapHoldMode::PermissiveHold,
                         enable_hrm: false,  // HRM disabled
                         chordal_hold: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
                         prior_idle_time: embassy_time::Duration::from_millis(120),
-                        post_wait_time: embassy_time::Duration::from_millis(80),
                     },
                     ..BehaviorConfig::default()
                 }),
@@ -361,13 +350,11 @@ mod hold_on_other_press_tests {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     tap_hold: TapHoldConfig {
-                        hold_on_other_press: true,
-                        permissive_hold: true,
+                        mode: TapHoldMode::PermissiveHold,
                         enable_hrm: true,  // HRM enabled
                         chordal_hold: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
                         prior_idle_time: embassy_time::Duration::from_millis(120),
-                        post_wait_time: embassy_time::Duration::from_millis(80),
                     },
                     ..BehaviorConfig::default()
                 }),
@@ -454,13 +441,11 @@ mod hold_on_other_press_tests {
                     ]]],
                     BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            hold_on_other_press: true,
-                            permissive_hold: true,
+                            mode: TapHoldMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
                             chordal_hold: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
                             prior_idle_time: embassy_time::Duration::from_millis(120),
-                            post_wait_time: embassy_time::Duration::from_millis(80),
                         },
                         ..BehaviorConfig::default()
                     }
@@ -521,13 +506,11 @@ mod hold_on_other_press_tests {
                     ]]],
                     BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            hold_on_other_press: true,
-                            permissive_hold: true,
+                            mode: TapHoldMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
                             chordal_hold: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
                             prior_idle_time: embassy_time::Duration::from_millis(120),
-                            post_wait_time: embassy_time::Duration::from_millis(80),
                         },
                         ..BehaviorConfig::default()
                     }
