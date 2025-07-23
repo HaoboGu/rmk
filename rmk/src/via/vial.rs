@@ -10,9 +10,9 @@ use crate::keymap::KeyMap;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
+    COMBO_MAX_LENGTH,
     channel::FLASH_CHANNEL,
     storage::{ComboData, FlashOperationMessage},
-    COMBO_MAX_LENGTH,
 };
 use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
 
@@ -119,7 +119,7 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
                     report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
-                                                                                     // TODO: Support dynamic key override
+                    // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                 }
                 VialDynamic::DynamicVialTapDanceGet => {
@@ -306,29 +306,30 @@ pub(crate) async fn process_vial<
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
-                if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get_mut(index as usize) {
-                        if clockwise == 1 {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting clockwise action: {:?}", action);
-                            encoder.set_clockwise(action);
+            let _encoder = match keymap.borrow_mut().encoders {
+                Some(ref mut encoder_map) => {
+                    if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
+                        if let Some(encoder) = encoder_layer.get_mut(index as usize) {
+                            if clockwise == 1 {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting clockwise action: {:?}", action);
+                                encoder.set_clockwise(action);
+                            } else {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting counter-clockwise action: {:?}", action);
+                                encoder.set_counter_clockwise(action);
+                            }
+                            Some(*encoder)
                         } else {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting counter-clockwise action: {:?}", action);
-                            encoder.set_counter_clockwise(action);
+                            None
                         }
-                        Some(*encoder)
                     } else {
                         None
                     }
-                } else {
-                    None
                 }
-            } else {
-                None
+                _ => None,
             };
 
             #[cfg(feature = "storage")]

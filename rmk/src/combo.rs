@@ -1,8 +1,8 @@
 use heapless::Vec;
 
+use crate::COMBO_MAX_LENGTH;
 use crate::action::KeyAction;
 use crate::event::KeyboardEvent;
-use crate::COMBO_MAX_LENGTH;
 
 #[derive(Clone, Debug)]
 pub struct Combo {

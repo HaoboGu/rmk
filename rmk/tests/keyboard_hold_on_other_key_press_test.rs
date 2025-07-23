@@ -32,10 +32,11 @@ fn tap_hold_config_with_hold_on_other_press_and_permissive() -> TapHoldConfig {
 }
 
 mod hold_on_other_press_tests {
-    use super::*;
-    use crate::common::{create_test_keyboard_with_config, wrap_keymap, KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT};
     use embassy_futures::block_on;
     use rmk::{config::TapHoldMode, keyboard::Keyboard};
+
+    use super::*;
+    use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, create_test_keyboard_with_config, wrap_keymap};
 
     rusty_fork_test! {
         #[test]

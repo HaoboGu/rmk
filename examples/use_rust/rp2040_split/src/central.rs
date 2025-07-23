@@ -22,8 +22,8 @@ use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::light::LightController;
-use rmk::split::central::{run_peripheral_manager, CentralMatrix};
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::split::central::{CentralMatrix, run_peripheral_manager};
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -74,7 +74,7 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_receiver = BufferedUart::new(p.UART0, Irqs, p.PIN_0, p.PIN_1, tx_buf, rx_buf, uart::Config::default());
+    let uart_receiver = BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default());
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();

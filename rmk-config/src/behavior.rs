@@ -28,7 +28,10 @@ impl crate::KeyboardTomlConfig {
                     }
                     for (i, c) in combo.combos.iter().enumerate() {
                         if c.actions.len() > self.rmk.combo_max_length {
-                            return Err(format!("keyboard.toml: number of keys in combo #{} is greater than combo_max_length configured under [rmk] section", i));
+                            return Err(format!(
+                                "keyboard.toml: number of keys in combo #{} is greater than combo_max_length configured under [rmk] section",
+                                i
+                            ));
                         }
                         if let Some(layer) = c.layer {
                             if layer >= layout.layers {

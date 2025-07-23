@@ -16,8 +16,8 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
 use rmk::run_devices;
-use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::split::peripheral::run_rmk_split_peripheral;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -40,7 +40,7 @@ async fn main(_spawner: Spawner) {
     let tx_buf = &mut TX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
     static RX_BUF: StaticCell<[u8; SPLIT_MESSAGE_MAX_SIZE]> = StaticCell::new();
     let rx_buf = &mut RX_BUF.init([0; SPLIT_MESSAGE_MAX_SIZE])[..];
-    let uart_instance = BufferedUart::new(p.UART0, Irqs, p.PIN_0, p.PIN_1, tx_buf, rx_buf, uart::Config::default());
+    let uart_instance = BufferedUart::new(p.UART0, p.PIN_0, p.PIN_1, Irqs, tx_buf, rx_buf, uart::Config::default());
 
     // Define the matrix
     let debouncer = DefaultDebouncer::<2, 2>::new();

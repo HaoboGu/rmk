@@ -6,11 +6,11 @@ mod macro_test {
     use rmk::action::{Action, KeyAction};
     use rmk::config::BehaviorConfig;
     use rmk::keyboard::Keyboard;
-    use rmk::keyboard_macros::{define_macro_sequences, to_macro_sequence, MacroOperation};
+    use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
     use rmk::keycode::KeyCode;
     use rusty_fork::rusty_fork_test;
 
-    use crate::common::{wrap_keymap, KC_LSHIFT};
+    use crate::common::{KC_LSHIFT, wrap_keymap};
     use crate::{kc_to_u8, key_sequence_test};
 
     fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 2, 1> {
