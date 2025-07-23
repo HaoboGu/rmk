@@ -54,8 +54,6 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// Keep current key pressed until the next key is triggered.
-    OneShot(Action),
     /// General tap/hold action: (tap_action, hold_action)
     TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.
@@ -91,4 +89,10 @@ pub enum Action {
     /// the main purpose for this enum variant is to easily extend to more than 32 macros (to 256)
     /// without introducing new Keycodes.
     TriggerMacro(u8),
+    /// Oneshot layer, keep the layer active until the next key is triggered.
+    OneShotLayer(u8),
+    /// Oneshot modifier, keep the modifier active until the next key is triggered.
+    OneShotModifier(ModifierCombination),
+    /// Oneshot key, keep the key active until the next key is triggered.
+    OneShotKey(KeyCode),
 }

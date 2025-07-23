@@ -57,6 +57,7 @@ When used in configuration files, all keycodes are case-insensitive.
 | `Enter` | `ent`   | Enter |
 | `Escape` | `esc`  | Escape |
 | `Backspace` | `bspc` | Backspace |
+| `Delete` | `del` | Delete |
 | `Tab`   |         | Tab   |
 | `Space` | `spc`   | Spacebar |
 | `Minus` | `mins`, `-` | `-` and `_` |

@@ -97,6 +97,8 @@ pub struct TapHoldConfig {
     pub permissive_hold: bool,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub chordal_hold: bool,
+    /// Trigger hold when any other non-tap-hold key is pressed
+    pub hold_on_other_press: bool,
 }
 
 impl Default for TapHoldConfig {
@@ -105,6 +107,7 @@ impl Default for TapHoldConfig {
             enable_hrm: false,
             permissive_hold: false,
             chordal_hold: false,
+            hold_on_other_press: false,
             prior_idle_time: Duration::from_millis(120),
             post_wait_time: Duration::from_millis(50),
             hold_timeout: Duration::from_millis(250),

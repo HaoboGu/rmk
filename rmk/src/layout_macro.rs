@@ -86,7 +86,7 @@ macro_rules! th {
 #[macro_export]
 macro_rules! osl {
     ($x: literal) => {
-        $crate::action::KeyAction::OneShot($crate::action::Action::LayerOn($x))
+        $crate::action::KeyAction::Single($crate::action::Action::OneShotLayer($x))
     };
 }
 
@@ -94,7 +94,7 @@ macro_rules! osl {
 #[macro_export]
 macro_rules! osm {
     ($m: expr) => {
-        $crate::action::KeyAction::OneShot($crate::action::Action::Modifier($m))
+        $crate::action::KeyAction::Single($crate::action::Action::OneShotModifier($m))
     };
 }
 

@@ -57,6 +57,10 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 Some(enable) => quote! { chordal_hold: #enable, },
                 None => quote! {},
             };
+            let hold_on_other_press = match tap_hold.hold_on_other_press {
+                Some(enable) => quote! { hold_on_other_press: #enable, },
+                None => quote! {},
+            };
             let prior_idle_time = match &tap_hold.prior_idle_time {
                 Some(t) => {
                     let timeout = t.0;
@@ -87,6 +91,7 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                     #hold_timeout
                     #permissive_hold
                     #chordal_hold
+                    #hold_on_other_press
                     ..Default::default()
                 }
             }
