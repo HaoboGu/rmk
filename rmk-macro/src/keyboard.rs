@@ -25,6 +25,7 @@ use crate::split::central::expand_split_central_config;
 pub enum Overwritten {
     Usb,
     ChipConfig,
+    ChipInit,
     Entry,
 }
 

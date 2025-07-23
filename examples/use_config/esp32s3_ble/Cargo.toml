@@ -66,3 +66,11 @@ overflow-checks = false
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-bootloader-esp-idf = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-storage = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-println = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-wifi = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal", rev = "9eb89a3de5efac4dbf2c2a9bf6d980396260b9d7" }

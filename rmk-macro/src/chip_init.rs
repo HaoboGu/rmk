@@ -22,9 +22,19 @@ pub(crate) fn expand_chip_init(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            let chip = keyboard_config.get_chip_model().unwrap();
-                            return Some(override_chip_init(&chip, item_fn));
+                        match Overwritten::from_meta(&item_fn.attrs[0].meta) {
+                            Ok(Overwritten::ChipConfig) => {
+                                return Some(override_chip_config(
+                                    &keyboard_config.get_chip_model().unwrap(),
+                                    item_fn,
+                                ));
+                            }
+                            Ok(Overwritten::ChipInit) => {
+                                // Override the whole chip initialization
+                                let stmts = &item_fn.block.stmts;
+                                return Some(quote! { #(#stmts)* });
+                            }
+                            _ => (),
                         }
                     }
                 }
@@ -185,7 +195,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
     }
 }
 
-fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
+fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     let initialization = item_fn.block.to_token_stream();
     let mut initialization_tokens = quote! {
         let config = #initialization;
