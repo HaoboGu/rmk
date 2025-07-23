@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.8] - 2025-07-23
+
+### Added
+
+- Hold-on-other-key-press mode for tap-hold
+- Add missing keycode to docs
+
+### Changed
+
+- Change `OneShot` as a variant of `Action`
+
+### Fixed
+
+- Permissive hold key rolling error
+- Chordal hold triggers tap unexpectly 
+
 ## [0.7.7] - 2025-07-21
 
 ### Added

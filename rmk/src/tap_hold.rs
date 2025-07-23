@@ -95,37 +95,31 @@ pub enum ChordHoldHand {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ChordHoldState<const COUNT: usize> {
+pub struct ChordHoldState {
     pub is_vertical_chord: bool,
     pub hand: ChordHoldHand,
+    pub count: usize,
 }
 
-impl<const COUNT: usize> ChordHoldState<COUNT> {
+impl ChordHoldState {
     // is the key event in the same side of current chord hold
-    pub fn is_same_hand_key_pos(&self, key_pos: KeyPos) -> bool {
-        if self.is_vertical_chord {
-            return self.is_same_hand(key_pos.row as usize);
-        } else {
-            return self.is_same_hand(key_pos.col as usize);
-        }
-    }
-
-    pub fn is_same_event_pos(&self, event_pos: KeyboardEventPos) -> bool {
-        if let KeyboardEventPos::Key(KeyPos { row, col }) = event_pos {
-            if self.is_vertical_chord {
-                return self.is_same_hand(row as usize);
-            } else {
-                return self.is_same_hand(col as usize);
+    pub fn is_same_hand(&self, key: KeyboardEventPos) -> bool {
+        match key {
+            KeyboardEventPos::Key(key_pos) => {
+                if self.is_vertical_chord {
+                    self.is_same_hand_inner(key_pos.row as usize)
+                } else {
+                    self.is_same_hand_inner(key_pos.col as usize)
+                }
             }
-        } else {
-            return false;
+            KeyboardEventPos::RotaryEncoder(_) => false,
         }
     }
 
-    pub fn is_same_hand(&self, number: usize) -> bool {
+    pub fn is_same_hand_inner(&self, n: usize) -> bool {
         match self.hand {
-            ChordHoldHand::Left => number < COUNT / 2,
-            ChordHoldHand::Right => number >= COUNT / 2,
+            ChordHoldHand::Left => n < self.count / 2,
+            ChordHoldHand::Right => n >= self.count / 2,
         }
     }
 
@@ -138,22 +132,26 @@ impl<const COUNT: usize> ChordHoldState<COUNT> {
                 ChordHoldState {
                     is_vertical_chord: false,
                     hand: ChordHoldHand::Left,
+                    count: cols,
                 }
             } else {
                 ChordHoldState {
                     is_vertical_chord: false,
                     hand: ChordHoldHand::Right,
+                    count: cols,
                 }
             }
         } else if (pos.row as usize) < (rows / 2) {
             ChordHoldState {
                 is_vertical_chord: true,
                 hand: ChordHoldHand::Left,
+                count: rows,
             }
         } else {
             ChordHoldState {
                 is_vertical_chord: true,
                 hand: ChordHoldHand::Right,
+                count: rows,
             }
         }
     }
@@ -169,31 +167,32 @@ mod tests {
     #[test]
     fn test_chordal_hold() {
         assert_eq!(
-            ChordHoldState::<6>::create(KeyPos { row: 0, col: 0 }, 3, 6).hand,
+            ChordHoldState::create(KeyPos { row: 0, col: 0 }, 3, 6).hand,
             ChordHoldHand::Left
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyPos { row: 3, col: 3 }, 4, 6).hand,
+            ChordHoldState::create(KeyPos { row: 3, col: 3 }, 4, 6).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyPos { row: 3, col: 3 }, 6, 4).hand,
+            ChordHoldState::create(KeyPos { row: 3, col: 3 }, 6, 4).hand,
             ChordHoldHand::Right
         );
         assert_eq!(
-            ChordHoldState::<6>::create(KeyPos { row: 3, col: 6 }, 5, 3).hand,
+            ChordHoldState::create(KeyPos { row: 3, col: 6 }, 6, 3).hand,
             ChordHoldHand::Right
         );
 
-        let chord = ChordHoldState::<6> {
+        let chord = ChordHoldState {
             is_vertical_chord: false,
             hand: ChordHoldHand::Left,
+            count: 6,
         };
 
         let vec: Vec<_, 6> = Vec::from_slice(&[0u8, 1, 2, 3, 4, 5]).unwrap();
         let result: Vec<_, 6> = vec
             .iter()
-            .map(|col| chord.is_same_hand_key_pos(KeyPos { row: 0, col: *col }))
+            .map(|col| chord.is_same_hand(crate::event::KeyboardEventPos::Key(KeyPos { row: 0, col: *col })))
             .collect();
 
         let result2: Vec<bool, 6> = Vec::from_slice(&[true, true, true, false, false, false]).unwrap();

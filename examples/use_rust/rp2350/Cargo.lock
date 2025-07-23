@@ -1858,7 +1858,7 @@ dependencies = [
 
 [[package]]
 name = "rmk"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "bitfield-struct",
  "bt-hci",
@@ -1900,7 +1900,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-config"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "cargo_toml",
  "config",
@@ -1916,7 +1916,7 @@ dependencies = [
 
 [[package]]
 name = "rmk-macro"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "cargo_toml",
  "darling",
