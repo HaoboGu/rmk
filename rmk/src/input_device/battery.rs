@@ -1,16 +1,14 @@
 use core::cell::RefCell;
 
-use embedded_hal::digital::InputPin;
-#[cfg(feature = "controller")]
-use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
-    crate::event::ControllerEvent,
-};
-
 use super::{InputDevice, InputProcessor};
+#[cfg(feature = "controller")]
+use crate::channel::{ControllerPub, CONTROLLER_CHANNEL};
 use crate::event::Event;
 use crate::input_device::ProcessResult;
 use crate::KeyMap;
+use embedded_hal::digital::InputPin;
+#[cfg(all(feature = "_ble", feature = "controller"))]
+use {crate::channel::send_controller_event, crate::event::ControllerEvent};
 
 pub struct ChargingStateReader<I: InputPin> {
     // Charging state pin or standby pin

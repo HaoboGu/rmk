@@ -9,7 +9,6 @@ use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3, Either3};
 use embassy_time::{with_timeout, Duration, Timer};
-use embedded_hal::digital::OutputPin;
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
@@ -44,7 +43,7 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
-use crate::light::{LedIndicator, LightController};
+use crate::light::LedIndicator;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
@@ -96,7 +95,6 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -106,7 +104,6 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
 ) {
     #[cfg(feature = "_nrf_ble")]
@@ -273,7 +270,6 @@ pub(crate) async fn run_ble<
                                     #[cfg(feature = "storage")]
                                     storage,
                                     USB_SUSPENDED.wait(),
-                                    light_controller,
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -287,7 +283,6 @@ pub(crate) async fn run_ble<
                                     &server,
                                     &conn,
                                     &stack,
-                                    light_controller,
                                     keymap,
                                     &mut rmk_config,
                                     #[cfg(feature = "storage")]
@@ -324,7 +319,6 @@ pub(crate) async fn run_ble<
                             #[cfg(feature = "storage")]
                             storage,
                             core::future::pending::<()>(), // Run forever until BLE connected
-                            light_controller,
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbVialReaderWriter::new(&mut vial_reader_writer),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -338,7 +332,6 @@ pub(crate) async fn run_ble<
                                         &server,
                                         &conn,
                                         &stack,
-                                        light_controller,
                                         keymap,
                                         &mut rmk_config,
                                         #[cfg(feature = "storage")]
@@ -382,7 +375,6 @@ pub(crate) async fn run_ble<
                             &server,
                             &conn,
                             &stack,
-                            light_controller,
                             keymap,
                             &mut rmk_config,
                             #[cfg(feature = "storage")]
@@ -729,7 +721,6 @@ async fn run_ble_keyboard<
     'c,
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
@@ -739,7 +730,6 @@ async fn run_ble_keyboard<
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    light_controller: &mut LightController<Out>,
     keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -782,7 +772,6 @@ async fn run_ble_keyboard<
         #[cfg(feature = "storage")]
         storage,
         communication_task,
-        light_controller,
         ble_led_reader,
         ble_via_server,
         ble_hid_server,

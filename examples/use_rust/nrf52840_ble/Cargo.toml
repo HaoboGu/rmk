@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble", "adafruit_bl"] }
+rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble", "adafruit_bl", "controller"] }
 nrf-sdc = { version = "0.1.0", default-features = false, features = [
     "defmt",
     "peripheral",
@@ -48,6 +48,7 @@ static_cell = "2"
 rand = { version = "0.8.4", default-features = false }
 rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
+async-trait = "0.1.88"
 
 [patch.crates-io]
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }

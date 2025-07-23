@@ -9,6 +9,7 @@ use crate::bind_interrupt::expand_bind_interrupt;
 use crate::ble::expand_ble_config;
 use crate::chip_init::expand_chip_init;
 use crate::comm::expand_usb_init;
+use crate::controller::expand_controller_init;
 use crate::entry::expand_rmk_entry;
 use crate::feature::{get_rmk_features, is_feature_enabled};
 use crate::flash::expand_flash_init;
@@ -16,7 +17,6 @@ use crate::import::expand_custom_imports;
 use crate::input_device::expand_input_device_config;
 use crate::keyboard_config::{expand_keyboard_info, expand_vial_config, read_keyboard_toml_config};
 use crate::layout::expand_default_keymap;
-use crate::light::expand_light_config;
 use crate::matrix::expand_matrix_config;
 use crate::split::central::expand_split_central_config;
 
@@ -113,7 +113,6 @@ fn expand_main(
     let chip_init = expand_chip_init(keyboard_config, None, &item_mod);
     let usb_init = expand_usb_init(keyboard_config, &item_mod);
     let flash_init = expand_flash_init(keyboard_config);
-    let light_config = expand_light_config(keyboard_config);
     let behavior_config = expand_behavior_config(keyboard_config);
     let matrix_config = expand_matrix_config(keyboard_config, rmk_features);
     let (ble_config, set_ble_config) = expand_ble_config(keyboard_config);
@@ -121,8 +120,8 @@ fn expand_main(
     let split_central_config = expand_split_central_config(keyboard_config);
     let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
-    let controller = expand_controller_init(keyboard_config);
-    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors);
+    let (controller_initializers, controllers) = expand_controller_init(keyboard_config);
+    let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
     let rmk_config = if keyboard_config.get_storage_config().enabled {
         quote! {
@@ -169,9 +168,6 @@ fn expand_main(
             // Initialize usb driver as `driver`
             #usb_init
 
-            // Initialize light config as `light_config`
-            #light_config
-
             // Initialize behavior config config as `behavior_config`
             #behavior_config
 
@@ -188,7 +184,7 @@ fn expand_main(
             #rmk_config
 
             // Initialize the controller, as `controller`
-            #controller
+            #controller_initializers
 
             // Initialize the storage and keymap, as `storage` and `keymap`
             #keymap_and_storage
@@ -330,19 +326,5 @@ pub(crate) fn expand_matrix_and_keyboard_init(
     quote! {
         let mut keyboard = ::rmk::keyboard::Keyboard::new(&keymap);
         #matrix
-    }
-}
-
-fn expand_controller_init(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
-    // TODO: Initialization for other controllers
-    let output_pin_type = match keyboard_config.get_chip_model().unwrap().series {
-        ChipSeries::Esp32 => quote! { ::esp_hal::gpio::Output },
-        ChipSeries::Stm32 => quote! { ::embassy_stm32::gpio::Output },
-        ChipSeries::Nrf52 => quote! { ::embassy_nrf::gpio::Output },
-        ChipSeries::Rp2040 => quote! { ::embassy_rp::gpio::Output },
-    };
-
-    quote! {
-        let mut light_controller: ::rmk::light::LightController<#output_pin_type>  = ::rmk::light::LightController::new(light_config);
     }
 }

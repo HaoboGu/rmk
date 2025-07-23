@@ -39,7 +39,7 @@ join3(
     // Run the keyboard processor
     keyboard.run(),
     // Run the remaining parts of RMK system
-    run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+    run_rmk(&keymap, driver, storage, rmk_config),
 )
 .await;
 ```
@@ -221,7 +221,7 @@ join3(
     // Task 2: Run the keyboard processor
     keyboard.run(),
     // Task 3: Run the main RMK system
-    run_rmk(&keymap, driver, storage, light_controller, rmk_config),
+    run_rmk(&keymap, driver, storage, rmk_config),
 )
 .await;
 ```

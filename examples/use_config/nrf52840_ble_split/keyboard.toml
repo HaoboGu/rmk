@@ -30,6 +30,13 @@ keymap = [
 [ble]
 enabled = true
 
+[light]
+# All light pins are high-active by default, uncomment if you want it to be low-active
+capslock.pin = "P0_00"
+capslock.low_active = true
+numslock.pin = "P0_01"
+numslock.low_active = false
+
 [behavior]
 tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms" }
 
