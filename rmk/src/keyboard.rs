@@ -151,6 +151,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Record the timestamp of last release, (event, is_modifier, timestamp)
     /// Now it's used in tap-hold prior-idle-time check
     last_release: (KeyboardEvent, bool, Option<Instant>),
+    last_press: (KeyboardEvent, bool, Option<Instant>),
 
     /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
     /// Used in repeat-key
@@ -220,6 +221,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
             last_release: (KeyboardEvent::key(0, 0, false), false, None),
+            last_press: (KeyboardEvent::key(0, 0, false), false, None),
             hold_after_tap: Default::default(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
@@ -410,7 +412,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
         // all modifier related effects are combined here to be sent with the hid report:
         let modifiers = self.resolve_modifiers(pressed);
-
+        info!("Sending keyboard report, pressed: {}", pressed);
         self.send_report(Report::KeyboardReport(KeyboardReport {
             modifier: modifiers.into_bits(),
             reserved: 0,
@@ -420,7 +422,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         .await;
 
         // Yield once after sending the report to channel
-        // yield_now().await;
+        yield_now().await;
     }
 
     /// Send system control report if needed
@@ -598,9 +600,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     self.chord_state.as_ref().unwrap()
                                 );
                                 return TapHoldDecision::BufferTapping;
-                            } else {
-                                return TapHoldDecision::CleanBuffer;
+                            } else if let KeyAction::Single(_) = key_action {
+                                // Check whether the key is pressed BEFORE the tap-hold/tap-dance key pressing
+                                // If so, it should be ignored
+
+                                if !self.holding_buffer.iter().any(|h| {
+                                    h.state == TapHoldState::Tap(0)
+                                        && h.action == key_action
+                                        && h.event.pos == event.pos
+                                }) {
+                                    return TapHoldDecision::Ignore;
+                                }
                             }
+                            return TapHoldDecision::CleanBuffer;
                         }
                     }
                 };
@@ -670,12 +682,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        // Release to early
-        if !event.pressed {
-            // Record release of current key, which will be used in tap/hold processing
-
-            debug!("Record released key event with : {:?}", release_taphold_state);
-
+        {
+            // Record release/press of current key, which will be used in tap/hold processing
+            debug!("Record last pressed key event with : {:?}", release_taphold_state);
             let mut is_tap_key = false;
             if let KeyAction::Single(Action::Key(k)) = key_action {
                 if k >= KeyCode::A && k <= KeyCode::International1 {
@@ -689,14 +698,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
+
             // Record the last release event
-            // TODO: check key action, should be a-z/space/enter
-            // TODO test key action if it's a normal key
             if is_tap_key {
-                debug!("Record released key event: {:?}", event);
-                self.last_release = (event, false, Some(Instant::now()));
+                debug!("Record last pressed key event: {:?}", event);
+                if event.pressed {
+                    self.last_press = (event, false, Some(Instant::now()));
+                } else {
+                    self.last_release = (event, false, Some(Instant::now()));
+                }
             } else {
-                debug!("Record released key event ignored: {:?}", event);
+                debug!("Record last pressed key event ignored: {:?}", event);
             }
         }
 
@@ -1085,6 +1097,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     is_mod = true;
                 }
             }
+            self.last_press = (event, is_mod, Some(Instant::now()));
             self.last_release = (event, is_mod, Some(Instant::now()));
         }
     }
@@ -1121,11 +1134,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .map_or(false, |c| c.is_same_event_pos(event.pos));
 
             // If HRM is enabled, check whether it's a different key is in key streak
-            if let Some(last_release_time) = self.last_release.2 {
+            if let Some(last_press_time) = self.last_press.2 {
                 // Ignore hold within pre idle time for quick typing
                 if event.pressed {
-                    if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
-                        && !(event.pos == self.last_release.0.pos)
+                    if last_press_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+                        && !(event.pos == self.last_press.0.pos)
                     {
                         // The previous key is a different key and released within `prior_idle_time`, it's in key streak
                         debug!("Key streak detected, trigger tap action");
@@ -1138,7 +1151,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             TapHoldState::PostTap(0),
                         );
                         return Some(TapHoldState::PostTap(1));
-                    } else if is_chordal_hold_same_hand {
+                    }
+                }
+            };
+
+            // Check hold-after-tap
+            if let Some(last_release_time) = self.last_release.2 {
+                if event.pressed {
+                    info!("Checking hold after tap");
+                    if is_chordal_hold_same_hand {
                         // If chordal hold is enabled, and the chord state is some, check if the key is the same as the chord state
                         debug!("match chordal hold same hand, key {:?} should be tap", event);
                         // save into buffer, but mark it as tap
@@ -2036,7 +2057,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             } else {
                                 tap_action
                             };
-                            debug!("Key {:?} become {:?}", hold_key.event, action);
+                            debug!("TapHold key {:?} becomes {:?} due to timeout", hold_key.event, action);
                             self.process_key_action_normal(action, hold_key.event).await;
                         } else if reason == TapHoldDecision::HoldOnOtherPress {
                             // Hold on other key press: ALL tap-hold keys become hold
@@ -2047,12 +2068,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             self.process_key_action_normal(hold_action, hold_key.event).await;
                         } else if matches!(hold_key.state, TapHoldState::Tap(_)) && hold_key.pressed_time < pressed_time
                         {
-                            debug!("Key {:?} become {:?}", hold_key.event, hold_action);
+                            debug!("TapHold key {:?} becomes hold {:?}", hold_key.event, hold_action);
                             self.process_key_action_normal(hold_action, hold_key.event).await;
                         } else if matches!(hold_key.state, TapHoldState::Tap(_))
                             && hold_key.pressed_time >= pressed_time
                         {
-                            debug!("Key {:?} become {:?}", hold_key.event, tap_action);
+                            debug!("TapHold key {:?} becomes tap {:?}", hold_key.event, tap_action);
                             self.process_key_action_normal(tap_action, hold_key.event).await;
                         } else {
                             debug!(

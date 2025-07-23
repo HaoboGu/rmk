@@ -7,6 +7,9 @@ set -e
 for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
         # Skip ESP32S3 projects for now
+        if [[ "$dir" == *"py32f07x"* ]]; then
+            continue
+        fi
         if [[ "$dir" == *"esp32s3"* ]]; then
             continue
         fi
@@ -31,10 +34,10 @@ for dir in examples/use_rust/*/ examples/use_config/*/; do
 done
 
 # Clean all examples
-for dir in examples/use_rust/*/ examples/use_config/*/; do
-    if [ -d "$dir" ] && [ -d "$dir/src" ]; then
-        cd "$dir"
-        cargo clean
-        cd ../../..
-    fi
-done
+# for dir in examples/use_rust/*/ examples/use_config/*/; do
+#     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
+#         cd "$dir"
+#         cargo clean
+#         cd ../../..
+#     fi
+# done

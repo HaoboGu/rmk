@@ -741,5 +741,31 @@ mod tap_hold_test {
             };
         }
 
+        #[test]
+        fn test_issue_496() {
+            key_sequence_test! {
+                keyboard: {
+                    let behavior_config = BehaviorConfig {
+                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                        ..BehaviorConfig::default()
+                    };
+                    create_test_keyboard_with_config(behavior_config)
+                },
+                sequence: [
+                    [1, 1, true, 20],  // Press Q
+                    [4, 5, true, 150],  // Press lt!(1, space)
+                    [1, 1, false, 20],  // Release Q
+                    [1, 3, true, 10], // Press E(on layer 1 is W)
+                    [1, 3, false, 10], // Release E(should trigger W)
+                    [4, 5, false, 10], // Release lt!(1, space)
+                ],
+                expected_reports: [
+                    [0, [kc_to_u8!(Q), 0, 0, 0, 0, 0]], // Tap Q
+                    [0, [0, 0, 0, 0, 0, 0]], // All released
+                    [0, [kc_to_u8!(W), 0, 0, 0, 0, 0]], // Tap W
+                    [0, [0, 0, 0, 0, 0, 0]], // All released
+                ]
+            };
+        }
     }
 }
