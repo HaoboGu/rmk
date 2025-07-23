@@ -741,8 +741,9 @@ mod tap_hold_test {
             };
         }
 
+        // Ref: https://github.com/HaoboGu/rmk/pull/496
         #[test]
-        fn test_issue_496() {
+        fn test_taphold_with_previous_rolling_keypress() {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
