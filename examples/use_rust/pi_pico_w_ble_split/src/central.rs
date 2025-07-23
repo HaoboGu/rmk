@@ -138,7 +138,6 @@ async fn main(spawner: Spawner) {
     // Read peripheral address from storage
     let peripheral_addrs = read_peripheral_addresses::<1, _, 4, 3, 2, 0>(&mut storage).await;
 
-
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
     let mut host_resources = HostResources::new();

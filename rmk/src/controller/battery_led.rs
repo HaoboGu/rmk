@@ -1,8 +1,9 @@
+use embedded_hal::digital::StatefulOutputPin;
+
 use crate::channel::{ControllerSub, CONTROLLER_CHANNEL};
 use crate::controller::{Controller, PollingController};
 use crate::driver::gpio::OutputController;
 use crate::event::ControllerEvent;
-use embedded_hal::digital::StatefulOutputPin;
 
 /// Battery state
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

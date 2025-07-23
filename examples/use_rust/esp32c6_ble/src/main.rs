@@ -79,7 +79,6 @@ async fn main(_s: Spawner) {
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 
-
     join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,

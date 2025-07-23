@@ -79,7 +79,6 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
-
     // Start
     join3(
         run_devices! (
