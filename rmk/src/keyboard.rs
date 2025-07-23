@@ -669,28 +669,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        // Release to early
+        // Record release of current key, which will be used in tap/hold processing
         if !event.pressed {
-            // Record release of current key, which will be used in tap/hold processing
-
             debug!("Record released key event with : {:?}", release_taphold_state);
-
             let mut is_tap_key = false;
-            if let KeyAction::Single(Action::Key(k)) = key_action {
-                if k >= KeyCode::A && k <= KeyCode::International1 {
-                    is_tap_key = true
-                }
-            } else if release_taphold_state.is_some_and(|x| x == TapHoldState::PostTap(1)) {
+            if let KeyAction::Single(Action::Key(k)) = key_action
+                && k.is_simple_key()
+            {
+                is_tap_key = true
+            } else if let Some(x) = release_taphold_state
+                && x == TapHoldState::PostTap(1)
+                && let KeyAction::TapHold(Action::Key(k), _) = key_action
+                && k.is_simple_key()
+            {
                 // if released key is a tap hold key action and in a state of PostTap
-                if let KeyAction::TapHold(Action::Key(k), _) = key_action {
-                    if k >= KeyCode::A && k <= KeyCode::International1 {
-                        is_tap_key = true
-                    }
-                }
+                is_tap_key = true
             }
             // Record the last release event
             // TODO: check key action, should be a-z/space/enter
-            // TODO test key action if it's a normal key
+            // TODO: test key action if it's a normal key
             if is_tap_key {
                 debug!("Record released key event: {:?}", event);
                 self.last_release = (event, false, Some(Instant::now()));
@@ -1109,50 +1106,50 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .map_or(false, |c| c.is_same_event_pos(event.pos));
 
             // If HRM is enabled, check whether it's a different key is in key streak
-            if let Some(last_release_time) = self.last_release.2 {
+            if let Some(last_release_time) = self.last_release.2
+                && event.pressed
+            {
                 // Ignore hold within pre idle time for quick typing
-                if event.pressed {
-                    if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
-                        && !(event.pos == self.last_release.0.pos)
-                    {
-                        // The previous key is a different key and released within `prior_idle_time`, it's in key streak
-                        debug!("Key streak detected, trigger tap action");
-                        self.process_key_action_normal(tap_action, event).await;
+                if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+                    && !(event.pos == self.last_release.0.pos)
+                {
+                    // The previous key is a different key and released within `prior_idle_time`, it's in key streak
+                    debug!("Key streak detected, trigger tap action");
+                    self.process_key_action_normal(tap_action, event).await;
 
-                        // Push into buffer, process by order in loop
-                        self.add_holding_key_to_buffer(
-                            event,
-                            KeyAction::TapHold(tap_action, hold_action),
-                            TapHoldState::PostTap(0),
-                        );
-                        return Some(TapHoldState::PostTap(1));
-                    } else if is_chordal_hold_same_hand {
-                        // If chordal hold is enabled, and the chord state is some, check if the key is the same as the chord state
-                        debug!("match chordal hold same hand, key {:?} should be tap", event);
-                        // save into buffer, but mark it as tap
-                        self.process_key_action_normal(tap_action, event).await;
+                    // Push into buffer, process by order in loop
+                    self.add_holding_key_to_buffer(
+                        event,
+                        KeyAction::TapHold(tap_action, hold_action),
+                        TapHoldState::PostTap(0),
+                    );
+                    return Some(TapHoldState::PostTap(1));
+                } else if is_chordal_hold_same_hand {
+                    // If chordal hold is enabled, and the chord state is some, check if the key is the same as the chord state
+                    debug!("match chordal hold same hand, key {:?} should be tap", event);
+                    // save into buffer, but mark it as tap
+                    self.process_key_action_normal(tap_action, event).await;
 
-                        // Push into buffer, process by order in loop
-                        self.add_holding_key_to_buffer(
-                            event,
-                            KeyAction::TapHold(tap_action, hold_action),
-                            TapHoldState::PostTap(1),
-                        );
-                        return Some(TapHoldState::PostTap(1));
-                    } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
-                        && event.pos == self.last_release.0.pos
-                    {
-                        // Quick tapping to repeat
-                        debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
+                    // Push into buffer, process by order in loop
+                    self.add_holding_key_to_buffer(
+                        event,
+                        KeyAction::TapHold(tap_action, hold_action),
+                        TapHoldState::PostTap(1),
+                    );
+                    return Some(TapHoldState::PostTap(1));
+                } else if last_release_time.elapsed() < self.keymap.borrow().behavior.tap_hold.hold_timeout
+                    && event.pos == self.last_release.0.pos
+                {
+                    // Quick tapping to repeat
+                    debug!("Pressed a same tap-hold key after tapped it within `hold_timeout`");
 
-                        // Pressed a same key after tapped it within `hold_timeout`
-                        // Trigger the tap action just as it's pressed
-                        self.process_key_action_normal(tap_action, event).await;
-                        if let Some(index) = self.hold_after_tap.iter().position(|&k| k.is_none()) {
-                            self.hold_after_tap[index] = Some(event);
-                        }
-                        return None;
+                    // Pressed a same key after tapped it within `hold_timeout`
+                    // Trigger the tap action just as it's pressed
+                    self.process_key_action_normal(tap_action, event).await;
+                    if let Some(index) = self.hold_after_tap.iter().position(|&k| k.is_none()) {
+                        self.hold_after_tap[index] = Some(event);
                     }
+                    return None;
                 }
             }
         }
@@ -2370,10 +2367,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn register_keycode(&mut self, key: KeyCode, event: KeyboardEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
-            if let Some(e) = k {
-                if event.pos == (*e).pos {
-                    return Some(i);
-                }
+            if let Some(e) = k
+                && event.pos == (*e).pos
+            {
+                return Some(i);
             }
             None
         });
@@ -2395,10 +2392,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     fn unregister_keycode(&mut self, key: KeyCode, event: KeyboardEvent) {
         // First, find the key event slot according to the position
         let slot = self.registered_keys.iter().enumerate().find_map(|(i, k)| {
-            if let Some(e) = k {
-                if event.pos == (*e).pos {
-                    return Some(i);
-                }
+            if let Some(e) = k
+                && event.pos == (*e).pos
+            {
+                return Some(i);
             }
             None
         });

@@ -1024,14 +1024,20 @@ pub enum KeyCode {
 }
 
 impl KeyCode {
-    /// Returns `true` if the keycode is basic keycode
-    pub(crate) fn is_basic(self) -> bool {
-        KeyCode::No <= self && self <= KeyCode::RGui
+    /// Returns `true` if the keycode is a simple keycode defined in HID spec
+    pub(crate) fn is_simple_key(self) -> bool {
+        KeyCode::No <= self && self <= KeyCode::MouseAccel2
     }
 
     /// Returns `true` if the keycode is a modifier keycode
     pub(crate) fn is_modifier(self) -> bool {
         KeyCode::LCtrl <= self && self <= KeyCode::RGui
+    }
+
+    /// Returns `true` if the keycode is basic keycode
+    /// The basic keycode = simple key + modifier
+    pub(crate) fn is_basic(self) -> bool {
+        KeyCode::No <= self && self <= KeyCode::RGui
     }
 
     /// Returns the byte with the bit corresponding to the USB HID
