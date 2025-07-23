@@ -315,7 +315,7 @@ pub(crate) async fn run_keyboard<
                     }
                 }
                 Err(e) => {
-                    error!("Read HID LED indicator error: {}", e);
+                    error!("Read HID LED indicator error: {:?}", e);
                     embassy_time::Timer::after_millis(1000).await
                 }
             }

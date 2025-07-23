@@ -15,7 +15,7 @@ use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;

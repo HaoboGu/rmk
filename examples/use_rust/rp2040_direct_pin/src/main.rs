@@ -16,7 +16,7 @@ use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use keymap::{COL, ROW, SIZE};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::direct_pin::DirectPinMatrix;
 use rmk::futures::future::join3;

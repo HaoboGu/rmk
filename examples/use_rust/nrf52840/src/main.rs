@@ -16,7 +16,7 @@ use embassy_nrf::usb::{self, Driver};
 use embassy_nrf::{bind_interrupts, peripherals};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;

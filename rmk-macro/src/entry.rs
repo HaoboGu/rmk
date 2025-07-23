@@ -93,7 +93,7 @@ pub(crate) fn rmk_entry_select(
             // TODO: Handle polling controllers
             for controller in controllers {
                 tasks.push(quote! {
-                    #controller.event_loop()
+                    #controller.event_loop(),
                 });
             }
             if split_config.connection == "ble" {
@@ -186,7 +186,7 @@ pub(crate) fn rmk_entry_default(
     // TODO: Handle polling controllers
     for controller in controllers {
         tasks.push(quote! {
-            #controller.event_loop().await;
+            #controller.event_loop()
         });
     }
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.

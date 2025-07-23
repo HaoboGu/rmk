@@ -34,7 +34,7 @@ pub(crate) fn expand_controller_init(keyboard_config: &KeyboardTomlConfig) -> (T
             let mut scrolllock_controller = ::rmk::controller::led_indicator::KeyboardIndicatorController::new(
                 #p,
                 #low_active,
-                ::rmk::controller::led_indicator::KeyboardIndicator::NumLock,
+                ::rmk::controller::led_indicator::KeyboardIndicator::ScrollLock,
             );
         };
         initializers.extend(scrollock_init);

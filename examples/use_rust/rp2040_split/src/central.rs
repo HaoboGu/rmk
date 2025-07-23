@@ -16,7 +16,7 @@ use embassy_rp::peripherals::{UART0, USB};
 use embassy_rp::uart::{self, BufferedUart};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
