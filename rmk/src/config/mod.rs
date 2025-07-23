@@ -5,7 +5,6 @@ pub mod macro_config;
 #[cfg(feature = "_ble")]
 pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
-use embedded_hal::digital::StatefulOutputPin;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 
@@ -13,41 +12,6 @@ use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::tap_dance::TapDance;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
-
-/// The config struct for RMK keyboard.
-///
-/// There are 3 types of configs:
-/// 1. `ChannelConfig`: Configurations for channels used in RMK.
-/// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
-/// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
-pub struct KeyboardConfig<'a, O: StatefulOutputPin> {
-    pub controller_config: ControllerConfig<O>,
-    pub rmk_config: RmkConfig<'a>,
-}
-
-impl<O: StatefulOutputPin> Default for KeyboardConfig<'_, O> {
-    fn default() -> Self {
-        Self {
-            controller_config: ControllerConfig::default(),
-            rmk_config: RmkConfig::default(),
-        }
-    }
-}
-
-/// Config for controllers.
-///
-/// Controllers are used for controlling other devices on the board, such as lights, RGB, etc.
-pub struct ControllerConfig<O: StatefulOutputPin> {
-    pub light_config: LightConfig<O>,
-}
-
-impl<O: StatefulOutputPin> Default for ControllerConfig<O> {
-    fn default() -> Self {
-        Self {
-            light_config: LightConfig::default(),
-        }
-    }
-}
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -174,28 +138,6 @@ impl Default for StorageConfig {
             start_addr: 0,
             num_sectors: 2,
             clear_storage: false,
-        }
-    }
-}
-
-/// Config for lights
-pub struct LightConfig<O: StatefulOutputPin> {
-    pub capslock: Option<LightPinConfig<O>>,
-    pub scrolllock: Option<LightPinConfig<O>>,
-    pub numslock: Option<LightPinConfig<O>>,
-}
-
-pub struct LightPinConfig<O: StatefulOutputPin> {
-    pub pin: O,
-    pub low_active: bool,
-}
-
-impl<O: StatefulOutputPin> Default for LightConfig<O> {
-    fn default() -> Self {
-        Self {
-            capslock: None,
-            scrolllock: None,
-            numslock: None,
         }
     }
 }
