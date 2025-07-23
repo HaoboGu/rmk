@@ -1,15 +1,13 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::TapHoldConfig;
+use rmk::config::{TapHoldConfig, TapHoldMode};
 
 fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
-        permissive_hold: true,
+        mode: TapHoldMode::PermissiveHold,
         chordal_hold: false,
-        hold_on_other_press: false,
-        post_wait_time: Duration::from_millis(0),
         ..TapHoldConfig::default()
     }
 }
@@ -18,9 +16,7 @@ fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
         chordal_hold: true,
-        permissive_hold: true,
-        hold_on_other_press: false,
-        post_wait_time: Duration::from_millis(0),
+        mode: TapHoldMode::PermissiveHold,
         ..TapHoldConfig::default()
     }
 }
@@ -125,8 +121,7 @@ mod tap_hold_test {
             let config =BehaviorConfig {
                 tap_hold: TapHoldConfig {
                     enable_hrm: true,
-                    permissive_hold: true,
-                    post_wait_time: Duration::from_millis(0),
+                    mode: TapHoldMode::PermissiveHold,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -161,8 +156,7 @@ mod tap_hold_test {
             let config = BehaviorConfig {
                 tap_hold: TapHoldConfig {
                     enable_hrm: true,
-                    permissive_hold: true,
-                    post_wait_time: Duration::from_millis(0),
+                    mode: TapHoldMode::PermissiveHold,
                     ..Default::default()
                 },
                 ..Default::default()
