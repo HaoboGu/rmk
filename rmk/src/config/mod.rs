@@ -284,11 +284,11 @@ impl Default for MouseKeyConfig {
             move_delta: 6,                 // 6 pixels per movement (~300 px/sec)
             max_speed: 3,                  // Conservative max speed multiplier (300 -> 900 px/sec)
             time_to_max: 50,               // 1.0 second to max
-            wheel_initial_delay_ms: 100,   // 100ms initial wheel delay
-            wheel_repeat_interval_ms: 80,  // 80ms between wheel movements
+            wheel_initial_delay_ms: 10,    // 10ms initial wheel delay
+            wheel_repeat_interval_ms: 20,  // 20ms between wheel movements
             wheel_delta: 1,                // 1 wheel unit per movement
-            wheel_max_speed_multiplier: 3, // Conservative wheel max speed
-            wheel_time_to_max: 40,         // 0.5 second to max
+            wheel_max_speed_multiplier: 2, // Conservative wheel max speed
+            wheel_time_to_max: 50,         // 0.5 second to max
             move_max: 20,                  // Maximum movement per report
             wheel_max: 4,                  // Maximum wheel movement per report
         }
