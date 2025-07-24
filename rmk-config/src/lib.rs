@@ -411,6 +411,7 @@ pub struct BehaviorConfig {
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
+    #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub tap_dance: Option<TapDancesConfig>,
