@@ -124,7 +124,7 @@ impl Fork {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ActiveFork {
     pub(crate) replacement: KeyAction, // the final replacement decision of the full fork chain

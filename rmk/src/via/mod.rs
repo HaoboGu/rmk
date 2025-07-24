@@ -154,10 +154,11 @@ impl<
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap
-                    .borrow_mut()
-                    .get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
-                let keycode = to_via_keycode(action);
+                let keycode = {
+                    let mut keymap = keymap.borrow_mut();
+                    let action = keymap.get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
+                    to_via_keycode(action.clone())
+                };
                 info!("Getting keycode: {:02X} at ({},{}), layer {}", keycode, row, col, layer);
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
             }
@@ -174,7 +175,7 @@ impl<
                 keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::key_pos(col as u8, row as u8),
                     layer as usize,
-                    action,
+                    action.clone(),
                 );
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
@@ -282,7 +283,7 @@ impl<
                     .skip((offset / 2) as usize)
                     .take((size / 2) as usize)
                     .for_each(|a| {
-                        let kc = to_via_keycode(*a);
+                        let kc = to_via_keycode(a.clone());
                         BigEndian::write_u16(&mut report.input_data[idx..idx + 2], kc);
                         idx += 2;
                     });
@@ -306,7 +307,7 @@ impl<
                     .for_each(|(i, a)| {
                         let via_keycode = LittleEndian::read_u16(&report.output_data[idx..idx + 2]);
                         let action: crate::action::KeyAction = from_via_keycode(via_keycode);
-                        *a = action;
+                        *a = action.clone();
                         idx += 2;
                         let current_offset = offset as usize + i;
                         let (row, col, layer) = get_position_from_offset(current_offset, row_num, col_num);

@@ -1,7 +1,7 @@
 use crate::keycode::{KeyCode, ModifierCombination};
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EncoderAction {
     clockwise: KeyAction,
@@ -32,18 +32,18 @@ impl EncoderAction {
         self.counter_clockwise = counter_clockwise;
     }
 
-    pub fn clockwise(&self) -> KeyAction {
-        self.clockwise
+    pub fn clockwise(&self) -> &KeyAction {
+        &self.clockwise
     }
 
-    pub fn counter_clockwise(&self) -> KeyAction {
-        self.counter_clockwise
+    pub fn counter_clockwise(&self) -> &KeyAction {
+        &self.counter_clockwise
     }
 }
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyAction {
     /// No action. Serialized as 0x0000.

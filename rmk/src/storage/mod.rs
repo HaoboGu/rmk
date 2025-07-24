@@ -230,7 +230,7 @@ impl Value<'_> for StorageData {
             }
             StorageData::KeymapKey(k) => {
                 buffer[0] = StorageKeys::KeymapKeys as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action.clone()));
                 buffer[3] = k.layer as u8;
                 buffer[4] = k.col as u8;
                 buffer[5] = k.row as u8;
@@ -238,8 +238,8 @@ impl Value<'_> for StorageData {
             }
             StorageData::EncoderConfig(e) => {
                 buffer[0] = StorageKeys::EncoderKeys as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise()));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise()));
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(e.action.clockwise().clone()));
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(e.action.counter_clockwise().clone()));
                 buffer[5] = e.idx as u8;
                 buffer[6] = e.layer as u8;
                 Ok(7)
@@ -270,11 +270,14 @@ impl Value<'_> for StorageData {
                 }
                 buffer[0] = StorageKeys::ComboData as u8;
                 for i in 0..COMBO_MAX_LENGTH {
-                    BigEndian::write_u16(&mut buffer[1 + i * 2..3 + i * 2], to_via_keycode(combo.actions[i]));
+                    BigEndian::write_u16(
+                        &mut buffer[1 + i * 2..3 + i * 2],
+                        to_via_keycode(combo.actions[i].clone()),
+                    );
                 }
                 BigEndian::write_u16(
                     &mut buffer[1 + COMBO_MAX_LENGTH * 2..3 + COMBO_MAX_LENGTH * 2],
-                    to_via_keycode(combo.output),
+                    to_via_keycode(combo.output.clone()),
                 );
                 Ok(3 + COMBO_MAX_LENGTH * 2)
             }
@@ -283,9 +286,9 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::ForkData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.trigger));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.negative_output));
-                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.positive_output));
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.trigger.clone()));
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.negative_output.clone()));
+                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.positive_output.clone()));
 
                 BigEndian::write_u16(
                     &mut buffer[7..9],
@@ -315,7 +318,7 @@ impl Value<'_> for StorageData {
                 // Serialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
                 for i in 0..TAP_DANCE_MAX_TAP {
                     let action = tap_dance.tap_actions.get(i).unwrap_or(&KeyAction::No);
-                    BigEndian::write_u16(&mut buffer[3 + i * 2..5 + i * 2], to_via_keycode(*action));
+                    BigEndian::write_u16(&mut buffer[3 + i * 2..5 + i * 2], to_via_keycode(action.clone()));
                 }
 
                 // Serialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
@@ -323,7 +326,7 @@ impl Value<'_> for StorageData {
                     let action = tap_dance.hold_actions.get(i).unwrap_or(&KeyAction::No);
                     BigEndian::write_u16(
                         &mut buffer[3 + (TAP_DANCE_MAX_TAP + i) * 2..5 + (TAP_DANCE_MAX_TAP + i) * 2],
-                        to_via_keycode(*action),
+                        to_via_keycode(action.clone()),
                     );
                 }
 
@@ -462,7 +465,7 @@ impl Value<'_> for StorageData {
                     if buffer.len() < 3 + COMBO_MAX_LENGTH * 2 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                    let mut actions = [const { KeyAction::No }; COMBO_MAX_LENGTH];
                     for i in 0..COMBO_MAX_LENGTH {
                         actions[i] = from_via_keycode(BigEndian::read_u16(&buffer[1 + i * 2..3 + i * 2]));
                     }
@@ -673,7 +676,7 @@ pub(crate) struct LayoutConfig {
     layout_option: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct KeymapKey {
     row: usize,
@@ -682,7 +685,7 @@ pub(crate) struct KeymapKey {
     action: KeyAction,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct EncoderConfig {
     /// Encoder index
@@ -693,7 +696,7 @@ pub(crate) struct EncoderConfig {
     action: EncoderAction,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct ComboData {
     pub(crate) idx: usize,
@@ -701,7 +704,7 @@ pub(crate) struct ComboData {
     pub(crate) output: KeyAction,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct ForkData {
     pub(crate) idx: usize,
@@ -1125,8 +1128,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
             if let Some(StorageData::ComboData(combo)) = read_data {
                 let mut actions: Vec<KeyAction, COMBO_MAX_LENGTH> = Vec::new();
-                for &action in combo.actions.iter().filter(|&&a| a != KeyAction::No) {
-                    let _ = actions.push(action);
+                for action in combo.actions.iter().filter(|&a| *a != KeyAction::No) {
+                    let _ = actions.push(action.clone());
                 }
                 *item = Combo::new(actions, combo.output, item.layer);
             }
@@ -1233,7 +1236,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         row,
                         col,
                         layer,
-                        action: *action,
+                        action: action.clone(),
                     });
 
                     let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
@@ -1259,7 +1262,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     let item = StorageData::EncoderConfig(EncoderConfig {
                         idx,
                         layer,
-                        action: *action,
+                        action: action.clone(),
                     });
 
                     let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);

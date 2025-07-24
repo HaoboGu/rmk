@@ -188,12 +188,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_at(&mut self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
+    pub(crate) fn get_action_at(&mut self, pos: KeyboardEventPos, layer_num: usize) -> &KeyAction {
         match pos {
             KeyboardEventPos::Key(key_pos) => {
                 let row = key_pos.row as usize;
                 let col = key_pos.col as usize;
-                self.layers[layer_num][row][col]
+                &self.layers[layer_num][row][col]
             }
             KeyboardEventPos::RotaryEncoder(encoder_pos) => {
                 // Get the action from the keymap
@@ -203,12 +203,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             return match encoder_pos.direction {
                                 Direction::Clockwise => encoder_action.clockwise(),
                                 Direction::CounterClockwise => encoder_action.counter_clockwise(),
-                                Direction::None => KeyAction::No,
+                                Direction::None => &KeyAction::No,
                             };
                         }
                     }
                 }
-                return KeyAction::No;
+                &KeyAction::No
             }
         }
     }
@@ -219,7 +219,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // Releasing a pressed key, use cached layer and restore the cache
             let layer = self.pop_layer_from_cache(event.pos);
             let action = self.get_action_at(event.pos, layer as usize);
-            return action;
+            return action.clone();
         }
 
         // Iterate from higher layer to lower layer, the lowest checked layer is the default layer
@@ -230,7 +230,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 for (layer_idx, layer) in self.layers.iter().enumerate().rev() {
                     if self.layer_state[layer_idx] || layer_idx as u8 == self.default_layer {
                         // This layer is activated
-                        let action = layer[row][col];
+                        let action = layer[row][col].clone();
                         if action == KeyAction::Transparent {
                             continue;
                         }
@@ -255,8 +255,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // This layer is activated
                             if let Some(encoder_action) = layer.get(encoder_pos.id as usize) {
                                 let action = match encoder_pos.direction {
-                                    Direction::Clockwise => encoder_action.clockwise(),
-                                    Direction::CounterClockwise => encoder_action.counter_clockwise(),
+                                    Direction::Clockwise => encoder_action.clockwise().clone(),
+                                    Direction::CounterClockwise => encoder_action.counter_clockwise().clone(),
                                     Direction::None => KeyAction::No,
                                 };
                                 if action == KeyAction::Transparent {

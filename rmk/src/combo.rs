@@ -38,7 +38,7 @@ impl Combo {
 
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
-    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
+    pub(crate) fn update(&mut self, key_action: &KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
             // Ignore combo that without actions
             return false;
@@ -50,7 +50,7 @@ impl Combo {
             }
         }
 
-        let action_idx = self.actions.iter().position(|&a| a == key_action);
+        let action_idx = self.actions.iter().position(|a| a == key_action);
         if let Some(i) = action_idx {
             debug!("[COMBO] {:?} registered {:?} ", self.output, key_action);
             self.state |= 1 << i;
@@ -62,8 +62,8 @@ impl Combo {
 
     /// Update the combo's state when a key is released
     /// When the combo is fully released from triggered state, this function returns true
-    pub(crate) fn update_released(&mut self, key_action: KeyAction) -> bool {
-        if let Some(i) = self.actions.iter().position(|&a| a == key_action) {
+    pub(crate) fn update_released(&mut self, key_action: &KeyAction) -> bool {
+        if let Some(i) = self.actions.iter().position(|a| a == key_action) {
             self.state &= !(1 << i);
         }
 
@@ -79,19 +79,19 @@ impl Combo {
     }
 
     /// Mark the combo as done, if all actions are satisfied
-    pub(crate) fn trigger(&mut self) -> KeyAction {
+    pub(crate) fn trigger(&mut self) -> &KeyAction {
         if self.is_triggered() {
-            return self.output;
+            return &self.output;
         }
 
         if self.output == KeyAction::No {
-            return self.output;
+            return &self.output;
         }
 
         if self.is_all_pressed() {
             self.is_triggered = true;
         }
-        self.output
+        &self.output
     }
 
     // Check if the combo is dispatched into key event

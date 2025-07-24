@@ -227,7 +227,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             with_modifiers: HidModifiers::default(),
             macro_texting: false,
             macro_caps: false,
-            fork_states: [None; FORK_MAX_NUM],
+            fork_states: [const { None }; FORK_MAX_NUM],
             fork_keep_mask: HidModifiers::default(),
             unprocessed_events: Vec::new(),
             holding_buffer: Vec::new(),
@@ -481,7 +481,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - If the key is released
     ///     - Check if permissive hold is enabled, if true, return `CleanBuffer`, fire buffered tap-hold keys. `CleanBuffer` means that the tap-hold decision is deferred to the next key press.
     /// - Otherwise, return `Ignore`, continue processing as normal.
-    fn make_tap_hold_decision(&mut self, key_action: KeyAction, event: KeyboardEvent) -> TapHoldDecision {
+    fn make_tap_hold_decision(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> TapHoldDecision {
         let tap_hold_mode = self.keymap.borrow().behavior.tap_hold.mode;
         let chordal_hold = self.keymap.borrow().behavior.tap_hold.chordal_hold;
 
@@ -532,8 +532,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                     TapHoldMode::HoldOnOtherPress => {
                         // Check if there's buffered layer_tap key
-                        let layer_tap_in_buffer = self.holding_buffer.iter().any(|h| match (h.action, h.state) {
-                            (KeyAction::TapHold(_, Action::LayerOn(_)), TapHoldState::Tap(0)) => true,
+                        let layer_tap_in_buffer = self.holding_buffer.iter().any(|h| match (&h.action, h.state) {
+                            (&KeyAction::TapHold(_, Action::LayerOn(_)), TapHoldState::Tap(0)) => true,
                             _ => false,
                         });
                         // If HRM is enabled, the MT shouldn't be checked.
@@ -583,7 +583,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // If so, it should be ignored
                                 if !self.holding_buffer.iter().any(|h| {
                                     h.state == TapHoldState::Tap(0)
-                                        && h.action == key_action
+                                        && h.action == *key_action
                                         && h.event.pos == event.pos
                                 }) {
                                     return TapHoldDecision::Ignore;
@@ -601,7 +601,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_key_action(&mut self, mut original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {
-        let decision = self.make_tap_hold_decision(original_key_action, event);
+        let decision = self.make_tap_hold_decision(&original_key_action, event);
 
         debug!("\x1b[34m[TAP-HOLD] --> decision is \x1b[0m: {:?}", decision);
         match decision {
@@ -609,7 +609,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             TapHoldDecision::Buffering => {
                 // Save into buffer, will be process in the future
                 // The buffered key is impossible to be a tap-hold key, so use `Tap(0)` is fine
-                self.add_holding_key_to_buffer(event, original_key_action, TapHoldState::Tap(0));
+                self.add_holding_key_to_buffer(event, original_key_action.clone(), TapHoldState::Tap(0));
                 return LoopState::Queue;
             }
             TapHoldDecision::CleanBuffer
@@ -638,7 +638,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action_inner(&mut self, original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {
         // Start forks
-        let key_action = self.try_start_forks(original_key_action, event);
+        let key_action = self.try_start_forks(original_key_action.clone(), event);
 
         #[cfg(feature = "_ble")]
         LAST_KEY_TIMESTAMP.store(Instant::now().as_secs() as u32, core::sync::atomic::Ordering::Release);
@@ -689,7 +689,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        self.try_finish_forks(original_key_action, event);
+        self.try_finish_forks(original_key_action.clone(), event);
 
         LoopState::OK
     }
@@ -705,11 +705,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if !event.pressed {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
                 if fork.trigger == key_action {
-                    if let Some(active) = self.fork_states[i] {
+                    if let Some(active) = &self.fork_states[i] {
                         // If the originating key of a fork is released, simply release the replacement key
                         // (The fork deactivation is delayed, will happen after the release hid report is sent)
                         debug!("replace input with fork action {:?}", active);
-                        return active.replacement;
+                        return active.replacement.clone();
                     }
                 }
             }
@@ -735,9 +735,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         && (fork.match_none & decision_state) == StateBits::default();
 
                     replacement = if decision {
-                        fork.positive_output
+                        fork.positive_output.clone()
                     } else {
-                        fork.negative_output
+                        fork.negative_output.clone()
                     };
 
                     let suppress = fork.match_any.modifiers & !fork.kept_modifiers;
@@ -787,7 +787,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // the replacement decision and modifier suppressions of the initially
             // triggered fork, which is here marked as active:
             self.fork_states[initial] = Some(ActiveFork {
-                replacement,
+                replacement: replacement.clone(),
                 suppress: combined_suppress,
             });
         }
@@ -813,7 +813,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut is_combo_action = false;
         let current_layer = self.keymap.borrow().get_activated_layer();
         for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
-            is_combo_action |= combo.update(key_action, event, current_layer);
+            is_combo_action |= combo.update(&key_action, event, current_layer);
         }
 
         if event.pressed && is_combo_action {
@@ -823,7 +823,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     state: TapHoldState::WaitingCombo,
                     event,
                     pressed_time: Instant::now(),
-                    action: key_action,
+                    action: key_action.clone(),
                 })
                 .is_err()
             {
@@ -838,7 +838,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .combo
                 .combos
                 .iter_mut()
-                .find_map(|combo| (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger()));
+                .find_map(|combo| (combo.is_all_pressed() && !combo.is_triggered()).then_some(combo.trigger().clone()));
 
             if next_action.is_some() {
                 debug!("[COMBO] {:?} triggered", next_action);
@@ -857,10 +857,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         releasing_triggered_combo |= combo.is_triggered();
 
                         // Release the combo key, check whether the combo is fully released
-                        if combo.update_released(key_action) {
+                        if combo.update_released(&key_action) {
                             // If the combo is fully released, update the combo output
                             debug!("[COMBO] {:?} is released", combo.output);
-                            combo_output = combo_output.or(Some(combo.output));
+                            combo_output = combo_output.or(Some(combo.output.clone()));
                         }
                     }
                 }
@@ -1233,7 +1233,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // TODO: Check whether it's pressed?
                                 if k.pressed_time.elapsed() > tap_dance.tapping_term {
                                     // Timeout, release current hold action
-                                    Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                                    Some(tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No).clone())
                                 } else {
                                     k.state = TapHoldState::IdleAfterTap(t);
                                     // Use current release time for `IdleAfterTap` state
@@ -1242,10 +1242,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 }
                             }
                             TapHoldState::PostHold(t) => {
-                                Some(*tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                                Some(tap_dance.hold_actions.get(t as usize).unwrap_or(&KeyAction::No).clone())
                             }
                             TapHoldState::PostTap(t) => {
-                                Some(*tap_dance.tap_actions.get(t as usize).unwrap_or(&KeyAction::No))
+                                Some(tap_dance.tap_actions.get(t as usize).unwrap_or(&KeyAction::No).clone())
                             }
                             _ => {
                                 // Release when tap-dance key is in other state, ignore
@@ -2072,13 +2072,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // Get tapped num, determine the action
                                 match hold_key.state {
                                     TapHoldState::Tap(tapped_num) => Some(
-                                        *tap_dance_action
+                                        tap_dance_action
                                             .hold_actions
                                             .get(tapped_num as usize)
                                             .unwrap_or(&KeyAction::No),
                                     ),
                                     TapHoldState::IdleAfterTap(tapped_num) => Some(
-                                        *tap_dance_action
+                                        tap_dance_action
                                             .tap_actions
                                             .get(tapped_num as usize)
                                             .unwrap_or(&KeyAction::No),
@@ -2091,13 +2091,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // Get tapped num, determine the action
                                 match hold_key.state {
                                     TapHoldState::Tap(tapped_num) => Some(
-                                        *tap_dance_action
+                                        tap_dance_action
                                             .tap_actions
                                             .get(tapped_num as usize)
                                             .unwrap_or(&KeyAction::No),
                                     ),
                                     TapHoldState::IdleAfterTap(tapped_num) => Some(
-                                        *tap_dance_action
+                                        tap_dance_action
                                             .tap_actions
                                             .get(tapped_num as usize)
                                             .unwrap_or(&KeyAction::No),
@@ -2109,9 +2109,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Trigger the tap-dance action
                             if let Some(action) = action {
                                 if let TapHoldState::IdleAfterTap(_) = hold_key.state {
-                                    removed_events.push((action, hold_key.event.clone())).ok();
+                                    removed_events.push((action.clone(), hold_key.event.clone())).ok();
                                 }
-                                self.process_key_action_inner(action, hold_key.event).await;
+                                self.process_key_action_inner(action.clone(), hold_key.event).await;
                             }
                         } else if let TapHoldState::Tap(tapped_num) = hold_key.state {
                             // Another key triggers `CleanBuffer` while current tap-dance key is pressed.
@@ -2123,7 +2123,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     "Tap-dance key {:?} is pressed before the key triggers `CleanBuffer`, trigger hold action",
                                     hold_key.event
                                 );
-                                *tap_dance_action
+                                tap_dance_action
                                     .hold_actions
                                     .get(tapped_num as usize)
                                     .unwrap_or(&KeyAction::No)
@@ -2132,14 +2132,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     "Tap-dance key {:?} is pressed after the key triggers `CleanBuffer`, trigger tap action",
                                     hold_key.event
                                 );
-                                *tap_dance_action
+                                tap_dance_action
                                     .tap_actions
                                     .get(tapped_num as usize)
                                     .unwrap_or(&KeyAction::No)
                             };
 
                             // Trigger the tap-dance action
-                            self.process_key_action_inner(action, hold_key.event).await;
+                            self.process_key_action_inner(action.clone(), hold_key.event).await;
                         }
                     }
                     _ => {
@@ -2267,14 +2267,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// if the current key action is a tap-hold, or the evaluation of current key action should be deferred by tap-hold.
     fn add_holding_key_to_buffer(&mut self, event: KeyboardEvent, action: KeyAction, state: TapHoldState) {
         let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-        let new_item = HoldingKey {
-            state,
-            event,
-            pressed_time,
-            action,
-        };
-        debug!("Saving action: {:?} to holding buffer", new_item);
-        self.push_and_sort_buffers(new_item);
         match action {
             KeyAction::TapHold(_, _) => {
                 // If this is the first tap-hold key, initialize the chord state for possible chordal hold detection.
@@ -2287,6 +2279,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
             _ => {}
         }
+        let new_item = HoldingKey {
+            state,
+            event,
+            pressed_time,
+            action,
+        };
+        debug!("Saving action: {:?} to holding buffer", new_item);
+        self.push_and_sort_buffers(new_item);
     }
 
     /// Set the timer value for a key event

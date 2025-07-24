@@ -86,7 +86,7 @@ impl Default for TapDancesConfig {
 }
 
 /// Mode for tap hold behavior
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldMode {
     /// Normal mode

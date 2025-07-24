@@ -132,19 +132,19 @@ pub(crate) async fn process_vial<
                         // Pack tap dance data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(*tap_dance.tap_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(tap_dance.tap_actions.get(0).unwrap_or(&KeyAction::No).clone()),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(*tap_dance.hold_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(tap_dance.hold_actions.get(0).unwrap_or(&KeyAction::No).clone()),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(*tap_dance.tap_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(tap_dance.tap_actions.get(1).unwrap_or(&KeyAction::No).clone()),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(*tap_dance.hold_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(tap_dance.hold_actions.get(1).unwrap_or(&KeyAction::No).clone()),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[9..11],
@@ -202,12 +202,12 @@ pub(crate) async fn process_vial<
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             LittleEndian::write_u16(
                                 &mut report.input_data[1 + i * 2..3 + i * 2],
-                                to_via_keycode(*combo.actions.get(i).unwrap_or(&KeyAction::No)),
+                                to_via_keycode(combo.actions.get(i).unwrap_or(&KeyAction::No).clone()),
                             );
                         }
                         LittleEndian::write_u16(
                             &mut report.input_data[1 + VIAL_COMBO_MAX_LENGTH * 2..3 + VIAL_COMBO_MAX_LENGTH * 2],
-                            to_via_keycode(combo.output),
+                            to_via_keycode(combo.output.clone()),
                         );
                     } else {
                         report.input_data[1..3 + VIAL_COMBO_MAX_LENGTH * 2].fill(0);
@@ -227,7 +227,7 @@ pub(crate) async fn process_vial<
                             return;
                         };
 
-                        let mut actions = [KeyAction::No; COMBO_MAX_LENGTH];
+                        let mut actions = [const { KeyAction::No }; COMBO_MAX_LENGTH];
                         let mut n: usize = 0;
                         for i in 0..VIAL_COMBO_MAX_LENGTH {
                             let action =
@@ -247,7 +247,7 @@ pub(crate) async fn process_vial<
 
                         combo.actions.clear();
                         let _ = combo.actions.extend_from_slice(&actions[0..n]);
-                        combo.output = output;
+                        combo.output = output.clone();
 
                         //reordering combo order
                         km.reorder_combos();
@@ -286,8 +286,8 @@ pub(crate) async fn process_vial<
             if let Some(encoder_map) = &keymap.borrow().encoders {
                 if let Some(encoder_layer) = encoder_map.get(layer as usize) {
                     if let Some(encoder) = encoder_layer.get(index as usize) {
-                        let clockwise = to_via_keycode(encoder.clockwise());
-                        let counter_clockwise = to_via_keycode(encoder.counter_clockwise());
+                        let clockwise = to_via_keycode(encoder.clockwise().clone());
+                        let counter_clockwise = to_via_keycode(encoder.counter_clockwise().clone());
                         BigEndian::write_u16(&mut report.input_data[0..2], counter_clockwise);
                         BigEndian::write_u16(&mut report.input_data[2..4], clockwise);
                         return;
@@ -321,7 +321,7 @@ pub(crate) async fn process_vial<
                                 info!("Setting counter-clockwise action: {:?}", action);
                                 encoder.set_counter_clockwise(action);
                             }
-                            Some(*encoder)
+                            Some(encoder.clone())
                         } else {
                             None
                         }
