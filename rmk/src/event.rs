@@ -1,9 +1,9 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
 use crate::{action::KeyAction, keycode::ModifierCombination};
+use crate::{input_device::rotary_encoder::Direction, tap_hold::ChordHoldHand};
 
 /// Raw events from input devices and keyboards
 ///
@@ -79,6 +79,36 @@ impl KeyboardEventPos {
 
     pub(crate) fn rotary_encoder_pos(id: u8, direction: Direction) -> Self {
         Self::RotaryEncoder(RotaryEncoderPos { id, direction })
+    }
+
+    pub(crate) fn is_same_hand<const ROW: usize, const COL: usize>(&self, pos: Self) -> bool {
+        match (self, pos) {
+            (Self::Key(_), Self::Key(_)) => self.get_hand::<ROW, COL>() == pos.get_hand::<ROW, COL>(),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn get_hand<const ROW: usize, const COL: usize>(&self) -> ChordHoldHand {
+        if let Self::Key(pos) = self {
+            if COL >= ROW {
+                // Horizontal
+                if pos.col < (COL as u8 / 2) {
+                    ChordHoldHand::Left
+                } else {
+                    ChordHoldHand::Right
+                }
+            } else {
+                // Vertical
+                if pos.row < (ROW as u8 / 2) {
+                    ChordHoldHand::Left
+                } else {
+                    ChordHoldHand::Right
+                }
+            }
+        } else {
+            // TODO: handle rotary encoder
+            ChordHoldHand::Left
+        }
     }
 }
 

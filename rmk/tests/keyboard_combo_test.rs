@@ -54,9 +54,9 @@ pub fn get_combos_config() -> CombosConfig {
 }
 
 mod combo_test {
-    use embassy_futures::block_on;
-    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig, TapHoldMode};
+    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
     use rmk::keycode::KeyCode;
+    use rmk::morse::MorseKeyMode;
     use rmk::th;
     use rusty_fork::rusty_fork_test;
 
@@ -184,7 +184,7 @@ mod combo_test {
                     let behavior_config = BehaviorConfig {
                         tap_hold: TapHoldConfig {
                             enable_hrm: true,
-                            mode: TapHoldMode::PermissiveHold,
+                            mode: MorseKeyMode::PermissiveHold,
                             chordal_hold: false,
                             ..TapHoldConfig::default()
                         },

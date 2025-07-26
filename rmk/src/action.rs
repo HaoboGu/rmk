@@ -1,4 +1,8 @@
-use crate::keycode::{KeyCode, ModifierCombination};
+use crate::{
+    TAP_DANCE_MAX_TAP,
+    keycode::{KeyCode, ModifierCombination},
+    morse::Morse,
+};
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
@@ -55,15 +59,19 @@ pub enum KeyAction {
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
     /// General tap/hold action: (tap_action, hold_action)
-    TapHold(Action, Action),
+    // TapHold(Morse<1>),
     /// Tap dance action, references a tap dance configuration by index.
-    TapDance(u8),
+    // TapDance(u8),
+    // Morse action
+    Morse(Morse<TAP_DANCE_MAX_TAP>),
 }
 
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Action {
+    /// Default action, no action.
+    No,
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
     Key(KeyCode),
     /// Modifier Combination, used for oneshot keyaction.
