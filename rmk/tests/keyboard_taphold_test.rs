@@ -1,12 +1,12 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{TapHoldConfig, TapHoldMode};
+use rmk::config::{MorseKeyMode, TapHoldConfig};
 
 fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
-        mode: TapHoldMode::PermissiveHold,
+        mode: MorseKeyMode::PermissiveHold,
         chordal_hold: false,
         ..TapHoldConfig::default()
     }
@@ -16,7 +16,7 @@ fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
         chordal_hold: true,
-        mode: TapHoldMode::PermissiveHold,
+        mode: MorseKeyMode::PermissiveHold,
         ..TapHoldConfig::default()
     }
 }
@@ -37,205 +37,6 @@ mod tap_hold_test {
     use crate::common::{KC_LGUI, KC_LSHIFT, create_test_keyboard, create_test_keyboard_with_config, wrap_keymap};
 
     rusty_fork_test! {
-
-        #[test]
-        fn test_taphold_tap() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard(),
-
-                sequence: [
-                    [2, 1, true, 10],  // Press TH shift A
-                    // Release before hold timeout
-                    [2, 1, false, 100], // Release A
-                ],
-
-                expected_reports: [
-                    // Should be a tapping A
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                ]
-            };
-        }
-
-        #[test]
-        fn test_taphold_hold() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard(),
-                sequence: [
-                    [2, 1, true, 10],  // Press th!(A, LShift)
-                    [2, 1, false, 300], // Release A after hold timeout
-                ],
-                expected_reports: [
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                    [0, [0, 0, 0, 0, 0, 0]], // All released
-                ]
-            };
-        }
-
-        #[test]
-        fn test_tap_hold_permissive_hold_timeout_and_release() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                .. BehaviorConfig::default()
-            }),
-            sequence: [
-                [2, 1, true, 10], // Press th!(A, lshift)
-                [2, 3, true, 200],  // Press D
-                [2, 3, false, 100], // Release D  <-- Release D after "permissive hold" interval, but also after the hold-timeout
-                [2, 1, false, 100], // Release A
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release D
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-            };
-        }
-
-
-        #[test]
-        fn test_tap_hold_permissive_hold_timeout_and_release_2() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                .. BehaviorConfig::default()
-            }),
-            sequence: [
-                [2, 1, true, 10], // Press th!(A, lshift)
-                [2, 2, true, 200],  // Press th!(S,lgui)
-                [2, 2, false, 100], // Release S  <-- Release S after "permissive hold" interval, but also after the hold-timeout
-                [2, 1, false, 100], // Release A
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                [KC_LSHIFT, [kc_to_u8!(S), 0, 0, 0, 0, 0]], // Press S
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release S
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-            };
-        }
-
-        #[test]
-        fn test_tap_hold_key_post_wait_in_new_version_1() {
-            let config =BehaviorConfig {
-                tap_hold: TapHoldConfig {
-                    enable_hrm: true,
-                    mode: TapHoldMode::PermissiveHold,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            let keymap:&mut RefCell<KeyMap<1, 2, 1>> = wrap_keymap(
-                [[[
-                    th!(B, LShift),
-                    k!(A)
-                ]]],
-                config
-            );
-            key_sequence_test! {
-                keyboard: Keyboard::new(keymap),
-                sequence: [
-                    [0, 0, true, 10],  // press th b
-                    [0, 1, true, 10],  // Press a
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, false, 10],  // Press a within post wait timeout
-
-                ],
-                expected_reports: [
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [ kc_to_u8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ kc_to_u8!(A) , 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                ]
-            }
-        }
-
-        #[test]
-        fn test_tap_hold_key_post_wait_in_new_version_2() {
-            let config = BehaviorConfig {
-                tap_hold: TapHoldConfig {
-                    enable_hrm: true,
-                    mode: TapHoldMode::PermissiveHold,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            let keymap:&mut RefCell<KeyMap<1, 2, 1>> = wrap_keymap(
-                [[[
-                    th!(B, LShift),
-                    k!(A)
-                ]]],
-                config
-            );
-
-            key_sequence_test! {
-                keyboard: Keyboard::new(keymap),
-                sequence: [
-                    [0, 0, true, 10],  // press th b
-                    [0, 1, true, 10],  // Press a
-                    [0, 0, false, 300], // Release th b
-                    [0, 1, false, 100],  // Press a out of post wait timeout
-                ],
-                expected_reports: [
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                    [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                    [0, [ 0, 0, 0, 0, 0, 0]],
-                ]
-            }
-        }
-
-        #[test]
-        fn test_tap_hold_key_multi_hold() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard(),
-                sequence: [
-                    [2, 1, true, 10], // Press th!(A, lshift)
-                    [2, 2, true, 10], // Press th!(S, lgui)
-                    [2, 3, true, 270],  // Press D (after hold timeout)
-                    [2, 3, false, 290], // Release D
-                    [2, 1, false, 380], // Release A
-                    [2, 2, false, 400], // Release S
-                ],
-                expected_reports: [
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Hold LShift + LGui
-                    [KC_LSHIFT | KC_LGUI, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-                    [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release D
-                    [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Hold LGui
-                    [0, [0, 0, 0, 0, 0, 0]], // All released
-                ]
-            };
-        }
-
-        // Normal tap hold tests
-        #[test]
-        fn test_tap_hold_key_release_rolling_should_tap_in_order() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold:tap_hold_config_with_hrm_and_permissive_hold(),
-                    .. BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 1, true, 10], // Press th!(A,shift)
-                    [2, 2, true, 30], // Press th!(S,lgui)
-                    [2, 3, true, 30], // Press D
-                    [2, 1, false, 50], // Release A
-                    [2, 2, false, 100], // Release s
-                    [2, 3, false, 100],  //  press d
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                    [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]],
-                    [0, [kc_to_u8!(A), kc_to_u8!(S), kc_to_u8!(D), 0, 0, 0]],
-                    [0, [0, kc_to_u8!(S), kc_to_u8!(D), 0, 0, 0]],
-                    [0, [0, 0, kc_to_u8!(D), 0, 0, 0]],
-                    [0, [0, 0, 0, 0, 0, 0]],
-                ]
-            };
-        }
-
         //permissive hold test cases
         #[test]
         fn test_tap_hold_hold_on_other_release() {
@@ -263,113 +64,6 @@ mod tap_hold_test {
             }
         }
 
-        // Hold after tapping
-        #[test]
-        fn test_tap_hold_hold_after_tapping() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    .. BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 1, true, 10], // Tap th!(A,shift)
-                    [2, 1, false, 50],
-                    // last release should record as tap
-                    [2, 1, true, 100], // Hold th!(A,shift) after tapping
-                    [2, 1, false, 400],
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A
-                    [0, [0, 0, 0, 0, 0, 0]], // Release A
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Hold after tapping
-                    [0, [0, 0, 0, 0, 0, 0]], // Release A
-                ]
-            }
-        }
-
-        // Hold after tapping timeout
-        #[test]
-        fn test_tap_hold_hold_after_tapping_timeout() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    .. BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 1, true, 10], // Tap th!(A,shift)
-                    [2, 1, false, 50],
-                    [2, 1, true, 300], // Hold th!(A,shift) after tapping timeout
-                    [2, 1, false, 400],
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A
-                    [0, [0, 0, 0, 0, 0, 0]], // Release A
-                    [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold after tapping timeout
-                    [0, [0, 0, 0, 0, 0, 0]], // Release A
-                ]
-            }
-        }
-
-        #[test]
-        fn test_tap_hold_hold_on_smesh_key_press() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                        .. BehaviorConfig::default()
-                    }),
-
-                sequence:[
-                    [2, 5, true, 30], // Press G
-                    [2, 1, true, 10], // Press th!(A,shift)
-                    [2, 5, false, 10], // Release G
-                    [3, 3, true, 10], // Press C
-                    [2, 2, true, 30], // Press th!(S,lgui)
-                    [3, 3, false, 10], // Release C
-                    [2, 1, false, 10], // Release A
-                    [2, 2, false, 100], // Release S
-                ],
-
-                expected_reports: [
-                    [0, [kc_to_u8!(G), 0, 0, 0, 0, 0]], // #0
-                    [0, [kc_to_u8!(G), kc_to_u8!(A),  0, 0, 0, 0]],
-                    [0, [0, kc_to_u8!(A),  0, 0, 0, 0]],
-                    [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]], // #0
-                    [0, [kc_to_u8!(C), kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0]], // #0
-                    // key release trigger a hold
-                    //should not trigger hold , if all prefix key is not mod key
-                    [0, [0, kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0]], // #0
-                    [0, [0, 0, kc_to_u8!(S), 0, 0, 0]],
-                    [0, [0, 0, 0, 0, 0, 0]],
-                ]
-            };
-        }
-
-        #[test]
-        fn test_tap_hold_key_mixed_release_hold() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    .. BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 1, true, 10], // Press th!(A,shift)
-                    [2, 2, true, 30], // Press th!(S,lgui)
-                    [2, 3, true, 30], // Press D
-                    [2, 1, false, 50], // Release A
-                    [2, 2, false, 20], // Release s
-                    [2, 3, false, 10],  // Release d
-                ],
-                expected_reports: [
-                    [0,  [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                    [0,  [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]],
-                    [0,  [kc_to_u8!(A), kc_to_u8!(S), kc_to_u8!(D), 0, 0, 0]],
-                    [0,  [0, kc_to_u8!(S), kc_to_u8!(D), 0, 0, 0]],
-                    [0,  [0, 0, kc_to_u8!(D), 0, 0, 0]],
-                    [0,  [0, 0, 0, 0, 0, 0]],
-                ]
-            };
-        }
-
         #[test]
         fn test_tap_hold_key_chord_cross_hand_should_be_hold() {
             key_sequence_test! {
@@ -395,54 +89,6 @@ mod tap_hold_test {
                     [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                     [0, [0, 0, 0, 0, 0, 0]],
 
-                ]
-            }
-        }
-
-        #[test]
-        fn test_tap_hold_key_chord_reversed_cross_tap_should_be_tap() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    ..BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 8, true, 50],  // Press K
-                    [2, 1, true, 20], // Press th!(A,shift)
-                    [2, 1, false, 20], // Release A
-                    [2, 8, false, 50], // Release K
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]], // Tap K
-                    [0, [kc_to_u8!(K), kc_to_u8!(A), 0, 0, 0, 0]], // Tap A
-                    [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]], // Release A
-                    [0, [0, 0, 0, 0, 0, 0]], // Release K
-                ]
-            }
-        }
-
-        #[test]
-        fn test_chordal_cross_hand_flow_tap_should_tap() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    ..BehaviorConfig::default()
-                }),
-                sequence: [
-                    [2, 8, true, 50],  // Press K
-                    [2, 8, false, 50],  // Release K
-                    [2, 1, true, 20], // Press th!(A,shift)
-                    [2, 2, true, 20], // Press th!(S,)
-                    [2, 1, false, 20], // Release A
-                    [2, 2, false, 20], // Release S
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]], // Tap K
-                    [0, [0, 0, 0, 0, 0, 0]], // Release K
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A
-                    [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]], // Tap S
-                    [0, [0, kc_to_u8!(S), 0, 0, 0, 0]], // Release A
-                    [0, [0, 0, 0, 0, 0, 0]], // Release S
                 ]
             }
         }

@@ -9,7 +9,7 @@ extern crate rmk;
 #[macro_export]
 macro_rules! key_sequence_test {
     (keyboard: $keyboard:expr, sequence: [$([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?], expected_reports: [$([$modifier:expr, $keys:expr]),* $(,)?]) => {
-        block_on(async {
+        ::embassy_futures::block_on(async {
             let mut keyboard = $keyboard;
             let sequence = vec![
                 $(

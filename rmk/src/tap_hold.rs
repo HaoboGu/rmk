@@ -1,67 +1,76 @@
-use embassy_time::Instant;
-
-use crate::action::KeyAction;
-use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyPos, KeyboardEventPos};
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TapHoldDecision {
-    // Hold timeout, trigger the hold action
-    Timeout,
-    // Clean holding buffer due to permissive hold or chordal hold is triggered
+    // Clean holding buffer due to permissive hold is triggered
     CleanBuffer,
-    // Holding
-    Hold,
-    // Chordal holding
-    ChordHold,
-    // A tap hold key is release as tap
-    BufferTapping,
-    // Hold on other key press
-    HoldOnOtherPress,
     // Skip key action processing and buffer key event
-    Buffering,
+    Buffer,
     // Continue processing as normal key event
     Ignore,
+    // Release current key
+    Release,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct HoldingKey {
-    pub state: TapHoldState,
-    pub event: KeyboardEvent,
-    // TODO: remove it, using `Keyboard.timer` instead
-    pub pressed_time: Instant,
-    pub action: KeyAction,
+pub enum HeldKeyDecision {
+    // Ignore it
+    Ignore,
+    // Chordal hold triggered
+    ChordalHold,
+    // Permissive hold triggered
+    PermissiveHold,
+    // Hold on other key press triggered
+    HoldOnOtherKeyPress,
+    // Used for the buffered key which is releasing now
+    Release,
+    // Releasing a key that is pressed before any keys in the buffer
+    NotInBuffer,
+    // The held key is a normal key,
+    // It will always be added to the decision list, and the decision will be made later
+    Normal,
 }
 
-impl HoldingKey {
-    pub(crate) fn is_tap_hold(&self) -> bool {
-        matches!(self.action, KeyAction::TapHold(_, _))
-    }
+// #[derive(Clone, Debug)]
+// #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+// pub struct HoldingKey {
+//     pub state: TapHoldState,
+//     pub event: KeyboardEvent,
+//     // TODO: remove it, using `Keyboard.timer` instead
+//     pub pressed_time: Instant,
+//     pub action: KeyAction,
+// }
 
-    pub(crate) fn is_tap_dance(&self) -> bool {
-        matches!(self.action, KeyAction::TapDance(_))
-    }
+// impl HoldingKey {
+//     pub(crate) fn is_tap_hold(&self) -> bool {
+//         matches!(self.action, KeyAction::TapHold(_, _))
+//     }
 
-    pub(crate) fn update_state(&mut self, new_state: TapHoldState) {
-        self.state = new_state;
-    }
+//     pub(crate) fn is_tap_dance(&self) -> bool {
+//         matches!(self.action, KeyAction::TapDance(_))
+//     }
 
-    pub(crate) fn press_time(&self) -> Instant {
-        self.pressed_time
-    }
+//     pub(crate) fn update_state(&mut self, new_state: TapHoldState) {
+//         self.state = new_state;
+//     }
 
-    pub(crate) fn state(&self) -> TapHoldState {
-        self.state
-    }
+//     pub(crate) fn press_time(&self) -> Instant {
+//         self.pressed_time
+//     }
 
-    pub(crate) fn tap_num(&self) -> u8 {
-        match self.state {
-            TapHoldState::Tap(num) => num,
-            _ => 0,
-        }
-    }
-}
+//     pub(crate) fn state(&self) -> TapHoldState {
+//         self.state
+//     }
+
+//     pub(crate) fn tap_num(&self) -> u8 {
+//         match self.state {
+//             TapHoldState::Tap(num) => num,
+//             _ => 0,
+//         }
+//     }
+// }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -98,7 +107,7 @@ pub enum ChordHoldHand {
 pub struct ChordHoldState {
     pub is_vertical_chord: bool,
     pub hand: ChordHoldHand,
-    pub count: usize,
+    pub count: u8,
 }
 
 impl ChordHoldState {
@@ -118,17 +127,17 @@ impl ChordHoldState {
 
     pub fn is_same_hand_inner(&self, n: usize) -> bool {
         match self.hand {
-            ChordHoldHand::Left => n < self.count / 2,
-            ChordHoldHand::Right => n >= self.count / 2,
+            ChordHoldHand::Left => n < self.count as usize / 2,
+            ChordHoldHand::Right => n >= self.count as usize / 2,
         }
     }
 
     /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
     /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
     /// the chordal hold will be determined by user configuration in future.
-    pub(crate) fn create(pos: KeyPos, rows: usize, cols: usize) -> Self {
+    pub(crate) fn create(pos: KeyPos, rows: u8, cols: u8) -> Self {
         if cols > rows {
-            if (pos.col as usize) < (cols / 2) {
+            if pos.col < (cols / 2) {
                 ChordHoldState {
                     is_vertical_chord: false,
                     hand: ChordHoldHand::Left,
@@ -141,7 +150,7 @@ impl ChordHoldState {
                     count: cols,
                 }
             }
-        } else if (pos.row as usize) < (rows / 2) {
+        } else if pos.row < (rows / 2) {
             ChordHoldState {
                 is_vertical_chord: true,
                 hand: ChordHoldHand::Left,

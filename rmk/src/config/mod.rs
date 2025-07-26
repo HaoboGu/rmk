@@ -11,6 +11,7 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
+use crate::morse::MorseKeyMode;
 use crate::tap_dance::TapDance;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
 
@@ -85,25 +86,13 @@ impl Default for TapDancesConfig {
     }
 }
 
-/// Mode for tap hold behavior
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum TapHoldMode {
-    /// Normal mode
-    Normal,
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
-    PermissiveHold,
-    /// Trigger hold when any other non-tap-hold key is pressed
-    HoldOnOtherPress,
-}
-
 /// Configurations for tap hold behavior
 #[derive(Clone, Copy, Debug)]
 pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
     pub hold_timeout: Duration,
-    pub mode: TapHoldMode,
+    pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub chordal_hold: bool,
 }
@@ -113,7 +102,7 @@ impl Default for TapHoldConfig {
         Self {
             enable_hrm: false,
             chordal_hold: false,
-            mode: TapHoldMode::Normal,
+            mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
             hold_timeout: Duration::from_millis(250),
         }

@@ -59,21 +59,20 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
     join!(
         // Run keyboard until all reports are received
         async {
-            select(keyboard.run(), async {
-                select(
-                    Timer::after(MAX_TEST_TIMEOUT).then(|_| async {
-                        panic!("Test timeout reached");
-                    }),
-                    async {
-                        while !*REPORTS_DONE.lock().await {
-                            // polling reports
-                            Timer::after(Duration::from_millis(50)).await;
-                        }
-                    },
-                )
-                .await;
-            })
-            .await;
+            match select(
+                Timer::after(Duration::from_secs(5)),
+                select(keyboard.run(), async {
+                    while !*REPORTS_DONE.lock().await {
+                        // polling reports
+                        Timer::after(Duration::from_millis(50)).await;
+                    }
+                }),
+            )
+            .await
+            {
+                Either::First(_) => panic!("ERROR: report done timeout reached"),
+                _ => (),
+            }
         },
         // Send all key events with delays
         async {
@@ -89,36 +88,43 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         },
         // Verify reports
         async {
-            let mut report_index = -1;
-            for expected in expected_reports {
-                match select(Timer::after(Duration::from_secs(2)), KEYBOARD_REPORT_CHANNEL.receive()).await {
-                    Either::First(_) => panic!("ERROR: report wait timeout reached"),
-                    Either::Second(Report::KeyboardReport(report)) => {
-                        report_index += 1;
-                        // println!("Received {}th report from channel: {:?}", report_index, report);
-                        assert_eq!(
-                            *expected, report,
-                            "on #{} reports, expected left but actually right",
-                            report_index
-                        );
-                    }
-                    Either::Second(report) => {
-                        debug!("other reports {:?}", report)
+            match select(Timer::after(Duration::from_secs(5)), async {
+                let mut report_index = -1;
+                for expected in expected_reports {
+                    match select(Timer::after(Duration::from_secs(2)), KEYBOARD_REPORT_CHANNEL.receive()).await {
+                        Either::First(_) => panic!("ERROR: report wait timeout reached"),
+                        Either::Second(Report::KeyboardReport(report)) => {
+                            report_index += 1;
+                            // println!("Received {}th report from channel: {:?}", report_index, report);
+                            assert_eq!(
+                                *expected, report,
+                                "on #{} reports, expected left but actually right",
+                                report_index
+                            );
+                        }
+                        Either::Second(report) => {
+                            debug!("other reports {:?}", report)
+                        }
                     }
                 }
-            }
 
-            // Wait for all key events to be sent
-            while !*SEQ_SEND_DONE.lock().await {
-                Timer::after(Duration::from_millis(50)).await;
-            }
+                // Wait for all key events to be sent
+                while !*SEQ_SEND_DONE.lock().await {
+                    Timer::after(Duration::from_millis(50)).await;
+                }
 
-            // Set done flag after all reports are verified
-            *REPORTS_DONE.lock().await = true;
+                // Set done flag after all reports are verified
+                *REPORTS_DONE.lock().await = true;
+            })
+            .await
+            {
+                Either::First(_) => panic!("Read report timeout"),
+                Either::Second(_) => (),
+            }
         }
     );
-    let buffer = keyboard.holding_buffer.clone();
-    if buffer.len() > 0 {
+    let buffer = keyboard.held_buffer.clone();
+    if !buffer.is_empty() {
         panic!("leak after buffer cleanup, buffer contains {:?}", buffer);
     }
 }

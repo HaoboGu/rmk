@@ -5,14 +5,14 @@
 
 pub mod common;
 
-use rmk::config::{BehaviorConfig, TapHoldConfig, TapHoldMode};
+use rmk::config::{BehaviorConfig, MorseKeyMode, TapHoldConfig};
 use rmk::{k, lt, th};
 use rusty_fork::rusty_fork_test;
 
 /// Helper to create tap-hold config with hold-on-other-key-press enabled
 fn tap_hold_config_with_hold_on_other_press() -> TapHoldConfig {
     TapHoldConfig {
-        mode: TapHoldMode::HoldOnOtherPress,
+        mode: MorseKeyMode::HoldOnOtherPress,
         enable_hrm: false,
         chordal_hold: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
@@ -23,7 +23,7 @@ fn tap_hold_config_with_hold_on_other_press() -> TapHoldConfig {
 /// Helper to create tap-hold config with both hold-on-other-press and permissive hold
 fn tap_hold_config_with_hold_on_other_press_and_permissive() -> TapHoldConfig {
     TapHoldConfig {
-        mode: TapHoldMode::PermissiveHold,
+        mode: MorseKeyMode::PermissiveHold,
         enable_hrm: false,
         chordal_hold: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
@@ -33,7 +33,7 @@ fn tap_hold_config_with_hold_on_other_press_and_permissive() -> TapHoldConfig {
 
 mod hold_on_other_press_tests {
     use embassy_futures::block_on;
-    use rmk::{config::TapHoldMode, keyboard::Keyboard};
+    use rmk::{config::MorseKeyMode, keyboard::Keyboard};
 
     use super::*;
     use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, create_test_keyboard_with_config, wrap_keymap};
@@ -322,7 +322,7 @@ mod hold_on_other_press_tests {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     tap_hold: TapHoldConfig {
-                        mode: TapHoldMode::PermissiveHold,
+                        mode: MorseKeyMode::PermissiveHold,
                         enable_hrm: false,  // HRM disabled
                         chordal_hold: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
@@ -351,7 +351,7 @@ mod hold_on_other_press_tests {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
                     tap_hold: TapHoldConfig {
-                        mode: TapHoldMode::PermissiveHold,
+                        mode: MorseKeyMode::PermissiveHold,
                         enable_hrm: true,  // HRM enabled
                         chordal_hold: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
@@ -442,7 +442,7 @@ mod hold_on_other_press_tests {
                     ]]],
                     BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            mode: TapHoldMode::PermissiveHold,
+                            mode: MorseKeyMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
                             chordal_hold: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
@@ -507,7 +507,7 @@ mod hold_on_other_press_tests {
                     ]]],
                     BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            mode: TapHoldMode::PermissiveHold,
+                            mode: MorseKeyMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
                             chordal_hold: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
