@@ -411,6 +411,8 @@ pub struct BehaviorConfig {
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
+    #[serde(alias = "macro")]
+    pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub tap_dance: Option<TapDancesConfig>,
 }
@@ -459,6 +461,30 @@ pub struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
     pub layer: Option<u8>,
+}
+
+/// Configurations for macros
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MacrosConfig {
+    pub macros: Vec<MacroConfig>,
+}
+
+/// Configurations for macro
+#[derive(Clone, Debug, Deserialize)]
+pub struct MacroConfig {
+    pub operations: Vec<MacroOperation>,
+}
+
+/// Macro operations
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "operation", rename_all = "lowercase")]
+pub enum MacroOperation {
+    Tap { keycode: String },
+    Down { keycode: String },
+    Up { keycode: String },
+    Delay { duration: DurationMillis },
+    Text { text: String },
 }
 
 /// Configurations for forks
