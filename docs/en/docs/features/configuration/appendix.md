@@ -109,10 +109,33 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
+# Tap Hold configuration
+tap_hold = { enable_hrm = true, permissive_hold = true, chordal_hold = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
+
+# Combo configuration
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output Escape key
+  { actions = ["J", "K"], output = "Escape" }
+]
+
+# Macro configuration
+[[behavior.macro.macros]]
+operations = [
+    { operation = "text", text = "Hello" }
+]
+
+# Fork configuration
+[behavior.fork]
+forks = [
+  # Shift + '.' output ':' key
+  { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" }
+]
 
 # Lighting configuration, if you don't have any light, just ignore this section.
 [light]
