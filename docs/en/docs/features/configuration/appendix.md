@@ -130,6 +130,18 @@ operations = [
     { operation = "text", text = "Hello" }
 ]
 
+[behavior.tap_dance]
+tap_dances = [
+  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+  # Extended tap dance for function keys
+  {
+    tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
+    hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
+    tapping_term = "300ms" 
+  }
+]
+
 # Fork configuration
 [behavior.fork]
 forks = [
