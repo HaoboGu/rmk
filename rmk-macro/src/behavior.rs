@@ -3,10 +3,11 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, OneShotConfig, TapDancesConfig, TapHoldConfig, TriLayerConfig,
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, OneShotConfig, TapDancesConfig, TapHoldConfig,
+    TriLayerConfig,
 };
 
-use crate::layout::parse_key;
+use crate::layout::{get_key_with_alias, parse_key};
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -119,6 +120,43 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
                     ..Default::default()
                 }
             }
+        }
+        None => default,
+    }
+}
+
+fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+
+    match macros {
+        Some(macros) => {
+            let macros_def = macros.macros.iter().map(|m| {
+                let operations = m.operations.iter().map(|op| match op {
+                    rmk_config::MacroOperation::Tap { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Down { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Up { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Delay { duration } => {
+                        let millis = duration.0 as u16;
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Text { text } => {
+                        quote! { ::rmk::keyboard_macros::to_macro_sequence(#text).into_iter() }
+                    }
+                });
+
+                quote! { [#(#operations),*].into_iter().flatten().collect() }
+            });
+
+            quote! { ::rmk::config::macro_config::KeyboardMacrosConfig::new(::rmk::keyboard_macros::define_macro_sequences(&[#(#macros_def),*])) }
         }
         None => default,
     }
@@ -362,6 +400,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let tap_hold = expand_tap_hold(&behavior.tap_hold);
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
+    let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork);
     let tap_dance = expand_tap_dance(&behavior.tap_dance);
 
@@ -373,8 +412,8 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             combo: #combos,
             fork: #forks,
             tap_dance: #tap_dance,
-            // TODO: implement macro for configuring Keyboard-Macro-Sequences
-            keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
+            keyboard_macros: #macros,
+            // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
         };
     }

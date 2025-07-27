@@ -85,6 +85,44 @@ combos = [
 ]
 ```
 
+## Macro
+
+In the `macro` sub-table, you can configure the keyboard's macro functionality. Macros are explained in more detail in the [keyboard macros](/docs/features/keymap/keyboard_macros.md) page.
+
+Macro operations are defined with an `operation` and a `keycode`, `duration` or `text` field depending on the operation. Available operations are:
+
+```toml
+[[behavior.macro.macros]]
+operations = [
+  { operation = "down", keycode = "_" }, # [!code focus:5]
+  { operation = "up", keycode = "_" },
+  { operation = "tap", keycode = "_" },
+  { operation = "delay", duration = "0ms" },
+  { operation = "text", text = "foo" }
+]
+```
+
+```toml
+# Outputs "Hello"
+[[behavior.macro.macros]]
+operations = [
+    { operation = "text", text = "Hello" }
+]
+
+# Outputs "Hello" with a 1 second delay after the first letter
+[[behavior.macro.macros]]
+operations = [
+    { operation = "down", keycode = "LShift" },
+    { operation = "tap", keycode = "H" },
+    { operation = "up", keycode = "LShift" },
+    { operation = "delay", duration = "1s" },
+    { operation = "tap", keycode = "E" },
+    { operation = "tap", keycode = "L" },
+    { operation = "tap", keycode = "L" },
+    { operation = "tap", keycode = "O" },
+]
+```
+
 ## Tap Dance
 
 In the `tap_dance` sub-table, you can configure the keyboard's tap dance functionality. Tap dance allows you to define different actions based on the number of times a key is tapped within a specific time window.
@@ -134,7 +172,7 @@ tap_dances = [
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape", tapping_term = "250ms" },
   
   # Extended tap dance for function keys
-  { 
+  {
     tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
     tapping_term = "300ms" 

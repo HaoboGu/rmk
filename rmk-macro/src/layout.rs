@@ -358,7 +358,7 @@ fn get_number(key: String, prefix: &str, suffix: &str) -> u8 {
     layer_str.parse::<u8>().unwrap()
 }
 
-fn get_key_with_alias(key: String) -> Ident {
+pub(crate) fn get_key_with_alias(key: String) -> Ident {
     let key = match KEYCODE_ALIAS.get(key.to_lowercase().as_str()) {
         Some(k) => *k,
         None => key.as_str(),

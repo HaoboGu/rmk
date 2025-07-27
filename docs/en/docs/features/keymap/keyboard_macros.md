@@ -36,11 +36,11 @@ This marks the end of a macro sequence. Don't use it: The code removes all occur
 
 ## Configure a macro sequence
 
-### via the configuration file
+### Via the configuration file
 
-This is not yet supported.
+See [macro](/docs/features/configuration/behavior.md#macro) section under `behavior`
 
-### via Rust
+### Via Rust
 
 A new field `keyboard_macros` has been added to the `BehaviorConfig` struct. Within it a field `macro_sequences` has to be set. This is in binary format (`[u8]`) and can only be as long as `MACRO_SPACE_SIZE`, which is set to 256.
 

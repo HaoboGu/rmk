@@ -28,7 +28,7 @@ embassy-usb = { version = "0.5", features = [
 embassy-sync = { version = "0.7" }
 embassy-futures = { version = "0.1" }
 embassy-executor = { version = "0.7" }
-embassy-usb-logger = { version = "0.4", optional = true }
+embassy-usb-logger = { version = "0.5", optional = true }
 
 futures = { version = "0.3", default-features = false, features = [
     "async-await",
