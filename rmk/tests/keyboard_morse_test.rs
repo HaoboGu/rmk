@@ -1,43 +1,14 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::action::KeyAction;
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig};
-use rmk::keyboard::Keyboard;
 use rmk::keycode::ModifierCombination;
-use rmk::{k, lt, mt};
+use rmk::{k, mt};
 use rusty_fork::rusty_fork_test;
 
-use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
-
-fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static, 1, 4, 2> {
-    let mut keymap = [
-        [[
-            k!(A),
-            mt!(B, ModifierCombination::SHIFT),
-            mt!(C, ModifierCombination::GUI),
-            lt!(1, D),
-        ]],
-        [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4)]],
-    ];
-
-    // Update all keys according to behavior config
-    for layer in keymap.iter_mut() {
-        for row in layer {
-            for key in row {
-                if let KeyAction::Morse(morse) = key {
-                    if behavior_config.tap_hold.chordal_hold {
-                        morse.chordal_hold = true;
-                    }
-                    morse.mode = behavior_config.tap_hold.mode;
-                }
-            }
-        }
-    }
-
-    Keyboard::new(wrap_keymap(keymap, behavior_config))
-}
+use crate::common::morse::create_simple_morse_keyboard;
+use crate::common::{KC_LGUI, KC_LSHIFT};
 
 rusty_fork_test! {
     #[test]

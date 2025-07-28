@@ -1,3 +1,4 @@
+pub mod morse;
 pub mod test_macro;
 
 use core::cell::RefCell;
@@ -7,7 +8,7 @@ use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-use futures::{FutureExt, join};
+use futures::join;
 use log::debug;
 use rmk::action::KeyAction;
 use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
@@ -60,7 +61,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         // Run keyboard until all reports are received
         async {
             match select(
-                Timer::after(Duration::from_secs(5)),
+                Timer::after(MAX_TEST_TIMEOUT),
                 select(keyboard.run(), async {
                     while !*REPORTS_DONE.lock().await {
                         // polling reports
@@ -88,7 +89,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         },
         // Verify reports
         async {
-            match select(Timer::after(Duration::from_secs(5)), async {
+            match select(Timer::after(MAX_TEST_TIMEOUT), async {
                 let mut report_index = -1;
                 for expected in expected_reports {
                     match select(Timer::after(Duration::from_secs(2)), KEYBOARD_REPORT_CHANNEL.receive()).await {
