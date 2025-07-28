@@ -17,7 +17,7 @@ use {
 use crate::action::{Action, KeyAction};
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
-use crate::descriptor::{KeyboardReport, ViaReport};
+use crate::descriptor::KeyboardReport;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
@@ -32,7 +32,7 @@ use crate::light::LedIndicator;
 use crate::morse::MorseKeyMode;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::tap_hold::{ChordHoldState, HeldKeyDecision, TapHoldDecision};
+use crate::tap_hold::{HeldKeyDecision, TapHoldDecision};
 use crate::{FORK_MAX_NUM, boot};
 
 pub(crate) mod combo;
@@ -145,25 +145,19 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Buffered held keys
     pub held_buffer: HeldBuffer,
 
-    chord_state: Option<ChordHoldState>,
-
     /// Timer which records the timestamp of key changes
     pub(crate) timer: [[Option<Instant>; ROW]; COL],
 
     /// Timer which records the timestamp of rotary encoder changes
     pub(crate) rotary_encoder_timer: [[Option<Instant>; 2]; NUM_ENCODER],
 
-    /// Record the timestamp of last release, (event, is_modifier, timestamp)
-    /// Now it's used in tap-hold prior-idle-time check
-    last_release: (KeyboardEvent, bool, Option<Instant>),
-    last_press: (KeyboardEvent, bool, Option<Instant>),
+    /// Record the timestamp of last **simple key** press.
+    /// It's used in tap-hold prior-idle-time check.
+    last_press_key: Instant,
 
     /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
     /// Used in repeat-key
     last_key_code: KeyCode,
-
-    /// Record whether the keyboard is in hold-after-tap state
-    hold_after_tap: [Option<KeyboardEvent>; 6],
 
     /// One shot layer state
     osl_state: OneShotState<u8>,
@@ -201,9 +195,6 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     /// Internal system control report buf
     system_control_report: SystemControlReport,
 
-    /// Via report
-    via_report: ViaReport,
-
     /// Mouse acceleration state
     mouse_accel: u8,
     mouse_repeat: u8,
@@ -225,9 +216,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             keymap,
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
-            last_release: (KeyboardEvent::key(0, 0, false), false, None),
-            last_press: (KeyboardEvent::key(0, 0, false), false, None),
-            hold_after_tap: Default::default(),
+            last_press_key: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
             with_modifiers: HidModifiers::default(),
@@ -249,10 +238,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             },
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
-            via_report: ViaReport {
-                input_data: [0; 32],
-                output_data: [0; 32],
-            },
             last_key_code: KeyCode::No,
             mouse_accel: 0,
             mouse_repeat: 0,
@@ -260,7 +245,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             combo_on: true,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
-            chord_state: None,
         }
     }
 
@@ -365,73 +349,23 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
-        // all modifier related effects are combined here to be sent with the hid report:
-        let modifiers = self.resolve_modifiers(pressed);
-        info!("Sending keyboard report, pressed: {}", pressed);
-        self.send_report(Report::KeyboardReport(KeyboardReport {
-            modifier: modifiers.into_bits(),
-            reserved: 0,
-            leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
-            keycodes: self.held_keycodes.map(|k| k as u8),
-        }))
-        .await;
-
-        // Yield once after sending the report to channel
-        yield_now().await;
-    }
-
-    /// Send system control report if needed
-    pub(crate) async fn send_system_control_report(&mut self) {
-        self.send_report(Report::SystemControlReport(self.system_control_report))
-            .await;
-        self.system_control_report.usage_id = 0;
-        yield_now().await;
-    }
-
-    /// Send media report if needed
-    pub(crate) async fn send_media_report(&mut self) {
-        self.send_report(Report::MediaKeyboardReport(self.media_report)).await;
-        self.media_report.usage_id = 0;
-        yield_now().await;
-    }
-
-    /// Send mouse report if needed
-    pub(crate) async fn send_mouse_report(&mut self) {
-        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
-        self.send_report(Report::MouseReport(self.mouse_report)).await;
-        yield_now().await;
-    }
-
-    fn update_osm(&mut self, event: KeyboardEvent) {
-        match self.osm_state {
-            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
-            OneShotState::Single(_) => {
-                if !event.pressed {
-                    self.osm_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn update_osl(&mut self, event: KeyboardEvent) {
-        match self.osl_state {
-            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
-            OneShotState::Single(layer_num) => {
-                if !event.pressed {
-                    self.keymap.borrow_mut().deactivate_layer(layer_num);
-                    self.osl_state = OneShotState::None;
-                }
-            }
-            _ => (),
-        }
-    }
-
     async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // Decision of current key and held keys
         let mut decision_for_current_key = TapHoldDecision::Ignore;
         let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
+
+        // If pressing a morse key, check `prior-idle-time` first.
+        if event.pressed
+            && let KeyAction::Morse(m) = key_action
+            && self.last_press_key.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+        {
+            // It's in key streak, trigger the first tap action
+            debug!("Key streak detected, trigger tap action for current morse key");
+            // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered tap_num
+            let action = m.tap_action(0);
+            self.process_key_action_tap(action, event).await;
+            return LoopState::OK;
+        }
 
         // If current key is a release, and it cannot be find in the held buffer or it's already triggered
         // it's pressed BEFORE any morse key is pressed, set the check_buffer = false
@@ -470,7 +404,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if let KeyAction::Morse(morse) = held_key.action {
                     if event.pressed {
                         // The current key is being pressed
-                        // TODO: Check prior-idle-ms
 
                         // 1. Check chordal hold of held key
                         if morse.chordal_hold && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos) {
@@ -658,7 +591,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         send_controller_event(&mut self.controller_pub, ControllerEvent::Key(event, key_action));
 
-        // let mut release_taphold_state = None;
         match key_action {
             KeyAction::No | KeyAction::Transparent => (),
             KeyAction::Single(a) => {
@@ -986,79 +918,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
             event.pressed = false;
             self.process_key_action_normal(action, event).await;
-
-            // Record the release event
-            let mut is_mod = false;
-            if let Action::Key(k) = action {
-                if k.is_modifier() {
-                    is_mod = true;
-                }
-            }
-            self.last_press = (event, is_mod, Some(Instant::now()));
-            self.last_release = (event, is_mod, Some(Instant::now()));
         }
-    }
-
-    /// A key release triggers buffer cleaning.
-    ///
-    /// Trigger all held keys in buffer, except current releasing key.
-    pub(crate) async fn clean_held_buffer(&mut self, event: KeyboardEvent) {
-        // When cleaning buffer, sort by the press time
-        self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
-
-        while let Some(mut key) = self
-            .held_buffer
-            .remove_if(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
-        {
-            debug!("Cleaning key: {:?}", key.event);
-            let action = self.keymap.borrow_mut().get_action_with_layer_cache(key.event);
-
-            // Fire held key, and push back to held_buffer if needed
-            match action {
-                KeyAction::Morse(m) => match key.state {
-                    KeyState::Held(t) => {
-                        if event.pos == key.event.pos {
-                            // When processing the same buffered key of current releasing key,
-                            // always process as tap
-                            let action = m.tap_action(t as usize);
-                            self.process_key_action_normal(action, key.event).await;
-                            key.state = KeyState::PostTap(t);
-                        } else {
-                            match m.mode {
-                                MorseKeyMode::PermissiveHold => {
-                                    let action = m.hold_action(t as usize);
-                                    self.process_key_action_normal(action, key.event).await;
-                                    key.state = KeyState::PostHold(t);
-                                }
-                                MorseKeyMode::HoldOnOtherPress => todo!(),
-                                _ => (),
-                            }
-                        }
-
-                        self.held_buffer.push_without_sort(key);
-                    }
-                    KeyState::IdleAfterTap(t) => {
-                        let action = m.tap_action(t as usize);
-                        self.process_key_action_tap(action, key.event).await;
-                        // The tap is fully fired, don't push it back to buffer again
-                        // key.state = KeyState::PostHold(t)
-                    }
-                    _ => (),
-                },
-                _ => {
-                    let action = self.keymap.borrow_mut().get_action_with_layer_cache(key.event);
-                    debug!("Tap Key {:?} now press down, action: {:?}", key.event, action);
-                    self.process_key_action_inner(action, key.event).await;
-
-                    // Update key's state, push back
-                    key.state = KeyState::PostTap(0);
-                    self.held_buffer.push_without_sort(key);
-                }
-            }
-        }
-
-        // Sort after cleaning held buffer
-        self.held_buffer.keys.sort_unstable_by_key(|k| k.timeout_time);
     }
 
     pub fn print_buffer(&self) {
@@ -1276,6 +1136,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process action key
     async fn process_action_key(&mut self, key: KeyCode, event: KeyboardEvent) {
+        if event.pressed && key.is_simple_key() {
+            // Records only the simple key
+            self.last_press_key = Instant::now();
+        }
         let key = match key {
             KeyCode::GraveEscape => {
                 if self.held_modifiers.into_bits() == 0 {
@@ -1720,6 +1584,69 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         } else {
             error!("Macro not found");
+        }
+    }
+
+    pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {
+        // all modifier related effects are combined here to be sent with the hid report:
+        let modifiers = self.resolve_modifiers(pressed);
+        info!("Sending keyboard report, pressed: {}", pressed);
+        self.send_report(Report::KeyboardReport(KeyboardReport {
+            modifier: modifiers.into_bits(),
+            reserved: 0,
+            leds: LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed),
+            keycodes: self.held_keycodes.map(|k| k as u8),
+        }))
+        .await;
+
+        // Yield once after sending the report to channel
+        yield_now().await;
+    }
+
+    /// Send system control report if needed
+    pub(crate) async fn send_system_control_report(&mut self) {
+        self.send_report(Report::SystemControlReport(self.system_control_report))
+            .await;
+        self.system_control_report.usage_id = 0;
+        yield_now().await;
+    }
+
+    /// Send media report if needed
+    pub(crate) async fn send_media_report(&mut self) {
+        self.send_report(Report::MediaKeyboardReport(self.media_report)).await;
+        self.media_report.usage_id = 0;
+        yield_now().await;
+    }
+
+    /// Send mouse report if needed
+    pub(crate) async fn send_mouse_report(&mut self) {
+        // Prevent mouse report flooding, set maximum mouse report rate to 50 HZ
+        self.send_report(Report::MouseReport(self.mouse_report)).await;
+        yield_now().await;
+    }
+
+    fn update_osm(&mut self, event: KeyboardEvent) {
+        match self.osm_state {
+            OneShotState::Initial(m) => self.osm_state = OneShotState::Held(m),
+            OneShotState::Single(_) => {
+                if !event.pressed {
+                    self.osm_state = OneShotState::None;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn update_osl(&mut self, event: KeyboardEvent) {
+        match self.osl_state {
+            OneShotState::Initial(l) => self.osl_state = OneShotState::Held(l),
+            OneShotState::Single(layer_num) => {
+                if !event.pressed {
+                    self.keymap.borrow_mut().deactivate_layer(layer_num);
+                    self.osl_state = OneShotState::None;
+                }
+            }
+            _ => (),
         }
     }
 

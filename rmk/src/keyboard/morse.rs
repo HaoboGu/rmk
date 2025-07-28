@@ -43,49 +43,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub(crate) async fn process_key_action_morse(&mut self, morse: Morse<TAP_DANCE_MAX_TAP>, event: KeyboardEvent) {
-        // Check HRM first:
-        // 1. prior-idle-time:
-        //    - If the current key is not in the holding buffer
-        //    - If the previous key pressing is in the prior-idle-time
-        // 2. chordal hold:
-        //    - If the previous key is in the chordal hold state and the current key is on the same hand
-        // 3. hold-after-tap:
-        //    - Is it needed?
-        if self.keymap.borrow().behavior.tap_hold.enable_hrm {
-            // If HRM is enabled, check whether it's in key streak.
-            // Conditions:
-            // 1. The last pressed key is not empty
-            // 2. The current key is pressed
-            // 3. The previous key is in prior-idle-time
-            // 4. The current key is not at the same position as the previous key
-            // 5. The current key is not in the holding buffer
-            if let Some(last_press_time) = self.last_press.2
-                && event.pressed // Current key is pressed
-                && last_press_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time // Previous key is in prior-idle-time
-                && !(event.pos == self.last_press.0.pos)
-                && self.held_buffer.find_pos(event.pos).is_none()
-            {
-                // It's in key streak, trigger the first tap action
-                debug!("Key streak detected, trigger tap action");
-
-                self.process_key_action_normal(morse.tap_action(0), event).await;
-
-                // Push into buffer, process by order in loop
-                let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-                let timeout_time = pressed_time + Duration::from_millis(morse.tapping_term_ms as u64);
-                self.held_buffer.push(HeldKey::new(
-                    event,
-                    KeyAction::Morse(morse),
-                    KeyState::PostTap(0),
-                    pressed_time,
-                    timeout_time,
-                ));
-            }
-
-            // TODO: Check chordal hold
-            // TODO: Check hold-after-tap
-        }
-
         debug!("Processing morse: {:?}", event);
 
         // Process the morse key
