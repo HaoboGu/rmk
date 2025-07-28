@@ -453,12 +453,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .filter(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
             {
                 // Releasing a key is already buffered
-                if held_key.action == key_action {
+                if !event.pressed && held_key.action == key_action {
                     debug!("Releasing a held key: {:?}", event);
-                    if !event.pressed {
-                        let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
-                        decision_for_current_key = TapHoldDecision::Release;
-                    }
+                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
+                    decision_for_current_key = TapHoldDecision::Release;
                     continue;
                 }
 
@@ -510,23 +508,25 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        for (p, d) in &decisions {
-            debug!("✅ decisions: {:?}: {:?}", p, d)
-        }
+        // for (p, d) in &decisions {
+        //     debug!("✅ Decisions: {:?}: {:?}", p, d)
+        // }
 
+        let mut keyboard_state_updated = false;
         // Fire buffered keys
         for (pos, decision) in decisions {
             // Some decisions of held keys have been made, fire those keys
             match decision {
                 HeldKeyDecision::ChordalHold => todo!(),
-                HeldKeyDecision::PermissiveHold => {
+                HeldKeyDecision::PermissiveHold | HeldKeyDecision::HoldOnOtherKeyPress => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
                         if let KeyAction::Morse(morse) = action {
                             // Permissive hold of held key is triggered
-                            debug!("Cleaning buffered morse key due to permissive hold");
+                            debug!("Cleaning buffered morse key due to permissive hold or hold on other key press");
                             match held_key.state {
                                 KeyState::Held(t) => {
+                                    keyboard_state_updated = true;
                                     let hold = morse.hold_action(t as usize);
                                     self.process_key_action_normal(hold, held_key.event).await;
                                     held_key.state = KeyState::PostHold(t);
@@ -547,22 +547,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HeldKeyDecision::Release => {
                     // Releasing the current key, will always be tapping, because timeout isn't here
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        let action = if is_combo {
-                            held_key.action
-                        } else {
+                        let key_action = if keyboard_state_updated {
                             self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
+                        } else {
+                            held_key.action
                         };
                         debug!("Processing current key before releasing: {:?}", held_key.event);
-                        match action {
+                        match key_action {
                             KeyAction::Single(action) => {
                                 self.process_key_action_normal(action, held_key.event).await;
-                                held_key.state = KeyState::PostTap(0);
-                                // Push back after triggered hold
-                                self.held_buffer.push_without_sort(held_key);
                             }
                             KeyAction::Tap(action) => {
                                 self.process_key_action_tap(action, held_key.event).await;
-                                // held_key.state = KeyState::PostTap(0);
                             }
                             KeyAction::Morse(morse) => {
                                 match held_key.state {
@@ -582,7 +578,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
 
                     // After processing current key in `Release` state, mark the `decision_for_current_key` to `CleanBuffer`
-                    // That means all normal keys pressed AFTER the current releasing key will be fired
+                    // That means all normal keys pressed AFTER the press of curreng releasing key will be fired
                     decision_for_current_key = TapHoldDecision::CleanBuffer;
                 }
                 HeldKeyDecision::Normal => {
@@ -591,7 +587,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     if trigger_normal && let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         debug!("Cleaning buffered normal key");
-                        let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
+                        let action = if keyboard_state_updated {
+                            self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
+                        } else {
+                            held_key.action
+                        };
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
                         self.process_key_action_inner(action, held_key.event).await;
 
@@ -600,8 +600,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.held_buffer.push_without_sort(held_key);
                     }
                 }
-                HeldKeyDecision::HoldOnOtherKeyPress => todo!(),
-                // HeldKeyDecision::NotInBuffer => todo!(),
                 _ => (),
             }
         }
@@ -610,7 +608,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         match decision_for_current_key {
             TapHoldDecision::CleanBuffer | TapHoldDecision::Release => {
                 debug!("Clean buffer, then process current key normally");
-                // self.clean_held_buffer(event).await;
+                let key_action = if keyboard_state_updated && !is_combo {
+                    // The key_action needs to be updated due to the morse key might be triggered
+                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                } else {
+                    key_action
+                };
                 self.process_key_action_inner(key_action, event).await
             }
             TapHoldDecision::Buffer => {
@@ -632,13 +635,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 LoopState::Queue
             }
             TapHoldDecision::Ignore => {
-                debug!("Current key is not buffered, process current key normally");
+                debug!("Current key is not buffered, process current key normally: {:?}", event);
                 // Process current key normally
-                let key_action = if is_combo {
-                    key_action
-                } else {
+                let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered
                     self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                } else {
+                    key_action
                 };
                 self.process_key_action_inner(key_action, event).await
             }
@@ -869,7 +872,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if self.held_buffer.keys[i].state == KeyState::WaitingCombo {
                 let key = self.held_buffer.keys.swap_remove(i);
                 debug!("[Combo] Dispatching combo: {:?}", key);
-                self.process_key_action_inner(key.action, key.event).await;
+                self.process_key_action(key.action, key.event, false).await;
             } else {
                 i += 1;
             }

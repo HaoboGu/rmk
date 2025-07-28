@@ -188,7 +188,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Fetch the action in keymap, with layer cache
-    pub(crate) fn get_action_at(&mut self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
+    pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
         match pos {
             KeyboardEventPos::Key(key_pos) => {
                 let row = key_pos.row as usize;

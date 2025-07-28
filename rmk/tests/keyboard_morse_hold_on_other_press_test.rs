@@ -40,11 +40,11 @@ fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'st
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }
 
-fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
+fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static, 1, 4, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
             enable_hrm: true,
-            mode: MorseKeyMode::PermissiveHold,
+            mode: MorseKeyMode::HoldOnOtherPress,
             chordal_hold: false,
             ..TapHoldConfig::default()
         },
@@ -52,32 +52,32 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
     })
 }
 
-fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
+fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
     let combo_key = KeyAction::Morse(Morse::new_tap_hold_with_config(
         Action::Key(KeyCode::B),
         Action::Modifier(ModifierCombination::SHIFT),
         250,
-        MorseKeyMode::PermissiveHold,
+        MorseKeyMode::HoldOnOtherPress,
         false,
     ));
     let combo_key_2 = KeyAction::Morse(Morse::new_tap_hold_with_config(
         Action::Key(KeyCode::C),
         Action::Modifier(ModifierCombination::GUI),
         250,
-        MorseKeyMode::PermissiveHold,
+        MorseKeyMode::HoldOnOtherPress,
         false,
     ));
     let combo_key_3 = KeyAction::Morse(Morse::new_tap_hold_with_config(
         Action::Key(KeyCode::D),
         Action::LayerOn(1),
         250,
-        MorseKeyMode::PermissiveHold,
+        MorseKeyMode::HoldOnOtherPress,
         false,
     ));
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
             enable_hrm: true,
-            mode: MorseKeyMode::PermissiveHold,
+            mode: MorseKeyMode::HoldOnOtherPress,
             chordal_hold: false,
             ..TapHoldConfig::default()
         },
@@ -97,7 +97,7 @@ rusty_fork_test! {
     #[test]
     fn test_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 // Release before hold timeout
@@ -113,7 +113,7 @@ rusty_fork_test! {
     #[test]
     fn test_hold() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10],  // Press mt!(B, LShift)
                 [0, 1, false, 300], // Release B after hold timeout
@@ -128,7 +128,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_1() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -147,7 +147,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_2() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -155,9 +155,9 @@ rusty_fork_test! {
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release B
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Permissive hold
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
             ]
         };
@@ -166,7 +166,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_3() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -185,7 +185,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_4() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -204,7 +204,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_5() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -223,7 +223,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_6() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 10], // Release mt!(B, LShift)
@@ -242,7 +242,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_1() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -261,7 +261,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_2() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -280,7 +280,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_3() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -299,7 +299,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_4() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -318,7 +318,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_5() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -337,7 +337,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_6() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 260], // Release mt!(B, LShift)
@@ -356,7 +356,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_7() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -375,7 +375,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_8() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
@@ -394,7 +394,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_9() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
@@ -413,7 +413,7 @@ rusty_fork_test! {
     #[test]
     fn test_mt_timeout_10() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
@@ -432,7 +432,7 @@ rusty_fork_test! {
     #[test]
     fn test_trigger() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 50],  // Press A
@@ -451,7 +451,7 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_1() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
@@ -470,7 +470,7 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_2() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
@@ -487,7 +487,7 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_3() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
@@ -504,15 +504,15 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_4() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
-                [0, 2, true, 60],  // Press mt!(C, LGui)
+                [0, 2, true, 60],  // Press mt!(C, LGui) -> Resolve B, note that mt!(C, LGui) is not resolved yet
                 [0, 1, false, 20], // Release B
-                [0, 2, false, 10], // Release C
+                [0, 2, false, 10], // Release C -> mt!(C, LGui) is resolved now
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
@@ -523,12 +523,12 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_5() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
-                [0, 1, false, 20], // Release B
-                [0, 2, false, 10], // Release C
+                [0, 1, false, 260], // Release B
+                [0, 2, false, 260], // Release C
             ],
             expected_reports: [
                 [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
@@ -540,21 +540,19 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_6() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
-                [0, 2, true, 60],  // Press mt!(C, LGui)
+                [0, 2, true, 60],  // Press mt!(C, LGui) -> Kp3 on layer 1
                 [0, 1, false, 20], // Release B
                 [0, 3, false, 10], // Release D
                 [0, 2, false, 10], // Release C
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
@@ -563,7 +561,7 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_7() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
@@ -582,7 +580,7 @@ rusty_fork_test! {
     #[test]
     fn test_with_combo_8() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard_with_combo(),
+            keyboard: create_hold_on_other_key_press_keyboard_with_combo(),
             sequence: [
                 [0, 1, true, 20],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
@@ -592,8 +590,8 @@ rusty_fork_test! {
                 [0, 3, false, 10], // Release D
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
@@ -603,7 +601,7 @@ rusty_fork_test! {
     #[test]
     fn test_timeout() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260],  // Press A after hold timeout
@@ -622,11 +620,11 @@ rusty_fork_test! {
     #[test]
     fn test_quick_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10],  // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
-                [0, 1, false, 100], // Release B
+                [0, 1, false, 100], // Release mt!(B, LShift)
                 [0, 0, false, 100], // Release A
             ],
             expected_reports: [
@@ -641,7 +639,7 @@ rusty_fork_test! {
     #[test]
     fn test_multi_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 10],  // Press A
                 [0, 0, false, 100], // Release A
@@ -653,9 +651,9 @@ rusty_fork_test! {
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-                [0, [0, 0, 0, 0, 0, 0]], // Release B
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release C
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // mt!(B, LShift)
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // mt!(B, LShift)
                 [0, [0, 0, 0, 0, 0, 0]], // Release C
             ]
         };
@@ -664,7 +662,7 @@ rusty_fork_test! {
     #[test]
     fn test_layer_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -691,32 +689,28 @@ rusty_fork_test! {
     #[test]
     fn test_rolling_with_layer_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 3, true, 10], // Press lt!(1, D)
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 10], // Press A -> Kp1 on layer 1
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
                 [0, 3, true, 250], // Press lt!(1, D)
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 10], // Press A Press A -> Kp1 on layer 1
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 100], // Release lt!(1, D)
                 [0, 3, true, 250], // Press lt!(1, D)
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 10], // Press A Press A -> Kp1 on layer 1
                 [0, 3, false, 100], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // D
-                [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]], // D + A
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release D
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
                 [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Kp1 on layer 1
                 [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // D
-                [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]], // D + A
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release D
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Kp1 on layer 1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Kp1 on layer 1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
             ]
         }
     }
@@ -724,7 +718,7 @@ rusty_fork_test! {
     #[test]
     fn test_timeout_rolled_release() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 260],  // Press A after hold timeout
@@ -743,7 +737,7 @@ rusty_fork_test! {
     #[test]
     fn test_timeout_rolled_release_2() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 10],  // Press A
@@ -762,11 +756,11 @@ rusty_fork_test! {
     #[test]
     fn test_timeout_and_release() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 0, true, 20],  // Press A
-                [0, 0, false, 260], // Release A  <-- Release A after "permissive hold" interval, but also after the hold-timeout
+                [0, 0, false, 260], // Release A
                 [0, 1, false, 100], // Release B
             ],
             expected_reports: [
@@ -781,11 +775,11 @@ rusty_fork_test! {
     #[test]
     fn test_timeout_and_release_with_other_morse_key() {
     key_sequence_test! {
-        keyboard: create_permissive_hold_keyboard(),
+        keyboard: create_hold_on_other_key_press_keyboard(),
         sequence: [
             [0, 1, true, 10], // Press mt!(B, LShift)
             [0, 2, true, 200],  // Press mt!(C, LGui)
-            [0, 2, false, 100], // Release C  <-- Release C after "permissive hold" interval, but also after the hold-timeout
+            [0, 2, false, 100], // Release C
             [0, 1, false, 100], // Release B
         ],
         expected_reports: [
@@ -800,22 +794,22 @@ rusty_fork_test! {
     #[test]
     fn test_rolling_release_order() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
-                [0, 0, true, 30], // Press A
-                [0, 1, false, 50], // Release mt!(B, LShift) -> In permissive hold mode, this operation resolves `B` and `A`, but not `C`
+                [0, 0, true, 30], // Press A -> Triggers mt!(B, LShift) and mt!(C, LGui)
+                [0, 1, false, 50], // Release mt!(B, LShift)
                 [0, 2, false, 100], // Release mt!(C, LGui)
                 [0, 0, false, 100],  // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]]
             ]
         };
     }
@@ -823,22 +817,22 @@ rusty_fork_test! {
     #[test]
     fn test_rolling_release_order_2() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
-                [0, 0, true, 30], // Press A
-                [0, 2, false, 100], // Release C -> Triggers permissve hold of mt!(B, LShift), `A` should also be resolved because it's a normal key press.
+                [0, 0, true, 30], // Press A -> Triggers mt!(B, LShift) and mt!(C, LGui)
+                [0, 2, false, 100], // Release C
                 [0, 1, false, 50], // Release B
                 [0, 0, false, 100],  // Release A
             ],
             expected_reports: [
                 [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-                [KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]]
             ]
         };
     }
@@ -846,46 +840,46 @@ rusty_fork_test! {
     #[test]
     fn test_rolling_release_order_3() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
-                [0, 0, true, 30], // Press A
+                [0, 0, true, 30], // Press A -> Triggers mt!(B, LShift) and mt!(C, LGui)
                 [0, 2, false, 100], // Release C
                 [0, 0, false, 100],  // Release A
                 [0, 1, false, 50], // Release B
             ],
             expected_reports: [
                 [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-                [KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                 [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]]
             ]
         };
     }
 
 
     #[test]
-    fn test_multiple_permissive_hold() {
+    fn test_multiple_mt_triggered() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
-                [0, 0, true, 30], // Press A
-                [0, 0, false, 100], // Release A -> Triggers permissve hold of mt!(B, LShift) and mt!(C, LGui)
+                [0, 0, true, 30], // Press A -> Triggers mt!(B, LShift) and mt!(C, LGui)
+                [0, 0, false, 100], // Release A
                 [0, 1, false, 50], // Release B
                 [0, 2, false, 100], // Release C
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Hold LShift + LGui
-                [KC_LSHIFT | KC_LGUI,  [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release A
-                [KC_LGUI, [ 0, 0, 0, 0, 0, 0]], // Hold LGui
-                [0, [0, 0, 0, 0, 0, 0]], // All released
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]]
             ]
         };
     }
@@ -893,7 +887,7 @@ rusty_fork_test! {
     #[test]
     fn test_complex_rolling() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 30], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
@@ -908,8 +902,8 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
                 [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
@@ -918,7 +912,7 @@ rusty_fork_test! {
     #[test]
     fn test_flow_tap() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 30],  // Press A
                 [0, 0, false, 30], // Release A
@@ -930,7 +924,7 @@ rusty_fork_test! {
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Press B
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
                 [0, [0, 0, 0, 0, 0, 0]], // Release C
@@ -942,7 +936,7 @@ rusty_fork_test! {
     #[test]
     fn test_previous_rolling_keypress() {
         key_sequence_test! {
-            keyboard: create_permissive_hold_keyboard(),
+            keyboard: create_hold_on_other_key_press_keyboard(),
             sequence: [
                 [0, 0, true, 30],  // Press A
                 [0, 3, true, 20],  // Press lt!(1, D)
