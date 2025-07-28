@@ -430,6 +430,286 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_morse_lt_1() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_2() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_3() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, false, 10], // Release A
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_4() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release D
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_5() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_6() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_1() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A -> timeout: Kp1 on layer 1
+                [0, 0, false, 260], // Release A
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_2() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A -> timeout: Kp1 on layer 1
+                [0, 3, false, 260], // Release lt!(1, D)
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_3() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, false, 260], // Release A
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_4() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 260], // Release lt!(1, D)
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_5() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 260], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_6() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 270], // Release lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_7() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 0, true, 10], // Press A
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, false, 10], // Release A
+                [0, 3, false, 260], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_8() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A -> Kp1 on layer 1
+                [0, 0, false, 10], // Release A
+                [0, 3, false, 260], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_9() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 260], // Press A -> Kp1 on layer 1
+                [0, 0, false, 10], // Release A
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1 on layer 1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_10() {
+        key_sequence_test! {
+            keyboard: create_hold_on_other_key_press_keyboard(),
+            sequence: [
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 260], // Press A -> Kp1 on layer 1
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 0, false, 10], // Release A
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1 on layer 1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
+            ]
+        };
+    }
+
+    #[test]
     fn test_trigger() {
         key_sequence_test! {
             keyboard: create_hold_on_other_key_press_keyboard(),
