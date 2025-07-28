@@ -355,13 +355,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(event);
 
         if self.combo_on {
-            if let Some(key_action) = self.process_combo(key_action, event).await {
-                self.process_key_action(key_action, event).await
+            if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
+                self.process_key_action(key_action, event, is_combo).await
             } else {
                 LoopState::OK
             }
         } else {
-            self.process_key_action(key_action, event).await
+            self.process_key_action(key_action, event, false).await
         }
     }
 
@@ -428,18 +428,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent) -> LoopState {
-        // let decision = self.make_tap_hold_decision(key_action, event);
-
-        // 1. check buffered morse keys
-        // 对于**当前**的这个key，处理方式一共就3种：
-        // buffer: 当前的key现在不处理，比如 permissive hold
-        // clean buffer: 当前的key已经在buffer里面（比如之前按下），然后当前动作触发了buffer里当前key的处理（比如释放当前key，需要先处理按下）
-        // process normally: 正常处理
-        // 但是，当前的key可以触发held_key中的部分key release & 释放
-        // 所以，对于两种情况，都得便利一整遍之后才能继续
+    async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
+        // Decision of current key and held keys
         let mut decision_for_current_key = TapHoldDecision::Ignore;
-
         let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
 
         // If current key is a release, and it cannot be find in the held buffer or it's already triggered
@@ -447,7 +438,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let check_held_buffer = event.pressed
             || self
                 .held_buffer
-                .find_pos(event.pos)
+                .find_action(key_action)
                 .is_some_and(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)));
 
         if check_held_buffer {
@@ -462,7 +453,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .filter(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
             {
                 // Releasing a key is already buffered
-                if held_key.event.pos == event.pos {
+                if held_key.action == key_action {
                     debug!("Releasing a held key: {:?}", event);
                     if !event.pressed {
                         let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
@@ -471,7 +462,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     continue;
                 }
 
-                // 对于Buffered普通的key，直接加进decision list，然后后面要根据最终的current key的decision，决定这些key是否触发
+                // Buffered normal keys should be added to the decision list, they will be processed later according to the decision of current key
                 if !matches!(held_key.action, KeyAction::Morse(_)) && matches!(held_key.state, KeyState::Held(_)) {
                     let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
                     continue;
@@ -519,9 +510,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        // for (p, d) in &decisions {
-        //     debug!("✅ decisions: {:?}: {:?}", p, d)
-        // }
+        for (p, d) in &decisions {
+            debug!("✅ decisions: {:?}: {:?}", p, d)
+        }
 
         // Fire buffered keys
         for (pos, decision) in decisions {
@@ -556,8 +547,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HeldKeyDecision::Release => {
                     // Releasing the current key, will always be tapping, because timeout isn't here
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
-                        // FIXME: 这里，对于已经触发了的按键，不要Release。Release的条件有问题，不要考虑已经触发了的按键。只考虑没有决定的按键。
+                        let action = if is_combo {
+                            held_key.action
+                        } else {
+                            self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
+                        };
                         debug!("Processing current key before releasing: {:?}", held_key.event);
                         match action {
                             KeyAction::Single(action) => {
@@ -586,12 +580,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             _ => (),
                         }
                     }
+
+                    // After processing current key in `Release` state, mark the `decision_for_current_key` to `CleanBuffer`
+                    // That means all normal keys pressed AFTER the current releasing key will be fired
+                    decision_for_current_key = TapHoldDecision::CleanBuffer;
                 }
                 HeldKeyDecision::Normal => {
-                    // Check if the normal keys in the buffer should be triggered
-                    if let TapHoldDecision::CleanBuffer = decision_for_current_key
-                        && let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos)
-                    {
+                    // Check if the normal keys in the buffer should be triggered.
+                    let trigger_normal = matches!(decision_for_current_key, TapHoldDecision::CleanBuffer);
+
+                    if trigger_normal && let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         debug!("Cleaning buffered normal key");
                         let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
@@ -636,8 +634,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             TapHoldDecision::Ignore => {
                 debug!("Current key is not buffered, process current key normally");
                 // Process current key normally
-                // The key_action needs to be updated due to the morse key might be triggered
-                let key_action: KeyAction = self.keymap.borrow_mut().get_action_with_layer_cache(event);
+                let key_action = if is_combo {
+                    key_action
+                } else {
+                    // The key_action needs to be updated due to the morse key might be triggered
+                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                };
                 self.process_key_action_inner(key_action, event).await
             }
         }
@@ -786,7 +788,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_combo(&mut self, key_action: KeyAction, event: KeyboardEvent) -> Option<KeyAction> {
+    /// Check combo before process keys.
+    ///
+    /// This function returns key action after processing combo, and a boolean indicates that if current returned key action is a combo output
+    async fn process_combo(&mut self, key_action: KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
         let mut is_combo_action = false;
         let current_layer = self.keymap.borrow().get_activated_layer();
         for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
@@ -820,8 +825,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.held_buffer
                     .keys
                     .retain(|item| item.state != KeyState::WaitingCombo);
+                (next_action, true)
+            } else {
+                (next_action, false)
             }
-            next_action
         } else {
             if !event.pressed {
                 let mut combo_output = None;
@@ -845,12 +852,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // - Return the output of the triggered combo when the combo is fully released
                 // - Return None when the combo is not fully released yet
                 if releasing_triggered_combo {
-                    return combo_output;
+                    return (combo_output, true);
                 }
             }
 
             self.dispatch_combos().await;
-            Some(key_action)
+            (Some(key_action), false)
         }
     }
 

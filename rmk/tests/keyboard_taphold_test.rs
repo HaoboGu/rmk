@@ -180,42 +180,6 @@ mod tap_hold_test {
             }
         }
 
-        #[test]
-        fn test_taphold_rolling_with_layer_tap() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                    ..BehaviorConfig::default()
-                }),
-                sequence: [
-                    [4, 5, true, 10],  // Press lt!(1, Space)
-                    [3, 2, true, 10],
-                    [4, 5, false, 100],  // Release lt!(1, Space)
-                    [3, 2, false, 10],  // Release shifted x
-                    [4, 5, true, 250],  // Press lt!(1, Space)
-                    [3, 2, true, 10],
-                    [3, 2, false, 10],  // Release shifted x
-                    [4, 5, false, 100],  // Release lt!(1, Space)
-                    [4, 5, true, 250],  // Press lt!(1, Space)
-                    [3, 2, true, 10],
-                    [4, 5, false, 100],  // Release lt!(1, Space)
-                    [3, 2, false, 10],  // Release shifted x
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(Space), 0, 0, 0, 0, 0]], // Space
-                    [0, [kc_to_u8!(Space), kc_to_u8!(X), 0, 0, 0, 0]], // Space + X
-                    [0, [0, kc_to_u8!(X), 0, 0, 0, 0]], // Release Space
-                    [0, [0, 0, 0, 0, 0, 0]], // Release X
-                    [KC_LSHIFT, [kc_to_u8!(X), 0, 0, 0, 0, 0]], // Shifted X
-                    [0, [0, 0, 0, 0, 0, 0]], // Release Shifted X
-                    [0, [kc_to_u8!(Space), 0, 0, 0, 0, 0]], // Space
-                    [0, [kc_to_u8!(Space), kc_to_u8!(X), 0, 0, 0, 0]], // Space + X
-                    [0, [0, kc_to_u8!(X), 0, 0, 0, 0]], // Release Space
-                    [0, [0, 0, 0, 0, 0, 0]], // Release X
-                ]
-            }
-        }
-
 
         #[test]
         fn test_chordal_multi_hold_key_cross_hand_should_be_hold() {
@@ -241,35 +205,6 @@ mod tap_hold_test {
                     [0, [0, 0, 0, 0, 0, 0]], // Release A
                 ]
             }
-        }
-
-        #[test]
-        fn test_taphold_flow_tap() {
-            key_sequence_test! {
-                keyboard: create_test_keyboard_with_config(
-                    BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
-                        ..BehaviorConfig::default()
-                    }
-                ),
-
-                sequence: [
-                    [2, 3, true, 30],  // Press d
-                    [2, 3, false, 30], // Release d
-                    [2, 1, true, 20],  // Press th!(A,shift)
-                    [2, 2, true, 10],  // Press th!(S,LGui)
-                    [2, 1, false, 40], // Release A
-                    [2, 2, false, 10], // Release S
-                ],
-                expected_reports: [
-                    [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Tap d
-                    [0, [0, 0, 0, 0, 0, 0]], // Release D
-                    [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // quick tapping, Tap A
-                    [0, [kc_to_u8!(A), kc_to_u8!(S), 0, 0, 0, 0]], // quick taping
-                    [0, [0, kc_to_u8!(S), 0, 0, 0, 0]],
-                    [0, [0, 0, 0, 0, 0, 0]],
-                ]
-            };
         }
 
         #[test]

@@ -38,6 +38,11 @@ impl HeldBuffer {
         }
     }
 
+    /// Find a held key by the key action
+    pub fn find_action(&self, action: KeyAction) -> Option<&HeldKey> {
+        self.keys.iter().find(|x| x.action == action)
+    }
+
     /// Find a held key by the KeyboardEventPos
     pub fn find_pos(&self, pos: KeyboardEventPos) -> Option<&HeldKey> {
         self.keys.iter().find(|x| x.event.pos == pos)

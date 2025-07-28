@@ -33,7 +33,7 @@ impl<const TAP_N: usize> Default for Morse<TAP_N> {
         Self {
             tap_actions: MorseActions::default(),
             hold_actions: MorseActions::default(),
-            tapping_term_ms: 200,
+            tapping_term_ms: 250,
             mode: MorseKeyMode::Normal,
             chordal_hold: false,
         }
@@ -47,7 +47,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
         Self {
             tap_actions,
             hold_actions,
-            tapping_term_ms: 200,
+            tapping_term_ms: 250,
             mode: MorseKeyMode::Normal,
             chordal_hold: false,
         }
