@@ -63,7 +63,10 @@ impl crate::KeyboardTomlConfig {
                         .sum::<usize>();
 
                     if macros_size > self.rmk.macro_space_size {
-                        return Err(format!("keyboard.toml: total size of macros ({}) is greater than macro_space_size configured under [rmk] section", macros_size));
+                        return Err(format!(
+                            "keyboard.toml: total size of macros ({}) is greater than macro_space_size configured under [rmk] section",
+                            macros_size
+                        ));
                     }
                 }
                 behavior.fork = behavior.fork.or(default.fork);

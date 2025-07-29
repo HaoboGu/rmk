@@ -91,7 +91,6 @@ impl Default for TapDancesConfig {
 pub enum TapHoldMode {
     /// Normal mode
     Normal,
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
     PermissiveHold,
     /// Trigger hold when any other non-tap-hold key is pressed
     HoldOnOtherPress,
