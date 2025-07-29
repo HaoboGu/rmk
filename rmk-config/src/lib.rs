@@ -359,6 +359,7 @@ pub struct BleConfig {
     pub charge_led: Option<PinConfig>,
     pub adc_divider_measured: Option<u32>,
     pub adc_divider_total: Option<u32>,
+    pub default_tx_power: Option<i8>,
 }
 
 /// Config for lights
