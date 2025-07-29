@@ -16,7 +16,7 @@ use crate::{
 };
 use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
 
-/// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
+/// Vial communication commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
@@ -39,7 +39,7 @@ pub(crate) enum VialCommand {
     Unhandled = 0xFF,
 }
 
-/// Vial dynamic commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L53)
+/// Vial dynamic commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
 pub(crate) enum VialDynamic {
