@@ -20,8 +20,8 @@ pub struct Morse<const TAP_N: usize> {
     pub(crate) tap_actions: MorseActions<TAP_N>,
     /// The actions triggered by tapping and holding the key
     pub(crate) hold_actions: MorseActions<TAP_N>,
-    /// The tapping term in milliseconds
-    pub tapping_term_ms: u16,
+    /// The timeout time for each operation in milliseconds
+    pub timeout_ms: u16,
     /// The decision mode of the morse key
     pub mode: MorseKeyMode,
     /// If the unilateral tap is enabled
@@ -33,7 +33,7 @@ impl<const TAP_N: usize> Default for Morse<TAP_N> {
         Self {
             tap_actions: MorseActions::default(),
             hold_actions: MorseActions::default(),
-            tapping_term_ms: 250,
+            timeout_ms: 250,
             mode: MorseKeyMode::Normal,
             unilateral_tap: false,
         }
@@ -47,8 +47,20 @@ impl<const TAP_N: usize> Morse<TAP_N> {
         Self {
             tap_actions,
             hold_actions,
-            tapping_term_ms: 250,
+            timeout_ms: 250,
             mode: MorseKeyMode::Normal,
+            unilateral_tap: false,
+        }
+    }
+
+    pub fn new_tap_dance(tap_action: [Action; TAP_N], hold_action: [Action; TAP_N], timeout_ms: u16) -> Self {
+        let tap_actions = MorseActions::new(tap_action);
+        let hold_actions = MorseActions::new(hold_action);
+        Self {
+            tap_actions,
+            hold_actions,
+            timeout_ms,
+            mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
         }
     }
@@ -56,7 +68,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
     pub const fn new_tap_hold_with_config(
         tap_action: Action,
         hold_action: Action,
-        tapping_term_ms: u16,
+        timeout_ms: u16,
         mode: MorseKeyMode,
         unilateral_tap: bool,
     ) -> Self {
@@ -65,9 +77,19 @@ impl<const TAP_N: usize> Morse<TAP_N> {
         Self {
             tap_actions,
             hold_actions,
-            tapping_term_ms,
+            timeout_ms,
             mode,
             unilateral_tap,
+        }
+    }
+
+    // TODO: Remove the global setting
+    pub fn get_timeout(&self, global_timeout_time: u16) -> u16 {
+        if self.timeout_ms == 250 && global_timeout_time != 250 {
+            // Global setting overrides the default setting
+            global_timeout_time
+        } else {
+            self.timeout_ms
         }
     }
 
@@ -114,6 +136,13 @@ impl<const N: usize> Default for MorseActions<N> {
 }
 
 impl<const N: usize> MorseActions<N> {
+    pub fn empty() -> Self {
+        Self {
+            actions: [Action::No; N],
+            len: 0,
+        }
+    }
+
     pub fn new(actions: [Action; N]) -> Self {
         let mut len = 0;
         for action in actions {
@@ -121,6 +150,10 @@ impl<const N: usize> MorseActions<N> {
                 len += 1;
             }
         }
+        Self { actions, len }
+    }
+
+    pub const fn new_from_list(actions: [Action; N], len: u8) -> Self {
         Self { actions, len }
     }
 
@@ -152,5 +185,9 @@ impl<const N: usize> MorseActions<N> {
 
     pub fn get(&self, index: usize) -> Option<&Action> {
         self.actions.get(index)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 }

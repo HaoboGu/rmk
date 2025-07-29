@@ -33,7 +33,7 @@ fn create_tap_dance_config() -> TapDancesConfig {
 
 mod tap_dance_test {
     use embassy_futures::block_on;
-    use rmk::config::{MorseKeyMode, TapHoldConfig};
+    use rmk::config::{MorseConfig, MorseKeyMode};
     use rmk::keyboard::Keyboard;
     use rusty_fork::rusty_fork_test;
 
@@ -49,7 +49,7 @@ mod tap_dance_test {
 
         let config = BehaviorConfig {
             tap_dance: create_tap_dance_config(),
-            tap_hold: TapHoldConfig {
+            morse: MorseConfig {
                 enable_hrm: true,
                 mode: MorseKeyMode::PermissiveHold,
                 ..Default::default()
@@ -68,7 +68,7 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // Press TapDance key
-                    [0, 0, false, 100], // Release within tapping_term
+                    [0, 0, false, 100], // Release within timeout
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap action (A)
@@ -84,7 +84,7 @@ mod tap_dance_test {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 0, true, 10],   // Press TapDance key
-                    [0, 0, false, 250], // Release after tapping_term
+                    [0, 0, false, 250], // Release after timeout
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Hold action (B)
@@ -101,7 +101,7 @@ mod tap_dance_test {
                 sequence: [
                     [0, 0, true, 10],   // First press
                     [0, 0, false, 190],  // First release (quick)
-                    [0, 0, true, 190],   // Second press within tapping_term
+                    [0, 0, true, 190],   // Second press within timeout
                     [0, 0, false, 190],  // Second release (quick)
                 ],
                 expected_reports: [
@@ -119,7 +119,7 @@ mod tap_dance_test {
                 sequence: [
                     [0, 0, true, 10],   // First press
                     [0, 0, false, 50],  // First release (quick)
-                    [0, 0, true, 190],   // Second press within tapping_term
+                    [0, 0, true, 190],   // Second press within timeout
                     [0, 0, false, 250], // Hold second press
                 ],
                 expected_reports: [
@@ -234,12 +234,12 @@ mod tap_dance_test {
 
         #[test]
         fn test_tap_dance_different_timing() {
-            // Test with different tapping_term (TapDance 1 has 150ms)
+            // Test with different timeout (TapDance 1 has 150ms)
             key_sequence_test! {
                 keyboard: create_simple_tap_dance_keyboard(),
                 sequence: [
                     [0, 1, true, 10],   // Press TapDance 1
-                    [0, 1, false, 180], // Release after 180ms (> 150ms tapping_term)
+                    [0, 1, false, 180], // Release after 180ms (> 150ms timeout)
                 ],
                 expected_reports: [
                     [0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]], // Hold action (Y) for TapDance 1

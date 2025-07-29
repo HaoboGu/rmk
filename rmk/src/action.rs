@@ -61,9 +61,20 @@ pub enum KeyAction {
     /// General tap/hold action: (tap_action, hold_action)
     // TapHold(Morse<1>),
     /// Tap dance action, references a tap dance configuration by index.
-    // TapDance(u8),
+    TapDance(u8),
     // Morse action
     Morse(Morse<TAP_DANCE_MAX_TAP>),
+}
+
+impl KeyAction {
+    // Convert `KeyAction` to the internal `Action`.
+    // Only valid for `Single` and `Tap` variant, returns `Action::No` for other variants.
+    pub(crate) fn to_action(self) -> Action {
+        match self {
+            KeyAction::Single(a) | KeyAction::Tap(a) => a,
+            _ => Action::No,
+        }
+    }
 }
 
 /// A single basic action that a keyboard can execute.
@@ -72,6 +83,8 @@ pub enum KeyAction {
 pub enum Action {
     /// Default action, no action.
     No,
+    /// Transparent action, next layer will be checked.
+    Transparent,
     /// A normal key stroke, uses for all keycodes defined in `KeyCode` enum, including mouse key, consumer/system control, etc.
     Key(KeyCode),
     /// Modifier Combination, used for oneshot keyaction.

@@ -146,7 +146,7 @@ Tap dance configuration includes the following parameters:
   - `hold`: The action to be triggered when the key is held down (not tapped).
   - `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
   - `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
-  - `tapping_term`: The time window (in milliseconds or seconds) within which taps are considered part of the same tap dance sequence. Defaults to 200ms if not specified.
+  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same tap dance sequence. Defaults to 200ms if not specified.
   - `tap_actions`: An array of actions, each corresponding to the number of taps. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
   - `hold_actions`: An array of actions, each corresponding to holding the key after a certain number of taps. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. If the tap count exceeds the length of the array, the last action is used.
 
@@ -169,13 +169,13 @@ tap_dances = [
   { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
   
   # Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
-  { tap = "Tab", hold = "MO(2)", double_tap = "Escape", tapping_term = "250ms" },
+  { tap = "Tab", hold = "MO(2)", double_tap = "Escape", timeout = "250ms" },
   
   # Extended tap dance for function keys
   {
     tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    tapping_term = "300ms" 
+    timeout = "300ms" 
   }
 ]
 ```

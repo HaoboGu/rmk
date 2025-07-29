@@ -65,7 +65,7 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
-    pub tap_hold: TapHoldConfig,
+    pub morse: MorseConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
@@ -86,25 +86,26 @@ impl Default for TapDancesConfig {
     }
 }
 
-/// Configurations for tap hold behavior
+/// Configurations for morse behavior
 #[derive(Clone, Copy, Debug)]
-pub struct TapHoldConfig {
+pub struct MorseConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
-    pub hold_timeout: Duration,
+    /// Timeout time for tap or hold
+    pub operation_timeout: Duration,
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
 }
 
-impl Default for TapHoldConfig {
+impl Default for MorseConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
             unilateral_tap: false,
             mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
-            hold_timeout: Duration::from_millis(250),
+            operation_timeout: Duration::from_millis(250),
         }
     }
 }

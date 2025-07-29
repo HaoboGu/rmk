@@ -524,8 +524,7 @@ pub struct TapDanceConfig {
     pub tap_actions: Option<Vec<String>>,
     /// Array of hold actions for each tap count (0-indexed)
     pub hold_actions: Option<Vec<String>>,
-
-    pub tapping_term: Option<DurationMillis>,
+    pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for split keyboards

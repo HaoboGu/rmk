@@ -132,24 +132,21 @@ pub(crate) async fn process_vial<
                         // Pack tap dance data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(*tap_dance.tap_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(0))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(*tap_dance.hold_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(0))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(*tap_dance.tap_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(1))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(*tap_dance.hold_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(1))),
                         );
-                        LittleEndian::write_u16(
-                            &mut report.input_data[9..11],
-                            tap_dance.tapping_term.as_millis() as u16,
-                        );
+                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.0.timeout_ms);
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -168,14 +165,14 @@ pub(crate) async fn process_vial<
                         let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
                         let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
                         let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                        let tapping_term_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                        let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                         let new_tap_dance = TapDance::new_from_vial(
-                            tap,
-                            hold,
-                            hold_after_tap,
-                            double_tap,
-                            embassy_time::Duration::from_millis(tapping_term_ms as u64),
+                            tap.to_action(),
+                            hold.to_action(),
+                            hold_after_tap.to_action(),
+                            double_tap.to_action(),
+                            embassy_time::Duration::from_millis(timeout_ms as u64),
                         );
 
                         // Update the tap dance in keymap

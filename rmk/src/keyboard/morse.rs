@@ -70,7 +70,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         KeyAction::Morse(morse),
                         KeyState::Held(0),
                         pressed_time,
-                        pressed_time + Duration::from_millis(morse.tapping_term_ms as u64),
+                        pressed_time + Duration::from_millis(morse.timeout_ms as u64),
                     ));
                 }
             }
@@ -107,7 +107,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // It's not the last tap action, update the tap state to idle
                                 k.state = KeyState::IdleAfterTap(t);
                                 // Use current release time for `IdleAfterTap` state
-                                k.press_time = Instant::now() + Duration::from_millis(morse.tapping_term_ms as u64);
+                                k.press_time = Instant::now() + Duration::from_millis(morse.timeout_ms as u64);
                                 None
                             }
                         }

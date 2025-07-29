@@ -2,6 +2,7 @@ use num_enum::FromPrimitive;
 
 use crate::action::{Action, KeyAction};
 use crate::keycode::{KeyCode, ModifierCombination};
+use crate::morse::Morse;
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
@@ -50,32 +51,32 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             warn!("Tap action is not supported by via");
             0
         }
-        KeyAction::Morse(_) => todo!("TODO: morse action to via keycode"),
-        // KeyAction::TapHold(tap, hold) => match hold {
-        //     Action::LayerOn(l) => {
-        //         if l > 16 {
-        //             0
-        //         } else {
-        //             let keycode = match tap {
-        //                 Action::Key(k) => k as u16,
-        //                 _ => 0,
-        //             };
-        //             0x4000 | ((l as u16) << 8) | keycode
-        //         }
-        //     }
-        //     Action::Modifier(m) => {
-        //         let keycode = match tap {
-        //             Action::Key(k) => k as u16,
-        //             _ => 0,
-        //         };
-        //         0x2000 | ((m.into_bits() as u16) << 8) | keycode
-        //     }
-        //     _ => 0x0000,
-        // },
-        // KeyAction::TapDance(index) => {
-        //     // Tap dance keycodes: 0x5700..=0x57FF
-        //     0x5700 | (index as u16)
-        // }
+        KeyAction::Morse(m) => {
+            if m.tap_actions.len() == 1 && m.hold_actions.len() == m.tap_actions.len() {
+                // It a tap-hold behavior
+                let tap_code = match m.tap_action(0) {
+                    Action::Key(key_code) => key_code as u16,
+                    _ => 0,
+                };
+                match m.hold_action(0) {
+                    Action::Modifier(m) => 0x2000 | ((m.into_bits() as u16) << 8) | tap_code,
+                    Action::LayerOn(l) => {
+                        if l > 16 {
+                            0
+                        } else {
+                            0x4000 | ((l as u16) << 8) | tap_code
+                        }
+                    }
+                    _ => 0,
+                }
+            } else {
+                0
+            }
+        }
+        KeyAction::TapDance(index) => {
+            // Tap dance keycodes: 0x5700..=0x57FF
+            0x5700 | (index as u16)
+        }
     }
 }
 
@@ -96,16 +97,14 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // The via equivalent of Modifier tap/hold is called Mod-tap, whose keycode representation is same with RMK
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
-            todo!()
-            // KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier))
+            KeyAction::Morse(Morse::new_tap_hold(Action::Key(keycode), Action::Modifier(modifier)))
         }
         0x4000..=0x4FFF => {
             // Layer tap/hold
             // The via equivalent of Modifier tap/hold is called Mod-tap,
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            todo!()
-            // KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8))
+            KeyAction::Morse(Morse::new_tap_hold(Action::Key(keycode), Action::LayerOn(layer as u8)))
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
@@ -145,8 +144,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5700..=0x57FF => {
             // Tap dance
             let index = (via_keycode & 0xFF) as u8;
-            todo!()
-            // KeyAction::TapDance(index)
+            KeyAction::TapDance(index)
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc

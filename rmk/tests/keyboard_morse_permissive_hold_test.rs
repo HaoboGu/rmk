@@ -3,7 +3,7 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, MorseConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
@@ -15,11 +15,11 @@ use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
+        morse: MorseConfig {
             enable_hrm: false,
             mode: MorseKeyMode::PermissiveHold,
             unilateral_tap: false,
-            ..TapHoldConfig::default()
+            ..MorseConfig::default()
         },
         ..BehaviorConfig::default()
     })
@@ -48,11 +48,11 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
         false,
     ));
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
+        morse: MorseConfig {
             enable_hrm: false,
             mode: MorseKeyMode::PermissiveHold,
             unilateral_tap: false,
-            ..TapHoldConfig::default()
+            ..MorseConfig::default()
         },
         combo: CombosConfig {
             combos: heapless::Vec::from_iter([

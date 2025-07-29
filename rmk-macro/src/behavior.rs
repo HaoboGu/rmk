@@ -51,11 +51,11 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 None => quote! {},
             };
             let tap_hold_mode = if let Some(true) = tap_hold.permissive_hold {
-                quote! { mode: ::rmk::config::TapHoldMode::PermissiveHold, }
+                quote! { mode: ::rmk::morse::MorseKeyMode::PermissiveHold, }
             } else if let Some(true) = tap_hold.hold_on_other_press {
-                quote! { mode: ::rmk::config::TapHoldMode::HoldOnOtherPress, }
+                quote! { mode: ::rmk::morse::MorseKeyMode::HoldOnOtherPress, }
             } else {
-                quote! { mode: ::rmk::config::TapHoldMode::Normal,}
+                quote! { mode: ::rmk::morse::MorseKeyMode::Normal,}
             };
             let unilateral_tap = match tap_hold.unilateral_tap {
                 Some(enable) => quote! { unilateral_tap: #enable, },
@@ -168,7 +168,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
         Some(tap_dance) => {
             let tap_dances_def = tap_dance.tap_dances.iter().map(|td| {
                 // Parse tapping term, default to 200ms if not specified
-                let tapping_term = match &td.tapping_term {
+                let timeout = match &td.timeout {
                     Some(duration) => {
                         let millis = duration.0;
                         quote! { ::embassy_time::Duration::from_millis(#millis) }
@@ -207,7 +207,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                         ::rmk::tap_dance::TapDance::new_with_actions(
                             #tap_actions_def,
                             #hold_actions_def,
-                            #tapping_term
+                            #timeout
                         )
                     }
                 } else {
@@ -222,7 +222,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                             #hold,
                             #hold_after_tap,
                             #double_tap,
-                            #tapping_term
+                            #timeout
                         )
                     }
                 }

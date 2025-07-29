@@ -1,9 +1,9 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
+use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
 use crate::{action::KeyAction, keycode::ModifierCombination};
-use crate::{input_device::rotary_encoder::Direction, tap_hold::ChordHoldHand};
 
 /// Raw events from input devices and keyboards
 ///
@@ -88,28 +88,35 @@ impl KeyboardEventPos {
         }
     }
 
-    pub(crate) fn get_hand<const ROW: usize, const COL: usize>(&self) -> ChordHoldHand {
+    pub(crate) fn get_hand<const ROW: usize, const COL: usize>(&self) -> Hand {
         if let Self::Key(pos) = self {
             if COL >= ROW {
                 // Horizontal
                 if pos.col < (COL as u8 / 2) {
-                    ChordHoldHand::Left
+                    Hand::Left
                 } else {
-                    ChordHoldHand::Right
+                    Hand::Right
                 }
             } else {
                 // Vertical
                 if pos.row < (ROW as u8 / 2) {
-                    ChordHoldHand::Left
+                    Hand::Left
                 } else {
-                    ChordHoldHand::Right
+                    Hand::Right
                 }
             }
         } else {
             // TODO: handle rotary encoder
-            ChordHoldHand::Left
+            Hand::Left
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Hand {
+    Right,
+    Left,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]

@@ -138,7 +138,7 @@ tap_dances = [
   {
     tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    tapping_term = "300ms" 
+    timeout = "300ms" 
   }
 ]
 

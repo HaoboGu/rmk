@@ -1,23 +1,23 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{MorseKeyMode, TapHoldConfig};
+use rmk::config::{MorseKeyMode, MorseConfig};
 
-fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
-    TapHoldConfig {
+fn tap_hold_config_with_hrm_and_permissive_hold() -> MorseConfig {
+    MorseConfig {
         enable_hrm: true,
         mode: MorseKeyMode::PermissiveHold,
         unilateral_tap: false,
-        ..TapHoldConfig::default()
+        ..MorseConfig::default()
     }
 }
 
-fn tap_hold_config_with_hrm_and_unilateral_tap() -> TapHoldConfig {
-    TapHoldConfig {
+fn tap_hold_config_with_hrm_and_unilateral_tap() -> MorseConfig {
+    MorseConfig {
         enable_hrm: true,
         unilateral_tap: true,
         mode: MorseKeyMode::PermissiveHold,
-        ..TapHoldConfig::default()
+        ..MorseConfig::default()
     }
 }
 
@@ -42,7 +42,7 @@ mod tap_hold_test {
         fn test_tap_hold_hold_on_other_release() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                    morse: tap_hold_config_with_hrm_and_permissive_hold(),
                     .. BehaviorConfig::default()
                 }),
                 sequence: [
@@ -69,7 +69,7 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
+                        morse: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -98,7 +98,7 @@ mod tap_hold_test {
             key_sequence_test!  {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
+                        morse: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -128,7 +128,7 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
+                        morse: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -154,7 +154,7 @@ mod tap_hold_test {
         fn test_chordal_multi_hold_key_cross_hand_should_be_hold() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
+                    morse: tap_hold_config_with_hrm_and_unilateral_tap(),
                     ..BehaviorConfig::default()
                 }),
                 sequence: [
@@ -182,7 +182,7 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_permissive_hold(),
+                        morse: tap_hold_config_with_hrm_and_permissive_hold(),
                         ..BehaviorConfig::default()
                     };
                     create_test_keyboard_with_config(behavior_config)
