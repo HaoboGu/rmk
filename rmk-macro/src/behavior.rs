@@ -57,8 +57,8 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
             } else {
                 quote! { mode: ::rmk::config::TapHoldMode::Normal,}
             };
-            let chordal_hold = match tap_hold.chordal_hold {
-                Some(enable) => quote! { chordal_hold: #enable, },
+            let unilateral_tap = match tap_hold.unilateral_tap {
+                Some(enable) => quote! { unilateral_tap: #enable, },
                 None => quote! {},
             };
             let prior_idle_time = match &tap_hold.prior_idle_time {
@@ -82,7 +82,7 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                     #prior_idle_time
                     #hold_timeout
                     #tap_hold_mode
-                    #chordal_hold
+                    #unilateral_tap
                     ..Default::default()
                 }
             }

@@ -1,6 +1,6 @@
 /// Test cases for home row mod(HRM)
 ///
-/// For HRM, `enable_hrm` and `chordal_hold` is enabled, `prior-idle-time` will be considered.
+/// For HRM, `enable_hrm` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
 pub mod common;
 
 use embassy_time::Duration;
@@ -21,7 +21,7 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 4, 2> {
         tap_hold: TapHoldConfig {
             enable_hrm: true,
             mode: MorseKeyMode::PermissiveHold,
-            chordal_hold: true,
+            unilateral_tap: true,
             ..TapHoldConfig::default()
         },
         ..BehaviorConfig::default()
@@ -54,7 +54,7 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
         tap_hold: TapHoldConfig {
             enable_hrm: true,
             mode: MorseKeyMode::PermissiveHold,
-            chordal_hold: false,
+            unilateral_tap: true,
             ..TapHoldConfig::default()
         },
         combo: CombosConfig {
@@ -75,7 +75,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10],  // Press mt!(B, LShift)
+                [0, 1, true, 150],  // Press mt!(B, LShift)
                 // Release before hold timeout
                 [0, 1, false, 100], // Release B
             ],
@@ -91,7 +91,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10],  // Press mt!(B, LShift)
+                [0, 1, true, 150],  // Press mt!(B, LShift)
                 [0, 1, false, 300], // Release B after hold timeout
             ],
             expected_reports: [
@@ -106,15 +106,34 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
-                [0, 0, true, 10], // Press A
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 0, true, 10], // Press A -> unilateral tap
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 10], // Release mt!(B, LShift)
             ],
             expected_reports: [
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Unilateral tap
+                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
+                [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
+            ]
+        };
+    }
+
+    #[test]
+    fn test_mt_1_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow tap won't be triggered because the previous morse key is not resolved yet.
+                [0, 3, false, 10], // Release lt!(1, D) -> Permissive hold triggered
+                [0, 1, false, 10], // Release mt!(B, LShift)
+            ],
+            expected_reports: [
                 [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Permissive hold
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
+                [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release D
                 [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
             ]
         };
@@ -125,8 +144,8 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
-                [0, 0, true, 10], // Press A
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 0, true, 10], // Press A -> Unilateral tap
                 [0, 1, false, 10], // Release mt!(B, LShift)
                 [0, 0, false, 10], // Release A
             ],
@@ -140,19 +159,76 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_mt_2_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 1, false, 10], // Release mt!(B, LShift)
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [0, [0, 0, 0, 0, 0, 0]], // Release B
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+            ]
+        };
+    }
+
+    #[test]
+    fn test_mt_2_2() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 2, false, 10], // Release mt!(C, LGui)
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+            ]
+        };
+    }
+
+    #[test]
+    fn test_mt_2_3() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 10], // Press lt!(1, D) -> Unilateral tap
+                [0, 3, false, 10], // Release lt!(1, D)
+                [0, 2, false, 10], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
+                [0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release D
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+            ]
+        };
+    }
+
+    #[test]
     fn test_mt_3() {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 150], // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 10], // Release mt!(B, LShift)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
+                [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
             ]
         };
@@ -163,7 +239,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 150], // Press A
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 10], // Release mt!(B, LShift)
                 [0, 0, false, 10], // Release A
@@ -182,7 +258,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 150], // Press A
                 [0, 0, false, 10], // Release A
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 10], // Release mt!(B, LShift)
@@ -201,7 +277,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 1, false, 10], // Release mt!(B, LShift)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -220,9 +296,9 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
-                [0, 0, false, 260], // Release A
+                [0, 0, false, 260], // Release A -> Timeout
                 [0, 1, false, 10], // Release mt!(B, LShift)
             ],
             expected_reports: [
@@ -235,11 +311,47 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_mt_timeout_1_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 260], // Release lt!(1, D)
+                [0, 2, false, 10], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Timeout
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_mt_timeout_1_2() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, false, 10], // Release lt!(1, D) -> Unilateral tap
+                [0, 2, false, 260], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
+                [0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release D
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+            ]
+        };
+    }
+
+    #[test]
     fn test_mt_timeout_2() {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 10], // Press A
                 [0, 1, false, 260], // Release mt!(B, LShift)
                 [0, 0, false, 10], // Release A
@@ -254,20 +366,37 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_mt_timeout_2_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 2, false, 260], // Release mt!(C, LGui)
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
     fn test_mt_timeout_3() {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 150], // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 0, false, 260], // Release A
                 [0, 1, false, 10], // Release mt!(B, LShift)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Timeout
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
+                [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
+                [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
+                [0, [0, 0, 0, 0, 0, 0]], // Release B
             ]
         };
     }
@@ -277,15 +406,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 150], // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 1, false, 260], // Release mt!(B, LShift)
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Timeout
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
+                [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release B
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
             ]
         };
@@ -296,15 +425,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 150], // Press A
                 [0, 0, false, 10], // Release A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 1, false, 260], // Release mt!(B, LShift)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Press mt!(B, LShift)
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press mt!(B, LShift)
                 [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
             ]
         };
@@ -315,7 +444,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 1, false, 260], // Release mt!(B, LShift)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -334,15 +463,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 150], // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 260], // Release mt!(B, LShift)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout
+                [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
+                [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
             ]
         };
@@ -353,16 +482,35 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
-                [0, 0, true, 10], // Press A
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 0, true, 10], // Press A -> Unilateral tap
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 260], // Release mt!(B, LShift)
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Permissve hold
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Unilateral tap
+                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
+            ]
+        };
+    }
+
+    #[test]
+    fn test_mt_timeout_8_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A
+                [0, 2, false, 260], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],  // Permissive hold
+                [KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [0, 0, 0, 0, 0, 0]], // Release mt!(C, LGui)
             ]
         };
     }
@@ -372,7 +520,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 10], // Release mt!(B, LShift)
@@ -391,7 +539,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 260], // Press A
                 [0, 1, false, 10], // Release mt!(B, LShift)
                 [0, 0, false, 10], // Release A
@@ -410,7 +558,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 10], // Release lt!(1, D)
@@ -427,7 +575,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
@@ -446,15 +594,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 150], // Press A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // Release D
             ]
         };
@@ -465,8 +613,8 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 150], // Press A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
             ],
@@ -484,9 +632,9 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 150], // Press A
                 [0, 0, false, 10], // Release A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
             expected_reports: [
@@ -503,7 +651,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -522,14 +670,14 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
-                [0, 0, true, 10], // Press A -> timeout: Kp1 on layer 1
-                [0, 0, false, 260], // Release A
+                [0, 3, true, 150], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 260], // Release A -> timeout, trigger Kp1 on layer 1
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
             expected_reports: [
-                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
             ]
         };
     }
@@ -539,14 +687,14 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
-                [0, 0, true, 10], // Press A -> timeout: Kp1 on layer 1
-                [0, 3, false, 260], // Release lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 3, false, 260], // Release lt!(1, D) -> timeout, trigger Kp1 on layer 1
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
+                [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
             ]
         };
     }
@@ -556,13 +704,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 150], // Press A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 0, false, 260], // Release A
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
             ]
         };
@@ -573,13 +723,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 150], // Press A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 3, false, 260], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release D
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
             ]
         };
@@ -590,8 +742,27 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
+                [0, 0, true, 150], // Press A
                 [0, 0, false, 10], // Release A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow tap
+                [0, 3, false, 260], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_lt_timeout_5_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 0, true, 150], // Press A
+                [0, 0, false, 200], // Release A -> Longer than `prior-idle-time`
                 [0, 3, true, 10], // Press lt!(1, D)
                 [0, 3, false, 260], // Release lt!(1, D)
             ],
@@ -607,7 +778,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 3, false, 270], // Release lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
@@ -624,14 +795,16 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10], // Press A
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 0, true, 150], // Press A
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 260], // Release lt!(1, D)
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
+                [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
             ]
         };
     }
@@ -641,7 +814,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A -> permisshive hold: Kp1 on layer 1
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 260], // Release lt!(1, D)
@@ -658,7 +831,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 260], // Press A -> Kp1 on layer 1
                 [0, 0, false, 10], // Release A
                 [0, 3, false, 10], // Release lt!(1, D)
@@ -675,7 +848,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 260], // Press A -> Kp1 on layer 1
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
@@ -692,15 +865,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
-                [0, 0, true, 50],  // Press A
+                [0, 1, true, 150], // Press mt!(B, LShift)
+                [0, 0, true, 50],  // Press A -> Unilateral tap
                 [0, 0, false, 10], // Release A
                 [0, 1, false, 100], // Release mt!(B, LShift)
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
                 [0, [0, 0, 0, 0, 0, 0]], // All released
             ]
         };
@@ -711,7 +884,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
                 [0, 2, false, 10], // Release C
                 [0, 1, false, 300], // Release B
@@ -730,7 +903,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
                 [0, 2, false, 10], // Release C
                 [0, 1, false, 300], // Release B
@@ -747,7 +920,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
                 [0, 2, false, 10], // Release C
@@ -764,7 +937,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
                 [0, 2, false, 10], // Release C
@@ -783,7 +956,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
                 [0, 2, false, 10], // Release C
@@ -800,7 +973,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
@@ -811,6 +984,8 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                // [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
+                // [0, [0, kc_to_u8!(C), 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
@@ -823,7 +998,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
                 [0, 2, true, 20],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
@@ -842,17 +1017,42 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard_with_combo(),
             sequence: [
-                [0, 1, true, 20],  // Press mt!(B, LShift)
+                [0, 1, true, 200],  // Press mt!(B, LShift)
                 [0, 3, true, 20],  // Press lt!(1, D)
                 [0, 2, true, 60],  // Press mt!(C, LGui)
                 [0, 1, false, 20], // Release B
-                [0, 2, false, 10], // Release C
+                [0, 2, false, 10], // Release C  -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
                 [0, 3, false, 10], // Release D
             ],
             expected_reports: [
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_with_combo_8_1() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard_with_combo(),
+            sequence: [
+                [0, 1, true, 200],  // Press mt!(B, LShift)
+                [0, 3, true, 200],  // Press lt!(1, D)
+                [0, 2, true, 60],  // Press mt!(C, LGui)
+                [0, 1, false, 20], // Release B
+                [0, 2, false, 10], // Release C -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
+                [0, 3, false, 10], // Release D
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
@@ -863,7 +1063,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 260],  // Press A after hold timeout
                 [0, 0, false, 100], // Release A
                 [0, 1, false, 100], // Release B
@@ -882,8 +1082,8 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10],  // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 150],  // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 1, false, 100], // Release B
                 [0, 0, false, 100], // Release A
             ],
@@ -901,8 +1101,8 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 10],  // Press A
-                [0, 0, false, 100], // Release A
+                [0, 0, true, 150],  // Press A
+                [0, 0, false, 120], // Release A
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 2, true, 60], // Press mt!(C, LGui)
                 [0, 1, false, 60], // Release mt!(B, LShift)
@@ -920,18 +1120,64 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_multi_tap_2() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 0, true, 150],  // Press A
+                [0, 0, false, 10], // Release A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
+                [0, 2, true, 200], // Press mt!(C, LGui)
+                [0, 1, false, 60], // Release mt!(B, LShift)
+                [0, 2, false, 60], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [0, [0, 0, 0, 0, 0, 0]], // Release B
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release C
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+            ]
+        };
+    }
+
+    #[test]
+    fn test_multi_tap_3() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 0, true, 150],  // Press A
+                [0, 0, false, 10], // Release A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
+                [0, 2, true, 40], // Press mt!(C, LGui) -> Flow Tap
+                [0, 1, false, 60], // Release mt!(B, LShift)
+                [0, 2, false, 60], // Release mt!(C, LGui)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0]], // Press C
+                [0, [0, kc_to_u8!(C), 0, 0, 0, 0]], // Release B
+                [0, [0, 0, 0, 0, 0, 0]], // Release C
+            ]
+        };
+    }
+
+    #[test]
     fn test_layer_tap() {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 1, true, 10], // Press mt!(B, LShift)
                 [0, 1, false, 100], // Release B
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 0, false, 10], // Release A
-                [0, 3, true, 10], // Press lt!(1, D)
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap after A
+                [0, 1, true, 50], // Press mt!(B, LShift) -> Flow Tap
                 [0, 1, false, 100], // Release B
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
@@ -940,8 +1186,10 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]], // Release Kp2
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
-                [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]], // Press Kp2 on layer 1
-                [0, [0, 0, 0, 0, 0, 0]], // Release Kp2
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
+                [0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
+                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Release B
+                [0, [0, 0, 0, 0, 0, 0]], // Release D
             ]
         };
     }
@@ -951,7 +1199,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 3, true, 10], // Press lt!(1, D)
+                [0, 3, true, 150], // Press lt!(1, D)
                 [0, 0, true, 10], // Press A
                 [0, 3, false, 10], // Release lt!(1, D)
                 [0, 0, false, 10], // Release A
@@ -984,7 +1232,7 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 260],  // Press A after hold timeout
                 [0, 1, false, 100], // Release B
                 [0, 0, false, 100], // Release A
@@ -1003,16 +1251,16 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 10],  // Press A
-                [0, 1, false, 300], // Release B after timeout
+                [0, 1, false, 300], // Release B
                 [0, 0, false, 10], // Release A
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout B
                 [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release A
-                [0, [0, 0, 0, 0, 0, 0]], // All released
+                [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
     }
@@ -1022,15 +1270,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 0, true, 20],  // Press A
-                [0, 0, false, 260], // Release A  <-- Release A after "permissive hold" interval, but also after the hold-timeout
+                [0, 0, false, 260], // Release A
                 [0, 1, false, 100], // Release B
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                 [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]], // All released
             ]
         };
@@ -1041,7 +1289,7 @@ rusty_fork_test! {
     key_sequence_test! {
         keyboard: create_hrm_keyboard(),
         sequence: [
-            [0, 1, true, 10], // Press mt!(B, LShift)
+            [0, 1, true, 150], // Press mt!(B, LShift)
             [0, 2, true, 200],  // Press mt!(C, LGui)
             [0, 2, false, 100], // Release C  <-- Release C after "permissive hold" interval, but also after the hold-timeout
             [0, 1, false, 100], // Release B
@@ -1060,15 +1308,15 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
                 [0, 0, true, 30], // Press A
-                [0, 1, false, 50], // Release mt!(B, LShift) -> In permissive hold mode, this operation resolves `B` and `A`, but not `C`
+                [0, 1, false, 50], // Release mt!(B, LShift)
                 [0, 2, false, 100], // Release mt!(C, LGui)
                 [0, 0, false, 100],  // Release A
             ],
             expected_reports: [
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // FIXME: Maybe B-C-A is the expected order
                 [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
@@ -1083,10 +1331,10 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
                 [0, 0, true, 30], // Press A
-                [0, 2, false, 100], // Release C -> Triggers permissve hold of mt!(B, LShift), `A` should also be resolved because it's a normal key press.
+                [0, 2, false, 100], // Release C -> Permissive hold for mt!(B, LShift)
                 [0, 1, false, 50], // Release B
                 [0, 0, false, 100],  // Release A
             ],
@@ -1106,10 +1354,10 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
                 [0, 0, true, 30], // Press A
-                [0, 2, false, 100], // Release C
+                [0, 2, false, 100], // Release C -> Permissive hold for mt!(B, LShift)
                 [0, 0, false, 100],  // Release A
                 [0, 1, false, 50], // Release B
             ],
@@ -1130,20 +1378,20 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 1, true, 150], // Press mt!(B, LShift)
                 [0, 2, true, 30], // Press mt!(C, LGui)
-                [0, 0, true, 30], // Press A
-                [0, 0, false, 100], // Release A -> Triggers permissve hold of mt!(B, LShift) and mt!(C, LGui)
+                [0, 0, true, 30], // Press A -> Unilateral tap for mt!(B, LShift)
+                [0, 0, false, 100], // Release A -> Permissive hold triggered of mt!(C, LGui)
                 [0, 1, false, 50], // Release B
                 [0, 2, false, 100], // Release C
             ],
             expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Hold LShift + LGui
-                [KC_LSHIFT | KC_LGUI,  [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-                [KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release A
-                [KC_LGUI, [ 0, 0, 0, 0, 0, 0]], // Hold LGui
-                [0, [0, 0, 0, 0, 0, 0]], // All released
+                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [KC_LGUI, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
+                [KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
     }
@@ -1153,21 +1401,23 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 30], // Press A
-                [0, 1, true, 10], // Press mt!(B, LShift)
+                [0, 0, true, 160], // Press A
+                [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
                 [0, 0, false, 10], // Release A
-                [0, 3, true, 30], // Press lt!(1, D)
-                [0, 2, true, 30], // Press mt!(C, LGui)
+                [0, 3, true, 30], // Press lt!(1, D) -> Flow Tap
+                [0, 2, true, 30], // Press mt!(C, LGui) -> Flow Tap
                 [0, 3, false, 100], // Release D
                 [0, 1, false, 50], // Release B
                 [0, 2, false, 10], // Release C
             ],
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-                [0, [0, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]],
+                [0, [0, kc_to_u8!(B), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(D), kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0]],
+                [0, [0, kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0]],
+                [0, [0, 0, kc_to_u8!(C), 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
@@ -1178,10 +1428,10 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 30],  // Press A
+                [0, 0, true, 150],  // Press A
                 [0, 0, false, 30], // Release A
-                [0, 1, true, 20],  // Press mt!(B, LShift)
-                [0, 2, true, 10],  // Press mt!(C, LGui)
+                [0, 1, true, 20],  // Press mt!(B, LShift) -> Flow Tap
+                [0, 2, true, 10],  // Press mt!(C, LGui) -> Flow Tap
                 [0, 1, false, 40], // Release B
                 [0, 2, false, 10], // Release C
             ],
@@ -1189,8 +1439,8 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-                [0, [0, 0, 0, 0, 0, 0]], // Release B
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
+                [0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0]], // Press C
+                [0, [0, kc_to_u8!(C), 0, 0, 0, 0]], // Release B
                 [0, [0, 0, 0, 0, 0, 0]], // Release C
             ]
         };
@@ -1202,10 +1452,10 @@ rusty_fork_test! {
         key_sequence_test! {
             keyboard: create_hrm_keyboard(),
             sequence: [
-                [0, 0, true, 30],  // Press A
-                [0, 3, true, 20],  // Press lt!(1, D)
+                [0, 0, true, 150],  // Press A
+                [0, 3, true, 150],  // Press lt!(1, D)
                 [0, 0, false, 30], // Release A
-                [0, 1, true, 20], // Press Kp2 on layer 1
+                [0, 1, true, 150], // Press Kp2 on layer 1
                 [0, 1, false, 40], // Release Kp2 on layer 1
                 [0, 3, false, 10], // Release lt!(1, D)
             ],
@@ -1214,6 +1464,27 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]], // Release A
                 [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]], // Press Kp2
                 [0, [0, 0, 0, 0, 0, 0]], // Release Kp2
+            ]
+        };
+    }
+
+    #[test]
+    fn test_multi_hold_cross_hand() {
+        key_sequence_test! {
+            keyboard: create_hrm_keyboard(),
+            sequence: [
+                [0, 2, true, 150], // Press mt!(C, LGui)
+                [0, 3, true, 150], // Press lt!(1, D)
+                [0, 0, true, 10], // Press A
+                [0, 0, false, 10], // Release A -> Permisive hold
+                [0, 2, false, 40], // Release Kp2 on layer 1
+                [0, 3, false, 10], // Release lt!(1, D)
+            ],
+            expected_reports: [
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [KC_LGUI, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
+                [KC_LGUI, [0, 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]], // Release A
             ]
         };
     }

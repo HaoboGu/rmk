@@ -24,8 +24,8 @@ pub struct Morse<const TAP_N: usize> {
     pub tapping_term_ms: u16,
     /// The decision mode of the morse key
     pub mode: MorseKeyMode,
-    /// If the chordal hold is enabled
-    pub chordal_hold: bool,
+    /// If the unilateral tap is enabled
+    pub unilateral_tap: bool,
 }
 
 impl<const TAP_N: usize> Default for Morse<TAP_N> {
@@ -35,7 +35,7 @@ impl<const TAP_N: usize> Default for Morse<TAP_N> {
             hold_actions: MorseActions::default(),
             tapping_term_ms: 250,
             mode: MorseKeyMode::Normal,
-            chordal_hold: false,
+            unilateral_tap: false,
         }
     }
 }
@@ -49,7 +49,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
             hold_actions,
             tapping_term_ms: 250,
             mode: MorseKeyMode::Normal,
-            chordal_hold: false,
+            unilateral_tap: false,
         }
     }
 
@@ -58,7 +58,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
         hold_action: Action,
         tapping_term_ms: u16,
         mode: MorseKeyMode,
-        chordal_hold: bool,
+        unilateral_tap: bool,
     ) -> Self {
         let tap_actions = MorseActions::new_single(tap_action);
         let hold_actions = MorseActions::new_single(hold_action);
@@ -67,7 +67,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
             hold_actions,
             tapping_term_ms,
             mode,
-            chordal_hold,
+            unilateral_tap,
         }
     }
 

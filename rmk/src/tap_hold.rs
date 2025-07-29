@@ -18,8 +18,8 @@ pub enum TapHoldDecision {
 pub enum HeldKeyDecision {
     // Ignore it
     Ignore,
-    // Chordal hold triggered
-    ChordalHold,
+    // Unilateral tap triggered
+    UnilateralTap,
     // Permissive hold triggered
     PermissiveHold,
     // Hold on other key press triggered
@@ -134,7 +134,7 @@ impl ChordHoldState {
 
     /// Create a new `ChordHoldState` based on the key event and the number of rows and columns.
     /// If the number of columns is greater than the number of rows, it will determine the hand based on the column.
-    /// the chordal hold will be determined by user configuration in future.
+    /// the unilateral tap will be determined by user configuration in future.
     pub(crate) fn create(pos: KeyPos, rows: u8, cols: u8) -> Self {
         if cols > rows {
             if pos.col < (cols / 2) {
@@ -174,7 +174,7 @@ mod tests {
     use crate::event::KeyboardEvent;
 
     #[test]
-    fn test_chordal_hold() {
+    fn test_unilateral_tap() {
         assert_eq!(
             ChordHoldState::create(KeyPos { row: 0, col: 0 }, 3, 6).hand,
             ChordHoldHand::Left

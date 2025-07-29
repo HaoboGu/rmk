@@ -7,15 +7,15 @@ fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
         mode: MorseKeyMode::PermissiveHold,
-        chordal_hold: false,
+        unilateral_tap: false,
         ..TapHoldConfig::default()
     }
 }
 
-fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
+fn tap_hold_config_with_hrm_and_unilateral_tap() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
-        chordal_hold: true,
+        unilateral_tap: true,
         mode: MorseKeyMode::PermissiveHold,
         ..TapHoldConfig::default()
     }
@@ -69,7 +69,7 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -98,7 +98,7 @@ mod tap_hold_test {
             key_sequence_test!  {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -128,7 +128,7 @@ mod tap_hold_test {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(
                     BehaviorConfig {
-                        tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                        tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
                         ..BehaviorConfig::default()
                     }
                 ),
@@ -154,7 +154,7 @@ mod tap_hold_test {
         fn test_chordal_multi_hold_key_cross_hand_should_be_hold() {
             key_sequence_test! {
                 keyboard: create_test_keyboard_with_config(BehaviorConfig {
-                    tap_hold: tap_hold_config_with_hrm_and_chordal_hold(),
+                    tap_hold: tap_hold_config_with_hrm_and_unilateral_tap(),
                     ..BehaviorConfig::default()
                 }),
                 sequence: [

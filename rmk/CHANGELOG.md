@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Permissive hold key rolling error
-- Chordal hold triggers tap unexpectly 
+- unilateral tap triggers tap unexpectly 
 
 ## [0.7.7] - 2025-07-21
 

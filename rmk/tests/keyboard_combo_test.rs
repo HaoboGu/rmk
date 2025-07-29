@@ -185,7 +185,7 @@ mod combo_test {
                         tap_hold: TapHoldConfig {
                             enable_hrm: true,
                             mode: MorseKeyMode::PermissiveHold,
-                            chordal_hold: false,
+                            unilateral_tap: false,
                             ..TapHoldConfig::default()
                         },
                         combo: CombosConfig {

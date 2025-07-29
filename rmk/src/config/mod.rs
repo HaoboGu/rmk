@@ -94,14 +94,14 @@ pub struct TapHoldConfig {
     pub hold_timeout: Duration,
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
-    pub chordal_hold: bool,
+    pub unilateral_tap: bool,
 }
 
 impl Default for TapHoldConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
-            chordal_hold: false,
+            unilateral_tap: false,
             mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
             hold_timeout: Duration::from_millis(250),

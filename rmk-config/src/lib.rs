@@ -423,7 +423,7 @@ pub struct BehaviorConfig {
 pub struct TapHoldConfig {
     pub enable_hrm: Option<bool>,
     pub permissive_hold: Option<bool>,
-    pub chordal_hold: Option<bool>,
+    pub unilateral_tap: Option<bool>,
     pub hold_on_other_press: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
     /// Depreciated

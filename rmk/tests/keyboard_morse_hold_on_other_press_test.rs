@@ -18,7 +18,7 @@ fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static, 1, 4, 2> {
         tap_hold: TapHoldConfig {
             enable_hrm: false,
             mode: MorseKeyMode::HoldOnOtherPress,
-            chordal_hold: false,
+            unilateral_tap: false,
             ..TapHoldConfig::default()
         },
         ..BehaviorConfig::default()
@@ -49,9 +49,9 @@ fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static, 1, 
     ));
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
-            enable_hrm: true,
+            enable_hrm: false,
             mode: MorseKeyMode::HoldOnOtherPress,
-            chordal_hold: false,
+            unilateral_tap: false,
             ..TapHoldConfig::default()
         },
         combo: CombosConfig {

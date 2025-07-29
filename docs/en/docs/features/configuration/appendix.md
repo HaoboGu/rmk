@@ -110,7 +110,7 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
 # Tap Hold configuration
-tap_hold = { enable_hrm = true, permissive_hold = true, chordal_hold = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration

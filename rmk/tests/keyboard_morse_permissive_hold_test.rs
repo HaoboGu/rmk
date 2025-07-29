@@ -18,7 +18,7 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 4, 2> {
         tap_hold: TapHoldConfig {
             enable_hrm: false,
             mode: MorseKeyMode::PermissiveHold,
-            chordal_hold: false,
+            unilateral_tap: false,
             ..TapHoldConfig::default()
         },
         ..BehaviorConfig::default()
@@ -49,9 +49,9 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
     ));
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
-            enable_hrm: true,
+            enable_hrm: false,
             mode: MorseKeyMode::PermissiveHold,
-            chordal_hold: false,
+            unilateral_tap: false,
             ..TapHoldConfig::default()
         },
         combo: CombosConfig {

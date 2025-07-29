@@ -22,8 +22,8 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         for row in layer {
             for key in row {
                 if let KeyAction::Morse(morse) = key {
-                    if behavior_config.tap_hold.chordal_hold {
-                        morse.chordal_hold = true;
+                    if behavior_config.tap_hold.unilateral_tap {
+                        morse.unilateral_tap = true;
                     }
                     morse.mode = behavior_config.tap_hold.mode;
                 }

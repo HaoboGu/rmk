@@ -14,7 +14,7 @@ fn tap_hold_config_with_hold_on_other_press() -> TapHoldConfig {
     TapHoldConfig {
         mode: MorseKeyMode::HoldOnOtherPress,
         enable_hrm: false,
-        chordal_hold: false,
+        unilateral_tap: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
         prior_idle_time: embassy_time::Duration::from_millis(120),
     }
@@ -25,7 +25,7 @@ fn tap_hold_config_with_hold_on_other_press_and_permissive() -> TapHoldConfig {
     TapHoldConfig {
         mode: MorseKeyMode::PermissiveHold,
         enable_hrm: false,
-        chordal_hold: false,
+        unilateral_tap: false,
         hold_timeout: embassy_time::Duration::from_millis(200),
         prior_idle_time: embassy_time::Duration::from_millis(120),
     }
@@ -324,7 +324,7 @@ mod hold_on_other_press_tests {
                     tap_hold: TapHoldConfig {
                         mode: MorseKeyMode::PermissiveHold,
                         enable_hrm: false,  // HRM disabled
-                        chordal_hold: false,
+                        unilateral_tap: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
                         prior_idle_time: embassy_time::Duration::from_millis(120),
                     },
@@ -353,7 +353,7 @@ mod hold_on_other_press_tests {
                     tap_hold: TapHoldConfig {
                         mode: MorseKeyMode::PermissiveHold,
                         enable_hrm: true,  // HRM enabled
-                        chordal_hold: false,
+                        unilateral_tap: false,
                         hold_timeout: embassy_time::Duration::from_millis(200),
                         prior_idle_time: embassy_time::Duration::from_millis(120),
                     },
@@ -444,7 +444,7 @@ mod hold_on_other_press_tests {
                         tap_hold: TapHoldConfig {
                             mode: MorseKeyMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
-                            chordal_hold: false,
+                            unilateral_tap: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
                             prior_idle_time: embassy_time::Duration::from_millis(120),
                         },
@@ -509,7 +509,7 @@ mod hold_on_other_press_tests {
                         tap_hold: TapHoldConfig {
                             mode: MorseKeyMode::PermissiveHold,
                             enable_hrm: true,  // HRM enabled
-                            chordal_hold: false,
+                            unilateral_tap: false,
                             hold_timeout: embassy_time::Duration::from_millis(200),
                             prior_idle_time: embassy_time::Duration::from_millis(120),
                         },
