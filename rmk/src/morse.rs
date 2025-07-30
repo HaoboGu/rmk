@@ -1,4 +1,5 @@
-use crate::{action::Action, keycode::ModifierCombination};
+use crate::action::Action;
+use crate::keycode::ModifierCombination;
 
 /// Definition of a morse key.
 ///

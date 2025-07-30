@@ -2,16 +2,12 @@
 
 use embassy_time::{Duration, Instant};
 
-use crate::{
-    TAP_DANCE_MAX_TAP,
-    action::KeyAction,
-    event::KeyboardEvent,
-    keyboard::{
-        Keyboard,
-        held_buffer::{HeldKey, KeyState},
-    },
-    morse::Morse,
-};
+use crate::TAP_DANCE_MAX_TAP;
+use crate::action::KeyAction;
+use crate::event::KeyboardEvent;
+use crate::keyboard::Keyboard;
+use crate::keyboard::held_buffer::{HeldKey, KeyState};
+use crate::morse::Morse;
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>

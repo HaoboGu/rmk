@@ -1,9 +1,7 @@
 use embassy_time::Instant;
 
-use crate::{
-    action::KeyAction,
-    event::{KeyboardEvent, KeyboardEventPos},
-};
+use crate::action::KeyAction;
+use crate::event::{KeyboardEvent, KeyboardEventPos};
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]

@@ -55,8 +55,9 @@ impl Default for TapDancesConfig {
 pub struct MorseConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
-    /// Timeout time for tap or hold
+    /// Default timeout time for tap or hold
     pub operation_timeout: Duration,
+    /// Default mode
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,

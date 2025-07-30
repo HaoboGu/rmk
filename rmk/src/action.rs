@@ -1,8 +1,6 @@
-use crate::{
-    TAP_DANCE_MAX_TAP,
-    keycode::{KeyCode, ModifierCombination},
-    morse::Morse,
-};
+use crate::TAP_DANCE_MAX_TAP;
+use crate::keycode::{KeyCode, ModifierCombination};
+use crate::morse::Morse;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
