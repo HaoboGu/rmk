@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrite tap-hold and tap-dance, use morse key instead
 - Rename chordal tap to unilateral tap
+- Rewrite led indicator, use controller system
 
 ## [0.7.8] - 2025-07-23
 

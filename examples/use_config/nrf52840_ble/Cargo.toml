@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble", "adafruit_bl"] }
+rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52840_ble", "adafruit_bl", "controller"] }
 nrf-sdc = { version = "0.1.1", default-features = false, features = [
     "defmt",
     "peripheral",
