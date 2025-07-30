@@ -426,8 +426,6 @@ pub struct TapHoldConfig {
     pub unilateral_tap: Option<bool>,
     pub hold_on_other_press: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
-    /// Depreciated
-    pub post_wait_time: Option<DurationMillis>,
     pub hold_timeout: Option<DurationMillis>,
 }
 

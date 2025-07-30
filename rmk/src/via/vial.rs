@@ -172,7 +172,7 @@ pub(crate) async fn process_vial<
                             hold.to_action(),
                             hold_after_tap.to_action(),
                             double_tap.to_action(),
-                            embassy_time::Duration::from_millis(timeout_ms as u64),
+                            timeout_ms,
                         );
 
                         // Update the tap dance in keymap

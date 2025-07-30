@@ -413,7 +413,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
 
                 // The remaining keys are not same as the current key, check only morse keys
-                if let KeyAction::Morse(morse) = held_key.action {
+                if let KeyAction::Morse(morse) = held_key.action
+                    && held_key.event.pos != event.pos
+                {
                     if event.pressed {
                         // The current key is being pressed
 
@@ -494,7 +496,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HeldKeyDecision::PermissiveHold | HeldKeyDecision::HoldOnOtherKeyPress => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
-                        if let KeyAction::Morse(morse) = action {
+                        let morse_action = match action {
+                            KeyAction::TapDance(i) => self
+                                .keymap
+                                .borrow()
+                                .behavior
+                                .tap_dance
+                                .tap_dances
+                                .get(i as usize)
+                                .map(|x| x.0),
+                            KeyAction::Morse(morse) => Some(morse),
+                            _ => None,
+                        };
+                        if let Some(morse) = morse_action {
                             // Permissive hold of held key is triggered
                             debug!("Cleaning buffered morse key due to permissive hold or hold on other key press");
                             match held_key.state {
@@ -546,7 +560,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 // Push back after triggered hold
                                 self.held_buffer.push_without_sort(held_key);
                             }
-                            _ => (),
+                            _ => (), // For tap-dance, the releasing will not be processed immediately, so just ignore it
                         }
                     }
 
@@ -608,7 +622,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 LoopState::Queue
             }
             KeyBehaviorDecision::Ignore => {
-                debug!("Current key is not buffered, process current key normally: {:?}", event);
+                debug!("Current key is ignored or not buffered, process normally: {:?}", event);
                 // Process current key normally
                 let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered

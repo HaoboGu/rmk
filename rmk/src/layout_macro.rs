@@ -118,7 +118,7 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        KeyAction::Morse($crate::morse::Morse::new_tap_hold(
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_tap_hold(
             $crate::action::Action::LayerToggle($x),
             $crate::action::Action::LayerOn($x),
         ))

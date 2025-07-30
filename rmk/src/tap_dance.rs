@@ -22,13 +22,7 @@ impl Default for TapDance {
 }
 
 impl TapDance {
-    pub fn new_from_vial(
-        tap: Action,
-        hold: Action,
-        hold_after_tap: Action,
-        double_tap: Action,
-        timeout: Duration,
-    ) -> Self {
+    pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
         assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
         let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
         let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
@@ -36,11 +30,7 @@ impl TapDance {
         tap_actions[1] = double_tap;
         hold_actions[0] = hold;
         hold_actions[1] = hold_after_tap;
-        Self(Morse::new_tap_dance(
-            tap_actions,
-            hold_actions,
-            timeout.as_millis() as u16,
-        ))
+        Self(Morse::new_tap_dance(tap_actions, hold_actions, timeout))
     }
 
     /// Create a new tap dance with custom actions for each tap count

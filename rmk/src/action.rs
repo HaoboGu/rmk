@@ -67,9 +67,9 @@ pub enum KeyAction {
 }
 
 impl KeyAction {
-    // Convert `KeyAction` to the internal `Action`.
-    // Only valid for `Single` and `Tap` variant, returns `Action::No` for other variants.
-    pub(crate) fn to_action(self) -> Action {
+    /// Convert `KeyAction` to the internal `Action`.
+    /// Only valid for `Single` and `Tap` variant, returns `Action::No` for other variants.
+    pub fn to_action(self) -> Action {
         match self {
             KeyAction::Single(a) | KeyAction::Tap(a) => a,
             _ => Action::No,

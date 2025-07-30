@@ -31,14 +31,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyState::IdleAfterTap(tap) => {
                 let a = morse.tap_action(tap as usize);
                 self.process_key_action_tap(a, key.event).await;
-                if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
-                    k.state = KeyState::PostTap(tap)
-                }
+                let _ = self.held_buffer.remove(key.event.pos);
             }
             _ => unreachable!(),
         };
 
-        // TODO: Use clean held buffer?
+        // TODO: Now timeout cleans only non-morse keys in the buffer, do we need to clean all cleanable keys in the buffer?
         self.trigger_held_non_morse_keys().await;
     }
 
@@ -61,6 +59,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             k.state = KeyState::Held(t + 1);
                         }
                         k.press_time = pressed_time;
+                        k.timeout_time = pressed_time + Duration::from_millis(morse.timeout_ms as u64);
                     }
                 }
                 None => {
@@ -85,7 +84,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let action = match k.state {
                     KeyState::Held(t) => {
                         // If the current pressed key is timeout when releasing it, release the hold action
-                        if k.press_time < Instant::now() {
+                        if k.timeout_time < Instant::now() {
                             // Timeout, release current hold action
                             Some(morse.hold_action(t as usize))
                         } else {
@@ -96,18 +95,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 debug!("Last tap action, trigger tap action {:?} immediately", action);
                                 // Trigger the tap action immediately
                                 k.state = KeyState::PostTap(t);
-                                // let mut press_event = event.clone();
-                                // press_event.pressed = true;
-                                self.process_key_action_normal(action, event).await;
-                                // self.process_key_action_normal(action, press_event).await;
+                                let mut press_event = event;
+                                press_event.pressed = true;
+                                self.process_key_action_tap(action, press_event).await;
                                 self.held_buffer.remove(event.pos);
-                                // self.trigger_held_non_morse_keys().await;
                                 None
                             } else {
                                 // It's not the last tap action, update the tap state to idle
                                 k.state = KeyState::IdleAfterTap(t);
                                 // Use current release time for `IdleAfterTap` state
-                                k.press_time = Instant::now() + Duration::from_millis(morse.timeout_ms as u64);
+                                k.press_time = Instant::now(); // Use release time as the "press_time"
+                                k.timeout_time = k.press_time + Duration::from_millis(morse.timeout_ms as u64);
                                 None
                             }
                         }
@@ -142,7 +140,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub(crate) async fn trigger_held_non_morse_keys(&mut self) {
-        // self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
+        self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
         // Trigger all non-morse keys in the buffer
         while let Some(key) = self.held_buffer.remove_if(|k| !matches!(k.action, KeyAction::Morse(_))) {
@@ -155,6 +153,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        // self.held_buffer.keys.sort_unstable_by_key(|k| k.timeout_time);
+        self.held_buffer.keys.sort_unstable_by_key(|k| k.timeout_time);
     }
 }
