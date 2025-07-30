@@ -207,7 +207,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                         ::rmk::tap_dance::TapDance::new_with_actions(
                             #tap_actions_def,
                             #hold_actions_def,
-                            #timeout
+                            #timeout as u16
                         )
                     }
                 } else {
@@ -222,7 +222,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                             #hold.to_action(),
                             #hold_after_tap.to_action(),
                             #double_tap.to_action(),
-                            #timeout
+                            #timeout as u16
                         )
                     }
                 }

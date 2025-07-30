@@ -1,4 +1,3 @@
-use embassy_time::Duration;
 use heapless::Vec;
 
 use crate::TAP_DANCE_MAX_TAP;
@@ -38,7 +37,7 @@ impl TapDance {
     pub fn new_with_actions(
         tap_actions: Vec<Action, TAP_DANCE_MAX_TAP>,
         hold_actions: Vec<Action, TAP_DANCE_MAX_TAP>,
-        timeout: Duration,
+        timeout: u16,
     ) -> Self {
         assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
         let mut tap_actions_slice = [Action::No; TAP_DANCE_MAX_TAP];
@@ -49,11 +48,7 @@ impl TapDance {
         for (i, item) in hold_actions.iter().enumerate() {
             hold_actions_slice[i] = *item;
         }
-        Self(Morse::new_tap_dance(
-            tap_actions_slice,
-            hold_actions_slice,
-            timeout.as_millis() as u16,
-        ))
+        Self(Morse::new_tap_dance(tap_actions_slice, hold_actions_slice, timeout))
     }
 
     /// Check if this tap dance has any actions defined
