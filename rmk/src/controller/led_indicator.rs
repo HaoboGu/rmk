@@ -1,7 +1,7 @@
 /// The controller for handling LEDindicators defines in HID spec, including NumLock, CapsLock, ScrollLock, Compose, and Kana.
 use embedded_hal::digital::StatefulOutputPin;
 
-use crate::channel::{ControllerSub, CONTROLLER_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
 use crate::controller::Controller;
 use crate::driver::gpio::OutputController;
 use crate::event::ControllerEvent;

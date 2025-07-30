@@ -22,8 +22,6 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::{CentralMatrix, run_peripheral_manager};
-use rmk::split::central::{CentralMatrix, run_peripheral_manager};
-use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
 use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
 use rmk::{initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
