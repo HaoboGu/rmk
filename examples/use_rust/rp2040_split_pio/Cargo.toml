@@ -6,13 +6,13 @@ description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
 repository = "https://github.com/haobogu/rmk"
 readme = "../../README.md"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["split", "rp2040_pio", "rp2040_bl"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
-embassy-rp = { version = "0.4", features = [
+embassy-rp = { version = "0.6", features = [
     "rp2040",
     "defmt",
     "time-driver",
@@ -32,9 +32,8 @@ panic-probe = { version = "1.0", features = ["print-defmt"] }
 static_cell = "2"
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 # [features]
 # avoid having to use --allow-multiple-definition linker flag

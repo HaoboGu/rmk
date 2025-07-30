@@ -3,10 +3,11 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, OneShotConfig, TapDancesConfig, TapHoldConfig, TriLayerConfig,
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, OneShotConfig, TapDancesConfig, TapHoldConfig,
+    TriLayerConfig,
 };
 
-use crate::layout::parse_key;
+use crate::layout::{get_key_with_alias, parse_key};
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -49,29 +50,21 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 Some(enable) => quote! { enable_hrm: #enable, },
                 None => quote! {},
             };
-            let permissive_hold = match tap_hold.permissive_hold {
-                Some(enable) => quote! { permissive_hold: #enable, },
-                None => quote! {},
+            let tap_hold_mode = if let Some(true) = tap_hold.permissive_hold {
+                quote! { mode: ::rmk::config::TapHoldMode::PermissiveHold, }
+            } else if let Some(true) = tap_hold.hold_on_other_press {
+                quote! { mode: ::rmk::config::TapHoldMode::HoldOnOtherPress, }
+            } else {
+                quote! { mode: ::rmk::config::TapHoldMode::Normal,}
             };
             let chordal_hold = match tap_hold.chordal_hold {
                 Some(enable) => quote! { chordal_hold: #enable, },
-                None => quote! {},
-            };
-            let hold_on_other_press = match tap_hold.hold_on_other_press {
-                Some(enable) => quote! { hold_on_other_press: #enable, },
                 None => quote! {},
             };
             let prior_idle_time = match &tap_hold.prior_idle_time {
                 Some(t) => {
                     let timeout = t.0;
                     quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#timeout), }
-                }
-                None => quote! {},
-            };
-            let post_wait_time = match &tap_hold.post_wait_time {
-                Some(t) => {
-                    let timeout = t.0;
-                    quote! { post_wait_time: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
@@ -87,11 +80,9 @@ fn expand_tap_hold(tap_hold: &Option<TapHoldConfig>) -> proc_macro2::TokenStream
                 ::rmk::config::TapHoldConfig {
                     #enable_hrm
                     #prior_idle_time
-                    #post_wait_time
                     #hold_timeout
-                    #permissive_hold
+                    #tap_hold_mode
                     #chordal_hold
-                    #hold_on_other_press
                     ..Default::default()
                 }
             }
@@ -129,6 +120,43 @@ fn expand_combos(combos: &Option<CombosConfig>) -> proc_macro2::TokenStream {
                     ..Default::default()
                 }
             }
+        }
+        None => default,
+    }
+}
+
+fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+
+    match macros {
+        Some(macros) => {
+            let macros_def = macros.macros.iter().map(|m| {
+                let operations = m.operations.iter().map(|op| match op {
+                    rmk_config::MacroOperation::Tap { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Down { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Up { keycode } => {
+                        let key = get_key_with_alias(keycode.trim().to_owned());
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::keycode::KeyCode::#key).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Delay { duration } => {
+                        let millis = duration.0 as u16;
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
+                    }
+                    rmk_config::MacroOperation::Text { text } => {
+                        quote! { ::rmk::keyboard_macros::to_macro_sequence(#text).into_iter() }
+                    }
+                });
+
+                quote! { [#(#operations),*].into_iter().flatten().collect() }
+            });
+
+            quote! { ::rmk::config::macro_config::KeyboardMacrosConfig::new(::rmk::keyboard_macros::define_macro_sequences(&[#(#macros_def),*])) }
         }
         None => default,
     }
@@ -372,6 +400,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let tap_hold = expand_tap_hold(&behavior.tap_hold);
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
+    let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork);
     let tap_dance = expand_tap_dance(&behavior.tap_dance);
 
@@ -383,8 +412,8 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             combo: #combos,
             fork: #forks,
             tap_dance: #tap_dance,
-            // TODO: implement macro for configuring Keyboard-Macro-Sequences
-            keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
+            keyboard_macros: #macros,
+            // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
         };
     }

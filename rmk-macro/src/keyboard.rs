@@ -25,6 +25,7 @@ use crate::split::central::expand_split_central_config;
 pub enum Overwritten {
     Usb,
     ChipConfig,
+    ChipInit,
     Entry,
 }
 
@@ -36,9 +37,13 @@ pub(crate) fn parse_keyboard_mod(item_mod: ItemMod) -> TokenStream2 {
 
     if keyboard_config.get_storage_config().enabled != is_feature_enabled(&rmk_features, "storage") {
         if keyboard_config.get_storage_config().enabled {
-            panic!("If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml.")
+            panic!(
+                "If the \"storage\" cargo feature is disabled, `storage.enabled` must be set to false in the keyboard.toml."
+            )
         } else {
-            panic!("Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)")
+            panic!(
+                "Storage is disabled. The \"storage\" cargo feature must also be disabled, by disabling default features for rmk in your Cargo.toml (and potentially re-adding col2row and defmt, as desired)"
+            )
         }
     }
 
@@ -67,6 +72,7 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
     let imports = match config.get_chip_model().unwrap().series {
         ChipSeries::Esp32 => quote! {
             use {esp_alloc as _, esp_backtrace as _};
+            ::esp_bootloader_esp_idf::esp_app_desc!();
         },
         _ => {
             // If defmt_log is disabled, add an empty defmt logger impl
@@ -280,7 +286,9 @@ pub(crate) fn expand_matrix_and_keyboard_init(
         }) => match matrix_config.matrix_type {
             MatrixType::normal => {
                 if matrix_config.row2col {
-                    eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
+                    eprintln!(
+                        "row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)"
+                    );
                 }
                 quote! {
                     let debouncer = #debouncer_type::<#input_output_num>::new();
@@ -302,7 +310,9 @@ pub(crate) fn expand_matrix_and_keyboard_init(
             let central_col = split_config.central.cols;
             let central_col_offset = split_config.central.col_offset;
             let input_output_pin_num = if split_config.central.matrix.row2col {
-                eprintln!("row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)");
+                eprintln!(
+                    "row2col is enabled, please ensure that you have updated your Cargo.toml, disabled default features(col2row is enabled as default feature)"
+                );
                 quote! { #central_row_offset, #central_col_offset, #central_col, #central_row }
             } else {
                 quote! { #central_row_offset, #central_col_offset, #central_row, #central_col }

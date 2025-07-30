@@ -16,8 +16,8 @@ mod layout;
 mod matrix;
 mod split;
 
-use darling::ast::NestedMeta;
 use darling::FromMeta;
+use darling::ast::NestedMeta;
 use proc_macro::TokenStream;
 use split::peripheral::parse_split_peripheral_mod;
 use syn::parse_macro_input;

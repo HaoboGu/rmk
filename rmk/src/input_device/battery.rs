@@ -1,11 +1,11 @@
 use core::cell::RefCell;
 
 use super::{InputDevice, InputProcessor};
+use crate::KeyMap;
 #[cfg(feature = "controller")]
-use crate::channel::{ControllerPub, CONTROLLER_CHANNEL};
+use crate::channel::{CONTROLLER_CHANNEL, ControllerPub};
 use crate::event::Event;
 use crate::input_device::ProcessResult;
-use crate::KeyMap;
 use embedded_hal::digital::InputPin;
 #[cfg(all(feature = "_ble", feature = "controller"))]
 use {crate::channel::send_controller_event, crate::event::ControllerEvent};

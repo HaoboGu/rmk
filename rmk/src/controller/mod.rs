@@ -7,7 +7,7 @@ pub mod battery_led;
 pub mod led_indicator;
 pub(crate) mod wpm;
 
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 
 /// Common trait for controllers.
 pub trait Controller {

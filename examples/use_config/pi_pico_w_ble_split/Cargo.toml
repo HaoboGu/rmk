@@ -6,13 +6,13 @@ description = "Keyboard firmware written in Rust"
 homepage = "https://github.com/haobogu/rmk"
 repository = "https://github.com/haobogu/rmk"
 readme = "../../README.md"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["pico_w_ble", "rp2040_bl", "split"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
-embassy-rp = { version = "0.4", features = [
+embassy-rp = { version = "0.6", features = [
     "rp2040",
     "defmt",
     "time-driver",
@@ -28,8 +28,8 @@ portable-atomic = { version = "1.11", features = ["critical-section"] }
 defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
-cyw43 = { version = "0.3.0", features = ["defmt", "firmware-logs", "bluetooth"] }
-cyw43-pio = { version = "0.4.0", features = ["defmt"] }
+cyw43 = { version = "0.4.0", features = ["defmt", "firmware-logs", "bluetooth"] }
+cyw43-pio = { version = "0.5.0", features = ["defmt"] }
 static_cell = "2"
 bt-hci = { version = "0.3", default-features = false, features = ["defmt"] }
 rand = { version = "0.8.4", default-features = false }
@@ -37,15 +37,8 @@ rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-cyw43 = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
-cyw43-pio = { git = "https://github.com/embassy-rs/embassy.git", rev = "f35aa4005a63e8d478b2b95aaa2bfb316b72dece" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 [features]
 skip-cyw43-firmware = []

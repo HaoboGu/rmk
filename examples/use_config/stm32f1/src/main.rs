@@ -6,9 +6,9 @@ use rmk::macros::rmk_keyboard;
 // Create and run your keyboard with a single macro: `rmk_keyboard`
 #[rmk_keyboard]
 mod keyboard {
+    use embassy_stm32::Config;
     use embassy_stm32::rcc::*;
     use embassy_stm32::time::Hertz;
-    use embassy_stm32::Config;
 
     #[Override(chip_config)]
     fn config() -> Config {

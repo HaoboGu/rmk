@@ -1,4 +1,4 @@
-use crate::BehaviorConfig;
+use crate::{BehaviorConfig, MacroOperation};
 
 impl crate::KeyboardTomlConfig {
     pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
@@ -28,7 +28,10 @@ impl crate::KeyboardTomlConfig {
                     }
                     for (i, c) in combo.combos.iter().enumerate() {
                         if c.actions.len() > self.rmk.combo_max_length {
-                            return Err(format!("keyboard.toml: number of keys in combo #{} is greater than combo_max_length configured under [rmk] section", i));
+                            return Err(format!(
+                                "keyboard.toml: number of keys in combo #{} is greater than combo_max_length configured under [rmk] section",
+                                i
+                            ));
                         }
                         if let Some(layer) = c.layer {
                             if layer >= layout.layers {
@@ -38,6 +41,32 @@ impl crate::KeyboardTomlConfig {
                                 ));
                             }
                         }
+                    }
+                }
+                behavior.macros = behavior.macros.or(default.macros);
+                if let Some(macros) = &behavior.macros {
+                    let macros_size = macros
+                        .macros
+                        .iter()
+                        .map(|m| {
+                            m.operations
+                                .iter()
+                                .map(|op| match op {
+                                    MacroOperation::Tap { .. }
+                                    | MacroOperation::Down { .. }
+                                    | MacroOperation::Up { .. } => 3,
+                                    MacroOperation::Delay { .. } => 4,
+                                    MacroOperation::Text { text } => text.len(),
+                                })
+                                .sum::<usize>()
+                        })
+                        .sum::<usize>();
+
+                    if macros_size > self.rmk.macro_space_size {
+                        return Err(format!(
+                            "keyboard.toml: total size of macros ({}) is greater than macro_space_size configured under [rmk] section",
+                            macros_size
+                        ));
                     }
                 }
                 behavior.fork = behavior.fork.or(default.fork);

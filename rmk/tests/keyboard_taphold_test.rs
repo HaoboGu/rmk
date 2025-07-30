@@ -1,15 +1,13 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::TapHoldConfig;
+use rmk::config::{TapHoldConfig, TapHoldMode};
 
 fn tap_hold_config_with_hrm_and_permissive_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
-        permissive_hold: true,
+        mode: TapHoldMode::PermissiveHold,
         chordal_hold: false,
-        hold_on_other_press: false,
-        post_wait_time: Duration::from_millis(0),
         ..TapHoldConfig::default()
     }
 }
@@ -18,9 +16,7 @@ fn tap_hold_config_with_hrm_and_chordal_hold() -> TapHoldConfig {
     TapHoldConfig {
         enable_hrm: true,
         chordal_hold: true,
-        permissive_hold: true,
-        hold_on_other_press: false,
-        post_wait_time: Duration::from_millis(0),
+        mode: TapHoldMode::PermissiveHold,
         ..TapHoldConfig::default()
     }
 }
@@ -38,7 +34,7 @@ mod tap_hold_test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{create_test_keyboard, create_test_keyboard_with_config, wrap_keymap, KC_LGUI, KC_LSHIFT};
+    use crate::common::{KC_LGUI, KC_LSHIFT, create_test_keyboard, create_test_keyboard_with_config, wrap_keymap};
 
     rusty_fork_test! {
 
@@ -125,8 +121,7 @@ mod tap_hold_test {
             let config =BehaviorConfig {
                 tap_hold: TapHoldConfig {
                     enable_hrm: true,
-                    permissive_hold: true,
-                    post_wait_time: Duration::from_millis(0),
+                    mode: TapHoldMode::PermissiveHold,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -161,8 +156,7 @@ mod tap_hold_test {
             let config = BehaviorConfig {
                 tap_hold: TapHoldConfig {
                     enable_hrm: true,
-                    permissive_hold: true,
-                    post_wait_time: Duration::from_millis(0),
+                    mode: TapHoldMode::PermissiveHold,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -741,8 +735,9 @@ mod tap_hold_test {
             };
         }
 
+        // Ref: https://github.com/HaoboGu/rmk/pull/496
         #[test]
-        fn test_issue_496() {
+        fn test_taphold_with_previous_rolling_keypress() {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {

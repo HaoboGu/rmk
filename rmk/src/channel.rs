@@ -20,9 +20,9 @@ use {
 
 use crate::event::{Event, KeyboardEvent};
 use crate::hid::Report;
+use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex, VIAL_CHANNEL_SIZE};
 #[cfg(feature = "storage")]
-use crate::{storage::FlashOperationMessage, FLASH_CHANNEL_SIZE};
-use crate::{RawMutex, EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, VIAL_CHANNEL_SIZE};
+use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 
 #[cfg(feature = "controller")]
 pub type ControllerSub = Subscriber<

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use config::{Config, File, FileFormat};
-use serde::{de, Deserialize as SerdeDeserialize};
+use serde::{Deserialize as SerdeDeserialize, de};
 use serde_derive::Deserialize;
 use serde_inline_default::serde_inline_default;
 
@@ -256,7 +256,9 @@ impl KeyboardTomlConfig {
                 }
 
                 if max_required_taps > 256 {
-                    panic!("The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}");
+                    panic!(
+                        "The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}"
+                    );
                 }
 
                 if max_required_taps > self.rmk.tap_dance_max_tap {
@@ -357,6 +359,7 @@ pub struct BleConfig {
     pub charge_led: Option<PinConfig>,
     pub adc_divider_measured: Option<u32>,
     pub adc_divider_total: Option<u32>,
+    pub default_tx_power: Option<i8>,
 }
 
 /// Config for lights
@@ -409,6 +412,8 @@ pub struct BehaviorConfig {
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
+    #[serde(alias = "macro")]
+    pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub tap_dance: Option<TapDancesConfig>,
 }
@@ -457,6 +462,30 @@ pub struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
     pub layer: Option<u8>,
+}
+
+/// Configurations for macros
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MacrosConfig {
+    pub macros: Vec<MacroConfig>,
+}
+
+/// Configurations for macro
+#[derive(Clone, Debug, Deserialize)]
+pub struct MacroConfig {
+    pub operations: Vec<MacroOperation>,
+}
+
+/// Macro operations
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "operation", rename_all = "lowercase")]
+pub enum MacroOperation {
+    Tap { keycode: String },
+    Down { keycode: String },
+    Up { keycode: String },
+    Delay { duration: DurationMillis },
+    Text { text: String },
 }
 
 /// Configurations for forks

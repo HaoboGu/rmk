@@ -55,13 +55,13 @@ pub fn get_combos_config() -> CombosConfig {
 
 mod combo_test {
     use embassy_futures::block_on;
-    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
+    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig, TapHoldMode};
     use rmk::keycode::KeyCode;
     use rmk::th;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{create_test_keyboard_with_config, KC_LSHIFT};
+    use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};
 
     rusty_fork_test! {
         #[test]
@@ -184,9 +184,8 @@ mod combo_test {
                     let behavior_config = BehaviorConfig {
                         tap_hold: TapHoldConfig {
                             enable_hrm: true,
-                            permissive_hold: true,
+                            mode: TapHoldMode::PermissiveHold,
                             chordal_hold: false,
-                            post_wait_time: Duration::from_millis(0),
                             ..TapHoldConfig::default()
                         },
                         combo: CombosConfig {

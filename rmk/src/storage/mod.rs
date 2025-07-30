@@ -11,14 +11,14 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use sequential_storage::cache::NoCache;
-use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
 use sequential_storage::Error as SSError;
+use sequential_storage::cache::NoCache;
+use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
 #[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
-    trouble_host::{prelude::*, BondInformation, IdentityResolvingKey, LongTermKey},
+    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
 use self::eeconfig::EeKeymapConfig;
@@ -851,7 +851,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             debug!("Flash operation: {:?}", info);
-            if let Err(e) = match info {
+            match match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
                     update_storage_field!(
@@ -1037,10 +1037,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
-                print_storage_error::<F>(e);
-                FLASH_OPERATION_FINISHED.signal(false);
-            } else {
-                FLASH_OPERATION_FINISHED.signal(true);
+                Err(e) => {
+                    print_storage_error::<F>(e);
+                    FLASH_OPERATION_FINISHED.signal(false);
+                }
+                _ => {
+                    FLASH_OPERATION_FINISHED.signal(true);
+                }
             }
         }
     }
@@ -1074,7 +1077,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     }
                 }
                 StorageData::EncoderConfig(encoder) => {
-                    if let Some(ref mut map) = encoder_map {
+                    if let Some(map) = encoder_map {
                         if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
                             map[encoder.layer][encoder.idx] = encoder.action;
                         }
