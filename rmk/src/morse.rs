@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::{action::Action, keycode::ModifierCombination};
 
 /// Definition of a morse key.
 ///
@@ -50,6 +50,42 @@ impl<const TAP_N: usize> Morse<TAP_N> {
             timeout_ms: 250,
             mode: MorseKeyMode::Normal,
             unilateral_tap: false,
+        }
+    }
+
+    pub const fn new_layer_tap_hold(tap_action: Action, layer: u8) -> Self {
+        let tap_actions = MorseActions::new_single(tap_action);
+        let hold_actions = MorseActions::new_single(Action::LayerOn(layer));
+        Self {
+            tap_actions,
+            hold_actions,
+            timeout_ms: 250,
+            mode: MorseKeyMode::HoldOnOtherPress,
+            unilateral_tap: false,
+        }
+    }
+
+    pub const fn new_modifier_tap_hold(tap_action: Action, modifier: ModifierCombination) -> Self {
+        let tap_actions = MorseActions::new_single(tap_action);
+        let hold_actions = MorseActions::new_single(Action::Modifier(modifier));
+        Self {
+            tap_actions,
+            hold_actions,
+            timeout_ms: 250,
+            mode: MorseKeyMode::HoldOnOtherPress,
+            unilateral_tap: false,
+        }
+    }
+
+    pub const fn new_hrm(tap_action: Action, modifier: ModifierCombination) -> Self {
+        let tap_actions = MorseActions::new_single(tap_action);
+        let hold_actions = MorseActions::new_single(Action::Modifier(modifier));
+        Self {
+            tap_actions,
+            hold_actions,
+            timeout_ms: 250,
+            mode: MorseKeyMode::PermissiveHold,
+            unilateral_tap: true,
         }
     }
 

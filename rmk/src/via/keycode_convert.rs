@@ -93,18 +93,23 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
         }
         0x2000..=0x3FFF => {
-            // Modifier tap/hold
-            // The via equivalent of Modifier tap/hold is called Mod-tap, whose keycode representation is same with RMK
+            // Modifier tap-hold.
+            // For modifier tap-hold, if it's on the home row, use `new_hrm` instead
+            // HRMs is in permissive hold mode, while other modifier tap-hold is in hold on other key press mode
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
             let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
-            KeyAction::Morse(Morse::new_tap_hold(Action::Key(keycode), Action::Modifier(modifier)))
+            if keycode.is_home_row() {
+                KeyAction::Morse(Morse::new_hrm(Action::Key(keycode), modifier))
+            } else {
+                KeyAction::Morse(Morse::new_modifier_tap_hold(Action::Key(keycode), modifier))
+            }
         }
         0x4000..=0x4FFF => {
-            // Layer tap/hold
-            // The via equivalent of Modifier tap/hold is called Mod-tap,
+            // Layer tap-hold.
+            // Layer tap-hold is in hold on other key press mode by default
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            KeyAction::Morse(Morse::new_tap_hold(Action::Key(keycode), Action::LayerOn(layer as u8)))
+            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(keycode), layer as u8))
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
