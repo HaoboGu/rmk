@@ -2015,6 +2015,7 @@ mod test {
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
+    use crate::morse::Morse;
     use crate::{a, k, layer, mo, th};
 
     // Init logger for tests
@@ -2223,7 +2224,7 @@ mod test {
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
-                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
+                    KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again))),
                 );
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),

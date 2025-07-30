@@ -1,10 +1,12 @@
 pub mod common;
 
 use embassy_time::Duration;
+use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig};
-use rmk::keycode::ModifierCombination;
-use rmk::{k, mt};
+use rmk::k;
+use rmk::keycode::{KeyCode, ModifierCombination};
+use rmk::morse::Morse;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -727,7 +729,7 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [mt!(B, ModifierCombination::SHIFT), mt!(C, ModifierCombination::GUI),],
+                                [KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT))), KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)))],
                                 k!(X),
                                 None,
                             )
@@ -758,7 +760,7 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [mt!(B, ModifierCombination::SHIFT), mt!(C, ModifierCombination::GUI),],
+                                [KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT))), KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)))],
                                 k!(X),
                                 None,
                             )
