@@ -15,12 +15,11 @@ use embassy_rp::gpio::{Input, Output};
 use embassy_rp::peripherals::{PIO0, USB};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::{CentralMatrix, run_peripheral_manager};
 use rmk::split::rp::uart::{BufferedUart, UartInterruptHandler};
@@ -84,9 +83,6 @@ async fn main(_spawner: Spawner) {
     let mut matrix = CentralMatrix::<_, _, _, 0, 0, 2, 2>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     // Start
     join4(
         run_devices! (
@@ -94,7 +90,7 @@ async fn main(_spawner: Spawner) {
         ),
         keyboard.run(),
         run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
-        run_rmk(&keymap, driver, &mut storage, &mut light_controller, rmk_config),
+        run_rmk(&keymap, driver, &mut storage, rmk_config),
     )
     .await;
 }

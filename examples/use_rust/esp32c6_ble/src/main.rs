@@ -15,12 +15,11 @@ use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
@@ -82,15 +81,12 @@ async fn main(_s: Spawner) {
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, &stack, &mut storage, &mut light_controller, rmk_config),
+        run_rmk(&keymap, &stack, &mut storage, rmk_config),
     )
     .await;
 }

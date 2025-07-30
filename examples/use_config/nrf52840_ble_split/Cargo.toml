@@ -15,6 +15,7 @@ rmk = { path = "../../../rmk", features = [
     "split",
     "async_matrix",
     "adafruit_bl",
+    "controller",
 ] }
 nrf-sdc = { version = "0.1.1", default-features = false, features = [
     "defmt",

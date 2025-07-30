@@ -73,7 +73,7 @@ Then adding the encoder to the device list of `run_device`.
             (matrix, encoder) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(&keymap, driver, storage, light_controller, rmk_config, sd),
+        run_rmk(&keymap, driver, storage, rmk_config, sd),
     )
     .await;
 ```
