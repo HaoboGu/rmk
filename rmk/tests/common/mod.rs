@@ -124,9 +124,8 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
             }
         }
     );
-    let buffer = keyboard.held_buffer.clone();
-    if !buffer.is_empty() {
-        panic!("leak after buffer cleanup, buffer contains {:?}", buffer);
+    if !keyboard.held_buffer.is_empty() {
+        panic!("leak after buffer cleanup, buffer contains {:?}", keyboard.held_buffer);
     }
 }
 
