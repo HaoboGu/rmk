@@ -45,7 +45,6 @@ impl MacroOperation {
         match (macro_sequences[idx], macro_sequences[idx + 1]) {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
-                // SS_QMK_PREFIX + SS_TAP_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Tap(keycode), offset + 3)
@@ -54,7 +53,6 @@ impl MacroOperation {
                 }
             }
             (1, 2) => {
-                // SS_QMK_PREFIX + SS_DOWN_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Press(keycode), offset + 3)
@@ -63,7 +61,6 @@ impl MacroOperation {
                 }
             }
             (1, 3) => {
-                // SS_QMK_PREFIX + SS_UP_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Release(keycode), offset + 3)
@@ -72,7 +69,6 @@ impl MacroOperation {
                 }
             }
             (1, 4) => {
-                // SS_QMK_PREFIX + SS_DELAY_CODE
                 if idx + 3 < macro_sequences.len() {
                     let delay_ms = (macro_sequences[idx + 2].max(1) as u16 - 1)
                         + (macro_sequences[idx + 3].max(1) as u16 - 1) * 255;

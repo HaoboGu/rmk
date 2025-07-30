@@ -18,8 +18,6 @@ use crate::{boot::reboot_keyboard, storage::Storage};
 
 /// Keymap represents the stack of layers.
 ///
-/// The conception of Keymap in rmk is borrowed from qmk: <https://docs.qmk.fm/#/keymap>.
-///
 /// Keymap should be binded to the actual pcb matrix definition.
 /// RMK detects hardware key strokes, uses tuple `(row, col, layer)` to retrieve the action from Keymap.
 pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
