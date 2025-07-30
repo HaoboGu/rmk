@@ -38,7 +38,7 @@ numslock.pin = "P0_01"
 numslock.low_active = false
 
 [behavior]
-tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms", post_wait_time = "50ms" }
+tap_hold = { enable_hrm = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 
 [[behavior.tap_dance.tap_dances]]
 tap = "A"
