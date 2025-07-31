@@ -349,14 +349,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
-        // Decision of current key and held keys
-        let mut decision_for_current_key = KeyBehaviorDecision::Ignore;
-        let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
-
         // Global hold timeout
         let operation_timeout = self.keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
 
-        // If pressing a morse key, check `prior-idle-time` first.
+        // When pressing a morse key, check flow tap first.
         if event.pressed
             && self.keymap.borrow().behavior.morse.enable_hrm
             && let KeyAction::Morse(m) = key_action
@@ -381,93 +377,70 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // If current key is a release, and it cannot be find in the held buffer or it's already triggered
         // it's pressed BEFORE any morse key is pressed, set the check_buffer = false
-        let check_held_buffer = event.pressed
-            || self
-                .held_buffer
-                .find_action(key_action)
-                .is_some_and(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)));
+        let (decision_for_current_key, decisions) = self.make_decisions_for_keys(key_action, event);
 
-        if check_held_buffer {
-            // First, sort by press time
-            self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
+        let (keyboard_state_updated, updated_decision_for_cur_key) =
+            self.fire_held_keys(decision_for_current_key, decisions).await;
 
-            // Check all unresolved held keys, calculatle their decision one-by-one
-            for held_key in self
-                .held_buffer
-                .keys
-                .iter()
-                .filter(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
-            {
-                // Releasing a key is already buffered
-                if !event.pressed && held_key.action == key_action {
-                    debug!("Releasing a held key: {:?}", event);
-                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
-                    decision_for_current_key = KeyBehaviorDecision::Release;
-                    continue;
-                }
-
-                // Buffered normal keys should be added to the decision list, they will be processed later according to the decision of current key
-                if !matches!(held_key.action, KeyAction::Morse(_)) && matches!(held_key.state, KeyState::Held(_)) {
-                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
-                    continue;
-                }
-
-                // The remaining keys are not same as the current key, check only morse keys
-                if let KeyAction::Morse(morse) = held_key.action
-                    && held_key.event.pos != event.pos
-                {
-                    if event.pressed {
-                        // The current key is being pressed
-
-                        // Check morse key mode
-                        match morse.mode {
-                            MorseKeyMode::PermissiveHold => {
-                                // Permissive hold mode checks key releases, so push current key press into buffer.
-                                decision_for_current_key = KeyBehaviorDecision::Buffer;
-                            }
-                            MorseKeyMode::HoldOnOtherPress => {
-                                debug!("Trigger morse key due to hold on other key press: {:?}", morse);
-                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
-                                decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
-                            }
-                            _ => (),
-                        }
-                    } else {
-                        // 1. Check unilateral tap of held key
-                        // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
-                        // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
-                        if morse.unilateral_tap
-                            && event.pos != held_key.event.pos
-                            && decision_for_current_key != KeyBehaviorDecision::Release
-                            && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
-                        {
-                            debug!("Unilateral tap triggered, resolve morse key as tapping");
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
-                            continue;
-                        }
-
-                        // The current key is being released, check only the held key in permissive hold mode
-                        if decision_for_current_key != KeyBehaviorDecision::Release
-                            && let MorseKeyMode::PermissiveHold = morse.mode
-                        {
-                            debug!("Permissive hold!");
-                            // Check first current releasing key is in the buffer, AND after the current key
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::PermissiveHold));
-                            decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
-                        }
-                    }
-                }
+        // Process current key action after all held keys are resolved
+        match updated_decision_for_cur_key {
+            KeyBehaviorDecision::CleanBuffer | KeyBehaviorDecision::Release => {
+                debug!("Clean buffer, then process current key normally");
+                let key_action = if keyboard_state_updated && !is_combo {
+                    // The key_action needs to be updated due to the morse key might be triggered
+                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                } else {
+                    key_action
+                };
+                self.process_key_action_inner(key_action, event).await
+            }
+            KeyBehaviorDecision::Buffer => {
+                debug!("Current key is buffered, return LoopState::Queue");
+                let press_time = Instant::now();
+                let timeout_time = if let KeyAction::Morse(m) = key_action {
+                    press_time + Duration::from_millis(m.timeout_ms as u64)
+                } else {
+                    press_time
+                };
+                self.held_buffer.push(HeldKey::new(
+                    event,
+                    key_action,
+                    KeyState::Held(0),
+                    press_time,
+                    timeout_time,
+                ));
+                // Current key is buffered, return LoopState::Queue
+                LoopState::Queue
+            }
+            KeyBehaviorDecision::Ignore => {
+                debug!("Current key is ignored or not buffered, process normally: {:?}", event);
+                // Process current key normally
+                let key_action = if keyboard_state_updated && !is_combo {
+                    // The key_action needs to be updated due to the morse key might be triggered
+                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                } else {
+                    key_action
+                };
+                self.process_key_action_inner(key_action, event).await
             }
         }
+    }
 
-        for (p, d) in &decisions {
-            debug!("✅ Decisions: {:?}: {:?}", p, d)
-        }
-
+    /// Fire held keys according to their decisions.
+    ///
+    /// This function fires held keys according to their decisions, and returns
+    /// whether the keyboard state is updated after firing those keys and
+    /// the updated decision for current key.
+    async fn fire_held_keys(
+        &mut self,
+        mut decision_for_current_key: KeyBehaviorDecision,
+        decisions: Vec<(KeyboardEventPos, HeldKeyDecision), 16>,
+    ) -> (bool, KeyBehaviorDecision) {
         let mut keyboard_state_updated = false;
         // Fire buffered keys
         for (pos, decision) in decisions {
             // Some decisions of held keys have been made, fire those keys
+            // debug!("✅ Decision for held key: {:?}: {:?}", pos, decision)
             match decision {
                 HeldKeyDecision::UnilateralTap => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
@@ -590,49 +563,104 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 _ => (),
             }
         }
+        (keyboard_state_updated, decision_for_current_key)
+    }
 
-        // Process current key action after all held keys are resolved
-        match decision_for_current_key {
-            KeyBehaviorDecision::CleanBuffer | KeyBehaviorDecision::Release => {
-                debug!("Clean buffer, then process current key normally");
-                let key_action = if keyboard_state_updated && !is_combo {
-                    // The key_action needs to be updated due to the morse key might be triggered
-                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
-                } else {
-                    key_action
-                };
-                self.process_key_action_inner(key_action, event).await
-            }
-            KeyBehaviorDecision::Buffer => {
-                debug!("Current key is buffered, return LoopState::Queue");
-                let press_time = Instant::now();
-                let timeout_time = if let KeyAction::Morse(m) = key_action {
-                    press_time + Duration::from_millis(m.timeout_ms as u64)
-                } else {
-                    press_time
-                };
-                self.held_buffer.push(HeldKey::new(
-                    event,
-                    key_action,
-                    KeyState::Held(0),
-                    press_time,
-                    timeout_time,
-                ));
-                // Current key is buffered, return LoopState::Queue
-                LoopState::Queue
-            }
-            KeyBehaviorDecision::Ignore => {
-                debug!("Current key is ignored or not buffered, process normally: {:?}", event);
-                // Process current key normally
-                let key_action = if keyboard_state_updated && !is_combo {
-                    // The key_action needs to be updated due to the morse key might be triggered
-                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
-                } else {
-                    key_action
-                };
-                self.process_key_action_inner(key_action, event).await
+    /// Make decisions for current key and each held key.
+    ///
+    /// This function iterates all held keys and makes decision for them if a special mode is triggered, such as permissive hold, etc.
+    fn make_decisions_for_keys(
+        &mut self,
+        key_action: KeyAction,
+        event: KeyboardEvent,
+    ) -> (
+        KeyBehaviorDecision,
+        Vec<(KeyboardEventPos, HeldKeyDecision), HOLD_BUFFER_SIZE>,
+    ) {
+        // Decision of current key and held keys
+        let mut decision_for_current_key = KeyBehaviorDecision::Ignore;
+        let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
+
+        // Whether the held buffer needs to be checked. If not, just returns an empty list
+        let check_held_buffer = event.pressed
+            || self
+                .held_buffer
+                .find_action(key_action)
+                .is_some_and(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)));
+
+        if check_held_buffer {
+            // First, sort by press time
+            self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
+
+            // Check all unresolved held keys, calculatle their decision one-by-one
+            for held_key in self
+                .held_buffer
+                .keys
+                .iter()
+                .filter(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
+            {
+                // Releasing a key is already buffered
+                if !event.pressed && held_key.action == key_action {
+                    debug!("Releasing a held key: {:?}", event);
+                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
+                    decision_for_current_key = KeyBehaviorDecision::Release;
+                    continue;
+                }
+
+                // Buffered normal keys should be added to the decision list, they will be processed later according to the decision of current key
+                if !matches!(held_key.action, KeyAction::Morse(_)) && matches!(held_key.state, KeyState::Held(_)) {
+                    let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
+                    continue;
+                }
+
+                // The remaining keys are not same as the current key, check only morse keys
+                if let KeyAction::Morse(morse) = held_key.action
+                    && held_key.event.pos != event.pos
+                {
+                    if event.pressed {
+                        // The current key is being pressed
+
+                        // Check morse key mode
+                        match morse.mode {
+                            MorseKeyMode::PermissiveHold => {
+                                // Permissive hold mode checks key releases, so push current key press into buffer.
+                                decision_for_current_key = KeyBehaviorDecision::Buffer;
+                            }
+                            MorseKeyMode::HoldOnOtherPress => {
+                                debug!("Trigger morse key due to hold on other key press: {:?}", morse);
+                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
+                                decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                            }
+                            _ => (),
+                        }
+                    } else {
+                        // 1. Check unilateral tap of held key
+                        // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
+                        // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
+                        if morse.unilateral_tap
+                            && event.pos != held_key.event.pos
+                            && decision_for_current_key != KeyBehaviorDecision::Release
+                            && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
+                        {
+                            debug!("Unilateral tap triggered, resolve morse key as tapping");
+                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
+                            continue;
+                        }
+
+                        // The current key is being released, check only the held key in permissive hold mode
+                        if decision_for_current_key != KeyBehaviorDecision::Release
+                            && let MorseKeyMode::PermissiveHold = morse.mode
+                        {
+                            debug!("Permissive hold!");
+                            // Check first current releasing key is in the buffer, AND after the current key
+                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::PermissiveHold));
+                            decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                        }
+                    }
+                }
             }
         }
+        (decision_for_current_key, decisions)
     }
 
     async fn process_key_action_inner(&mut self, original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {

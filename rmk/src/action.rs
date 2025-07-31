@@ -56,11 +56,9 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// General tap/hold action: (tap_action, hold_action)
-    // TapHold(Morse<1>),
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
-    // Morse action
+    /// Morse action
     Morse(Morse<TAP_DANCE_MAX_TAP>),
 }
 
