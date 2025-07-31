@@ -667,6 +667,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // Start forks
         let key_action = self.try_start_forks(original_key_action, event);
 
+        // Clear with_modifier if a new key is pressed
+        if self.with_modifiers.into_bits() != 0 && event.pressed {
+            self.with_modifiers = HidModifiers::new();
+        }
+
         #[cfg(feature = "_ble")]
         LAST_KEY_TIMESTAMP.store(Instant::now().as_secs() as u32, core::sync::atomic::Ordering::Release);
 
