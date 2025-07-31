@@ -1,11 +1,10 @@
 use embassy_time::Instant;
 
 use super::{DebounceState, DebouncerTrait};
-use crate::matrix::KeyState;
 use crate::DEBOUNCE_THRESHOLD;
+use crate::matrix::KeyState;
 
 /// Fast per-key debouncer.
-/// The debouncing algorithm is similar as QMK's [asym eager defer pk debouncer](https://github.com/qmk/qmk_firmware/blob/2fd56317763e8b3b73f0db7488ef42a70f5b946e/quantum/debounce/asym_eager_defer_pk.c)
 pub struct RapidDebouncer<const INPUT_PIN_NUM: usize, const OUTPUT_PIN_NUM: usize> {
     last_ms: Instant,
     debouncing: [[bool; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],

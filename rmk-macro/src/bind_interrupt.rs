@@ -66,6 +66,13 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
             } else {
                 quote! { CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler; }
             };
+
+            let tx_power = if let Some(pwr) = communication.get_ble_config().unwrap().default_tx_power {
+                quote! { .default_tx_power(#pwr)?  }
+            } else {
+                quote! {}
+            };
+
             // nrf-sdc interrupt config
             let nrf_sdc_config = match board {
                 BoardConfig::Split(_) => quote! {
@@ -79,6 +86,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_phy_update_central()?
                     .support_phy_update_peripheral()?
                     .support_le_2m_phy()?
+                    #tx_power
                     .central_count(1)?
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
@@ -91,6 +99,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_dle_peripheral()?
                     .support_phy_update_peripheral()?
                     .support_le_2m_phy()?
+                    #tx_power
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
                     .build(p, rng, mpsl, mem)

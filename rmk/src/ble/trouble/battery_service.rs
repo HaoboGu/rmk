@@ -4,7 +4,8 @@ use embassy_time::{Instant, Timer};
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
-use crate::{ble::trouble::SLEEPING_STATE, keyboard::LAST_KEY_TIMESTAMP};
+use crate::ble::trouble::SLEEPING_STATE;
+use crate::keyboard::LAST_KEY_TIMESTAMP;
 
 /// Battery level global value.
 /// The range of battery level is 0-100, 255 > level > 100 means the battery is charging. 255 means the battery level is not available.

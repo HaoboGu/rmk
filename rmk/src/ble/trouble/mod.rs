@@ -7,9 +7,8 @@ use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select3, Either3};
-use embassy_time::{with_timeout, Duration, Timer};
-use embedded_hal::digital::OutputPin;
+use embassy_futures::select::{Either3, select, select3};
+use embassy_time::{Duration, Timer, with_timeout};
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
@@ -17,7 +16,7 @@ use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, CONTROLLER_CHANNEL},
+    crate::channel::{CONTROLLER_CHANNEL, send_controller_event},
     crate::event::ControllerEvent,
 };
 #[cfg(not(feature = "_no_usb"))]
@@ -26,10 +25,10 @@ use {
     crate::light::UsbLedReader,
     crate::state::{get_connection_type, BLE_CONNECTION_STATE},
     crate::usb::UsbKeyboardWriter,
-    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
+    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
     crate::via::UsbVialReaderWriter,
-    embassy_futures::select::{select4, Either, Either4},
+    embassy_futures::select::{Either, Either4, select4},
     embassy_usb::driver::Driver,
 };
 #[cfg(feature = "storage")]
@@ -44,13 +43,13 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
-use crate::light::{LedIndicator, LightController};
+use crate::light::LedIndicator;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};
 #[cfg(feature = "usb_log")]
 use crate::usb::add_usb_logger;
-use crate::{run_keyboard, CONNECTION_STATE};
+use crate::{CONNECTION_STATE, run_keyboard};
 
 pub mod battery_service;
 pub(crate) mod ble_server;
@@ -96,7 +95,6 @@ pub(crate) async fn run_ble<
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    Out: OutputPin,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -106,7 +104,6 @@ pub(crate) async fn run_ble<
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
-    light_controller: &mut LightController<Out>,
     mut rmk_config: RmkConfig<'static>,
 ) {
     #[cfg(feature = "_nrf_ble")]
@@ -278,7 +275,6 @@ pub(crate) async fn run_ble<
                                     #[cfg(feature = "storage")]
                                     storage,
                                     USB_SUSPENDED.wait(),
-                                    light_controller,
                                     UsbLedReader::new(&mut keyboard_reader),
                                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -292,7 +288,6 @@ pub(crate) async fn run_ble<
                                     &server,
                                     &conn,
                                     &stack,
-                                    light_controller,
                                     keymap,
                                     &mut rmk_config,
                                     #[cfg(feature = "storage")]
@@ -330,7 +325,6 @@ pub(crate) async fn run_ble<
                             #[cfg(feature = "storage")]
                             storage,
                             core::future::pending::<()>(), // Run forever until BLE connected
-                            light_controller,
                             UsbLedReader::new(&mut keyboard_reader),
                             UsbVialReaderWriter::new(&mut vial_reader_writer),
                             UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
@@ -348,7 +342,6 @@ pub(crate) async fn run_ble<
                                         &server,
                                         &conn,
                                         &stack,
-                                        light_controller,
                                         keymap,
                                         &mut rmk_config,
                                         #[cfg(feature = "storage")]
@@ -393,7 +386,6 @@ pub(crate) async fn run_ble<
                             &server,
                             &conn,
                             &stack,
-                            light_controller,
                             keymap,
                             &mut rmk_config,
                             #[cfg(feature = "storage")]
@@ -745,7 +737,6 @@ async fn run_ble_keyboard<
     'c,
     'd,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    Out: OutputPin,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     const ROW: usize,
     const COL: usize,
@@ -755,7 +746,6 @@ async fn run_ble_keyboard<
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    light_controller: &mut LightController<Out>,
     keymap: &'c RefCell<KeyMap<'c, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     rmk_config: &'d mut RmkConfig<'static>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -798,7 +788,6 @@ async fn run_ble_keyboard<
         #[cfg(feature = "storage")]
         storage,
         communication_task,
-        light_controller,
         ble_led_reader,
         ble_via_server,
         ble_hid_server,

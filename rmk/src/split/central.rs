@@ -81,15 +81,15 @@ pub struct CentralMatrix<
 }
 
 impl<
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > InputDevice for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> InputDevice for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     async fn read_event(&mut self) -> Event {
         loop {
@@ -156,15 +156,15 @@ impl<
 }
 
 impl<
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > MatrixTrait for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> MatrixTrait for CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     #[cfg(feature = "col2row")]
     const ROW: usize = INPUT_PIN_NUM;
@@ -211,15 +211,15 @@ impl<
 }
 
 impl<
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        Out: OutputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const INPUT_PIN_NUM: usize,
-        const OUTPUT_PIN_NUM: usize,
-    > CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    Out: OutputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const INPUT_PIN_NUM: usize,
+    const OUTPUT_PIN_NUM: usize,
+> CentralMatrix<In, Out, D, ROW_OFFSET, COL_OFFSET, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
     /// Initialization of central
     pub fn new(input_pins: [In; INPUT_PIN_NUM], output_pins: [Out; OUTPUT_PIN_NUM], debouncer: D) -> Self {
@@ -260,15 +260,15 @@ pub struct CentralDirectPinMatrix<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
 {
     /// Create a matrix from input and output pins.
     pub fn new(direct_pins: [[Option<In>; COL]; ROW], debouncer: D, low_active: bool) -> Self {
@@ -284,15 +284,15 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > InputDevice for CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> InputDevice for CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
 {
     async fn read_event(&mut self) -> Event {
         info!("Central Direct Pin Matrix scanning");
@@ -352,15 +352,15 @@ impl<
 }
 
 impl<
-        #[cfg(not(feature = "async_matrix"))] In: InputPin,
-        #[cfg(feature = "async_matrix")] In: Wait + InputPin,
-        D: DebouncerTrait,
-        const ROW_OFFSET: usize,
-        const COL_OFFSET: usize,
-        const ROW: usize,
-        const COL: usize,
-        const SIZE: usize,
-    > MatrixTrait for CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    D: DebouncerTrait,
+    const ROW_OFFSET: usize,
+    const COL_OFFSET: usize,
+    const ROW: usize,
+    const COL: usize,
+    const SIZE: usize,
+> MatrixTrait for CentralDirectPinMatrix<In, D, ROW_OFFSET, COL_OFFSET, ROW, COL, SIZE>
 {
     const ROW: usize = ROW;
     const COL: usize = COL;

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
-use crate::{action::KeyAction, keycode::ModifierCombination};
+use crate::{action::KeyAction, keycode::ModifierCombination, light::LedIndicator};
 
 /// Raw events from input devices and keyboards
 ///
@@ -80,6 +80,43 @@ impl KeyboardEventPos {
     pub(crate) fn rotary_encoder_pos(id: u8, direction: Direction) -> Self {
         Self::RotaryEncoder(RotaryEncoderPos { id, direction })
     }
+
+    pub(crate) fn is_same_hand<const ROW: usize, const COL: usize>(&self, pos: Self) -> bool {
+        match (self, pos) {
+            (Self::Key(_), Self::Key(_)) => self.get_hand::<ROW, COL>() == pos.get_hand::<ROW, COL>(),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn get_hand<const ROW: usize, const COL: usize>(&self) -> Hand {
+        if let Self::Key(pos) = self {
+            if COL >= ROW {
+                // Horizontal
+                if pos.col < (COL as u8 / 2) {
+                    Hand::Left
+                } else {
+                    Hand::Right
+                }
+            } else {
+                // Vertical
+                if pos.row < (ROW as u8 / 2) {
+                    Hand::Left
+                } else {
+                    Hand::Right
+                }
+            }
+        } else {
+            // TODO: handle rotary encoder
+            Hand::Left
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Hand {
+    Right,
+    Left,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
@@ -151,7 +188,7 @@ pub enum ControllerEvent {
     Key(KeyboardEvent, KeyAction),
     /// Battery percent changed
     Battery(u8),
-    /// Charging state changed
+    /// Charging state changed, true means charging, false means not charging
     ChargingState(bool),
     /// Ble profile changed
     BleProfile(u8),
@@ -165,4 +202,6 @@ pub enum ControllerEvent {
     ConnectionType(u8),
     /// Split peripheral connection
     SplitPeripheral(usize, bool),
+    /// Lock state led indicator
+    KeyboardIndicator(LedIndicator),
 }

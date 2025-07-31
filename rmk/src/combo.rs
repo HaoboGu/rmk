@@ -1,8 +1,8 @@
 use heapless::Vec;
 
+use crate::COMBO_MAX_LENGTH;
 use crate::action::KeyAction;
 use crate::event::KeyboardEvent;
-use crate::COMBO_MAX_LENGTH;
 
 #[derive(Clone, Debug)]
 pub struct Combo {
@@ -52,7 +52,6 @@ impl Combo {
 
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
-            debug!("[COMBO] {:?} registered {:?} ", self.output, key_action);
             self.state |= 1 << i;
         } else if !self.is_all_pressed() {
             self.reset();

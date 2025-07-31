@@ -81,7 +81,6 @@ pub struct ResolutionPhase {
 
 impl ResolutionPhase {
     pub fn new(resolution: u8, reverse: bool) -> Self {
-        // This lookup table is based on the QMK implementation
         // Each entry corresponds to a state transition and provides +1, -1, or 0 pulse
         let mut lut = [0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0];
         if reverse {
@@ -213,12 +212,12 @@ impl<A: InputPin, B: InputPin, P: Phase> RotaryEncoder<A, B, P> {
 }
 
 impl<
-        #[cfg(feature = "async_matrix")] A: InputPin + Wait,
-        #[cfg(not(feature = "async_matrix"))] A: InputPin,
-        #[cfg(feature = "async_matrix")] B: InputPin + Wait,
-        #[cfg(not(feature = "async_matrix"))] B: InputPin,
-        P: Phase,
-    > InputDevice for RotaryEncoder<A, B, P>
+    #[cfg(feature = "async_matrix")] A: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] A: InputPin,
+    #[cfg(feature = "async_matrix")] B: InputPin + Wait,
+    #[cfg(not(feature = "async_matrix"))] B: InputPin,
+    P: Phase,
+> InputDevice for RotaryEncoder<A, B, P>
 {
     async fn read_event(&mut self) -> Event {
         // Read until a valid rotary encoder event is detected

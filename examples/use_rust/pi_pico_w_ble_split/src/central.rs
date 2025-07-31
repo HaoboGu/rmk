@@ -21,16 +21,15 @@ use keymap::{COL, ROW};
 use rand::SeedableRng;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join3};
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::split::ble::central::read_peripheral_addresses;
 use rmk::split::central::run_peripheral_manager;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
@@ -139,9 +138,6 @@ async fn main(spawner: Spawner) {
     // Read peripheral address from storage
     let peripheral_addrs = read_peripheral_addresses::<1, _, 4, 3, 2, 0>(&mut storage).await;
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
     let mut host_resources = HostResources::new();
@@ -158,7 +154,7 @@ async fn main(spawner: Spawner) {
         keyboard.run(),
         join(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addrs[0], &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
         ),
     )
     .await;

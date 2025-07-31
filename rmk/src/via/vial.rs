@@ -10,13 +10,13 @@ use crate::keymap::KeyMap;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
+    COMBO_MAX_LENGTH,
     channel::FLASH_CHANNEL,
     storage::{ComboData, FlashOperationMessage},
-    COMBO_MAX_LENGTH,
 };
 use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
 
-/// Vial communication commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L36)
+/// Vial communication commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
@@ -39,7 +39,7 @@ pub(crate) enum VialCommand {
     Unhandled = 0xFF,
 }
 
-/// Vial dynamic commands. Check [vial-qmk/quantum/vial.h`](https://github.com/vial-kb/vial-qmk/blob/20d61fcb373354dc17d6ecad8f8176be469743da/quantum/vial.h#L53)
+/// Vial dynamic commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
 pub(crate) enum VialDynamic {
@@ -119,7 +119,7 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
                     report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
-                                                                                     // TODO: Support dynamic key override
+                    // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
                 }
                 VialDynamic::DynamicVialTapDanceGet => {
@@ -132,24 +132,21 @@ pub(crate) async fn process_vial<
                         // Pack tap dance data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(*tap_dance.tap_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(0))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(*tap_dance.hold_actions.get(0).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(0))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(*tap_dance.tap_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(1))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(*tap_dance.hold_actions.get(1).unwrap_or(&KeyAction::No)),
+                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(1))),
                         );
-                        LittleEndian::write_u16(
-                            &mut report.input_data[9..11],
-                            tap_dance.tapping_term.as_millis() as u16,
-                        );
+                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.0.timeout_ms);
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -168,14 +165,14 @@ pub(crate) async fn process_vial<
                         let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
                         let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
                         let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                        let tapping_term_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                        let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                         let new_tap_dance = TapDance::new_from_vial(
-                            tap,
-                            hold,
-                            hold_after_tap,
-                            double_tap,
-                            embassy_time::Duration::from_millis(tapping_term_ms as u64),
+                            tap.to_action(),
+                            hold.to_action(),
+                            hold_after_tap.to_action(),
+                            double_tap.to_action(),
+                            timeout_ms,
                         );
 
                         // Update the tap dance in keymap
@@ -306,29 +303,30 @@ pub(crate) async fn process_vial<
                 "Received Vial - SetEncoder, encoder idx: {} clockwise: {} at layer: {}",
                 index, clockwise, layer
             );
-            let _encoder = if let Some(ref mut encoder_map) = keymap.borrow_mut().encoders {
-                if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
-                    if let Some(encoder) = encoder_layer.get_mut(index as usize) {
-                        if clockwise == 1 {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting clockwise action: {:?}", action);
-                            encoder.set_clockwise(action);
+            let _encoder = match keymap.borrow_mut().encoders {
+                Some(ref mut encoder_map) => {
+                    if let Some(encoder_layer) = encoder_map.get_mut(layer as usize) {
+                        if let Some(encoder) = encoder_layer.get_mut(index as usize) {
+                            if clockwise == 1 {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting clockwise action: {:?}", action);
+                                encoder.set_clockwise(action);
+                            } else {
+                                let keycode = BigEndian::read_u16(&report.output_data[5..7]);
+                                let action = from_via_keycode(keycode);
+                                info!("Setting counter-clockwise action: {:?}", action);
+                                encoder.set_counter_clockwise(action);
+                            }
+                            Some(*encoder)
                         } else {
-                            let keycode = BigEndian::read_u16(&report.output_data[5..7]);
-                            let action = from_via_keycode(keycode);
-                            info!("Setting counter-clockwise action: {:?}", action);
-                            encoder.set_counter_clockwise(action);
+                            None
                         }
-                        Some(*encoder)
                     } else {
                         None
                     }
-                } else {
-                    None
                 }
-            } else {
-                None
+                _ => None,
             };
 
             #[cfg(feature = "storage")]

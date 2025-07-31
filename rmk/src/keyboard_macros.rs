@@ -1,14 +1,14 @@
 use num_enum::FromPrimitive;
 
+use crate::MACRO_SPACE_SIZE;
 use crate::keycode::KeyCode;
 use crate::keymap::fill_vec;
 use crate::via::keycode_convert::{from_ascii, to_ascii};
-use crate::MACRO_SPACE_SIZE;
 
 /// encoded with the two bytes, content at the third byte
 /// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported
 ///
-/// TODO save space: refacter to use 1 byte for encoding and convert to/from vial 2 byte encoding
+/// TODO save space: refactor to use 1 byte for encoding and convert to/from vial 2 byte encoding
 #[derive(Debug, Clone)]
 pub enum MacroOperation {
     /// 0x00, 1 byte
@@ -45,7 +45,6 @@ impl MacroOperation {
         match (macro_sequences[idx], macro_sequences[idx + 1]) {
             (0, _) => (MacroOperation::End, offset),
             (1, 1) => {
-                // SS_QMK_PREFIX + SS_TAP_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Tap(keycode), offset + 3)
@@ -54,7 +53,6 @@ impl MacroOperation {
                 }
             }
             (1, 2) => {
-                // SS_QMK_PREFIX + SS_DOWN_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Press(keycode), offset + 3)
@@ -63,7 +61,6 @@ impl MacroOperation {
                 }
             }
             (1, 3) => {
-                // SS_QMK_PREFIX + SS_UP_CODE
                 if idx + 2 < macro_sequences.len() {
                     let keycode = KeyCode::from_primitive(macro_sequences[idx + 2] as u16);
                     (MacroOperation::Release(keycode), offset + 3)
@@ -72,7 +69,6 @@ impl MacroOperation {
                 }
             }
             (1, 4) => {
-                // SS_QMK_PREFIX + SS_DELAY_CODE
                 if idx + 3 < macro_sequences.len() {
                     let delay_ms = (macro_sequences[idx + 2].max(1) as u16 - 1)
                         + (macro_sequences[idx + 3].max(1) as u16 - 1) * 255;
@@ -108,11 +104,7 @@ impl MacroOperation {
             idx += 1;
         }
 
-        if idx == macro_sequences.len() {
-            None
-        } else {
-            Some(idx)
-        }
+        if idx == macro_sequences.len() { None } else { Some(idx) }
     }
 }
 
@@ -135,8 +127,18 @@ pub fn define_macro_sequences(
         .expect("as we resized the vector, this can't happen!")
 }
 
+impl IntoIterator for MacroOperation {
+    type Item = MacroOperation;
+
+    type IntoIter = <heapless::Vec<MacroOperation, MACRO_SPACE_SIZE> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        heapless::Vec::from_iter([self]).into_iter()
+    }
+}
+
 /// Convinience function to convert a String into a sequence of MacroOptions::Text.
-/// Currently ponly u8 ascii is supported.
+/// Currently only u8 ascii is supported.
 pub fn to_macro_sequence(text: &str) -> heapless::Vec<MacroOperation, MACRO_SPACE_SIZE> {
     // if !text.is_ascii() {
     //     compile_error!("Only ascii text is supported!")
@@ -150,7 +152,7 @@ pub fn to_macro_sequence(text: &str) -> heapless::Vec<MacroOperation, MACRO_SPAC
         .collect()
 }
 
-/// converts macro sequences [Vec<MacroOperation] binary form and flattens to Vec<u8, MACRO_SPACE_SIZE>
+/// converts macro sequences [Vec<MacroOperation>] binary form and flattens to [Vec<u8, MACRO_SPACE_SIZE>]
 /// Note that the Vec is still at it's minimal needed length and needs to be etended with zeros to the desired size
 /// (with vec.resize())
 fn fold_to_binary(

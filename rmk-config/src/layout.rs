@@ -44,7 +44,10 @@ impl KeyboardTomlConfig {
                         if *row >= layout.rows || *col >= layout.cols {
                             return Err(format!(
                                 "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
-                                row, col, layout.rows-1, layout.cols-1
+                                row,
+                                col,
+                                layout.rows - 1,
+                                layout.cols - 1
                             ));
                         }
                         if grid_to_sequence[*row as usize][*col as usize].is_some() {
@@ -98,7 +101,10 @@ impl KeyboardTomlConfig {
                         for (sequence_number, key_action) in key_action_sequence.into_iter().enumerate() {
                             if sequence_number >= sequence_to_grid.len() {
                                 return Err(format!(
-                                    "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)", &layer.name.clone().unwrap_or_default(), layer_number));
+                                    "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)",
+                                    &layer.name.clone().unwrap_or_default(),
+                                    layer_number
+                                ));
                             }
                             let (row, col) = sequence_to_grid[sequence_number];
                             legacy_keymap[row as usize][col as usize] = key_action.clone();
@@ -125,7 +131,9 @@ impl KeyboardTomlConfig {
         } else {
             return Err(format!(
                 "keyboard.toml: The actual number of layers is larger than {} [layout.layers]: {} [[Layer]] entries + {} layers in layout.keymap",
-                layout.layers, layers.len(), layout.keymap.as_ref().map(|keymap| keymap.len()).unwrap_or_default()
+                layout.layers,
+                layers.len(),
+                layout.keymap.as_ref().map(|keymap| keymap.len()).unwrap_or_default()
             ));
         }
         // Row

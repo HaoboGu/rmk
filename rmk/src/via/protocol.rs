@@ -3,7 +3,7 @@ use num_enum::{FromPrimitive, TryFromPrimitive};
 pub(crate) const VIA_PROTOCOL_VERSION: u16 = 0x0009;
 pub(crate) const VIA_FIRMWARE_VERSION: u32 = 0x0001;
 
-/// Via communication commands. Check [qmk/quantum/via.h`](https://github.com/qmk/qmk_firmware/blob/2fad45132f0777002934e07d17bfe8ec7aa95740/quantum/via.h#L74)
+/// Via communication commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
 #[repr(u8)]
 pub(crate) enum ViaCommand {
