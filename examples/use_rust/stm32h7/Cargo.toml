@@ -20,7 +20,7 @@ embassy-stm32 = { version = "0.2", features = [
     "memory-x",
     "time-driver-any",
 ] }
-embassy-executor = { version = "0.7", features = [
+embassy-executor = { version = "0.8", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -34,7 +34,7 @@ panic-halt = "1.0"
 [patch.crates-io]
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+
 embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
