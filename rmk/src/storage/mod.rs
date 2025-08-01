@@ -1066,7 +1066,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         // Read all keymap keys and encoder configs
         while let Some((_key, item)) = key_iterator
-            .next::<u32, StorageData>(&mut self.buffer)
+            .next::<StorageData>(&mut self.buffer)
             .await
             .map_err(|e| print_storage_error::<F>(e))?
         {
