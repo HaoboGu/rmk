@@ -1267,17 +1267,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        if key.is_basic() {
-            self.process_basic(key, event).await;
-        } else if key.is_consumer() {
+        // Consumer, system and mouse keys should be processed before basic keycodes, since basic keycodes contain them all
+        if key.is_consumer() {
             self.process_action_consumer_control(key, event).await;
         } else if key.is_system() {
             self.process_action_system_control(key, event).await;
         } else if key.is_mouse_key() {
             self.process_action_mouse(key, event).await;
+        } else if key.is_basic() {
+            self.process_basic(key, event).await;
         } else if key.is_user() {
             self.process_user(key, event).await;
         } else if key.is_macro() {
+            // Process macro
             self.process_action_macro(key, event).await;
         } else if key.is_combo() {
             self.process_action_combo(key, event).await;
