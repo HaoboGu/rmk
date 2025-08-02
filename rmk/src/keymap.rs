@@ -6,13 +6,15 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::COMBO_MAX_NUM;
 use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
+use crate::morse::Morse;
+use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_TAP};
+
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 
@@ -182,6 +184,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
+        }
+    }
+
+    /// Translate a KeyAction to ExtractedKeyAction
+    pub(crate) fn into_morse(
+        &self,
+        key_action: &KeyAction,
+        _pos: KeyboardEventPos,
+    ) -> Option<Morse<TAP_DANCE_MAX_TAP>> {
+        match key_action {
+            //TODO: Instead of this below, lets use pos for home row, left and right hand decisions!
+            //      Of course this will need a new configuration table - could be filled by an optional third coordinate in the matrix_map
+
+            // if keycode.is_home_row() {
+            //     Morse::new_hrm(Action::Key(keycode), modifier)
+            // } else {
+            //     Morse::new_modifier_tap_hold(Action::Key(keycode), modifier)
+            // }
+            KeyAction::TapHold(tap_action, hold_action) => Some(Morse::new_tap_hold(*tap_action, *hold_action)),
+            KeyAction::TapDance(idx) => self.behavior.tap_dance.tap_dances.get(*idx as usize).map(|td| td.0),
+            KeyAction::Morse(idx) => self.behavior.morse.action_sets.get(*idx as usize).copied(),
+            _ => None,
         }
     }
 

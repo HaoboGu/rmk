@@ -1,7 +1,9 @@
 use embassy_time::Instant;
 
+use crate::TAP_DANCE_MAX_TAP;
 use crate::action::KeyAction;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::morse::Morse;
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]
@@ -114,6 +116,8 @@ pub enum KeyState {
 pub struct HeldKey {
     pub event: KeyboardEvent,
     pub action: KeyAction,
+    /// if the action is tap/hold related, the config converted to morse
+    pub morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
     /// Current state of the held key
     pub state: KeyState,
     /// The press time for the key
@@ -126,6 +130,7 @@ impl HeldKey {
     pub fn new(
         event: KeyboardEvent,
         action: KeyAction,
+        morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
         state: KeyState,
         press_time: Instant,
         timeout_time: Instant,
@@ -133,6 +138,7 @@ impl HeldKey {
         Self {
             event,
             action,
+            morse,
             state,
             press_time,
             timeout_time,
