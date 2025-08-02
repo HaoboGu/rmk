@@ -1,5 +1,3 @@
-// TODO: Move morse processing to this module
-
 use embassy_time::{Duration, Instant};
 
 use crate::TAP_DANCE_MAX_TAP;
@@ -32,8 +30,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             _ => unreachable!(),
         };
 
-        // TODO: Now timeout cleans only non-morse keys in the buffer, do we need to clean all cleanable keys in the buffer?
-        self.trigger_held_non_morse_keys().await;
+        // If there's still morse key in the held buffer, don't fire normal keys
+        if self
+            .held_buffer
+            .keys
+            .iter()
+            .filter(|k| matches!(k.action, KeyAction::Morse(_)) && matches!(k.state, KeyState::Held(0)))
+            .count()
+            > 0
+        {
+            return;
+        }
+
+        self.fire_held_non_morse_keys().await;
     }
 
     pub(crate) async fn process_key_action_morse(&mut self, morse: Morse<TAP_DANCE_MAX_TAP>, event: KeyboardEvent) {
@@ -135,7 +144,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    pub(crate) async fn trigger_held_non_morse_keys(&mut self) {
+    pub(crate) async fn fire_held_non_morse_keys(&mut self) {
         self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
         // Trigger all non-morse keys in the buffer
