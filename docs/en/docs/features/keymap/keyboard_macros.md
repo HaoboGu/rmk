@@ -137,7 +137,10 @@ You can combine the trigger with any `KeyAction`, like layer-taps, hold-taps, et
 For example:
 
 ```rust
-KeyAction::TapHold(k!(Macro0, Acrion::TriggerMacro(1)))
+// Trigger macro(1) when tapping and switch to layer 1 when holding
+KeyAction::Morse(Morse::new_layer_tap_hold(Action::TriggerMacro(1), 1))
+// Or
+KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::Macro0), 1))
 ```
 
 Probably you most likely will need

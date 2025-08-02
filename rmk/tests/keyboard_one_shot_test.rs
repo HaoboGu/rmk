@@ -13,7 +13,6 @@ fn one_shot_config_with_short_timeout() -> OneShotConfig {
 mod one_shot_test {
     use std::cell::RefCell;
 
-    use embassy_futures::block_on;
     use rmk::action::KeyAction;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;

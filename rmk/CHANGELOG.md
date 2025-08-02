@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Rewrite tap-hold and tap-dance, use morse key instead
+- Rename chordal tap to unilateral tap
 - Rewrite led indicator, use controller system
 
 ## [0.7.8] - 2025-07-23
@@ -25,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Permissive hold key rolling error
-- Chordal hold triggers tap unexpectly 
+- Chordal tap triggers tap unexpectly 
 
 ## [0.7.7] - 2025-07-21
 

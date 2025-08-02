@@ -54,9 +54,9 @@ pub fn get_combos_config() -> CombosConfig {
 }
 
 mod combo_test {
-    use embassy_futures::block_on;
-    use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig, TapHoldMode};
+    use rmk::config::{BehaviorConfig, MorseConfig, OneShotConfig};
     use rmk::keycode::KeyCode;
+    use rmk::morse::MorseKeyMode;
     use rmk::th;
     use rusty_fork::rusty_fork_test;
 
@@ -182,11 +182,11 @@ mod combo_test {
             key_sequence_test! {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
-                        tap_hold: TapHoldConfig {
+                        morse: MorseConfig {
                             enable_hrm: true,
-                            mode: TapHoldMode::PermissiveHold,
-                            chordal_hold: false,
-                            ..TapHoldConfig::default()
+                            mode: MorseKeyMode::PermissiveHold,
+                            unilateral_tap: false,
+                            ..MorseConfig::default()
                         },
                         combo: CombosConfig {
                             combos: heapless::Vec::from_iter([
