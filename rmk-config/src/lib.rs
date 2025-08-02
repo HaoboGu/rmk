@@ -424,11 +424,9 @@ pub struct BehaviorConfig {
 pub struct TapHoldConfig {
     pub enable_hrm: Option<bool>,
     pub permissive_hold: Option<bool>,
-    pub chordal_hold: Option<bool>,
+    pub unilateral_tap: Option<bool>,
     pub hold_on_other_press: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
-    /// Depreciated
-    pub post_wait_time: Option<DurationMillis>,
     pub hold_timeout: Option<DurationMillis>,
 }
 
@@ -525,8 +523,7 @@ pub struct TapDanceConfig {
     pub tap_actions: Option<Vec<String>>,
     /// Array of hold actions for each tap count (0-indexed)
     pub hold_actions: Option<Vec<String>>,
-
-    pub tapping_term: Option<DurationMillis>,
+    pub timeout: Option<DurationMillis>,
 }
 
 /// Configurations for split keyboards

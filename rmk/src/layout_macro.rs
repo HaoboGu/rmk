@@ -53,10 +53,10 @@ macro_rules! lm {
 #[macro_export]
 macro_rules! lt {
     ($x: literal, $k: ident) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_layer_tap_hold(
             $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $crate::action::Action::LayerOn($x),
-        )
+            $x,
+        ))
     };
 }
 
@@ -64,10 +64,21 @@ macro_rules! lt {
 #[macro_export]
 macro_rules! mt {
     ($k: ident, $m: expr) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_modifier_tap_hold(
             $crate::action::Action::Key($crate::keycode::KeyCode::$k),
-            $crate::action::Action::Modifier($m),
-        )
+            $m,
+        ))
+    };
+}
+
+/// Create a modifier-tap-hold action which is on the home row.
+#[macro_export]
+macro_rules! hrm {
+    ($k: ident, $m: expr) => {
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_hrm(
+            $crate::action::Action::Key($crate::keycode::KeyCode::$k),
+            $m,
+        ))
     };
 }
 
@@ -75,10 +86,10 @@ macro_rules! mt {
 #[macro_export]
 macro_rules! th {
     ($t: ident, $h: ident) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_tap_hold(
             $crate::action::Action::Key($crate::keycode::KeyCode::$t),
             $crate::action::Action::Key($crate::keycode::KeyCode::$h),
-        )
+        ))
     };
 }
 
@@ -110,10 +121,10 @@ macro_rules! tg {
 #[macro_export]
 macro_rules! tt {
     ($x: literal) => {
-        $crate::action::KeyAction::TapHold(
+        $crate::action::KeyAction::Morse($crate::morse::Morse::new_layer_tap_hold(
             $crate::action::Action::LayerToggle($x),
-            $crate::action::Action::LayerOn($x),
-        )
+            $x,
+        ))
     };
 }
 

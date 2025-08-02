@@ -7,7 +7,6 @@ use core::ops::Range;
 use byteorder::{BigEndian, ByteOrder};
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
-use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
@@ -22,13 +21,14 @@ use {
 };
 
 use self::eeconfig::EeKeymapConfig;
-use crate::action::{EncoderAction, KeyAction};
+use crate::action::{Action, EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
 use crate::config::StorageConfig;
 use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
+use crate::morse::Morse;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::tap_dance::TapDance;
@@ -310,20 +310,23 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::TapDanceData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], tap_dance.tapping_term.as_millis() as u16);
+                BigEndian::write_u16(&mut buffer[1..3], tap_dance.0.timeout_ms);
 
                 // Serialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
                 for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.tap_actions.get(i).unwrap_or(&KeyAction::No);
-                    BigEndian::write_u16(&mut buffer[3 + i * 2..5 + i * 2], to_via_keycode(*action));
+                    let action = tap_dance.0.tap_action(i);
+                    BigEndian::write_u16(
+                        &mut buffer[3 + i * 2..5 + i * 2],
+                        to_via_keycode(KeyAction::Single(action)),
+                    );
                 }
 
                 // Serialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
                 for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.hold_actions.get(i).unwrap_or(&KeyAction::No);
+                    let action = tap_dance.0.hold_action(i);
                     BigEndian::write_u16(
                         &mut buffer[3 + (TAP_DANCE_MAX_TAP + i) * 2..5 + (TAP_DANCE_MAX_TAP + i) * 2],
-                        to_via_keycode(*action),
+                        to_via_keycode(KeyAction::Single(action)),
                     );
                 }
 
@@ -531,29 +534,25 @@ impl Value<'_> for StorageData {
                     if buffer.len() < 3 + TAP_DANCE_MAX_TAP * 4 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let tapping_term = BigEndian::read_u16(&buffer[1..3]);
+                    let timeout = BigEndian::read_u16(&buffer[1..3]);
 
                     // Deserialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut tap_actions = Vec::new();
+                    let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
                     for i in 0..TAP_DANCE_MAX_TAP {
-                        let action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
-                        tap_actions.push(action).ok();
+                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
+                        tap_actions[i] = key_action.to_action();
                     }
 
                     // Deserialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut hold_actions = Vec::new();
+                    let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
                     for i in 0..TAP_DANCE_MAX_TAP {
-                        let action = from_via_keycode(BigEndian::read_u16(
+                        let key_action = from_via_keycode(BigEndian::read_u16(
                             &buffer[3 + TAP_DANCE_MAX_TAP * 2 + i * 2..5 + TAP_DANCE_MAX_TAP * 2 + i * 2],
                         ));
-                        hold_actions.push(action).ok();
+                        hold_actions[i] = key_action.to_action();
                     }
 
-                    let tap_dance = TapDance {
-                        tap_actions,
-                        hold_actions,
-                        tapping_term: Duration::from_millis(tapping_term as u64),
-                    };
+                    let tap_dance = TapDance(Morse::new_tap_dance(tap_actions, hold_actions, timeout));
 
                     Ok(StorageData::TapDanceData(tap_dance))
                 }
@@ -1430,8 +1429,8 @@ mod tests {
         // Validation
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
-                // tapping_term
-                assert_eq!(deserialized_tap_dance.tapping_term, tap_dance.tapping_term);
+                // timeout
+                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
                 // tap_actions
                 assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
                 for (original, deserialized) in tap_dance
@@ -1458,7 +1457,7 @@ mod tests {
     #[test]
     fn test_tap_dance_with_partial_actions() {
         // Create a TapDance with partial actions
-        let mut tap_dance = TapDance::default();
+        let mut tap_dance: TapDance = TapDance::default();
         tap_dance
             .tap_actions
             .push(KeyAction::Single(Action::Key(KeyCode::A)))
@@ -1467,7 +1466,7 @@ mod tests {
             .hold_actions
             .push(KeyAction::Single(Action::Key(KeyCode::B)))
             .ok();
-        tap_dance.tapping_term = Duration::from_millis(150);
+        tap_dance.timeout = Duration::from_millis(150);
 
         // Serialization
         let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
@@ -1480,8 +1479,8 @@ mod tests {
         // Validation
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
-                // tapping_term
-                assert_eq!(deserialized_tap_dance.tapping_term, tap_dance.tapping_term);
+                // timeout
+                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
                 // tap_actions
                 assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
                 for (original, deserialized) in tap_dance

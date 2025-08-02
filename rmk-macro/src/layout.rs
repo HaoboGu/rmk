@@ -297,6 +297,36 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 );
             }
         }
+        s if s.to_lowercase().starts_with("hrm(") => {
+            let prefix = s.get(0..4).unwrap();
+            if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {
+                let keys: Vec<&str> = internal
+                    .split_terminator(",")
+                    .map(|w| w.trim())
+                    .filter(|w| !w.is_empty())
+                    .collect();
+                if keys.len() != 2 {
+                    panic!(
+                        "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+                    );
+                }
+                let ident = get_key_with_alias(keys[0].to_string());
+                let modifiers = parse_modifiers(keys[1]);
+
+                if modifiers.is_empty() {
+                    panic!(
+                        "\n❌ keyboard.toml: modifier in HRM(key, modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+                    );
+                }
+                quote! {
+                    ::rmk::hrm!(#ident, #modifiers)
+                }
+            } else {
+                panic!(
+                    "\n❌ keyboard.toml: HRM(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+                );
+            }
+        }
         s if s.to_lowercase().starts_with("th(") => {
             let prefix = s.get(0..3).unwrap();
             if let Some(internal) = s.trim_start_matches(prefix).strip_suffix(")") {

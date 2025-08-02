@@ -1,7 +1,6 @@
 pub mod common;
 
 mod macro_test {
-    use embassy_futures::block_on;
     use heapless::Vec;
     use rmk::action::{Action, KeyAction};
     use rmk::config::BehaviorConfig;
