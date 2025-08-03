@@ -58,6 +58,10 @@ trouble-host = { version = "0.2.4", features = [
     "scan",
     "derive",
     "security",
+    "default-packet-pool-size-8",
+    "l2cap-tx-queue-size-4",
+    "l2cap-rx-queue-size-4",
+    "default-packet-pool-mtu-128",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
