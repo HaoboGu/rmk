@@ -36,11 +36,11 @@ This marks the end of a macro sequence. Don't use it: The code removes all occur
 
 ## Configure a macro sequence
 
-### via the configuration file
+### Via the configuration file
 
-This is not yet supported.
+See [macro](/docs/features/configuration/behavior.md#macro) section under `behavior`
 
-### via Rust
+### Via Rust
 
 A new field `keyboard_macros` has been added to the `BehaviorConfig` struct. Within it a field `macro_sequences` has to be set. This is in binary format (`[u8]`) and can only be as long as `MACRO_SPACE_SIZE`, which is set to 256.
 
@@ -137,7 +137,10 @@ You can combine the trigger with any `KeyAction`, like layer-taps, hold-taps, et
 For example:
 
 ```rust
-KeyAction::TapHold(k!(Macro0, Acrion::TriggerMacro(1)))
+// Trigger macro(1) when tapping and switch to layer 1 when holding
+KeyAction::Morse(Morse::new_layer_tap_hold(Action::TriggerMacro(1), 1))
+// Or
+KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::Macro0), 1))
 ```
 
 Probably you most likely will need
@@ -225,7 +228,7 @@ pub(crate) fn get_forks() -> ForksConfig {
                 k!(Macro0),
                 k!(Macro1),
                 StateBits::new_from(
-                    HidModifiers::new_from(false, true, false, false, false, false, false, false),
+                    HidModifiers::LSHIFT,
                     LedIndicator::default(),
                     HidMouseButtons::default(),
                 ),

@@ -11,6 +11,7 @@ pub(crate) fn expand_rmk_entry(
     item_mod: &ItemMod,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
+    controllers: Vec<TokenStream2>,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(entry)]`, override the entry
     if let Some((_, items)) = &item_mod.content {
@@ -26,9 +27,9 @@ pub(crate) fn expand_rmk_entry(
                 }
                 None
             })
-            .unwrap_or(rmk_entry_select(keyboard_config, devices, processors))
+            .unwrap_or(rmk_entry_select(keyboard_config, devices, processors, controllers))
     } else {
-        rmk_entry_select(keyboard_config, devices, processors)
+        rmk_entry_select(keyboard_config, devices, processors, controllers)
     }
 }
 
@@ -43,6 +44,7 @@ pub(crate) fn rmk_entry_select(
     keyboard_config: &KeyboardTomlConfig,
     devices: Vec<TokenStream2>,
     processors: Vec<TokenStream2>,
+    controllers: Vec<TokenStream2>,
 ) -> TokenStream2 {
     let devices_task = {
         let mut devs = devices.clone();
@@ -61,6 +63,11 @@ pub(crate) fn rmk_entry_select(
                 ::rmk::channel::EVENT_CHANNEL=> [#(#processors),*],
             )
         }
+    };
+    let event_trait_import = if controllers.len() > 0 {
+        quote! { use ::rmk::controller::EventController; }
+    } else {
+        quote! {}
     };
 
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
@@ -82,11 +89,18 @@ pub(crate) fn rmk_entry_select(
             let keyboard_task = quote! {
                 keyboard.run(),
             };
+            let mut tasks = vec![devices_task, keyboard_task];
+            // TODO: Handle polling controllers
+            for controller in controllers {
+                tasks.push(quote! {
+                    #controller.event_loop(),
+                });
+            }
             if split_config.connection == "ble" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, #usb_driver_arg &stack, #storage &mut light_controller, rmk_config),
+                    ::rmk::run_rmk(&keymap, #usb_driver_arg &stack, #storage rmk_config),
                 };
-                let mut tasks = vec![devices_task, rmk_task, keyboard_task];
+                tasks.push(rmk_task);
                 if !processors.is_empty() {
                     tasks.push(processors_task);
                 };
@@ -106,9 +120,9 @@ pub(crate) fn rmk_entry_select(
                 join_all_tasks(tasks)
             } else if split_config.connection == "serial" {
                 let rmk_task = quote! {
-                    ::rmk::run_rmk(&keymap, #usb_driver_arg #storage &mut light_controller, rmk_config),
+                    ::rmk::run_rmk(&keymap, #usb_driver_arg #storage rmk_config),
                 };
-                let mut tasks = vec![devices_task, rmk_task, keyboard_task];
+                tasks.push(rmk_task);
                 if !processors.is_empty() {
                     tasks.push(processors_task);
                 };
@@ -145,10 +159,12 @@ pub(crate) fn rmk_entry_select(
                 );
             }
         }
-        BoardConfig::UniBody(_) => rmk_entry_default(keyboard_config, devices_task, processors_task),
+        BoardConfig::UniBody(_) => rmk_entry_default(keyboard_config, devices_task, processors_task, controllers),
     };
+
     quote! {
         use ::rmk::input_device::Runnable;
+        #event_trait_import
         #entry
     }
 }
@@ -157,6 +173,7 @@ pub(crate) fn rmk_entry_default(
     keyboard_config: &KeyboardTomlConfig,
     devices_task: TokenStream2,
     processors_task: TokenStream2,
+    controllers: Vec<TokenStream2>,
 ) -> TokenStream2 {
     let keyboard_task = quote! {
         keyboard.run()
@@ -165,6 +182,12 @@ pub(crate) fn rmk_entry_default(
     let mut tasks = vec![devices_task, keyboard_task];
     if !processors_task.is_empty() {
         tasks.push(processors_task);
+    }
+    // TODO: Handle polling controllers
+    for controller in controllers {
+        tasks.push(quote! {
+            #controller.event_loop()
+        });
     }
     // Remove the storage argument if disabled in config. The feature also needs to be disabled.
     let storage = if keyboard_config.get_storage_config().enabled {
@@ -176,21 +199,21 @@ pub(crate) fn rmk_entry_default(
     match communication {
         CommunicationConfig::Usb(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, #storage &mut light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, driver, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Ble(_) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, &stack, #storage &mut light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, &stack, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)
         }
         CommunicationConfig::Both(_, _) => {
             let rmk_task = quote! {
-                ::rmk::run_rmk(&keymap, driver, &stack, #storage &mut light_controller, rmk_config)
+                ::rmk::run_rmk(&keymap, driver, &stack, #storage rmk_config)
             };
             tasks.push(rmk_task);
             join_all_tasks(tasks)

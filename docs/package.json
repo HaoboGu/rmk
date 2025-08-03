@@ -16,7 +16,7 @@
   "dependencies": {
     "markdown-it": "^14.1.0",
     "markdown-it-task-lists": "^2.1.1",
-    "sass": "^1.89.0",
+    "sass": "^1.89.2",
     "vue": "^3.5.14"
   }
 }

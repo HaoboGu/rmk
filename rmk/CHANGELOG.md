@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrite tap-hold and tap-dance, use morse key instead
+- Rename chordal tap to unilateral tap
+- Rewrite led indicator, use controller system
+
+## [0.7.8] - 2025-07-23
+
+### Added
+
+- Hold-on-other-key-press mode for tap-hold
+- Add missing keycode to docs
+
+### Changed
+
+- Change `OneShot` as a variant of `Action`
+
+### Fixed
+
+- Permissive hold key rolling error
+- Chordal tap triggers tap unexpectly 
+
+## [0.7.7] - 2025-07-21
+
+### Added
+
+- [TapDance](https://rmk.rs/docs/features/configuration/behavior.html#tap-dance) support
+- Extra delay when executing macros
+
+### Changed
+
+- CI bloat workflow can comment on PR now  
+- Report battery percentage instead of adc value, and do the report instantly after boot
+- Report battery level via BLE only when there's a key action recently
+
+### Fixed
+
+- USB remote wakeup failure
+- Overflow in `PollingController`
+
+## [0.7.6] - 2025-07-15
+
+### Changed
+
+- Move encoder events processing to `Keyboard`
+- Use bitfield_struct's native defmt formatting 
+- Use device id as the serial number for nRF 
+- Move `KeyAction::WithModifier` to `Action::KeyWithModifier`
+- ​​Reset the sidebar style in user documentation​
+
+### Added
+
+- Add ESP32 heterogeneous example, which uses ESP32C6 as central and ESP32C3 as peripheral
+- Add mouse acceleration support
+- Add consts for single-bit structs 
+
+### Fixed
+
+- Repeat message from periphral for serial split
+- Crash when the host returns empty data
+- Key trigger issue when combo is used with one-shot key
+- Key trigger issue when there's overlapped combo
+- Don't send battery notification according to control point value from host
+- Update addr stored in peripheral after re-pairing 
+- Repeat mouse key when multiple mouse keys are pressed
+
 ## [0.7.5] - 2025-07-06
 
 ### Fixed
@@ -20,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add sleep mode for split central after connected to the host
 
-### Updated
+### Changed
 
 - Refactor key processing, fix tap-hold issues
 - Only the valid macro data is stored in the storage now. **Clearing storage is required to update**

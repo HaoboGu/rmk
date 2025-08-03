@@ -1,6 +1,6 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use rmk_config::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig, KeyboardTomlConfig};
 use syn::{ItemFn, ItemMod};
 
@@ -22,9 +22,19 @@ pub(crate) fn expand_chip_init(
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item {
                     if item_fn.attrs.len() == 1 {
-                        if let Ok(Overwritten::ChipConfig) = Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                            let chip = keyboard_config.get_chip_model().unwrap();
-                            return Some(override_chip_init(&chip, item_fn));
+                        match Overwritten::from_meta(&item_fn.attrs[0].meta) {
+                            Ok(Overwritten::ChipConfig) => {
+                                return Some(override_chip_config(
+                                    &keyboard_config.get_chip_model().unwrap(),
+                                    item_fn,
+                                ));
+                            }
+                            Ok(Overwritten::ChipInit) => {
+                                // Override the whole chip initialization
+                                let stmts = &item_fn.block.stmts;
+                                return Some(quote! { #(#stmts)* });
+                            }
+                            _ => (),
                         }
                     }
                 }
@@ -171,7 +181,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 ::esp_alloc::heap_allocator!(size: 72 * 1024);
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 let mut rng = ::esp_hal::rng::Trng::new(p.RNG, p.ADC1);
-                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone(), p.RADIO_CLK).unwrap();
+                let init = ::esp_wifi::init(timg0.timer0, rng.rng.clone()).unwrap();
                 let systimer = ::esp_hal::timer::systimer::SystemTimer::new(p.SYSTIMER);
                 ::esp_hal_embassy::init(systimer.alarm0);
                 let bluetooth = p.BT;
@@ -185,7 +195,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
     }
 }
 
-fn override_chip_init(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
+fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     let initialization = item_fn.block.to_token_stream();
     let mut initialization_tokens = quote! {
         let config = #initialization;

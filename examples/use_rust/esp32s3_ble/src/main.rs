@@ -12,26 +12,28 @@ use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
-use esp_hal::otg_fs::asynch::{Config, Driver};
 use esp_hal::otg_fs::Usb;
+use esp_hal::otg_fs::asynch::{Config, Driver};
+use esp_hal::rng::{Trng, TrngSource};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
-use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
+use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
 use {esp_alloc as _, esp_backtrace as _};
 
 use crate::keymap::*;
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
+
+::esp_bootloader_esp_idf::esp_app_desc!();
 
 #[esp_hal_embassy::main]
 async fn main(_s: Spawner) {
@@ -40,8 +42,9 @@ async fn main(_s: Spawner) {
     let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
     esp_alloc::heap_allocator!(size: 72 * 1024);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let mut rng = esp_hal::rng::Trng::new(peripherals.RNG, peripherals.ADC1);
-    let init = esp_wifi::init(timg0.timer0, rng.rng.clone(), peripherals.RADIO_CLK).unwrap();
+    let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
+    let mut rng = Trng::try_new().unwrap();
+    let init = esp_wifi::init(timg0.timer0).unwrap();
     let systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
     esp_hal_embassy::init(systimer.alarm0);
     let bluetooth = peripherals.BT;
@@ -91,22 +94,12 @@ async fn main(_s: Spawner) {
     // let mut matrix = rmk::matrix::TestMatrix::<ROW, COL>::new();
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     join3(
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),
         keyboard.run(), // Keyboard is special
-        run_rmk(
-            &keymap,
-            usb_driver,
-            &stack,
-            &mut storage,
-            &mut light_controller,
-            rmk_config,
-        ),
+        run_rmk(&keymap, usb_driver, &stack, &mut storage, rmk_config),
     )
     .await;
 }

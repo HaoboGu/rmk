@@ -10,29 +10,32 @@ use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use sequential_storage::cache::NoCache;
-use sequential_storage::map::{fetch_all_items, fetch_item, store_item, SerializationError, Value};
 use sequential_storage::Error as SSError;
+use sequential_storage::cache::NoCache;
+use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
 #[cfg(feature = "_ble")]
 use {
     crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
     crate::ble::trouble::profile::ProfileInfo,
-    trouble_host::{prelude::*, BondInformation, IdentityResolvingKey, LongTermKey},
+    trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
 use self::eeconfig::EeKeymapConfig;
-use crate::action::{EncoderAction, KeyAction};
+use crate::action::{Action, EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
 use crate::config::StorageConfig;
 use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
+use crate::morse::Morse;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::tap_dance::TapDance;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM};
+use crate::{
+    BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM, TAP_DANCE_MAX_TAP,
+};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -81,7 +84,7 @@ pub(crate) enum FlashOperationMessage {
     // Write fork
     WriteFork(ForkData),
     // Write tap dance
-    WriteTapDance(TapDanceData),
+    WriteTapDance(u8, TapDance),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -148,7 +151,7 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
-    TapDanceData(TapDanceData),
+    TapDanceData(TapDance),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -191,8 +194,8 @@ pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
 }
 
 /// Get the key to retrieve the tap dance from the storage.
-pub(crate) fn get_tap_dance_key(idx: usize) -> u32 {
-    (0x7000 + idx) as u32
+pub(crate) fn get_tap_dance_key(idx: u8) -> u32 {
+    0x7000 + idx as u32
 }
 
 impl Value<'_> for StorageData {
@@ -302,16 +305,32 @@ impl Value<'_> for StorageData {
                 Ok(15)
             }
             StorageData::TapDanceData(tap_dance) => {
-                if buffer.len() < 11 {
+                let total_size = 3 + TAP_DANCE_MAX_TAP * 4;
+                if buffer.len() < total_size {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::TapDanceData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(tap_dance.tap));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(tap_dance.hold));
-                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(tap_dance.hold_after_tap));
-                BigEndian::write_u16(&mut buffer[7..9], to_via_keycode(tap_dance.double_tap));
-                BigEndian::write_u16(&mut buffer[9..11], tap_dance.tapping_term_ms);
-                Ok(11)
+                BigEndian::write_u16(&mut buffer[1..3], tap_dance.0.timeout_ms);
+
+                // Serialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
+                for i in 0..TAP_DANCE_MAX_TAP {
+                    let action = tap_dance.0.tap_action(i);
+                    BigEndian::write_u16(
+                        &mut buffer[3 + i * 2..5 + i * 2],
+                        to_via_keycode(KeyAction::Single(action)),
+                    );
+                }
+
+                // Serialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
+                for i in 0..TAP_DANCE_MAX_TAP {
+                    let action = tap_dance.0.hold_action(i);
+                    BigEndian::write_u16(
+                        &mut buffer[3 + (TAP_DANCE_MAX_TAP + i) * 2..5 + (TAP_DANCE_MAX_TAP + i) * 2],
+                        to_via_keycode(KeyAction::Single(action)),
+                    );
+                }
+
+                Ok(total_size)
             }
             StorageData::ConnectionType(ty) => {
                 buffer[0] = StorageKeys::ConnectionType as u8;
@@ -512,22 +531,30 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::TapDanceData => {
-                    if buffer.len() < 11 {
+                    if buffer.len() < 3 + TAP_DANCE_MAX_TAP * 4 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let tap = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let hold = from_via_keycode(BigEndian::read_u16(&buffer[3..5]));
-                    let hold_after_tap = from_via_keycode(BigEndian::read_u16(&buffer[5..7]));
-                    let double_tap = from_via_keycode(BigEndian::read_u16(&buffer[7..9]));
-                    let tapping_term_ms = BigEndian::read_u16(&buffer[9..11]);
-                    Ok(StorageData::TapDanceData(TapDanceData {
-                        idx: 0,
-                        tap,
-                        hold,
-                        hold_after_tap,
-                        double_tap,
-                        tapping_term_ms,
-                    }))
+                    let timeout = BigEndian::read_u16(&buffer[1..3]);
+
+                    // Deserialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
+                    let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
+                    for i in 0..TAP_DANCE_MAX_TAP {
+                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
+                        tap_actions[i] = key_action.to_action();
+                    }
+
+                    // Deserialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
+                    let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
+                    for i in 0..TAP_DANCE_MAX_TAP {
+                        let key_action = from_via_keycode(BigEndian::read_u16(
+                            &buffer[3 + TAP_DANCE_MAX_TAP * 2 + i * 2..5 + TAP_DANCE_MAX_TAP * 2 + i * 2],
+                        ));
+                        hold_actions[i] = key_action.to_action();
+                    }
+
+                    let tap_dance = TapDance(Morse::new_tap_dance(tap_actions, hold_actions, timeout));
+
+                    Ok(StorageData::TapDanceData(tap_dance))
                 }
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
@@ -677,6 +704,7 @@ pub(crate) struct ComboData {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct ForkData {
     pub(crate) idx: usize,
+    // TODO: Use `fork::Fork` instead
     pub(crate) trigger: KeyAction,
     pub(crate) negative_output: KeyAction,
     pub(crate) positive_output: KeyAction,
@@ -684,17 +712,6 @@ pub(crate) struct ForkData {
     pub(crate) match_none: StateBits,
     pub(crate) kept_modifiers: HidModifiers,
     pub(crate) bindable: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub(crate) struct TapDanceData {
-    pub(crate) idx: usize,
-    pub(crate) tap: KeyAction,
-    pub(crate) hold: KeyAction,
-    pub(crate) hold_after_tap: KeyAction,
-    pub(crate) double_tap: KeyAction,
-    pub(crate) tapping_term_ms: u16,
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -833,7 +850,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         loop {
             let info: FlashOperationMessage = FLASH_CHANNEL.receive().await;
             debug!("Flash operation: {:?}", info);
-            if let Err(e) = match info {
+            match match info {
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     // Read out layout options, update layer option and save back
                     update_storage_field!(
@@ -946,8 +963,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                FlashOperationMessage::WriteTapDance(tap_dance) => {
-                    let key = get_tap_dance_key(tap_dance.idx);
+                FlashOperationMessage::WriteTapDance(id, tap_dance) => {
+                    let key = get_tap_dance_key(id);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
@@ -1019,10 +1036,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
             } {
-                print_storage_error::<F>(e);
-                FLASH_OPERATION_FINISHED.signal(false);
-            } else {
-                FLASH_OPERATION_FINISHED.signal(true);
+                Err(e) => {
+                    print_storage_error::<F>(e);
+                    FLASH_OPERATION_FINISHED.signal(false);
+                }
+                _ => {
+                    FLASH_OPERATION_FINISHED.signal(true);
+                }
             }
         }
     }
@@ -1056,7 +1076,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     }
                 }
                 StorageData::EncoderConfig(encoder) => {
-                    if let Some(ref mut map) = encoder_map {
+                    if let Some(map) = encoder_map {
                         if encoder.layer < NUM_LAYER && encoder.idx < NUM_ENCODER {
                             map[encoder.layer][encoder.idx] = encoder.action;
                         }
@@ -1148,7 +1168,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         tap_dances: &mut Vec<TapDance, TAP_DANCE_MAX_NUM>,
     ) -> Result<(), ()> {
         for (i, item) in tap_dances.iter_mut().enumerate() {
-            let key = get_tap_dance_key(i);
+            let key = get_tap_dance_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -1160,13 +1180,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::TapDanceData(tap_dance)) = read_data {
-                *item = TapDance::new(
-                    tap_dance.tap,
-                    tap_dance.hold,
-                    tap_dance.hold_after_tap,
-                    tap_dance.double_tap,
-                    embassy_time::Duration::from_millis(tap_dance.tapping_term_ms as u64),
-                );
+                *item = tap_dance;
             }
         }
 
@@ -1383,4 +1397,110 @@ macro_rules! read_storage {
         )
         .await
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use embassy_time::Duration;
+    use sequential_storage::map::Value;
+
+    use super::*;
+    use crate::action::{Action, KeyAction};
+    use crate::keycode::KeyCode;
+
+    #[test]
+    fn test_tap_dance_serialization_deserialization() {
+        let tap_dance = TapDance::new(
+            KeyAction::Single(Action::Key(KeyCode::A)),
+            KeyAction::Single(Action::Key(KeyCode::B)),
+            KeyAction::Single(Action::Key(KeyCode::C)),
+            KeyAction::Single(Action::Key(KeyCode::D)),
+            Duration::from_millis(200),
+        );
+
+        // Serialization
+        let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
+        let storage_data = StorageData::TapDanceData(tap_dance);
+        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
+
+        // Deserialization
+        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
+
+        // Validation
+        match deserialized_data {
+            StorageData::TapDanceData(deserialized_tap_dance) => {
+                // timeout
+                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
+                // tap_actions
+                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
+                for (original, deserialized) in tap_dance
+                    .tap_actions
+                    .iter()
+                    .zip(deserialized_tap_dance.tap_actions.iter())
+                {
+                    assert_eq!(original, deserialized);
+                }
+                // hold_actions
+                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
+                for (original, deserialized) in tap_dance
+                    .hold_actions
+                    .iter()
+                    .zip(deserialized_tap_dance.hold_actions.iter())
+                {
+                    assert_eq!(original, deserialized);
+                }
+            }
+            _ => panic!("Expected TapDanceData"),
+        }
+    }
+
+    #[test]
+    fn test_tap_dance_with_partial_actions() {
+        // Create a TapDance with partial actions
+        let mut tap_dance: TapDance = TapDance::default();
+        tap_dance
+            .tap_actions
+            .push(KeyAction::Single(Action::Key(KeyCode::A)))
+            .ok();
+        tap_dance
+            .hold_actions
+            .push(KeyAction::Single(Action::Key(KeyCode::B)))
+            .ok();
+        tap_dance.timeout = Duration::from_millis(150);
+
+        // Serialization
+        let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
+        let storage_data = StorageData::TapDanceData(tap_dance);
+        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
+
+        // Deserialization
+        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
+
+        // Validation
+        match deserialized_data {
+            StorageData::TapDanceData(deserialized_tap_dance) => {
+                // timeout
+                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
+                // tap_actions
+                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
+                for (original, deserialized) in tap_dance
+                    .tap_actions
+                    .iter()
+                    .zip(deserialized_tap_dance.tap_actions.iter())
+                {
+                    assert_eq!(original, deserialized);
+                }
+                // hold_actions
+                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
+                for (original, deserialized) in tap_dance
+                    .hold_actions
+                    .iter()
+                    .zip(deserialized_tap_dance.hold_actions.iter())
+                {
+                    assert_eq!(original, deserialized);
+                }
+            }
+            _ => panic!("Expected TapDanceData"),
+        }
+    }
 }

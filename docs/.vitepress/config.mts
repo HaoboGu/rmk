@@ -3,7 +3,7 @@ import taskLists from 'markdown-it-task-lists'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: 'RMK',
+  title: ' ',
   description: 'RMK keyboard firmware',
   head: [['link', { rel: 'icon', href: '/images/rmk_logo.svg' }]],
   rewrites: {
@@ -46,6 +46,15 @@ export default defineConfig({
       }
     ]
   },
+  vite: {
+    css: { 
+      preprocessorOptions: {
+        scss: {
+          api: 'modern',
+        }
+      }
+    }
+  },
 
   transformHead: ({ assets }) => {
     const textFont = assets.find((file) => /OpenSans\.[\w-]+\.ttf/.test(file))
@@ -82,10 +91,10 @@ function nav() {
     { text: 'Guide', link: '/docs/user_guide/1_guide_overview' },
     { text: 'Documentation', link: '/docs/introduction' },
     {
-      text: `v0.7.5`,
+      text: `v0.7.8`,
       items: [
         {
-          items: [{ text: 'v0.7.5', link: '/docs/introduction' }]
+          items: [{ text: 'v0.7.8', link: '/docs/introduction' }]
         },
         {
           items: [{ text: 'Migration Guide', link: '/docs/migration_guide' }]

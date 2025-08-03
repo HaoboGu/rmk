@@ -6,12 +6,14 @@ use embassy_usb::driver::EndpointError;
 use serde::Serialize;
 use usbd_hid::descriptor::{AsInputReport, MediaKeyboardReport, MouseReport, SystemControlReport};
 
+use crate::CONNECTION_STATE;
 use crate::channel::KEYBOARD_REPORT_CHANNEL;
 use crate::descriptor::KeyboardReport;
 use crate::state::ConnectionState;
-use crate::CONNECTION_STATE;
+#[cfg(not(feature = "_no_usb"))]
+use crate::usb::USB_REMOTE_WAKEUP;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub enum Report {
     /// Normal keyboard hid report
     KeyboardReport(KeyboardReport),
@@ -41,7 +43,7 @@ pub enum HidError {
 /// HidWriter trait is used for reporting HID messages to the host, via USB, BLE, etc.
 pub trait HidWriterTrait {
     /// The report type that the reporter receives from input processors.
-    type ReportType: AsInputReport;
+    type ReportType: AsInputReport + Clone;
 
     /// Write report to the host, return the number of bytes written if success.
     fn write_report(&mut self, report: Self::ReportType) -> impl Future<Output = Result<usize, HidError>>;
@@ -60,9 +62,19 @@ pub trait RunnableHidWriter: HidWriterTrait {
                 let report = self.get_report().await;
                 // Only send the report after the connection is established.
                 if CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Connected.into() {
-                    match self.write_report(report).await {
-                        Ok(_) => continue,
-                        Err(e) => error!("Failed to send report: {:?}", e),
+                    if let Err(e) = self.write_report(report.clone()).await {
+                        error!("Failed to send report: {:?}", e);
+                        #[cfg(not(feature = "_no_usb"))]
+                        // If the USB endpoint is disabled, try wakeup
+                        if let HidError::UsbEndpointError(EndpointError::Disabled) = e {
+                            USB_REMOTE_WAKEUP.signal(());
+                            // Wait 200ms for the wakeup, then send the report again
+                            // Ignore the error for the second send
+                            embassy_time::Timer::after_millis(200).await;
+                            if let Err(e) = self.write_report(report).await {
+                                error!("Failed to send report after wakeup: {:?}", e);
+                            }
+                        }
                     };
                 }
             }

@@ -16,17 +16,7 @@ pub(crate) fn expand_encoder_device(
         return (Vec::new(), Vec::new());
     }
 
-    let mut processor_initializer = vec![];
     let mut device_initializer = vec![];
-
-    // Add encoder processor
-    let encoder_processor_ident = format_ident!("encoder_processor");
-    processor_initializer.push(Initializer {
-        initializer: quote! {
-            let mut #encoder_processor_ident = ::rmk::input_device::rotary_encoder::RotaryEncoderProcessor::new(&keymap);
-        },
-        var_name: encoder_processor_ident,
-    });
 
     // Create rotary encoders
     for (idx, encoder) in encoder_config.iter().enumerate() {
@@ -92,5 +82,5 @@ pub(crate) fn expand_encoder_device(
         });
     }
 
-    (device_initializer, processor_initializer)
+    (device_initializer, vec![])
 }

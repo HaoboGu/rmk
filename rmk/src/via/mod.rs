@@ -6,16 +6,17 @@ use embassy_time::{Instant, Timer};
 use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::driver::Driver;
 use num_enum::{FromPrimitive as _, TryFromPrimitive as _};
-use protocol::{ViaCommand, ViaKeyboardInfo, VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION};
+use protocol::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
+use crate::event::KeyboardEventPos;
 use crate::hid::{HidError, HidReaderTrait, HidWriterTrait};
 use crate::keymap::KeyMap;
 use crate::state::ConnectionState;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::{boot, CONNECTION_STATE, MACRO_SPACE_SIZE};
+use crate::{CONNECTION_STATE, MACRO_SPACE_SIZE, boot};
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
@@ -41,13 +42,13 @@ pub(crate) struct VialService<
 }
 
 impl<
-        'a,
-        RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
-        const ROW: usize,
-        const COL: usize,
-        const NUM_LAYER: usize,
-        const NUM_ENCODER: usize,
-    > VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
+    'a,
+    RW: HidWriterTrait<ReportType = ViaReport> + HidReaderTrait<ReportType = ViaReport>,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+> VialService<'a, RW, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
     // VialService::new() should be called only once.
     // Otherwise the `vial_buf.init()` will panic.
@@ -153,7 +154,9 @@ impl<
                 let layer = report.output_data[1] as usize;
                 let row = report.output_data[2] as usize;
                 let col = report.output_data[3] as usize;
-                let action = keymap.borrow_mut().get_action_at(row, col, layer);
+                let action = keymap
+                    .borrow_mut()
+                    .get_action_at(KeyboardEventPos::key_pos(col as u8, row as u8), layer);
                 let keycode = to_via_keycode(action);
                 info!("Getting keycode: {:02X} at ({},{}), layer {}", keycode, row, col, layer);
                 BigEndian::write_u16(&mut report.input_data[4..6], keycode);
@@ -168,9 +171,11 @@ impl<
                     "Setting keycode: 0x{:02X} at ({},{}), layer {} as {:?}",
                     keycode, row, col, layer, action
                 );
-                keymap
-                    .borrow_mut()
-                    .set_action_at(row as usize, col as usize, layer as usize, action);
+                keymap.borrow_mut().set_action_at(
+                    KeyboardEventPos::key_pos(col as u8, row as u8),
+                    layer as usize,
+                    action,
+                );
                 #[cfg(feature = "storage")]
                 FLASH_CHANNEL
                     .send(FlashOperationMessage::KeymapKey {
@@ -242,8 +247,6 @@ impl<
 
                 // Update macro cache
                 info!("Setting macro buffer, offset: {}, size: {}", offset, size);
-                #[cfg(feature = "defmt")]
-                info!("Data: {=[u8]:x}", report.output_data[4..]);
                 self.keymap.borrow_mut().behavior.keyboard_macros.macro_sequences[offset as usize..end as usize]
                     .copy_from_slice(&report.output_data[4..4 + size as usize]);
 

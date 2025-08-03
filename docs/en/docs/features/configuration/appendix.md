@@ -109,10 +109,45 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
+# Tap Hold configuration
+tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
+
+# Combo configuration
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output Escape key
+  { actions = ["J", "K"], output = "Escape" }
+]
+
+# Macro configuration
+[[behavior.macro.macros]]
+operations = [
+    { operation = "text", text = "Hello" }
+]
+
+[behavior.tap_dance]
+tap_dances = [
+  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+  # Extended tap dance for function keys
+  {
+    tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
+    hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
+    timeout = "300ms" 
+  }
+]
+
+# Fork configuration
+[behavior.fork]
+forks = [
+  # Shift + '.' output ':' key
+  { trigger = "Dot", negative_output = "Dot", positive_output = "WM(Semicolon, LShift)", match_any = "LShift|RShift" }
+]
 
 # Lighting configuration, if you don't have any light, just ignore this section.
 [light]
@@ -153,6 +188,42 @@ adc_divider_total = 2806
 # charge_state = { pin = "PIN_1", low_active = true }
 # [Depreciated] Output LED pin that blinks when the battery is low
 # charge_led= { pin = "PIN_2", low_active = true }
+
+# RMK internal configuration
+[rmk]
+# Mouse key interval (ms) - controls mouse movement speed
+mouse_key_interval = 20
+# Mouse wheel interval (ms) - controls scrolling speed
+mouse_wheel_interval = 80
+# Maximum number of combos keyboard can store
+combo_max_num = 8
+# Maximum number of keys pressed simultaneously in a combo
+combo_max_length = 4
+# Maximum number of forks for conditional key actions
+fork_max_num = 8
+# Maximum number of tap dances keyboard can store
+# (Each tap dance is a programmable multi-tap/hold key)
+tap_dance_max_num = 8
+# Maximum number of taps per tap dance (default: 2, min: 2, max: 256)
+tap_dance_max_tap = 2
+# Macro space size in bytes for storing sequences
+macro_space_size = 256
+# Default debounce time in ms
+debounce_time = 20
+# Event channel size
+event_channel_size = 16
+# Report channel size
+report_channel_size = 16
+# Vial channel size
+vial_channel_size = 4
+# Flash channel size
+flash_channel_size = 4
+# The number of the split peripherals
+split_peripherals_num = 1
+# The size of the split message channel
+split_message_channel_size = 4
+# The number of available BLE profiles
+ble_profiles_num = 3
 
 # Split configuration
 # This section is conflict with [split] section, you could only have either [matrix] or [split], but NOT BOTH

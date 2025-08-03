@@ -11,15 +11,14 @@ use embassy_executor::Spawner;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB;
 use embassy_stm32::usb::{Driver, InterruptHandler};
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use keymap::{COL, ROW};
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{BehaviorConfig, ControllerConfig, RmkConfig, VialConfig};
+use rmk::config::{BehaviorConfig, RmkConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::matrix::Matrix;
 use rmk::{initialize_keymap, run_devices, run_rmk};
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -62,13 +61,10 @@ async fn main(_spawner: Spawner) {
     let mut matrix = Matrix::<_, _, _, ROW, COL>::new(input_pins, output_pins, debouncer);
     let mut keyboard = Keyboard::new(&keymap);
 
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
-
     // Start
     join3(
         keyboard.run(),
-        run_rmk(&keymap, driver, &mut light_controller, rmk_config),
+        run_rmk(&keymap, driver, rmk_config),
         run_devices! (
             (matrix) => EVENT_CHANNEL,
         ),

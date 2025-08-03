@@ -2,23 +2,23 @@ use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
-use embassy_futures::select::{select, select3, Either, Either3};
+use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer};
 use embedded_storage_async::nor_flash::NorFlash;
 use trouble_host::prelude::*;
 #[cfg(feature = "controller")]
 use {
-    crate::channel::{send_controller_event, ControllerPub, CONTROLLER_CHANNEL},
+    crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
-use crate::ble::trouble::{update_ble_phy, update_conn_params, SLEEPING_STATE};
+use crate::ble::trouble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
-use crate::split::{SplitMessage, SPLIT_MESSAGE_MAX_SIZE};
+use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::storage::{FlashOperationMessage, Storage};
 use crate::{CONNECTION_STATE, SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES};
 

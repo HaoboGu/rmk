@@ -71,10 +71,12 @@ jobs:
     steps:
       - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v3
-      - name: Install ldproxy and espup
-        run: cargo binstall ldproxy espup -y
+      - name: Install espup
+        run: cargo binstall espup --locked -y
       - name: Install esp toolchain
-        run: espup install
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} espup install
       - name: Build
         working-directory: ./examples/${{ matrix.example_type }}/${{ matrix.chip }}_ble
         run: . /home/runner/export-esp.sh && cargo +esp build --release 

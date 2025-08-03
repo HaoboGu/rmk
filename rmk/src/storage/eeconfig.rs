@@ -12,9 +12,9 @@ pub(crate) struct Eeconfig {
     layout_option: u32,
 }
 
-#[bitfield(u16, order = Msb)]
+#[bitfield(u16, order = Msb, defmt = cfg(feature = "defmt"))]
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub(crate) struct EeKeymapConfig {
     #[bits(1)]
     swap_control_capslock: bool,
@@ -46,9 +46,9 @@ pub(crate) struct EeKeymapConfig {
     _reserved: u8,
 }
 
-#[bitfield(u8, order = Msb)]
+#[bitfield(u8, order = Msb, defmt = cfg(feature = "defmt"))]
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub(crate) struct EeBacklightConfig {
     #[bits(1)]
     enable: bool,
@@ -60,9 +60,9 @@ pub(crate) struct EeBacklightConfig {
     level: u8,
 }
 
-#[bitfield(u8, order = Msb)]
+#[bitfield(u8, order = Msb, defmt = cfg(feature = "defmt"))]
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub(crate) struct EeAudioConfig {
     #[bits(1)]
     enable: bool,
@@ -72,9 +72,8 @@ pub(crate) struct EeAudioConfig {
     level: u8,
 }
 
-#[bitfield(u64, order = Msb)]
+#[bitfield(u64, order = Msb, defmt = cfg(feature = "defmt"))]
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct EeRgbLightConfig {
     #[bits(1)]
     enable: bool,

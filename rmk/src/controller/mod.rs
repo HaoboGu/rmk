@@ -3,9 +3,11 @@
 //! This module defines the `Controller` trait and several macros for running output device controllers.
 //! The `Controller` trait provides the interface for individual output device controllers, and the macros facilitate their concurrent execution.
 
+pub mod battery_led;
+pub mod led_indicator;
 pub(crate) mod wpm;
 
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 
 /// Common trait for controllers.
 pub trait Controller {
@@ -58,6 +60,9 @@ pub trait EventController: Controller {
     }
 }
 
+// Auto impl `EventController` trait for all `Controller`
+impl<T: Controller> EventController for T {}
+
 /// The trait for polling controllers.
 ///
 /// This trait defines the interface for polling controllers in RMK.
@@ -108,7 +113,11 @@ pub trait PollingController: Controller {
             let elapsed = last.elapsed();
 
             match select(
-                embassy_time::Timer::after(Self::INTERVAL - elapsed),
+                embassy_time::Timer::after(
+                    Self::INTERVAL
+                        .checked_sub(elapsed)
+                        .unwrap_or(embassy_time::Duration::MIN),
+                ),
                 self.next_message(),
             )
             .await

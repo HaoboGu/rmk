@@ -5,49 +5,14 @@ pub mod macro_config;
 #[cfg(feature = "_ble")]
 pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
-use embedded_hal::digital::OutputPin;
 use heapless::Vec;
 use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
+use crate::morse::MorseKeyMode;
 use crate::tap_dance::TapDance;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
-
-/// The config struct for RMK keyboard.
-///
-/// There are 3 types of configs:
-/// 1. `ChannelConfig`: Configurations for channels used in RMK.
-/// 2. `ControllerConfig`: Config for controllers, the controllers are used for controlling other devices on the board.
-/// 3. `RmkConfig`: Tunable configurations for RMK keyboard.
-pub struct KeyboardConfig<'a, O: OutputPin> {
-    pub controller_config: ControllerConfig<O>,
-    pub rmk_config: RmkConfig<'a>,
-}
-
-impl<O: OutputPin> Default for KeyboardConfig<'_, O> {
-    fn default() -> Self {
-        Self {
-            controller_config: ControllerConfig::default(),
-            rmk_config: RmkConfig::default(),
-        }
-    }
-}
-
-/// Config for controllers.
-///
-/// Controllers are used for controlling other devices on the board, such as lights, RGB, etc.
-pub struct ControllerConfig<O: OutputPin> {
-    pub light_config: LightConfig<O>,
-}
-
-impl<O: OutputPin> Default for ControllerConfig<O> {
-    fn default() -> Self {
-        Self {
-            light_config: LightConfig::default(),
-        }
-    }
-}
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -64,7 +29,7 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
-    pub tap_hold: TapHoldConfig,
+    pub morse: MorseConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
@@ -85,29 +50,27 @@ impl Default for TapDancesConfig {
     }
 }
 
-/// Configurations for tap hold behavior
+/// Configurations for morse behavior
 #[derive(Clone, Copy, Debug)]
-pub struct TapHoldConfig {
+pub struct MorseConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
-    /// Depreciated
-    pub post_wait_time: Duration,
-    pub hold_timeout: Duration,
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
-    pub permissive_hold: bool,
+    /// Default timeout time for tap or hold
+    pub operation_timeout: Duration,
+    /// Default mode
+    pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
-    pub chordal_hold: bool,
+    pub unilateral_tap: bool,
 }
 
-impl Default for TapHoldConfig {
+impl Default for MorseConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
-            permissive_hold: false,
-            chordal_hold: false,
+            unilateral_tap: false,
+            mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
-            post_wait_time: Duration::from_millis(50),
-            hold_timeout: Duration::from_millis(250),
+            operation_timeout: Duration::from_millis(250),
         }
     }
 }
@@ -171,28 +134,6 @@ impl Default for StorageConfig {
             start_addr: 0,
             num_sectors: 2,
             clear_storage: false,
-        }
-    }
-}
-
-/// Config for lights
-pub struct LightConfig<O: OutputPin> {
-    pub capslock: Option<LightPinConfig<O>>,
-    pub scrolllock: Option<LightPinConfig<O>>,
-    pub numslock: Option<LightPinConfig<O>>,
-}
-
-pub struct LightPinConfig<O: OutputPin> {
-    pub pin: O,
-    pub low_active: bool,
-}
-
-impl<O: OutputPin> Default for LightConfig<O> {
-    fn default() -> Self {
-        Self {
-            capslock: None,
-            scrolllock: None,
-            numslock: None,
         }
     }
 }

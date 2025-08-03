@@ -4,12 +4,12 @@ extern crate rmk;
 ///
 /// # Arguments:
 ///     - keyboard: keyboard initialization
-///     - sequence: key sequence: [row, col, pressed, delay], where delay is the time interval in ms between last key action and current key
+///     - sequence: key sequence: [row, col, pressed, press_delay], where press_delay is the time interval in ms between last key action and current key
 ///     - expected_reports: [modifiers, [keycodes; 6]], represents the hid report which will be sent to the host
 #[macro_export]
 macro_rules! key_sequence_test {
     (keyboard: $keyboard:expr, sequence: [$([$row:expr, $col:expr, $pressed:expr, $delay:expr]),* $(,)?], expected_reports: [$([$modifier:expr, $keys:expr]),* $(,)?]) => {
-        block_on(async {
+        ::embassy_futures::block_on(async {
             let mut keyboard = $keyboard;
             let sequence = vec![
                 $(

@@ -14,7 +14,8 @@ In the `tap_hold` sub-table, you can configure the following parameters:
 
 - `enable_hrm`: Enables or disables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`.
 - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_hrm` is set to true.
-- `chordal_hold`: (Experimental) Enables chordal hold mode. When enabled, hold action will be triggered when a key from "opposite" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
+- `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. **Priority rules**: When HRM is disabled, permissive hold takes precedence over this feature. When HRM is enabled, this feature works normally. Defaults to `false`.
 - `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is effective only when enable_hrm is set to `true`. Defaults to 120ms.
 - `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
 - `post_wait_time`: Adds an additional delay after releasing a tap-hold key to check if any keys pressed during the `hold_timeout` are released. This helps accommodate fast typing scenarios where some keys may not be fully released during a hold. Defaults to 50ms
@@ -23,8 +24,10 @@ The following are the typical configurations:
 
 ```toml
 [behavior]
-# Enable HRM
-tap_hold = { enable_hrm = true, permissive_hold = true, chordal_hold = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+# Enable HRM with all tap-hold features
+tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, hold_on_other_press = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+# Fast modifier usage without HRM
+tap_hold = { enable_hrm = false, hold_on_other_press = true, hold_timeout = "200ms" }
 # Disable HRM, you can safely ignore any fields if you don't want to change them
 tap_hold = { enable_hrm = false, hold_timeout = "200ms" }
 ```
@@ -81,6 +84,142 @@ combos = [
   { actions = ["A", "S", "D"], output = "TO(2)" }
 ]
 ```
+
+## Macro
+
+In the `macro` sub-table, you can configure the keyboard's macro functionality. Macros are explained in more detail in the [keyboard macros](/docs/features/keymap/keyboard_macros.md) page.
+
+Macro operations are defined with an `operation` and a `keycode`, `duration` or `text` field depending on the operation. Available operations are:
+
+```toml
+[[behavior.macro.macros]]
+operations = [
+  { operation = "down", keycode = "_" }, # [!code focus:5]
+  { operation = "up", keycode = "_" },
+  { operation = "tap", keycode = "_" },
+  { operation = "delay", duration = "0ms" },
+  { operation = "text", text = "foo" }
+]
+```
+
+```toml
+# Outputs "Hello"
+[[behavior.macro.macros]]
+operations = [
+    { operation = "text", text = "Hello" }
+]
+
+# Outputs "Hello" with a 1 second delay after the first letter
+[[behavior.macro.macros]]
+operations = [
+    { operation = "down", keycode = "LShift" },
+    { operation = "tap", keycode = "H" },
+    { operation = "up", keycode = "LShift" },
+    { operation = "delay", duration = "1s" },
+    { operation = "tap", keycode = "E" },
+    { operation = "tap", keycode = "L" },
+    { operation = "tap", keycode = "L" },
+    { operation = "tap", keycode = "O" },
+]
+```
+
+## Tap Dance
+
+In the `tap_dance` sub-table, you can configure the keyboard's tap dance functionality. Tap dance allows you to define different actions based on the number of times a key is tapped within a specific time window.
+
+The basic tap dance(with 2 taps) works as follows:
+
+1. **Single Tap**: When a key is pressed and released within the tapping term, the `tap` action is triggered.
+2. **Hold**: When a key is pressed and held beyond the tapping term, the `hold` action is triggered.
+3. **Hold After Tap**: When a key is tapped once and then held down, the `hold_after_tap` action is triggered.
+4. **Double Tap**: When a key is tapped twice within the tapping term, the `double_tap` action is triggered.
+
+In RMK, tap dance behavior also supports multiple taps and hold-after-multiple-taps:
+
+- **Multiple Taps**: Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array, for example, tapping 5 times will trigger `tap_action[4]`.
+- **Hold After Multiple Taps**: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered, for example, hold the key after tapping 5 times will trigger `hold_action[4]`.
+
+Tap dance configuration includes the following parameters:
+
+- `tap_dances`: An array containing all defined tap dances. Each tap dance configuration is an object containing the following attributes:
+  - `tap`: The action to be triggered on the first tap. This is the default action when the key is tapped once.
+  - `hold`: The action to be triggered when the key is held down (not tapped).
+  - `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
+  - `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
+  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same tap dance sequence. Defaults to 200ms if not specified.
+  - `tap_actions`: An array of actions, each corresponding to the number of taps. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
+  - `hold_actions`: An array of actions, each corresponding to holding the key after a certain number of taps. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. If the tap count exceeds the length of the array, the last action is used.
+
+::: warning
+
+`tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. For each tap dance configuration, please choose either the array style (`tap_actions`/`hold_actions`) or the individual fields (`tap`/`hold`/`hold_after_tap`/`double_tap`).
+
+:::
+
+
+Here is an example of tap dance configuration:
+
+```toml
+[behavior.tap_dance]
+tap_dances = [
+  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+  
+  # Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
+  { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
+  
+  # Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
+  { tap = "Tab", hold = "MO(2)", double_tap = "Escape", timeout = "250ms" },
+  
+  # Extended tap dance for function keys
+  {
+    tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
+    hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
+    timeout = "300ms" 
+  }
+]
+```
+
+### Using Tap Dance in Keymaps
+
+To use a tap dance in your keymap, reference it by its index (starting from 0):
+
+```toml
+[layout]
+rows = 4
+cols = 3
+layers = 2
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["TD(0)", "TD(1)", "TD(2)"],  # Use tap dances 0, 1, and 2
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"]
+    ],
+]
+```
+
+### Configuration Limits
+
+The tap dance functionality is controlled by the following configuration limits in the `[rmk]` section:
+
+- `tap_dance_max_num`: Maximum number of tap dances (default: 8)
+- `tap_dance_max_tap`: Maximum number of taps per tap dance (default: 2, range: 2-256)
+
+To support more taps per sequence, increase the `tap_dance_max_tap` value:
+
+```toml
+[rmk]
+tap_dance_max_tap = 4  # Support up to 4 taps per tap dance
+```
+
+Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value.
 
 ## Fork
 

@@ -2,9 +2,9 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct HidModifiers {
     #[bits(1)]
     pub(crate) left_ctrl: bool,
@@ -57,6 +57,16 @@ impl BitOrAssign for HidModifiers {
 }
 
 impl HidModifiers {
+    pub const LCTRL: Self = Self::new().with_left_ctrl(true);
+    pub const LSHIFT: Self = Self::new().with_left_shift(true);
+    pub const LALT: Self = Self::new().with_left_alt(true);
+    pub const LGUI: Self = Self::new().with_left_gui(true);
+
+    pub const RCTRL: Self = Self::new().with_right_ctrl(true);
+    pub const RSHIFT: Self = Self::new().with_right_shift(true);
+    pub const RALT: Self = Self::new().with_right_alt(true);
+    pub const RGUI: Self = Self::new().with_right_gui(true);
+
     pub const fn new_from(
         left_ctrl: bool,
         left_shift: bool,
@@ -79,9 +89,9 @@ impl HidModifiers {
     }
 }
 
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+
 pub struct HidMouseButtons {
     #[bits(1)]
     pub(crate) button1: bool, //left
@@ -134,6 +144,15 @@ impl BitOrAssign for HidMouseButtons {
 }
 
 impl HidMouseButtons {
+    pub const BUTTON1: Self = Self::new().with_button1(true);
+    pub const BUTTON2: Self = Self::new().with_button2(true);
+    pub const BUTTON3: Self = Self::new().with_button3(true);
+    pub const BUTTON4: Self = Self::new().with_button4(true);
+    pub const BUTTON5: Self = Self::new().with_button5(true);
+    pub const BUTTON6: Self = Self::new().with_button6(true);
+    pub const BUTTON7: Self = Self::new().with_button7(true);
+    pub const BUTTON8: Self = Self::new().with_button8(true);
+
     pub const fn new_from(
         button1: bool,
         button2: bool,

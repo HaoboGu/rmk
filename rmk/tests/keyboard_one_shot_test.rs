@@ -13,7 +13,6 @@ fn one_shot_config_with_short_timeout() -> OneShotConfig {
 mod one_shot_test {
     use std::cell::RefCell;
 
-    use embassy_futures::block_on;
     use rmk::action::KeyAction;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
@@ -21,7 +20,7 @@ mod one_shot_test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::common::{run_key_sequence_test, wrap_keymap, KC_LCTRL, KC_LGUI, KC_LSHIFT};
+    use crate::common::{KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
 
     const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
         [[

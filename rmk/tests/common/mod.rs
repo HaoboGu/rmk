@@ -1,19 +1,20 @@
+pub mod morse;
 pub mod test_macro;
 
 use core::cell::RefCell;
 
 use embassy_futures::block_on;
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
-use futures::{join, FutureExt};
+use futures::join;
 use log::debug;
 use rmk::action::KeyAction;
-use rmk::channel::{KEYBOARD_REPORT_CHANNEL, KEY_EVENT_CHANNEL};
+use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
-use rmk::event::KeyEvent;
+use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
@@ -30,9 +31,10 @@ pub fn init_log() {
         .try_init();
 }
 
+pub const KC_LCTRL: u8 = 1 << 0;
 pub const KC_LSHIFT: u8 = 1 << 1;
+pub const KC_LALT: u8 = 1 << 2;
 pub const KC_LGUI: u8 = 1 << 3;
-pub const KC_LCTRL: u8 = 1;
 
 #[derive(Debug, Clone)]
 pub struct TestKeyPress {
@@ -58,32 +60,27 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
     join!(
         // Run keyboard until all reports are received
         async {
-            select(keyboard.run(), async {
-                select(
-                    Timer::after(MAX_TEST_TIMEOUT).then(|_| async {
-                        panic!("Test timeout reached");
-                    }),
-                    async {
-                        while !*REPORTS_DONE.lock().await {
-                            // polling reports
-                            Timer::after(Duration::from_millis(50)).await;
-                        }
-                    },
-                )
-                .await;
-            })
-            .await;
+            match select(
+                Timer::after(MAX_TEST_TIMEOUT),
+                select(keyboard.run(), async {
+                    while !*REPORTS_DONE.lock().await {
+                        // polling reports
+                        Timer::after(Duration::from_millis(50)).await;
+                    }
+                }),
+            )
+            .await
+            {
+                Either::First(_) => panic!("ERROR: report done timeout reached"),
+                _ => (),
+            }
         },
         // Send all key events with delays
         async {
             for key in key_sequence {
                 Timer::after(Duration::from_millis(key.delay)).await;
                 KEY_EVENT_CHANNEL
-                    .send(KeyEvent {
-                        row: key.row,
-                        col: key.col,
-                        pressed: key.pressed,
-                    })
+                    .send(KeyboardEvent::key(key.row, key.col, key.pressed))
                     .await;
             }
 
@@ -92,37 +89,43 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
         },
         // Verify reports
         async {
-            let mut report_index = -1;
-            for expected in expected_reports {
-                match select(Timer::after(Duration::from_secs(1)), KEYBOARD_REPORT_CHANNEL.receive()).await {
-                    Either::First(_) => panic!("ERROR: report wait timeout reached"),
-                    Either::Second(Report::KeyboardReport(report)) => {
-                        report_index += 1;
-                        // println!("Received {}th report from channel: {:?}", report_index, report);
-                        assert_eq!(
-                            *expected, report,
-                            "on #{} reports, expected left but actually right",
-                            report_index
-                        );
-                    }
-                    Either::Second(report) => {
-                        debug!("other reports {:?}", report)
+            match select(Timer::after(MAX_TEST_TIMEOUT), async {
+                let mut report_index = -1;
+                for expected in expected_reports {
+                    match select(Timer::after(Duration::from_secs(2)), KEYBOARD_REPORT_CHANNEL.receive()).await {
+                        Either::First(_) => panic!("ERROR: report wait timeout reached"),
+                        Either::Second(Report::KeyboardReport(report)) => {
+                            report_index += 1;
+                            // println!("Received {}th report from channel: {:?}", report_index, report);
+                            assert_eq!(
+                                *expected, report,
+                                "on #{} reports, expected left but actually right",
+                                report_index
+                            );
+                        }
+                        Either::Second(report) => {
+                            debug!("other reports {:?}", report)
+                        }
                     }
                 }
-            }
 
-            // Wait for all key events to be sent
-            while !*SEQ_SEND_DONE.lock().await {
-                Timer::after(Duration::from_millis(50)).await;
-            }
+                // Wait for all key events to be sent
+                while !*SEQ_SEND_DONE.lock().await {
+                    Timer::after(Duration::from_millis(50)).await;
+                }
 
-            // Set done flag after all reports are verified
-            *REPORTS_DONE.lock().await = true;
+                // Set done flag after all reports are verified
+                *REPORTS_DONE.lock().await = true;
+            })
+            .await
+            {
+                Either::First(_) => panic!("Read report timeout"),
+                Either::Second(_) => (),
+            }
         }
     );
-    let buffer = keyboard.holding_buffer.clone();
-    if buffer.len() > 0 {
-        panic!("leak after buffer cleanup, buffer contains {:?}", buffer);
+    if !keyboard.held_buffer.is_empty() {
+        panic!("leak after buffer cleanup, buffer contains {:?}", keyboard.held_buffer);
     }
 }
 
@@ -138,7 +141,7 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
         ]),
         layer!([
             [k!(Grave), k!(F1), k!(F2), k!(F3), k!(F4), k!(F5), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11), k!(F12), k!(Delete)],
-            [a!(No), a!(Transparent), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
+            [a!(No), a!(Transparent), k!(E), k!(W), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [k!(CapsLock), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No)],
             [a!(No), a!(No), shifted!(X), wm!(X, ModifierCombination::new_from(false, false, false, true, false)), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Up)],
             [a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), a!(No), k!(Left), a!(No), k!(Down), k!(Right)]

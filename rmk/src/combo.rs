@@ -1,8 +1,8 @@
 use heapless::Vec;
 
-use crate::action::KeyAction;
-use crate::event::KeyEvent;
 use crate::COMBO_MAX_LENGTH;
+use crate::action::KeyAction;
+use crate::event::KeyboardEvent;
 
 #[derive(Clone, Debug)]
 pub struct Combo {
@@ -38,7 +38,7 @@ impl Combo {
 
     /// Update the combo's state when a key is pressed.
     /// Returns true if the combo is updated.
-    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyEvent, active_layer: u8) -> bool {
+    pub(crate) fn update(&mut self, key_action: KeyAction, key_event: KeyboardEvent, active_layer: u8) -> bool {
         if !key_event.pressed || self.actions.is_empty() || self.is_triggered {
             // Ignore combo that without actions
             return false;
@@ -52,7 +52,6 @@ impl Combo {
 
         let action_idx = self.actions.iter().position(|&a| a == key_action);
         if let Some(i) = action_idx {
-            debug!("[COMBO] {:?} registered {:?} ", self.output, key_action);
             self.state |= 1 << i;
         } else if !self.is_all_pressed() {
             self.reset();

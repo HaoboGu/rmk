@@ -13,9 +13,9 @@ use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::usb::Driver;
-use embassy_nrf::{bind_interrupts, rng, usb, Peri};
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_nrf::{Peri, bind_interrupts, rng, usb};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
@@ -23,20 +23,19 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
-use rmk::config::{
-    BehaviorConfig, BleBatteryConfig, ControllerConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig,
-};
+use rmk::config::{BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::controller::EventController as _;
+use rmk::controller::led_indicator::{KeyboardIndicator, KeyboardIndicatorController};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
+use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
-use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder, RotaryEncoderProcessor};
-use rmk::input_device::Runnable;
+use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::keyboard::Keyboard;
-use rmk::light::LightController;
 use rmk::split::ble::central::read_peripheral_addresses;
-use rmk::split::central::{run_peripheral_manager, CentralMatrix};
-use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
+use rmk::split::central::{CentralMatrix, run_peripheral_manager};
+use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -199,7 +198,7 @@ async fn main(spawner: Spawner) {
 
     let pin_a = Input::new(p.P1_06, embassy_nrf::gpio::Pull::None);
     let pin_b = Input::new(p.P1_04, embassy_nrf::gpio::Pull::None);
-    let mut encoder = RotaryEncoder::with_phase(pin_a, pin_b, DefaultPhase, 0);
+    let mut encoder = RotaryEncoder::with_resolution(pin_a, pin_b, 4, true, 0);
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<4, 7>::new();
@@ -208,14 +207,9 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
 
     // Read peripheral address from storage
-    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 1>(&mut storage).await;
-
-    // Initialize the light controller
-    let mut light_controller: LightController<Output> = LightController::new(ControllerConfig::default().light_config);
+    let peripheral_addrs = read_peripheral_addresses::<1, _, 8, 7, 4, 2>(&mut storage).await;
 
     // Initialize the encoder processor
-    let mut encoder_processor = RotaryEncoderProcessor::new(&keymap);
-
     let mut adc_device = NrfAdc::new(
         saadc,
         [AnalogEventType::Battery],
@@ -224,18 +218,29 @@ async fn main(spawner: Spawner) {
     );
     let mut batt_proc = BatteryProcessor::new(2000, 2806, &keymap);
 
+    // Initialize the controllers
+    let mut capslock_led = KeyboardIndicatorController::new(
+        Output::new(
+            p.P0_00,
+            embassy_nrf::gpio::Level::Low,
+            embassy_nrf::gpio::OutputDrive::Standard,
+        ),
+        false,
+        KeyboardIndicator::CapsLock,
+    );
+
     // Start
     join4(
         run_devices! (
             (matrix, encoder, adc_device) => EVENT_CHANNEL,
         ),
         run_processor_chain! {
-            EVENT_CHANNEL => [encoder_processor, batt_proc],
+            EVENT_CHANNEL => [batt_proc],
         },
-        keyboard.run(),
+        join(keyboard.run(), capslock_led.event_loop()),
         join(
             run_peripheral_manager::<4, 7, 4, 0, _>(0, peripheral_addrs[0], &stack),
-            run_rmk(&keymap, driver, &stack, &mut storage, &mut light_controller, rmk_config),
+            run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
         ),
     )
     .await;
