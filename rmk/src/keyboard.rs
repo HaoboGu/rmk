@@ -689,8 +689,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_morse(morse, event).await;
             }
             KeyAction::TapDance(idx) => {
-                if let Some(td) = self.keymap.borrow().behavior.tap_dance.tap_dances.get(idx as usize) {
-                    self.process_key_action_morse(td.0, event).await;
+                // Get morse first, to avoid keymap being borrowed
+                let morse = match self.keymap.borrow().behavior.tap_dance.tap_dances.get(idx as usize) {
+                    Some(td) => Some(td.0),
+                    None => None,
+                };
+
+                if let Some(m) = morse {
+                    self.process_key_action_morse(m, event).await;
                 }
             }
         }
