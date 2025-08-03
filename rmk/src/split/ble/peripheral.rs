@@ -265,7 +265,7 @@ fn get_peri_advertiser<'a, C: Controller>(
                 ],
                 &mut advertiser_data[..],
             )?;
-            trace!("advertising data: {:?}", advertiser_data);
+            trace!("Advertising data: {:?}", advertiser_data);
             Advertisement::ConnectableScannableUndirected {
                 adv_data: &advertiser_data[..],
                 scan_data: &[],
