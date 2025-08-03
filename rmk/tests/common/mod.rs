@@ -104,7 +104,7 @@ pub async fn run_key_sequence_test<'a, const ROW: usize, const COL: usize, const
                             );
                         }
                         Either::Second(report) => {
-                            debug!("other reports {:?}", report)
+                            debug!("Other reports {:?}", report)
                         }
                     }
                 }

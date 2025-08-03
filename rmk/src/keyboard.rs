@@ -1073,7 +1073,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
-                                warn!("unprocessed event queue is full, dropping event");
+                                warn!("Unprocessed event queue is full, dropping event");
                             }
                         }
                     }
@@ -1126,7 +1126,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
-                                warn!("unprocessed event queue is full, dropping event");
+                                warn!("Unprocessed event queue is full, dropping event");
                             }
                         }
                     }
@@ -1578,7 +1578,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Either::Second(e) => {
                                 // Received a new key event before timeout, add to unprocessed list
                                 if self.unprocessed_events.push(e).is_err() {
-                                    warn!("unprocessed event queue is full, dropping event");
+                                    warn!("Unprocessed event queue is full, dropping event");
                                 }
                             }
                         }
