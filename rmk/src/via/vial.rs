@@ -1,6 +1,7 @@
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use embassy_time::Duration;
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
@@ -30,13 +31,24 @@ pub(crate) enum VialCommand {
     UnlockStart = 0x06,
     UnlockPoll = 0x07,
     Lock = 0x08,
-    QmkSettingsQuery = 0x09,
-    QmkSettingsGet = 0x0A,
-    QmkSettingsSet = 0x0B,
+    BehaviorSettingQuery = 0x09,
+    GetBehaviorSetting = 0x0A,
+    SetBehaviorSetting = 0x0B,
     QmkSettingsReset = 0x0C,
-    DynamicEntryOp = 0x0D, /* operate on tapdance, combos, etc */
+    // Operate on tapdance, combos, etc
+    DynamicEntryOp = 0x0D,
     #[num_enum(default)]
     Unhandled = 0xFF,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[repr(u16)]
+pub(crate) enum SettingKey {
+    #[num_enum(default)]
+    None,
+    ComboTimeout = 0x02,
+    TappingTerm = 0x07,
 }
 
 /// Vial dynamic commands.
@@ -109,8 +121,44 @@ pub(crate) async fn process_vial<
             // Unlock in progress
             report.input_data[1] = 0;
         }
-        VialCommand::QmkSettingsQuery => {
+        VialCommand::BehaviorSettingQuery => {
             report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            if value <= 7 {
+                LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
+                LittleEndian::write_u16(&mut report.input_data[2..4], 0x07);
+            }
+        }
+        VialCommand::GetBehaviorSetting => {
+            report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match SettingKey::from_primitive(value) {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    report.input_data[0] = 0;
+                    let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
+                }
+                SettingKey::TappingTerm => {
+                    report.input_data[0] = 0;
+                    let tapping_term = keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
+                }
+            }
+        }
+        VialCommand::SetBehaviorSetting => {
+            let key = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match SettingKey::from_primitive(key) {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.combo.timeout = Duration::from_millis(combo_timeout as u64);
+                }
+                SettingKey::TappingTerm => {
+                    let tapping_term = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.morse.operation_timeout = Duration::from_millis(tapping_term as u64);
+                }
+            }
         }
         VialCommand::DynamicEntryOp => {
             let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
