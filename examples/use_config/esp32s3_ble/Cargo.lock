@@ -566,17 +566,42 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90327bcc66333a507f89ecc4e2d911b265c45f5c9bc241f98eee076752d35ac6"
 dependencies = [
  "critical-section",
  "document-features",
- "embassy-executor-macros",
+ "embassy-executor-macros 0.6.2",
+]
+
+[[package]]
+name = "embassy-executor"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f102d5e04befe3ea74b6f41a0e26218740124636eb2f59e1cc215b5839b96df2"
+dependencies = [
+ "critical-section",
+ "document-features",
+ "embassy-executor-macros 0.7.0",
 ]
 
 [[package]]
 name = "embassy-executor-macros"
 version = "0.6.2"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3577b1e9446f61381179a330fc5324b01d511624c55f25e3c66c9e3c626dbecf"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
+name = "embassy-executor-macros"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfdddc3a04226828316bf31393b6903ee162238576b1584ee2669af215d55472"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -665,7 +690,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc55c748d16908a65b166d09ce976575fb8852cf60ccd06174092b41064d8f83"
 dependencies = [
- "embassy-executor",
+ "embassy-executor 0.7.0",
  "heapless 0.8.0",
 ]
 
@@ -937,7 +962,7 @@ dependencies = [
  "cfg-if",
  "critical-section",
  "document-features",
- "embassy-executor",
+ "embassy-executor 0.7.0",
  "embassy-sync 0.6.2",
  "embassy-time",
  "embassy-time-driver",
@@ -1976,7 +2001,7 @@ dependencies = [
  "crc32fast",
  "document-features",
  "embassy-embedded-hal",
- "embassy-executor",
+ "embassy-executor 0.8.0",
  "embassy-futures",
  "embassy-sync 0.7.0",
  "embassy-time",
@@ -2028,7 +2053,7 @@ dependencies = [
  "bt-hci",
  "cc",
  "const-gen",
- "embassy-executor",
+ "embassy-executor 0.7.0",
  "embuild",
  "esp-alloc",
  "esp-backtrace",
@@ -2164,9 +2189,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "4.0.1"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d8e933f534642c25b7341338c10e2250187c8cd198c3957ef6894265eefda86"
+checksum = "56a82250c179995d4aba246dfbebc817c1a093816dbb36c3a458d9074ed77968"
 dependencies = [
  "embedded-storage-async",
 ]

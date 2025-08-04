@@ -16,7 +16,7 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "log",
     "storage",
 ] }
-embassy-executor = { version = "0.8.0" }
+embassy-executor = { version = "0.7.0" }
 esp-backtrace = { version = "0.17", features = [
     "esp32c3",
     "exception-handler",

@@ -661,13 +661,14 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/embassy.git?rev=03a16011f63c11c97ded10f7e6b872db81280a23#03a16011f63c11c97ded10f7e6b872db81280a23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cef1a8a1ea892f9b656de0295532ac5d8067e9830d49ec75076291fd6066b136"
 dependencies = [
  "cfg-if",
  "critical-section",
  "embedded-io-async",
- "futures-core",
  "futures-sink",
+ "futures-util",
  "heapless 0.8.0",
 ]
 
@@ -2042,7 +2043,7 @@ dependencies = [
  "bt-hci",
  "cc",
  "const-gen",
- "embassy-executor 0.8.0",
+ "embassy-executor 0.7.0",
  "embuild",
  "esp-alloc",
  "esp-backtrace",
@@ -2171,9 +2172,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "4.0.3"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516ed74ad8268ec0d78c574af8fc7e09a9c3a0df63c7692c588a10d7097dea3b"
+checksum = "56a82250c179995d4aba246dfbebc817c1a093816dbb36c3a458d9074ed77968"
 dependencies = [
  "embedded-storage-async",
 ]

@@ -2067,7 +2067,7 @@ dependencies = [
  "bt-hci",
  "cc",
  "const-gen",
- "embassy-executor 0.8.0",
+ "embassy-executor 0.7.0",
  "embuild",
  "esp-alloc",
  "esp-backtrace",
