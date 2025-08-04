@@ -144,7 +144,6 @@ usb_log = ["dep:embassy-usb-logger", "log"]
 std = [
     "embassy-executor/arch-std",
     "embassy-executor/executor-thread",
-    "embassy-executor/task-arena-size-32768",
     "embassy-time/std",
     "embassy-time/generic-queue-128",
     "critical-section?/std",
