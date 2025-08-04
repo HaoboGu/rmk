@@ -1,5 +1,4 @@
 pub mod dummy_flash;
-mod eeconfig;
 
 use core::fmt::Debug;
 use core::ops::Range;
@@ -20,11 +19,10 @@ use {
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
-use self::eeconfig::EeKeymapConfig;
 use crate::action::{Action, EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
-use crate::config::StorageConfig;
+use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
@@ -85,6 +83,20 @@ pub(crate) enum FlashOperationMessage {
     WriteFork(ForkData),
     // Write tap dance
     WriteTapDance(u8, TapDance),
+    // Timeout time for morse keys
+    MorseTimeout(u16),
+    // Timeout time for combos
+    ComboTimeout(u16),
+    // Timeout time for one-shot keys
+    OneShotTimeout(u16),
+    // Interval for tap actions
+    TapInterval(u16),
+    // Interval for tapping capslock
+    TapCapslockInterval(u16),
+    // The prior-idle-time in ms used for in flow tap
+    PriorIdleTime(u16),
+    // Whether the unilateral tap is enabled
+    UnilateralTap(bool),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -93,18 +105,16 @@ pub(crate) enum FlashOperationMessage {
 /// When deserializing, we need to know the type of the stored data to know how to parse it, the first byte of the stored data is always the type, aka StorageKeys.
 #[repr(u32)]
 pub(crate) enum StorageKeys {
-    StorageConfig,
-    LedLightConfig,
-    RgbLightConfig,
-    KeymapConfig,
-    LayoutConfig,
-    KeymapKeys,
-    MacroData,
-    ComboData,
-    ConnectionType,
-    EncoderKeys,
-    ForkData,
-    TapDanceData,
+    StorageConfig = 0,
+    KeymapConfig = 1,
+    LayoutConfig = 2,
+    BehaviorConfig = 3,
+    MacroData = 4,
+    ComboData = 5,
+    ConnectionType = 6,
+    EncoderKeys = 7,
+    ForkData = 8,
+    TapDanceData = 9,
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress = 0xED,
     #[cfg(feature = "_ble")]
@@ -117,17 +127,15 @@ impl StorageKeys {
     pub(crate) fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(StorageKeys::StorageConfig),
-            1 => Some(StorageKeys::LedLightConfig),
-            2 => Some(StorageKeys::RgbLightConfig),
-            3 => Some(StorageKeys::KeymapConfig),
-            4 => Some(StorageKeys::LayoutConfig),
-            5 => Some(StorageKeys::KeymapKeys),
-            6 => Some(StorageKeys::MacroData),
-            7 => Some(StorageKeys::ComboData),
-            8 => Some(StorageKeys::ConnectionType),
-            9 => Some(StorageKeys::EncoderKeys),
-            10 => Some(StorageKeys::ForkData),
-            11 => Some(StorageKeys::TapDanceData),
+            1 => Some(StorageKeys::KeymapConfig),
+            2 => Some(StorageKeys::LayoutConfig),
+            3 => Some(StorageKeys::BehaviorConfig),
+            4 => Some(StorageKeys::MacroData),
+            5 => Some(StorageKeys::ComboData),
+            6 => Some(StorageKeys::ConnectionType),
+            7 => Some(StorageKeys::EncoderKeys),
+            8 => Some(StorageKeys::ForkData),
+            9 => Some(StorageKeys::TapDanceData),
             #[cfg(all(feature = "_ble", feature = "split"))]
             0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
@@ -144,7 +152,7 @@ impl StorageKeys {
 pub(crate) enum StorageData {
     StorageConfig(LocalStorageConfig),
     LayoutConfig(LayoutConfig),
-    KeymapConfig(EeKeymapConfig),
+    BehaviorConfig(BehaviorConfig),
     KeymapKey(KeymapKey),
     EncoderConfig(EncoderConfig),
     MacroData([u8; MACRO_SPACE_SIZE]),
@@ -198,6 +206,7 @@ pub(crate) fn get_tap_dance_key(idx: u8) -> u32 {
     0x7000 + idx as u32
 }
 
+// TODO: Move ser/de code to corresponding structs
 impl Value<'_> for StorageData {
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
         if buffer.len() < 6 {
@@ -222,14 +231,23 @@ impl Value<'_> for StorageData {
                 BigEndian::write_u32(&mut buffer[2..6], c.layout_option);
                 Ok(6)
             }
-            StorageData::KeymapConfig(c) => {
+            StorageData::BehaviorConfig(c) => {
                 buffer[0] = StorageKeys::KeymapConfig as u8;
-                let bits = c.into_bits();
-                BigEndian::write_u16(&mut buffer[1..3], bits);
-                Ok(3)
+                BigEndian::write_u16(&mut buffer[1..3], c.morse_timeout);
+                BigEndian::write_u16(&mut buffer[3..5], c.combo_timeout);
+                BigEndian::write_u16(&mut buffer[5..7], c.one_shot_timeout);
+                BigEndian::write_u16(&mut buffer[7..9], c.tap_interval);
+                BigEndian::write_u16(&mut buffer[9..11], c.tap_capslock_interval);
+                BigEndian::write_u16(&mut buffer[11..13], c.prior_idle_time);
+                if c.unilateral_tap {
+                    buffer[13] = 1
+                } else {
+                    buffer[13] = 0
+                }
+                Ok(14)
             }
             StorageData::KeymapKey(k) => {
-                buffer[0] = StorageKeys::KeymapKeys as u8;
+                buffer[0] = StorageKeys::BehaviorConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
                 buffer[3] = k.layer as u8;
                 buffer[4] = k.col as u8;
@@ -283,24 +301,24 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::ForkData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.trigger));
-                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.negative_output));
-                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.positive_output));
+                BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(fork.fork.trigger));
+                BigEndian::write_u16(&mut buffer[3..5], to_via_keycode(fork.fork.negative_output));
+                BigEndian::write_u16(&mut buffer[5..7], to_via_keycode(fork.fork.positive_output));
 
                 BigEndian::write_u16(
                     &mut buffer[7..9],
-                    fork.match_any.leds.into_bits() as u16 | (fork.match_none.leds.into_bits() as u16) << 8,
+                    fork.fork.match_any.leds.into_bits() as u16 | (fork.fork.match_none.leds.into_bits() as u16) << 8,
                 );
                 BigEndian::write_u16(
                     &mut buffer[9..11],
-                    fork.match_any.mouse.into_bits() as u16 | (fork.match_none.mouse.into_bits() as u16) << 8,
+                    fork.fork.match_any.mouse.into_bits() as u16 | (fork.fork.match_none.mouse.into_bits() as u16) << 8,
                 );
                 BigEndian::write_u32(
                     &mut buffer[11..15],
-                    fork.match_any.modifiers.into_bits() as u32
-                        | (fork.match_none.modifiers.into_bits() as u32) << 8
-                        | (fork.kept_modifiers.into_bits() as u32) << 16
-                        | if fork.bindable { 1 << 24 } else { 0 },
+                    fork.fork.match_any.modifiers.into_bits() as u32
+                        | (fork.fork.match_none.modifiers.into_bits() as u32) << 8
+                        | (fork.fork.kept_modifiers.into_bits() as u32) << 16
+                        | if fork.fork.bindable { 1 << 24 } else { 0 },
                 );
                 Ok(15)
             }
@@ -366,10 +384,6 @@ impl Value<'_> for StorageData {
                     Some(irk) => irk.to_le_bytes(),
                     None => [0; 16],
                 };
-                // let (address, irk) = match b.info.identity {
-                //     Identity::BdAddr(address) => (address, [0; 16]),
-                //     Identity::Irk(irk) => (BdAddr::default(), irk.to_le_bytes()),
-                // };
                 buffer[1] = b.slot_num;
                 buffer[2..18].copy_from_slice(&ltk);
                 buffer[18..24].copy_from_slice(address.raw());
@@ -421,11 +435,21 @@ impl Value<'_> for StorageData {
                         }))
                     }
                 }
-                StorageKeys::LedLightConfig => Err(SerializationError::Custom(0)),
-                StorageKeys::RgbLightConfig => Err(SerializationError::Custom(0)),
-                StorageKeys::KeymapConfig => Ok(StorageData::KeymapConfig(EeKeymapConfig::from_bits(
-                    BigEndian::read_u16(&buffer[1..3]),
-                ))),
+                StorageKeys::KeymapConfig => {
+                    if buffer.len() < 14 {
+                        return Err(SerializationError::BufferTooSmall);
+                    }
+                    let keymap_config = BehaviorConfig {
+                        morse_timeout: BigEndian::read_u16(&buffer[1..3]),
+                        combo_timeout: BigEndian::read_u16(&buffer[3..5]),
+                        one_shot_timeout: BigEndian::read_u16(&buffer[5..7]),
+                        tap_interval: BigEndian::read_u16(&buffer[7..9]),
+                        tap_capslock_interval: BigEndian::read_u16(&buffer[9..11]),
+                        prior_idle_time: BigEndian::read_u16(&buffer[11..13]),
+                        unilateral_tap: buffer[13] == 1,
+                    };
+                    Ok(StorageData::BehaviorConfig(keymap_config))
+                }
                 StorageKeys::LayoutConfig => {
                     let default_layer = buffer[1];
                     let layout_option = BigEndian::read_u32(&buffer[2..6]);
@@ -434,7 +458,7 @@ impl Value<'_> for StorageData {
                         layout_option,
                     }))
                 }
-                StorageKeys::KeymapKeys => {
+                StorageKeys::BehaviorConfig => {
                     let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
                     let layer = buffer[3] as usize;
                     let col = buffer[4] as usize;
@@ -521,13 +545,15 @@ impl Value<'_> for StorageData {
 
                     Ok(StorageData::ForkData(ForkData {
                         idx: 0,
-                        trigger,
-                        negative_output,
-                        positive_output,
-                        match_any,
-                        match_none,
-                        kept_modifiers,
-                        bindable,
+                        fork: Fork::new(
+                            trigger,
+                            negative_output,
+                            positive_output,
+                            match_any,
+                            match_none,
+                            kept_modifiers,
+                            bindable,
+                        ),
                     }))
                 }
                 StorageKeys::TapDanceData => {
@@ -631,7 +657,7 @@ impl StorageData {
         match self {
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
-            StorageData::KeymapConfig(_) => StorageKeys::KeymapConfig as u32,
+            StorageData::BehaviorConfig(_) => StorageKeys::KeymapConfig as u32,
             StorageData::KeymapKey(_) => {
                 panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
             }
@@ -704,14 +730,27 @@ pub(crate) struct ComboData {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct ForkData {
     pub(crate) idx: usize,
-    // TODO: Use `fork::Fork` instead
-    pub(crate) trigger: KeyAction,
-    pub(crate) negative_output: KeyAction,
-    pub(crate) positive_output: KeyAction,
-    pub(crate) match_any: StateBits,
-    pub(crate) match_none: StateBits,
-    pub(crate) kept_modifiers: HidModifiers,
-    pub(crate) bindable: bool,
+    pub(crate) fork: Fork,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub(crate) struct BehaviorConfig {
+    // Timeout time for morse keys
+    pub(crate) morse_timeout: u16,
+    // Timeout time for combos
+    pub(crate) combo_timeout: u16,
+    // Timeout time for one-shot keys
+    pub(crate) one_shot_timeout: u16,
+    // Interval for tap actions
+    pub(crate) tap_interval: u16,
+    // Interval for tapping capslock.
+    // macOS has special processing of capslock, when tapping capslock, the tap interval should be another value
+    pub(crate) tap_capslock_interval: u16,
+    // The prior-idle-time in ms used for in flow tap
+    pub(crate) prior_idle_time: u16,
+    // Whether the unilateral tap is enabled
+    pub(crate) unilateral_tap: bool,
 }
 
 pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
@@ -723,7 +762,7 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     flash: F,
     storage_config: StorageConfig,
 ) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config).await
+    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config, &config::BehaviorConfig::default()).await
 }
 
 pub struct Storage<
@@ -768,43 +807,44 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         flash: F,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        config: &StorageConfig,
+        storage_config: &StorageConfig,
+        behavior_config: &config::BehaviorConfig,
     ) -> Self {
         // Check storage setting
         assert!(
-            config.num_sectors >= 2,
+            storage_config.num_sectors >= 2,
             "Number of used sector for storage must larger than 1"
         );
 
         // If config.start_addr == 0, use last `num_sectors` sectors or sectors begin at 0x0006_0000 for nRF52
         // Other wise, use storage config setting
         #[cfg(feature = "_nrf_ble")]
-        let start_addr = if config.start_addr == 0 {
+        let start_addr = if storage_config.start_addr == 0 {
             0x0006_0000
         } else {
-            config.start_addr
+            storage_config.start_addr
         };
 
         #[cfg(not(feature = "_nrf_ble"))]
-        let start_addr = config.start_addr;
+        let start_addr = storage_config.start_addr;
 
         // Check storage setting
         info!(
             "Flash capacity {} KB, RMK use {} KB({} sectors) starting from 0x{:X} as storage",
             flash.capacity() / 1024,
-            (F::ERASE_SIZE * config.num_sectors as usize) / 1024,
-            config.num_sectors,
-            config.start_addr,
+            (F::ERASE_SIZE * storage_config.num_sectors as usize) / 1024,
+            storage_config.num_sectors,
+            storage_config.start_addr,
         );
 
         let storage_range = if start_addr == 0 {
-            (flash.capacity() - config.num_sectors as usize * F::ERASE_SIZE) as u32..flash.capacity() as u32
+            (flash.capacity() - storage_config.num_sectors as usize * F::ERASE_SIZE) as u32..flash.capacity() as u32
         } else {
             assert!(
                 start_addr % F::ERASE_SIZE == 0,
                 "Storage's start addr MUST BE a multiplier of sector size"
             );
-            start_addr as u32..(start_addr + config.num_sectors as usize * F::ERASE_SIZE) as u32
+            start_addr as u32..(start_addr + storage_config.num_sectors as usize * F::ERASE_SIZE) as u32
         };
 
         let mut storage = Self {
@@ -814,14 +854,14 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         };
 
         // Check whether keymap and configs have been storaged in flash
-        if !storage.check_enable().await || config.clear_storage {
+        if !storage.check_enable().await || storage_config.clear_storage {
             // Clear storage first
             debug!("Clearing storage!");
             let _ = sequential_storage::erase_all(&mut storage.flash, storage.storage_range.clone()).await;
 
             // Initialize storage from keymap and config
             if storage
-                .initialize_storage_with_config(keymap, encoder_map)
+                .initialize_storage_with_config(keymap, encoder_map, behavior_config)
                 .await
                 .is_err()
             {
@@ -1035,6 +1075,62 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 #[cfg(not(feature = "_ble"))]
                 _ => Ok(()),
+                FlashOperationMessage::MorseTimeout(morse_timeout) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    morse_timeout,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::ComboTimeout(combo_timeout) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    combo_timeout,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::OneShotTimeout(one_shot_timeout) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    one_shot_timeout,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::TapInterval(tap_interval) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    tap_interval,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::TapCapslockInterval(tap_capslock_interval) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    tap_capslock_interval,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::PriorIdleTime(prior_idle_time) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    prior_idle_time,
+                    self.storage_range.clone()
+                ),
+                FlashOperationMessage::UnilateralTap(unilateral_tap) => update_storage_field!(
+                    &mut self.flash,
+                    &mut self.buffer,
+                    &mut storage_cache,
+                    BehaviorConfig,
+                    unilateral_tap,
+                    self.storage_range.clone()
+                ),
             } {
                 Err(e) => {
                     print_storage_error::<F>(e);
@@ -1148,15 +1244,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .map_err(|e| print_storage_error::<F>(e))?;
 
             if let Some(StorageData::ForkData(fork)) = read_data {
-                *item = Fork::new(
-                    fork.trigger,
-                    fork.negative_output,
-                    fork.positive_output,
-                    fork.match_any,
-                    fork.match_none,
-                    fork.kept_modifiers,
-                    fork.bindable,
-                );
+                *item = fork.fork;
             }
         }
 
@@ -1191,6 +1279,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        behavior: &config::BehaviorConfig,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config
@@ -1221,6 +1310,28 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             &mut self.buffer,
             &layout_config.key(),
             &layout_config,
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?;
+
+        // Save behavior config
+        let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
+            morse_timeout: behavior.morse.operation_timeout.as_millis() as u16,
+            combo_timeout: behavior.combo.timeout.as_millis() as u16,
+            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            tap_interval: 20, // TODO: Add to behavior config
+            tap_capslock_interval: 20,
+            prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
+            unilateral_tap: behavior.morse.unilateral_tap,
+        });
+
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut cache,
+            &mut self.buffer,
+            &behavior_config.key(),
+            &behavior_config,
         )
         .await
         .map_err(|e| print_storage_error::<F>(e))?;

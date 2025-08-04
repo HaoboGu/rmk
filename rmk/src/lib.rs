@@ -145,7 +145,14 @@ pub async fn initialize_encoder_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, &Some(default_encoder_map), storage_config).await;
+    let mut storage = Storage::new(
+        flash,
+        default_keymap,
+        &Some(default_encoder_map),
+        storage_config,
+        &behavior_config,
+    )
+    .await;
 
     let keymap = RefCell::new(
         KeyMap::new_from_storage(
@@ -175,7 +182,7 @@ pub async fn initialize_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
+    let mut storage = Storage::new(flash, default_keymap, &None, storage_config, &behavior_config).await;
 
     let keymap =
         RefCell::new(KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await);
