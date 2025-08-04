@@ -121,6 +121,7 @@ pub(crate) async fn process_vial<
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
                     // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
+                    report.input_data[31] = 1 // Enable caps word
                 }
                 VialDynamic::DynamicVialTapDanceGet => {
                     debug!("DynamicEntryOp - DynamicVialTapDanceGet");

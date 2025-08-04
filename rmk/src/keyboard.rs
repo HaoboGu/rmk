@@ -128,8 +128,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                     }
                 }
             }
-
-            embassy_time::Timer::after_micros(500).await;
         }
     }
 }
@@ -152,7 +150,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// Record the timestamp of last **simple key** press.
     /// It's used in tap-hold prior-idle-time check.
-    last_press_key: Instant,
+    last_press_time: Instant,
 
     /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
     /// Used in repeat-key
@@ -163,6 +161,11 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// One shot modifier state
     osm_state: OneShotState<HidModifiers>,
+
+    /// Caps word state - whether caps word is currently active
+    caps_word_active: bool,
+    /// Caps word idle timer - tracks when caps word should timeout
+    caps_word_timer: Option<Instant>,
 
     /// The modifiers coming from (last) Action::KeyWithModifier
     with_modifiers: HidModifiers,
@@ -215,9 +218,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             keymap,
             timer: [[None; ROW]; COL],
             rotary_encoder_timer: [[None; 2]; NUM_ENCODER],
-            last_press_key: Instant::now(),
+            last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
+            caps_word_active: false,
+            caps_word_timer: None,
             with_modifiers: HidModifiers::default(),
             macro_texting: false,
             macro_caps: false,
@@ -356,7 +361,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed
             && self.keymap.borrow().behavior.morse.enable_hrm
             && let KeyAction::Morse(m) = key_action
-            && self.last_press_key.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
@@ -689,8 +694,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.process_key_action_morse(morse, event).await;
             }
             KeyAction::TapDance(idx) => {
-                if let Some(td) = self.keymap.borrow().behavior.tap_dance.tap_dances.get(idx as usize) {
-                    self.process_key_action_morse(td.0, event).await;
+                // Get morse first, to avoid keymap being borrowed
+                let morse = match self.keymap.borrow().behavior.tap_dance.tap_dances.get(idx as usize) {
+                    Some(td) => Some(td.0),
+                    None => None,
+                };
+
+                if let Some(m) = morse {
+                    self.process_key_action_morse(m, event).await;
                 }
             }
         }
@@ -1048,7 +1059,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
-                                warn!("unprocessed event queue is full, dropping event");
+                                warn!("Unprocessed event queue is full, dropping event");
                             }
                         }
                     }
@@ -1101,7 +1112,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         Either::Second(e) => {
                             // New event, send it to queue
                             if self.unprocessed_events.push(e).is_err() {
-                                warn!("unprocessed event queue is full, dropping event");
+                                warn!("Unprocessed event queue is full, dropping event");
                             }
                         }
                     }
@@ -1112,42 +1123,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 _ => (),
             };
-        }
-    }
-
-    // Process a single keycode, typically a basic key or a modifier key.
-    async fn process_action_keycode(&mut self, mut key: KeyCode, event: KeyboardEvent) {
-        if key == KeyCode::Again {
-            key = self.last_key_code;
-            debug!("Repeat last key code: {:?} , {:?}", key, event);
-        } else if event.pressed {
-            //TODO should save releasing key only
-            debug!(
-                "Last key code changed from {:?} to {:?}(pressed: {:?})",
-                self.last_key_code, key, event.pressed
-            );
-            self.last_key_code = key;
-        }
-
-        if key.is_consumer() {
-            self.process_action_consumer_control(key, event).await;
-        } else if key.is_system() {
-            self.process_action_system_control(key, event).await;
-        } else if key.is_mouse_key() {
-            self.process_action_mouse(key, event).await;
-        } else if key.is_user() {
-            self.process_user(key, event).await;
-        } else if key.is_basic() {
-            self.process_basic(key, event).await;
-        } else if key.is_macro() {
-            // Process macro
-            self.process_action_macro(key, event).await;
-        } else if key.is_combo() {
-            self.process_action_combo(key, event).await;
-        } else if key.is_boot() {
-            self.process_boot(key, event);
-        } else {
-            warn!("Unsupported key: {:?}", key);
         }
     }
 
@@ -1180,7 +1155,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - one-shot modifiers
     /// - effect of Action::KeyWithModifiers (while they are pressed)
     /// - possible fork related modifier suppressions
-    pub fn resolve_modifiers(&self, pressed: bool) -> HidModifiers {
+    pub fn resolve_modifiers(&mut self, pressed: bool) -> HidModifiers {
         // Text typing macro should not be affected by any modifiers,
         // only its own capitalization
         if self.macro_texting {
@@ -1212,6 +1187,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // the suppression effect of forks should not apply on these
         result |= self.with_modifiers;
 
+        // Apply caps word shift if active and appropriate
+        if self.caps_word_active
+            && let Some(timer) = self.caps_word_timer
+            && timer.elapsed() < Duration::from_secs(5)
+        {
+            if pressed {
+                result |= HidModifiers::new().with_left_shift(true);
+            }
+        } else {
+            self.caps_word_timer = None;
+            self.caps_word_active = false;
+        };
+
         result
     }
 
@@ -1228,10 +1216,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Process action key
     async fn process_action_key(&mut self, key: KeyCode, event: KeyboardEvent) {
-        if event.pressed && key.is_simple_key() {
-            // Records only the simple key
-            self.last_press_key = Instant::now();
-        }
         let key = match key {
             KeyCode::GraveEscape => {
                 if self.held_modifiers.into_bits() == 0 {
@@ -1240,10 +1224,76 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyCode::Grave
                 }
             }
+            KeyCode::CapsWordToggle => {
+                // Handle caps word keycode by triggering the action
+                if event.pressed {
+                    self.caps_word_active = !self.caps_word_active;
+                    if self.caps_word_active {
+                        // The caps word is just activated, set the timer
+                        self.caps_word_timer = Some(Instant::now());
+                    } else {
+                        // The caps word is just deactivated, reset the timer
+                        self.caps_word_timer = None;
+                    }
+                };
+                return;
+            }
+            KeyCode::Again => {
+                debug!("Repeat last key code: {:?} , {:?}", self.last_key_code, event);
+                self.last_key_code
+            }
             _ => key,
         };
 
-        self.process_action_keycode(key, event).await;
+        if event.pressed {
+            // Record last press time
+            if key.is_simple_key() {
+                // Records only the simple key
+                self.last_press_time = Instant::now();
+            }
+            // Check repeat key
+            if key != KeyCode::Again {
+                debug!(
+                    "Last key code changed from {:?} to {:?}(pressed: {:?})",
+                    self.last_key_code, key, event.pressed
+                );
+                self.last_key_code = key;
+            }
+            // Check caps word
+            if self.caps_word_active {
+                if key.is_caps_word_continue_key()
+                    && let Some(timer) = self.caps_word_timer
+                    && timer.elapsed() < Duration::from_secs(5)
+                {
+                    self.caps_word_timer = Some(Instant::now());
+                } else {
+                    self.caps_word_active = false;
+                    self.caps_word_timer = None;
+                }
+            }
+        }
+
+        // Consumer, system and mouse keys should be processed before basic keycodes, since basic keycodes contain them all
+        if key.is_consumer() {
+            self.process_action_consumer_control(key, event).await;
+        } else if key.is_system() {
+            self.process_action_system_control(key, event).await;
+        } else if key.is_mouse_key() {
+            self.process_action_mouse(key, event).await;
+        } else if key.is_basic() {
+            self.process_basic(key, event).await;
+        } else if key.is_user() {
+            self.process_user(key, event).await;
+        } else if key.is_macro() {
+            // Process macro
+            self.process_action_macro(key, event).await;
+        } else if key.is_combo() {
+            self.process_action_combo(key, event).await;
+        } else if key.is_boot() {
+            self.process_boot(key, event);
+        } else {
+            warn!("Unsupported key: {:?}", key);
+        }
         self.update_osm(event);
         self.update_osl(event);
     }
@@ -1553,7 +1603,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Either::Second(e) => {
                                 // Received a new key event before timeout, add to unprocessed list
                                 if self.unprocessed_events.push(e).is_err() {
-                                    warn!("unprocessed event queue is full, dropping event");
+                                    warn!("Unprocessed event queue is full, dropping event");
                                 }
                             }
                         }
