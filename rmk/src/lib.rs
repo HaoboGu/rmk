@@ -306,7 +306,7 @@ pub(crate) async fn run_keyboard<
                     LOCK_LED_STATES.store(led_indicator.into_bits(), core::sync::atomic::Ordering::Relaxed);
                     #[cfg(feature = "controller")]
                     {
-                        info!("publishing led indicator");
+                        info!("Publishing led indicator");
                         // Publish the event
                         crate::channel::send_controller_event(
                             &mut controller_pub,

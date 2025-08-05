@@ -230,7 +230,7 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
                 ],
                 &mut advertiser_data[..],
             )?;
-            trace!("advertising data: {:?}", advertiser_data);
+            trace!("Advertising data: {:?}", advertiser_data);
             Advertisement::ConnectableScannableUndirected {
                 adv_data: &advertiser_data[..],
                 scan_data: &[],

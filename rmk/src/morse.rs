@@ -212,7 +212,7 @@ impl<const N: usize> MorseActions<N> {
                 }
             }
         } else {
-            warn!("MorseActions is full");
+            warn!("MorseAction list is full");
         }
     }
 

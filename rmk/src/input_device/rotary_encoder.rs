@@ -273,14 +273,14 @@ mod test {
         for item in [0b100, 0b1101, 0b1011, 0b10] {
             let d = default_phase.direction(item);
             let d2 = resolution_phase.direction(item);
-            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            info!("Item: {:b}, {:?} {:?}", item, d, d2);
             assert_eq!(d, d2);
         }
         // Counterclockwise sequence
         for item in [0b1000, 0b1110, 0b111, 0b1] {
             let d = default_phase.direction(item);
             let d2 = resolution_phase.direction(item);
-            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            info!("Item: {:b}, {:?} {:?}", item, d, d2);
             assert_eq!(d, d2);
         }
 
@@ -290,7 +290,7 @@ mod test {
         for item in 0u8..16 {
             let d = default_phase.direction(item);
             let d2 = resolution_phase.direction(item);
-            info!("item: {:b}, {:?} {:?}", item, d, d2);
+            info!("Item: {:b}, {:?} {:?}", item, d, d2);
             assert_eq!(d, d2);
         }
     }
