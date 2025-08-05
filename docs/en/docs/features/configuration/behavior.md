@@ -207,19 +207,14 @@ keymap = [
 
 ### Configuration Limits
 
-The tap dance functionality is controlled by the following configuration limits in the `[rmk]` section:
+The tap dance and morse functionality is controlled by the following configuration limits in the `[rmk]` section:
 
 - `tap_dance_max_num`: Maximum number of tap dances (default: 8)
-- `tap_dance_max_tap`: Maximum number of taps per tap dance (default: 2, range: 2-256)
+- `morse_max_num`: Maximum number of morse keys (default: 8)
+- `max_morse_patterns_per_key`: Maximum number of morse patterns per morse key config (default: 8, range: 4-255)
 
-To support more taps per sequence, increase the `tap_dance_max_tap` value:
-
-```toml
-[rmk]
-tap_dance_max_tap = 4  # Support up to 4 taps per tap dance
-```
-
-Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value.
+Note that the tap_dance is limited to 2 taps in these combinations: `tap`, `hold`, `double_tap`, `hold_after_tap`, while morse supports up to 15 tap/hold in a morse pattern.
+To support more taps per sequence, use morse instead of tap dance.
 
 ## Fork
 

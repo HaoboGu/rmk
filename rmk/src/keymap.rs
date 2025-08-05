@@ -14,7 +14,7 @@ use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
 use crate::morse::Morse;
-use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_TAP};
+use crate::{COMBO_MAX_NUM, MAX_MORSE_PATTERNS_PER_KEY};
 
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
@@ -193,7 +193,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         &self,
         key_action: &KeyAction,
         _pos: KeyboardEventPos,
-    ) -> Option<Morse<TAP_DANCE_MAX_TAP>> {
+    ) -> Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>> {
         match key_action {
             KeyAction::TapHold(tap_action, hold_action) => Some(
                 if self.behavior.morse.enable_hrm //TODO instead of this let the HRM keycodes configurable!
@@ -216,7 +216,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     )
                 },
             ),
-            KeyAction::TapDance(idx) => self.behavior.tap_dance.tap_dances.get(*idx as usize).map(|td| td.0),
+            KeyAction::TapDance(idx) => self.behavior.tap_dance.tap_dances.get(*idx as usize).map(|td| {
+                Morse::new_tap_dance(
+                    td.tap_action,
+                    td.hold_action,
+                    td.double_tap_action,
+                    td.hold_after_tap_action,
+                    td.timeout_ms,
+                    td.mode,
+                    td.unilateral_tap,
+                )
+            }),
             KeyAction::Morse(idx) => self.behavior.morse.action_sets.get(*idx as usize).copied(),
             _ => None,
         }
