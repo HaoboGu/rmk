@@ -381,7 +381,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed
             && self.keymap.borrow().behavior.morse.enable_hrm
             && let Some(morse) = morse
-            && self.last_press_key.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
