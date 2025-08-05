@@ -227,7 +227,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     td.unilateral_tap,
                 )
             }),
-            KeyAction::Morse(idx) => self.behavior.morse.action_sets.get(*idx as usize).copied(),
+            KeyAction::Morse(idx) => self.behavior.morse.action_sets.get(*idx as usize).cloned(),
             _ => None,
         }
     }

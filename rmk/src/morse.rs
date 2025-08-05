@@ -64,11 +64,13 @@ impl MorsePattern {
 ///
 /// The morse key can act as a superset of tap-hold key and tap-dance key and more if N >= 4.
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse<const N: usize> {
     /// The list of pattern -> actions pairs, which can be triggered
-    pub(crate) actions: MorseActions<N>,
+    //pub(crate) actions: MorseActions<N>,
+    pub(crate) actions: heapless::Vec<(MorsePattern, Action), N>,
+
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
     /// The decision mode of the morse key
@@ -80,7 +82,7 @@ pub struct Morse<const N: usize> {
 impl<const N: usize> Default for Morse<N> {
     fn default() -> Self {
         Self {
-            actions: MorseActions::default(),
+            actions: heapless::Vec::default(),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
@@ -89,9 +91,20 @@ impl<const N: usize> Default for Morse<N> {
 }
 
 impl<const N: usize> Morse<N> {
+    pub fn max_pattern_length(&self) -> usize {
+        let mut max_length = 0;
+        for pair in self.actions.iter() {
+            let pattern_length = pair.0.pattern_length();
+            if pattern_length > max_length {
+                max_length = pattern_length;
+            }
+        }
+        max_length
+    }
+
     pub fn new_tap_hold(tap_action: Action, hold_action: Action) -> Self {
         Self {
-            actions: MorseActions::new_tap_hold_combo(tap_action, hold_action),
+            actions: Self::new_tap_hold_combo(tap_action, hold_action),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
@@ -100,7 +113,7 @@ impl<const N: usize> Morse<N> {
 
     pub fn new_layer_tap_hold(tap_action: Action, layer: u8) -> Self {
         Self {
-            actions: MorseActions::new_tap_hold_combo(tap_action, Action::LayerOn(layer)),
+            actions: Self::new_tap_hold_combo(tap_action, Action::LayerOn(layer)),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
@@ -109,7 +122,7 @@ impl<const N: usize> Morse<N> {
 
     pub fn new_modifier_tap_hold(tap_action: Action, modifier: ModifierCombination) -> Self {
         Self {
-            actions: MorseActions::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
+            actions: Self::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
@@ -118,7 +131,7 @@ impl<const N: usize> Morse<N> {
 
     pub const fn new_hrm(tap_action: Action, modifier: ModifierCombination, timeout_ms: u16) -> Self {
         Self {
-            actions: MorseActions::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
+            actions: Self::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
             timeout_ms,
             mode: MorseKeyMode::PermissiveHold,
             unilateral_tap: true,
@@ -134,18 +147,21 @@ impl<const N: usize> Morse<N> {
         mode: MorseKeyMode,
         unilateral_tap: bool,
     ) -> Self {
-        let mut actions = MorseActions::empty();
-        actions.push(MorsePattern::tap(), tap_action);
-        actions.push(MorsePattern::hold(), hold_action);
-        actions.push(MorsePattern::double_tap(), double_tap_action);
-        actions.push(MorsePattern::hold_after_tap(), hold_after_tap_action);
-
-        Self {
-            actions,
+        let mut result = Self {
+            actions: Self::new_tap_hold_combo(tap_action, hold_action),
             timeout_ms,
             mode,
             unilateral_tap,
+        };
+        if double_tap_action != Action::No {
+            _ = result.actions.push((MorsePattern::double_tap(), double_tap_action));
         }
+        if hold_after_tap_action != Action::No {
+            _ = result
+                .actions
+                .push((MorsePattern::hold_after_tap(), hold_after_tap_action));
+        }
+        result
     }
 
     pub fn new_tap_hold_with_config(
@@ -156,7 +172,7 @@ impl<const N: usize> Morse<N> {
         unilateral_tap: bool,
     ) -> Self {
         Self {
-            actions: MorseActions::new_tap_hold_combo(tap_action, hold_action),
+            actions: Self::new_tap_hold_combo(tap_action, hold_action),
             timeout_ms,
             mode,
             unilateral_tap,
@@ -174,11 +190,31 @@ impl<const N: usize> Morse<N> {
     }
 
     pub fn action_from_pattern(&self, pattern: MorsePattern) -> Action {
-        *self.actions.get(pattern).unwrap_or(&Action::No)
+        *self.get(pattern).unwrap_or(&Action::No)
     }
 
     pub fn tap_action(&self) -> Action {
-        *self.actions.get(MorsePattern::tap()).unwrap_or(&Action::No)
+        *self.get(MorsePattern::tap()).unwrap_or(&Action::No)
+    }
+
+    fn new_tap_hold_combo(tap_action: Action, hold_action: Action) -> heapless::Vec<(MorsePattern, Action), N> {
+        let mut result = heapless::Vec::<(MorsePattern, Action), N>::new();
+        if tap_action != Action::No {
+            _ = result.push((MorsePattern::tap(), tap_action));
+        }
+        if hold_action != Action::No {
+            _ = result.push((MorsePattern::hold(), hold_action));
+        }
+        result
+    }
+
+    fn get(&self, pattern: MorsePattern) -> Option<&Action> {
+        for pair in self.actions.iter() {
+            if pair.0 == pattern {
+                return Some(&pair.1);
+            }
+        }
+        None
     }
 }
 
@@ -194,98 +230,4 @@ pub enum MorseKeyMode {
     PermissiveHold,
     /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
     HoldOnOtherPress,
-}
-
-/// The list of actions for a morse key.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MorseActions<const N: usize> {
-    /// List of triggering patterns and triggered actions
-    actions: [(MorsePattern, Action); N],
-    /// The number of saved actions
-    len: u8,
-}
-
-impl<const N: usize> Default for MorseActions<N> {
-    fn default() -> Self {
-        Self {
-            actions: [(MorsePattern::default(), Action::No); N],
-            len: 0,
-        }
-    }
-}
-
-impl<const N: usize> MorseActions<N> {
-    pub fn empty() -> Self {
-        Self {
-            actions: [(MorsePattern::default(), Action::No); N],
-            len: 0,
-        }
-    }
-
-    pub fn new(actions: [(MorsePattern, Action); N]) -> Self {
-        let mut result = Self::empty();
-        for action in actions {
-            if action.0 != MorsePattern::default() && action.1 != Action::No {
-                result.push(action.0, action.1);
-            }
-        }
-        result
-    }
-
-    pub const fn new_from_list(actions: [(MorsePattern, Action); N], len: u8) -> Self {
-        Self { actions, len }
-    }
-
-    pub const fn new_single(pattern: MorsePattern, action: Action) -> Self {
-        Self {
-            actions: [(pattern, action); N],
-            len: 1,
-        }
-    }
-
-    pub fn new_tap_hold_combo(tap_action: Action, hold_action: Action) -> Self {
-        let mut result = Self::empty();
-        result.push(MorsePattern::tap(), tap_action);
-        result.push(MorsePattern::hold(), hold_action);
-        result
-    }
-
-    pub fn push(&mut self, pattern: MorsePattern, action: Action) {
-        if (self.len as usize) < N && (pattern != MorsePattern::default() && action != Action::No) {
-            self.actions[self.len as usize] = (pattern, action);
-            self.len += 1;
-        }
-    }
-
-    pub fn max_pattern_length(&self) -> usize {
-        let mut max_length = 0;
-        for i in 0..self.len as usize {
-            let pattern_length = self.actions[i].0.pattern_length();
-            if pattern_length > max_length {
-                max_length = pattern_length;
-            }
-        }
-        max_length
-    }
-
-    pub fn len(&self) -> usize {
-        self.len as usize
-    }
-
-    pub fn get(&self, pattern: MorsePattern) -> Option<&Action> {
-        for i in 0..self.len as usize {
-            let pair = self.actions.get(i);
-            if let Some(pair) = pair {
-                if pair.0 == pattern {
-                    return Some(&pair.1);
-                }
-            }
-        }
-        None
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
 }

@@ -112,7 +112,7 @@ pub enum KeyState {
     Release,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct HeldKey {
     pub event: KeyboardEvent,
