@@ -129,7 +129,7 @@ impl<const N: usize> Morse<N> {
         }
     }
 
-    pub const fn new_hrm(tap_action: Action, modifier: ModifierCombination, timeout_ms: u16) -> Self {
+    pub fn new_hrm(tap_action: Action, modifier: ModifierCombination, timeout_ms: u16) -> Self {
         Self {
             actions: Self::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
             timeout_ms,

@@ -71,8 +71,6 @@ macro_rules! mt {
     };
 }
 
-//TODO: delete this - positional config should turn this into hrm instead, so this macro is not needed (both mt, lt can be on home row)!
-/// Create a modifier-tap-hold action which is on the home row.
 #[macro_export]
 macro_rules! hrm {
     ($k: ident, $m: expr) => {

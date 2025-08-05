@@ -29,17 +29,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             _ => unreachable!(),
         };
 
-        //TODO
-        // // If there's still morse key in the held buffer, don't fire normal keys
-        // if self
-        //     .held_buffer
-        //     .keys
-        //     .iter()
-        //     .filter(|k| { k.morse.is_some() && matches!(k.state, KeyState::Held(MorsePattern::default())) } ) ///FIXME: is this correct? or KeyState::Held(MorsePattern::default()) needed here?
-        //     .count() > 0
-        // {
-        //     return;
-        // }
+        // If there's still morse key in the held buffer, don't fire normal keys
+        if self
+            .held_buffer
+            .keys
+            .iter()
+            .any(|k| k.morse.is_some() && matches!(k.state, KeyState::Held(_)))
+        //FIXME: is this correct? or KeyState::Held(MorsePattern::default()) needed here?
+        {
+            return;
+        }
 
         self.fire_held_non_morse_keys().await;
     }
