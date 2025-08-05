@@ -48,7 +48,12 @@ pub(crate) enum SettingKey {
     #[num_enum(default)]
     None,
     ComboTimeout = 0x02,
-    TappingTerm = 0x07,
+    OneShotTimeout = 0x06,
+    MorseTimeout = 0x07,
+    TapInterval = 0x12,
+    TapCapslockInterval = 0x13,
+    UnilateralTap = 0x1A,
+    PriorIdleTime = 0x1B,
 }
 
 /// Vial dynamic commands.
@@ -126,7 +131,12 @@ pub(crate) async fn process_vial<
             let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
             if value <= 7 {
                 LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
-                LittleEndian::write_u16(&mut report.input_data[2..4], 0x07);
+                LittleEndian::write_u16(&mut report.input_data[2..4], 0x06);
+                LittleEndian::write_u16(&mut report.input_data[4..6], 0x07);
+                LittleEndian::write_u16(&mut report.input_data[6..8], 0x12);
+                LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
+                LittleEndian::write_u16(&mut report.input_data[10..12], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[12..14], 0x1B);
             }
         }
         VialCommand::GetBehaviorSetting => {
@@ -139,10 +149,39 @@ pub(crate) async fn process_vial<
                     let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
                 }
-                SettingKey::TappingTerm => {
+                SettingKey::MorseTimeout => {
                     report.input_data[0] = 0;
                     let tapping_term = keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
+                }
+                SettingKey::OneShotTimeout => {
+                    report.input_data[0] = 0;
+                    let one_shot_timeout = keymap.borrow().behavior.one_shot.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
+                }
+                SettingKey::TapInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.key.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::TapCapslockInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.key.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::UnilateralTap => {
+                    report.input_data[0] = 0;
+                    let unilateral_tap = keymap.borrow().behavior.morse.unilateral_tap;
+                    if unilateral_tap {
+                        report.input_data[1] = 1;
+                    } else {
+                        report.input_data[1] = 0;
+                    };
+                }
+                SettingKey::PriorIdleTime => {
+                    report.input_data[0] = 0;
+                    let prior_idle_time = keymap.borrow().behavior.morse.prior_idle_time.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], prior_idle_time);
                 }
             }
         }
@@ -154,9 +193,28 @@ pub(crate) async fn process_vial<
                     let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.combo.timeout = Duration::from_millis(combo_timeout as u64);
                 }
-                SettingKey::TappingTerm => {
-                    let tapping_term = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.morse.operation_timeout = Duration::from_millis(tapping_term as u64);
+                SettingKey::MorseTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.morse.operation_timeout = Duration::from_millis(timeout_time as u64);
+                }
+                SettingKey::OneShotTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.one_shot.timeout = Duration::from_millis(timeout_time as u64);
+                }
+                SettingKey::TapInterval => {
+                    let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.key.tap_interval = tap_interval;
+                }
+                SettingKey::TapCapslockInterval => {
+                    let tap_capslock_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.key.tap_capslock_interval = tap_capslock_interval;
+                }
+                SettingKey::UnilateralTap => {
+                    keymap.borrow_mut().behavior.morse.unilateral_tap = report.output_data[4] == 1;
+                }
+                SettingKey::PriorIdleTime => {
+                    let prior_idle_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.morse.prior_idle_time = Duration::from_millis(prior_idle_time as u64);
                 }
             }
         }
