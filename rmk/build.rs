@@ -66,7 +66,8 @@ fn get_constants_str(constants: RmkConstantsConfig) -> String {
         const_declaration!(pub(crate) NUM_BLE_PROFILE = constants.ble_profiles_num),
         const_declaration!(pub(crate) SPLIT_CENTRAL_SLEEP_TIMEOUT_MINUTES = constants.split_central_sleep_timeout_minutes),
         const_declaration!(pub(crate) TAP_DANCE_MAX_NUM = constants.tap_dance_max_num),
-        const_declaration!(pub(crate) TAP_DANCE_MAX_TAP = constants.tap_dance_max_tap),
+        const_declaration!(pub(crate) MORSE_MAX_NUM = constants.morse_max_num),
+        const_declaration!(pub(crate) MAX_MORSE_PATTERNS_PER_KEY = constants.max_morse_patterns_per_key),
         format!("pub(crate) const BUILD_HASH: u32 = {build_hash:#010x};\n"),
     ]
     .map(|s| "#[allow(clippy::redundant_static_lifetimes)]\n".to_owned() + s.as_str())

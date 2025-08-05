@@ -29,10 +29,10 @@ use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
-use crate::morse::{Morse, MorseKeyMode};
+use crate::morse::{Morse, MorseKeyMode, MorsePattern};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::{FORK_MAX_NUM, TAP_DANCE_MAX_TAP, boot};
+use crate::{FORK_MAX_NUM, MAX_MORSE_PATTERNS_PER_KEY, boot};
 
 pub(crate) mod combo;
 pub(crate) mod held_buffer;
@@ -370,7 +370,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(
         &mut self,
         key_action: KeyAction,
-        morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
+        morse: Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>>,
         event: KeyboardEvent,
         is_combo: bool,
     ) -> LoopState {
@@ -388,14 +388,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered tap_num
             // TODO: Check only morse with modifier?
 
-            let tap = morse.tap_action(0);
+            let tap = morse.tap_action();
             self.process_key_action_normal(tap, event).await;
             // Push back after triggered press
             self.held_buffer.push(HeldKey::new(
                 event,
                 key_action,
                 Some(morse),
-                KeyState::PostTap(0),
+                KeyState::PostTap(MorsePattern::default().followed_by_tap()), //FIXME: is this correct?
                 Instant::now(),
                 Instant::now() + Duration::from_millis(morse.get_timeout(operation_timeout) as u64),
             ));
@@ -433,7 +433,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     event,
                     key_action,
                     morse,
-                    KeyState::Held(0),
+                    KeyState::Held(MorsePattern::default()), //FIXME: is this correct?
                     press_time,
                     timeout_time,
                 ));
@@ -476,15 +476,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Unilateral tap of the held key is triggered
                             debug!("Cleaning buffered morse key due to unilateral tap");
                             match held_key.state {
-                                KeyState::Held(t) => {
-                                    let tap = morse.tap_action(t as usize);
+                                KeyState::Held(pattern) => {
+                                    let tap = morse.action_from_pattern(pattern); //FIXME: is this correct?
                                     self.process_key_action_normal(tap, held_key.event).await;
-                                    held_key.state = KeyState::PostTap(t);
+                                    held_key.state = KeyState::PostTap(pattern); //FIXME: is this correct?
                                     // Push back after triggered tap
                                     self.held_buffer.push_without_sort(held_key);
                                 }
-                                KeyState::IdleAfterTap(t) => {
-                                    let tap = morse.tap_action(t as usize);
+                                KeyState::IdleAfterTap(pattern) => {
+                                    let tap = morse.action_from_pattern(pattern); //FIXME: is this correct?
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(tap, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -503,16 +503,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Permissive hold of held key is triggered
                             debug!("Cleaning buffered morse key due to permissive hold or hold on other key press");
                             match held_key.state {
-                                KeyState::Held(t) => {
+                                KeyState::Held(pattern) => {
                                     keyboard_state_updated = true;
-                                    let hold = morse.hold_action(t as usize);
+                                    let hold = morse.action_from_pattern(pattern.followed_by_hold()); //FIXME: is this correct?
                                     self.process_key_action_normal(hold, held_key.event).await;
-                                    held_key.state = KeyState::PostHold(t);
+                                    held_key.state = KeyState::PostHold(pattern); //FIXME: is this correct?
                                     // Push back after triggered hold
                                     self.held_buffer.push_without_sort(held_key);
                                 }
-                                KeyState::IdleAfterTap(t) => {
-                                    let tap = morse.tap_action(t as usize);
+                                KeyState::IdleAfterTap(pattern) => {
+                                    let tap = morse.action_from_pattern(pattern.followed_by_tap()); //FIXME: is this correct?
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(tap, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -535,11 +535,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         debug!("Processing current key before releasing: {:?}", held_key.event);
                         if let Some(morse) = morse {
                             match held_key.state {
-                                KeyState::Held(t) => {
+                                KeyState::Held(pattern) => {
                                     debug!("Cleaning buffered Release key");
-                                    let tap = morse.tap_action(t as usize);
+                                    let tap = morse.action_from_pattern(pattern.followed_by_tap()); //FIXME: is this correct?
                                     self.process_key_action_normal(tap, held_key.event).await;
-                                    held_key.state = KeyState::PostTap(t);
+                                    held_key.state = KeyState::PostTap(pattern.followed_by_tap()); //FIXME: is this correct?
                                 }
                                 _ => (),
                             }
@@ -579,7 +579,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         self.process_key_action_inner(action, morse, held_key.event).await;
 
                         // Update key's state, push back
-                        held_key.state = KeyState::PostTap(0);
+                        held_key.state = KeyState::PostTap(MorsePattern::default().followed_by_tap()); //FIXME: is this correct?
                         self.held_buffer.push_without_sort(held_key);
                     }
                 }
@@ -615,7 +615,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // First, sort by press time
             self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
-            // Check all unresolved held keys, calculatle their decision one-by-one
+            // Check all unresolved held keys, calculate their decision one-by-one
             for held_key in self
                 .held_buffer
                 .keys
@@ -689,7 +689,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action_inner(
         &mut self,
         original_key_action: KeyAction,
-        morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
+        morse: Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>>,
         event: KeyboardEvent,
     ) -> LoopState {
         // Start forks
@@ -845,7 +845,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_combo(
         &mut self,
         key_action: KeyAction,
-        morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
+        morse: Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>>,
         event: KeyboardEvent,
     ) -> (Option<KeyAction>, bool) {
         let mut is_combo_action = false;
