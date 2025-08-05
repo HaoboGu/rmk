@@ -18,7 +18,7 @@ embedded-io-async = { version = "0.6" }
 embedded-storage = { version = "0.3", optional = true }
 embedded-storage-async = { version = "0.4", optional = true }
 
-embassy-embedded-hal = { version = "0.3" }
+embassy-embedded-hal = { version = "0.4" }
 embassy-time = { version = "0.4" }
 embassy-usb = { version = "0.5", features = [
     "usbd-hid",
@@ -63,13 +63,13 @@ rand_core = { version = "0.6", optional = true }
 bt-hci = { version = "0.3", optional = true }
 
 # nRF dependencies
-embassy-nrf = { version = "0.5", features = [
+embassy-nrf = { version = "0.6", features = [
     "unstable-pac",
     "time",
 ], optional = true }
 
 # RP2040 dependencies
-embassy-rp = { version = "0.6", optional = true }
+embassy-rp = { version = "0.7", optional = true }
 embassy-hal-internal = { version = "0.3.0", optional = true }
 rp-pac = { version = "7.0.0", optional = true }
 pio = { version = "0.3.0", optional = true }
@@ -93,7 +93,7 @@ rusty-fork = "0.3.0"
 
 [build-dependencies]
 rmk-config = { path = "../rmk-config", version = "=0.5.6"}
-toml = "0.8"
+toml = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
 chrono = "0.4"
