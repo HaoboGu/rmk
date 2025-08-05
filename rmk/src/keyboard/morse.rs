@@ -61,7 +61,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 Some(k) => {
                     // The current key is already in the buffer, update the tap state
                     if let KeyState::IdleAfterTap(t) = k.state {
-                        let tap_len = morse.tap_actions.len() as u8;
+                        let tap_len = morse.tap_actions.len().max(morse.hold_actions.len()) as u8;
                         if t + 1 >= tap_len {
                             // Reach maximum tapping number
                             k.state = KeyState::Held(tap_len - 1);
@@ -100,7 +100,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             Some(morse.hold_action(t as usize))
                         } else {
                             // Not timeout, check whether it's the last tap action
-                            if t + 1 == morse.tap_actions.len() as u8 {
+                            if t + 1 >= morse.tap_actions.len() as u8 && t >= morse.hold_actions.len() as u8 {
                                 // It's the last tap action, trigger the tap action immediately
                                 let action = morse.tap_action(t as usize);
                                 debug!("Last tap action, trigger tap action {:?} immediately", action);

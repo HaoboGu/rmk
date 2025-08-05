@@ -35,7 +35,7 @@ impl<const TAP_N: usize> Default for Morse<TAP_N> {
             tap_actions: MorseActions::default(),
             hold_actions: MorseActions::default(),
             timeout_ms: 250,
-            mode: MorseKeyMode::Normal,
+            mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
         }
     }
@@ -49,7 +49,7 @@ impl<const TAP_N: usize> Morse<TAP_N> {
             tap_actions,
             hold_actions,
             timeout_ms: 250,
-            mode: MorseKeyMode::Normal,
+            mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
         }
     }
