@@ -2112,12 +2112,11 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::action::ExtractedKeyActionKeyActionKeyActionKeyActionKeyActionKeyActionKeyActionKeyActionKeyAction;
+    use crate::action::KeyAction;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
-    use crate::morse::Morse;
     use crate::{a, k, layer, mo, th};
 
     // Init logger for tests
@@ -2326,7 +2325,7 @@ mod test {
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
-                    KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again))),
+                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
                 );
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),
@@ -2345,13 +2344,13 @@ mod test {
                 keyboard
                     .send_keyboard_report_with_resolved_modifiers(true)
                     .await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
                 // Release F
                 keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
 
                 // Press A key
                 keyboard.process_inner(KeyboardEvent::key(2, 1, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
 
                 // Release A key
                 keyboard.process_inner(KeyboardEvent::key(2, 1, false)).await;
@@ -2362,25 +2361,24 @@ mod test {
 
                 // Here release event should make again into hold
 
-
                 embassy_time::Timer::after_millis(200 as u64).await;
                 // after another key is pressed, that key is repeated
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
                 force_timeout_first_hold(&mut keyboard).await;
 
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
 
                 // releasing the repeat key
                 keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
                 // Press S key
                 keyboard.process_inner(KeyboardEvent::key(2, 2, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
 
                 // after another key is pressed, that key is repeated
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
             };
             block_on(main);
         }

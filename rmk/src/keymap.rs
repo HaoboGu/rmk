@@ -1,5 +1,6 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+use postcard::fixint::be;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
@@ -195,13 +196,24 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     ) -> Option<Morse<TAP_DANCE_MAX_TAP>> {
         match key_action {
             KeyAction::TapHold(tap_action, hold_action) => Some(
-                if let Action::Key(keycode) = tap_action
+                if self.behavior.morse.enable_hrm //TODO instead of this let the HRM keycodes configurable!
+                    && let Action::Key(keycode) = tap_action
                     && keycode.is_home_row()
                     && let Action::Modifier(modifier) = hold_action
                 {
-                    Morse::new_hrm(*tap_action, *modifier)
+                    Morse::new_hrm(
+                        *tap_action,
+                        *modifier,
+                        self.behavior.morse.operation_timeout.as_millis() as u16,
+                    )
                 } else {
-                    Morse::new_tap_hold(*tap_action, *hold_action)
+                    Morse::new_tap_hold_with_config(
+                        *tap_action,
+                        *hold_action,
+                        self.behavior.morse.operation_timeout.as_millis() as u16,
+                        self.behavior.morse.mode,
+                        self.behavior.morse.unilateral_tap,
+                    )
                 },
             ),
             KeyAction::TapDance(idx) => self.behavior.tap_dance.tap_dances.get(*idx as usize).map(|td| td.0),

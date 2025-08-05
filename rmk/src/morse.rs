@@ -78,13 +78,13 @@ impl<const TAP_N: usize> Morse<TAP_N> {
         }
     }
 
-    pub const fn new_hrm(tap_action: Action, modifier: ModifierCombination) -> Self {
+    pub const fn new_hrm(tap_action: Action, modifier: ModifierCombination, timeout_ms: u16) -> Self {
         let tap_actions = MorseActions::new_single(tap_action);
         let hold_actions = MorseActions::new_single(Action::Modifier(modifier));
         Self {
             tap_actions,
             hold_actions,
-            timeout_ms: 250,
+            timeout_ms,
             mode: MorseKeyMode::PermissiveHold,
             unilateral_tap: true,
         }

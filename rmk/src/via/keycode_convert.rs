@@ -500,54 +500,54 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 0)),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0)),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 3)),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3)),
             from_via_keycode(via_keycode)
         );
 
         // LSA_T(A) ->
         let via_keycode = 0x2604;
         assert_eq!(
-            KeyAction::Morse(Morse::new_hrm(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, false, true, true, false)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, false))
+            ), //hrm
             from_via_keycode(via_keycode)
         );
 
         // RCAG_T(B) ->
         let via_keycode = 0x3D05;
         assert_eq!(
-            KeyAction::Morse(Morse::new_modifier_tap_hold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::B),
-                ModifierCombination::new_from(true, true, true, false, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(true, true, true, false, true))
+            ),
             from_via_keycode(via_keycode)
         );
 
         // ALL_T(A) ->
         let via_keycode: u16 = 0x2F04;
         assert_eq!(
-            KeyAction::Morse(Morse::new_hrm(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, true, true, true, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, true, true, true, true))
+            ), //hrm
             from_via_keycode(via_keycode)
         );
 
         // Meh_T(B) ->
         let via_keycode = 0x2705;
         assert_eq!(
-            KeyAction::Morse(Morse::new_modifier_tap_hold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::B),
-                ModifierCombination::new_from(false, false, true, true, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, true))
+            ),
             from_via_keycode(via_keycode)
         );
 
@@ -638,39 +638,39 @@ mod test {
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 0));
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0));
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 3));
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3));
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, false),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
+        );
         assert_eq!(0x2604, to_via_keycode(a));
 
         // RCAG_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(true, true, true, false, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
+        );
         assert_eq!(0x3D04, to_via_keycode(a));
 
         // ALL_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, true, true, true, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
+        );
         assert_eq!(0x2F04, to_via_keycode(a));
 
         // Meh_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
+        );
         assert_eq!(0x2704, to_via_keycode(a));
 
         // ComboOff

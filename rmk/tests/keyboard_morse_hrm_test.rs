@@ -10,7 +10,7 @@ use rmk::config::{BehaviorConfig, CombosConfig, MorseConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::{Morse, MorseKeyMode};
+use rmk::morse::MorseKeyMode;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -29,15 +29,10 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 4, 2> {
 }
 
 fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 4, 2> {
-    let combo_key = KeyAction::Morse(Morse::new_hrm(Action::Key(KeyCode::B), ModifierCombination::SHIFT));
-    let combo_key_2 = KeyAction::Morse(Morse::new_hrm(Action::Key(KeyCode::C), ModifierCombination::GUI));
-    let combo_key_3 = KeyAction::Morse(Morse::new_tap_hold_with_config(
-        Action::Key(KeyCode::D),
-        Action::LayerOn(1),
-        250,
-        MorseKeyMode::PermissiveHold,
-        true,
-    ));
+    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT)); //TODO hrm = MorseKeyMode::PermissiveHold, true
+    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)); //TODO hrm = MorseKeyMode::PermissiveHold, true
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1)); //TODO hrm = MorseKeyMode::PermissiveHold, true
+
     create_simple_morse_keyboard(BehaviorConfig {
         morse: MorseConfig {
             enable_hrm: true,
