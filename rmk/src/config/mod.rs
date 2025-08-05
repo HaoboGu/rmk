@@ -12,7 +12,7 @@ use crate::combo::Combo;
 use crate::fork::Fork;
 use crate::morse::{Morse, MorseKeyMode};
 use crate::tap_dance::TapDance;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MAX_MORSE_PATTERNS_PER_KEY, MORSE_MAX_NUM, TAP_DANCE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM, TAP_DANCE_MAX_TAP};
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -63,7 +63,7 @@ pub struct MorseConfig {
     pub unilateral_tap: bool,
 
     // for advanced morse:
-    pub action_sets: Vec<Morse<MAX_MORSE_PATTERNS_PER_KEY>, MORSE_MAX_NUM>,
+    pub action_sets: Vec<Morse<TAP_DANCE_MAX_TAP>, 8>, //TODO MORSE_MAX_NUM = 8
 }
 
 impl Default for MorseConfig {

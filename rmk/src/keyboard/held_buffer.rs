@@ -1,9 +1,9 @@
 use embassy_time::Instant;
 
-use crate::MAX_MORSE_PATTERNS_PER_KEY;
+use crate::TAP_DANCE_MAX_TAP;
 use crate::action::KeyAction;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
-use crate::morse::{Morse, MorsePattern};
+use crate::morse::Morse;
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]
@@ -91,22 +91,21 @@ impl HeldBuffer {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyState {
+    /// After a press event is received.
+    /// The number represents the number of completed "tap".
+    Held(u8),
+    /// Idle state after tap n times for morse keys
+    IdleAfterTap(u8),
+    /// Idle state after hold released
+    IdleAfterHold(u8),
     /// The current key is a component of a combo, and it's waiting for other combo components
     WaitingCombo,
-
-    /// After a press event is received.
-    /// The data represents the already completed morse pattern.
-    Held(MorsePattern),
-    /// Idle state after morse pattern
-    IdleAfterTap(MorsePattern),
-    /// Idle state after hold released
-    IdleAfterHold(MorsePattern),
     /// Tap key has been processed and sent to HID, but not yet released.
-    /// The data represents completed morse pattern.
-    PostTap(MorsePattern),
+    /// The number is used for morse keys, represents the number of completed "tap"s
+    PostTap(u8),
     /// Key is being held, but not yet released
-    /// The data represents completed morse pattern.
-    PostHold(MorsePattern),
+    /// The number is used for morse keys, represents the number of completed "tap"s
+    PostHold(u8),
     /// Key needs to be released but is still in the queue,
     /// it should be cleaned up in the main loop regardless
     Release,
@@ -118,7 +117,7 @@ pub struct HeldKey {
     pub event: KeyboardEvent,
     pub action: KeyAction,
     /// if the action is tap/hold related, the config converted to morse
-    pub morse: Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>>,
+    pub morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
     /// Current state of the held key
     pub state: KeyState,
     /// The press time for the key
@@ -131,7 +130,7 @@ impl HeldKey {
     pub fn new(
         event: KeyboardEvent,
         action: KeyAction,
-        morse: Option<Morse<MAX_MORSE_PATTERNS_PER_KEY>>,
+        morse: Option<Morse<TAP_DANCE_MAX_TAP>>,
         state: KeyState,
         press_time: Instant,
         timeout_time: Instant,

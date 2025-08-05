@@ -1,54 +1,58 @@
+use heapless::Vec;
+
+use crate::TAP_DANCE_MAX_TAP;
 use crate::action::Action;
-use crate::morse::MorseKeyMode;
+use crate::morse::{Morse, MorseActions};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapDance {
-    /// if more complex pattens are needed than these below, use `Morse` instead:
-    pub tap_action: Action,
-    pub hold_action: Action,
-    pub double_tap_action: Action,
-    pub hold_after_tap_action: Action,
-    /// The timeout time for each operation in milliseconds
-    pub timeout_ms: u16,
-    /// The decision mode of the morse key
-    pub mode: MorseKeyMode,
-    /// If the unilateral tap is enabled
-    pub unilateral_tap: bool,
-}
+pub struct TapDance(pub(crate) Morse<TAP_DANCE_MAX_TAP>);
 
 impl Default for TapDance {
     fn default() -> Self {
-        Self {
-            tap_action: Action::No,
-            hold_action: Action::No,
-            double_tap_action: Action::No,
-            hold_after_tap_action: Action::No,
+        Self(Morse {
+            tap_actions: MorseActions::empty(),
+            hold_actions: MorseActions::empty(),
             timeout_ms: 200,
             mode: crate::morse::MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
-        }
+        })
     }
 }
 
 impl TapDance {
     pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
-        Self {
-            tap_action: tap,
-            hold_action: hold,
-            double_tap_action: double_tap,
-            hold_after_tap_action: hold_after_tap,
-            timeout_ms: timeout,
-            mode: crate::morse::MorseKeyMode::HoldOnOtherPress,
-            unilateral_tap: false,
+        assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
+        let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
+        let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
+        tap_actions[0] = tap;
+        tap_actions[1] = double_tap;
+        hold_actions[0] = hold;
+        hold_actions[1] = hold_after_tap;
+        Self(Morse::new_tap_dance(tap_actions, hold_actions, timeout))
+    }
+
+    /// Create a new tap dance with custom actions for each tap count
+    /// This allows for more flexible tap dance configurations
+    pub fn new_with_actions(
+        tap_actions: Vec<Action, TAP_DANCE_MAX_TAP>,
+        hold_actions: Vec<Action, TAP_DANCE_MAX_TAP>,
+        timeout: u16,
+    ) -> Self {
+        assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
+        let mut tap_actions_slice = [Action::No; TAP_DANCE_MAX_TAP];
+        let mut hold_actions_slice = [Action::No; TAP_DANCE_MAX_TAP];
+        for (i, item) in tap_actions.iter().enumerate() {
+            tap_actions_slice[i] = *item;
         }
+        for (i, item) in hold_actions.iter().enumerate() {
+            hold_actions_slice[i] = *item;
+        }
+        Self(Morse::new_tap_dance(tap_actions_slice, hold_actions_slice, timeout))
     }
 
     /// Check if this tap dance has any actions defined
     pub fn has_actions(&self) -> bool {
-        self.tap_action != Action::No
-            || self.hold_action != Action::No
-            || self.double_tap_action != Action::No
-            || self.hold_after_tap_action != Action::No
+        !self.0.tap_actions.is_empty() || !self.0.hold_actions.is_empty()
     }
 }
