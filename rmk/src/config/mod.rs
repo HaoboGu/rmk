@@ -74,7 +74,7 @@ pub struct MorseConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
     /// Default timeout time for tap or hold
-    pub operation_timeout: Duration,
+    pub timeout: Duration,
     /// Default mode
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
@@ -88,7 +88,7 @@ impl Default for MorseConfig {
             unilateral_tap: false,
             mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
-            operation_timeout: Duration::from_millis(250),
+            timeout: Duration::from_millis(250),
         }
     }
 }

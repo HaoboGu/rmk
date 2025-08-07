@@ -1334,7 +1334,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
-            morse_timeout: behavior.morse.operation_timeout.as_millis() as u16,
+            morse_timeout: behavior.morse.timeout.as_millis() as u16,
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
             tap_interval: 20, // TODO: Add to behavior config

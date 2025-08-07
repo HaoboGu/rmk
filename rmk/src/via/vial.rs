@@ -151,7 +151,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::MorseTimeout => {
                     report.input_data[0] = 0;
-                    let tapping_term = keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
+                    let tapping_term = keymap.borrow().behavior.morse.timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
@@ -199,7 +199,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.morse.operation_timeout = Duration::from_millis(timeout_time as u64);
+                    keymap.borrow_mut().behavior.morse.timeout = Duration::from_millis(timeout_time as u64);
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::MorseTimeout(timeout_time))

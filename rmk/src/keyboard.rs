@@ -350,7 +350,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // Global hold timeout
-        let operation_timeout = self.keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
+        let timeout = self.keymap.borrow().behavior.morse.timeout.as_millis() as u16;
 
         // When pressing a morse key, check flow tap first.
         if event.pressed
@@ -370,7 +370,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 key_action,
                 KeyState::PostTap(0),
                 Instant::now(),
-                Instant::now() + Duration::from_millis(m.get_timeout(operation_timeout) as u64),
+                Instant::now() + Duration::from_millis(m.get_timeout(timeout) as u64),
             ));
             return LoopState::OK;
         }

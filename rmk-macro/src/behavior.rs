@@ -71,7 +71,7 @@ fn expand_morse(morse_config: &Option<TapHoldConfig>) -> proc_macro2::TokenStrea
             let hold_timeout = match &morse.hold_timeout {
                 Some(t) => {
                     let timeout = t.0;
-                    quote! { operation_timeout: ::embassy_time::Duration::from_millis(#timeout), }
+                    quote! { timeout: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
