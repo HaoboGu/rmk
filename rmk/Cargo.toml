@@ -35,6 +35,9 @@ futures = { version = "0.3", default-features = false, features = [
 ] }
 
 heapless = "0.8.0"
+bitvec = { version = "1.0.1", default-features = false, features = [
+    "atomic",
+], optional = true }
 usbd-hid = "0.8.2"
 bitfield-struct = "0.11"
 static_cell = "2"
@@ -92,7 +95,7 @@ ctor = "0.4.1"
 rusty-fork = "0.3.0"
 
 [build-dependencies]
-rmk-config = { path = "../rmk-config", version = "=0.5.6"}
+rmk-config = { path = "../rmk-config", version = "=0.5.6" }
 toml = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
@@ -108,7 +111,13 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage"]
+default = ["col2row", "defmt", "storage", "vial_lock"]
+
+## the matrix tester is optional to store matrix state
+matrix_tester = ["dep:bitvec"]
+
+## the vial lock is optional to lock the vial
+vial_lock = ["matrix_tester"]
 
 ## the storage is optional to save memory
 storage = ["dep:embedded-storage", "dep:embedded-storage-async"]

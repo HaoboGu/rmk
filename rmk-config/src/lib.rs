@@ -196,6 +196,8 @@ pub struct KeyboardTomlConfig {
     split: Option<SplitConfig>,
     /// Input device config
     input_device: Option<InputDeviceConfig>,
+    /// Unlock keys for the keyboard
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,

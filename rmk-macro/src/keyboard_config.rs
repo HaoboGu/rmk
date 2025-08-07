@@ -39,12 +39,26 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
     }
 }
 
-pub(crate) fn expand_vial_config() -> proc_macro2::TokenStream {
+pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
+    let unlock_keys = if let Some(unlock_keys) = &config.unlock_keys {
+        let keys_expr = unlock_keys
+            .iter()
+            .map(|key| {
+                let row = key[0];
+                let col = key[1];
+                quote! { (#row, #col) }
+            })
+            .collect::<Vec<_>>();
+        quote! { &[#(#keys_expr), *] }
+    } else {
+        quote! { &[] }
+    };
     quote! {
         include!(concat!(env!("OUT_DIR"), "/config_generated.rs"));
         const VIAL_CONFIG: ::rmk::config::VialConfig = ::rmk::config::VialConfig {
             vial_keyboard_id: &VIAL_KEYBOARD_ID,
             vial_keyboard_def: &VIAL_KEYBOARD_DEF,
+            unlock_keys: #unlock_keys
         };
     }
 }

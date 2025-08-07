@@ -94,7 +94,11 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             .await
             {
                 Either3::First(event) => match event {
-                    Event::Key(key_event) => KEY_EVENT_CHANNEL.send(key_event).await,
+                    Event::Key(key_event) => {
+                        #[cfg(feature = "matrix_tester")]
+                        crate::matrix::MATRIX_STATE.update(&key_event);
+                        KEY_EVENT_CHANNEL.send(key_event).await
+                    }
                     _ => {
                         if EVENT_CHANNEL.is_full() {
                             let _ = EVENT_CHANNEL.receive().await;

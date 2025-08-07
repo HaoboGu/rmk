@@ -5,6 +5,7 @@ use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
 use crate::combo::Combo;
+use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::keymap::KeyMap;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
@@ -60,14 +61,15 @@ const VIAL_COMBO_MAX_LENGTH: usize = 4;
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
+    'a,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
     report: &mut ViaReport,
-    vial_keyboard_Id: &[u8],
-    vial_keyboard_def: &[u8],
+    vial_config: &VialConfig<'a>,
+    #[cfg(feature = "vial_lock")] locker: &mut super::vial_lock::VialLock<'static>,
     keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
@@ -77,16 +79,17 @@ pub(crate) async fn process_vial<
         VialCommand::GetKeyboardId => {
             // Returns vial protocol version + vial keyboard id
             LittleEndian::write_u32(&mut report.input_data[0..4], VIAL_PROTOCOL_VERSION);
-            report.input_data[4..12].clone_from_slice(vial_keyboard_Id);
+            report.input_data[4..12].clone_from_slice(vial_config.vial_keyboard_id);
             debug!("Vial return: {:?}", report.input_data);
         }
         VialCommand::GetSize => {
-            LittleEndian::write_u32(&mut report.input_data[0..4], vial_keyboard_def.len() as u32);
+            LittleEndian::write_u32(&mut report.input_data[0..4], vial_config.vial_keyboard_def.len() as u32);
         }
         VialCommand::GetKeyboardDef => {
             let page = LittleEndian::read_u16(&report.output_data[2..4]) as usize;
             let start = page * VIAL_EP_SIZE;
             let mut end = start + VIAL_EP_SIZE;
+            let vial_keyboard_def = &vial_config.vial_keyboard_def;
             if end < start || start >= vial_keyboard_def.len() {
                 return;
             }
@@ -104,10 +107,48 @@ pub(crate) async fn process_vial<
         VialCommand::GetUnlockStatus => {
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
-            // Unlocked
-            report.input_data[0] = 1;
-            // Unlock in progress
-            report.input_data[1] = 0;
+            #[cfg(feature = "vial_lock")]
+            {
+               // Unlocked
+                report.input_data[0] = locker.is_unlocked() as u8;
+                // Unlock in progress
+                report.input_data[1] = locker.is_unlocking() as u8;
+                // Unlock keys
+                for (idx, (row, col)) in vial_config.unlock_keys.iter().enumerate() {
+                    report.input_data[2 + idx * 2] = *row;
+                    report.input_data[3 + idx * 2] = *col;
+                }
+            }
+            #[cfg(not(feature = "vial_lock"))] {
+                // Unlocked
+                 report.input_data[0] = 1 ;
+                 // Unlock in progress
+                 report.input_data[1] = 0 ;
+                warn!("Vial lock feature is not enabled");
+            }
+        }
+        VialCommand::UnlockStart => {
+            #[cfg(feature = "vial_lock")]
+            locker.unlocking();
+            #[cfg(not(feature = "vial_lock"))]
+            error!("Vial lock feature is not enabled");
+        }
+        VialCommand::UnlockPoll => {
+            #[cfg(feature = "vial_lock")]
+            {
+                locker.unlocking();
+                report.input_data[0] = locker.is_unlocked() as u8;
+                report.input_data[1] = locker.is_unlocking() as u8;
+                report.input_data[2] = locker.check_unlock();
+            }
+            #[cfg(not(feature = "vial_lock"))]
+            error!("Vial lock feature is not enabled");
+        }
+        VialCommand::Lock => {
+            #[cfg(feature = "vial_lock")]
+            locker.lock();
+            #[cfg(not(feature = "vial_lock"))]
+            error!("Vial lock feature is not enabled");
         }
         VialCommand::QmkSettingsQuery => {
             report.input_data.fill(0xFF);

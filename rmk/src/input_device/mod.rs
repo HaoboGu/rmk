@@ -132,6 +132,7 @@ macro_rules! run_devices {
                                 // For KeyboardEvent, send it to KEY_EVENT_CHANNEL
                                 match e {
                                     $crate::event::Event::Key(key_event) => {
+                                        $crate::update_matrix_state!(&key_event);
                                         $crate::channel::KEY_EVENT_CHANNEL.send(key_event).await;
                                     }
                                     _ => {
@@ -149,6 +150,20 @@ macro_rules! run_devices {
             ),+
         )
     }};
+}
+
+#[macro_export]
+#[cfg(feature = "matrix_tester")]
+macro_rules! update_matrix_state {
+    ($i:expr) => {{
+        $crate::matrix::MATRIX_STATE.update($i);
+    }};
+}
+
+#[macro_export]
+#[cfg(not(feature = "matrix_tester"))]
+macro_rules! update_matrix_state {
+    ($i:expr) => {{}};
 }
 
 /// Macro to bind input devices and an input processor directly.

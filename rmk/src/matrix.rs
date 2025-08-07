@@ -1,4 +1,6 @@
 use core::future::Future;
+#[cfg(feature = "matrix_tester")]
+use core::sync::atomic::AtomicU8;
 use core::sync::atomic::Ordering;
 
 use embassy_time::{Instant, Timer};
@@ -12,6 +14,66 @@ use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
+/// Recording the matrix state
+#[cfg(feature = "matrix_tester")]
+pub static MATRIX_STATE: MatrixState = MatrixState::new();
+
+/// Recording the matrix pressed state
+#[cfg(feature = "matrix_tester")]
+pub struct MatrixState {
+    /// the maxima available is 30 bytes due to the VIA `report.input_data` is `[u8;32]`.
+    state: bitvec::BitArr!(for 240, in AtomicU8),
+    row: AtomicU8,
+    row_len: AtomicU8,
+}
+
+#[cfg(feature = "matrix_tester")]
+impl MatrixState {
+    const fn new() -> Self {
+        Self {
+            state: bitvec::prelude::BitArray::ZERO,
+            row: AtomicU8::new(0),
+            row_len: AtomicU8::new(0),
+        }
+    }
+    pub fn update(&self, event: &crate::event::KeyboardEvent) {
+        use crate::event::KeyboardEventPos;
+        if let KeyboardEventPos::Key(key) = event.pos {
+            let row = key.row;
+            let col = key.col;
+            let pressed = event.pressed;
+            let index = row * self.row_len.load(Ordering::Relaxed) * 8 + col;
+            // The bitvec crate does not mainly design for atomic operations.
+            // And the safe interface does not provide a modification method
+            // but we know that it is safe because the underlying data is atomic.
+            unsafe { self.state.as_bitptr().offset(index as isize).to_mut().write(pressed) };
+        }
+    }
+    pub fn configure(&self, row: usize, col: usize) {
+        self.row.store(row as u8, Ordering::Relaxed);
+        let row_len = bitvec::mem::elts::<u8>(col);
+        self.row_len.store(row_len as u8, Ordering::Relaxed);
+    }
+    pub fn read_all(&self, target: &mut [u8]) {
+        let row = self.row.load(Ordering::Relaxed);
+        let row_len = self.row_len.load(Ordering::Relaxed);
+        let slice = &self.state.as_raw_slice()[..(row as usize * row_len as usize)];
+        let mut target_iter = target.iter_mut();
+        for row_bytes in slice.chunks(row_len.into()) {
+            for byte in row_bytes.iter().rev() {
+                *target_iter.next().unwrap() = byte.load(Ordering::Relaxed);
+            }
+        }
+    }
+    pub fn read(&self, row: u8, col: u8) -> bool {
+        let row_len = self.row_len.load(Ordering::Relaxed);
+        *self
+            .state
+            .get(row as usize * row_len as usize * 8 + col as usize)
+            .unwrap()
+    }
+}
+
 /// MatrixTrait is the trait for keyboard matrix.
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
@@ -24,7 +86,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected.into() {
+            while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");

@@ -66,7 +66,7 @@ pub(crate) fn expand_imports_and_constants(config: &KeyboardTomlConfig) -> Token
     // Generate default keymap
     let default_keymap = expand_default_keymap(config);
     // Generate vial config
-    let vial_static_var = expand_vial_config();
+    let vial_static_var = expand_vial_config(config);
 
     // Generate extra imports, panic handler and logger
     let imports = match config.get_chip_model().unwrap().series {
