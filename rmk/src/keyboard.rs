@@ -331,6 +331,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Process key changes at (row, col)
     async fn process_inner(&mut self, event: KeyboardEvent) -> LoopState {
+        #[cfg(feature = "matrix_tester")]
         self.keymap.borrow_mut().matrix_state.update(&event);
 
         // Matrix should process key pressed event first, record the timestamp of key changes
