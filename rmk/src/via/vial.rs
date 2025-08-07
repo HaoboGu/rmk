@@ -192,29 +192,57 @@ pub(crate) async fn process_vial<
                 SettingKey::ComboTimeout => {
                     let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.combo.timeout = Duration::from_millis(combo_timeout as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::ComboTimeout(combo_timeout))
+                        .await;
                 }
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.morse.operation_timeout = Duration::from_millis(timeout_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseTimeout(timeout_time))
+                        .await;
                 }
                 SettingKey::OneShotTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.one_shot.timeout = Duration::from_millis(timeout_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::OneShotTimeout(timeout_time))
+                        .await;
                 }
                 SettingKey::TapInterval => {
                     let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.key.tap_interval = tap_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapInterval(tap_interval))
+                        .await;
                 }
                 SettingKey::TapCapslockInterval => {
                     let tap_capslock_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.key.tap_capslock_interval = tap_capslock_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapCapslockInterval(tap_capslock_interval))
+                        .await;
                 }
                 SettingKey::UnilateralTap => {
                     keymap.borrow_mut().behavior.morse.unilateral_tap = report.output_data[4] == 1;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .await;
                 }
                 SettingKey::PriorIdleTime => {
                     let prior_idle_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
                     keymap.borrow_mut().behavior.morse.prior_idle_time = Duration::from_millis(prior_idle_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::PriorIdleTime(prior_idle_time))
+                        .await;
                 }
             }
         }

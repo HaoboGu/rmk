@@ -232,7 +232,7 @@ impl Value<'_> for StorageData {
                 Ok(6)
             }
             StorageData::BehaviorConfig(c) => {
-                buffer[0] = StorageKeys::KeymapConfig as u8;
+                buffer[0] = StorageKeys::BehaviorConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], c.morse_timeout);
                 BigEndian::write_u16(&mut buffer[3..5], c.combo_timeout);
                 BigEndian::write_u16(&mut buffer[5..7], c.one_shot_timeout);
@@ -247,7 +247,7 @@ impl Value<'_> for StorageData {
                 Ok(14)
             }
             StorageData::KeymapKey(k) => {
-                buffer[0] = StorageKeys::BehaviorConfig as u8;
+                buffer[0] = StorageKeys::KeymapConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], to_via_keycode(k.action));
                 buffer[3] = k.layer as u8;
                 buffer[4] = k.col as u8;
@@ -657,7 +657,7 @@ impl StorageData {
         match self {
             StorageData::StorageConfig(_) => StorageKeys::StorageConfig as u32,
             StorageData::LayoutConfig(_) => StorageKeys::LayoutConfig as u32,
-            StorageData::BehaviorConfig(_) => StorageKeys::KeymapConfig as u32,
+            StorageData::BehaviorConfig(_) => StorageKeys::BehaviorConfig as u32,
             StorageData::KeymapKey(_) => {
                 panic!("To get storage key for KeymapKey, use `get_keymap_key` instead");
             }
@@ -1270,6 +1270,24 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             if let Some(StorageData::TapDanceData(tap_dance)) = read_data {
                 *item = tap_dance;
             }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn read_behavior_config(&mut self, behavior_config: &mut BehaviorConfig) -> Result<(), ()> {
+        if let Some(StorageData::BehaviorConfig(c)) = fetch_item::<u32, StorageData, _>(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut NoCache::new(),
+            &mut self.buffer,
+            &(StorageKeys::BehaviorConfig as u32),
+        )
+        .await
+        .map_err(|e| print_storage_error::<F>(e))?
+        {
+            // TODO: Set current config to normal key config
+            *behavior_config = c;
         }
 
         Ok(())
