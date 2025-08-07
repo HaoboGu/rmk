@@ -35,9 +35,6 @@ futures = { version = "0.3", default-features = false, features = [
 ] }
 
 heapless = "0.8.0"
-bitvec = { version = "1.0.1", default-features = false, features = [
-    "atomic",
-], optional = true }
 usbd-hid = "0.8.2"
 bitfield-struct = "0.11"
 static_cell = "2"
@@ -114,7 +111,7 @@ cortex-m = { version = "0.7" }
 default = ["col2row", "defmt", "storage", "vial_lock"]
 
 ## the matrix tester is optional to store matrix state
-matrix_tester = ["dep:bitvec"]
+matrix_tester = []
 
 ## the vial lock is optional to lock the vial
 vial_lock = ["matrix_tester"]

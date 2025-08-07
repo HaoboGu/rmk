@@ -41,7 +41,7 @@ pub(crate) struct VialService<
 
     // Vail lock instance
     #[cfg(feature = "vial_lock")]
-    locker: vial_lock::VialLock<'static>,
+    locker: vial_lock::VialLock<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 
     // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
@@ -63,13 +63,11 @@ impl<
         vial_config: VialConfig<'static>,
         reader_writer: RW,
     ) -> Self {
-        #[cfg(feature = "matrix_tester")]
-        crate::matrix::MATRIX_STATE.configure(ROW, COL);
         Self {
             keymap,
             vial_config,
             #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::<'static>::new(vial_config.unlock_keys),
+            locker: vial_lock::VialLock::<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>::new(vial_config.unlock_keys, keymap),
             reader_writer,
         }
     }
@@ -136,13 +134,13 @@ impl<
                             {
                                 #[cfg(not(feature = "vial_lock"))]
                                 {
-                                    crate::matrix::MATRIX_STATE.read_all(&mut report.input_data[2..]);
+                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
                                     error!("It is not sercure to use matrix tester without vial lock");
                                 }
 
                                 #[cfg(feature = "vial_lock")]
                                 if self.locker.is_unlocked() {
-                                    crate::matrix::MATRIX_STATE.read_all(&mut report.input_data[2..]);
+                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
                                 }
                             }
                         }

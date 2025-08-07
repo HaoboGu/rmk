@@ -1,17 +1,24 @@
-pub(crate) struct VialLock<'a> {
+use crate::keymap::KeyMap;
+use core::cell::RefCell;
+
+pub(crate) struct VialLock<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     unlocked: bool,
     unlocking: bool,
     last_poll: embassy_time::Instant,
     unlock_keys: &'a [(u8, u8)],
+    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 }
 
-impl<'a> VialLock<'a> {
-    pub fn new(unlock_keys: &'a [(u8, u8)]) -> Self {
+impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    VialLock<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
+{
+    pub fn new(unlock_keys: &'a [(u8, u8)], keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>) -> Self {
         Self {
             unlocked: false,
             unlocking: false,
             last_poll: embassy_time::Instant::MIN,
             unlock_keys,
+            keymap,
         }
     }
     pub fn is_unlocking(&mut self) -> bool {
@@ -38,7 +45,7 @@ impl<'a> VialLock<'a> {
         } else {
             let mut counter = self.unlock_keys.len().try_into().unwrap();
             for (row, col) in self.unlock_keys {
-                if crate::matrix::MATRIX_STATE.read(*row, *col) {
+                if self.keymap.borrow().matrix_state.read(*row, *col) {
                     counter -= 1;
                 }
             }

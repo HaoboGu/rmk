@@ -69,7 +69,7 @@ pub(crate) async fn process_vial<
 >(
     report: &mut ViaReport,
     vial_config: &VialConfig<'a>,
-    #[cfg(feature = "vial_lock")] locker: &mut super::vial_lock::VialLock<'static>,
+    #[cfg(feature = "vial_lock")] locker: &mut super::vial_lock::VialLock<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
@@ -109,7 +109,7 @@ pub(crate) async fn process_vial<
             report.input_data.fill(0xFF);
             #[cfg(feature = "vial_lock")]
             {
-               // Unlocked
+                // Unlocked
                 report.input_data[0] = locker.is_unlocked() as u8;
                 // Unlock in progress
                 report.input_data[1] = locker.is_unlocking() as u8;
@@ -119,11 +119,12 @@ pub(crate) async fn process_vial<
                     report.input_data[3 + idx * 2] = *col;
                 }
             }
-            #[cfg(not(feature = "vial_lock"))] {
+            #[cfg(not(feature = "vial_lock"))]
+            {
                 // Unlocked
-                 report.input_data[0] = 1 ;
-                 // Unlock in progress
-                 report.input_data[1] = 0 ;
+                report.input_data[0] = 1;
+                // Unlock in progress
+                report.input_data[1] = 0;
                 warn!("Vial lock feature is not enabled");
             }
         }
