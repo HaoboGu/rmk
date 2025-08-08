@@ -6,6 +6,7 @@ use core::ops::Range;
 use byteorder::{BigEndian, ByteOrder};
 use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_sync::signal::Signal;
+use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
@@ -436,6 +437,28 @@ impl Value<'_> for StorageData {
                     }
                 }
                 StorageKeys::KeymapConfig => {
+                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
+                    let layer = buffer[3] as usize;
+                    let col = buffer[4] as usize;
+                    let row = buffer[5] as usize;
+
+                    // row, col, layer are used to calculate key only, not used here
+                    Ok(StorageData::KeymapKey(KeymapKey {
+                        row,
+                        col,
+                        layer,
+                        action,
+                    }))
+                }
+                StorageKeys::LayoutConfig => {
+                    let default_layer = buffer[1];
+                    let layout_option = BigEndian::read_u32(&buffer[2..6]);
+                    Ok(StorageData::LayoutConfig(LayoutConfig {
+                        default_layer,
+                        layout_option,
+                    }))
+                }
+                StorageKeys::BehaviorConfig => {
                     if buffer.len() < 14 {
                         return Err(SerializationError::BufferTooSmall);
                     }
@@ -449,28 +472,6 @@ impl Value<'_> for StorageData {
                         unilateral_tap: buffer[13] == 1,
                     };
                     Ok(StorageData::BehaviorConfig(keymap_config))
-                }
-                StorageKeys::LayoutConfig => {
-                    let default_layer = buffer[1];
-                    let layout_option = BigEndian::read_u32(&buffer[2..6]);
-                    Ok(StorageData::LayoutConfig(LayoutConfig {
-                        default_layer,
-                        layout_option,
-                    }))
-                }
-                StorageKeys::BehaviorConfig => {
-                    let action = from_via_keycode(BigEndian::read_u16(&buffer[1..3]));
-                    let layer = buffer[3] as usize;
-                    let col = buffer[4] as usize;
-                    let row = buffer[5] as usize;
-
-                    // row, col, layer are used to calculate key only, not used here
-                    Ok(StorageData::KeymapKey(KeymapKey {
-                        row,
-                        col,
-                        layer,
-                        action,
-                    }))
                 }
                 StorageKeys::MacroData => {
                     if buffer.len() < 3 {
@@ -1073,8 +1074,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                #[cfg(not(feature = "_ble"))]
-                _ => Ok(()),
                 FlashOperationMessage::MorseTimeout(morse_timeout) => update_storage_field!(
                     &mut self.flash,
                     &mut self.buffer,
@@ -1131,6 +1130,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     unilateral_tap,
                     self.storage_range.clone()
                 ),
+                #[cfg(not(feature = "_ble"))]
+                _ => Ok(()),
             } {
                 Err(e) => {
                     print_storage_error::<F>(e);
@@ -1275,7 +1276,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    pub(crate) async fn read_behavior_config(&mut self, behavior_config: &mut BehaviorConfig) -> Result<(), ()> {
+    pub(crate) async fn read_behavior_config(
+        &mut self,
+        behavior_config: &mut config::BehaviorConfig,
+    ) -> Result<(), ()> {
         if let Some(StorageData::BehaviorConfig(c)) = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
             self.storage_range.clone(),
@@ -1286,8 +1290,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .await
         .map_err(|e| print_storage_error::<F>(e))?
         {
-            // TODO: Set current config to normal key config
-            *behavior_config = c;
+            behavior_config.morse.timeout = Duration::from_millis(c.morse_timeout as u64);
+            behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
+            behavior_config.morse.unilateral_tap = c.unilateral_tap;
+            behavior_config.combo.timeout = Duration::from_millis(c.combo_timeout as u64);
+            behavior_config.one_shot.timeout = Duration::from_millis(c.one_shot_timeout as u64);
+            behavior_config.tap.tap_interval = c.tap_interval;
+            behavior_config.tap.tap_capslock_interval = c.tap_capslock_interval;
         }
 
         Ok(())
@@ -1337,8 +1346,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             morse_timeout: behavior.morse.timeout.as_millis() as u16,
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
-            tap_interval: 20, // TODO: Add to behavior config
-            tap_capslock_interval: 20,
+            tap_interval: behavior.tap.tap_interval,
+            tap_capslock_interval: behavior.tap.tap_capslock_interval,
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
             unilateral_tap: behavior.morse.unilateral_tap,
         });

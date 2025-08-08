@@ -161,12 +161,12 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::TapInterval => {
                     report.input_data[0] = 0;
-                    let tap_interval = keymap.borrow().behavior.key.tap_interval;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
                 }
                 SettingKey::TapCapslockInterval => {
                     report.input_data[0] = 0;
-                    let tap_interval = keymap.borrow().behavior.key.tap_interval;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
                 }
                 SettingKey::UnilateralTap => {
@@ -215,7 +215,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::TapInterval => {
                     let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.key.tap_interval = tap_interval;
+                    keymap.borrow_mut().behavior.tap.tap_interval = tap_interval;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::TapInterval(tap_interval))
@@ -223,7 +223,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::TapCapslockInterval => {
                     let tap_capslock_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.key.tap_capslock_interval = tap_capslock_interval;
+                    keymap.borrow_mut().behavior.tap.tap_capslock_interval = tap_capslock_interval;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::TapCapslockInterval(tap_capslock_interval))

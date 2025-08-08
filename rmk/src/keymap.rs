@@ -93,24 +93,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.tap_dance.tap_dances);
 
-        let mut storage_behavior_config = crate::storage::BehaviorConfig {
-            morse_timeout: behavior.morse.timeout.as_millis() as u16,
-            combo_timeout: behavior.combo.timeout.as_millis() as u16,
-            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
-            // TODO: tap interval
-            tap_interval: 20,
-            tap_capslock_interval: 20,
-            prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
-            unilateral_tap: behavior.morse.unilateral_tap,
-        };
-
         if let Some(storage) = storage {
             if {
                 Ok(())
                     // Read keymap to `action_map`
                     .and(storage.read_keymap(action_map, &mut encoder_map).await)
                     // Read behavior config
-                    .and(storage.read_behavior_config(&mut storage_behavior_config).await)
+                    .and(storage.read_behavior_config(&mut behavior).await)
                     // Read macro cache
                     .and(
                         storage

@@ -29,7 +29,7 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
-    pub key: NormalKeyConfig,
+    pub tap: TapConfig,
     pub morse: MorseConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
@@ -41,13 +41,13 @@ pub struct BehaviorConfig {
 
 /// Configurations for morse behavior
 #[derive(Clone, Copy, Debug)]
-pub struct NormalKeyConfig {
+pub struct TapConfig {
     // TODO: Use `Duration` instead?
     pub tap_interval: u16,
     pub tap_capslock_interval: u16,
 }
 
-impl Default for NormalKeyConfig {
+impl Default for TapConfig {
     fn default() -> Self {
         Self {
             tap_interval: 20,
