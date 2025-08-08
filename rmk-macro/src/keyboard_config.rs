@@ -40,8 +40,9 @@ pub(crate) fn expand_keyboard_info(keyboard_config: &KeyboardTomlConfig) -> proc
 }
 
 pub(crate) fn expand_vial_config(config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    let unlock_keys = if let Some(unlock_keys) = &config.unlock_keys {
-        let keys_expr = unlock_keys
+    let unlock_keys = if let Some(security_config) = &config.security {
+        let keys_expr = security_config
+            .unlock_keys
             .iter()
             .map(|key| {
                 let row = key[0];

@@ -197,7 +197,7 @@ pub struct KeyboardTomlConfig {
     /// Input device config
     input_device: Option<InputDeviceConfig>,
     /// Unlock keys for the keyboard
-    pub unlock_keys: Option<Vec<[u8; 2]>>,
+    pub security: Option<SecurityConfig>,
     /// RMK config constants
     #[serde(default)]
     pub rmk: RmkConstantsConfig,
@@ -599,6 +599,12 @@ fn parse_duration_millis<'de, D: de::Deserializer<'de>>(deserializer: D) -> Resu
             "Invalid duration unit \"{other}\": unit part must be either \"s\" or \"ms\""
         ))),
     }
+}
+
+/// Configuration for security
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct SecurityConfig {
+    pub unlock_keys: Vec<[u8; 2]>,
 }
 
 /// Configurations for input devices
