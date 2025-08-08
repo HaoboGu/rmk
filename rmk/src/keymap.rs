@@ -1,18 +1,21 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+use postcard::fixint::be;
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
     crate::event::ControllerEvent,
 };
 
-use crate::COMBO_MAX_NUM;
-use crate::action::{EncoderAction, KeyAction};
+use crate::action::{Action, EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard_macros::MacroOperation;
+use crate::morse::Morse;
+use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_TAP};
+
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 
@@ -182,6 +185,40 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
+        }
+    }
+
+    /// Translate a KeyAction to ExtractedKeyAction
+    pub(crate) fn into_morse(
+        &self,
+        key_action: &KeyAction,
+        _pos: KeyboardEventPos,
+    ) -> Option<Morse<TAP_DANCE_MAX_TAP>> {
+        match key_action {
+            KeyAction::TapHold(tap_action, hold_action) => Some(
+                if self.behavior.morse.enable_hrm //TODO instead of this let the HRM keycodes configurable!
+                    && let Action::Key(keycode) = tap_action
+                    && keycode.is_home_row()
+                    && let Action::Modifier(modifier) = hold_action
+                {
+                    Morse::new_hrm(
+                        *tap_action,
+                        *modifier,
+                        self.behavior.morse.operation_timeout.as_millis() as u16,
+                    )
+                } else {
+                    Morse::new_tap_hold_with_config(
+                        *tap_action,
+                        *hold_action,
+                        self.behavior.morse.operation_timeout.as_millis() as u16,
+                        self.behavior.morse.mode,
+                        self.behavior.morse.unilateral_tap,
+                    )
+                },
+            ),
+            KeyAction::TapDance(idx) => self.behavior.tap_dance.tap_dances.get(*idx as usize).map(|td| td.0),
+            KeyAction::Morse(idx) => self.behavior.morse.action_sets.get(*idx as usize).copied(),
+            _ => None,
         }
     }
 

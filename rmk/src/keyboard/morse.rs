@@ -45,7 +45,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.fire_held_non_morse_keys().await;
     }
 
-    pub(crate) async fn process_key_action_morse(&mut self, morse: Morse<TAP_DANCE_MAX_TAP>, event: KeyboardEvent) {
+    pub(crate) async fn process_key_action_morse(
+        &mut self,
+        key_action: KeyAction,
+        morse: Morse<TAP_DANCE_MAX_TAP>,
+        event: KeyboardEvent,
+    ) {
         debug!("Processing morse: {:?}", event);
 
         // Process the morse key
@@ -71,7 +76,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // Add to buffer
                     self.held_buffer.push(HeldKey::new(
                         event,
-                        KeyAction::Morse(morse),
+                        key_action,
+                        Some(morse),
                         KeyState::Held(0),
                         pressed_time,
                         pressed_time + Duration::from_millis(morse.timeout_ms as u64),
