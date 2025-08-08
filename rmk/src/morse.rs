@@ -22,7 +22,7 @@ pub struct Morse<const TAP_N: usize> {
     /// The actions triggered by tapping and holding the key
     pub(crate) hold_actions: MorseActions<TAP_N>,
     /// The timeout time for each operation in milliseconds
-    pub timeout_ms: u16,
+    pub(crate) timeout_ms: u16,
     /// The decision mode of the morse key
     pub mode: MorseKeyMode,
     /// If the unilateral tap is enabled

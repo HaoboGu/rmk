@@ -47,6 +47,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     pub(crate) async fn process_key_action_morse(&mut self, morse: Morse<TAP_DANCE_MAX_TAP>, event: KeyboardEvent) {
         debug!("Processing morse: {:?}", event);
+        // Global hold timeout
+        let timeout = self.keymap.borrow().behavior.morse.timeout.as_millis() as u16;
 
         // Process the morse key
         if event.pressed {
@@ -64,7 +66,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             k.state = KeyState::Held(t + 1);
                         }
                         k.press_time = pressed_time;
-                        k.timeout_time = pressed_time + Duration::from_millis(morse.timeout_ms as u64);
+                        k.timeout_time = pressed_time + Duration::from_millis(morse.get_timeout(timeout) as u64);
                     }
                 }
                 None => {
@@ -74,7 +76,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         KeyAction::Morse(morse),
                         KeyState::Held(0),
                         pressed_time,
-                        pressed_time + Duration::from_millis(morse.timeout_ms as u64),
+                        pressed_time + Duration::from_millis(morse.get_timeout(timeout) as u64),
                     ));
                 }
             }
@@ -110,7 +112,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 k.state = KeyState::IdleAfterTap(t);
                                 // Use current release time for `IdleAfterTap` state
                                 k.press_time = Instant::now(); // Use release time as the "press_time"
-                                k.timeout_time = k.press_time + Duration::from_millis(morse.timeout_ms as u64);
+                                k.timeout_time =
+                                    k.press_time + Duration::from_millis(morse.get_timeout(timeout) as u64);
                                 None
                             }
                         }

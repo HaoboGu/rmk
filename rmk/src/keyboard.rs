@@ -398,7 +398,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if let KeyAction::Morse(m) = key_action {
-                    press_time + Duration::from_millis(m.timeout_ms as u64)
+                    press_time + Duration::from_millis(m.get_timeout(timeout) as u64)
                 } else {
                     press_time
                 };
