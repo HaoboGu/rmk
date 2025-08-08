@@ -18,24 +18,33 @@ pub struct MatrixState<const ROW: usize, const COL: usize> {
     // 30 bytes is the limited by Vial and 240 keys is enough for
     // most keyborad
     state: [u8; 30],
-    row_len: u8,
 }
 
 #[cfg(feature = "matrix_tester")]
 impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
+    const ROW: u8 = ROW as u8;
+    const COL: u8 = COL as u8;
+    const ROW_LEN: u8 = (COL as u8 + 8) / 8;
+    const OUT_OF_BOUNDARY: () = if Self::ROW * Self::ROW_LEN > 30 {
+        panic!(
+            "Cannot use matrix tester because your keyboard has too many keys. \
+            Consider disable the `matrix_tester` feature"
+        )
+    };
     pub fn new() -> Self {
-        Self {
-            state: [0; 30],
-            row_len: (<usize as TryInto<u8>>::try_into(COL).unwrap() + 8) / 8,
-        }
+        Self { state: [0; 30] }
     }
     pub fn update(&mut self, event: &crate::event::KeyboardEvent) {
         use crate::event::KeyboardEventPos;
         if let KeyboardEventPos::Key(key) = event.pos {
             let row = key.row;
             let col = key.col;
+            if row >= Self::ROW || col >= Self::COL {
+                warn!("Matrix read out of bounds");
+                return;
+            }
             let pressed = event.pressed;
-            let index = row * self.row_len * 8 + col;
+            let index = row * Self::ROW_LEN * 8 + col;
             let byte_index = index / 8;
             let bit_index = index % 8;
             self.state[byte_index as usize] =
@@ -43,18 +52,24 @@ impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
         }
     }
     pub fn read_all(&self, target: &mut [u8]) {
-        let row = ROW;
-        let row_len = self.row_len;
-        let slice = &self.state[..(row as usize * row_len as usize)];
+        let slice = &self.state[..(Self::ROW as usize * Self::ROW_LEN as usize)];
         let mut target_iter = target.iter_mut();
-        for row_bytes in slice.chunks(row_len.into()) {
+        for row_bytes in slice.chunks(Self::ROW_LEN as usize) {
             for byte in row_bytes.iter().rev() {
-                *target_iter.next().unwrap() = *byte;
+                if let Some(target_byte) = target_iter.next() {
+                    *target_byte = *byte;
+                } else {
+                    break;
+                }
             }
         }
     }
     pub fn read(&self, row: u8, col: u8) -> bool {
-        let index = row * self.row_len * 8 + col;
+        if row >= Self::ROW || col >= Self::COL {
+            warn!("Matrix read out of bounds");
+            return false;
+        }
+        let index = row * Self::ROW_LEN * 8 + col;
         let byte_index = index / 8;
         let bit_index = index % 8;
         self.state[byte_index as usize] & (1 << bit_index) != 0

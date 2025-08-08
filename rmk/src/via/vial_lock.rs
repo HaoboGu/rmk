@@ -1,5 +1,6 @@
-use crate::keymap::KeyMap;
 use core::cell::RefCell;
+
+use crate::keymap::KeyMap;
 
 pub(crate) struct VialLock<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
     unlocked: bool,
