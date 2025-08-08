@@ -637,7 +637,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
-                        if morse.unilateral_tap
+                        // TODO: Use perkey unilateral tap config
+                        let unilateral_tap_enabled = self.keymap.borrow().behavior.morse.unilateral_tap;
+                        if unilateral_tap_enabled
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
                             && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
