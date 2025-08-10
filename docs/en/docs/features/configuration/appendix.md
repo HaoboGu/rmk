@@ -136,9 +136,9 @@ tap_dances = [
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
   # Extended tap dance for function keys
   {
-    tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
+    tap_actions = ["F1", "F2", "F3", "F4", "F5"],
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    timeout = "300ms" 
+    timeout = "300ms"
   }
 ]
 
@@ -299,6 +299,11 @@ output_pins = ["PIN_10"]
 [dependency]
 # Whether to enable defmt, set to false for reducing binary size
 defmt_log = true
+
+[security]
+# the unlock keys are the combo of the row 0, col 0 key and
+# the row 0, col 1 key
+unlock_keys = [[0, 0], [0, 1]]
 ```
 
 ### Available chip names

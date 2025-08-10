@@ -149,13 +149,15 @@ impl Default for StorageConfig {
 pub struct VialConfig<'a> {
     pub vial_keyboard_id: &'a [u8],
     pub vial_keyboard_def: &'a [u8],
+    pub unlock_keys: &'a [(u8, u8)],
 }
 
 impl<'a> VialConfig<'a> {
-    pub fn new(vial_keyboard_id: &'a [u8], vial_keyboard_def: &'a [u8]) -> Self {
+    pub fn new(vial_keyboard_id: &'a [u8], vial_keyboard_def: &'a [u8], unlock_keys: &'a [(u8, u8)]) -> Self {
         Self {
             vial_keyboard_id,
             vial_keyboard_def,
+            unlock_keys,
         }
     }
 }

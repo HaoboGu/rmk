@@ -59,7 +59,7 @@ async fn main(_spawner: Spawner) {
         serial_number: "vial:f64c2b3c:000001",
     };
 
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
 
     let rmk_config = RmkConfig {
         usb_config: keyboard_usb_config,

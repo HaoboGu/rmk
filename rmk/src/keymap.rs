@@ -16,6 +16,8 @@ use crate::keyboard_macros::MacroOperation;
 use crate::morse::Morse;
 use crate::{COMBO_MAX_NUM, MAX_MORSE_PATTERNS_PER_KEY};
 
+#[cfg(feature = "matrix_tester")]
+use crate::matrix::MatrixState;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
 
@@ -41,6 +43,9 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
+    /// Matrix state
+    #[cfg(feature = "matrix_tester")]
+    pub(crate) matrix_state: MatrixState<ROW, COL>,
 }
 
 fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
@@ -82,6 +87,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             behavior,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+            #[cfg(feature = "matrix_tester")]
+            matrix_state: MatrixState::new(),
         }
     }
     #[cfg(feature = "storage")]
@@ -135,6 +142,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             behavior,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
+            #[cfg(feature = "matrix_tester")]
+            matrix_state: MatrixState::new(),
         }
     }
 
