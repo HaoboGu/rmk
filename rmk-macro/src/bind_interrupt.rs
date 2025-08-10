@@ -57,8 +57,12 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
 /// Expand default `bind_interrupt!` for different chips and nrf-sdc config for nRF52
 pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     let extern_irqs_vec = find_extern_irqs(item_mod);
-    let extern_irqs = quote!{
-        #(#extern_irqs_vec);*
+    let extern_irqs = if extern_irqs_vec.is_empty() {
+        quote!{}
+    } else {
+        quote!{
+            #(#extern_irqs_vec);* ;
+        }
     };
 
     let chip = keyboard_config.get_chip_model().unwrap();
@@ -143,7 +147,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
                     RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
-                    #extern_irqs;
+                    #extern_irqs
                 });
 
                 #[::embassy_executor::task]
