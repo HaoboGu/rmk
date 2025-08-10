@@ -27,14 +27,40 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_m
                 }
                 None
             })
-            .unwrap_or(bind_interrupt_default(keyboard_config))
+            .unwrap_or(bind_interrupt_default(keyboard_config, item_mod))
     } else {
-        bind_interrupt_default(keyboard_config)
+        bind_interrupt_default(keyboard_config, item_mod)
     }
 }
 
+pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
+
+    let mut extern_irqs:Vec<TokenStream2> = Vec::new();
+    if let Some((_, items)) = &item_mod.content {
+        items
+            .iter()
+            .for_each(|item| {
+                if let syn::Item::Fn(item_fn) = &item {
+                    if let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("add_irq")){
+                        if let syn::Meta::List(list) = &attr.meta {
+                            extern_irqs.push(list.tokens.clone());
+                        } else {
+                            panic!("Invalid attribute format for add_irq");
+                        }
+                    }
+                }
+        });
+    }
+    extern_irqs
+}
+
 /// Expand default `bind_interrupt!` for different chips and nrf-sdc config for nRF52
-pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
+pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
+    let extern_irqs_vec = find_extern_irqs(item_mod);
+    let extern_irqs = quote!{
+        #(#extern_irqs_vec);*
+    };
+
     let chip = keyboard_config.get_chip_model().unwrap();
     let board = keyboard_config.get_board_config().unwrap();
     let communication = keyboard_config.get_communication_config().unwrap();
@@ -48,10 +74,13 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     use ::embassy_stm32::bind_interrupts;
                     bind_interrupts!(struct Irqs {
                         #interrupt_name => ::embassy_stm32::usb::InterruptHandler<::embassy_stm32::peripherals::#peripheral_name>;
+                        #extern_irqs
                     });
                 }
             } else {
-                quote! {}
+                quote! {
+                    #extern_irqs
+                }
             }
         }
         rmk_config::ChipSeries::Nrf52 => {
@@ -114,6 +143,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     RADIO => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
+                    #extern_irqs;
                 });
 
                 #[::embassy_executor::task]
