@@ -1401,26 +1401,25 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
-    use embassy_time::Duration;
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::action::{Action, KeyAction};
+    use crate::action::Action;
     use crate::keycode::KeyCode;
 
     #[test]
     fn test_tap_dance_serialization_deserialization() {
-        let tap_dance = TapDance::new(
-            KeyAction::Single(Action::Key(KeyCode::A)),
-            KeyAction::Single(Action::Key(KeyCode::B)),
-            KeyAction::Single(Action::Key(KeyCode::C)),
-            KeyAction::Single(Action::Key(KeyCode::D)),
-            Duration::from_millis(200),
+        let tap_dance = TapDance::new_from_vial(
+            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::B),
+            Action::Key(KeyCode::C),
+            Action::Key(KeyCode::D),
+            200,
         );
 
         // Serialization
         let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
-        let storage_data = StorageData::TapDanceData(tap_dance);
+        let storage_data = StorageData::TapDanceData(tap_dance.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -1430,25 +1429,11 @@ mod tests {
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
                 // timeout
-                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
+                assert_eq!(deserialized_tap_dance.0.timeout_ms, tap_dance.0.timeout_ms);
                 // tap_actions
-                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
-                for (original, deserialized) in tap_dance
-                    .tap_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.tap_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
+                assert_eq!(deserialized_tap_dance.0.tap_actions, tap_dance.0.tap_actions);
                 // hold_actions
-                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
-                for (original, deserialized) in tap_dance
-                    .hold_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.hold_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
+                assert_eq!(deserialized_tap_dance.0.hold_actions, tap_dance.0.hold_actions);
             }
             _ => panic!("Expected TapDanceData"),
         }
@@ -1458,19 +1443,13 @@ mod tests {
     fn test_tap_dance_with_partial_actions() {
         // Create a TapDance with partial actions
         let mut tap_dance: TapDance = TapDance::default();
-        tap_dance
-            .tap_actions
-            .push(KeyAction::Single(Action::Key(KeyCode::A)))
-            .ok();
-        tap_dance
-            .hold_actions
-            .push(KeyAction::Single(Action::Key(KeyCode::B)))
-            .ok();
-        tap_dance.timeout = Duration::from_millis(150);
+        tap_dance.0.tap_actions.push(Action::Key(KeyCode::A));
+        tap_dance.0.hold_actions.push(Action::Key(KeyCode::B));
+        tap_dance.0.timeout_ms = 150;
 
         // Serialization
         let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
-        let storage_data = StorageData::TapDanceData(tap_dance);
+        let storage_data = StorageData::TapDanceData(tap_dance.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -1480,25 +1459,11 @@ mod tests {
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
                 // timeout
-                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
+                assert_eq!(deserialized_tap_dance.0.timeout_ms, tap_dance.0.timeout_ms);
                 // tap_actions
-                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
-                for (original, deserialized) in tap_dance
-                    .tap_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.tap_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
+                assert_eq!(deserialized_tap_dance.0.tap_actions, tap_dance.0.tap_actions);
                 // hold_actions
-                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
-                for (original, deserialized) in tap_dance
-                    .hold_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.hold_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
+                assert_eq!(deserialized_tap_dance.0.hold_actions, tap_dance.0.hold_actions);
             }
             _ => panic!("Expected TapDanceData"),
         }
