@@ -480,14 +480,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             debug!("Cleaning buffered morse key due to unilateral tap");
                             match held_key.state {
                                 KeyState::Held(pattern) => {
-                                    let tap = morse.action_from_pattern(pattern); //FIXME: is this correct? is followed_by_tap() needed here?
+                                    let tap = morse.action_from_pattern(pattern.followed_by_tap()); //FIXME: is this correct? is followed_by_tap() needed here?
                                     self.process_key_action_normal(tap, held_key.event).await;
-                                    held_key.state = KeyState::PostTap(pattern); //FIXME: is this correct? is followed_by_tap() needed here?
+                                    held_key.state = KeyState::PostTap(pattern.followed_by_tap()); //FIXME: is this correct? is followed_by_tap() needed here?
                                     // Push back after triggered tap
                                     self.held_buffer.push_without_sort(held_key);
                                 }
                                 KeyState::IdleAfterTap(pattern) => {
-                                    let tap = morse.action_from_pattern(pattern); //FIXME: is this correct? is followed_by_tap() needed here?
+                                    let tap = morse.action_from_pattern(pattern.followed_by_hold()); //FIXME: is this correct? is followed_by_tap() needed here?
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(tap, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again

@@ -15,10 +15,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub(crate) async fn handle_morse_timeout(&mut self, key: &HeldKey, morse: &Morse<MAX_MORSE_PATTERNS_PER_KEY>) {
         match key.state {
             KeyState::Held(pattern) => {
-                let a = morse.action_from_pattern(pattern.followed_by_hold()); //FIXME: is this correct? is followed_by_hold() needed here?
+                let a = morse.action_from_pattern(pattern.followed_by_hold());
                 self.process_key_action_normal(a, key.event).await; //FIXME: in real morse patterns the hold can be followed by taps, so do not fire immediately!
                 if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
-                    k.state = KeyState::PostHold(pattern.followed_by_hold()) //FIXME: is this correct? is followed_by_hold() needed here?
+                    k.state = KeyState::PostHold(pattern.followed_by_hold())
                 }
             }
             KeyState::IdleAfterTap(pattern) => {
