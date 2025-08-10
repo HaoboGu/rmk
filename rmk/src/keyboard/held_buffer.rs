@@ -1,7 +1,7 @@
 use embassy_time::Instant;
 
 use crate::MAX_MORSE_PATTERNS_PER_KEY;
-use crate::action::KeyAction;
+use crate::action::{Action, KeyAction};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::morse::{Morse, MorsePattern};
 
@@ -95,21 +95,18 @@ pub enum KeyState {
     WaitingCombo,
 
     /// After a press event is received.
-    /// The data represents the already completed morse pattern.
-    Held(MorsePattern),
-    /// Idle state after morse pattern
-    IdleAfterTap(MorsePattern),
-    /// Idle state after hold released
-    IdleAfterHold(MorsePattern),
-    /// Tap key has been processed and sent to HID, but not yet released.
-    /// The data represents completed morse pattern.
-    PostTap(MorsePattern),
-    /// Key is being held, but not yet released
-    /// The data represents completed morse pattern.
-    PostHold(MorsePattern),
-    /// Key needs to be released but is still in the queue,
-    /// it should be cleaned up in the main loop regardless
-    Release,
+    /// The data represents the previously completed morse pattern (not including the things happened after the last press of this key).
+    Pressed(MorsePattern),
+
+    /// After a release event is received for a key still kept in the HeldBuffer - so morse pattern may continue
+    /// The data represents the already completed morse pattern (until the last release of this key).
+    Released(MorsePattern),
+
+    /// The corresponding action is already executed (so the Pressed HID report is sent), but the
+    /// release HID report is not sent yet (will be sent only when the corresponding key is really released).
+    ProcessedButReleaseNotReportedYet(Action),
+    // Idle state is represented by the removal from the HeldBuffer
+    // Idle,
 }
 
 #[derive(Clone, Debug)]
