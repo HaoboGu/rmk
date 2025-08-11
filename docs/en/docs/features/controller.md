@@ -8,7 +8,7 @@ In RMK, controllers can be out-of-tree. To use those controllers with RMK's  con
 In the attributes `#[rmk_keyboard]`, `#[rmk_central]` or `#[rmk_peripheral]`. We can declare a controller as below. The name of the function is unique as the controller's name. And the body of the function returns the controller. The return type can be omitted.
 ```rust
 #[rmk_central]
-mod keybaord_central {
+mod keyboard_central {
     // ...
 
     #[controller]
@@ -41,7 +41,7 @@ Some external controllers may need interrupt. We can declare the interrupt as we
 
 ```rust
 #[rmk_central]
-mod keybaord_central {
+mod keyboard_central {
     // ...
 
     // declare the interrupt
