@@ -40,13 +40,9 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
         items
             .iter()
             .for_each(|item| {
-                if let syn::Item::Fn(item_fn) = &item {
-                    if let Some(attr) = item_fn.attrs.iter().find(|attr| attr.path().is_ident("add_irq")){
-                        if let syn::Meta::List(list) = &attr.meta {
-                            extern_irqs.push(list.tokens.clone());
-                        } else {
-                            panic!("Invalid attribute format for add_irq");
-                        }
+                if let syn::Item::Macro(item_macro) = &item {
+                    if item_macro.mac.path.is_ident("add_interrupt") {
+                        extern_irqs.push(item_macro.mac.tokens.clone());
                     }
                 }
         });

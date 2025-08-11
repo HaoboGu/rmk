@@ -75,12 +75,14 @@ pub(crate) fn expand_controller_init(keyboard_config: &KeyboardTomlConfig, item_
 fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, TokenStream) {
     let attr =  &fn_item.attrs.iter().find(|attr| attr.path().is_ident("controller")).unwrap();
     if let syn::Meta::List(meta) = &attr.meta {
+        let task_name = meta.tokens.clone();
+
         let content = &fn_item.block.stmts;
         let initializer = quote! {
-            #(#content)*
+            let mut #task_name = {
+                #(#content)*
+            };
         };
-
-        let task_name = meta.tokens.clone();
 
         (initializer, task_name)
     } else {
