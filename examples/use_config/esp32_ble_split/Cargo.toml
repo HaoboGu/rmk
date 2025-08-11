@@ -14,7 +14,7 @@ default = []
 central = [
     "rmk/esp32c6_ble",
     "esp-backtrace/esp32c6",
-    "esp-storage/esp32c6", 
+    "esp-storage/esp32c6",
     "esp-hal/esp32c6",
     "esp-hal-embassy/esp32c6",
     "esp-println/esp32c6",
@@ -25,7 +25,7 @@ peripheral = [
     "rmk/esp32c3_ble",
     "esp-backtrace/esp32c3",
     "esp-storage/esp32c3",
-    "esp-hal/esp32c3", 
+    "esp-hal/esp32c3",
     "esp-hal-embassy/esp32c3",
     "esp-println/esp32c3",
     "esp-wifi/esp32c3",
@@ -38,6 +38,7 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "log",
     "split",
     "storage",
+    "vial",
 ] }
 embassy-executor = { version = "0.7.0" }
 esp-backtrace = { version = "0.17", features = [

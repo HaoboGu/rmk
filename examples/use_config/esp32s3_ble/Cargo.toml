@@ -15,6 +15,7 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "esp32s3_ble",
     "log",
     "storage",
+    "vial"
 ] }
 embassy-executor = { version = "0.7.0" }
 esp-backtrace = { version = "0.17", features = [
