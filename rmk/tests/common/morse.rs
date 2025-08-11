@@ -31,5 +31,7 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         }
     }
 
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }
