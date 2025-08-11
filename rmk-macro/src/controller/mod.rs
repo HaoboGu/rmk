@@ -7,7 +7,10 @@ use crate::gpio_config::convert_gpio_str_to_output_pin;
 
 /// Expands the controller initialization code based on the keyboard configuration.
 /// Returns a tuple containing: (controller_initialization, controller names)
-pub(crate) fn expand_controller_init(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> (TokenStream, Vec<TokenStream>) {
+pub(crate) fn expand_controller_init(
+    keyboard_config: &KeyboardTomlConfig,
+    item_mod: &ItemMod,
+) -> (TokenStream, Vec<TokenStream>) {
     // TODO: Check whether the `controller` feature is enabled
     let chip = keyboard_config.get_chip_model().unwrap();
 
@@ -73,21 +76,14 @@ pub(crate) fn expand_controller_init(keyboard_config: &KeyboardTomlConfig, item_
 }
 
 fn expand_custom_controller(fn_item: &syn::ItemFn) -> (TokenStream, TokenStream) {
-    let attr =  &fn_item.attrs.iter().find(|attr| attr.path().is_ident("controller")).unwrap();
-    if let syn::Meta::List(meta) = &attr.meta {
-        let task_name = meta.tokens.clone();
+    let task_name = &fn_item.sig.ident;
 
-        let content = &fn_item.block.stmts;
-        let initializer = quote! {
-            let mut #task_name = {
-                #(#content)*
-            };
+    let content = &fn_item.block.stmts;
+    let initializer = quote! {
+        let mut #task_name = {
+            #(#content)*
         };
+    };
 
-        (initializer, task_name)
-    } else {
-        (quote! {
-            compile_error!("Invalid controller definition")
-        }, quote! {})
-    }
+    (initializer, quote! { #task_name })
 }

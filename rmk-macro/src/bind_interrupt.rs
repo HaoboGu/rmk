@@ -34,17 +34,14 @@ pub(crate) fn expand_bind_interrupt(keyboard_config: &KeyboardTomlConfig, item_m
 }
 
 pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
-
-    let mut extern_irqs:Vec<TokenStream2> = Vec::new();
+    let mut extern_irqs: Vec<TokenStream2> = Vec::new();
     if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .for_each(|item| {
-                if let syn::Item::Macro(item_macro) = &item {
-                    if item_macro.mac.path.is_ident("add_interrupt") {
-                        extern_irqs.push(item_macro.mac.tokens.clone());
-                    }
+        items.iter().for_each(|item| {
+            if let syn::Item::Macro(item_macro) = &item {
+                if item_macro.mac.path.is_ident("add_interrupt") {
+                    extern_irqs.push(item_macro.mac.tokens.clone());
                 }
+            }
         });
     }
     extern_irqs
@@ -54,9 +51,9 @@ pub(crate) fn find_extern_irqs(item_mod: &ItemMod) -> Vec<TokenStream2> {
 pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_mod: &ItemMod) -> TokenStream2 {
     let extern_irqs_vec = find_extern_irqs(item_mod);
     let extern_irqs = if extern_irqs_vec.is_empty() {
-        quote!{}
+        quote! {}
     } else {
-        quote!{
+        quote! {
             #(#extern_irqs_vec);* ;
         }
     };
