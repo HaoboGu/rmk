@@ -415,6 +415,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             keyboard_macros: #macros,
             // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
+            tap: ::rmk::config::TapConfig::default(),
         };
     }
 }
