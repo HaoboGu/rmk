@@ -108,7 +108,7 @@ pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
     default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
-    behavior_config: config::BehaviorConfig,
+    behavior_config: &'a mut config::BehaviorConfig,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
     RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await)
 }
@@ -122,7 +122,7 @@ pub async fn initialize_encoder_keymap<
 >(
     default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
     default_encoder_map: &'a mut [[action::EncoderAction; NUM_ENCODER]; NUM_LAYER],
-    behavior_config: config::BehaviorConfig,
+    behavior_config: &'a mut config::BehaviorConfig,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
     RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config).await)
 }
@@ -140,7 +140,7 @@ pub async fn initialize_encoder_keymap_and_storage<
     default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     flash: F,
     storage_config: &config::StorageConfig,
-    behavior_config: config::BehaviorConfig,
+    behavior_config: &'a mut config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -177,7 +177,7 @@ pub async fn initialize_keymap_and_storage<
     default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     flash: F,
     storage_config: &config::StorageConfig,
-    behavior_config: config::BehaviorConfig,
+    behavior_config: &'a mut config::BehaviorConfig,
 ) -> (
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,

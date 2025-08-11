@@ -405,7 +405,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let tap_dance = expand_tap_dance(&behavior.tap_dance);
 
     quote! {
-        let behavior_config = ::rmk::config::BehaviorConfig {
+        let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             morse: #morse,
             one_shot: #one_shot,

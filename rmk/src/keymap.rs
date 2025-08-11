@@ -34,7 +34,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     /// Rotary encoder cache
     encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
     /// Options for configurable action behavior
-    pub(crate) behavior: BehaviorConfig,
+    pub(crate) behavior: &'a mut BehaviorConfig,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -58,7 +58,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        mut behavior: BehaviorConfig,
+        behavior: &'a mut BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
 
@@ -86,7 +86,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-        mut behavior: BehaviorConfig,
+        behavior: &'a mut BehaviorConfig,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
@@ -99,7 +99,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // Read keymap to `action_map`
                     .and(storage.read_keymap(action_map, &mut encoder_map).await)
                     // Read behavior config
-                    .and(storage.read_behavior_config(&mut behavior).await)
+                    .and(storage.read_behavior_config(behavior).await)
                     // Read macro cache
                     .and(
                         storage
