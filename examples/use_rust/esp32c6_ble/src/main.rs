@@ -56,7 +56,7 @@ async fn main(_s: Spawner) {
     let (input_pins, output_pins) = config_matrix_pins_esp!(peripherals: peripherals, input: [GPIO6, GPIO7, GPIO20, GPIO21], output: [GPIO3, GPIO4, GPIO5]);
 
     // RMK config
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
     let storage_config = StorageConfig {
         start_addr: 0x3f0000,
         num_sectors: 16,

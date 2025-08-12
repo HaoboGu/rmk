@@ -22,6 +22,8 @@ use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 pub(crate) mod keycode_convert;
 mod protocol;
 mod vial;
+#[cfg(feature = "vial_lock")]
+mod vial_lock;
 
 pub(crate) struct VialService<
     'a,
@@ -36,6 +38,10 @@ pub(crate) struct VialService<
 
     // Vial config
     vial_config: VialConfig<'static>,
+
+    // Vail lock instance
+    #[cfg(feature = "vial_lock")]
+    locker: vial_lock::VialLock<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 
     // Usb vial hid reader writer
     pub(crate) reader_writer: RW,
@@ -60,6 +66,8 @@ impl<
         Self {
             keymap,
             vial_config,
+            #[cfg(feature = "vial_lock")]
+            locker: vial_lock::VialLock::<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>::new(vial_config.unlock_keys, keymap),
             reader_writer,
         }
     }
@@ -69,7 +77,9 @@ impl<
             match self.process().await {
                 Ok(_) => continue,
                 Err(e) => {
-                    if CONNECTION_STATE.load(Ordering::Relaxed) == ConnectionState::Disconnected.into() {
+                    if CONNECTION_STATE.load(Ordering::Relaxed)
+                        == <ConnectionState as Into<bool>>::into(ConnectionState::Disconnected)
+                    {
                         Timer::after_millis(1000).await;
                     } else {
                         error!("Process vial error: {:?}", e);
@@ -92,7 +102,7 @@ impl<
     }
 
     async fn process_via_packet(
-        &self,
+        &mut self,
         report: &mut ViaReport,
         keymap: &RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     ) {
@@ -120,7 +130,19 @@ impl<
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
                         ViaKeyboardInfo::SwitchMatrixState => {
-                            warn!("GetKeyboardValue - SwitchMatrixState")
+                            #[cfg(feature = "matrix_tester")]
+                            {
+                                #[cfg(not(feature = "vial_lock"))]
+                                {
+                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
+                                    error!("It is not sercure to use matrix tester without vial lock");
+                                }
+
+                                #[cfg(feature = "vial_lock")]
+                                if self.locker.is_unlocked() {
+                                    self.keymap.borrow().matrix_state.read_all(&mut report.input_data[2..]);
+                                }
+                            }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
                             BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
@@ -334,8 +356,9 @@ impl<
             ViaCommand::Vial => {
                 process_vial(
                     report,
-                    self.vial_config.vial_keyboard_id,
-                    self.vial_config.vial_keyboard_def,
+                    &self.vial_config,
+                    #[cfg(feature = "vial_lock")]
+                    &mut self.locker,
                     keymap,
                 )
                 .await

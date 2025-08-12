@@ -1,10 +1,10 @@
 use core::cell::RefCell;
 use core::fmt::Debug;
-#[cfg(feature = "_ble")]
-use core::sync::atomic::AtomicU32;
 
 use embassy_futures::select::{Either, select};
 use embassy_futures::yield_now;
+#[cfg(feature = "_ble")]
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -44,7 +44,7 @@ const HOLD_BUFFER_SIZE: usize = 16;
 
 // Timestamp of the last key action, the value is the number of seconds since the boot
 #[cfg(feature = "_ble")]
-pub(crate) static LAST_KEY_TIMESTAMP: AtomicU32 = AtomicU32::new(0);
+pub(crate) static LAST_KEY_TIMESTAMP: Signal<crate::RawMutex, u32> = Signal::new();
 
 /// Led states for the keyboard hid report (its value is received by by the light service in a hid report)
 /// LedIndicator type would be nicer, but that does not have const expr constructor
@@ -331,6 +331,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Process key changes at (row, col)
     async fn process_inner(&mut self, event: KeyboardEvent) -> LoopState {
+        #[cfg(feature = "matrix_tester")]
+        self.keymap.borrow_mut().matrix_state.update(&event);
+
         // Matrix should process key pressed event first, record the timestamp of key changes
         if event.pressed {
             self.set_timer_value(event, Some(Instant::now()));
@@ -678,7 +681,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
 
         #[cfg(feature = "_ble")]
-        LAST_KEY_TIMESTAMP.store(Instant::now().as_secs() as u32, core::sync::atomic::Ordering::Release);
+        LAST_KEY_TIMESTAMP.signal(Instant::now().as_secs() as u32);
 
         #[cfg(feature = "controller")]
         send_controller_event(&mut self.controller_pub, ControllerEvent::Key(event, key_action));

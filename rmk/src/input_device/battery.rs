@@ -1,5 +1,6 @@
 use core::cell::RefCell;
 
+use embassy_sync::signal::Signal;
 use embedded_hal::digital::InputPin;
 #[cfg(all(feature = "_ble", feature = "controller"))]
 use {crate::channel::send_controller_event, crate::event::ControllerEvent};
@@ -10,6 +11,21 @@ use crate::KeyMap;
 use crate::channel::{CONTROLLER_CHANNEL, ControllerPub};
 use crate::event::Event;
 use crate::input_device::ProcessResult;
+
+pub(crate) static BATTERY_UPDATE: Signal<crate::RawMutex, BatteryState> = Signal::new();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum BatteryState {
+    // The battery state is not available
+    NotAvailable,
+    // The value range is 0~100
+    Normal(u8),
+    // Charging
+    Charging,
+    // Charging completed, ideally the battery level after charging completed is 100
+    Charged,
+}
 
 pub struct ChargingStateReader<I: InputPin> {
     // Charging state pin or standby pin
@@ -63,6 +79,8 @@ pub struct BatteryProcessor<'a, const ROW: usize, const COL: usize, const NUM_LA
     keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     adc_divider_measured: u32,
     adc_divider_total: u32,
+    /// Current battery state
+    battery_state: BatteryState,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -80,6 +98,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             keymap,
             adc_divider_measured,
             adc_divider_total,
+            battery_state: BatteryState::NotAvailable,
             #[cfg(feature = "controller")]
             controller_pub: unwrap!(CONTROLLER_CHANNEL.publisher()),
         }
@@ -132,17 +151,18 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 #[cfg(feature = "_ble")]
                 {
-                    let current_value =
-                        crate::ble::trouble::battery_service::BATTERY_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
-                    if current_value < 100 || current_value == 255 {
+                    if matches!(self.battery_state, BatteryState::Normal(_) | BatteryState::NotAvailable) {
                         let battery_percent = self.get_battery_percent(val);
 
                         #[cfg(feature = "controller")]
                         send_controller_event(&mut self.controller_pub, ControllerEvent::Battery(battery_percent));
 
-                        // When charging, don't update the battery level(which is inaccurate)
-                        crate::ble::trouble::battery_service::BATTERY_LEVEL
-                            .store(battery_percent, core::sync::atomic::Ordering::Relaxed);
+                        // Update the battery state
+                        if self.battery_state != BatteryState::Normal(battery_percent) {
+                            self.battery_state = BatteryState::Normal(battery_percent);
+                            // Send signal
+                            BATTERY_UPDATE.signal(self.battery_state);
+                        }
                     }
                 }
                 ProcessResult::Stop
@@ -156,13 +176,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     send_controller_event(&mut self.controller_pub, ControllerEvent::ChargingState(charging));
 
                     if charging {
-                        crate::ble::trouble::battery_service::BATTERY_LEVEL
-                            .store(101, core::sync::atomic::Ordering::Relaxed);
+                        self.battery_state = BatteryState::Charging;
                     } else {
-                        // When discharging, the battery level is changed to 255(not available)
+                        // When discharging, the battery state is changed to not available
                         // Then wait for the `Event::Battery` to update the battery level to real value
-                        crate::ble::trouble::battery_service::BATTERY_LEVEL
-                            .store(255, core::sync::atomic::Ordering::Relaxed);
+                        self.battery_state = BatteryState::NotAvailable;
                     }
                 }
 

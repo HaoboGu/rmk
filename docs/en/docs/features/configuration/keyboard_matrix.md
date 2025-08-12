@@ -35,7 +35,7 @@ usb_enable = true
 
 - `nice!nano`
 - `nice!nano_v2`
-- `pi_pico_w`   
+- `pi_pico_w`
 - `XIAO BLE`
 
 ## `[matrix]`
@@ -100,4 +100,15 @@ direct_pins = [
 ]
 # `direct_pin_low_active` is optional. Default to `true`.
 direct_pin_low_active = true
+```
+
+### Security
+
+For security, some Vial's functions, e.g. `matrix_tester`, are protected behind a lock. You can set keys for unlocking your keyboard.
+
+```toml
+[security]
+# For example, the unlock keys are the combo of
+# the row 0, col 0 key and the row 0, col 1 key
+unlock_keys = [[0, 0], [0, 1]]
 ```
