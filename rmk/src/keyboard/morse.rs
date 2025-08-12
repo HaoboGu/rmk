@@ -19,6 +19,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 let pattern = pattern.followed_by_hold();
                 if pattern.is_full() || pattern.pattern_length() >= morse.max_pattern_length() {
                     let action = morse.action_from_pattern(pattern);
+                    debug!("Execute normal held action while pressed: {:?}", action);
                     self.process_key_action_normal(action, key.event).await; // This fires the pressed HID report only
                     if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
                         k.state = KeyState::ProcessedButReleaseNotReportedYet(action);
@@ -28,6 +29,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyState::Released(pattern) => {
                 // The time since the key release is longer than the timeout, trigger the pattern's action
                 let action = morse.action_from_pattern(pattern);
+                debug!("Execute normal held action after release: {:?}", action);
                 self.process_key_action_tap(action, key.event).await; // This fires the pressed HID report followed by the release HID report
                 let _ = self.held_buffer.remove(key.event.pos); // Removing from the held buffer is like setting to an idle state
             }

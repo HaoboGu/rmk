@@ -395,6 +395,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // TODO: Check only morse with modifier?
 
             let action = morse.tap_action();
+            debug!("Execute tap action: {:?}", action);
             self.process_key_action_normal(action, event).await;
             // Push back after triggered press
             let now = Instant::now();
@@ -427,6 +428,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 } else {
                     key_action
                 };
+                debug!("Execute key_action {:?}", key_action);
                 self.process_key_action_inner(key_action, morse, event).await
             }
             KeyBehaviorDecision::Buffer => {
@@ -488,6 +490,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Pressed(pattern) => {
                                     let pattern = pattern.followed_by_tap(); //the HeldKeyDecision turned this into tap!
                                     let action = morse.action_from_pattern(pattern);
+                                    debug!("Execute forced tap action while pressed: {:?}", action);
                                     self.process_key_action_normal(action, held_key.event).await; // This fires the pressed HID report only
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered tap
@@ -498,6 +501,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     // TODO? check if this is the longest possible pattern?
                                     let pattern = pattern.change_finish_to_tap(); //the HeldKeyDecision turned this into tap!
                                     let action = morse.action_from_pattern(pattern);
+                                    debug!("Execute forced tap action after release: {:?}", action);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await; // This fires the pressed HID report followed by the release HID report
                                     // The tap is fully fired, don't push it back to buffer again
@@ -521,6 +525,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     keyboard_state_updated = true;
                                     let pattern = pattern.followed_by_hold(); //the HeldKeyDecision turned this into hold!
                                     let action = morse.action_from_pattern(pattern);
+                                    debug!("Execute forced held action while pressed: {:?}", action);
                                     self.process_key_action_normal(action, held_key.event).await; // This fires the pressed HID report only
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
@@ -531,6 +536,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     // TODO? check if this is the longest possible pattern?
                                     let pattern = pattern.change_finish_to_hold(); //the HeldKeyDecision turned this into hold!
                                     let action = morse.action_from_pattern(pattern);
+                                    debug!("Execute forced held action after release: {:?}", action);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await; // This fires the pressed HID report followed by the release HID report
                                     // The tap is fully fired, don't push it back to buffer again
@@ -558,6 +564,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     debug!("Cleaning buffered Release key");
                                     let pattern = pattern.followed_by_tap(); // Releasing the current key, will always be tapping, because timeout isn't here
                                     let action = morse.action_from_pattern(pattern);
+                                    debug!("Execute normal tap action after release: {:?}", action);
                                     self.process_key_action_normal(action, held_key.event).await; // This fires the pressed HID report only
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                 }
@@ -597,6 +604,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             "Tap Key {:?} now press down, action: {:?}",
                             held_key.event, held_key.action
                         );
+
+                        debug!("Execute action: {:?}", held_key.action);
 
                         self.process_key_action_inner(held_key.action, held_key.morse.as_ref(), held_key.event)
                             .await;
