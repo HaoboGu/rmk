@@ -38,23 +38,23 @@ impl MorsePattern {
         MorsePattern((self.0 << 1) | 0b1)
     }
 
-    pub fn change_finish_to_tap(&self) -> Self {
-        // Set the last bit to 0 (tap)
-        if self.is_empty() {
-            MorsePattern::default()
-        } else {
-            MorsePattern(self.0 & (!0b1))
-        }
-    }
+    // pub fn change_finish_to_tap(&self) -> Self {
+    //     // Set the last bit to 0 (tap)
+    //     if self.is_empty() {
+    //         MorsePattern::default()
+    //     } else {
+    //         MorsePattern(self.0 & (!0b1))
+    //     }
+    // }
 
-    pub fn change_finish_to_hold(&self) -> Self {
-        // Set the last bit to 1 (hold)
-        if self.is_empty() {
-            MorsePattern::default()
-        } else {
-            MorsePattern(self.0 | 0b1)
-        }
-    }
+    // pub fn change_finish_to_hold(&self) -> Self {
+    //     // Set the last bit to 1 (hold)
+    //     if self.is_empty() {
+    //         MorsePattern::default()
+    //     } else {
+    //         MorsePattern(self.0 | 0b1)
+    //     }
+    // }
 
     //common patterns:
     pub fn tap() -> Self {

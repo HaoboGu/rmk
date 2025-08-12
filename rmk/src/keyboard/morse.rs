@@ -23,6 +23,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.process_key_action_normal(action, key.event).await; // This fires the pressed HID report only
                     if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
                         k.state = KeyState::ProcessedButReleaseNotReportedYet(action);
+                        debug!("new state5: {:?}", &k.state);
                     }
                 }
             }
@@ -67,6 +68,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     // The current key is already in the buffer, update its state
                     if let KeyState::Released(pattern) = k.state {
                         k.state = KeyState::Pressed(pattern);
+                        debug!("new state6: {:?}", &k.state);
                         k.press_time = pressed_time;
                         k.timeout_time = timeout_time;
                     }
@@ -112,9 +114,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             let mut press_event = event;
                             press_event.pressed = true;
                             self.process_key_action_tap(action, press_event).await; // This fires the pressed HID report followed by the release HID report
+                            self.held_buffer.remove(event.pos); // Remove the key from the held buffer, is like setting to an idle state
                         } else {
                             // It's not the last tap action, update the state
                             k.state = KeyState::Released(pattern);
+                            debug!("new state7: {:?}", &k.state);
                             // Use current release time for `IdleAfterTap` state
                             k.press_time = Instant::now(); // Use release time as the "press_time"
                             k.timeout_time = k.press_time + Duration::from_millis(morse.timeout_ms as u64);
@@ -123,9 +127,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     KeyState::ProcessedButReleaseNotReportedYet(action) => {
                         // Releasing a tap-hold action whose pressed HID report is already sent
                         info!("Releasing a morse action whose pressed action is already triggered");
-                        debug!("[morse] Releasing tap-hold key: {:?}", event);
                         let _ = self.held_buffer.remove(event.pos);
-                        // Process the action
+                        // Process the release action
+                        debug!("[morse] Releasing tap-hold key: {:?}", event);
                         self.process_key_action_normal(action, event).await; // This fires the release HID report
                         // Clear timer
                         self.set_timer_value(event, None);

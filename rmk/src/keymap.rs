@@ -1,6 +1,6 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
-use postcard::fixint::be;
+
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
