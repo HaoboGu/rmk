@@ -1174,6 +1174,20 @@ impl KeyCode {
         }
     }
 
+    /// Does current keycode continues caps word
+    pub(crate) fn is_caps_word_continue_key(self) -> bool {
+        if self >= KeyCode::A && self <= KeyCode::Z {
+            return true;
+        }
+        if self >= KeyCode::Kc1 && self <= KeyCode::Kc0 {
+            return true;
+        }
+        if self == KeyCode::Minus || self == KeyCode::Backspace || self == KeyCode::Delete {
+            return true;
+        }
+        false
+    }
+
     /// Convert a keycode to usb hid media key
     pub(crate) fn as_consumer_control_usage_id(self) -> ConsumerKey {
         match self {

@@ -11,6 +11,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
         KeyAction::Single(a) => match a {
             Action::Key(KeyCode::GraveEscape) => 0x7c16,
             Action::Key(KeyCode::RepeatKey) => 0x7c79,
+            Action::Key(KeyCode::CapsWordToggle) => 0x7c73,
             Action::Key(k) => {
                 if k.is_macro() {
                     k as u16 & 0xFF | 0x7700
@@ -176,6 +177,8 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7C16 => KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
         // RepeatKey
         0x7C79 => KeyAction::Single(Action::Key(KeyCode::RepeatKey)),
+        // Caps Word
+        0x7C73 => KeyAction::Single(Action::Key(KeyCode::CapsWordToggle)),
         0x7C00..=0x7C5F => {
             // TODO: Reset/GESC/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
             // - [GESC](https://docs.qmk.fm/#/feature_grave_esc)
