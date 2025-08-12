@@ -45,7 +45,9 @@ mod keyboard_central {
     // ...
 
     // declare the interrupt
-    add_interrupt!(SPIM3 => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::SPI3>);
+    add_interrupt!{
+        SPIM3 => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::SPI3>;
+    }
 
     // ...
 }

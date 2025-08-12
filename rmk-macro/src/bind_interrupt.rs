@@ -54,7 +54,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig, item_
         quote! {}
     } else {
         quote! {
-            #(#extern_irqs_vec);* ;
+            #(#extern_irqs_vec)*
         }
     };
 
