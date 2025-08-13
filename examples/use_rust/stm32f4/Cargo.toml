@@ -14,7 +14,7 @@ rmk = { path = "../../../rmk" }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
-embassy-stm32 = { version = "0.2", features = [
+embassy-stm32 = { version = "0.3", features = [
     # "stm32f407ve",
     "stm32f411ce",
     "defmt",
@@ -32,14 +32,7 @@ defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 [build-dependencies]
 xz2 = "0.1.7"
