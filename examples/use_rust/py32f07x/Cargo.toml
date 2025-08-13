@@ -10,13 +10,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["col2row", "defmt", "vial"] }
 embassy-time = { version = "0.4", features = ["defmt"] }
 # py32-hal = { git = "https://github.com/py32-rs/py32-hal", rev = "3ffc9c2", features = [
 py32-hal = { version = "0.3.0", features = [
-    "py32f072c1b", 
-    "memory-x", 
-    "rt", 
+    "py32f072c1b",
+    "memory-x",
+    "rt",
     "embassy-usb-driver-impl",
     "time-driver-tim3"
 ] }
