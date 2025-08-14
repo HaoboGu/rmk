@@ -47,10 +47,10 @@ export default defineConfig({
     ]
   },
   vite: {
-    css: { 
+    css: {
       preprocessorOptions: {
         scss: {
-          api: 'modern',
+          api: 'modern'
         }
       }
     }
@@ -207,6 +207,7 @@ function sidebarGuide() {
         { text: 'Joystick', link: 'input_devices/joystick' }
       ]
     },
+    { text: 'Controller', link: 'features/controller' },
     {
       text: 'Development',
       items: [
