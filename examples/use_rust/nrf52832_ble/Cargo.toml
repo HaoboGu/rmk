@@ -11,12 +11,12 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rmk = { path = "../../../rmk", features = ["async_matrix", "nrf52832_ble"] }
-nrf-sdc = { version = "0.1.1", default-features = false, features = [
+nrf-sdc = { version = "0.2", default-features = false, features = [
     "defmt",
     "peripheral",
     "nrf52832",
 ] }
-nrf-mpsl = { version = "0.1.1", default-features = false, features = [
+nrf-mpsl = { version = "0.2", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf52832",
@@ -26,7 +26,7 @@ bt-hci = { version = "0.3", default-features = false, features = ["defmt"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.5", features = [
+embassy-nrf = { version = "0.6", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
@@ -34,7 +34,7 @@ embassy-nrf = { version = "0.5", features = [
     "unstable-pac",
     "time",
 ] }
-embassy-executor = { version = "0.7", features = [
+embassy-executor = { version = "0.8", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -53,9 +53,7 @@ rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
-nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "b15c91008f085c8c1f21fdbfc176a60dee4ab9fa" }
-nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "b15c91008f085c8c1f21fdbfc176a60dee4ab9fa" }
+
 
 [build-dependencies]
 xz2 = "0.1.7"
