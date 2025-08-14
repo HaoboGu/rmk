@@ -192,6 +192,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "bt-hci"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a496a585c0e2e00195e558af18342f79afd67598d3edb32e78c006e606a31386"
+dependencies = [
+ "btuuid",
+ "defmt 1.0.1",
+ "embassy-sync",
+ "embedded-io",
+ "embedded-io-async",
+ "futures-intrusive",
+ "heapless 0.8.0",
+]
+
+[[package]]
+name = "btuuid"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0acfef8a77a02866e04f7e2ad3f4c7b32d575696c49c4bbad742b4aecb8e4a3"
+dependencies = [
+ "defmt 0.3.100",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1406,7 +1430,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7ca6ba5d9018af9c201a16c73474ea57362ddc64ac2bd1709148ca7b64cd5b1"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.3.2",
  "critical-section",
  "defmt 1.0.1",
  "embassy-hal-internal",
@@ -1776,7 +1800,7 @@ name = "rmk"
 version = "0.7.8"
 dependencies = [
  "bitfield-struct",
- "bt-hci",
+ "bt-hci 0.4.0",
  "byteorder",
  "chrono",
  "const-gen",
@@ -1853,7 +1877,7 @@ dependencies = [
 name = "rmk-nrf52840"
 version = "0.2.0"
 dependencies = [
- "bt-hci",
+ "bt-hci 0.4.0",
  "const-gen",
  "cortex-m",
  "cortex-m-rt",
@@ -2261,7 +2285,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c18ffc4e0c94e3b322116e6aaf8b6323fe3a42a9a9d1b6631606c16eb2885a2d"
 dependencies = [
  "aes",
- "bt-hci",
+ "bt-hci 0.3.2",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",
