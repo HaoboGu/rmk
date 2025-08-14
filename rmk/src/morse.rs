@@ -1,3 +1,5 @@
+use heapless::Vec;
+
 use crate::action::Action;
 
 /// a sequence of maximum 15 tap or hold can be encoded on an u16:
@@ -63,7 +65,7 @@ impl MorsePattern {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse<const N: usize> {
     /// The list of pattern -> action pairs, which can be triggered
-    pub(crate) actions: heapless::Vec<(MorsePattern, Action), N>,
+    pub(crate) actions: Vec<(MorsePattern, Action), N>,
 
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
@@ -76,7 +78,7 @@ pub struct Morse<const N: usize> {
 impl<const N: usize> Default for Morse<N> {
     fn default() -> Self {
         Self {
-            actions: heapless::Vec::default(),
+            actions: Vec::default(),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,

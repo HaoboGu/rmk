@@ -142,6 +142,33 @@ tap_dances = [
   }
 ]
 
+[[morse]]
+hold_timeout = "300ms"
+permissive_hold = false
+unilateral_tap = false
+hold_on_other_press = false
+morse.action_pairs = [ 
+  # Extended many function keys with morse
+  {pattern = ".", action = "F1"}, {pattern = "..", action = "F2"}, {pattern = "...", action = "F3"}, {pattern = "....", action = "F4"}, {pattern = ".....", action = "F5"},
+  {pattern = "-", action = "MO(1)"}, {pattern = ".-", action = "MO(2)"}, {pattern = "..-", action = "MO(3)"}, {pattern = "...-", action = "MO(4)"}, {pattern = "....-", action = "MO(5)"} 
+]
+
+# real morse ABC
+[[morse]]
+hold_timeout = "200ms"
+permissive_hold = false
+unilateral_tap = false
+hold_on_other_press = false
+[[morse.action_pairs]]
+pattern = ".-"
+action = "A"
+[[morse.action_pairs]] 
+pattern = "-..."
+action = "B"
+[[morse.action_pairs]] 
+pattern = "-.-."
+action = "C"
+
 # Fork configuration
 [behavior.fork]
 forks = [
@@ -204,9 +231,9 @@ fork_max_num = 8
 # Maximum number of tap dances keyboard can store (max 255)
 tap_dance_max_num = 8
 # Maximum number of morse keys the keyboard can store (max 255)
-morse_max_num = 1
+morse_max_num = 2
 # Maximum number of morse patterns a morse key can handle
-max_morse_patterns_per_key = 40
+max_morse_patterns_per_key = 12
 # Macro space size in bytes for storing sequences
 macro_space_size = 256
 # Default debounce time in ms

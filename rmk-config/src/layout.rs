@@ -408,6 +408,11 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
+                                Rule::morse_action => {
+                                    let action = inner_pair.as_str().to_string();
+                                    key_action_sequence.push(action);
+                                }
+
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End of input marker
                                 }

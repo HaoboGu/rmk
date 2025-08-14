@@ -388,6 +388,7 @@ pub struct LayoutConfig {
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
+    pub morse: Vec<Morse>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
@@ -406,6 +407,23 @@ pub struct TapHoldConfig {
     pub hold_on_other_press: Option<bool>,
     pub prior_idle_time: Option<DurationMillis>,
     pub hold_timeout: Option<DurationMillis>,
+}
+
+/// Configurations for morse
+#[derive(Clone, Debug, Deserialize)]
+pub struct Morse {
+    pub action_pairs: Vec<MorseActionPair>,
+    pub hold_timeout: Option<DurationMillis>,
+    pub permissive_hold: Option<bool>,
+    pub unilateral_tap: Option<bool>,
+    pub hold_on_other_press: Option<bool>,
+}
+
+/// Configurations for morse action pairs
+#[derive(Clone, Debug, Deserialize)]
+pub struct MorseActionPair {
+    pub pattern: String, // "-..."
+    pub action: String,  // "B"
 }
 
 /// Configurations for tri layer
