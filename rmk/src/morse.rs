@@ -1,11 +1,15 @@
 use crate::action::Action;
-use crate::keycode::ModifierCombination;
 
 /// a sequence of maximum 15 tap or hold can be encoded on an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MorsePattern(u16);
+
+pub const TAP: MorsePattern = MorsePattern(0b10);
+pub const HOLD: MorsePattern = MorsePattern(0b11);
+pub const DOUBLE_TAP: MorsePattern = MorsePattern(0b100);
+pub const HOLD_AFTER_TAP: MorsePattern = MorsePattern(0b101);
 
 impl MorsePattern {
     pub fn max_taps() -> usize {
@@ -36,38 +40,6 @@ impl MorsePattern {
     pub fn followed_by_hold(&self) -> Self {
         // Shift the bits to the left and set the last bit to 1 (hold)
         MorsePattern((self.0 << 1) | 0b1)
-    }
-
-    // pub fn change_finish_to_tap(&self) -> Self {
-    //     // Set the last bit to 0 (tap)
-    //     if self.is_empty() {
-    //         MorsePattern::default()
-    //     } else {
-    //         MorsePattern(self.0 & (!0b1))
-    //     }
-    // }
-
-    // pub fn change_finish_to_hold(&self) -> Self {
-    //     // Set the last bit to 1 (hold)
-    //     if self.is_empty() {
-    //         MorsePattern::default()
-    //     } else {
-    //         MorsePattern(self.0 | 0b1)
-    //     }
-    // }
-
-    //common patterns:
-    pub fn tap() -> Self {
-        MorsePattern(0b10) // 0b10 means tap
-    }
-    pub fn hold() -> Self {
-        MorsePattern(0b11) // 0b11 means hold
-    }
-    pub fn double_tap() -> Self {
-        MorsePattern(0b100) // 0b100 means double tap
-    }
-    pub fn hold_after_tap() -> Self {
-        MorsePattern(0b101) // 0b101 means hold after tap
     }
 }
 
@@ -120,113 +92,7 @@ impl<const N: usize> Morse<N> {
         max_length
     }
 
-    pub fn new_tap_hold(tap_action: Action, hold_action: Action) -> Self {
-        Self {
-            actions: Self::new_tap_hold_combo(tap_action, hold_action),
-            timeout_ms: 250,
-            mode: MorseKeyMode::HoldOnOtherPress,
-            unilateral_tap: false,
-        }
-    }
-
-    pub fn new_layer_tap_hold(tap_action: Action, layer: u8) -> Self {
-        Self {
-            actions: Self::new_tap_hold_combo(tap_action, Action::LayerOn(layer)),
-            timeout_ms: 250,
-            mode: MorseKeyMode::HoldOnOtherPress,
-            unilateral_tap: false,
-        }
-    }
-
-    pub fn new_modifier_tap_hold(tap_action: Action, modifier: ModifierCombination) -> Self {
-        Self {
-            actions: Self::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
-            timeout_ms: 250,
-            mode: MorseKeyMode::HoldOnOtherPress,
-            unilateral_tap: false,
-        }
-    }
-
-    pub fn new_hrm(tap_action: Action, modifier: ModifierCombination, timeout_ms: u16) -> Self {
-        Self {
-            actions: Self::new_tap_hold_combo(tap_action, Action::Modifier(modifier)),
-            timeout_ms,
-            mode: MorseKeyMode::PermissiveHold,
-            unilateral_tap: true,
-        }
-    }
-
-    pub fn new_tap_dance(
-        tap_action: Action,
-        hold_action: Action,
-        double_tap_action: Action,
-        hold_after_tap_action: Action,
-        timeout_ms: u16,
-        mode: MorseKeyMode,
-        unilateral_tap: bool,
-    ) -> Self {
-        let mut result = Self {
-            actions: Self::new_tap_hold_combo(tap_action, hold_action),
-            timeout_ms,
-            mode,
-            unilateral_tap,
-        };
-        if double_tap_action != Action::No {
-            _ = result.actions.push((MorsePattern::double_tap(), double_tap_action));
-        }
-        if hold_after_tap_action != Action::No {
-            _ = result
-                .actions
-                .push((MorsePattern::hold_after_tap(), hold_after_tap_action));
-        }
-        result
-    }
-
-    pub fn new_tap_hold_with_config(
-        tap_action: Action,
-        hold_action: Action,
-        timeout_ms: u16,
-        mode: MorseKeyMode,
-        unilateral_tap: bool,
-    ) -> Self {
-        Self {
-            actions: Self::new_tap_hold_combo(tap_action, hold_action),
-            timeout_ms,
-            mode,
-            unilateral_tap,
-        }
-    }
-
-    // TODO: Remove the global setting
-    pub fn get_timeout(&self, global_timeout_time: u16) -> u16 {
-        if self.timeout_ms == 250 && global_timeout_time != 250 {
-            // Global setting overrides the default setting
-            global_timeout_time
-        } else {
-            self.timeout_ms
-        }
-    }
-
-    pub fn action_from_pattern(&self, pattern: MorsePattern) -> Action {
-        *self.get(pattern).unwrap_or(&Action::No)
-    }
-
-    pub fn tap_action(&self) -> Action {
-        *self.get(MorsePattern::tap()).unwrap_or(&Action::No)
-    }
-
-    fn new_tap_hold_combo(tap_action: Action, hold_action: Action) -> heapless::Vec<(MorsePattern, Action), N> {
-        let mut result = heapless::Vec::<(MorsePattern, Action), N>::new();
-        if tap_action != Action::No {
-            _ = result.push((MorsePattern::tap(), tap_action));
-        }
-        if hold_action != Action::No {
-            _ = result.push((MorsePattern::hold(), hold_action));
-        }
-        result
-    }
-
-    fn get(&self, pattern: MorsePattern) -> Option<&Action> {
+    pub fn get(&self, pattern: MorsePattern) -> Option<&Action> {
         for pair in self.actions.iter() {
             if pair.0 == pattern {
                 return Some(&pair.1);

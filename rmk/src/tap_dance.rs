@@ -51,4 +51,12 @@ impl TapDance {
             || self.double_tap_action != Action::No
             || self.hold_after_tap_action != Action::No
     }
+
+    pub fn max_pattern_length(&self) -> usize {
+        if self.double_tap_action != Action::No || self.hold_after_tap_action != Action::No {
+            2
+        } else {
+            1
+        }
+    }
 }
