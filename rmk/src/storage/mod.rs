@@ -33,7 +33,10 @@ use crate::morse::{Morse, MorsePattern};
 use crate::split::ble::PeerAddress;
 use crate::tap_dance::TapDance;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM};
+use crate::{
+    BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MAX_MORSE_PATTERNS_PER_KEY,
+    TAP_DANCE_MAX_NUM,
+};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -83,6 +86,8 @@ pub(crate) enum FlashOperationMessage {
     WriteFork(ForkData),
     // Write tap dance
     WriteTapDance(u8, TapDance),
+    // Write morse
+    WriteMorse(u8, Morse<MAX_MORSE_PATTERNS_PER_KEY>),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -152,7 +157,7 @@ pub(crate) enum StorageData {
     ConnectionType(u8),
     ForkData(ForkData),
     TapDanceData(TapDance),
-    MorseData(Morse),
+    MorseData(Morse<MAX_MORSE_PATTERNS_PER_KEY>),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -197,6 +202,11 @@ pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
 /// Get the key to retrieve the tap dance from the storage.
 pub(crate) fn get_tap_dance_key(idx: u8) -> u32 {
     0x7000 + idx as u32
+}
+
+/// Get the key to retrieve the morse from the storage.
+pub(crate) fn get_morse_key(idx: u8) -> u32 {
+    0x8000 + idx as u32
 }
 
 impl Value<'_> for StorageData {
@@ -344,15 +354,12 @@ impl Value<'_> for StorageData {
                 //TODO: mode, unilateral_tap
 
                 let mut i = 5;
-                for item in morse.actions {
+                for (pattern, action) in &morse.actions {
                     BigEndian::write_u16(
                         &mut buffer[i..i + 2],
-                        to_via_keycode(KeyAction::Single(item.0)), //pattern
+                        pattern.to_u16(), //pattern
                     );
-                    BigEndian::write_u16(
-                        &mut buffer[i + 2..i + 4],
-                        to_via_keycode(KeyAction::Single(item.1)), //key action
-                    );
+                    BigEndian::write_u16(&mut buffer[i + 2..i + 4], to_via_keycode(KeyAction::Single(*action)));
                     i += 4;
                 }
 
@@ -588,7 +595,7 @@ impl Value<'_> for StorageData {
                     for i in 0..count {
                         let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[5 + i * 4..7 + i * 4]));
                         let key_action = from_via_keycode(BigEndian::read_u16(&buffer[7 + i * 4..9 + i * 4]));
-                        morse.actions.push((pattern, key_action.to_action()));
+                        _ = morse.actions.push((pattern, key_action.to_action()));
                     }
 
                     Ok(StorageData::MorseData(morse))
@@ -685,6 +692,9 @@ impl StorageData {
             }
             StorageData::TapDanceData(_) => {
                 panic!("To get tap dance key for TapDanceData, use `get_tap_dance_key` instead");
+            }
+            StorageData::MorseData(_) => {
+                panic!("To get morse key for MorseData, use `get_morse_key` instead");
             }
             #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
@@ -1009,6 +1019,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &mut self.buffer,
                         &key,
                         &StorageData::TapDanceData(tap_dance),
+                    )
+                    .await
+                }
+                FlashOperationMessage::WriteMorse(id, morse) => {
+                    let key = get_morse_key(id);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &StorageData::MorseData(morse),
                     )
                     .await
                 }

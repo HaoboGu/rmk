@@ -24,6 +24,10 @@ impl MorsePattern {
         MorsePattern(value)
     }
 
+    pub fn to_u16(&self) -> u16 {
+        self.0
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0 == 0b1
     }
