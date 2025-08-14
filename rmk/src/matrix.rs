@@ -12,6 +12,65 @@ use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
+/// Recording the matrix pressed state
+#[cfg(feature = "matrix_tester")]
+pub struct MatrixState<const ROW: usize, const COL: usize> {
+    // 30 bytes is the limited by Vial and 240 keys is enough for
+    // most keyborad
+    state: [u8; 30],
+}
+
+#[cfg(feature = "matrix_tester")]
+impl<const ROW: usize, const COL: usize> MatrixState<ROW, COL> {
+    const ROW_LEN: usize = (COL + 8) / 8;
+    const OUT_OF_BOUNDARY: () = if ROW * Self::ROW_LEN > 30 {
+        panic!(
+            "Cannot use matrix tester because your keyboard has too many keys. \
+            Consider disable the `matrix_tester` feature"
+        )
+    };
+    pub fn new() -> Self {
+        Self { state: [0; 30] }
+    }
+    pub fn update(&mut self, event: &crate::event::KeyboardEvent) {
+        use crate::event::KeyboardEventPos;
+        if let KeyboardEventPos::Key(crate::event::KeyPos { row, col }) = event.pos {
+            if row as usize >= ROW || col as usize >= COL {
+                warn!("Matrix read out of bounds");
+                return;
+            }
+            let pressed = event.pressed;
+            let index = row as usize * Self::ROW_LEN * 8 + col as usize;
+            let byte_index = index / 8;
+            let bit_index = index % 8;
+            self.state[byte_index] = self.state[byte_index] & !(1 << bit_index) | ((pressed as u8) << bit_index);
+        }
+    }
+    pub fn read_all(&self, target: &mut [u8]) {
+        let slice = &self.state[..(ROW * Self::ROW_LEN)];
+        let mut target_iter = target.iter_mut();
+        for row_bytes in slice.chunks(Self::ROW_LEN) {
+            for byte in row_bytes.iter().rev() {
+                if let Some(target_byte) = target_iter.next() {
+                    *target_byte = *byte;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    pub fn read(&self, row: u8, col: u8) -> bool {
+        if row as usize >= ROW || col as usize >= COL {
+            warn!("Matrix read out of bounds");
+            return false;
+        }
+        let index = row as usize * Self::ROW_LEN * 8 + col as usize;
+        let byte_index = index / 8;
+        let bit_index = index % 8;
+        self.state[byte_index] & (1 << bit_index) != 0
+    }
+}
+
 /// MatrixTrait is the trait for keyboard matrix.
 ///
 /// The keyboard matrix is a 2D matrix of keys, the matrix does the scanning and saves the result to each key's `KeyState`.
@@ -24,7 +83,7 @@ pub trait MatrixTrait: InputDevice {
     // Wait for USB or BLE really connected
     fn wait_for_connected(&self) -> impl Future<Output = ()> {
         async {
-            while CONNECTION_STATE.load(Ordering::Acquire) == ConnectionState::Disconnected.into() {
+            while CONNECTION_STATE.load(Ordering::Acquire) == Into::<bool>::into(ConnectionState::Disconnected) {
                 embassy_time::Timer::after_millis(100).await;
             }
             info!("Connected, start scanning matrix");

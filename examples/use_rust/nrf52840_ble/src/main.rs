@@ -63,6 +63,11 @@ const L2CAP_RXQ: u8 = 3;
 /// Size of L2CAP packets
 const L2CAP_MTU: usize = 251;
 
+const UNLOCK_KEYS: &[(u8, u8)] = &[
+    (0, 0),
+    (0, 1),
+];
+
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
     rng: &'d mut rng::Rng<RNG, Async>,
@@ -160,7 +165,7 @@ async fn main(spawner: Spawner) {
         product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let ble_battery_config = BleBatteryConfig::new(Some(is_charging_pin), true, None, false);
     let storage_config = StorageConfig {
         start_addr: 0xA0000, // FIXME: use 0x70000 after we can build without softdevice controller

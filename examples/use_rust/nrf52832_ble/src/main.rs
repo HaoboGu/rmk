@@ -127,7 +127,7 @@ async fn main(spawner: Spawner) {
         product_name: "RMK Keyboard",
         serial_number: "vial:f64c2b3c:000001",
     };
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF);
+    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
     let storage_config = StorageConfig {
         start_addr: 0x70000,
         num_sectors: 6,

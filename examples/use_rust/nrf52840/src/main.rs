@@ -58,7 +58,7 @@ async fn main(_spawner: Spawner) {
 
     // RMK config
     let rmk_config = RmkConfig {
-        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF),
+        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]),
         ..Default::default()
     };
 
