@@ -29,7 +29,7 @@ use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
-use crate::morse::MorseKeyMode;
+use crate::morse::{MorseKeyMode, MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::{FORK_MAX_NUM, boot};
@@ -114,7 +114,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
                 }
                 _ => {
                     // Stop buffering, clean all buffered events
-                    self.clean_buffered_tap_keys();
+                    self.clean_buffered_processed_keys();
 
                     // After processing the key event, check if there are unprocessed events
                     // This will happen if there's recursion in key processing
@@ -259,25 +259,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     /// Get a copy of the next timeout key in the buffer,
     /// which is either a combo component that is waiting for other combo keys,
-    /// or a morse key that is in the tap state or the idle state after tapping.
+    /// or a morse key that is in the pressed or released state.
     fn next_buffered_key(&mut self) -> Option<HeldKey> {
         self.held_buffer.next_timeout(|k| {
-            matches!(k.state, KeyState::IdleAfterTap(_) | KeyState::WaitingCombo)
-                || (matches!(k.state, KeyState::Held(_)) && matches!(k.action, KeyAction::Morse(_)))
+            matches!(k.state, KeyState::Released(_) | KeyState::WaitingCombo)
+                || (matches!(k.state, KeyState::Pressed(_)) && k.action.is_morse())
         })
     }
 
-    // Clean up for leak keys, remove non-tap-hold keys in PostTap state from the buffer
-    pub(crate) fn clean_buffered_tap_keys(&mut self) {
-        self.held_buffer.keys.retain(|k| match k.action {
-            KeyAction::Morse(_) => true,
-            _ => match k.state {
-                KeyState::PostTap(_) => {
-                    warn!("NEED CLEAN: Processing buffering TAP keys with post tap: {:?}", k.event);
-                    false
+    // Clean up for leak keys, remove non-morse keys in ProcessedButReleaseNotReportedYet state from the buffer
+    pub(crate) fn clean_buffered_processed_keys(&mut self) {
+        self.held_buffer.keys.retain(|k| {
+            if k.action.is_morse() {
+                true
+            } else {
+                match k.state {
+                    KeyState::ProcessedButReleaseNotReportedYet(_) => {
+                        warn!("NEED CLEAN: Processing buffering TAP keys with post tap: {:?}", k.event);
+                        false
+                    }
+                    _ => true,
                 }
-                _ => true,
-            },
+            }
         });
     }
 
@@ -308,10 +311,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
-            KeyState::Held(_) | KeyState::IdleAfterTap(_) => {
-                if let KeyAction::Morse(morse) = key.action {
+            KeyState::Pressed(_) | KeyState::Released(_) => {
+                if key.action.is_morse() {
                     // Wait for timeout or new key event
-                    info!("Waiting morse key: {:?}", morse);
+                    info!("Waiting morse key: {:?}", key.action);
                     match with_deadline(key.timeout_time, KEY_EVENT_CHANNEL.receive()).await {
                         Ok(event) => {
                             debug!("Buffered morse key interrupted by a new key event: {:?}", event);
@@ -319,7 +322,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
                         Err(_timeout) => {
                             debug!("Buffered morse key timeout");
-                            self.handle_morse_timeout(&key, morse).await;
+                            self.handle_morse_timeout(&key).await;
                         }
                     }
                 }
@@ -357,28 +360,29 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
-        // Global hold timeout
-        let operation_timeout = self.keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
-
         // When pressing a morse key, check flow tap first.
         if event.pressed
             && self.keymap.borrow().behavior.morse.enable_hrm
-            && let KeyAction::Morse(m) = key_action
+            && key_action.is_morse()
             && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
-            // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered tap_num
+
+            // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered morse pattern?
             // TODO: Check only morse with modifier?
-            let tap = m.tap_action(0);
-            self.process_key_action_normal(tap, event).await;
+
+            let action = key_action.action_from_pattern(&self.keymap.borrow().behavior, TAP); //tap action
+            self.process_key_action_normal(action, event).await;
             // Push back after triggered press
+            let now = Instant::now();
+            let time_out = now + key_action.morse_timeout(&self.keymap.borrow().behavior);
             self.held_buffer.push(HeldKey::new(
                 event,
                 key_action,
-                KeyState::PostTap(0),
-                Instant::now(),
-                Instant::now() + Duration::from_millis(m.get_timeout(operation_timeout) as u64),
+                KeyState::ProcessedButReleaseNotReportedYet(action),
+                now,
+                time_out,
             ));
             return LoopState::OK;
         }
@@ -405,15 +409,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             KeyBehaviorDecision::Buffer => {
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
-                let timeout_time = if let KeyAction::Morse(m) = key_action {
-                    press_time + Duration::from_millis(m.timeout_ms as u64)
+                let timeout_time = if key_action.is_morse() {
+                    press_time + key_action.morse_timeout(&self.keymap.borrow().behavior)
                 } else {
                     press_time
                 };
                 self.held_buffer.push(HeldKey::new(
                     event,
                     key_action,
-                    KeyState::Held(0),
+                    KeyState::Pressed(MorsePattern::default()),
                     press_time,
                     timeout_time,
                 ));
@@ -452,22 +456,30 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             match decision {
                 HeldKeyDecision::UnilateralTap => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
-                        if let KeyAction::Morse(morse) = held_key.action {
+                        if held_key.action.is_morse() {
                             // Unilateral tap of the held key is triggered
                             debug!("Cleaning buffered morse key due to unilateral tap");
                             match held_key.state {
-                                KeyState::Held(t) => {
-                                    let tap = morse.tap_action(t as usize);
-                                    self.process_key_action_normal(tap, held_key.event).await;
-                                    held_key.state = KeyState::PostTap(t);
+                                KeyState::Pressed(pattern) => {
+                                    let pattern = pattern.followed_by_tap(); // The HeldKeyDecision turned this into tap!
+                                    let action = held_key
+                                        .action
+                                        .action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    self.process_key_action_normal(action, held_key.event).await;
+                                    held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered tap
                                     self.held_buffer.push_without_sort(held_key);
                                 }
-                                KeyState::IdleAfterTap(t) => {
-                                    let tap = morse.tap_action(t as usize);
+                                KeyState::Released(pattern) => {
+                                    // TODO? check if this is the longest possible pattern?
+                                    let pattern = pattern;
+                                    let action = held_key
+                                        .action
+                                        .action_from_pattern(&self.keymap.borrow().behavior, pattern);
                                     held_key.event.pressed = true;
-                                    self.process_key_action_tap(tap, held_key.event).await;
+                                    self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
+                                    // Removing from the held buffer is like setting to an idle state
                                 }
                                 _ => (),
                             }
@@ -477,35 +489,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HeldKeyDecision::PermissiveHold | HeldKeyDecision::HoldOnOtherKeyPress => {
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         let action = self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event);
-                        let morse_action = match action {
-                            KeyAction::TapDance(i) => self
-                                .keymap
-                                .borrow()
-                                .behavior
-                                .tap_dance
-                                .tap_dances
-                                .get(i as usize)
-                                .map(|x| x.0),
-                            KeyAction::Morse(morse) => Some(morse),
-                            _ => None,
-                        };
-                        if let Some(morse) = morse_action {
+
+                        if action.is_morse() {
                             // Permissive hold of held key is triggered
                             debug!("Cleaning buffered morse key due to permissive hold or hold on other key press");
                             match held_key.state {
-                                KeyState::Held(t) => {
+                                KeyState::Pressed(pattern) => {
                                     keyboard_state_updated = true;
-                                    let hold = morse.hold_action(t as usize);
-                                    self.process_key_action_normal(hold, held_key.event).await;
-                                    held_key.state = KeyState::PostHold(t);
+                                    let pattern = pattern.followed_by_hold(); // The HeldKeyDecision turned this into hold!
+                                    let action = action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    self.process_key_action_normal(action, held_key.event).await;
+                                    held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
                                     self.held_buffer.push_without_sort(held_key);
                                 }
-                                KeyState::IdleAfterTap(t) => {
-                                    let tap = morse.tap_action(t as usize);
+                                KeyState::Released(pattern) => {
+                                    // TODO? check if this is the longest possible pattern?
+                                    let pattern = pattern;
+                                    let action = action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
                                     held_key.event.pressed = true;
-                                    self.process_key_action_tap(tap, held_key.event).await;
+                                    self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
+                                    // Removing from the held buffer is like setting to an idle state
                                 }
                                 _ => (),
                             }
@@ -521,32 +526,45 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             held_key.action
                         };
                         debug!("Processing current key before releasing: {:?}", held_key.event);
-                        match key_action {
-                            KeyAction::Single(action) => {
-                                self.process_key_action_normal(action, held_key.event).await;
-                            }
-                            KeyAction::Tap(action) => {
-                                self.process_key_action_tap(action, held_key.event).await;
-                            }
-                            KeyAction::Morse(morse) => {
-                                match held_key.state {
-                                    KeyState::Held(t) => {
-                                        debug!("Cleaning buffered Release key");
-                                        let tap = morse.tap_action(t as usize);
-                                        self.process_key_action_normal(tap, held_key.event).await;
-                                        held_key.state = KeyState::PostTap(t);
-                                    }
-                                    _ => (),
+                        if !key_action.is_morse() {
+                            match key_action {
+                                KeyAction::Single(action) => {
+                                    self.process_key_action_normal(action, held_key.event).await;
                                 }
-                                // Push back after triggered hold
-                                self.held_buffer.push_without_sort(held_key);
+                                KeyAction::Tap(action) => {
+                                    self.process_key_action_tap(action, held_key.event).await;
+                                }
+                                _ => {}
                             }
-                            _ => (), // For tap-dance, the releasing will not be processed immediately, so just ignore it
+                        } else {
+                            match held_key.state {
+                                KeyState::Pressed(pattern) => {
+                                    debug!("Cleaning buffered Release key");
+                                    let pattern = pattern.followed_by_tap(); // Releasing the current key, will always be tapping, because timeout isn't here
+                                    // let pattern = if Instant::now() >= held_key.timeout_time {
+                                    //     pattern.followed_by_hold()
+                                    // } else {
+                                    //     pattern.followed_by_tap()
+                                    // };
+                                    if pattern.is_full()
+                                        || pattern.pattern_length()
+                                            >= key_action.max_pattern_length(&self.keymap.borrow().behavior)
+                                    {
+                                        let action =
+                                            key_action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                        self.process_key_action_normal(action, held_key.event).await;
+                                        held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
+                                    }
+                                }
+                                _ => {} // For tap-dance, the releasing will not be processed immediately, so just ignore it
+                            }
+                            // Push back after triggered hold
+                            self.held_buffer.push_without_sort(held_key);
                         }
                     }
 
                     // After processing current key in `Release` state, mark the `decision_for_current_key` to `CleanBuffer`
-                    // That means all normal keys pressed AFTER the press of curreng releasing key will be fired
+                    // That means all normal keys pressed AFTER the press of current releasing key will be fired
                     decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
                 }
                 HeldKeyDecision::Normal => {
@@ -560,11 +578,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         } else {
                             held_key.action
                         };
+
+                        // Morse actions are not expected here!
+                        //assert!(!action.is_morse());
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
                         self.process_key_action_inner(action, held_key.event).await;
 
-                        // Update key's state, push back
-                        held_key.state = KeyState::PostTap(0);
+                        // Push back the updated key state
+                        held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action.to_action()); // Morse actions are not expected here!
                         self.held_buffer.push_without_sort(held_key);
                     }
                 }
@@ -589,23 +610,23 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut decision_for_current_key = KeyBehaviorDecision::Ignore;
         let mut decisions: Vec<(_, HeldKeyDecision), HOLD_BUFFER_SIZE> = Vec::new();
 
-        // Whether the held buffer needs to be checked. If not, just returns an empty list
+        // Whether the held buffer needs to be checked.
         let check_held_buffer = event.pressed
             || self
                 .held_buffer
                 .find_action(key_action)
-                .is_some_and(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)));
+                .is_some_and(|k| matches!(k.state, KeyState::Pressed(_) | KeyState::Released(_)));
 
         if check_held_buffer {
             // First, sort by press time
             self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
-            // Check all unresolved held keys, calculatle their decision one-by-one
+            // Check all unresolved held keys, calculate their decision one-by-one
             for held_key in self
                 .held_buffer
                 .keys
                 .iter()
-                .filter(|k| matches!(k.state, KeyState::Held(_) | KeyState::IdleAfterTap(_)))
+                .filter(|k| matches!(k.state, KeyState::Pressed(_) | KeyState::Released(_)))
             {
                 // Releasing a key is already buffered
                 if !event.pressed && held_key.action == key_action {
@@ -615,27 +636,31 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     continue;
                 }
 
-                // Buffered normal keys should be added to the decision list, they will be processed later according to the decision of current key
-                if !matches!(held_key.action, KeyAction::Morse(_)) && matches!(held_key.state, KeyState::Held(_)) {
+                // Buffered normal keys should be added to the decision list,
+                // they will be processed later according to the decision of current key
+                if !held_key.action.is_morse() && matches!(held_key.state, KeyState::Pressed(_)) {
                     let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Normal));
                     continue;
                 }
 
                 // The remaining keys are not same as the current key, check only morse keys
-                if let KeyAction::Morse(morse) = held_key.action
-                    && held_key.event.pos != event.pos
-                {
+                if held_key.event.pos != event.pos && held_key.action.is_morse() {
+                    let (morse_mode, unilateral_tap) = held_key.action.morse_mode(&self.keymap.borrow().behavior);
+
                     if event.pressed {
                         // The current key is being pressed
 
                         // Check morse key mode
-                        match morse.mode {
+                        match morse_mode {
                             MorseKeyMode::PermissiveHold => {
                                 // Permissive hold mode checks key releases, so push current key press into buffer.
                                 decision_for_current_key = KeyBehaviorDecision::Buffer;
                             }
                             MorseKeyMode::HoldOnOtherPress => {
-                                debug!("Trigger morse key due to hold on other key press: {:?}", morse);
+                                debug!(
+                                    "Trigger morse key due to hold on other key press: {:?}",
+                                    held_key.action
+                                );
                                 let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
                                 decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
                             }
@@ -645,7 +670,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
-                        if morse.unilateral_tap
+                        if unilateral_tap
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
                             && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
@@ -657,7 +682,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                         // The current key is being released, check only the held key in permissive hold mode
                         if decision_for_current_key != KeyBehaviorDecision::Release
-                            && let MorseKeyMode::PermissiveHold = morse.mode
+                            && morse_mode == MorseKeyMode::PermissiveHold
                         {
                             debug!("Permissive hold!");
                             // Check first current releasing key is in the buffer, AND after the current key
@@ -686,29 +711,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "controller")]
         send_controller_event(&mut self.controller_pub, ControllerEvent::Key(event, key_action));
 
-        match key_action {
-            KeyAction::No | KeyAction::Transparent => (),
-            KeyAction::Single(a) => {
-                debug!("Process Single key action: {:?}, {:?}", a, event);
-                self.process_key_action_normal(a, event).await;
-            }
-            KeyAction::Tap(a) => self.process_key_action_tap(a, event).await,
-            KeyAction::Morse(morse) => {
-                self.process_key_action_morse(morse, event).await;
-            }
-            KeyAction::TapDance(idx) => {
-                // Get morse first, to avoid keymap being borrowed
-                let morse = match self.keymap.borrow().behavior.tap_dance.tap_dances.get(idx as usize) {
-                    Some(td) => Some(td.0),
-                    None => None,
-                };
-
-                if let Some(m) = morse {
-                    self.process_key_action_morse(m, event).await;
+        if !key_action.is_morse() {
+            match key_action {
+                KeyAction::No | KeyAction::Transparent => (),
+                KeyAction::Single(action) => {
+                    debug!("Process Single key action: {:?}, {:?}", action, event);
+                    self.process_key_action_normal(action, event).await;
                 }
+                KeyAction::Tap(action) => self.process_key_action_tap(action, event).await,
+                _ => {}
             }
+        } else {
+            self.process_key_action_morse(key_action, event).await;
         }
-
         self.try_finish_forks(original_key_action, event);
 
         LoopState::OK
@@ -2101,7 +2116,6 @@ mod test {
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
-    use crate::morse::Morse;
     use crate::{a, k, layer, mo, th};
 
     // Init logger for tests
@@ -2310,7 +2324,7 @@ mod test {
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }),
                     0,
-                    KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again))),
+                    KeyAction::TapHold(Action::Key(KeyCode::F), Action::Key(KeyCode::Again)),
                 );
                 keyboard.keymap.borrow_mut().set_action_at(
                     KeyboardEventPos::Key(KeyPos { row: 2, col: 1 }),
@@ -2329,13 +2343,13 @@ mod test {
                 keyboard
                     .send_keyboard_report_with_resolved_modifiers(true)
                     .await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
                 // Release F
                 keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
 
                 // Press A key
                 keyboard.process_inner(KeyboardEvent::key(2, 1, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
 
                 // Release A key
                 keyboard.process_inner(KeyboardEvent::key(2, 1, false)).await;
@@ -2346,25 +2360,24 @@ mod test {
 
                 // Here release event should make again into hold
 
-
                 embassy_time::Timer::after_millis(200 as u64).await;
                 // after another key is pressed, that key is repeated
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
                 force_timeout_first_hold(&mut keyboard).await;
 
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::A); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::A);
 
                 // releasing the repeat key
                 keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::No); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
 
                 // Press S key
                 keyboard.process_inner(KeyboardEvent::key(2, 2, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
 
                 // after another key is pressed, that key is repeated
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
-                assert_eq!(keyboard.held_keycodes[0], KeyCode::S); // A key's HID code is 0x04
+                assert_eq!(keyboard.held_keycodes[0], KeyCode::S);
             };
             block_on(main);
         }

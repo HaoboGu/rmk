@@ -48,4 +48,4 @@ keymap = [
 # enabled = false
 
 [rmk]
-tap_dance_max_tap = 4
+morse_max_num = 0

@@ -50,10 +50,13 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_tap_dance_max_num")]
     pub tap_dance_max_num: usize,
-    /// Maximum number of taps per tap dance
-    #[serde_inline_default(2)]
-    #[serde(deserialize_with = "check_tap_dance_max_tap")]
-    pub tap_dance_max_tap: usize,
+    /// Maximum number of morse key configurations the keyboard can store
+    #[serde_inline_default(1)]
+    #[serde(deserialize_with = "check_morse_max_num")]
+    pub morse_max_num: usize,
+    /// Maximum number of morse patterns a morse key can handle
+    #[serde_inline_default(40)]
+    pub max_morse_patterns_per_key: usize,
     /// Macro space size in bytes for storing sequences
     #[serde_inline_default(256)]
     pub macro_space_size: usize,
@@ -117,13 +120,13 @@ where
     Ok(value)
 }
 
-fn check_tap_dance_max_tap<'de, D>(deserializer: D) -> Result<usize, D::Error>
+fn check_morse_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
     let value = SerdeDeserialize::deserialize(deserializer)?;
-    if value < 2 || value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: tap_dance_max_tap must be between 2 and 256, got {value}");
+    if value > 256 {
+        panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
     }
     Ok(value)
 }
@@ -149,7 +152,8 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             tap_dance_max_num: 8,
-            tap_dance_max_tap: 2,
+            morse_max_num: 1,
+            max_morse_patterns_per_key: 40,
             macro_space_size: 256,
             debounce_time: 20,
             event_channel_size: 16,
@@ -230,7 +234,6 @@ impl KeyboardTomlConfig {
     }
 
     /// Auto calculate some parameters in toml:
-    /// - Update tap_dance_max_tap to fit the max length of tap_actions and hold_actions
     /// - Update peripheral number based on the number of split boards
     /// - TODO: Update controller number based on the number of split boards
     pub fn auto_calculate_parameters(&mut self) {
@@ -243,33 +246,6 @@ impl KeyboardTomlConfig {
                 //     self.rmk.split_peripherals_num
                 // );
                 self.rmk.split_peripherals_num = split.peripheral.len();
-            }
-        }
-
-        // Update tap_dance_max_tap
-        if let Some(behavior) = &self.behavior {
-            if let Some(tap_dance) = &behavior.tap_dance {
-                let mut max_required_taps = self.rmk.tap_dance_max_tap;
-
-                for td in &tap_dance.tap_dances {
-                    let tap_actions_len = td.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
-                    let hold_actions_len = td.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
-                    max_required_taps = max_required_taps.max(tap_actions_len).max(hold_actions_len);
-                }
-
-                if max_required_taps > 256 {
-                    panic!(
-                        "The number of taps per tap dance is too large, the max number of taps is 256, got {max_required_taps}"
-                    );
-                }
-
-                if max_required_taps > self.rmk.tap_dance_max_tap {
-                    // eprintln!(
-                    //     "The number of taps per tap dance is updated to {} from {}",
-                    //     max_required_taps, self.rmk.tap_dance_max_tap
-                    // );
-                    self.rmk.tap_dance_max_tap = max_required_taps;
-                }
             }
         }
     }
