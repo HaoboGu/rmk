@@ -126,7 +126,7 @@ fn expand_main(
     let split_central_config = expand_split_central_config(keyboard_config);
     let (input_device_config, devices, processors) = expand_input_device_config(keyboard_config);
     let matrix_and_keyboard = expand_matrix_and_keyboard_init(keyboard_config, rmk_features);
-    let (controller_initializers, controllers) = expand_controller_init(keyboard_config);
+    let (controller_initializers, controllers) = expand_controller_init(keyboard_config, &item_mod);
     let run_rmk = expand_rmk_entry(keyboard_config, &item_mod, devices, processors, controllers);
 
     let rmk_config = if keyboard_config.get_storage_config().enabled {
