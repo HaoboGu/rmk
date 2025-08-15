@@ -16,7 +16,7 @@ rmk = { path = "../../../rmk", default-features = false, features = [
     "log",
     "storage",
 ] }
-embassy-executor = { version = "0.7.0" }
+embassy-executor = { version = "0.8" }
 esp-backtrace = { version = "0.17", features = [
     "esp32s3",
     "exception-handler",
@@ -30,7 +30,7 @@ esp-alloc = { version = "0.8.0" }
 esp-println = { version = "0.15.0", features = ["esp32s3", "log-04"] }
 esp-wifi = { version = "0.15.0", features = ["esp32s3", "ble"] }
 esp-bootloader-esp-idf = { version = "0.2.0", features = ["esp32s3", "log-04"] }
-bt-hci = { version = "0.3" }
+bt-hci = { version = "0.4" }
 rand_core = { version = "0.6", default-features = false }
 
 [build-dependencies]
