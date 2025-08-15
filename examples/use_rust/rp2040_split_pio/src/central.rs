@@ -73,10 +73,10 @@ async fn main(_spawner: Spawner) {
 
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let behavior_config = BehaviorConfig::default();
+    let mut behavior_config = BehaviorConfig::default();
     let storage_config = StorageConfig::default();
     let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
+        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
 
     // Initialize the matrix + keyboard
     let debouncer = DefaultDebouncer::<2, 2>::new();

@@ -71,7 +71,7 @@ fn expand_morse(morse_config: &Option<TapHoldConfig>) -> proc_macro2::TokenStrea
             let hold_timeout = match &morse.hold_timeout {
                 Some(t) => {
                     let timeout = t.0;
-                    quote! { operation_timeout: ::embassy_time::Duration::from_millis(#timeout), }
+                    quote! { timeout: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
@@ -405,7 +405,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let tap_dance = expand_tap_dance(&behavior.tap_dance);
 
     quote! {
-        let behavior_config = ::rmk::config::BehaviorConfig {
+        let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
             morse: #morse,
             one_shot: #one_shot,
@@ -415,6 +415,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             keyboard_macros: #macros,
             // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
+            tap: ::rmk::config::TapConfig::default(),
         };
     }
 }

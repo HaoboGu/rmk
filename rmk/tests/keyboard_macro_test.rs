@@ -17,7 +17,8 @@ mod macro_test {
             KeyAction::Single(Action::Key(KeyCode::Macro0)),
             KeyAction::Single(Action::Key(KeyCode::Macro1)),
         ]]];
-
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+        let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(behavior_config);
         Keyboard::new(wrap_keymap(keymap, behavior_config))
     }
 
