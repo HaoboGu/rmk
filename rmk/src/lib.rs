@@ -241,7 +241,9 @@ pub async fn run_rmk<
 
                         use crate::usb::USB_REMOTE_WAKEUP;
 
+                        // Run
                         usb_device.run_until_suspend().await;
+                        // Suspended, wait resume or remote wakeup
                         match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
                             Either::First(_) => continue,
                             Either::Second(_) => {
