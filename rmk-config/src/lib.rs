@@ -404,7 +404,7 @@ pub struct LayoutConfig {
 pub struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
-    pub morse: Vec<Morse>,
+    pub morse: Option<Vec<Morse>>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]

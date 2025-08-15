@@ -473,7 +473,10 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let behavior = keyboard_config.get_behavior_config().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
-    let morse = expand_morse_config(&behavior.tap_hold, &behavior.morse);
+    let morse = expand_morse_config(
+        &behavior.tap_hold,
+        behavior.morse.as_ref().unwrap_or(&Vec::<Morse>::new()),
+    );
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
     let macros = expand_macros(&behavior.macros);
