@@ -408,6 +408,11 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
+                                Rule::trigger_macro_action => {
+                                    let action = inner_pair.as_str().to_string();
+                                    key_action_sequence.push(action);
+                                }
+
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End of input marker
                                 }
@@ -539,6 +544,20 @@ mod tests {
         assert!(result.is_ok());
         let actions = result.unwrap();
         assert_eq!(actions, vec!["A", "TD(0)", "B", "TD(1)", "C", "TD(255)"]);
+    }
+
+    #[test]
+    fn test_macro_trigger_action_parsing() {
+        let aliases = std::collections::HashMap::new();
+        let layer_names = std::collections::HashMap::new();
+
+        // Test parsing a keymap string with macro trigger actions
+        let keymap = "A M(0) B M(1) C M(255)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", "M(0)", "B", "M(1)", "C", "M(255)"]);
     }
 
     #[test]

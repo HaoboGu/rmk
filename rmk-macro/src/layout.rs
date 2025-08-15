@@ -374,6 +374,12 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
                 ::rmk::td!(#index)
             }
         }
+        s if s.to_lowercase().starts_with("m(") => {
+            let index = get_number(s.clone(), s.get(0..2).unwrap(), ")");
+            quote! {
+                ::rmk::m!(#index)
+            }
+        }
         _ => {
             let ident = get_key_with_alias(key);
             quote! { ::rmk::k!(#ident) }

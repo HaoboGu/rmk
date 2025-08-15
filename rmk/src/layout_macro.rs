@@ -170,3 +170,11 @@ macro_rules! td {
         $crate::action::KeyAction::TapDance($index)
     };
 }
+
+// Create a macro trigger action
+#[macro_export]
+macro_rules! m {
+    ($index: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::TriggerMacro($index))
+    };
+}
