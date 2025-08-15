@@ -115,7 +115,7 @@ impl KeyAction {
 
             KeyAction::Morse(idx) => behavior_config
                 .morse
-                .action_sets
+                .morse_keys
                 .get(*idx as usize)
                 .map_or(Action::No, |morse| *morse.get(pattern).unwrap_or(&Action::No)),
             _ => Action::No,
@@ -132,7 +132,7 @@ impl KeyAction {
 
             KeyAction::Morse(idx) => behavior_config
                 .morse
-                .action_sets
+                .morse_keys
                 .get(*idx as usize)
                 .map(|morse| Duration::from_millis(morse.timeout_ms as u64)),
 
@@ -151,7 +151,7 @@ impl KeyAction {
 
             KeyAction::Morse(idx) => behavior_config
                 .morse
-                .action_sets
+                .morse_keys
                 .get(*idx as usize)
                 .map(|morse| (morse.mode, morse.unilateral_tap)),
 
@@ -180,7 +180,7 @@ impl KeyAction {
                 .map_or(0, |td| td.max_pattern_length()),
             KeyAction::Morse(idx) => behavior_config
                 .morse
-                .action_sets
+                .morse_keys
                 .get(*idx as usize)
                 .map_or(0, |morse| morse.max_pattern_length()),
             _ => 0,

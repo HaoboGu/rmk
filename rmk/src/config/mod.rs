@@ -63,7 +63,7 @@ pub struct MorseConfig {
     pub unilateral_tap: bool,
 
     // Morse actions for each morse key:
-    pub action_sets: Vec<Morse, MORSE_MAX_NUM>,
+    pub morse_keys: Vec<Morse, MORSE_MAX_NUM>,
 }
 
 impl Default for MorseConfig {
@@ -74,7 +74,7 @@ impl Default for MorseConfig {
             mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
             operation_timeout: Duration::from_millis(250),
-            action_sets: Vec::new(),
+            morse_keys: Vec::new(),
         }
     }
 }

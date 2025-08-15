@@ -109,7 +109,7 @@ fn expand_morse_keys(morse_keys: &Vec<Morse>) -> proc_macro2::TokenStream {
         let morse_key_def = morse_keys.iter().map(|morse| expand_morse_key(morse));
 
         quote! {
-            action_sets: ::rmk::heapless::Vec::from_iter([#(#morse_key_def),*]),
+            morse_keys: ::rmk::heapless::Vec::from_iter([#(#morse_key_def),*]),
         }
     } else {
         quote! {}

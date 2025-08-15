@@ -74,6 +74,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         fill_vec(&mut behavior.fork.forks);
 
+        fill_vec(&mut behavior.morse.morse_keys);
+
         KeyMap {
             layers: action_map,
             encoders: encoder_map,
@@ -99,6 +101,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.combo.combos);
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.tap_dance.tap_dances);
+        fill_vec(&mut behavior.morse.morse_keys);
 
         if let Some(storage) = storage {
             if {
@@ -117,6 +120,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_forks(&mut behavior.fork.forks).await)
                     // Read tap dance cache
                     .and(storage.read_tap_dances(&mut behavior.tap_dance.tap_dances).await)
+                    // Read tap morse key cache
+                    .and(storage.read_morse_keys(&mut behavior.morse.morse_keys).await)
             }
             .is_err()
             {
