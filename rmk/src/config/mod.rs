@@ -10,9 +10,9 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::MorseKeyMode;
+use crate::morse::{Morse, MorseKeyMode};
 use crate::tap_dance::TapDance;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM, TAP_DANCE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -51,7 +51,7 @@ impl Default for TapDancesConfig {
 }
 
 /// Configurations for morse behavior
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MorseConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
@@ -61,6 +61,9 @@ pub struct MorseConfig {
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
+
+    // Morse actions for each morse key:
+    pub action_sets: Vec<Morse, MORSE_MAX_NUM>,
 }
 
 impl Default for MorseConfig {
@@ -71,6 +74,7 @@ impl Default for MorseConfig {
             mode: MorseKeyMode::Normal,
             prior_idle_time: Duration::from_millis(120),
             operation_timeout: Duration::from_millis(250),
+            action_sets: Vec::new(),
         }
     }
 }

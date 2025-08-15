@@ -2,34 +2,44 @@ use heapless::Vec;
 
 use crate::TAP_DANCE_MAX_TAP;
 use crate::action::Action;
-use crate::morse::{Morse, MorseActions};
+use crate::morse::MorseKeyMode;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapDance(pub(crate) Morse<TAP_DANCE_MAX_TAP>);
+pub struct TapDance {
+    /// array of (tap, hold) action pairs
+    pub(crate) actions: [(Action, Action); TAP_DANCE_MAX_TAP],
+
+    /// The timeout time for each operation in milliseconds
+    pub timeout_ms: u16,
+    /// The decision mode of the morse key
+    pub mode: MorseKeyMode,
+    /// If the unilateral tap is enabled
+    pub unilateral_tap: bool,
+}
 
 impl Default for TapDance {
     fn default() -> Self {
-        Self(Morse {
-            tap_actions: MorseActions::empty(),
-            hold_actions: MorseActions::empty(),
+        Self {
+            actions: [(Action::No, Action::No); TAP_DANCE_MAX_TAP],
             timeout_ms: 200,
             mode: crate::morse::MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
-        })
+        }
     }
 }
 
 impl TapDance {
     pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
         assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
-        let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
-        let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
-        tap_actions[0] = tap;
-        tap_actions[1] = double_tap;
-        hold_actions[0] = hold;
-        hold_actions[1] = hold_after_tap;
-        Self(Morse::new_tap_dance(tap_actions, hold_actions, timeout))
+        let mut actions = [(Action::No, Action::No); TAP_DANCE_MAX_TAP];
+        actions[0] = (tap, hold);
+        actions[1] = (double_tap, hold_after_tap);
+        Self {
+            actions: actions,
+            timeout_ms: timeout,
+            ..Default::default()
+        }
     }
 
     /// Create a new tap dance with custom actions for each tap count
@@ -40,19 +50,29 @@ impl TapDance {
         timeout: u16,
     ) -> Self {
         assert!(TAP_DANCE_MAX_TAP >= 2, "TAP_DANCE_MAX_TAP must be at least 2");
-        let mut tap_actions_slice = [Action::No; TAP_DANCE_MAX_TAP];
-        let mut hold_actions_slice = [Action::No; TAP_DANCE_MAX_TAP];
+        let mut actions = [(Action::No, Action::No); TAP_DANCE_MAX_TAP];
         for (i, item) in tap_actions.iter().enumerate() {
-            tap_actions_slice[i] = *item;
+            actions[i].0 = *item;
         }
         for (i, item) in hold_actions.iter().enumerate() {
-            hold_actions_slice[i] = *item;
+            actions[i].1 = *item;
         }
-        Self(Morse::new_tap_dance(tap_actions_slice, hold_actions_slice, timeout))
+        Self {
+            actions: actions,
+            timeout_ms: timeout,
+            ..Default::default()
+        }
     }
 
-    /// Check if this tap dance has any actions defined
-    pub fn has_actions(&self) -> bool {
-        !self.0.tap_actions.is_empty() || !self.0.hold_actions.is_empty()
+    pub fn max_pattern_length(&self) -> usize {
+        let mut i = TAP_DANCE_MAX_TAP;
+        while i > 0 {
+            let (tap, hold) = self.actions[i - 1];
+            if tap != Action::No || hold != Action::No {
+                return i;
+            }
+            i -= 1;
+        }
+        i
     }
 }

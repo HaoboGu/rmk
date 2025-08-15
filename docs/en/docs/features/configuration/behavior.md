@@ -156,31 +156,68 @@ Tap dance configuration includes the following parameters:
 
 :::
 
+## Morse
+In the `morse` sub-table, you can configure the keyboard's morse functionality. Morse allows you to define different actions based on various tap/hold patterns.
+It is like tap dance for experts, but unfortunately has no VIAL support. 
 
-Here is an example of tap dance configuration:
+For each morse configuration the following parameters can be set:
+- `timeout` : The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence (also the minimum length of 'hold'). 
+- `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_hrm` is set to true.
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
+- `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. **Priority rules**: When HRM is disabled, permissive hold takes precedence over this feature. When HRM is enabled, this feature works normally. Defaults to `false`.
+ - `morse.actions`: list of patten -> action pairs. The pattern is a tap/hold sequence, its length is limited in 15. The morse pattern of `C` for example can be described like this: `"-.-."` or `"_._."` or `"1010"`. See the examples below!
+
+Here is an example of tap dance and morse configuration:
 
 ```toml
 [behavior.tap_dance]
 tap_dances = [
-  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
   
-  # Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
+  # td(1): Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
   { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
   
-  # Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
+  # td(2): Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape", timeout = "250ms" },
   
-  # Extended tap dance for function keys
+  # td(3): Extended tap dance for function keys
   {
     tap_actions = ["F1", "F2", "F3", "F4", "F5"], 
     hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
     timeout = "300ms" 
   }
 ]
+
+# morse(0): Extended many function keys with morse - equivalent with td(3)
+[[behavior.morse]]
+timeout = "300ms"
+permissive_hold = false
+unilateral_tap = false
+hold_on_other_press = false
+actions = [ 
+  {pattern = ".", action = "F1"}, {pattern = "..", action = "F2"}, {pattern = "...", action = "F3"}, {pattern = "....", action = "F4"}, {pattern = ".....", action = "F5"},
+  {pattern = "-", action = "MO(1)"}, {pattern = ".-", action = "MO(2)"}, {pattern = "..-", action = "MO(3)"}, {pattern = "...-", action = "MO(4)"}, {pattern = "....-", action = "MO(5)"} 
+]
+
+# morse(1): the start of the real morse ABC
+[[behavior.morse]]
+timeout = "200ms"
+permissive_hold = false
+unilateral_tap = false
+hold_on_other_press = false
+[[behavior.morse.actions]]
+pattern = ".-"
+action = "A"
+[[behavior.morse.actions]] 
+pattern = "-..."
+action = "B"
+[[behavior.morse.actions]] 
+pattern = "-.-."
+action = "C"
 ```
 
-### Using Tap Dance in Keymaps
+### Using Tap Dance, Morse in Keymaps
 
 To use a tap dance in your keymap, reference it by its index (starting from 0):
 
@@ -191,7 +228,7 @@ cols = 3
 layers = 2
 keymap = [
     [
-        ["A", "B", "C"],
+        ["A", "MORSE(0)", "MORSE(1)"], # use morse 0 and 1
         ["TD(0)", "TD(1)", "TD(2)"],  # Use tap dances 0, 1, and 2
         ["LCtrl", "MO(1)", "LShift"],
         ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
@@ -207,7 +244,7 @@ keymap = [
 
 ### Configuration Limits
 
-The tap dance functionality is controlled by the following configuration limits in the `[rmk]` section:
+The tap dance and morse functionality is controlled by the following configuration limits in the `[rmk]` section:
 
 - `tap_dance_max_num`: Maximum number of tap dances (default: 8)
 - `tap_dance_max_tap`: Maximum number of taps per tap dance (default: 2, range: 2-256)
@@ -220,6 +257,13 @@ tap_dance_max_tap = 4  # Support up to 4 taps per tap dance
 ```
 
 Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value.
+
+- `morse_max_num`: Maximum number of morse keys (default: 1)
+- `max_morse_patterns_per_key`: Maximum number of morse patterns per morse key config (default: 36, range: 4-255)
+
+Note that morse supports a sequence of up to 15 tap/hold in a morse pattern.
+
+To support advanced use cases you may consider to use morse instead of tap dance, the only drawback is the lack of vial support.
 
 ## Fork
 

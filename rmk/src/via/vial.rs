@@ -175,21 +175,21 @@ pub(crate) async fn process_vial<
                         // Pack tap dance data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(0))),
+                            to_via_keycode(KeyAction::Single(tap_dance.actions[0].0)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(0))),
+                            to_via_keycode(KeyAction::Single(tap_dance.actions[0].1)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(1))),
+                            to_via_keycode(KeyAction::Single(tap_dance.actions[1].0)),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(1))),
+                            to_via_keycode(KeyAction::Single(tap_dance.actions[1].1)),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.0.timeout_ms);
+                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.timeout_ms);
                     } else {
                         report.input_data[1..11].fill(0);
                     }

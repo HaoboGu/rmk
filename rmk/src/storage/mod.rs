@@ -28,7 +28,7 @@ use crate::config::StorageConfig;
 use crate::fork::{Fork, StateBits};
 use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
-use crate::morse::Morse;
+use crate::morse::{Morse, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::tap_dance::TapDance;
@@ -85,6 +85,8 @@ pub(crate) enum FlashOperationMessage {
     WriteFork(ForkData),
     // Write tap dance
     WriteTapDance(u8, TapDance),
+    // Write morse
+    WriteMorse(u8, Morse),
 }
 
 /// StorageKeys is the prefix digit stored in the flash, it's used to identify the type of the stored data.
@@ -105,6 +107,7 @@ pub(crate) enum StorageKeys {
     EncoderKeys,
     ForkData,
     TapDanceData,
+    MorseData,
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress = 0xED,
     #[cfg(feature = "_ble")]
@@ -128,6 +131,7 @@ impl StorageKeys {
             9 => Some(StorageKeys::EncoderKeys),
             10 => Some(StorageKeys::ForkData),
             11 => Some(StorageKeys::TapDanceData),
+            12 => Some(StorageKeys::MorseData),
             #[cfg(all(feature = "_ble", feature = "split"))]
             0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
@@ -152,6 +156,7 @@ pub(crate) enum StorageData {
     ConnectionType(u8),
     ForkData(ForkData),
     TapDanceData(TapDance),
+    MorseData(Morse),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -196,6 +201,11 @@ pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
 /// Get the key to retrieve the tap dance from the storage.
 pub(crate) fn get_tap_dance_key(idx: u8) -> u32 {
     0x7000 + idx as u32
+}
+
+/// Get the key to retrieve the morse from the storage.
+pub(crate) fn get_morse_key(idx: u8) -> u32 {
+    0x8000 + idx as u32
 }
 
 impl Value<'_> for StorageData {
@@ -310,11 +320,11 @@ impl Value<'_> for StorageData {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::TapDanceData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], tap_dance.0.timeout_ms);
+                BigEndian::write_u16(&mut buffer[1..3], tap_dance.timeout_ms);
 
                 // Serialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
                 for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.0.tap_action(i);
+                    let action = tap_dance.actions[i].0;
                     BigEndian::write_u16(
                         &mut buffer[3 + i * 2..5 + i * 2],
                         to_via_keycode(KeyAction::Single(action)),
@@ -323,11 +333,33 @@ impl Value<'_> for StorageData {
 
                 // Serialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
                 for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.0.hold_action(i);
+                    let action = tap_dance.actions[i].1;
                     BigEndian::write_u16(
                         &mut buffer[3 + (TAP_DANCE_MAX_TAP + i) * 2..5 + (TAP_DANCE_MAX_TAP + i) * 2],
                         to_via_keycode(KeyAction::Single(action)),
                     );
+                }
+
+                Ok(total_size)
+            }
+            StorageData::MorseData(morse) => {
+                let total_size = 5 + 4 * morse.actions.len();
+                if buffer.len() < total_size {
+                    return Err(SerializationError::BufferTooSmall);
+                }
+                buffer[0] = StorageKeys::MorseData as u8;
+                BigEndian::write_u16(&mut buffer[1..3], morse.actions.len() as u16);
+                BigEndian::write_u16(&mut buffer[3..5], morse.timeout_ms);
+                //TODO: mode, unilateral_tap
+
+                let mut i = 5;
+                for (pattern, action) in &morse.actions {
+                    BigEndian::write_u16(
+                        &mut buffer[i..i + 2],
+                        pattern.to_u16(), //pattern
+                    );
+                    BigEndian::write_u16(&mut buffer[i + 2..i + 4], to_via_keycode(KeyAction::Single(*action)));
+                    i += 4;
                 }
 
                 Ok(total_size)
@@ -534,27 +566,45 @@ impl Value<'_> for StorageData {
                     if buffer.len() < 3 + TAP_DANCE_MAX_TAP * 4 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let timeout = BigEndian::read_u16(&buffer[1..3]);
+                    let timeout_ms = BigEndian::read_u16(&buffer[1..3]);
 
-                    // Deserialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
+                    // Deserialize tap/hold actions (up to TAP_DANCE_MAX_TAP actions)
+                    let mut actions = [(Action::No, Action::No); TAP_DANCE_MAX_TAP];
                     for i in 0..TAP_DANCE_MAX_TAP {
-                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
-                        tap_actions[i] = key_action.to_action();
-                    }
-
-                    // Deserialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
-                    for i in 0..TAP_DANCE_MAX_TAP {
-                        let key_action = from_via_keycode(BigEndian::read_u16(
+                        let tap_action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
+                        let hold_action = from_via_keycode(BigEndian::read_u16(
                             &buffer[3 + TAP_DANCE_MAX_TAP * 2 + i * 2..5 + TAP_DANCE_MAX_TAP * 2 + i * 2],
                         ));
-                        hold_actions[i] = key_action.to_action();
+                        actions[i] = (tap_action.to_action(), hold_action.to_action());
                     }
 
-                    let tap_dance = TapDance(Morse::new_tap_dance(tap_actions, hold_actions, timeout));
-
+                    let tap_dance = TapDance {
+                        actions,
+                        timeout_ms,
+                        ..Default::default()
+                    };
                     Ok(StorageData::TapDanceData(tap_dance))
+                }
+                StorageKeys::MorseData => {
+                    if buffer.len() < 5 {
+                        return Err(SerializationError::InvalidData);
+                    }
+                    let count = BigEndian::read_u16(&buffer[1..3]) as usize;
+
+                    if buffer.len() < 5 + 4 * count {
+                        return Err(SerializationError::InvalidData);
+                    }
+
+                    let mut morse = Morse::default();
+                    morse.timeout_ms = BigEndian::read_u16(&buffer[1..3]);
+
+                    for i in 0..count {
+                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[5 + i * 4..7 + i * 4]));
+                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[7 + i * 4..9 + i * 4]));
+                        _ = morse.actions.push((pattern, key_action.to_action()));
+                    }
+
+                    Ok(StorageData::MorseData(morse))
                 }
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
@@ -648,6 +698,9 @@ impl StorageData {
             }
             StorageData::TapDanceData(_) => {
                 panic!("To get tap dance key for TapDanceData, use `get_tap_dance_key` instead");
+            }
+            StorageData::MorseData(_) => {
+                panic!("To get morse key for MorseData, use `get_morse_key` instead");
             }
             #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
@@ -972,6 +1025,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                         &mut self.buffer,
                         &key,
                         &StorageData::TapDanceData(tap_dance),
+                    )
+                    .await
+                }
+                FlashOperationMessage::WriteMorse(id, morse) => {
+                    let key = get_morse_key(id);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut storage_cache,
+                        &mut self.buffer,
+                        &key,
+                        &StorageData::MorseData(morse),
                     )
                     .await
                 }

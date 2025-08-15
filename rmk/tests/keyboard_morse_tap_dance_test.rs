@@ -262,6 +262,27 @@ rusty_fork_test! {
     }
 
     #[test]
+    fn test_rolling_3() {
+        key_sequence_test! {
+            keyboard: create_tap_dance_test_keyboard(),
+            sequence: [
+                [0, 0, true, 150], // Press td!(0)
+                [0, 0, false, 10], // Release td!(0)
+                [0, 0, true, 150], // Press td!(0)
+                [0, 1, true, 260], // Press td!(1) -> td!(0) timeout (tap-hold)
+                [0, 1, false, 260], // Release td!(1)
+                [0, 0, false, 260], // Release td!(0) -> td!(1) timeout (hold)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
     fn test_multiple_tap_dance_keys() {
         key_sequence_test! {
             keyboard: create_tap_dance_test_keyboard(),
