@@ -66,7 +66,7 @@ pub enum KeyAction {
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
 
-    /// Morse action, references a morse configuration by index.
+    /// Morse action, references a morse key configuration by index.
     Morse(u8),
 }
 
@@ -80,7 +80,7 @@ impl KeyAction {
         }
     }
 
-    pub fn is_morse(&self) -> bool {
+    pub fn is_morse_like(&self) -> bool {
         matches!(
             self,
             KeyAction::TapHold(_, _) | KeyAction::TapDance(_) | KeyAction::Morse(_)
@@ -112,7 +112,6 @@ impl KeyAction {
                         }
                     })
             }
-
             KeyAction::Morse(idx) => behavior_config
                 .morse
                 .morse_keys
@@ -129,7 +128,6 @@ impl KeyAction {
                 .tap_dances
                 .get(*idx as usize)
                 .map(|td| Duration::from_millis(td.timeout_ms as u64)),
-
             KeyAction::Morse(idx) => behavior_config
                 .morse
                 .morse_keys
@@ -148,7 +146,6 @@ impl KeyAction {
                 .tap_dances
                 .get(*idx as usize)
                 .map(|td| (td.mode, td.unilateral_tap)),
-
             KeyAction::Morse(idx) => behavior_config
                 .morse
                 .morse_keys

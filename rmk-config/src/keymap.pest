@@ -95,10 +95,10 @@ tap_hold_action = _{ mt_action | th_action }
 // Rule 7: SHIFTED(key)
 shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
 
-// Rule 8: TD(n) - Tap Dance
+// Rule 8: TD(n) - Tap Dance index
 tap_dance_action = { ^"TD" ~ "(" ~ number ~ ")" }
 
-// Rule 9: MORSE(n) - Morse
+// Rule 9: MORSE(n) - Morse key index
 morse_action = { ^"MORSE" ~ "(" ~ number ~ ")" }
 
 // --- Top Level Rules ---

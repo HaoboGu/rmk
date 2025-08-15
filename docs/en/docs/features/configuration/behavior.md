@@ -136,8 +136,8 @@ The basic tap dance(with 2 taps) works as follows:
 
 In RMK, tap dance behavior also supports multiple taps and hold-after-multiple-taps:
 
-- **Multiple Taps**: Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array, for example, tapping 5 times will trigger `tap_action[4]`.
-- **Hold After Multiple Taps**: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered, for example, hold the key after tapping 5 times will trigger `hold_action[4]`.
+- **Multiple Taps**: Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array, for example, tapping 5 times will trigger the 5th item in the `tap_actions` (`tap_actions[4]`).
+- **Hold After Multiple Taps**: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered, for example, hold the key after tapping 5 times will trigger 6th item in the `hold_actions` list (`hold_actions[5]`).
 
 Tap dance configuration includes the following parameters:
 
@@ -158,10 +158,10 @@ Tap dance configuration includes the following parameters:
 
 ## Morse
 In the `morse` sub-table, you can configure the keyboard's morse functionality. Morse allows you to define different actions based on various tap/hold patterns.
-It is like tap dance for experts, but unfortunately has no VIAL support. 
+It is like tap dance for experts, but unfortunately has no VIAL support.
 
 For each morse configuration the following parameters can be set:
-- `timeout` : The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence (also the minimum length of 'hold'). 
+- `timeout` : The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence (also the minimum length of `hold`). 
 - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_hrm` is set to true.
 - `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "opposite" hand is calculated [according to the number of cols/rows](https://github.com/HaoboGu/rmk/blob/c0ef95b1185c25972c62458c878ee9f1a8e1a837/rmk/src/tap_hold.rs#L111-L136). This option is recommended to set to true when `enable_hrm` is set to true.
 - `hold_on_other_press`: Enables hold-on-other-key-press mode. When enabled, hold action will be triggered immediately when any other non-tap-hold key is pressed while a tap-hold key is being held. This provides faster modifier activation without waiting for the timeout. **Priority rules**: When HRM is disabled, permissive hold takes precedence over this feature. When HRM is enabled, this feature works normally. Defaults to `false`.
@@ -246,22 +246,29 @@ keymap = [
 
 The tap dance and morse functionality is controlled by the following configuration limits in the `[rmk]` section:
 
-- `tap_dance_max_num`: Maximum number of tap dances (default: 8)
-- `tap_dance_max_tap`: Maximum number of taps per tap dance (default: 2, range: 2-256)
+- `tap_dance_max_num`: Maximum number of tap dances (default: 8, range: 0-256)
+- `tap_dance_max_tap`: Maximum number of taps per tap dance (default: 2, range: 2-15)
 
 To support more taps per sequence, increase the `tap_dance_max_tap` value:
 
 ```toml
 [rmk]
-tap_dance_max_tap = 4  # Support up to 4 taps per tap dance
+tap_dance_max_num = 8  # To support up to 8 tap dances
+tap_dance_max_tap = 4  # To support up to 4 taps per tap dance
 ```
 
-Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value.
+Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value. 
 
-- `morse_max_num`: Maximum number of morse keys (default: 1)
-- `max_morse_patterns_per_key`: Maximum number of morse patterns per morse key config (default: 36, range: 4-255)
+- `morse_max_num`: Maximum number of morse keys (default: 0, range: 0-256)
+- `max_morse_patterns_per_key`: Maximum number of morse patterns per morse key config (default: 8, range: 1-65536)
 
-Note that morse supports a sequence of up to 15 tap/hold in a morse pattern.
+```toml
+[rmk]
+morse_max_num = 2  # To support up to 2 morse keys
+max_morse_patterns_per_key = 36  # To support up to 36 morse patterns per morse key
+```
+
+Note that morse always supports a sequence of up to 15 tap/hold, while tap dance actions are limited by `tap_dance_max_tap`, but also can not exceed 15 taps per sequence.
 
 To support advanced use cases you may consider to use morse instead of tap dance, the only drawback is the lack of vial support.
 

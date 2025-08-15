@@ -61,37 +61,34 @@ impl MorsePattern {
 /// Definition of a morse key.
 ///
 /// A morse key is a key that behaves differently according to the pattern of a tap/hold sequence.
-///
-/// There is a lists of (morse pattern, corresponding action) pairs for each morse key:
-/// The number of pairs is limited by N, which is a const generic parameter.
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
-
+/// There is a lists of (morse pattern, corresponding action) pairs for each morse key:
+/// The number of pairs is limited by MAX_MORSE_PATTERNS_PER_KEY, which is a const generic parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Morse {
-    /// The list of pattern -> action pairs, which can be triggered
-    pub actions: Vec<(MorsePattern, Action), MAX_MORSE_PATTERNS_PER_KEY>,
-
+pub struct MorseKey {    
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
     /// The decision mode of the morse key
     pub mode: MorseKeyMode,
     /// If the unilateral tap is enabled
     pub unilateral_tap: bool,
+    /// The list of pattern -> action pairs, which can be triggered
+    pub actions: Vec<(MorsePattern, Action), MAX_MORSE_PATTERNS_PER_KEY>,
 }
 
-impl Default for Morse {
+impl Default for MorseKey {
     fn default() -> Self {
         Self {
-            actions: Vec::default(),
             timeout_ms: 250,
             mode: MorseKeyMode::HoldOnOtherPress,
             unilateral_tap: false,
+            actions: Vec::default(),
         }
     }
 }
 
-impl Morse {
+impl MorseKey {
     pub fn max_pattern_length(&self) -> usize {
         let mut max_length = 0;
         for pair in self.actions.iter() {

@@ -10,7 +10,7 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::{Morse, MorseKeyMode};
+use crate::morse::{MorseKey, MorseKeyMode};
 use crate::tap_dance::TapDance;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM, TAP_DANCE_MAX_NUM};
 
@@ -61,9 +61,8 @@ pub struct MorseConfig {
     pub mode: MorseKeyMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
-
-    // Morse actions for each morse key:
-    pub morse_keys: Vec<Morse, MORSE_MAX_NUM>,
+    // Definition of morse keys:
+    pub morse_keys: Vec<MorseKey, MORSE_MAX_NUM>,
 }
 
 impl Default for MorseConfig {

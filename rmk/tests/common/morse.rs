@@ -4,7 +4,7 @@ use rmk::action::Action;
 use rmk::config::{BehaviorConfig, MorseConfig};
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::{Morse, MorsePattern};
+use rmk::morse::{MorseKey, MorsePattern};
 use rmk::{k, lt, mrs, mt};
 
 use crate::common::wrap_keymap;
@@ -21,7 +21,7 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
     ];
 
-    let morse0 = Morse {
+    let morse0 = MorseKey {
         actions: Vec::from_slice(&[
             (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
             (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),

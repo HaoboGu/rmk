@@ -11,7 +11,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 {
     // When a morse key reaches timeout after press / release
     pub(crate) async fn handle_morse_timeout(&mut self, key: &HeldKey) {
-        assert!(key.action.is_morse());
+        assert!(key.action.is_morse_like());
 
         match key.state {
             KeyState::Pressed(pattern) => {
@@ -40,7 +40,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .held_buffer
             .keys
             .iter()
-            .any(|k| k.action.is_morse() && matches!(k.state, KeyState::Pressed(_)))
+            .any(|k| k.action.is_morse_like() && matches!(k.state, KeyState::Pressed(_)))
         {
             return; //?
         }
@@ -50,7 +50,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     pub(crate) async fn process_key_action_morse(&mut self, key_action: KeyAction, event: KeyboardEvent) {
         debug!("Processing morse: {:?}", event);
-        assert!(key_action.is_morse());
+        assert!(key_action.is_morse_like());
 
         // Process the morse key
         if event.pressed {
@@ -139,7 +139,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_buffer.keys.sort_unstable_by_key(|k| k.press_time);
 
         // Trigger all non-morse keys in the buffer
-        while let Some(key) = self.held_buffer.remove_if(|k| !k.action.is_morse()) {
+        while let Some(key) = self.held_buffer.remove_if(|k| !k.action.is_morse_like()) {
             debug!("Trigger non-morse key: {:?}", key);
             let action = self.keymap.borrow_mut().get_action_with_layer_cache(key.event);
             match action {

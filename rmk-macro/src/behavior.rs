@@ -3,7 +3,7 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, Morse, MorseActionPair, OneShotConfig,
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorseKeyConfig, OneShotConfig,
     TapDancesConfig, TapHoldConfig, TriLayerConfig,
 };
 
@@ -69,7 +69,7 @@ fn expand_morse_actions(actions: &Vec<MorseActionPair>) -> proc_macro2::TokenStr
     }
 }
 
-fn expand_morse_key(morse: &Morse) -> proc_macro2::TokenStream {
+fn expand_morse_key(morse: &MorseKeyConfig) -> proc_macro2::TokenStream {
     let timeout_ms = match &morse.timeout {
         Some(t) => {
             let timeout = t.0 as u16;
@@ -94,17 +94,17 @@ fn expand_morse_key(morse: &Morse) -> proc_macro2::TokenStream {
     let actions_def = expand_morse_actions(&morse.actions);
 
     quote! {
-        ::rmk::morse::Morse {
-            #actions_def
+        ::rmk::morse::MorseKey {
             #timeout_ms
             #morse_mode
             #unilateral_tap
+            #actions_def
             ..Default::default()
         }
     }
 }
 
-fn expand_morse_keys(morse_keys: &Vec<Morse>) -> proc_macro2::TokenStream {
+fn expand_morse_keys(morse_keys: &Vec<MorseKeyConfig>) -> proc_macro2::TokenStream {
     if morse_keys.len() > 0 {
         let morse_key_def = morse_keys.iter().map(|morse| expand_morse_key(morse));
 
@@ -116,7 +116,10 @@ fn expand_morse_keys(morse_keys: &Vec<Morse>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_morse_config(morse_config: &Option<TapHoldConfig>, morse_keys: &Vec<Morse>) -> proc_macro2::TokenStream {
+fn expand_morse_config(
+    morse_config: &Option<TapHoldConfig>,
+    morse_keys: &Vec<MorseKeyConfig>,
+) -> proc_macro2::TokenStream {
     let default = quote! {::rmk::config::MorseConfig::default()};
     match morse_config {
         Some(morse_config) => {
@@ -475,7 +478,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let morse = expand_morse_config(
         &behavior.tap_hold,
-        behavior.morse.as_ref().unwrap_or(&Vec::<Morse>::new()),
+        behavior.morse.as_ref().unwrap_or(&Vec::<MorseKeyConfig>::new()),
     );
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
