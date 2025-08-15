@@ -190,8 +190,6 @@ pub enum ControllerEvent {
     Battery(u8),
     /// Charging state changed, true means charging, false means not charging
     ChargingState(bool),
-    /// Ble profile changed
-    BleProfile(u8),
     /// Layer changed
     Layer(u8),
     /// Modifier changed
@@ -202,6 +200,14 @@ pub enum ControllerEvent {
     ConnectionType(u8),
     /// Split peripheral connection
     SplitPeripheral(usize, bool),
+    /// Split central connection
+    SplitCentral(bool),
     /// Lock state led indicator
     KeyboardIndicator(LedIndicator),
+    /// Ble state changed
+    #[cfg(feature = "_ble")]
+    BleState(u8, crate::ble::trouble::BleState),
+    /// Ble profile changed
+    #[cfg(feature = "_ble")]
+    BleProfile(u8),
 }
