@@ -53,7 +53,8 @@ impl StateBits {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Fork {
     pub(crate) trigger: KeyAction,
     pub(crate) negative_output: KeyAction,

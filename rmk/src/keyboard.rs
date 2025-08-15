@@ -358,7 +358,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // Global hold timeout
-        let operation_timeout = self.keymap.borrow().behavior.morse.operation_timeout.as_millis() as u16;
+        let timeout = self.keymap.borrow().behavior.morse.timeout.as_millis() as u16;
 
         // When pressing a morse key, check flow tap first.
         if event.pressed
@@ -378,7 +378,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 key_action,
                 KeyState::PostTap(0),
                 Instant::now(),
-                Instant::now() + Duration::from_millis(m.get_timeout(operation_timeout) as u64),
+                Instant::now() + Duration::from_millis(m.get_timeout(timeout) as u64),
             ));
             return LoopState::OK;
         }
@@ -406,7 +406,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if let KeyAction::Morse(m) = key_action {
-                    press_time + Duration::from_millis(m.timeout_ms as u64)
+                    press_time + Duration::from_millis(m.get_timeout(timeout) as u64)
                 } else {
                     press_time
                 };
@@ -645,7 +645,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
-                        if morse.unilateral_tap
+                        // TODO: Use perkey unilateral tap config
+                        let unilateral_tap_enabled = self.keymap.borrow().behavior.morse.unilateral_tap;
+                        if unilateral_tap_enabled
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
                             && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
@@ -2162,11 +2164,14 @@ mod test {
     }
 
     fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+        let behavior_config = BEHAVIOR_CONFIG.init(config);
+
         // Box::leak is acceptable in tests
         let keymap = Box::new(get_keymap());
         let leaked_keymap = Box::leak(keymap);
 
-        let keymap = block_on(KeyMap::new(leaked_keymap, None, config));
+        let keymap = block_on(KeyMap::new(leaked_keymap, None, behavior_config));
         let keymap_cell = RefCell::new(keymap);
         let keymap_ref = Box::leak(Box::new(keymap_cell));
 

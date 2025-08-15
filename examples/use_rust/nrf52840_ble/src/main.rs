@@ -13,9 +13,9 @@ use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::mode::Async;
 use embassy_nrf::peripherals::{RNG, SAADC, USBD};
 use embassy_nrf::saadc::{self, AnyInput, Input as _, Saadc};
-use embassy_nrf::usb::Driver;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
-use embassy_nrf::{Peri, bind_interrupts, pac, rng, usb};
+use embassy_nrf::usb::Driver;
+use embassy_nrf::{bind_interrupts, pac, rng, usb, Peri};
 use keymap::{COL, ROW};
 use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
@@ -27,13 +27,13 @@ use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join4;
-use rmk::input_device::Runnable;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::{DefaultPhase, RotaryEncoder};
+use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk};
+use rmk::{initialize_encoder_keymap_and_storage, run_devices, run_processor_chain, run_rmk, HostResources};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -183,14 +183,14 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let behavior_config = BehaviorConfig::default();
+    let mut behavior_config = BehaviorConfig::default();
     let mut encoder_map = keymap::get_default_encoder_map();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut encoder_map,
         flash,
         &storage_config,
-        behavior_config,
+        &mut behavior_config,
     )
     .await;
 
