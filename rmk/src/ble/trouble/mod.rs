@@ -280,6 +280,7 @@ pub(crate) async fn run_ble<
                                 if let Ok(mut publisher) = CONTROLLER_CHANNEL.publisher() {
                                     send_controller_event(&mut publisher, ControllerEvent::BleState(0, BleState::None));
                                 }
+                                // Re-send the consumed flag
                                 USB_ENABLED.signal(());
                                 let usb_fut = run_keyboard(
                                     keymap,
@@ -295,6 +296,9 @@ pub(crate) async fn run_ble<
                             }
                             Either4::Second(Ok(conn)) => {
                                 info!("No USB, BLE connected, run BLE keyboard");
+                                if USB_SUSPENDED.signaled() {
+                                    USB_SUSPENDED.reset();
+                                }
                                 let ble_fut = run_ble_keyboard(
                                     &server,
                                     &conn,
