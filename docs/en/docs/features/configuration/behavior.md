@@ -270,7 +270,13 @@ max_morse_patterns_per_key = 36  # To support up to 36 morse patterns per morse 
 
 Note that morse always supports a sequence of up to 15 tap/hold, while tap dance actions are limited by `tap_dance_max_tap`, but also can not exceed 15 taps per sequence.
 
-To support advanced use cases you may consider to use morse instead of tap dance, the only drawback is the lack of vial support.
+To support advanced use cases you may consider to use morse instead of tap dance.
+
+::: warning 
+In Vial morse keys are mapped after the real tap dances, so their index will be increased by `tap_dance_max_num`.
+Also Vial is only able to edit the ".", "-", "..", ".-" morse patterns as tap, hold, double tap, hold after tap.
+Likewise, Vial is not able to edit the part of the tap dances where tap_dance_max_tap > 2.
+:::
 
 ## Fork
 

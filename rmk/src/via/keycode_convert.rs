@@ -1,5 +1,6 @@
 use num_enum::FromPrimitive;
 
+use crate::TAP_DANCE_MAX_NUM;
 use crate::action::{Action, KeyAction};
 use crate::keycode::{KeyCode, ModifierCombination};
 
@@ -76,9 +77,13 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             // Tap dance keycodes: 0x5700..=0x57FF
             0x5700 | (index as u16)
         }
-        KeyAction::Morse(_) => {
-            warn!("Morse is not supported by via");
-            0
+        KeyAction::Morse(index) => {
+            // HACK: Morse keys mapped after the real tap dance keys into vial
+            if (TAP_DANCE_MAX_NUM as u32 + index as u32) < 256 {
+                0x5700 | (TAP_DANCE_MAX_NUM as u16 + index as u16)
+            } else {
+                0x0000
+            }
         }
     }
 }
@@ -148,7 +153,12 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5700..=0x57FF => {
             // Tap dance
             let index = (via_keycode & 0xFF) as u8;
-            KeyAction::TapDance(index)
+            if (index as u32) < (TAP_DANCE_MAX_NUM as u32) {
+                KeyAction::TapDance(index)
+            } else {
+                //HACK: Morse keys mapped after the real tap dance keys into vial
+                KeyAction::Morse(index - TAP_DANCE_MAX_NUM as u8)
+            }
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
@@ -580,9 +590,13 @@ mod test {
         let via_keycode = 0x5705;
         assert_eq!(KeyAction::TapDance(5), from_via_keycode(via_keycode));
 
-        // TapDance(255)
+        // HACK: Morse keys mapped after the real tap dance keys into vial
+        // so TapDance(255) becomes Morse(247)
         let via_keycode = 0x57FF;
-        assert_eq!(KeyAction::TapDance(255), from_via_keycode(via_keycode));
+        assert_eq!(
+            KeyAction::Morse(255 - TAP_DANCE_MAX_NUM as u8),
+            from_via_keycode(via_keycode)
+        );
     }
 
     #[test]

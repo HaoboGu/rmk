@@ -3,11 +3,12 @@ use core::cell::RefCell;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use num_enum::FromPrimitive;
 
-use crate::action::KeyAction;
+use crate::action::{Action, KeyAction};
 use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::keymap::KeyMap;
+use crate::morse::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
     channel::FLASH_CHANNEL,
     storage::{ComboData, FlashOperationMessage},
 };
-use crate::{COMBO_MAX_NUM, TAP_DANCE_MAX_NUM};
+use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM, TAP_DANCE_MAX_NUM};
 
 /// Vial communication commands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
@@ -159,7 +160,8 @@ pub(crate) async fn process_vial<
             match vial_dynamic {
                 VialDynamic::DynamicVialGetNumberOfEntries => {
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
-                    report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
+                    // HACK: Morse keys mapped after the real tap dance keys into vial
+                    report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM + MORSE_MAX_NUM, 255) as u8; // Tap dance, Morse entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
                     // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries
@@ -170,28 +172,60 @@ pub(crate) async fn process_vial<
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
                     let tap_dance_idx = report.output_data[3] as usize;
-                    let tap_dances = &keymap.borrow().behavior.tap_dance.tap_dances;
-                    if let Some(tap_dance) = tap_dances.get(tap_dance_idx) {
-                        // Pack tap dance data into report
-                        LittleEndian::write_u16(
-                            &mut report.input_data[1..3],
-                            to_via_keycode(KeyAction::Single(tap_dance.actions[0].0)),
-                        );
-                        LittleEndian::write_u16(
-                            &mut report.input_data[3..5],
-                            to_via_keycode(KeyAction::Single(tap_dance.actions[0].1)),
-                        );
-                        LittleEndian::write_u16(
-                            &mut report.input_data[5..7],
-                            to_via_keycode(KeyAction::Single(tap_dance.actions[1].0)),
-                        );
-                        LittleEndian::write_u16(
-                            &mut report.input_data[7..9],
-                            to_via_keycode(KeyAction::Single(tap_dance.actions[1].1)),
-                        );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.timeout_ms);
+
+                    if tap_dance_idx < TAP_DANCE_MAX_NUM {
+                        let tap_dances = &keymap.borrow().behavior.tap_dance.tap_dances;
+                        if let Some(tap_dance) = tap_dances.get(tap_dance_idx) {
+                            // Pack tap dance data into report
+                            LittleEndian::write_u16(
+                                &mut report.input_data[1..3],
+                                to_via_keycode(KeyAction::Single(tap_dance.actions[0].0)),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[3..5],
+                                to_via_keycode(KeyAction::Single(tap_dance.actions[0].1)),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[5..7],
+                                to_via_keycode(KeyAction::Single(tap_dance.actions[1].0)),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[7..9],
+                                to_via_keycode(KeyAction::Single(tap_dance.actions[1].1)),
+                            );
+                            LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.timeout_ms);
+                        } else {
+                            report.input_data[1..11].fill(0);
+                        }
                     } else {
-                        report.input_data[1..11].fill(0);
+                        // HACK: Morse keys mapped after the real tap dance keys into vial
+                        let morse_idx = tap_dance_idx - TAP_DANCE_MAX_NUM;
+                        let morse_keys = &keymap.borrow_mut().behavior.morse.morse_keys;
+
+                        if let Some(morse_key) = morse_keys.get(morse_idx) {
+                            // Pack tap dance data into report
+                            LittleEndian::write_u16(
+                                &mut report.input_data[1..3],
+                                to_via_keycode(KeyAction::Single(*morse_key.get(TAP).unwrap_or(&Action::No))),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[3..5],
+                                to_via_keycode(KeyAction::Single(*morse_key.get(HOLD).unwrap_or(&Action::No))),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[5..7],
+                                to_via_keycode(KeyAction::Single(*morse_key.get(DOUBLE_TAP).unwrap_or(&Action::No))),
+                            );
+                            LittleEndian::write_u16(
+                                &mut report.input_data[7..9],
+                                to_via_keycode(KeyAction::Single(
+                                    *morse_key.get(HOLD_AFTER_TAP).unwrap_or(&Action::No),
+                                )),
+                            );
+                            LittleEndian::write_u16(&mut report.input_data[9..11], morse_key.timeout_ms);
+                        } else {
+                            report.input_data[1..11].fill(0);
+                        }
                     }
                 }
                 VialDynamic::DynamicVialTapDanceSet => {
@@ -200,35 +234,71 @@ pub(crate) async fn process_vial<
 
                     use crate::tap_dance::TapDance;
                     let tap_dance_idx = report.output_data[3] as usize;
-                    let tap_dances = &mut keymap.borrow_mut().behavior.tap_dance.tap_dances;
 
-                    if tap_dance_idx < tap_dances.len() {
-                        // Extract tap dance data from report
-                        let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
-                        let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
-                        let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
-                        let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                        let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                    if tap_dance_idx < TAP_DANCE_MAX_NUM {
+                        let tap_dances = &mut keymap.borrow_mut().behavior.tap_dance.tap_dances;
 
-                        let new_tap_dance = TapDance::new_from_vial(
-                            tap.to_action(),
-                            hold.to_action(),
-                            hold_after_tap.to_action(),
-                            double_tap.to_action(),
-                            timeout_ms,
-                        );
+                        if tap_dance_idx < tap_dances.len() {
+                            // Update the tap dance in keymap
+                            if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
+                                // Extract tap dance data from report
+                                let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
+                                let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
+                                let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
+                                let hold_after_tap =
+                                    from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
+                                let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
-                        // Update the tap dance in keymap
-                        if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
-                            *tap_dance = new_tap_dance.clone();
+                                *tap_dance = TapDance::new_from_vial(
+                                    tap.to_action(),
+                                    hold.to_action(),
+                                    hold_after_tap.to_action(),
+                                    double_tap.to_action(),
+                                    timeout_ms,
+                                );
+
+                                #[cfg(feature = "storage")]
+                                {
+                                    // Save to storage
+                                    FLASH_CHANNEL
+                                        .send(FlashOperationMessage::WriteTapDance(
+                                            tap_dance_idx as u8,
+                                            tap_dance.clone(),
+                                        ))
+                                        .await;
+                                }
+                            }
                         }
+                    } else {
+                        // HACK: Morse keys mapped after the real tap dance keys into vial
+                        let morse_idx = tap_dance_idx - TAP_DANCE_MAX_NUM;
+                        let morse_keys = &mut keymap.borrow_mut().behavior.morse.morse_keys;
 
-                        #[cfg(feature = "storage")]
-                        {
-                            // Save to storage
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, new_tap_dance))
-                                .await;
+                        if morse_idx < morse_keys.len() {
+                            // Update the morse key in keymap
+                            if let Some(morse_key) = morse_keys.get_mut(morse_idx) {
+                                // Extract tap dance data from report
+                                let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
+                                let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
+                                let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
+                                let hold_after_tap =
+                                    from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
+                                let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+
+                                _ = morse_key.put(TAP, tap.to_action());
+                                _ = morse_key.put(DOUBLE_TAP, double_tap.to_action());
+                                _ = morse_key.put(HOLD, hold.to_action());
+                                _ = morse_key.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
+                                morse_key.timeout_ms = timeout_ms;
+
+                                #[cfg(feature = "storage")]
+                                {
+                                    // Save to storage
+                                    FLASH_CHANNEL
+                                        .send(FlashOperationMessage::WriteMorseKey(morse_idx as u8, morse_key.clone()))
+                                        .await;
+                                }
+                            }
                         }
                     }
                 }

@@ -66,7 +66,7 @@ impl MorsePattern {
 /// The number of pairs is limited by MAX_MORSE_PATTERNS_PER_KEY, which is a const generic parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MorseKey {    
+pub struct MorseKey {
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
     /// The decision mode of the morse key
@@ -107,6 +107,30 @@ impl MorseKey {
             }
         }
         None
+    }
+
+    /// A call with Action::No will remove the item from the collection,
+    /// otherwise will update the existing action or insert the new action if possible
+    pub fn put(&mut self, pattern: MorsePattern, action: Action) -> Result<(), Action> {
+        if action != Action::No {
+            for pair in self.actions.iter_mut() {
+                if pair.0 == pattern {
+                    pair.1 = action; //modify
+                    return Ok(());
+                }
+            }
+            self.actions.push((pattern, action)).map_err(|v| v.1) //try to insert
+        } else {
+            //try to remove
+            for i in 0..self.actions.len() {
+                if self.actions[i].0 == pattern {
+                    self.actions[i] = self.actions[self.actions.len() - 1];
+                    self.actions.pop();
+                    return Ok(());
+                }
+            }
+            Ok(())
+        }
     }
 }
 

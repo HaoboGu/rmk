@@ -74,7 +74,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.tap_dance.tap_dances);
-        fill_vec(&mut behavior.morse.morse_keys); // Is this needed? (has no Vial support)
+        fill_vec(&mut behavior.morse.morse_keys);
 
         KeyMap {
             layers: action_map,
@@ -101,7 +101,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         fill_vec(&mut behavior.combo.combos);
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.tap_dance.tap_dances);
-        fill_vec(&mut behavior.morse.morse_keys); // Is this needed? (has no Vial support)
+        fill_vec(&mut behavior.morse.morse_keys);
 
         if let Some(storage) = storage {
             if {
