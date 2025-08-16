@@ -142,32 +142,50 @@ tap_dances = [
   }
 ]
 
-[[behavior.morse]]
-timeout = "300ms"
-permissive_hold = false
-unilateral_tap = false
-hold_on_other_press = false
-actions = [ 
-  # Extended many function keys with morse
-  {pattern = ".", action = "F1"}, {pattern = "..", action = "F2"}, {pattern = "...", action = "F3"}, {pattern = "....", action = "F4"}, {pattern = ".....", action = "F5"},
-  {pattern = "-", action = "MO(1)"}, {pattern = ".-", action = "MO(2)"}, {pattern = "..-", action = "MO(3)"}, {pattern = "...-", action = "MO(4)"}, {pattern = "....-", action = "MO(5)"} 
-]
-
 # real morse ABC
 [[behavior.morse]]
-timeout = "200ms"
+timeout = "250ms"
 permissive_hold = false
 unilateral_tap = false
 hold_on_other_press = false
-[[behavior.morse.actions]]
-pattern = ".-"
-action = "A"
-[[behavior.morse.actions]] 
-pattern = "-..."
-action = "B"
-[[behavior.morse.actions]] 
-pattern = "-.-."
-action = "C"
+actions = [
+   {pattern = ".-", action = "A"}, 
+   {pattern = "-...", action = "B"}, 
+   {pattern = "-.-.", action = "C"}, 
+   {pattern = "-..", action = "D"}, 
+   {pattern = ".", action = "E"}, 
+   {pattern = "..-.", action = "F"}, 
+   {pattern = "--.", action = "G"}, 
+   {pattern = "....", action = "H"}, 
+   {pattern = "..", action = "I"}, 
+   {pattern = ".---", action = "J"}, 
+   {pattern = "-.-", action = "K"}, 
+   {pattern = ".-..", action = "L"}, 
+   {pattern = "--", action = "M"}, 
+   {pattern = "-.", action = "N"}, 
+   {pattern = "---", action = "O"}, 
+   {pattern = ".--.", action = "P"}, 
+   {pattern = "--.-", action = "Q"}, 
+   {pattern = ".-.", action = "R"}, 
+   {pattern = "...", action = "S"}, 
+   {pattern = "-", action = "T"}, 
+   {pattern = "..-", action = "U"}, 
+   {pattern = "...-", action = "V"}, 
+   {pattern = ".--", action = "W"}, 
+   {pattern = "-..-", action = "X"}, 
+   {pattern = "-.--", action = "Y"}, 
+   {pattern = "--..", action = "Z"}, 
+   {pattern = ".----", action = "Kc1"}, 
+   {pattern = "..---", action = "Kc2"}, 
+   {pattern = "...--", action = "Kc3"}, 
+   {pattern = "....-", action = "Kc4"}, 
+   {pattern = ".....", action = "Kc5"}, 
+   {pattern = "-....", action = "Kc6"}, 
+   {pattern = "--...", action = "Kc7"}, 
+   {pattern = "---..", action = "Kc8"}, 
+   {pattern = "----.", action = "Kc9"}, 
+   {pattern = "-----", action = "Kc0"}
+]
 
 # Fork configuration
 [behavior.fork]
@@ -234,9 +252,9 @@ tap_dance_max_num = 8
 # Maximum number of taps per tap dance (default: 2, min: 2, max: 15)
 tap_dance_max_tap = 2
 # Maximum number of morse keys the keyboard can store (max 256)
-morse_max_num = 2
+morse_max_num = 1
 # Maximum number of morse patterns a morse key can handle
-max_morse_patterns_per_key = 8
+max_morse_patterns_per_key = 36
 # Macro space size in bytes for storing sequences
 macro_space_size = 256
 # Default debounce time in ms

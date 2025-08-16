@@ -170,6 +170,16 @@ For each morse configuration the following parameters can be set:
 Here is an example of tap dance and morse configuration:
 
 ```toml
+[rmk]
+# Maximum number of tap dances keyboard can store (max 256)
+tap_dance_max_num = 9
+# Maximum number of taps per tap dance (default: 2, min: 2, max: 15)
+tap_dance_max_tap = 5
+# Maximum number of morse keys the keyboard can store (max 256)
+morse_max_num = 1
+# Maximum number of morse patterns a morse key can handle
+max_morse_patterns_per_key = 36
+
 [behavior.tap_dance]
 tap_dances = [
   # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
@@ -189,32 +199,50 @@ tap_dances = [
   }
 ]
 
-# morse(0): Extended many function keys with morse - equivalent with td(3)
+# morse(0): the real morse ABC
 [[behavior.morse]]
-timeout = "300ms"
+timeout = "250ms"
 permissive_hold = false
 unilateral_tap = false
 hold_on_other_press = false
-actions = [ 
-  {pattern = ".", action = "F1"}, {pattern = "..", action = "F2"}, {pattern = "...", action = "F3"}, {pattern = "....", action = "F4"}, {pattern = ".....", action = "F5"},
-  {pattern = "-", action = "MO(1)"}, {pattern = ".-", action = "MO(2)"}, {pattern = "..-", action = "MO(3)"}, {pattern = "...-", action = "MO(4)"}, {pattern = "....-", action = "MO(5)"} 
+actions = [
+   {pattern = ".-", action = "A"}, 
+   {pattern = "-...", action = "B"}, 
+   {pattern = "-.-.", action = "C"}, 
+   {pattern = "-..", action = "D"}, 
+   {pattern = ".", action = "E"}, 
+   {pattern = "..-.", action = "F"}, 
+   {pattern = "--.", action = "G"}, 
+   {pattern = "....", action = "H"}, 
+   {pattern = "..", action = "I"}, 
+   {pattern = ".---", action = "J"}, 
+   {pattern = "-.-", action = "K"}, 
+   {pattern = ".-..", action = "L"}, 
+   {pattern = "--", action = "M"}, 
+   {pattern = "-.", action = "N"}, 
+   {pattern = "---", action = "O"}, 
+   {pattern = ".--.", action = "P"}, 
+   {pattern = "--.-", action = "Q"}, 
+   {pattern = ".-.", action = "R"}, 
+   {pattern = "...", action = "S"}, 
+   {pattern = "-", action = "T"}, 
+   {pattern = "..-", action = "U"}, 
+   {pattern = "...-", action = "V"}, 
+   {pattern = ".--", action = "W"}, 
+   {pattern = "-..-", action = "X"}, 
+   {pattern = "-.--", action = "Y"}, 
+   {pattern = "--..", action = "Z"}, 
+   {pattern = ".----", action = "Kc1"}, 
+   {pattern = "..---", action = "Kc2"}, 
+   {pattern = "...--", action = "Kc3"}, 
+   {pattern = "....-", action = "Kc4"}, 
+   {pattern = ".....", action = "Kc5"}, 
+   {pattern = "-....", action = "Kc6"}, 
+   {pattern = "--...", action = "Kc7"}, 
+   {pattern = "---..", action = "Kc8"}, 
+   {pattern = "----.", action = "Kc9"}, 
+   {pattern = "-----", action = "Kc0"}
 ]
-
-# morse(1): the start of the real morse ABC
-[[behavior.morse]]
-timeout = "200ms"
-permissive_hold = false
-unilateral_tap = false
-hold_on_other_press = false
-[[behavior.morse.actions]]
-pattern = ".-"
-action = "A"
-[[behavior.morse.actions]] 
-pattern = "-..."
-action = "B"
-[[behavior.morse.actions]] 
-pattern = "-.-."
-action = "C"
 ```
 
 ### Using Tap Dance, Morse in Keymaps
