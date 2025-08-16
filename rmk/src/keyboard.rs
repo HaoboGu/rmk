@@ -346,11 +346,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         update_activity_time();
 
         // Process key
-        let key_action = self.keymap.borrow_mut().get_action_with_layer_cache(event);
+        let key_action = &self.keymap.borrow_mut().get_action_with_layer_cache(event);
 
         if self.combo_on {
             if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
-                self.process_key_action(key_action, event, is_combo).await
+                self.process_key_action(&key_action, event, is_combo).await
             } else {
                 LoopState::OK
             }
@@ -359,7 +359,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    async fn process_key_action(&mut self, key_action: KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
+    async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // When pressing a morse key, check flow tap first.
         if event.pressed
             && self.keymap.borrow().behavior.morse.enable_hrm
@@ -372,14 +372,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // TODO: Check whether current morse key is in the buffer, if so, remove it from buffer and use the buffered morse pattern?
             // TODO: Check only morse with modifier?
 
-            let action = key_action.action_from_pattern(&self.keymap.borrow().behavior, TAP); //tap action
+            let action = Self::action_from_pattern(&self.keymap.borrow().behavior, key_action, TAP); //tap action
             self.process_key_action_normal(action, event).await;
             // Push back after triggered press
             let now = Instant::now();
-            let time_out = now + key_action.morse_timeout(&self.keymap.borrow().behavior);
+            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, key_action);
             self.held_buffer.push(HeldKey::new(
                 event,
-                key_action,
+                *key_action,
                 KeyState::ProcessedButReleaseNotReportedYet(action),
                 now,
                 time_out,
@@ -400,7 +400,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Clean buffer, then process current key normally");
                 let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered
-                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                    &self.keymap.borrow_mut().get_action_with_layer_cache(event)
                 } else {
                     key_action
                 };
@@ -410,13 +410,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse_like() {
-                    press_time + key_action.morse_timeout(&self.keymap.borrow().behavior)
+                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, key_action)
                 } else {
                     press_time
                 };
                 self.held_buffer.push(HeldKey::new(
                     event,
-                    key_action,
+                    *key_action,
                     KeyState::Pressed(MorsePattern::default()),
                     press_time,
                     timeout_time,
@@ -429,7 +429,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // Process current key normally
                 let key_action = if keyboard_state_updated && !is_combo {
                     // The key_action needs to be updated due to the morse key might be triggered
-                    self.keymap.borrow_mut().get_action_with_layer_cache(event)
+                    &self.keymap.borrow_mut().get_action_with_layer_cache(event)
                 } else {
                     key_action
                 };
@@ -463,9 +463,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Pressed(pattern) => {
                                     //TODO? allow this only if the pattern is yet empty or when the longest pattern's length == 1?
                                     let pattern = pattern.followed_by_tap(); // The HeldKeyDecision turned this into tap!
-                                    let action = held_key
-                                        .action
-                                        .action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    let action = Self::action_from_pattern(
+                                        &self.keymap.borrow().behavior,
+                                        &held_key.action,
+                                        pattern,
+                                    );
                                     self.process_key_action_normal(action, held_key.event).await;
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered tap
@@ -474,9 +476,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Released(pattern) => {
                                     // TODO? check if this is the longest possible pattern?
                                     let pattern = pattern;
-                                    let action = held_key
-                                        .action
-                                        .action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    let action = Self::action_from_pattern(
+                                        &self.keymap.borrow().behavior,
+                                        &held_key.action,
+                                        pattern,
+                                    );
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -499,7 +503,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     keyboard_state_updated = true;
                                     //TODO? allow this only for tap hold, tap dance, but not for real morse?
                                     let pattern = pattern.followed_by_hold(); // The HeldKeyDecision turned this into hold!
-                                    let action = action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    let action =
+                                        Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
                                     self.process_key_action_normal(action, held_key.event).await;
                                     held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     // Push back after triggered hold
@@ -508,7 +513,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Released(pattern) => {
                                     // TODO? check if this is the longest possible pattern?
                                     let pattern = pattern;
-                                    let action = action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    let action =
+                                        Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
                                     held_key.event.pressed = true;
                                     self.process_key_action_tap(action, held_key.event).await;
                                     // The tap is fully fired, don't push it back to buffer again
@@ -552,9 +558,13 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                                     let pattern = pattern.followed_by_tap(); // Releasing the current key, will always be tapping, because timeout isn't here
 
-                                    if key_action.is_pattern_completed(&self.keymap.borrow().behavior, pattern) {
-                                        let action =
-                                            key_action.action_from_pattern(&self.keymap.borrow().behavior, pattern);
+                                    if Self::is_pattern_completed(&self.keymap.borrow().behavior, &key_action, pattern)
+                                    {
+                                        let action = Self::action_from_pattern(
+                                            &self.keymap.borrow().behavior,
+                                            &key_action,
+                                            pattern,
+                                        );
                                         self.process_key_action_normal(action, held_key.event).await;
                                         held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     }
@@ -585,7 +595,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         // Note: Morse like actions are not expected here.
                         assert!(!action.is_morse_like());
                         debug!("Tap Key {:?} now press down, action: {:?}", held_key.event, action);
-                        self.process_key_action_inner(action, held_key.event).await;
+                        self.process_key_action_inner(&action, held_key.event).await;
 
                         // Push back the updated key state
                         held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action.to_action()); // Morse like actions are not expected here
@@ -603,7 +613,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// This function iterates all held keys and makes decision for them if a special mode is triggered, such as permissive hold, etc.
     fn make_decisions_for_keys(
         &mut self,
-        key_action: KeyAction,
+        key_action: &KeyAction,
         event: KeyboardEvent,
     ) -> (
         KeyBehaviorDecision,
@@ -632,7 +642,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .filter(|k| matches!(k.state, KeyState::Pressed(_) | KeyState::Released(_)))
             {
                 // Releasing a key is already buffered
-                if !event.pressed && held_key.action == key_action {
+                if !event.pressed && held_key.action == *key_action {
                     debug!("Releasing a held key: {:?}", event);
                     let _ = decisions.push((held_key.event.pos, HeldKeyDecision::Release));
                     decision_for_current_key = KeyBehaviorDecision::Release;
@@ -648,7 +658,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse_like() {
-                    let (morse_mode, unilateral_tap) = held_key.action.morse_mode(&self.keymap.borrow().behavior);
+                    let (morse_mode, unilateral_tap) =
+                        Self::morse_mode(&self.keymap.borrow().behavior, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
@@ -699,9 +710,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (decision_for_current_key, decisions)
     }
 
-    async fn process_key_action_inner(&mut self, original_key_action: KeyAction, event: KeyboardEvent) -> LoopState {
+    async fn process_key_action_inner(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) -> LoopState {
         // Start forks
-        let key_action = self.try_start_forks(original_key_action, event);
+        let key_action = self.try_start_forks(*original_key_action, event);
 
         // Clear with_modifier if a new key is pressed
         if self.with_modifiers.into_bits() != 0 && event.pressed {
@@ -725,7 +736,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 _ => {}
             }
         } else {
-            self.process_key_action_morse(key_action, event).await;
+            self.process_key_action_morse(&key_action, event).await;
         }
         self.try_finish_forks(original_key_action, event);
 
@@ -836,10 +847,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     // Release of forked key must deactivate the fork
     // (explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent)
-    fn try_finish_forks(&mut self, original_key_action: KeyAction, event: KeyboardEvent) {
+    fn try_finish_forks(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) {
         if !event.pressed {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if self.fork_states[i].is_some() && fork.trigger == original_key_action {
+                if self.fork_states[i].is_some() && fork.trigger == *original_key_action {
                     // if the originating key of a fork is released the replacement decision is not valid anymore
                     self.fork_states[i] = None;
                 }
@@ -850,7 +861,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Check combo before process keys.
     ///
     /// This function returns key action after processing combo, and a boolean indicates that if current returned key action is a combo output
-    async fn process_combo(&mut self, key_action: KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
+    async fn process_combo(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> (Option<KeyAction>, bool) {
         let mut is_combo_action = false;
         let current_layer = self.keymap.borrow().get_activated_layer();
         for combo in self.keymap.borrow_mut().behavior.combo.combos.iter_mut() {
@@ -861,7 +872,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
             self.held_buffer.push(HeldKey::new(
                 event,
-                key_action,
+                *key_action,
                 KeyState::WaitingCombo,
                 pressed_time,
                 pressed_time + self.keymap.borrow().behavior.combo.timeout,
@@ -916,7 +927,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
 
             self.dispatch_combos().await;
-            (Some(key_action), false)
+            (Some(*key_action), false)
         }
     }
 
@@ -928,7 +939,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             if self.held_buffer.keys[i].state == KeyState::WaitingCombo {
                 let key = self.held_buffer.keys.swap_remove(i);
                 debug!("[Combo] Dispatching combo: {:?}", key);
-                self.process_key_action(key.action, key.event, false).await;
+                self.process_key_action(&key.action, key.event, false).await;
             } else {
                 i += 1;
             }
