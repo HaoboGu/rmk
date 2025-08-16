@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rewrite tap-hold and tap-dance, use morse key instead
+- Refactor tap-hold, tap-dance and introduced morse key to support real morse patterns
 - Rename chordal tap to unilateral tap
 - Rewrite led indicator, use controller system
 

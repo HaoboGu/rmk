@@ -81,6 +81,12 @@ impl crate::KeyboardTomlConfig {
                         return Err("keyboard.toml: number of tap dances is greater than tap_dance_max_num configured under [rmk] section".to_string());
                     }
                 }
+                behavior.morse = behavior.morse.or(default.morse);
+                if let Some(morse) = &behavior.morse {
+                    if morse.len() > self.rmk.morse_max_num {
+                        return Err("keyboard.toml: number of morse keys is greater than morse_max_num configured under [rmk] section".to_string());
+                    }
+                }
                 Ok(behavior)
             }
             None => Ok(default),
