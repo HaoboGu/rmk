@@ -4,12 +4,11 @@ use crate::TAP_DANCE_MAX_TAP;
 use crate::action::Action;
 use crate::morse::MorseKeyMode;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TapDance {
     /// array of (tap, hold) action pairs
     pub(crate) actions: [(Action, Action); TAP_DANCE_MAX_TAP],
-
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
     /// The decision mode of the morse key
