@@ -55,7 +55,7 @@ pub struct RmkConstantsConfig {
     #[serde(deserialize_with = "check_tap_dance_max_tap")]
     pub tap_dance_max_tap: usize,
     /// Maximum number of morse key configurations the keyboard can store
-    #[serde_inline_default(0)]
+    #[serde_inline_default(2)]
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
     /// Maximum number of morse patterns a morse key can handle
@@ -168,7 +168,7 @@ impl Default for RmkConstantsConfig {
             fork_max_num: 8,
             tap_dance_max_num: 8,
             tap_dance_max_tap: 2,
-            morse_max_num: 0,
+            morse_max_num: 2,
             max_morse_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
@@ -474,7 +474,7 @@ pub struct TapHoldConfig {
 
 /// Configurations for morse
 #[derive(Clone, Debug, Deserialize)]
-pub struct MorseKeyConfig {    
+pub struct MorseKeyConfig {
     pub timeout: Option<DurationMillis>,
     pub permissive_hold: Option<bool>,
     pub unilateral_tap: Option<bool>,

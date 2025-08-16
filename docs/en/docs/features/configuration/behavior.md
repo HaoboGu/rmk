@@ -259,7 +259,7 @@ tap_dance_max_tap = 4  # To support up to 4 taps per tap dance
 
 Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) is limited to 2 taps, while the extended format (using `tap_actions` and `hold_actions`) can support up to the configured `tap_dance_max_tap` value. 
 
-- `morse_max_num`: Maximum number of morse keys (default: 0, range: 0-256)
+- `morse_max_num`: Maximum number of morse keys (default: 2, range: 0-256)
 - `max_morse_patterns_per_key`: Maximum number of morse patterns per morse key config (default: 8, range: 1-65536)
 
 ```toml

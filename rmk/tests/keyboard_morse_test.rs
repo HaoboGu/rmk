@@ -784,43 +784,56 @@ rusty_fork_test! {
     }
 
     #[test]
-    fn test_morse_abc_s_o_s_c() {
+    fn test_morse_abc_c() {
+        key_sequence_test! {
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
+            sequence: [
+                //C
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 80],
+                [0, 4, false, 80], //.
+                [0, 4, true, 80],
+                [0, 4, false, 300], //-
+                [0, 4, true, 80],
+                [0, 4, false, 80], //.
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    //#[ignore]
+    fn test_morse_abc_s_o_s() {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
             sequence: [
                 //S
                 [0, 4, true, 300],
-                [0, 4, false, 100], //.
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
 
                 //O
                 [0, 4, true, 300],
                 [0, 4, false, 300], //-
-                [0, 4, true, 100],
+                [0, 4, true, 10],
                 [0, 4, false, 300], //-
-                [0, 4, true, 100],
+                [0, 4, true, 10],
                 [0, 4, false, 300], //-
 
                 //S
                 [0, 4, true, 300],
-                [0, 4, false, 100], //.
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
-
-                //C
-                [0, 4, true, 300],
-                [0, 4, false, 300], //-
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
-                [0, 4, true, 100],
-                [0, 4, false, 300], //-
-                [0, 4, true, 100],
-                [0, 4, false, 100], //.
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
             ],
             expected_reports: [
                 [0, [kc_to_u8!(S), 0, 0, 0, 0, 0]],
@@ -829,7 +842,44 @@ rusty_fork_test! {
                 [0, [0, 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(S), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    //#[ignore]
+    fn test_morse_rmk() {
+        key_sequence_test! {
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
+            sequence: [
+                //R .-.
+                [0, 4, true, 300],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+
+                //M --
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+
+                //K -.-
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(R), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(M), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };
