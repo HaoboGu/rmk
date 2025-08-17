@@ -50,7 +50,7 @@ use crate::usb::add_usb_logger;
 use crate::{CONNECTION_STATE, run_keyboard};
 
 #[cfg(feature = "vial")]
-use {crate::channel::VIAL_READ_CHANNEL, crate::keymap::KeyMap, ble_server::BleViaServer, core::cell::RefCell};
+use {crate::channel::VIAL_READ_CHANNEL, crate::keymap::KeyMap, core::cell::RefCell, vial::BleViaServer};
 #[cfg(all(not(feature = "_no_usb"), feature = "vial"))]
 use {crate::descriptor::ViaReport, crate::via::UsbVialReaderWriter};
 
@@ -58,6 +58,8 @@ pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
 pub(crate) mod profile;
+#[cfg(feature = "vial")]
+pub(crate) mod vial;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
