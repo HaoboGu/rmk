@@ -211,6 +211,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         .unwrap_or_else(|| behavior_config.morse.operation_timeout)
     }
 
+    /// decides and returns the pair of (morse_mode, unilateral_tap) based on configuration for the given key action
     pub fn morse_mode(behavior_config: &BehaviorConfig, keyAction: &KeyAction) -> (MorseKeyMode, bool) {
         match keyAction {
             KeyAction::TapDance(idx) => behavior_config

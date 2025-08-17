@@ -806,7 +806,6 @@ rusty_fork_test! {
     }
 
     #[test]
-    //#[ignore]
     fn test_morse_abc_s_o_s() {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
@@ -847,7 +846,6 @@ rusty_fork_test! {
     }
 
     #[test]
-    //#[ignore]
     fn test_morse_rmk() {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),

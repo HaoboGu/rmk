@@ -269,9 +269,9 @@ rusty_fork_test! {
                 [0, 0, true, 150], // Press td!(0)
                 [0, 0, false, 10], // Release td!(0)
                 [0, 0, true, 150], // Press td!(0)
-                [0, 1, true, 260], // Press td!(1) -> td!(0) timeout (tap-hold)
-                [0, 1, false, 260], // Release td!(1)
-                [0, 0, false, 260], // Release td!(0) -> td!(1) timeout (hold)
+                [0, 1, true, 260], // Press td!(1),      td!(0) timeout (tap-hold) -> press "C"
+                [0, 1, false, 260], // Release td!(1) -> td(1) hold, gap -> tap "Y"
+                [0, 0, false, 260], // Release td!(0) -> release "C"
             ],
             expected_reports: [
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
