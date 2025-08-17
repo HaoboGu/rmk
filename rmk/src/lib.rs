@@ -27,18 +27,27 @@ use bt_hci::{
     cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
     controller::{ControllerCmdAsync, ControllerCmdSync},
 };
-use config::{RmkConfig, VialConfig};
+use config::RmkConfig;
 #[cfg(feature = "controller")]
 use controller::{PollingController, wpm::WpmController};
-use descriptor::ViaReport;
+#[cfg(not(feature = "_ble"))]
+use descriptor::{CompositeReport, KeyboardReport};
+#[cfg(not(any(feature = "storage", feature = "vial")))]
+use embassy_futures::select::{Either3, select3};
+#[cfg(any(feature = "storage", feature = "vial"))]
 use embassy_futures::select::{Either4, select4};
+#[cfg(feature = "vial")]
+use {config::VialConfig, descriptor::ViaReport, hid::HidWriterTrait};
+
+use embassy_futures::select::select;
+
 #[cfg(not(any(cortex_m)))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex as RawMutex;
 #[cfg(cortex_m)]
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 #[cfg(not(feature = "_no_usb"))]
 use embassy_usb::driver::Driver;
-use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
+use hid::{HidReaderTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::LedIndicator;
 use matrix::MatrixTrait;
@@ -47,7 +56,8 @@ use state::CONNECTION_STATE;
 use trouble_host::prelude::*;
 #[cfg(feature = "_ble")]
 pub use trouble_host::prelude::{DefaultPacketPool, HostResources};
-use via::VialService;
+#[cfg(all(not(feature = "_ble"), feature = "vial"))]
+use via::UsbVialReaderWriter;
 #[cfg(all(not(feature = "_no_usb"), not(feature = "_ble")))]
 use {
     crate::light::UsbLedReader,
@@ -56,14 +66,8 @@ use {
 #[cfg(feature = "storage")]
 use {
     action::{EncoderAction, KeyAction},
-    embassy_futures::select::select,
     embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
     storage::Storage,
-};
-#[cfg(not(feature = "_ble"))]
-use {
-    descriptor::{CompositeReport, KeyboardReport},
-    via::UsbVialReaderWriter,
 };
 pub use {embassy_futures, futures, heapless, rmk_macro as macros};
 
@@ -104,6 +108,9 @@ pub mod storage;
 pub mod tap_dance;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
+#[cfg(feature = "vial")]
+use via::VialService;
+#[cfg(feature = "vial")]
 pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
@@ -145,18 +152,28 @@ pub async fn initialize_encoder_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, &Some(default_encoder_map), storage_config).await;
+    #[cfg(feature = "vial")]
+    {
+        let mut storage = Storage::new(flash, default_keymap, &Some(default_encoder_map), storage_config).await;
 
-    let keymap = RefCell::new(
-        KeyMap::new_from_storage(
-            default_keymap,
-            Some(default_encoder_map),
-            Some(&mut storage),
-            behavior_config,
-        )
-        .await,
-    );
-    (keymap, storage)
+        let keymap = RefCell::new(
+            KeyMap::new_from_storage(
+                default_keymap,
+                Some(default_encoder_map),
+                Some(&mut storage),
+                behavior_config,
+            )
+            .await,
+        );
+        (keymap, storage)
+    }
+
+    #[cfg(not(feature = "vial"))]
+    {
+        let storage = Storage::new(flash, storage_config).await;
+        let keymap = RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config).await);
+        (keymap, storage)
+    }
 }
 
 #[cfg(feature = "storage")]
@@ -175,11 +192,20 @@ pub async fn initialize_keymap_and_storage<
     RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, 0>>,
     Storage<F, ROW, COL, NUM_LAYER, 0>,
 ) {
-    let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
+    #[cfg(feature = "vial")]
+    {
+        let mut storage = Storage::new(flash, default_keymap, &None, storage_config).await;
+        let keymap =
+            RefCell::new(KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await);
+        (keymap, storage)
+    }
 
-    let keymap =
-        RefCell::new(KeyMap::new_from_storage(default_keymap, None, Some(&mut storage), behavior_config).await);
-    (keymap, storage)
+    #[cfg(not(feature = "vial"))]
+    {
+        let storage = Storage::new(flash, storage_config).await;
+        let keymap = RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await);
+        (keymap, storage)
+    }
 }
 
 #[allow(unreachable_code)]
@@ -189,12 +215,12 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
     #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "vial")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(not(feature = "_no_usb"))] usb_driver: D,
     #[cfg(feature = "_ble")] stack: &'b Stack<'b, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
@@ -203,6 +229,7 @@ pub async fn run_rmk<
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
     crate::ble::trouble::run_ble(
+        #[cfg(feature = "vial")]
         keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,
@@ -220,6 +247,7 @@ pub async fn run_rmk<
         let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let mut other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
+        #[cfg(feature = "vial")]
         let mut vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
         let (mut keyboard_reader, mut keyboard_writer) = keyboard_reader_writer.split();
 
@@ -254,13 +282,16 @@ pub async fn run_rmk<
                 };
 
                 run_keyboard(
+                    #[cfg(feature = "vial")]
                     keymap,
                     #[cfg(feature = "storage")]
                     storage,
                     usb_task,
                     UsbLedReader::new(&mut keyboard_reader),
+                    #[cfg(feature = "vial")]
                     UsbVialReaderWriter::new(&mut vial_reader_writer),
                     UsbKeyboardWriter::new(&mut keyboard_writer, &mut other_writer),
+                    #[cfg(feature = "vial")]
                     rmk_config.vial_config,
                 )
                 .await;
@@ -275,27 +306,28 @@ pub async fn run_rmk<
 // Run keyboard task for once
 pub(crate) async fn run_keyboard<
     'a,
-    Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
+    #[cfg(feature = "vial")] Rw: HidReaderTrait<ReportType = ViaReport> + HidWriterTrait<ReportType = ViaReport>,
     R: HidReaderTrait<ReportType = LedIndicator>,
     W: RunnableHidWriter,
     Fu: Future<Output = ()>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const ROW: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const COL: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const NUM_LAYER: usize,
+    #[cfg(any(feature = "storage", feature = "vial"))] const NUM_ENCODER: usize,
 >(
-    keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
+    #[cfg(feature = "vial")] keymap: &'a RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
     #[cfg(feature = "storage")] storage: &mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>,
     communication_task: Fu,
     mut led_reader: R,
-    vial_reader_writer: Rw,
+    #[cfg(feature = "vial")] vial_reader_writer: Rw,
     mut keyboard_writer: W,
-    vial_config: VialConfig<'static>,
+    #[cfg(feature = "vial")] vial_config: VialConfig<'static>,
 ) {
     // The state will be changed to true after the keyboard starts running
     CONNECTION_STATE.store(ConnectionState::Connected.into(), Ordering::Release);
     let writer_fut = keyboard_writer.run_writer();
+    #[cfg(feature = "vial")]
     let mut vial_service = VialService::new(keymap, vial_config, vial_reader_writer);
 
     let led_fut = async {
@@ -324,6 +356,7 @@ pub(crate) async fn run_keyboard<
         }
     };
 
+    #[cfg(feature = "vial")]
     let via_fut = vial_service.run();
 
     #[cfg(feature = "storage")]
@@ -332,12 +365,29 @@ pub(crate) async fn run_keyboard<
     #[cfg(feature = "controller")]
     let mut wpm_controller = WpmController::new();
 
+    #[cfg(not(any(feature = "storage", feature = "vial")))]
+    match select3(
+        communication_task,
+        #[cfg(feature = "controller")]
+        select(wpm_controller.polling_loop(), led_fut),
+        #[cfg(not(feature = "controller"))]
+        led_fut,
+        writer_fut,
+    )
+    .await
+    {
+        Either3::First(_) => error!("Communication task has ended"),
+        Either3::Second(_) => error!("Controller or led task has ended"),
+        Either3::Third(_) => error!("Keyboard writer task has ended"),
+    }
+
+    #[cfg(any(feature = "storage", feature = "vial"))]
     match select4(
         communication_task,
-        #[cfg(feature = "storage")]
+        #[cfg(all(feature = "storage", feature = "vial"))]
         select(storage_fut, via_fut),
-        #[cfg(not(feature = "storage"))]
-        via_fut,
+        #[cfg(all(feature = "storage", not(feature = "vial")))]
+        storage_fut,
         #[cfg(feature = "controller")]
         select(wpm_controller.polling_loop(), led_fut),
         #[cfg(not(feature = "controller"))]

@@ -18,9 +18,11 @@ use {
     crate::{SPLIT_MESSAGE_CHANNEL_SIZE, SPLIT_PERIPHERALS_NUM},
 };
 
+#[cfg(feature = "vial")]
+use crate::VIAL_CHANNEL_SIZE;
 use crate::event::{Event, KeyboardEvent};
 use crate::hid::Report;
-use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex, VIAL_CHANNEL_SIZE};
+use crate::{EVENT_CHANNEL_SIZE, REPORT_CHANNEL_SIZE, RawMutex};
 #[cfg(feature = "storage")]
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
 
@@ -62,6 +64,7 @@ pub static CONTROLLER_CHANNEL: PubSubChannel<
     CONTROLLER_CHANNEL_PUBS,
 > = PubSubChannel::new();
 /// Channel for reading vial reports from the host
+#[cfg(feature = "vial")]
 pub(crate) static VIAL_READ_CHANNEL: Channel<RawMutex, [u8; 32], VIAL_CHANNEL_SIZE> = Channel::new();
 // Sync messages from server to flash
 #[cfg(feature = "storage")]
