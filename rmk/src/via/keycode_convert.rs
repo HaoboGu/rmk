@@ -1,5 +1,3 @@
-#![cfg(feature = "vial")]
-
 use num_enum::FromPrimitive;
 
 use crate::action::{Action, KeyAction};
