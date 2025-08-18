@@ -160,8 +160,7 @@ pub(crate) async fn process_vial<
             match vial_dynamic {
                 VialDynamic::DynamicVialGetNumberOfEntries => {
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");
-                    // HACK: Morse keys mapped after the real tap dance keys into vial
-                    report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance, Morse entries
+                    report.input_data[0] = core::cmp::min(TAP_DANCE_MAX_NUM, 255) as u8; // Tap dance entries
                     report.input_data[1] = core::cmp::min(COMBO_MAX_NUM, 255) as u8; // Combo entries
                     // TODO: Support dynamic key override
                     report.input_data[2] = 0; // Key override entries

@@ -381,7 +381,7 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
     }
 }
 
-/// Parse the string literal like `MO(1)`, `OSL(1)`, `TD(0)`, `MORSE(0)`, etc, get the number in it.
+/// Parse the string literal like `MO(1)`, `OSL(1)`, `TD(0)`, etc, get the number in it.
 /// The caller should pass the trimmed prefix and suffix
 fn get_number(key: String, prefix: &str, suffix: &str) -> u8 {
     let layer_str = key.trim_start_matches(prefix).trim_end_matches(suffix);

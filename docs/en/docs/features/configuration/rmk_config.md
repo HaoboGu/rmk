@@ -59,8 +59,7 @@ Increasing the number of combos, forks, tap dances and macros will increase memo
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
 - `tap_dance_max_num`: Maximum number of tap dances that can be stored, default value is 8. This value must be between 0 and 256.
-config](./behavior.md#tap-dance) is set, the `tap_dance_max_tap` will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.
-- `max_patterns_per_key` : Maximum number of patterns a tap dance key can handle, default value is 8. This value must be between 4 and 65536.
+- `max_patterns_per_key` : Maximum number of tap/hold patterns a tap dance key can handle, default value is 8. This value must be between 4 and 65536. (Will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.)
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration

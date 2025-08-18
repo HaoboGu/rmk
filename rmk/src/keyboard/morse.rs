@@ -7,6 +7,7 @@ use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
 use crate::tap_dance::{HOLD, MorsePattern, TAP, TapHoldMode};
 
+// 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
     Keyboard<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>
 {
@@ -19,7 +20,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // The time since the key press is longer than the timeout,
                 // if there is no possibility for longer morse patterns, trigger the action:
                 let pattern = pattern.followed_by_hold();
-                if let Some(action) = Self::try_predict_final(&self.keymap.borrow().behavior, &key.action, pattern) {
+                debug!("pattern while holding: {:?}", pattern);
+                let final_action = Self::try_predict_final_action(&self.keymap.borrow().behavior, &key.action, pattern);
+                if let Some(action) = final_action {
+                    debug!("hold prediction {:?} -> {:?}", pattern, action);
                     self.process_key_action_normal(action, key.event).await;
                     if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
                         k.state = KeyState::ProcessedButReleaseNotReportedYet(action);
@@ -56,7 +60,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, &key_action);
+            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, key_action);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
@@ -90,14 +94,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         let hold = released_time >= k.timeout_time;
 
                         let pattern = if hold {
+                            debug!("pattern after hold release: {:?}", pattern);
                             pattern.followed_by_hold()
                         } else {
+                            debug!("pattern after tap release: {:?}", pattern);
                             pattern.followed_by_tap()
                         };
 
-                        if let Some(action) =
-                            Self::try_predict_final(&self.keymap.borrow().behavior, &k.action, pattern)
-                        {
+                        let final_action =
+                            Self::try_predict_final_action(&self.keymap.borrow().behavior, &k.action, pattern);
+                        if let Some(action) = final_action {
+                            debug!("released prediction {:?} -> {:?}", pattern, action);
                             // Reached the longest configured morse pattern, trigger the corresponding action immediately
                             self.held_buffer.remove(event.pos); // Remove the key from the held buffer, is like setting to an idle state
 
@@ -209,7 +216,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)
-    pub fn try_predict_final(
+    pub fn try_predict_final_action(
         behavior_config: &BehaviorConfig,
         keyAction: &KeyAction,
         pattern_start: MorsePattern,
@@ -226,7 +233,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .tap_dance
                 .tap_dances
                 .get(*idx as usize)
-                .and_then(|td| td.try_predict_final(pattern_start)),
+                .and_then(|td| td.try_predict_final_action(pattern_start)),
             _ => None,
         }
     }

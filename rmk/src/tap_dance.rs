@@ -82,6 +82,9 @@ pub struct TapDance {
     pub unilateral_tap: bool,
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
+    //TODO? introduce settings to block/allow early resolving by prediction
+    //TODO? introduce settings to block/allow error correction at pattern finish
+    //TODO? introduce settings to set gap and hold timeout separately
 }
 
 impl Default for TapDance {
@@ -140,20 +143,28 @@ impl TapDance {
         result
     }
 
-    /// checks all stored pattern if more than one continuation found for the given pattern, none, otherwise the unique completion
-    pub fn try_predict_final(&self, pattern_start: MorsePattern) -> Option<Action> {
-        let mut first = None;
+    /// checks all stored patterns if more than one continuation found for the given pattern, none, otherwise the unique completion
+    pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
+        let mut first_action = None;
         for pair in self.actions.iter() {
             //if pair.pattern starts with the given pattern_start
             if pair.0.starts_with(pattern_start) {
-                if first.is_none() {
-                    first = Some(pair);
+                if let Some(first) = first_action {
+                    if first != pair.1 {
+                        return None;
+                    }
                 } else {
-                    return None;
+                    first_action = Some(pair.1);
                 }
             }
         }
-        first.map(|first| first.1)
+
+        //TODO?
+        //if first action is None here, then the user made a mistake entering the pattern
+        //should we repeat this with a sorter pattern_start? to correct the error?
+        //or just use error correction when the pattern is finished, and return the least distance?
+
+        first_action
     }
 
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {

@@ -1155,7 +1155,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     ) -> Result<(), ()> {
         for (i, item) in tap_dances.iter_mut().enumerate() {
             let key = get_tap_dance_key(i as u8);
-            let read_data: Option<StorageData> = fetch_item::<u32, StorageData, _>(
+            let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
                 &mut NoCache::new(),
@@ -1392,7 +1392,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::keycode::KeyCode;
-    use crate::tap_dance::TapHoldMode;
+    use crate::tap_dance::{HOLD, TAP, TapHoldMode};
 
     #[test]
     fn test_tap_dance_serialization_deserialization() {
@@ -1430,13 +1430,10 @@ mod tests {
     #[test]
     fn test_tap_dance_with_partial_actions() {
         // Create a TapDance with partial actions
-        let tap_dance: TapDance = TapDance::new_from_vial(
-            Action::Key(KeyCode::A),
-            Action::Key(KeyCode::B),
-            Action::No,
-            Action::No,
-            150,
-        );
+        let mut tap_dance: TapDance = TapDance::default();
+        _ = tap_dance.put(TAP, Action::Key(KeyCode::A));
+        _ = tap_dance.put(HOLD, Action::Key(KeyCode::B));
+        tap_dance.timeout_ms = 150;
 
         // Serialization
         let mut buffer = [0u8; 5 + 4 * 4];
@@ -1496,7 +1493,7 @@ mod tests {
                 // timeout
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
 
-                // TODO: mode, unilateral_tap
+                // TODO? mode, unilateral_tap
                 // assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
                 // assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
 

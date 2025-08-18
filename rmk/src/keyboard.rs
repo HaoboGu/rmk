@@ -463,6 +463,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyState::Pressed(pattern) => {
                                     //TODO? allow this only if the pattern is yet empty or when the longest pattern's length == 1?
                                     let pattern = pattern.followed_by_tap(); // The HeldKeyDecision turned this into tap!
+                                    debug!("pattern after unilateral tap: {:?}", pattern);
                                     let action = Self::action_from_pattern(
                                         &self.keymap.borrow().behavior,
                                         &held_key.action,
@@ -503,6 +504,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     keyboard_state_updated = true;
                                     //TODO? allow this only for tap hold, tap dance, but not for real morse?
                                     let pattern = pattern.followed_by_hold(); // The HeldKeyDecision turned this into hold!
+                                    debug!("pattern after permissive hold: {:?}", pattern);
                                     let action =
                                         Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
                                     self.process_key_action_normal(action, held_key.event).await;
@@ -542,7 +544,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 KeyAction::Tap(action) => {
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
-                                _ => {}
+                                _ => unreachable!(),
                             }
                         } else {
                             match held_key.state {
@@ -557,10 +559,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     // };
 
                                     let pattern = pattern.followed_by_tap(); // Releasing the current key, will always be tapping, because timeout isn't here
+                                    debug!("pattern by decided tap release: {:?}", pattern);
 
-                                    if let Some(action) =
-                                        Self::try_predict_final(&self.keymap.borrow().behavior, &key_action, pattern)
-                                    {
+                                    let final_action = Self::try_predict_final_action(
+                                        &self.keymap.borrow().behavior,
+                                        &key_action,
+                                        pattern,
+                                    );
+                                    if let Some(action) = final_action {
+                                        debug!("tap prediction {:?} -> {:?}", pattern, action);
                                         self.process_key_action_normal(action, held_key.event).await;
                                         held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     }
@@ -708,7 +715,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     async fn process_key_action_inner(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) -> LoopState {
         // Start forks
-        let key_action = self.try_start_forks(*original_key_action, event);
+        let key_action = self.try_start_forks(original_key_action, event);
 
         // Clear with_modifier if a new key is pressed
         if self.with_modifiers.into_bits() != 0 && event.pressed {
@@ -729,7 +736,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     self.process_key_action_normal(action, event).await;
                 }
                 KeyAction::Tap(action) => self.process_key_action_tap(action, event).await,
-                _ => {}
+                _ => unreachable!(),
             }
         } else {
             self.process_key_action_morse(&key_action, event).await;
@@ -742,14 +749,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Replaces the incoming key_action if a fork is configured for that key.
     /// The replacement decision is made at key_press time, and the decision
     /// is kept until the key is released.
-    fn try_start_forks(&mut self, key_action: KeyAction, event: KeyboardEvent) -> KeyAction {
+    fn try_start_forks(&mut self, key_action: &KeyAction, event: KeyboardEvent) -> KeyAction {
         if self.keymap.borrow().behavior.fork.forks.is_empty() {
-            return key_action;
+            return *key_action;
         }
 
         if !event.pressed {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {
-                if fork.trigger == key_action {
+                if fork.trigger == *key_action {
                     if let Some(active) = self.fork_states[i] {
                         // If the originating key of a fork is released, simply release the replacement key
                         // (The fork deactivation is delayed, will happen after the release hid report is sent)
@@ -758,7 +765,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     }
                 }
             }
-            return key_action;
+            return *key_action;
         }
 
         let mut decision_state = StateBits {
@@ -771,7 +778,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
         let mut chain_starter: Option<usize> = None;
         let mut combined_suppress = HidModifiers::default();
-        let mut replacement = key_action;
+        let mut replacement = *key_action;
 
         'bind: loop {
             for (i, fork) in (&self.keymap.borrow().behavior.fork.forks).into_iter().enumerate() {

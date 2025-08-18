@@ -140,6 +140,7 @@ In RMK, tap dance behavior also supports multiple taps and hold-after-multiple-t
 - **Hold After Multiple Taps**: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered, for example, hold the key after tapping 5 times will trigger 6th item in the `hold_actions` list (`hold_actions[5]`).
 
 In RMK, tap dance behavior also supports morse code like patterns:
+
 - **Morse code**: Each tap/hold within the tapping term registered in a pattern, then the corresponding action looked up in the `morse_actions` array.
 
 Tap dance configuration includes the following parameters:
