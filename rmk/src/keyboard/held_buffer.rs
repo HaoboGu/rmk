@@ -2,7 +2,7 @@ use embassy_time::Instant;
 
 use crate::action::{Action, KeyAction};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
-use crate::morse::MorsePattern;
+use crate::tap_dance::MorsePattern;
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]

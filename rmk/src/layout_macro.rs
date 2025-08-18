@@ -170,12 +170,3 @@ macro_rules! td {
         $crate::action::KeyAction::TapDance($index)
     };
 }
-
-/// Create a morse key action
-/// (morse!(n) name would conflict with the module name so mrs!(n) used instead)
-#[macro_export]
-macro_rules! mrs {
-    ($index: literal) => {
-        $crate::action::KeyAction::Morse($index)
-    };
-}

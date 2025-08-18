@@ -10,9 +10,8 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::{MorseKey, MorseKeyMode};
-use crate::tap_dance::TapDance;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM, TAP_DANCE_MAX_NUM};
+use crate::tap_dance::{TapHoldMode, TapDance};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -29,7 +28,7 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
-    pub morse: MorseConfig,
+    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
@@ -52,28 +51,25 @@ impl Default for TapDancesConfig {
 
 /// Configurations for morse behavior
 #[derive(Clone, Debug)]
-pub struct MorseConfig {
+pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
     /// Default timeout time for tap or hold
     pub operation_timeout: Duration,
     /// Default mode
-    pub mode: MorseKeyMode,
+    pub mode: TapHoldMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
-    // Definition of morse keys:
-    pub morse_keys: Vec<MorseKey, MORSE_MAX_NUM>,
 }
 
-impl Default for MorseConfig {
+impl Default for TapHoldConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
             unilateral_tap: false,
-            mode: MorseKeyMode::Normal,
+            mode: TapHoldMode::Normal,
             prior_idle_time: Duration::from_millis(120),
             operation_timeout: Duration::from_millis(250),
-            morse_keys: Vec::new(),
         }
     }
 }

@@ -18,12 +18,8 @@ combo_max_length = 4
 fork_max_num = 8
 # Maximum number of tap dances keyboard can store (max 256)
 tap_dance_max_num = 8
-# Maximum number of taps per tap dance (default: 2, min: 2, max: 15)
-tap_dance_max_tap = 2
-# Maximum number of morse keys the keyboard can store (max 256)
-morse_max_num = 2
-# Maximum number of morse patterns a morse key can handle (max 65536)
-max_morse_patterns_per_key = 8
+# Maximum number of patterns a tap dance key can handle (default: 8, min: 2, max 65536)
+max_patterns_per_key = 8
 # Macro space size in bytes for storing sequences. The maximum number of Macros depends on the size of each sequence: All sequences combined need to fit into macro_space_size, the number of macro sequences doesn't matter.
 macro_space_size = 256
 # Default debounce time in ms
@@ -63,9 +59,8 @@ Increasing the number of combos, forks, tap dances and macros will increase memo
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
 - `tap_dance_max_num`: Maximum number of tap dances that can be stored, default value is 8. This value must be between 0 and 256.
-- `tap_dance_max_tap`: Maximum number of taps per tap dance, default value is 2. This value must be minimum 2 and maximum 15. If `tap_actions` or `hold_actions` in [tap-dance config](./behavior.md#tap-dance) is set, the `tap_dance_max_tap` will be automatically set to the maximum length of `tap_actions` or `hold_actions`.
-- `morse_max_num` : Maximum number of morse keys the keyboard can store, default value is 2. This value must be between 0 and 256.
-- `max_morse_patterns_per_key` : Maximum number of morse patterns a morse key can handle, default value is 8. This value must be between 0 and 65536.
+config](./behavior.md#tap-dance) is set, the `tap_dance_max_tap` will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.
+- `max_patterns_per_key` : Maximum number of patterns a tap dance key can handle, default value is 8. This value must be between 4 and 65536.
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration

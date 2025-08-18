@@ -3,11 +3,11 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, MorseConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::MorseKeyMode;
+use rmk::tap_dance::TapHoldMode;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -15,26 +15,26 @@ use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
-        morse: MorseConfig {
+        tap_hold: TapHoldConfig {
             enable_hrm: false,
-            mode: MorseKeyMode::PermissiveHold,
+            mode: TapHoldMode::PermissiveHold,
             unilateral_tap: false,
-            ..MorseConfig::default()
+            ..TapHoldConfig::default()
         },
         ..BehaviorConfig::default()
     })
 }
 
 fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT)); //TODO MorseKeyMode::PermissiveHold, false    
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)); //TODO MorseKeyMode::PermissiveHold, false    
-    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1)); //TODO MorseKeyMode::PermissiveHold, false
+    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT)); //TODO TapHoldMode::PermissiveHold, false    
+    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)); //TODO TapHoldMode::PermissiveHold, false    
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1)); //TODO TapHoldMode::PermissiveHold, false
     create_simple_morse_keyboard(BehaviorConfig {
-        morse: MorseConfig {
+        tap_hold: TapHoldConfig {
             enable_hrm: false,
-            mode: MorseKeyMode::PermissiveHold,
+            mode: TapHoldMode::PermissiveHold,
             unilateral_tap: false,
-            ..MorseConfig::default()
+            ..TapHoldConfig::default()
         },
         combo: CombosConfig {
             combos: heapless::Vec::from_iter([

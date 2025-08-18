@@ -132,59 +132,51 @@ operations = [
 
 [behavior.tap_dance]
 tap_dances = [
-  # Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
+  # TD(0) Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
-  # Extended tap dance for function keys
-  {
-    tap_actions = ["F1", "F2", "F3", "F4", "F5"],
-    hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"],
-    timeout = "300ms"
-  }
-]
 
-# real morse ABC
-[[behavior.morse]]
-timeout = "250ms"
-permissive_hold = false
-unilateral_tap = false
-hold_on_other_press = false
-actions = [
-   {pattern = ".-", action = "A"}, 
-   {pattern = "-...", action = "B"}, 
-   {pattern = "-.-.", action = "C"}, 
-   {pattern = "-..", action = "D"}, 
-   {pattern = ".", action = "E"}, 
-   {pattern = "..-.", action = "F"}, 
-   {pattern = "--.", action = "G"}, 
-   {pattern = "....", action = "H"}, 
-   {pattern = "..", action = "I"}, 
-   {pattern = ".---", action = "J"}, 
-   {pattern = "-.-", action = "K"}, 
-   {pattern = ".-..", action = "L"}, 
-   {pattern = "--", action = "M"}, 
-   {pattern = "-.", action = "N"}, 
-   {pattern = "---", action = "O"}, 
-   {pattern = ".--.", action = "P"}, 
-   {pattern = "--.-", action = "Q"}, 
-   {pattern = ".-.", action = "R"}, 
-   {pattern = "...", action = "S"}, 
-   {pattern = "-", action = "T"}, 
-   {pattern = "..-", action = "U"}, 
-   {pattern = "...-", action = "V"}, 
-   {pattern = ".--", action = "W"}, 
-   {pattern = "-..-", action = "X"}, 
-   {pattern = "-.--", action = "Y"}, 
-   {pattern = "--..", action = "Z"}, 
-   {pattern = ".----", action = "Kc1"}, 
-   {pattern = "..---", action = "Kc2"}, 
-   {pattern = "...--", action = "Kc3"}, 
-   {pattern = "....-", action = "Kc4"}, 
-   {pattern = ".....", action = "Kc5"}, 
-   {pattern = "-....", action = "Kc6"}, 
-   {pattern = "--...", action = "Kc7"}, 
-   {pattern = "---..", action = "Kc8"}, 
-   {pattern = "----.", action = "Kc9"}, 
-   {pattern = "-----", action = "Kc0"}
+  # TD(1) Extended tap dance for function keys  
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
+
+  # TD(2) Morse like tap dance
+  { timeout = "300ms", morse_actions = [
+      {pattern = ".-", action = "A"}, 
+      {pattern = "-...", action = "B"}, 
+      {pattern = "-.-.", action = "C"}, 
+      {pattern = "-..", action = "D"}, 
+      {pattern = ".", action = "E"}, 
+      {pattern = "..-.", action = "F"}, 
+      {pattern = "--.", action = "G"}, 
+      {pattern = "....", action = "H"}, 
+      {pattern = "..", action = "I"}, 
+      {pattern = ".---", action = "J"}, 
+      {pattern = "-.-", action = "K"}, 
+      {pattern = ".-..", action = "L"}, 
+      {pattern = "--", action = "M"}, 
+      {pattern = "-.", action = "N"}, 
+      {pattern = "---", action = "O"}, 
+      {pattern = ".--.", action = "P"}, 
+      {pattern = "--.-", action = "Q"}, 
+      {pattern = ".-.", action = "R"}, 
+      {pattern = "...", action = "S"}, 
+      {pattern = "-", action = "T"}, 
+      {pattern = "..-", action = "U"}, 
+      {pattern = "...-", action = "V"}, 
+      {pattern = ".--", action = "W"}, 
+      {pattern = "-..-", action = "X"}, 
+      {pattern = "-.--", action = "Y"}, 
+      {pattern = "--..", action = "Z"}, 
+      {pattern = ".----", action = "Kc1"}, 
+      {pattern = "..---", action = "Kc2"}, 
+      {pattern = "...--", action = "Kc3"}, 
+      {pattern = "....-", action = "Kc4"}, 
+      {pattern = ".....", action = "Kc5"}, 
+      {pattern = "-....", action = "Kc6"}, 
+      {pattern = "--...", action = "Kc7"}, 
+      {pattern = "---..", action = "Kc8"}, 
+      {pattern = "----.", action = "Kc9"}, 
+      {pattern = "-----", action = "Kc0"}
+    ] }
 ]
 
 # Fork configuration
@@ -249,12 +241,8 @@ fork_max_num = 8
 # Maximum number of tap dances keyboard can store (max 256)
 # (Each tap dance is a programmable multi-tap/hold key)
 tap_dance_max_num = 8
-# Maximum number of taps per tap dance (default: 2, min: 2, max: 15)
-tap_dance_max_tap = 2
-# Maximum number of morse keys the keyboard can store (max 256)
-morse_max_num = 1
-# Maximum number of morse patterns a morse key can handle
-max_morse_patterns_per_key = 36
+# Maximum number of patterns a tap dance key can handle
+max_patterns_per_key = 36
 # Macro space size in bytes for storing sequences
 macro_space_size = 256
 # Default debounce time in ms

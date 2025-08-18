@@ -60,9 +60,6 @@ pub enum KeyAction {
 
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
-
-    /// Morse action, references a morse key configuration by index.
-    Morse(u8),
 }
 
 impl KeyAction {
@@ -75,11 +72,9 @@ impl KeyAction {
         }
     }
 
-    pub fn is_morse_like(&self) -> bool {
-        matches!(
-            self,
-            KeyAction::TapHold(_, _) | KeyAction::TapDance(_) | KeyAction::Morse(_)
-        )
+    /// true if tap hold like (can be tap dance, even with morse pattern)
+    pub fn is_morse(&self) -> bool {
+        matches!(self, KeyAction::TapHold(_, _) | KeyAction::TapDance(_))
     }
 }
 

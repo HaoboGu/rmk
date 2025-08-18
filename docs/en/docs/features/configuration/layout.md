@@ -120,8 +120,6 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 8. For Tap Dance, use `TD(n)`
 
-9. For morse key, use `MORSE(n)`
-
 ## Aliases
 
 The `[aliases]` section contains a table of user defined names and an associated replacement string, which can be used in the `layer.keys`:
