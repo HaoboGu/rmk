@@ -28,6 +28,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
                         k.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                     }
+                } else {
+                    // Expect a possible longer morse pattern (or idle timeout after release), so can not finish yet...
+                    // Update the state so this test will not run again until the next keypress.
+                    if let Some(k) = self.held_buffer.find_pos_mut(key.event.pos) {
+                        k.state = KeyState::Holding(pattern);
+                    }
                 }
             }
             KeyState::Released(pattern) => {
@@ -40,6 +46,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         };
 
         // If there's still morse key in the held buffer, don't fire normal keys
+        // FIXME? is |Holding needed here?
         if self
             .held_buffer
             .keys
@@ -127,6 +134,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                 k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, &k.action);
                         }
                     }
+                    KeyState::Holding(pattern) => {
+                        // The try_predict_final_action => None is already decided, when we entered in Holding mode
+                        // So, just expect a possible longer morse pattern (or idle timeout), update the state
+                        let released_time = Instant::now(); // TODO? It would be better if the event would carry the real timestamp of the release event!                        
+                        k.state = KeyState::Released(pattern);
+                        // Use current release time for `IdleAfterTap` state
+                        k.press_time = released_time; // Use release time as the "press_time"
+                        k.timeout_time = k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, &k.action);
+                    }
                     KeyState::ProcessedButReleaseNotReportedYet(action) => {
                         // Releasing a tap-hold action whose pressed HID report is already sent
                         info!("Releasing a morse action whose pressed action is already triggered");
@@ -175,7 +191,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .tap_dance
                 .tap_dances
                 .get(*idx as usize)
-                .map_or(Action::No, |morse| morse.get(pattern).unwrap_or(Action::No)),
+                .map(|morse| morse.get(pattern).unwrap_or(Action::No))
+                .unwrap_or(
+                    //TODO? if the user made a mistake entering the pattern, and we are not in strict mode,
+                    //could use error correction heuristics (return the action of the least distance pattern)?
+                    Action::No,
+                ),
             _ => Action::No,
         }
     }

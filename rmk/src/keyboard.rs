@@ -460,9 +460,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Unilateral tap of the held key is triggered
                             debug!("Cleaning buffered morse key due to unilateral tap");
                             match held_key.state {
-                                KeyState::Pressed(pattern) => {
-                                    //TODO? allow this only if the pattern is yet empty or when the longest pattern's length == 1?
-                                    let pattern = pattern.followed_by_tap(); // The HeldKeyDecision turned this into tap!
+                                KeyState::Pressed(_) | KeyState::Holding(_) => {
+                                    // In this state pattern is not surely finished,
+                                    // however an other key is pressed so terminate the sequence
+                                    // with a tap due to UnilateralTap decision; try to resolve as is
+                                    let pattern = match held_key.state {
+                                        KeyState::Pressed(pattern) => pattern.followed_by_tap(), // The HeldKeyDecision turned this into tap!
+                                        KeyState::Holding(pattern) => pattern,
+                                        _ => unreachable!(),
+                                    };
                                     debug!("pattern after unilateral tap: {:?}", pattern);
                                     let action = Self::action_from_pattern(
                                         &self.keymap.borrow().behavior,
@@ -475,8 +481,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     self.held_buffer.push_without_sort(held_key);
                                 }
                                 KeyState::Released(pattern) => {
-                                    // TODO? check if this is the longest possible pattern?
-                                    let pattern = pattern;
+                                    // In this state pattern is not surely finished,
+                                    // however an other key is pressed so terminate the sequence, try to resolve as is
+                                    debug!("pattern after released, unilateral tap: {:?}", pattern);
                                     let action = Self::action_from_pattern(
                                         &self.keymap.borrow().behavior,
                                         &held_key.action,
@@ -500,10 +507,16 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Permissive hold of held key is triggered
                             debug!("Cleaning buffered morse key due to permissive hold or hold on other key press");
                             match held_key.state {
-                                KeyState::Pressed(pattern) => {
+                                KeyState::Pressed(_) | KeyState::Holding(_) => {
+                                    // In this state pattern is not surely finished,
+                                    // however an other key is pressed so terminate the sequence
+                                    // with a hold due to PermissiveHold/HoldOnOtherKeyPress decision; try to resolve as is
+                                    let pattern = match held_key.state {
+                                        KeyState::Pressed(pattern) => pattern.followed_by_hold(), // The HeldKeyDecision turned this into hold!
+                                        KeyState::Holding(pattern) => pattern,
+                                        _ => unreachable!(),
+                                    };
                                     keyboard_state_updated = true;
-                                    //TODO? allow this only for tap hold, tap dance, but not for real morse?
-                                    let pattern = pattern.followed_by_hold(); // The HeldKeyDecision turned this into hold!
                                     debug!("pattern after permissive hold: {:?}", pattern);
                                     let action =
                                         Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
@@ -513,8 +526,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                     self.held_buffer.push_without_sort(held_key);
                                 }
                                 KeyState::Released(pattern) => {
-                                    // TODO? check if this is the longest possible pattern?
-                                    let pattern = pattern;
+                                    debug!("pattern after released, permissive hold: {:?}", pattern);
                                     let action =
                                         Self::action_from_pattern(&self.keymap.borrow().behavior, &action, pattern);
                                     held_key.event.pressed = true;
@@ -548,17 +560,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             }
                         } else {
                             match held_key.state {
-                                KeyState::Pressed(pattern) => {
+                                KeyState::Pressed(_) | KeyState::Holding(_) => {
                                     debug!("Cleaning buffered Release key");
 
-                                    // TODO? should we double check the timeout?
-                                    // let pattern = if Instant::now() >= held_key.timeout_time {
-                                    //     pattern.followed_by_hold()
-                                    // } else {
-                                    //     pattern.followed_by_tap()
-                                    // };
+                                    let pattern = match held_key.state {
+                                        KeyState::Pressed(pattern) => pattern.followed_by_tap(), // TODO? should we double check the timeout with Instant::now() >= held_key.timeout_time?
+                                        KeyState::Holding(pattern) => pattern,
+                                        _ => unreachable!(),
+                                    };
 
-                                    let pattern = pattern.followed_by_tap(); // Releasing the current key, will always be tapping, because timeout isn't here
                                     debug!("pattern by decided tap release: {:?}", pattern);
 
                                     let final_action = Self::try_predict_final_action(

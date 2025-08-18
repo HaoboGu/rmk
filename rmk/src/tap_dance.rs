@@ -168,30 +168,33 @@ impl TapDance {
 
     /// checks all stored patterns if more than one continuation found for the given pattern, none, otherwise the unique completion
     pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
-        if self.strict_pattern_checking && pattern_start.pattern_length() < self.max_pattern_length() {
-            return None;
-        }
-
-        let mut first_action = None;
+        let mut first: Option<&(MorsePattern, Action)> = None;
         for pair in self.actions.iter() {
             //if pair.pattern starts with the given pattern_start
             if pair.0.starts_with(pattern_start) {
-                if let Some(first) = first_action {
-                    if first != pair.1 {
+                if let Some((_, action)) = first {
+                    if *action != pair.1 {
                         return None;
                     }
                 } else {
-                    first_action = Some(pair.1);
+                    first = Some(pair);
                 }
             }
         }
 
-        //TODO?
-        //if first action is None here, then the user made a mistake entering the pattern
-        //should we repeat this with a sorter pattern_start? to correct the error?
-        //or just use error correction when the pattern is finished, and return the least distance?
-
-        first_action
+        if let Some((pattern, action)) = first {
+            if !self.strict_pattern_checking || pattern_start.pattern_length() == pattern.pattern_length() {
+                // in strict case we want to have full length match (prediction too early may confuse the user)
+                Some(*action)
+            } else {
+                None
+            }
+        } else {
+            // if first is None here, that means: the user made a mistake while entering the pattern
+            // We could use error correction heuristics when the pattern is finished with idle
+            // (return the action of the least distance pattern)?
+            None
+        }
     }
 
     pub fn get(&self, pattern: MorsePattern) -> Option<Action> {
