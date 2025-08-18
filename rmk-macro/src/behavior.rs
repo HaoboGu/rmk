@@ -202,6 +202,8 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     }
                     None => quote! { 200u16 },
                 };
+
+                let strict = td.strict.unwrap_or(true);//the default is strict = true
                 
                 if let Some(morse_actions) = &td.morse_actions {
                     if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() || td.tap_actions.is_some() || td.hold_actions.is_some() {
@@ -209,8 +211,6 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     }
                     
                     let actions_def = expand_morse_actions(&morse_actions);
-
-                    let strict = td.strict.unwrap_or(true);//for morse the default is strict = true
 
                     quote! {                        
                         ::rmk::tap_dance::TapDance {
@@ -249,8 +249,6 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                         None => quote! { ::rmk::heapless::Vec::new() },
                     };
 
-                    let strict = td.strict.unwrap_or(false);
-
                     quote! {
                         ::rmk::tap_dance::TapDance::new_with_actions(
                             #tap_actions_def,
@@ -264,7 +262,6 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
                     let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
                     let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
-                    let strict = td.strict.unwrap_or(false);
 
                     quote! {
                         ::rmk::tap_dance::TapDance::new_from_vial(

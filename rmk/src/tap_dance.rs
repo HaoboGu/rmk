@@ -97,7 +97,7 @@ impl Default for TapDance {
             timeout_ms: 250,
             mode: TapHoldMode::HoldOnOtherPress,
             unilateral_tap: false,
-            strict_pattern_checking: false,
+            strict_pattern_checking: true,
             actions: Vec::default(),
         }
     }
