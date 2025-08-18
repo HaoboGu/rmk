@@ -246,6 +246,7 @@ impl Handler for UsbDeviceHandler {
             info!("Device disabled");
             if USB_ENABLED.signaled() {
                 USB_ENABLED.reset();
+                USB_SUSPENDED.signal(());
             }
             CURRENT_CONNECTION.store(1, Ordering::SeqCst);
         }
