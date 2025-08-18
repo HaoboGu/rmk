@@ -528,6 +528,8 @@ pub struct TapDanceConfig {
     /// Array of morse patter->action pairs  count (0-indexed)
     pub morse_actions: Option<Vec<MorseActionPair>>,
     pub timeout: Option<DurationMillis>,
+    pub strict: Option<bool>,
+    //TODO? mode, unilateral_tap
 }
 
 /// Configurations for morse action pairs

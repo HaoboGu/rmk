@@ -30,7 +30,7 @@ use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
-use crate::tap_dance::{MorsePattern, TapDance};
+use crate::tap_dance::{MorsePattern, TapDance, TapHoldMode};
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM};
 
@@ -302,16 +302,28 @@ impl Value<'_> for StorageData {
                 Ok(15)
             }
             StorageData::TapDanceData(tap_dance) => {
-                let total_size = 5 + 4 * tap_dance.actions.len();
+                let total_size = 6 + 4 * tap_dance.actions.len();
                 if buffer.len() < total_size {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::TapDanceData as u8;
                 BigEndian::write_u16(&mut buffer[1..3], tap_dance.actions.len() as u16);
                 BigEndian::write_u16(&mut buffer[3..5], tap_dance.timeout_ms);
-                //TODO: mode, unilateral_tap
 
-                let mut i = 5;
+                let mut flags = match tap_dance.mode {
+                    TapHoldMode::Normal => 0,
+                    TapHoldMode::PermissiveHold => 1,
+                    TapHoldMode::HoldOnOtherPress => 2,
+                };
+                if tap_dance.unilateral_tap {
+                    flags |= 0x10;
+                }
+                if tap_dance.strict_pattern_checking {
+                    flags |= 0x20;
+                }
+                buffer[5] = flags;
+
+                let mut i = 6;
                 for (pattern, action) in &tap_dance.actions {
                     BigEndian::write_u16(
                         &mut buffer[i..i + 2],
@@ -522,22 +534,34 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::TapDanceData => {
-                    if buffer.len() < 5 {
+                    if buffer.len() < 6 {
                         return Err(SerializationError::InvalidData);
                     }
                     let count = BigEndian::read_u16(&buffer[1..3]) as usize;
 
-                    if buffer.len() < 5 + 4 * count {
+                    if buffer.len() < 6 + 4 * count {
                         return Err(SerializationError::InvalidData);
                     }
 
                     let mut tap_dance = TapDance::default();
                     tap_dance.timeout_ms = BigEndian::read_u16(&buffer[3..5]);
 
-                    for i in 0..count {
-                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[5 + i * 4..7 + i * 4]));
-                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[7 + i * 4..9 + i * 4]));
+                    let flags = buffer[5];
+                    match flags & 0x0F {
+                        0 => tap_dance.mode = TapHoldMode::Normal,
+                        1 => tap_dance.mode = TapHoldMode::PermissiveHold,
+                        2 => tap_dance.mode = TapHoldMode::HoldOnOtherPress,
+                        _ => {}
+                    }
+                    tap_dance.unilateral_tap = flags & 0x10 != 0;
+                    tap_dance.strict_pattern_checking = flags & 0x20 != 0;
+
+                    let mut i = 6;
+                    for _ in 0..count {
+                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
+                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
                         _ = tap_dance.actions.push((pattern, key_action.to_action()));
+                        i += 4;
                     }
 
                     Ok(StorageData::TapDanceData(tap_dance))
@@ -1402,10 +1426,11 @@ mod tests {
             Action::Key(KeyCode::C),
             Action::Key(KeyCode::D),
             200,
+            false,
         );
 
         // Serialization
-        let mut buffer = [0u8; 5 + 4 * 4];
+        let mut buffer = [0u8; 6 + 4 * 4];
         let storage_data = StorageData::TapDanceData(tap_dance.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1415,8 +1440,14 @@ mod tests {
         // Validation
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
-                // timeout
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
+                assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
+                assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
+                assert_eq!(
+                    deserialized_tap_dance.strict_pattern_checking,
+                    tap_dance.strict_pattern_checking
+                );
+
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());
                 for (original, deserialized) in tap_dance.actions.iter().zip(deserialized_tap_dance.actions.iter()) {
@@ -1434,9 +1465,11 @@ mod tests {
         _ = tap_dance.put(TAP, Action::Key(KeyCode::A));
         _ = tap_dance.put(HOLD, Action::Key(KeyCode::B));
         tap_dance.timeout_ms = 150;
+        tap_dance.unilateral_tap = true;
+        tap_dance.mode = TapHoldMode::PermissiveHold;
 
         // Serialization
-        let mut buffer = [0u8; 5 + 4 * 4];
+        let mut buffer = [0u8; 6 + 4 * 4];
         let storage_data = StorageData::TapDanceData(tap_dance.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1446,8 +1479,14 @@ mod tests {
         // Validation
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
-                // timeout
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
+                assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
+                assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
+                assert_eq!(
+                    deserialized_tap_dance.strict_pattern_checking,
+                    tap_dance.strict_pattern_checking
+                );
+
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());
                 for (original, deserialized) in tap_dance.actions.iter().zip(deserialized_tap_dance.actions.iter()) {
@@ -1464,6 +1503,7 @@ mod tests {
             timeout_ms: 200,
             mode: TapHoldMode::Normal,
             unilateral_tap: true,
+            strict_pattern_checking: true,
             actions: Vec::default(),
         };
         tap_dance
@@ -1480,7 +1520,7 @@ mod tests {
             .ok();
 
         // Serialization
-        let mut buffer = [0u8; 5 + 3 * 4];
+        let mut buffer = [0u8; 6 + 3 * 4];
         let storage_data = StorageData::TapDanceData(tap_dance.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1490,12 +1530,13 @@ mod tests {
         // Validation
         match deserialized_data {
             StorageData::TapDanceData(deserialized_tap_dance) => {
-                // timeout
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
-
-                // TODO? mode, unilateral_tap
-                // assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
-                // assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
+                assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
+                assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
+                assert_eq!(
+                    deserialized_tap_dance.strict_pattern_checking,
+                    tap_dance.strict_pattern_checking
+                );
 
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());

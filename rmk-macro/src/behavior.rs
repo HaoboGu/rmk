@@ -202,7 +202,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     }
                     None => quote! { 200u16 },
                 };
-
+                
                 if let Some(morse_actions) = &td.morse_actions {
                     if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() || td.tap_actions.is_some() || td.hold_actions.is_some() {
                         panic!("\n❌ keyboard.toml: `morse_actions` cannot be used together with `tap_actions`, `hold_actions`, `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#tap-dance");
@@ -210,9 +210,12 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     
                     let actions_def = expand_morse_actions(&morse_actions);
 
+                    let strict = td.strict.unwrap_or(true);//for morse the default is strict = true
+
                     quote! {                        
                         ::rmk::tap_dance::TapDance {
                             timeout_ms: #timeout,
+                            strict_pattern_checking: #strict,
                             #actions_def
                             ..Default::default()
                         }
@@ -223,6 +226,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() {
                         panic!("\n❌ keyboard.toml: `tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#tap-dance");
                     }
+                    
                     let tap_actions_def = match &td.tap_actions {
                         Some(tap_actions) => {
                             let actions = tap_actions.iter().map(|action| {
@@ -245,11 +249,14 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                         None => quote! { ::rmk::heapless::Vec::new() },
                     };
 
+                    let strict = td.strict.unwrap_or(false);
+
                     quote! {
                         ::rmk::tap_dance::TapDance::new_with_actions(
                             #tap_actions_def,
                             #hold_actions_def,
-                            #timeout
+                            #timeout,
+                            #strict
                         )
                     }
                 } else {
@@ -257,6 +264,7 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
                     let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
                     let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let strict = td.strict.unwrap_or(false);
 
                     quote! {
                         ::rmk::tap_dance::TapDance::new_from_vial(
@@ -264,7 +272,8 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                             #hold.to_action(),
                             #hold_after_tap.to_action(),
                             #double_tap.to_action(),
-                            #timeout
+                            #timeout,
+                            #strict
                         )
                     }
                 }

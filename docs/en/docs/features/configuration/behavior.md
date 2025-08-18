@@ -154,6 +154,8 @@ Tap dance configuration includes the following parameters:
   - `tap_actions`: An array of actions, each corresponding to the number of taps. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
   - `hold_actions`: An array of actions, each corresponding to holding the key after a certain number of taps. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. If the tap count exceeds the length of the array, the last action is used.
   - `morse_actions`: list of patten -> action pairs. The pattern is a tap/hold sequence, its length is limited in 15. The morse pattern of `C` for example can be described like this: `"-.-."` or `"_._."` or `"1010"`. See the examples below!
+  - `strict`: The pattern checking should be strict, no predictions allowed before the user finishes the pattern. Defaults to `false` except when morse_actions used.
+
 
 ::: warning
 
@@ -185,7 +187,7 @@ tap_dances = [
   { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
 
   # td(4): the morse ABC
-  { timeout = "250ms", morse_actions = [
+  { timeout = "250ms", strict = true, morse_actions = [
       {pattern = ".-", action = "A"}, 
       {pattern = "-...", action = "B"}, 
       {pattern = "-.-.", action = "C"}, 

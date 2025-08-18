@@ -80,6 +80,10 @@ pub struct TapDance {
     pub mode: TapHoldMode,
     /// If the unilateral tap is enabled
     pub unilateral_tap: bool,
+
+    // real morse codes need stricter pattern checking
+    pub strict_pattern_checking: bool,
+
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
     //TODO? introduce settings to block/allow early resolving by prediction
@@ -93,13 +97,21 @@ impl Default for TapDance {
             timeout_ms: 250,
             mode: TapHoldMode::HoldOnOtherPress,
             unilateral_tap: false,
+            strict_pattern_checking: false,
             actions: Vec::default(),
         }
     }
 }
 
 impl TapDance {
-    pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
+    pub fn new_from_vial(
+        tap: Action,
+        hold: Action,
+        hold_after_tap: Action,
+        double_tap: Action,
+        timeout: u16,
+        strict: bool,
+    ) -> Self {
         let mut result = Self::default();
         if tap != Action::No {
             _ = result.actions.push((TAP, tap));
@@ -114,6 +126,7 @@ impl TapDance {
             _ = result.actions.push((HOLD_AFTER_TAP, hold_after_tap));
         }
         result.timeout_ms = timeout;
+        result.strict_pattern_checking = strict;
         result
     }
 
@@ -123,10 +136,12 @@ impl TapDance {
         tap_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         hold_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         timeout: u16,
+        strict: bool,
     ) -> Self {
         assert!(MAX_PATTERNS_PER_KEY >= 4, "MAX_PATTERNS_PER_KEY must be at least 4");
         let mut result = Self::default();
         result.timeout_ms = timeout;
+        result.strict_pattern_checking = strict;
 
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {
@@ -143,8 +158,20 @@ impl TapDance {
         result
     }
 
+    pub fn max_pattern_length(&self) -> usize {
+        let mut max_length = 0;
+        for pair in self.actions.iter() {
+            max_length = max_length.max(pair.0.pattern_length());
+        }
+        max_length
+    }
+
     /// checks all stored patterns if more than one continuation found for the given pattern, none, otherwise the unique completion
     pub fn try_predict_final_action(&self, pattern_start: MorsePattern) -> Option<Action> {
+        if self.strict_pattern_checking && pattern_start.pattern_length() < self.max_pattern_length() {
+            return None;
+        }
+
         let mut first_action = None;
         for pair in self.actions.iter() {
             //if pair.pattern starts with the given pattern_start
