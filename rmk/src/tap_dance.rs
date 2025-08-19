@@ -3,7 +3,7 @@ use heapless::Vec;
 use crate::MAX_PATTERNS_PER_KEY;
 use crate::action::Action;
 
-/// a sequence of maximum 15 tap or hold can be encoded on an u16:
+/// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -43,7 +43,7 @@ impl MorsePattern {
         15 - self.0.leading_zeros() as usize
     }
 
-    /// checks if this pattern starts with the given one
+    /// Checks if this pattern starts with the given one
     pub fn starts_with(&self, pattern_start: MorsePattern) -> bool {
         let n = pattern_start.0.leading_zeros();
         let m = self.0.leading_zeros();
@@ -83,9 +83,7 @@ pub struct TapDance {
 
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
-    //TODO? introduce settings to block/allow early resolving by prediction
-    //TODO? introduce settings to block/allow error correction at pattern finish
-    //TODO? introduce settings to set gap and hold timeout separately
+    //TODO: introduce settings to set gap and hold timeout separately
 }
 
 impl Default for TapDance {
@@ -132,13 +130,13 @@ impl TapDance {
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {
             pattern = pattern << 1;
-            _ = result.put(MorsePattern::from_u16(pattern), *item); //+ one tap in each iteration
+            result.put(MorsePattern::from_u16(pattern), *item); //+ one tap in each iteration
         }
 
         let mut pattern = 0b1u16;
         for item in hold_actions.iter() {
             pattern = pattern << 1;
-            _ = result.put(MorsePattern::from_u16(pattern | 0b1), *item); //+ one tap in each iteration, but the last one is modified to hold
+            result.put(MorsePattern::from_u16(pattern | 0b1), *item); //+ one tap in each iteration, but the last one is modified to hold
         }
 
         result
@@ -195,25 +193,27 @@ impl TapDance {
 
     /// A call with Action::No will remove the item from the collection,
     /// otherwise will update the existing action or insert the new action if possible
-    pub fn put(&mut self, pattern: MorsePattern, action: Action) -> Result<(), Action> {
+    pub fn put(&mut self, pattern: MorsePattern, action: Action) {
         if action != Action::No {
             for pair in self.actions.iter_mut() {
+                // Update if found
                 if pair.0 == pattern {
-                    pair.1 = action; //modify
-                    return Ok(());
+                    pair.1 = action;
+                    return;
                 }
             }
-            self.actions.push((pattern, action)).map_err(|v| v.1) //try to insert
+            if let Err(a) = self.actions.push((pattern, action)) {
+                error!("The actions buffer is full in current morse key, pushing {:?} fails", a);
+            }
         } else {
-            //try to remove
             for i in 0..self.actions.len() {
+                // Found saved pattern, pop it
                 if self.actions[i].0 == pattern {
                     self.actions[i] = self.actions[self.actions.len() - 1];
                     self.actions.pop();
-                    return Ok(());
+                    return;
                 }
             }
-            Ok(())
         }
     }
 }
