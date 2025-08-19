@@ -192,11 +192,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .tap_dances
                 .get(*idx as usize)
                 .map(|morse| morse.get(pattern).unwrap_or(Action::No))
-                .unwrap_or(
-                    //TODO? if the user made a mistake entering the pattern, and we are not in strict mode,
-                    //could use error correction heuristics (return the action of the least distance pattern)?
-                    Action::No,
-                ),
+                .unwrap_or(Action::No),
             _ => Action::No,
         }
     }
@@ -224,9 +220,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             _ => None,
         }
         .unwrap_or_else(|| {
-            if behavior_config.tap_hold.enable_hrm //TODO instead of this let the HRM keycodes configurable!
-               && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, keyAction, TAP)
-               && tap_key_code.is_home_row()
+            if behavior_config.tap_hold.enable_hrm // TODO instead of this let the HRM keycodes configurable!
+                && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, keyAction, TAP)
+                && tap_key_code.is_home_row()
             //&& (!let Action::Key(_) = hold_action) //the hold action in home row is not key, but modifier or layer activation
             {
                 (TapHoldMode::PermissiveHold, true)

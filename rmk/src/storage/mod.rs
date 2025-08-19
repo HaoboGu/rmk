@@ -337,9 +337,6 @@ impl Value<'_> for StorageData {
                 if tap_dance.unilateral_tap {
                     flags |= 0x10;
                 }
-                if tap_dance.strict_pattern_checking {
-                    flags |= 0x20;
-                }
                 buffer[5] = flags;
 
                 let mut i = 6;
@@ -581,7 +578,6 @@ impl Value<'_> for StorageData {
                         _ => {}
                     }
                     tap_dance.unilateral_tap = flags & 0x10 != 0;
-                    tap_dance.strict_pattern_checking = flags & 0x20 != 0;
 
                     let mut i = 6;
                     for _ in 0..count {
@@ -1564,7 +1560,6 @@ mod tests {
             Action::Key(KeyCode::C),
             Action::Key(KeyCode::D),
             200,
-            false,
         );
 
         // Serialization
@@ -1581,10 +1576,6 @@ mod tests {
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
                 assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
                 assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
-                assert_eq!(
-                    deserialized_tap_dance.strict_pattern_checking,
-                    tap_dance.strict_pattern_checking
-                );
 
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());
@@ -1620,10 +1611,6 @@ mod tests {
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
                 assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
                 assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
-                assert_eq!(
-                    deserialized_tap_dance.strict_pattern_checking,
-                    tap_dance.strict_pattern_checking
-                );
 
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());
@@ -1641,7 +1628,6 @@ mod tests {
             timeout_ms: 200,
             mode: TapHoldMode::Normal,
             unilateral_tap: true,
-            strict_pattern_checking: true,
             actions: Vec::default(),
         };
         tap_dance
@@ -1671,10 +1657,6 @@ mod tests {
                 assert_eq!(deserialized_tap_dance.timeout_ms, tap_dance.timeout_ms);
                 assert_eq!(deserialized_tap_dance.mode, tap_dance.mode);
                 assert_eq!(deserialized_tap_dance.unilateral_tap, tap_dance.unilateral_tap);
-                assert_eq!(
-                    deserialized_tap_dance.strict_pattern_checking,
-                    tap_dance.strict_pattern_checking
-                );
 
                 // actions
                 assert_eq!(deserialized_tap_dance.actions.len(), tap_dance.actions.len());

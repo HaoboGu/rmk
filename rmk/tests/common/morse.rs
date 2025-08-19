@@ -1,5 +1,4 @@
 use heapless::Vec;
-
 use rmk::action::Action;
 use rmk::config::{BehaviorConfig, TapDancesConfig};
 use rmk::keyboard::Keyboard;
@@ -33,7 +32,6 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
             (MorsePattern::from_u16(0b1_000), Action::Key(KeyCode::S)),
         ])
         .unwrap(),
-        strict_pattern_checking: true,
         ..Default::default()
     };
 
