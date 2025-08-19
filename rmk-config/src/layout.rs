@@ -403,7 +403,7 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
-                                Rule::tap_dance_action => {
+                                Rule::morse_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
                                 }
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tap_dance_action_parsing() {
+    fn test_morse_action_parsing() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
 
@@ -542,14 +542,14 @@ mod tests {
     }
 
     #[test]
-    fn test_tap_dance_action_grammar() {
+    fn test_morse_action_grammar() {
         // Test that TD actions are parsed correctly by the grammar
         let test_cases = vec![
-            ("TD(0)", Rule::tap_dance_action),
-            ("TD(1)", Rule::tap_dance_action),
-            ("TD(255)", Rule::tap_dance_action),
-            ("td(0)", Rule::tap_dance_action), // Case insensitive
-            ("td(1)", Rule::tap_dance_action),
+            ("TD(0)", Rule::morse_action),
+            ("TD(1)", Rule::morse_action),
+            ("TD(255)", Rule::morse_action),
+            ("td(0)", Rule::morse_action), // Case insensitive
+            ("td(1)", Rule::morse_action),
         ];
 
         for (input, expected_rule) in test_cases {
@@ -561,7 +561,7 @@ mod tests {
                 if pair.as_rule() == Rule::key_map {
                     for inner_pair in pair.into_inner() {
                         match inner_pair.as_rule() {
-                            Rule::tap_dance_action => {
+                            Rule::morse_action => {
                                 found_rule = Some(inner_pair.as_rule());
                             }
                             _ => {}

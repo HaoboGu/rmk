@@ -123,55 +123,103 @@ operations = [
 ]
 ```
 
-## Tap Dance
+## Morse(Tap Dance)
 
-In the `tap_dance` sub-table, you can configure the keyboard's tap dance functionality. Tap dance allows you to define different actions based on the number of times a key is tapped within a specific time window.
+In the `morse` sub-table, you can configure the keyboard's morse functionality. Morse is a superset of well-known [tap dance](https://docs.qmk.fm/features/tap_dance), which allows you to define different actions based on the different combinations of taps and holds within a specific time window.
 
-The basic tap dance(with 2 taps) works as follows:
+You can define a list of morse keys as the following: 
 
-1. **Single Tap**: When a key is pressed and released within the tapping term, the `tap` action is triggered.
-2. **Hold**: When a key is pressed and held beyond the tapping term, the `hold` action is triggered.
-3. **Hold After Tap**: When a key is tapped once and then held down, the `hold_after_tap` action is triggered.
-4. **Double Tap**: When a key is tapped twice within the tapping term, the `double_tap` action is triggered.
+```toml
+[behavior.morse]
+morses = [
+  ... # Morse keys
+]
+```
 
-In RMK, tap dance behavior also supports multiple taps and hold-after-multiple-taps:
+There are three ways to define a morse key in RMK:
 
-- **Multiple Taps**: Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array, for example, tapping 5 times will trigger the 5th item in the `tap_actions` (`tap_actions[4]`).
-- **Hold After Multiple Taps**: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered, for example, hold the key after tapping 5 times will trigger 6th item in the `hold_actions` list (`hold_actions[5]`).
+### Define a morse key
 
-In RMK, tap dance behavior also supports morse code like patterns:
+#### 1. Define the vial-like tap dance:
 
-- **Morse code**: Each tap/hold within the tapping term registered in a pattern, then the corresponding action looked up in the `morse_actions` array.
+This type is fully compatible with TapDance in Vial, only four actions are defined:
 
-Tap dance configuration includes the following parameters:
+1 `tap`: The action to be triggered on the first tap within the tapping term. This is the default action when the key is tapped once.
+2 `hold`: The action to be triggered when the key is held down (not tapped) beyond the tapping term.
+3 `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
+4 `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
 
-- `tap_dances`: An array containing all defined tap dances. Each tap dance configuration is an object containing the following attributes:
-  - `tap`: The action to be triggered on the first tap. This is the default action when the key is tapped once.
-  - `hold`: The action to be triggered when the key is held down (not tapped).
-  - `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
-  - `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
-  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same tap dance sequence. Defaults to 200ms if not specified.
-  - `tap_actions`: An array of actions, each corresponding to the number of taps. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
-  - `hold_actions`: An array of actions, each corresponding to holding the key after a certain number of taps. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. If the tap count exceeds the length of the array, the last action is used.
-  - `morse_actions`: list of patten -> action pairs. The pattern is a tap/hold sequence, its length is limited in 15. The morse pattern of `C` for example can be described like this: `"-.-."` or `"_._."` or `"1010"`. See the examples below!
+The following is an example:
+
+```toml
+[behavior.morse]
+morses = [
+  # A vial-like tap dance
+  { tap = "F1", hold = "MO(1)", hold_after_tap = "MO(2)", double_tap = "F2" }
+]
+```
+
+#### 2. Define taps and hold-after-tap actions
+
+This is a slightly extended version of tap dance, you can define multiple taps(just like tap dance) in `tap_actions`, and you can also define a `hold_actions` list which represents hold-after-multiple-taps:
+
+- `tap_actions`: Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. Tapping 5 times will trigger the 5th item in the `tap_actions` (`tap_actions[4]`). If the tap count exceeds the length of the array, the last action is used.
+- `hold_actions`: When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. Holding the key after tapping 5 times will trigger 6th item in the `hold_actions` list (`hold_actions[5]`).
+
+The following is an example:
+
+```toml
+[behavior.morse]
+morses = [
+  # A taps & hold-after-tap morse key
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
+]
+```
+
+#### 3. Define the full-morse behavior
+
+This is the most powerful way, you can just define a morse code like patterns, use a single key to represent many many actions, just like [morse code](https://en.wikipedia.org/wiki/Morse_code).
+
+- `morse_actions`: list of patten -> action pairs. The pattern is a tap/hold sequence, its length is limited in 15. For example, the morse pattern of `C` can be described like this: `"-.-."` or `"_._."` or `"1010"`.
+
+The following is an example:
+
+```toml
+[behavior.morse]
+morses = [
+  # A morse key defined using morse_actions
+  { morse_actions = [
+        { pattern = ".-", action = "A" },
+        { pattern = "-...", action = "B" },
+        { pattern = "-.-.", action = "C" },
+        { pattern = "-..", action = "D" },
+    ] },
+]
+```
+
+### Common configuration for morse keys
+
+This is also common configurations for both three representations of morse keys:
+
+  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence. Defaults to 200ms if not specified.
 
 ::: warning
 
-`morse_actions` cannot be used together with `tap_actions` and `hold_actions` and they also cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. For each tap dance configuration, please choose either the morse style (`morse_actions`) or array style (`tap_actions`/`hold_actions`) or the individual fields (`tap`/`hold`/`hold_after_tap`/`double_tap`).
+`morse_actions` cannot be used together with `tap_actions` and `hold_actions` and they also cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. For each morse configuration, please choose either the morse style (`morse_actions`) or array style (`tap_actions`/`hold_actions`) or the individual fields (`tap`/`hold`/`hold_after_tap`/`double_tap`).
 
 :::
 
-Here is an example of tap dance configuration:
+Here is a composite example of morse configuration:
 
 ```toml
 [rmk]
-# Maximum number of tap dances keyboard can store (max 256)
-tap_dance_max_num = 9
-# Maximum number of patterns a tap dance key can handle
+# Maximum number of morses keyboard can store (max 256)
+morse_max_num = 9
+# Maximum number of patterns a morse key can handle
 max_patterns_per_key = 36
 
-[behavior.tap_dance]
-tap_dances = [
+[behavior.morse]
+morses = [
   # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
   
@@ -181,54 +229,54 @@ tap_dances = [
   # td(2): Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape", timeout = "250ms" },
   
-  # td(3): Extended tap dance for function keys
+  # td(3): Extended morse for function keys
   { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
 
   # td(4): the morse ABC
   { timeout = "250ms", morse_actions = [
-      {pattern = ".-", action = "A"}, 
-      {pattern = "-...", action = "B"}, 
-      {pattern = "-.-.", action = "C"}, 
-      {pattern = "-..", action = "D"}, 
-      {pattern = ".", action = "E"}, 
-      {pattern = "..-.", action = "F"}, 
-      {pattern = "--.", action = "G"}, 
-      {pattern = "....", action = "H"}, 
-      {pattern = "..", action = "I"}, 
-      {pattern = ".---", action = "J"}, 
-      {pattern = "-.-", action = "K"}, 
-      {pattern = ".-..", action = "L"}, 
-      {pattern = "--", action = "M"}, 
-      {pattern = "-.", action = "N"}, 
-      {pattern = "---", action = "O"}, 
-      {pattern = ".--.", action = "P"}, 
-      {pattern = "--.-", action = "Q"}, 
-      {pattern = ".-.", action = "R"}, 
-      {pattern = "...", action = "S"}, 
-      {pattern = "-", action = "T"}, 
-      {pattern = "..-", action = "U"}, 
-      {pattern = "...-", action = "V"}, 
-      {pattern = ".--", action = "W"}, 
-      {pattern = "-..-", action = "X"}, 
-      {pattern = "-.--", action = "Y"}, 
-      {pattern = "--..", action = "Z"}, 
-      {pattern = ".----", action = "Kc1"}, 
-      {pattern = "..---", action = "Kc2"}, 
-      {pattern = "...--", action = "Kc3"}, 
-      {pattern = "....-", action = "Kc4"}, 
-      {pattern = ".....", action = "Kc5"}, 
-      {pattern = "-....", action = "Kc6"}, 
-      {pattern = "--...", action = "Kc7"}, 
-      {pattern = "---..", action = "Kc8"}, 
-      {pattern = "----.", action = "Kc9"}, 
-      {pattern = "-----", action = "Kc0"}
+      { pattern = ".-", action = "A" }, 
+      { pattern = "-...", action = "B" }, 
+      { pattern = "-.-.", action = "C" }, 
+      { pattern = "-..", action = "D" }, 
+      { pattern = ".", action = "E" }, 
+      { pattern = "..-.", action = "F" }, 
+      { pattern = "--.", action = "G" }, 
+      { pattern = "....", action = "H" }, 
+      { pattern = "..", action = "I" }, 
+      { pattern = ".---", action = "J" }, 
+      { pattern = "-.-", action = "K" }, 
+      { pattern = ".-..", action = "L" }, 
+      { pattern = "--", action = "M" }, 
+      { pattern = "-.", action = "N" }, 
+      { pattern = "---", action = "O"}, 
+      { pattern = ".--.", action = "P" }, 
+      { pattern = "--.-", action = "Q" }, 
+      { pattern = ".-.", action = "R" }, 
+      { pattern = "...", action = "S" }, 
+      { pattern = "-", action = "T" }, 
+      { pattern = "..-", action = "U" }, 
+      { pattern = "...-", action = "V" }, 
+      { pattern = ".--", action = "W" }, 
+      { pattern = "-..-", action = "X" }, 
+      { pattern = "-.--", action = "Y" }, 
+      { pattern = "--..", action = "Z" }, 
+      { pattern = ".----", action = "Kc1" }, 
+      { pattern = "..---", action = "Kc2" }, 
+      { pattern = "...--", action = "Kc3" }, 
+      { pattern = "....-", action = "Kc4" }, 
+      { pattern = ".....", action = "Kc5" }, 
+      { pattern = "-....", action = "Kc6" }, 
+      { pattern = "--...", action = "Kc7" }, 
+      { pattern = "---..", action = "Kc8" }, 
+      { pattern = "----.", action = "Kc9" }, 
+      { pattern = "-----", action = "Kc0" }
     ] }
 ]
 ```
 
-### Using Tap Dance in Keymaps
+### Using Morse(Tap Dance) in Keymaps
 
-To use a tap dance in your keymap, reference it by its index (starting from 0):
+You can use both `Morse` and `TD` to represent a morse key in your keymap, you can reference it by its index (starting from 0):
 
 ```toml
 [layout]
@@ -238,7 +286,7 @@ layers = 2
 keymap = [
     [
         ["A", "B", "C"], 
-        ["TD(0)", "TD(1)", "TD(2)"],  # Use tap dances 0, 1, and 2
+        ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
         ["LCtrl", "MO(1)", "LShift"],
         ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
     ],
@@ -251,20 +299,20 @@ keymap = [
 ]
 ```
 
-### Configuration Limits
+### Limits
 
-The tap dance functionality is controlled by the following configuration limits in the `[rmk]` section:
+The morse functionality is controlled by the following configuration limits in the `[rmk]` section:
 
-- `tap_dance_max_num`: Maximum number of tap dances (default: 8, range: 0-256)
-- `max_patterns_per_key`: Maximum number of patterns per tap dance key config (default: 8, range: 4-65536)
+- `morse_max_num`: Maximum number of morses (default: 8, range: 0-256)
+- `max_patterns_per_key`: Maximum number of patterns per morse key config (default: 8, range: 4-65536)
 
 ```toml
 [rmk]
-tap_dance_max_num = 10  # To support up to 10 tap dances
-max_patterns_per_key = 36  # To support up to 36 morse patterns per tap dance key
+morse_max_num = 10  # To support up to 10 morses
+max_patterns_per_key = 36  # To support up to 36 morse patterns per morse key
 ```
 
-Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) needs at least 4 patterns, the  the extended format (using `tap_actions` + `hold_actions` together) can support up to the configured `max_patterns_per_key` value, then number of `morse_actions` is also limited by `max_patterns_per_key`. 
+Note that the default format (using `tap`, `hold`, `hold_after_tap`, `double_tap`) needs at least 4 patterns, the extended format (using `tap_actions` + `hold_actions` together) can support up to the configured `max_patterns_per_key` value, then number of `morse_actions` is also limited by `max_patterns_per_key`. 
 
 ::: warning 
 Also Vial is only able to edit the ".", "-", "..", ".-" patterns as tap, hold, double tap, hold after tap, the rest is not visible.

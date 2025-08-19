@@ -72,7 +72,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             _ => 0x0000,
         },
-        KeyAction::TapDance(index) => {
+        KeyAction::Morse(index) => {
             // Tap dance keycodes: 0x5700..=0x57FF
             0x5700 | (index as u16)
         }
@@ -144,7 +144,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5700..=0x57FF => {
             // Tap dance
             let index = (via_keycode & 0xFF) as u8;
-            KeyAction::TapDance(index)
+            KeyAction::Morse(index)
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
@@ -568,17 +568,17 @@ mod test {
             from_via_keycode(via_keycode)
         );
 
-        // TapDance(0)
+        // Morse(0)
         let via_keycode = 0x5700;
-        assert_eq!(KeyAction::TapDance(0), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(0), from_via_keycode(via_keycode));
 
-        // TapDance(5)
+        // Morse(5)
         let via_keycode = 0x5705;
-        assert_eq!(KeyAction::TapDance(5), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(5), from_via_keycode(via_keycode));
 
-        // TapDance(255)
+        // Morse(255)
         let via_keycode = 0x57FF;
-        assert_eq!(KeyAction::TapDance(255), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(255), from_via_keycode(via_keycode));
     }
 
     #[test]
@@ -681,14 +681,14 @@ mod test {
         let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
         assert_eq!(0x7C79, to_via_keycode(a));
 
-        // TapDance
-        let a = KeyAction::TapDance(0);
+        // Morse
+        let a = KeyAction::Morse(0);
         assert_eq!(0x5700, to_via_keycode(a));
 
-        let a = KeyAction::TapDance(5);
+        let a = KeyAction::Morse(5);
         assert_eq!(0x5705, to_via_keycode(a));
 
-        let a = KeyAction::TapDance(255);
+        let a = KeyAction::Morse(255);
         assert_eq!(0x57FF, to_via_keycode(a));
     }
 

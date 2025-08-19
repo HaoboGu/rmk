@@ -163,10 +163,18 @@ macro_rules! encoder {
     };
 }
 
-/// Create a tap dance action
+/// Create a morse(tap dance) action
 #[macro_export]
 macro_rules! td {
     ($index: literal) => {
-        $crate::action::KeyAction::TapDance($index)
+        $crate::action::KeyAction::Morse($index)
+    };
+}
+
+/// Create a morse(tap dance) action
+#[macro_export]
+macro_rules! morse {
+    ($index: literal) => {
+        $crate::action::KeyAction::Morse($index)
     };
 }
