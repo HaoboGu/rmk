@@ -355,10 +355,10 @@ pub(crate) async fn process_vial<
                             let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
                             let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
-                            _ = tap_dance.put(TAP, tap.to_action());
-                            _ = tap_dance.put(DOUBLE_TAP, double_tap.to_action());
-                            _ = tap_dance.put(HOLD, hold.to_action());
-                            _ = tap_dance.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
+                            tap_dance.put(TAP, tap.to_action());
+                            tap_dance.put(DOUBLE_TAP, double_tap.to_action());
+                            tap_dance.put(HOLD, hold.to_action());
+                            tap_dance.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
                             tap_dance.timeout_ms = timeout_ms;
 
                             #[cfg(feature = "storage")]

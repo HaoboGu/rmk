@@ -98,8 +98,8 @@ pub enum KeyState {
     Pressed(MorsePattern),
 
     /// After a press event is received and the hold timeout is reached.
-    /// The data represents the previously completed morse pattern 
-    /// including the current hold 
+    /// The data represents the previously completed morse pattern
+    /// including the current hold
     Holding(MorsePattern),
 
     /// After a release event is received for a key still kept in the HeldBuffer - so morse pattern may continue

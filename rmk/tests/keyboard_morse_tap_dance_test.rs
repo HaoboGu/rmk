@@ -27,7 +27,6 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
                     250,
-                    false,
                 ),
                 TapDance::new_from_vial(
                     Action::Key(KeyCode::X),
@@ -35,7 +34,6 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
                     250,
-                    false,
                 ),
                 TapDance::new_from_vial(
                     Action::Key(KeyCode::Kp1),
@@ -43,7 +41,6 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::GUI),
                     250,
-                    false,
                 ),
             ])
             .unwrap(),

@@ -54,7 +54,6 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-
     /// Tap hold action
     TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.

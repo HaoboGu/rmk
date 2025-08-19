@@ -1058,6 +1058,11 @@ impl KeyCode {
         }
     }
 
+    /// Returns `true` if the keycode is a letter
+    pub(crate) fn is_letter(self) -> bool {
+        KeyCode::A <= self && self <= KeyCode::Z
+    }
+
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
     pub(crate) fn to_hid_modifiers(self) -> HidModifiers {
