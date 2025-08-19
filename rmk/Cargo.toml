@@ -60,7 +60,7 @@ trouble-host = { version = "0.2.4", features = [
     "security",
 ], optional = true }
 rand_core = { version = "0.6", optional = true }
-bt-hci = { version = "0.3", optional = true }
+bt-hci = { version = "0.4", optional = true }
 
 # nRF dependencies
 embassy-nrf = { version = "0.6", features = [
