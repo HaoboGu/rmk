@@ -209,9 +209,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         .unwrap_or_else(|| behavior_config.tap_hold.timeout)
     }
 
-    /// decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
-    pub fn tap_hold_mode(behavior_config: &BehaviorConfig, keyAction: &KeyAction) -> (TapHoldMode, bool) {
-        match keyAction {
+    /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
+    pub fn tap_hold_mode(behavior_config: &BehaviorConfig, key_action: &KeyAction) -> (TapHoldMode, bool) {
+        match key_action {
             KeyAction::TapDance(idx) => behavior_config
                 .tap_dance
                 .tap_dances
@@ -221,11 +221,19 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
         .unwrap_or_else(|| {
             if behavior_config.tap_hold.enable_hrm // TODO instead of this let the HRM keycodes configurable!
-                && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, keyAction, TAP)
-                && tap_key_code.is_home_row()
-            //&& (!let Action::Key(_) = hold_action) //the hold action in home row is not key, but modifier or layer activation
+                && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, key_action, TAP)
             {
-                (TapHoldMode::PermissiveHold, true)
+                if tap_key_code.is_letter() || tap_key_code.is_home_row() {
+                    (TapHoldMode::PermissiveHold, true)
+                } else {
+                    match Self::action_from_pattern(behavior_config, key_action, HOLD) {
+                        Action::Modifier(_) | Action::LayerOn(_) => {
+                            // MT/LT on non-letter, non-home-row keys
+                            (TapHoldMode::HoldOnOtherPress, false)
+                        }
+                        _ => (behavior_config.tap_hold.mode, behavior_config.tap_hold.unilateral_tap),
+                    }
+                }
             } else {
                 (behavior_config.tap_hold.mode, behavior_config.tap_hold.unilateral_tap)
             }
