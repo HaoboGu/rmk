@@ -210,7 +210,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 .map(|td| Duration::from_millis(td.timeout_ms as u64)),
             _ => None,
         }
-        .unwrap_or_else(|| behavior_config.tap_hold.operation_timeout)
+        .unwrap_or_else(|| behavior_config.tap_hold.timeout)
     }
 
     /// decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action

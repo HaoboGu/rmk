@@ -1,6 +1,7 @@
 use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use embassy_time::Duration;
 use num_enum::FromPrimitive;
 
 use crate::action::KeyAction;
@@ -32,13 +33,29 @@ pub(crate) enum VialCommand {
     UnlockStart = 0x06,
     UnlockPoll = 0x07,
     Lock = 0x08,
-    QmkSettingsQuery = 0x09,
-    QmkSettingsGet = 0x0A,
-    QmkSettingsSet = 0x0B,
+    BehaviorSettingQuery = 0x09,
+    GetBehaviorSetting = 0x0A,
+    SetBehaviorSetting = 0x0B,
     QmkSettingsReset = 0x0C,
-    DynamicEntryOp = 0x0D, /* operate on tapdance, combos, etc */
+    // Operate on tapdance, combos, etc
+    DynamicEntryOp = 0x0D,
     #[num_enum(default)]
     Unhandled = 0xFF,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[repr(u16)]
+pub(crate) enum SettingKey {
+    #[num_enum(default)]
+    None,
+    ComboTimeout = 0x02,
+    OneShotTimeout = 0x06,
+    MorseTimeout = 0x07,
+    TapInterval = 0x12,
+    TapCapslockInterval = 0x13,
+    UnilateralTap = 0x1A,
+    PriorIdleTime = 0x1B,
 }
 
 /// Vial dynamic commands.
@@ -152,8 +169,126 @@ pub(crate) async fn process_vial<
             #[cfg(not(feature = "vial_lock"))]
             error!("Vial lock feature is not enabled");
         }
-        VialCommand::QmkSettingsQuery => {
+        VialCommand::BehaviorSettingQuery => {
             report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            if value <= 7 {
+                LittleEndian::write_u16(&mut report.input_data[0..2], 0x02);
+                LittleEndian::write_u16(&mut report.input_data[2..4], 0x06);
+                LittleEndian::write_u16(&mut report.input_data[4..6], 0x07);
+                LittleEndian::write_u16(&mut report.input_data[6..8], 0x12);
+                LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
+                LittleEndian::write_u16(&mut report.input_data[10..12], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[12..14], 0x1B);
+            }
+        }
+        VialCommand::GetBehaviorSetting => {
+            report.input_data.fill(0xFF);
+            let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match SettingKey::from_primitive(value) {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    report.input_data[0] = 0;
+                    let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
+                }
+                SettingKey::MorseTimeout => {
+                    report.input_data[0] = 0;
+                    let tapping_term = keymap.borrow().behavior.tap_hold.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
+                }
+                SettingKey::OneShotTimeout => {
+                    report.input_data[0] = 0;
+                    let one_shot_timeout = keymap.borrow().behavior.one_shot.timeout.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
+                }
+                SettingKey::TapInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::TapCapslockInterval => {
+                    report.input_data[0] = 0;
+                    let tap_interval = keymap.borrow().behavior.tap.tap_interval;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tap_interval);
+                }
+                SettingKey::UnilateralTap => {
+                    report.input_data[0] = 0;
+                    let unilateral_tap = keymap.borrow().behavior.tap_hold.unilateral_tap;
+                    if unilateral_tap {
+                        report.input_data[1] = 1;
+                    } else {
+                        report.input_data[1] = 0;
+                    };
+                }
+                SettingKey::PriorIdleTime => {
+                    report.input_data[0] = 0;
+                    let prior_idle_time = keymap.borrow().behavior.tap_hold.prior_idle_time.as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], prior_idle_time);
+                }
+            }
+        }
+        VialCommand::SetBehaviorSetting => {
+            let key = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
+            match SettingKey::from_primitive(key) {
+                SettingKey::None => (),
+                SettingKey::ComboTimeout => {
+                    let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.combo.timeout = Duration::from_millis(combo_timeout as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::ComboTimeout(combo_timeout))
+                        .await;
+                }
+                SettingKey::MorseTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap_hold.timeout = Duration::from_millis(timeout_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseTimeout(timeout_time))
+                        .await;
+                }
+                SettingKey::OneShotTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.one_shot.timeout = Duration::from_millis(timeout_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::OneShotTimeout(timeout_time))
+                        .await;
+                }
+                SettingKey::TapInterval => {
+                    let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap.tap_interval = tap_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapInterval(tap_interval))
+                        .await;
+                }
+                SettingKey::TapCapslockInterval => {
+                    let tap_capslock_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap.tap_capslock_interval = tap_capslock_interval;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::TapCapslockInterval(tap_capslock_interval))
+                        .await;
+                }
+                SettingKey::UnilateralTap => {
+                    keymap.borrow_mut().behavior.tap_hold.unilateral_tap = report.output_data[4] == 1;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
+                        .await;
+                }
+                SettingKey::PriorIdleTime => {
+                    let prior_idle_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap_hold.prior_idle_time =
+                        Duration::from_millis(prior_idle_time as u64);
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::PriorIdleTime(prior_idle_time))
+                        .await;
+                }
+            }
         }
         VialCommand::DynamicEntryOp => {
             let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);

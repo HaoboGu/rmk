@@ -26,7 +26,7 @@ use rmk::futures::future::join3;
 use rmk::input_device::Runnable as _;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::{HostResources, initialize_keymap_and_storage, run_devices, run_rmk};
+use rmk::{initialize_keymap_and_storage, run_devices, run_rmk, HostResources};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 use {defmt_rtt as _, panic_probe as _};
@@ -143,9 +143,9 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let behavior_config = BehaviorConfig::default();
+    let mut behavior_config = BehaviorConfig::default();
     let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
+        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();

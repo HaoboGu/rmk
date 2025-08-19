@@ -221,7 +221,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                     &mut default_keymap,
                     flash,
                     &rmk_config.storage_config,
-                    behavior_config,
+                    &mut behavior_config,
                 )
             }
         } else {
@@ -232,7 +232,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
                     &mut encoder_keymap,
                     flash,
                     &rmk_config.storage_config,
-                    behavior_config,
+                    &mut behavior_config,
                 )
             }
         };
@@ -255,7 +255,7 @@ pub(crate) fn expand_keymap_and_storage(keyboard_config: &KeyboardTomlConfig) ->
             let mut default_keymap = get_default_keymap();
             let keymap =  ::rmk::initialize_keymap(
                 &mut default_keymap,
-                behavior_config,
+                &mut behavior_config,
             ).await;
         }
     }

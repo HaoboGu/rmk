@@ -10,7 +10,7 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::tap_dance::{TapHoldMode, TapDance};
+use crate::tap_dance::{TapDance, TapHoldMode};
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
@@ -28,6 +28,7 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
+    pub tap: TapConfig,
     pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
@@ -35,6 +36,23 @@ pub struct BehaviorConfig {
     pub tap_dance: TapDancesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+}
+
+/// Configurations for morse behavior
+#[derive(Clone, Copy, Debug)]
+pub struct TapConfig {
+    // TODO: Use `Duration` instead?
+    pub tap_interval: u16,
+    pub tap_capslock_interval: u16,
+}
+
+impl Default for TapConfig {
+    fn default() -> Self {
+        Self {
+            tap_interval: 20,
+            tap_capslock_interval: 20,
+        }
+    }
 }
 
 /// Configuration for tap dance behavior
@@ -55,7 +73,7 @@ pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
     /// Default timeout time for tap or hold
-    pub operation_timeout: Duration,
+    pub timeout: Duration,
     /// Default mode
     pub mode: TapHoldMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
@@ -69,7 +87,7 @@ impl Default for TapHoldConfig {
             unilateral_tap: false,
             mode: TapHoldMode::Normal,
             prior_idle_time: Duration::from_millis(120),
-            operation_timeout: Duration::from_millis(250),
+            timeout: Duration::from_millis(250),
         }
     }
 }
