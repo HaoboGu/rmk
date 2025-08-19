@@ -138,9 +138,9 @@ For example:
 
 ```rust
 // Trigger macro(1) when tapping and switch to layer 1 when holding
-KeyAction::Morse(Morse::new_layer_tap_hold(Action::TriggerMacro(1), 1))
+KeyAction::TapHold(Action::TriggerMacro(1), Action::LayerOn(1))
 // Or
-KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::Macro0), 1))
+KeyAction::TapHold(Action::Key(KeyCode::Macro0), Action::LayerOn(1))
 ```
 
 Probably you most likely will need
