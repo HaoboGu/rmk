@@ -1,6 +1,4 @@
-use crate::TAP_DANCE_MAX_TAP;
 use crate::keycode::{KeyCode, ModifierCombination};
-use crate::morse::Morse;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
@@ -56,10 +54,11 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
+
+    /// Tap hold action
+    TapHold(Action, Action),
     /// Tap dance action, references a tap dance configuration by index.
     TapDance(u8),
-    /// Morse action
-    Morse(Morse<TAP_DANCE_MAX_TAP>),
 }
 
 impl KeyAction {
@@ -70,6 +69,12 @@ impl KeyAction {
             KeyAction::Single(a) | KeyAction::Tap(a) => a,
             _ => Action::No,
         }
+    }
+
+    /// 'morse' is an alias for the superset of tap dance and tap hold keys,
+    /// since their handling have many similarities
+    pub fn is_morse(&self) -> bool {
+        matches!(self, KeyAction::TapHold(_, _) | KeyAction::TapDance(_))
     }
 }
 

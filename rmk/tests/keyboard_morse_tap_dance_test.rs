@@ -27,6 +27,7 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
                     250,
+                    false,
                 ),
                 TapDance::new_from_vial(
                     Action::Key(KeyCode::X),
@@ -34,6 +35,7 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
                     250,
+                    false,
                 ),
                 TapDance::new_from_vial(
                     Action::Key(KeyCode::Kp1),
@@ -41,6 +43,7 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::GUI),
                     250,
+                    false,
                 ),
             ])
             .unwrap(),
@@ -256,6 +259,27 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(Y), 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_rolling_3() {
+        key_sequence_test! {
+            keyboard: create_tap_dance_test_keyboard(),
+            sequence: [
+                [0, 0, true, 150], // Press td!(0)
+                [0, 0, false, 10], // Release td!(0)
+                [0, 0, true, 150], // Press td!(0)
+                [0, 1, true, 260], // Press td!(1),      td!(0) timeout (tap-hold) -> press "C"
+                [0, 1, false, 260], // Release td!(1) -> td(1) hold, gap -> tap "Y"
+                [0, 0, false, 260], // Release td!(0) -> release "C"
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };

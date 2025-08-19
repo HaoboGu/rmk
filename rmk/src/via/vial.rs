@@ -8,6 +8,7 @@ use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
 use crate::keymap::KeyMap;
+use crate::tap_dance::{DOUBLE_TAP, HOLD, HOLD_AFTER_TAP, TAP};
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 #[cfg(feature = "storage")]
 use crate::{
@@ -175,21 +176,29 @@ pub(crate) async fn process_vial<
                         // Pack tap dance data into report
                         LittleEndian::write_u16(
                             &mut report.input_data[1..3],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(0))),
+                            to_via_keycode(tap_dance.get(TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(0))),
+                            to_via_keycode(
+                                tap_dance
+                                    .get(DOUBLE_TAP)
+                                    .map_or(KeyAction::No, |a| KeyAction::Single(a)),
+                            ),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.tap_action(1))),
+                            to_via_keycode(tap_dance.get(HOLD).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],
-                            to_via_keycode(KeyAction::Single(tap_dance.0.hold_action(1))),
+                            to_via_keycode(
+                                tap_dance
+                                    .get(HOLD_AFTER_TAP)
+                                    .map_or(KeyAction::No, |a| KeyAction::Single(a)),
+                            ),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.0.timeout_ms);
+                        LittleEndian::write_u16(&mut report.input_data[9..11], tap_dance.timeout_ms);
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -198,37 +207,35 @@ pub(crate) async fn process_vial<
                     debug!("DynamicEntryOp - DynamicVialTapDanceSet");
                     report.input_data[0] = 0; // Index 0 is the return code, 0 means success
 
-                    use crate::tap_dance::TapDance;
                     let tap_dance_idx = report.output_data[3] as usize;
                     let tap_dances = &mut keymap.borrow_mut().behavior.tap_dance.tap_dances;
 
                     if tap_dance_idx < tap_dances.len() {
-                        // Extract tap dance data from report
-                        let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
-                        let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
-                        let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
-                        let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                        let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
-
-                        let new_tap_dance = TapDance::new_from_vial(
-                            tap.to_action(),
-                            hold.to_action(),
-                            hold_after_tap.to_action(),
-                            double_tap.to_action(),
-                            timeout_ms,
-                        );
-
                         // Update the tap dance in keymap
                         if let Some(tap_dance) = tap_dances.get_mut(tap_dance_idx) {
-                            *tap_dance = new_tap_dance.clone();
-                        }
+                            // Extract tap dance data from report
+                            let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
+                            let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
+                            let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
+                            let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
+                            let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
-                        #[cfg(feature = "storage")]
-                        {
-                            // Save to storage
-                            FLASH_CHANNEL
-                                .send(FlashOperationMessage::WriteTapDance(tap_dance_idx as u8, new_tap_dance))
-                                .await;
+                            _ = tap_dance.put(TAP, tap.to_action());
+                            _ = tap_dance.put(DOUBLE_TAP, double_tap.to_action());
+                            _ = tap_dance.put(HOLD, hold.to_action());
+                            _ = tap_dance.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
+                            tap_dance.timeout_ms = timeout_ms;
+
+                            #[cfg(feature = "storage")]
+                            {
+                                // Save to storage
+                                FLASH_CHANNEL
+                                    .send(FlashOperationMessage::WriteTapDance(
+                                        tap_dance_idx as u8,
+                                        tap_dance.clone(),
+                                    ))
+                                    .await;
+                            }
                         }
                     }
                 }

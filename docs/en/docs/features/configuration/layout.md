@@ -118,6 +118,8 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 7. For shifted key, use `SHIFTED(key)`
 
+8. For Tap Dance, use `TD(n)`
+
 ## Aliases
 
 The `[aliases]` section contains a table of user defined names and an associated replacement string, which can be used in the `layer.keys`:

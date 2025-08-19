@@ -54,7 +54,7 @@ fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
 pub(crate) fn fill_vec<T: Default + Clone, const N: usize>(vector: &mut heapless::Vec<T, N>) {
     vector
         .resize(vector.capacity(), T::default())
-        .expect("impossible error, as we resie to the capcacity of the vector!");
+        .expect("impossible error, as we resize to the capacity of the vector!");
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -72,7 +72,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         //reorder the combos
         _reorder_combos(&mut behavior.combo.combos);
 
-        fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
+        fill_vec(&mut behavior.tap_dance.tap_dances);
 
         KeyMap {
             layers: action_map,
@@ -97,7 +98,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
-        fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
         fill_vec(&mut behavior.tap_dance.tap_dances);
 
         if let Some(storage) = storage {

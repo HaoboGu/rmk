@@ -1,7 +1,8 @@
 use embassy_time::Instant;
 
-use crate::action::KeyAction;
+use crate::action::{Action, KeyAction};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::tap_dance::MorsePattern;
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]
@@ -37,8 +38,8 @@ impl HeldBuffer {
     }
 
     /// Find a held key by the key action
-    pub fn find_action(&self, action: KeyAction) -> Option<&HeldKey> {
-        self.keys.iter().find(|x| x.action == action)
+    pub fn find_action(&self, action: &KeyAction) -> Option<&HeldKey> {
+        self.keys.iter().find(|x| x.action == *action)
     }
 
     /// Find a held key by the KeyboardEventPos
@@ -89,24 +90,27 @@ impl HeldBuffer {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyState {
-    /// After a press event is received.
-    /// The number represents the number of completed "tap".
-    Held(u8),
-    /// Idle state after tap n times for morse keys
-    IdleAfterTap(u8),
-    /// Idle state after hold released
-    IdleAfterHold(u8),
     /// The current key is a component of a combo, and it's waiting for other combo components
     WaitingCombo,
-    /// Tap key has been processed and sent to HID, but not yet released.
-    /// The number is used for morse keys, represents the number of completed "tap"s
-    PostTap(u8),
-    /// Key is being held, but not yet released
-    /// The number is used for morse keys, represents the number of completed "tap"s
-    PostHold(u8),
-    /// Key needs to be released but is still in the queue,
-    /// it should be cleaned up in the main loop regardless
-    Release,
+
+    /// After a press event is received.
+    /// The data represents the previously completed morse pattern
+    Pressed(MorsePattern),
+
+    /// After a press event is received and the hold timeout is reached.
+    /// The data represents the previously completed morse pattern 
+    /// including the current hold 
+    Holding(MorsePattern),
+
+    /// After a release event is received for a key still kept in the HeldBuffer - so morse pattern may continue
+    /// The data represents the already completed morse pattern
+    Released(MorsePattern),
+
+    /// The corresponding action is already executed (so the Pressed HID report is sent),
+    /// but the release HID report is not sent yet (will be sent only when the corresponding
+    /// key is really released).
+    ProcessedButReleaseNotReportedYet(Action),
+    // The Idle state is represented by the removal from the HeldBuffer
 }
 
 #[derive(Clone, Copy, Debug)]

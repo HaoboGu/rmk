@@ -95,7 +95,6 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
-pub mod morse;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod state;
