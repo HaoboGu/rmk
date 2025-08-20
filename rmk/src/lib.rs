@@ -194,7 +194,7 @@ pub async fn run_rmk<
     #[cfg(feature = "_ble")] 'b,
     #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static> + 'static,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,

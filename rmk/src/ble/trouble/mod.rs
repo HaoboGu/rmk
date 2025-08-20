@@ -7,10 +7,15 @@ use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use device_info::{PnPID, VidSource};
 use embassy_futures::join::join;
+#[cfg(not(feature = "_no_usb"))]
+use embassy_futures::join::join4;
 use embassy_futures::select::{Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
+use ergot::endpoint;
+use ergot::exports::bbq2::traits::coordination::cas::AtomicCoord;
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
+use static_cell::ConstStaticCell;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
@@ -27,7 +32,7 @@ use {
     crate::state::get_connection_type,
     crate::usb::UsbKeyboardWriter,
     crate::usb::{USB_ENABLED, USB_REMOTE_WAKEUP, USB_SUSPENDED},
-    crate::usb::{add_usb_reader_writer, add_usb_writer, new_usb_builder},
+    crate::usb::{add_usb_reader_writer, add_usb_writer},
     crate::via::UsbVialReaderWriter,
     embassy_futures::select::{Either, Either4, select4},
     embassy_usb::driver::Driver,
@@ -100,13 +105,16 @@ pub async fn build_ble_stack<
         .set_random_generator_seed(random_generator)
 }
 
+use ergot::toolkits::embassy_usb_v0_5 as kit;
+static STORAGE: kit::WireStorage<256, 256, 64, 256> = kit::WireStorage::new();
+
 /// Run the BLE stack.
 pub(crate) async fn run_ble<
     'a,
     'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(feature = "storage")] F: AsyncNorFlash,
-    #[cfg(not(feature = "_no_usb"))] D: Driver<'static>,
+    #[cfg(not(feature = "_no_usb"))] D: Driver<'static> + 'static,
     const ROW: usize,
     const COL: usize,
     const NUM_LAYER: usize,
@@ -122,11 +130,41 @@ pub(crate) async fn run_ble<
     {
         rmk_config.usb_config.serial_number = crate::hid::get_serial_number();
     }
+    // let unique_id = 1234u64;
+    let mut usb_config = embassy_usb::Config::new(rmk_config.usb_config.vid, rmk_config.usb_config.pid);
+    usb_config.manufacturer = Some(rmk_config.usb_config.manufacturer);
+    usb_config.product = Some(rmk_config.usb_config.product_name);
+    usb_config.serial_number = Some(rmk_config.usb_config.serial_number);
+    usb_config.max_power = 450;
+    usb_config.supports_remote_wakeup = true;
 
+    // Required for windows compatibility.
+    usb_config.max_packet_size_0 = 64;
+    usb_config.device_class = 0xEF;
+    usb_config.device_sub_class = 0x02;
+    usb_config.device_protocol = 0x01;
+    usb_config.composite_with_iads = true;
+
+    // The type of our outgoing queue
+    type Queue = kit::Queue<4096, AtomicCoord>;
+    static OUTQ: Queue = kit::Queue::new();
+    type Stack = kit::Stack<&'static Queue, ergot::exports::mutex::raw_impls::cs::CriticalSectionRawMutex>;
+    static STACK: Stack = kit::new_target_stack(OUTQ.framed_producer(), 1024);
     // Initialize usb device and usb hid reader/writer
     #[cfg(not(feature = "_no_usb"))]
-    let (mut _usb_builder, mut keyboard_reader, mut keyboard_writer, mut other_writer, mut vial_reader_writer) = {
-        let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
+    let (
+        mut _usb_builder,
+        mut keyboard_reader,
+        mut keyboard_writer,
+        mut other_writer,
+        mut vial_reader_writer,
+        rxvr,
+        mut tx_impl,
+    ) = {
+        let (mut usb_builder, tx_impl, ep_out) = STORAGE.init_without_build(usb_driver, usb_config);
+        let rxvr: kit::RxWorker<&'static Queue, ergot::exports::mutex::raw_impls::cs::CriticalSectionRawMutex, D> =
+            kit::RxWorker::new(STACK.base(), ep_out);
+        // let mut usb_builder: embassy_usb::Builder<'_, D> = new_usb_builder(usb_driver, rmk_config.usb_config);
         let keyboard_reader_writer = add_usb_reader_writer!(&mut usb_builder, KeyboardReport, 1, 8);
         let other_writer = add_usb_writer!(&mut usb_builder, CompositeReport, 9);
         let vial_reader_writer = add_usb_reader_writer!(&mut usb_builder, ViaReport, 32, 32);
@@ -137,8 +175,11 @@ pub(crate) async fn run_ble<
             keyboard_writer,
             other_writer,
             vial_reader_writer,
+            rxvr,
+            tx_impl,
         )
     };
+    static RX_BUF: ConstStaticCell<[u8; 1024]> = ConstStaticCell::new([0u8; 1024]);
 
     // Optional usb logger initialization
     #[cfg(all(feature = "usb_log", not(feature = "_no_usb")))]
@@ -224,21 +265,56 @@ pub(crate) async fn run_ble<
         )
         .unwrap();
 
+    endpoint!(EchoEndpoint, u8, u8, "echo");
     #[cfg(not(feature = "_no_usb"))]
-    let usb_task = async {
-        loop {
-            usb_device.run_until_suspend().await;
-            match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
-                Either::First(_) => continue,
-                Either::Second(_) => {
-                    info!("USB wakeup remote");
-                    if let Err(e) = usb_device.remote_wakeup().await {
-                        info!("USB wakeup remote error: {:?}", e)
+    let usb_task = join4(
+        async {
+            // USB task
+            loop {
+                usb_device.run_until_suspend().await;
+                match select(usb_device.wait_resume(), USB_REMOTE_WAKEUP.wait()).await {
+                    Either::First(_) => continue,
+                    Either::Second(_) => {
+                        info!("USB wakeup remote");
+                        if let Err(e) = usb_device.remote_wakeup().await {
+                            info!("USB wakeup remote error: {:?}", e)
+                        }
                     }
                 }
             }
-        }
-    };
+        },
+        async {
+            info!("Running rx task");
+            // Rx task
+            rxvr.run(RX_BUF.take(), kit::USB_FS_MAX_PACKET_SIZE)
+        },
+        async {
+            // Tx task
+            kit::tx_worker::<D, 4096, AtomicCoord>(
+                &mut tx_impl,
+                OUTQ.framed_consumer(),
+                kit::DEFAULT_TIMEOUT_MS_PER_FRAME,
+                kit::USB_FS_MAX_PACKET_SIZE,
+            )
+        },
+        async {
+            // Echo task
+            use core::pin::pin;
+            let socket = STACK.stack_bounded_endpoint_server::<EchoEndpoint, 4>(Some("echoserver"));
+            let socket = pin!(socket);
+            let mut hdl = socket.attach();
+            loop {
+                let _ = hdl
+                    .serve(async |input_num| {
+                        embassy_time::Timer::after_millis(1).await;
+                        info!("Received ergot");
+                        input_num + 1
+                    })
+                    .await;
+                embassy_time::Timer::after_millis(10).await;
+            }
+        },
+    );
 
     #[cfg(all(not(feature = "usb_log"), not(feature = "_no_usb")))]
     let background_task = join(ble_task(runner), usb_task);
