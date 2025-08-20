@@ -344,7 +344,7 @@ pub(crate) async fn process_vial<
                     if morse_idx < morses.len() {
                         // Update the morse in keymap
                         if let Some(morse) = morses.get_mut(morse_idx) {
-                            // Extract morse(tap dance) data from report
+                            // Extract morse (also known as "tap dance" in vial)
                             let tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[4..6]));
                             let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
                             let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));

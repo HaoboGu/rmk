@@ -163,7 +163,7 @@ macro_rules! encoder {
     };
 }
 
-/// Create a morse(tap dance) action
+/// Create a Morse(index) action (in Vial its simplest form is known as "Tap Dance", so `td` name is used)
 #[macro_export]
 macro_rules! td {
     ($index: literal) => {
@@ -171,7 +171,7 @@ macro_rules! td {
     };
 }
 
-/// Create a morse(tap dance) action
+/// Create a Morse(index) action (in Vial it will appear as "Tap Dance")
 #[macro_export]
 macro_rules! morse {
     ($index: literal) => {

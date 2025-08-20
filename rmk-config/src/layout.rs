@@ -550,6 +550,11 @@ mod tests {
             ("TD(255)", Rule::morse_action),
             ("td(0)", Rule::morse_action), // Case insensitive
             ("td(1)", Rule::morse_action),
+            ("MORSE(0)", Rule::morse_action),
+            ("MORSE(1)", Rule::morse_action),
+            ("MORSE(255)", Rule::morse_action),
+            ("Morse(0)", Rule::morse_action), // Case insensitive
+            ("morse(1)", Rule::morse_action),
         ];
 
         for (input, expected_rule) in test_cases {

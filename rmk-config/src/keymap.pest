@@ -22,7 +22,7 @@ number = @{ ASCII_DIGIT+ }
 layer_number = @{ number }
 layer_name = @{ loose_identifier }
 
-//the order is important here, as we want to match the number first 
+// The order is important here, as we want to match the number first 
 layer_reference = _{ layer_number | layer_name }
 
 // Modifier Names
@@ -95,8 +95,11 @@ tap_hold_action = _{ mt_action | th_action }
 // Rule 7: SHIFTED(key)
 shifted_action = { ^"SHIFTED" ~ "(" ~ keycode_name ~ ")" }
 
-// Rule 8: TD(n) - Morse(Tap Dance) index
-morse_action = { ^"TD" ~ "(" ~ number ~ ")" }
+// Rule 8: TD(n)/MORSE(n) - Morse index (in Vial its simplest form is known as "Tap Dance", so the TD name is used)
+morse_name = @{
+    ^"TD" | ^"MORSE"
+}
+morse_action = { morse_name ~ "(" ~ number ~ ")" }
 
 // --- Top Level Rules ---
 
