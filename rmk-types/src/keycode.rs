@@ -3,7 +3,7 @@ use core::ops::BitOr;
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
-use strum::FromRepr;
+use strum::{EnumIter, FromRepr};
 
 use crate::hid_state::HidModifiers;
 
@@ -94,7 +94,7 @@ impl From<u16> for ConsumerKey {
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ConsumerKey {
     Zero = 0x00,
@@ -180,7 +180,7 @@ impl From<u16> for KeyCode {
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromRepr)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromRepr, EnumIter)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyCode {
     /// Reserved, no-key.
