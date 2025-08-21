@@ -10,6 +10,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
+use rmk_types::hid_state::{HidModifiers, HidMouseButtons};
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
@@ -20,18 +21,17 @@ use {
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
-use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
 use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
-use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
 use crate::morse::{Morse, MorseMode, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
+use rmk_types::action::{EncoderAction, KeyAction};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -1545,9 +1545,9 @@ mod tests {
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::action::Action;
-    use crate::keycode::KeyCode;
     use crate::morse::{HOLD, MorseMode, TAP};
+    use rmk_types::action::Action;
+    use rmk_types::keycode::KeyCode;
 
     #[test]
     fn test_morse_serialization_deserialization() {

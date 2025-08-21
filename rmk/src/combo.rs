@@ -1,7 +1,7 @@
 use heapless::Vec;
 
 use crate::COMBO_MAX_LENGTH;
-use crate::action::KeyAction;
+use rmk_types::action::KeyAction;
 use crate::event::KeyboardEvent;
 
 #[derive(Clone, Debug)]

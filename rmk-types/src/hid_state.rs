@@ -7,21 +7,21 @@ use bitfield_struct::bitfield;
 
 pub struct HidModifiers {
     #[bits(1)]
-    pub(crate) left_ctrl: bool,
+    pub left_ctrl: bool,
     #[bits(1)]
-    pub(crate) left_shift: bool,
+    pub left_shift: bool,
     #[bits(1)]
-    pub(crate) left_alt: bool,
+    pub left_alt: bool,
     #[bits(1)]
-    pub(crate) left_gui: bool,
+    pub left_gui: bool,
     #[bits(1)]
-    pub(crate) right_ctrl: bool,
+    pub right_ctrl: bool,
     #[bits(1)]
-    pub(crate) right_shift: bool,
+    pub right_shift: bool,
     #[bits(1)]
-    pub(crate) right_alt: bool,
+    pub right_alt: bool,
     #[bits(1)]
-    pub(crate) right_gui: bool,
+    pub right_gui: bool,
 }
 
 impl BitOr for HidModifiers {
@@ -94,21 +94,21 @@ impl HidModifiers {
 
 pub struct HidMouseButtons {
     #[bits(1)]
-    pub(crate) button1: bool, //left
+    pub button1: bool, //left
     #[bits(1)]
-    pub(crate) button2: bool, //right
+    pub button2: bool, //right
     #[bits(1)]
-    pub(crate) button3: bool, //middle
+    pub button3: bool, //middle
     #[bits(1)]
-    pub(crate) button4: bool,
+    pub button4: bool,
     #[bits(1)]
-    pub(crate) button5: bool,
+    pub button5: bool,
     #[bits(1)]
-    pub(crate) button6: bool,
+    pub button6: bool,
     #[bits(1)]
-    pub(crate) button7: bool,
+    pub button7: bool,
     #[bits(1)]
-    pub(crate) button8: bool,
+    pub button8: bool,
 }
 
 impl BitOr for HidMouseButtons {

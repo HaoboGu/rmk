@@ -1,0 +1,17 @@
+[package]
+name = "rmk-types"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+defmt = { version = "1.0", optional = true }
+log = { version = "0.4", optional = true }
+
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1", features = ["experimental-derive"] }
+strum = { version = "0.27", default-features = false, features = ["derive"] }
+
+bitfield-struct = "0.11"
+
+# [features]
+# defmt = []

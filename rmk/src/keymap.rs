@@ -7,7 +7,6 @@ use {
 };
 
 use crate::COMBO_MAX_NUM;
-use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
@@ -17,6 +16,7 @@ use crate::keyboard_macros::MacroOperation;
 use crate::matrix::MatrixState;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
+use rmk_types::action::{EncoderAction, KeyAction};
 
 /// Keymap represents the stack of layers.
 ///
@@ -409,12 +409,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 #[cfg(test)]
 mod test {
     use super::{_reorder_combos, Combo};
-    use crate::action::{Action, KeyAction};
     use crate::fork::{Fork, StateBits};
     use crate::hid_state::HidModifiers;
-    use crate::keycode::KeyCode;
+    use rmk_types::keycode::KeyCode;
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
+    use rmk_types::action::{Action, KeyAction};
 
     #[test]
     fn test_fill_vec() {

@@ -1,8 +1,8 @@
 use core::ops::{BitAnd, BitOr, Not};
 
-use crate::action::KeyAction;
-use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::light::LedIndicator;
+use rmk_types::action::KeyAction;
+use rmk_types::hid_state::{HidModifiers, HidMouseButtons};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

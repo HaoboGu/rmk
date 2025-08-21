@@ -16,6 +16,7 @@ impl Default for EncoderAction {
         }
     }
 }
+
 impl EncoderAction {
     pub const fn new(clockwise: KeyAction, counter_clockwise: KeyAction) -> Self {
         Self {

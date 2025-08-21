@@ -2,9 +2,10 @@ use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
-use num_enum::FromPrimitive;
+use rmk_types::protocol::vial::{
+    SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
+};
 
-use crate::action::KeyAction;
 use crate::combo::Combo;
 use crate::config::VialConfig;
 use crate::descriptor::ViaReport;
@@ -18,64 +19,7 @@ use crate::{
     storage::{ComboData, FlashOperationMessage},
 };
 use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
-
-/// Vial communication commands.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[repr(u8)]
-pub(crate) enum VialCommand {
-    GetKeyboardId = 0x00,
-    GetSize = 0x01,
-    GetKeyboardDef = 0x02,
-    GetEncoder = 0x03,
-    SetEncoder = 0x04,
-    GetUnlockStatus = 0x05,
-    UnlockStart = 0x06,
-    UnlockPoll = 0x07,
-    Lock = 0x08,
-    BehaviorSettingQuery = 0x09,
-    GetBehaviorSetting = 0x0A,
-    SetBehaviorSetting = 0x0B,
-    QmkSettingsReset = 0x0C,
-    // Operate on tapdance, combos, etc
-    DynamicEntryOp = 0x0D,
-    #[num_enum(default)]
-    Unhandled = 0xFF,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[repr(u16)]
-pub(crate) enum SettingKey {
-    #[num_enum(default)]
-    None,
-    ComboTimeout = 0x02,
-    OneShotTimeout = 0x06,
-    MorseTimeout = 0x07,
-    TapInterval = 0x12,
-    TapCapslockInterval = 0x13,
-    UnilateralTap = 0x1A,
-    PriorIdleTime = 0x1B,
-}
-
-/// Vial dynamic commands.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
-#[repr(u8)]
-pub(crate) enum VialDynamic {
-    DynamicVialGetNumberOfEntries = 0x00,
-    DynamicVialMorseGet = 0x01,
-    DynamicVialMorseSet = 0x02,
-    DynamicVialComboGet = 0x03,
-    DynamicVialComboSet = 0x04,
-    DynamicVialKeyOverrideGet = 0x05,
-    DynamicVialKeyOverrideSet = 0x06,
-    #[num_enum(default)]
-    Unhandled = 0xFF,
-}
-
-const VIAL_PROTOCOL_VERSION: u32 = 6;
-const VIAL_EP_SIZE: usize = 32;
-const VIAL_COMBO_MAX_LENGTH: usize = 4;
+use rmk_types::action::KeyAction;
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<
@@ -91,7 +35,7 @@ pub(crate) async fn process_vial<
     keymap: &RefCell<KeyMap<'_, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
-    let vial_command = VialCommand::from_primitive(report.output_data[1]);
+    let vial_command = report.output_data[1].into();
     debug!("Received vial command: {:?}", vial_command);
     match vial_command {
         VialCommand::GetKeyboardId => {
@@ -185,7 +129,7 @@ pub(crate) async fn process_vial<
         VialCommand::GetBehaviorSetting => {
             report.input_data.fill(0xFF);
             let value = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
-            match SettingKey::from_primitive(value) {
+            match value.into() {
                 SettingKey::None => (),
                 SettingKey::ComboTimeout => {
                     report.input_data[0] = 0;
@@ -230,7 +174,7 @@ pub(crate) async fn process_vial<
         }
         VialCommand::SetBehaviorSetting => {
             let key = u16::from_le_bytes([report.output_data[2], report.output_data[3]]);
-            match SettingKey::from_primitive(key) {
+            match key.into() {
                 SettingKey::None => (),
                 SettingKey::ComboTimeout => {
                     let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
@@ -291,7 +235,7 @@ pub(crate) async fn process_vial<
             }
         }
         VialCommand::DynamicEntryOp => {
-            let vial_dynamic = VialDynamic::from_primitive(report.output_data[2]);
+            let vial_dynamic = report.output_data[2].into();
             match vial_dynamic {
                 VialDynamic::DynamicVialGetNumberOfEntries => {
                     debug!("DynamicEntryOp - DynamicVialGetNumberOfEntries");

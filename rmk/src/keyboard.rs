@@ -7,6 +7,9 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
+use rmk_types::action::{Action, KeyAction};
+use rmk_types::hid_state::{HidModifiers, HidMouseButtons};
+use rmk_types::keycode::{KeyCode, ModifierCombination};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {
@@ -14,19 +17,16 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::action::{Action, KeyAction};
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::KeyboardReport;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
-use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard_macros::MacroOperation;
-use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
 use crate::morse::{MorseMode, MorsePattern, TAP};
@@ -2138,12 +2138,12 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::action::KeyAction;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::hid_state::HidModifiers;
     use crate::{a, k, layer, mo, th};
+    use rmk_types::action::KeyAction;
 
     // Init logger for tests
     #[ctor::ctor]
