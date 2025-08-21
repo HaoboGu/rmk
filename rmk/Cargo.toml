@@ -34,7 +34,7 @@ futures = { version = "0.3", default-features = false, features = [
     "async-await",
 ] }
 
-heapless = "0.8"
+heapless = "0.9"
 usbd-hid = "0.8.2"
 bitfield-struct = "0.11"
 static_cell = "2"
@@ -53,7 +53,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.2.4", features = [
+trouble-host = { version = "0.2.4", git = "https://github.com/haobogu/trouble", rev = "c439474", features = [
     "gatt",
     "scan",
     "derive",
@@ -139,7 +139,7 @@ defmt = [
     "postcard/use-defmt",
     "trouble-host?/defmt",
     "bt-hci?/defmt",
-    "heapless/defmt-03",
+    "heapless/defmt",
 ]
 
 log = ["dep:log", "trouble-host?/log"]

@@ -58,6 +58,8 @@ rand_chacha = { version = "0.3", default-features = false }
 
 [patch.crates-io]
 embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "7ea8107" }
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "7ea8107" }
 
 
 [build-dependencies]
