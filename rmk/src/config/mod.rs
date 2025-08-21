@@ -36,6 +36,7 @@ pub struct BehaviorConfig {
     pub tap_dance: TapDancesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+    pub autoshift: AutoShiftConfig,
 }
 
 /// Configurations for morse behavior
@@ -198,6 +199,42 @@ impl Default for KeyboardUsbConfig<'_> {
             manufacturer: "RMK",
             product_name: "RMK Keyboard",
             serial_number: "vial:f64c2b3c:000001",
+        }
+    }
+}
+
+/// AutoShift configuration
+#[derive(Clone, Debug)]
+pub struct AutoShiftConfig {
+    /// Enable/disable AutoShift globally
+    pub enable: bool,
+    /// Set of keys that support AutoShift
+    pub enabled_keys: AutoShiftKeySet,
+}
+
+/// Configuration for which keys support AutoShift
+#[derive(Clone, Debug)]
+pub struct AutoShiftKeySet {
+    pub letters: bool, // A-Z
+    pub numbers: bool, // 0-9
+    pub symbols: bool, // ;:'",./<>? etc.
+}
+
+impl Default for AutoShiftConfig {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            enabled_keys: AutoShiftKeySet::default(),
+        }
+    }
+}
+
+impl Default for AutoShiftKeySet {
+    fn default() -> Self {
+        Self {
+            letters: false,
+            numbers: false,
+            symbols: false,
         }
     }
 }

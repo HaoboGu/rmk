@@ -5,7 +5,7 @@ use num_enum::FromPrimitive;
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::hid_state::HidModifiers;
+use crate::{action::Action, hid_state::HidModifiers};
 
 /// To represent all combinations of modifiers, at least 5 bits are needed.
 /// 1 bit for Left/Right, 4 bits for modifier type. Represented in LSB format.
@@ -1235,5 +1235,36 @@ impl KeyCode {
             KeyCode::SystemWake => Some(SystemControlKey::WakeUp),
             _ => None,
         }
+    }
+
+    /// Check if this keycode supports AutoShift based on the provided configuration
+    pub fn supports_autoshift(self, config: &crate::config::AutoShiftKeySet) -> bool {
+        if KeyCode::A <= self && self <= KeyCode::Z {
+            config.letters
+        } else if KeyCode::Kc1 <= self && self <= KeyCode::Kc0 {
+            config.numbers
+        } else if matches!(
+            self,
+            KeyCode::Semicolon
+                | KeyCode::Quote
+                | KeyCode::Comma
+                | KeyCode::Dot
+                | KeyCode::Slash
+                | KeyCode::Grave
+                | KeyCode::LeftBracket
+                | KeyCode::RightBracket
+                | KeyCode::Backslash
+                | KeyCode::Minus
+                | KeyCode::Equal
+        ) {
+            config.symbols
+        } else {
+            false
+        }
+    }
+
+    /// Get the shifted version of this keycode as an Action
+    pub fn get_shifted_action(self) -> Option<crate::action::Action> {
+        Some(Action::KeyWithModifier(self, ModifierCombination::SHIFT))
     }
 }
