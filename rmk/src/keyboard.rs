@@ -257,6 +257,45 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         KEYBOARD_REPORT_CHANNEL.sender().send(report).await
     }
 
+    /// Check if a key action is an AutoShift-generated TapHold action
+    fn is_autoshift_key(&self, action: &KeyAction) -> bool {
+        if let KeyAction::TapHold(tap_action, _) = action {
+            if let Action::Key(keycode) = tap_action {
+                let behavior_config = &self.keymap.borrow().behavior;
+                return keycode.supports_autoshift(&behavior_config.autoshift.enabled_keys);
+            }
+        }
+        false
+    }
+
+    /// Check if AutoShift should be applied to the given key action
+    fn should_apply_autoshift(&self, action: &KeyAction) -> bool {
+        let behavior_config = &self.keymap.borrow().behavior;
+
+        // AutoShift must be enabled globally
+        if !behavior_config.autoshift.enable {
+            return false;
+        }
+
+        // Only apply to Single key actions (not existing TapHold or other complex actions)
+        match action {
+            KeyAction::Single(Action::Key(keycode)) => {
+                keycode.supports_autoshift(&behavior_config.autoshift.enabled_keys)
+            }
+            _ => false,
+        }
+    }
+
+    /// Create an AutoShift TapHold action from a regular key action
+    fn create_autoshift_action(&self, action: &KeyAction) -> KeyAction {
+        if let KeyAction::Single(Action::Key(keycode)) = action {
+            if let Some(shifted_action) = keycode.get_shifted_action() {
+                return KeyAction::TapHold(Action::Key(*keycode), shifted_action);
+            }
+        }
+        *action
+    }
+
     /// Get a copy of the next timeout key in the buffer,
     /// which is either a combo component that is waiting for other combo keys,
     /// or a morse key that is in the pressed or released state.
@@ -346,20 +385,39 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         update_activity_time();
 
         // Process key
-        let key_action = &self.keymap.borrow_mut().get_action_with_layer_cache(event);
+        let mut key_action = self.keymap.borrow_mut().get_action_with_layer_cache(event);
 
         if self.combo_on {
-            if let (Some(key_action), is_combo) = self.process_combo(key_action, event).await {
+            if let (Some(mut key_action), is_combo) = self.process_combo(&key_action, event).await {
+                // Check AutoShift
+                if self.should_apply_autoshift(&key_action) {
+                    debug!("Applying AutoShift transformation to key: {:?}", key_action);
+                    key_action = self.create_autoshift_action(&key_action)
+                };
                 self.process_key_action(&key_action, event, is_combo).await
             } else {
                 LoopState::OK
             }
         } else {
-            self.process_key_action(key_action, event, false).await
+            if self.should_apply_autoshift(&key_action) {
+                debug!("Applying AutoShift transformation to key: {:?}", key_action);
+                key_action = self.create_autoshift_action(&key_action)
+            };
+            self.process_key_action(&key_action, event, false).await
         }
     }
 
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
+        // Apply AutoShift transformation if applicable
+        let autoshift_action = if self.should_apply_autoshift(key_action) {
+            debug!("Applying AutoShift transformation to key: {:?}", key_action);
+            Some(self.create_autoshift_action(key_action))
+        } else {
+            None
+        };
+
+        let key_action = autoshift_action.as_ref().unwrap_or(key_action);
+
         // When pressing a morse key, check flow tap first.
         if event.pressed
             && self.keymap.borrow().behavior.tap_hold.enable_hrm
@@ -541,12 +599,17 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 }
                 HeldKeyDecision::Release => {
                     // Releasing the current key, will always be tapping, because timeout isn't here
+                    let mut is_autoshift_key = false;
                     if let Some(mut held_key) = self.held_buffer.remove_if(|k| k.event.pos == pos) {
                         let key_action = if keyboard_state_updated {
                             self.keymap.borrow_mut().get_action_with_layer_cache(held_key.event)
                         } else {
                             held_key.action
                         };
+
+                        // Check if this is an AutoShift key before processing
+                        is_autoshift_key = self.is_autoshift_key(&key_action);
+
                         debug!("Processing current key before releasing: {:?}", held_key.event);
                         if !key_action.is_morse() {
                             match key_action {
@@ -591,7 +654,10 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                     // After processing current key in `Release` state, mark the `decision_for_current_key` to `CleanBuffer`
                     // That means all normal keys pressed AFTER the press of current releasing key will be fired
-                    decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                    // However, for AutoShift keys, we want them to be independent and not interfere with each other
+                    if !is_autoshift_key {
+                        decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                    }
                 }
                 HeldKeyDecision::Normal => {
                     // Check if the normal keys in the buffer should be triggered.

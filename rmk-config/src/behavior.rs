@@ -81,6 +81,7 @@ impl crate::KeyboardTomlConfig {
                         return Err("keyboard.toml: number of tap dances is greater than tap_dance_max_num configured under [rmk] section".to_string());
                     }
                 }
+                behavior.autoshift = behavior.autoshift.or(default.autoshift);
                 Ok(behavior)
             }
             None => Ok(default),
