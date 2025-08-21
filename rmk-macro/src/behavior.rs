@@ -161,15 +161,15 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
                 let operations = m.operations.iter().map(|op| match op {
                     rmk_config::MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Delay { duration } => {
                         let millis = duration.0 as u16;
@@ -362,9 +362,9 @@ impl quote::ToTokens for StateBitsMacro {
 
         tokens.extend(quote! {
             ::rmk::fork::StateBits::new_from(
-                ::rmk::hid_state::HidModifiers::new_from(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
+                ::rmk::types::hid_state::HidModifiers::new_from(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
                 ::rmk::light::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
-                ::rmk::hid_state::HidMouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
+                ::rmk::types::hid_state::HidMouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
         });
     }
 }

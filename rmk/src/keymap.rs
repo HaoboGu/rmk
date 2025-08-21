@@ -410,11 +410,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use super::{_reorder_combos, Combo};
     use crate::fork::{Fork, StateBits};
-    use crate::hid_state::HidModifiers;
-    use rmk_types::keycode::KeyCode;
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
     use rmk_types::action::{Action, KeyAction};
+    use rmk_types::hid_state::HidModifiers;
+    use rmk_types::keycode::KeyCode;
 
     #[test]
     fn test_fill_vec() {

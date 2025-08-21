@@ -14,7 +14,7 @@ The default keymap could also be defined at a Rust source file, There are `keyma
 
 ```rust
 // https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/src/keymap.rs
-use rmk::action::KeyAction;
+use rmk::types::action::KeyAction;
 use rmk::{a, k, layer, mo};
 pub(crate) const COL: usize = 14;
 pub(crate) const ROW: usize = 5;

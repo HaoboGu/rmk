@@ -2141,9 +2141,9 @@ mod test {
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
-    use crate::hid_state::HidModifiers;
     use crate::{a, k, layer, mo, th};
     use rmk_types::action::KeyAction;
+    use rmk_types::hid_state::HidModifiers;
 
     // Init logger for tests
     #[ctor::ctor]
