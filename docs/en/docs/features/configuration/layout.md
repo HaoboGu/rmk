@@ -118,7 +118,9 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 7. For shifted key, use `SHIFTED(key)`
 
-8. For Morse/Tap Dance, use `TD(n)`
+8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
+
+9. For keyboard macros, use `Macro(n)`
 
 ## Aliases
 
