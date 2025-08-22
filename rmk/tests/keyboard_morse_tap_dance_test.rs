@@ -1,12 +1,12 @@
-/// Test cases for tap-dance
+/// Test cases for tap-dance like morses
 pub mod common;
 
 use heapless::Vec;
 use rmk::action::Action;
-use rmk::config::{BehaviorConfig, TapDancesConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::tap_dance::TapDance;
+use rmk::morse::Morse;
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
 
@@ -19,23 +19,23 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
     ];
 
     let behavior_config = BehaviorConfig {
-        tap_dance: TapDancesConfig {
-            tap_dances: Vec::from_slice(&[
-                TapDance::new_from_vial(
+        morse: MorsesConfig {
+            morses: Vec::from_slice(&[
+                Morse::new_from_vial(
                     Action::Key(KeyCode::A),
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
                     250,
                 ),
-                TapDance::new_from_vial(
+                Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
                     250,
                 ),
-                TapDance::new_from_vial(
+                Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::SHIFT),
                     Action::Key(KeyCode::Kp2),

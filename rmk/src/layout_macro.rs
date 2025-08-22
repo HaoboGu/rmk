@@ -163,17 +163,26 @@ macro_rules! encoder {
     };
 }
 
-/// Create a tap dance action
+/// Create a Morse(index) action (in Vial its simplest form is known as "Tap Dance", so `td` name is used)
 #[macro_export]
 macro_rules! td {
     ($index: literal) => {
-        $crate::action::KeyAction::TapDance($index)
+        $crate::action::KeyAction::Morse($index)
+    };
+}
+
+/// Create a Morse(index) action (in Vial it will appear as "Tap Dance")
+#[macro_export]
+macro_rules! morse {
+    ($index: literal) => {
+        $crate::action::KeyAction::Morse($index)
     };
 }
 
 // Create a macro trigger action
+// Use `macros` because `macro` is a key word in Rust
 #[macro_export]
-macro_rules! m {
+macro_rules! macros {
     ($index: literal) => {
         $crate::action::KeyAction::Single($crate::action::Action::TriggerMacro($index))
     };

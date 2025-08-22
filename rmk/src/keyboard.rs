@@ -29,9 +29,9 @@ use crate::keyboard_macros::MacroOperation;
 use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
 use crate::light::LedIndicator;
+use crate::morse::{MorseMode, MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
-use crate::tap_dance::{MorsePattern, TAP, TapHoldMode};
 use crate::{FORK_MAX_NUM, boot};
 
 pub(crate) mod combo;
@@ -582,7 +582,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                                         held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);
                                     }
                                 }
-                                _ => {} // For tap-dance, the releasing will not be processed immediately, so just ignore it
+                                _ => {} // For morse, the releasing will not be processed immediately, so just ignore it
                             }
                             // Push back after triggered hold
                             self.held_buffer.push_without_sort(held_key);
@@ -679,11 +679,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                         // Check morse key mode
                         match tap_hold_mode {
-                            TapHoldMode::PermissiveHold => {
+                            MorseMode::PermissiveHold => {
                                 // Permissive hold mode checks key releases, so push current key press into buffer.
                                 decision_for_current_key = KeyBehaviorDecision::Buffer;
                             }
-                            TapHoldMode::HoldOnOtherPress => {
+                            MorseMode::HoldOnOtherPress => {
                                 debug!(
                                     "Trigger morse key due to hold on other key press: {:?}",
                                     held_key.action
@@ -709,7 +709,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                         // The current key is being released, check only the held key in permissive hold mode
                         if decision_for_current_key != KeyBehaviorDecision::Release
-                            && tap_hold_mode == TapHoldMode::PermissiveHold
+                            && tap_hold_mode == MorseMode::PermissiveHold
                         {
                             debug!("Permissive hold!");
                             // Check first current releasing key is in the buffer, AND after the current key

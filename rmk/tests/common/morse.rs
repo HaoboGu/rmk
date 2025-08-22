@@ -1,9 +1,9 @@
 use heapless::Vec;
 use rmk::action::Action;
-use rmk::config::{BehaviorConfig, TapDancesConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::tap_dance::{MorsePattern, TapDance};
+use rmk::morse::{Morse, MorsePattern};
 use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;
@@ -20,7 +20,7 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
         [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
     ];
 
-    let morse0 = TapDance {
+    let morse0 = Morse {
         actions: Vec::from_slice(&[
             (MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)),
             (MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)),
@@ -36,8 +36,8 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig) -> Keyboard
     };
 
     let behavior_config = BehaviorConfig {
-        tap_dance: TapDancesConfig {
-            tap_dances: Vec::from_slice(&[morse0]).unwrap(),
+        morse: MorsesConfig {
+            morses: Vec::from_slice(&[morse0]).unwrap(),
         },
         ..behavior_config
     };

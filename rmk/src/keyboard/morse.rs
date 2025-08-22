@@ -5,7 +5,7 @@ use crate::config::BehaviorConfig;
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
-use crate::tap_dance::{HOLD, MorsePattern, TAP, TapHoldMode};
+use crate::morse::{HOLD, MorseMode, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -187,9 +187,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 HOLD => *hold_action,
                 _ => Action::No,
             },
-            KeyAction::TapDance(idx) => behavior_config
-                .tap_dance
-                .tap_dances
+            KeyAction::Morse(idx) => behavior_config
+                .morse
+                .morses
                 .get(*idx as usize)
                 .map(|morse| morse.get(pattern).unwrap_or(Action::No))
                 .unwrap_or(Action::No),
@@ -199,9 +199,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     pub fn morse_timeout(behavior_config: &BehaviorConfig, keyAction: &KeyAction) -> Duration {
         match keyAction {
-            KeyAction::TapDance(idx) => behavior_config
-                .tap_dance
-                .tap_dances
+            KeyAction::Morse(idx) => behavior_config
+                .morse
+                .morses
                 .get(*idx as usize)
                 .map(|td| Duration::from_millis(td.timeout_ms as u64)),
             _ => None,
@@ -210,11 +210,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
-    pub fn tap_hold_mode(behavior_config: &BehaviorConfig, key_action: &KeyAction) -> (TapHoldMode, bool) {
+    pub fn tap_hold_mode(behavior_config: &BehaviorConfig, key_action: &KeyAction) -> (MorseMode, bool) {
         match key_action {
-            KeyAction::TapDance(idx) => behavior_config
-                .tap_dance
-                .tap_dances
+            KeyAction::Morse(idx) => behavior_config
+                .morse
+                .morses
                 .get(*idx as usize)
                 .map(|td| (td.mode, td.unilateral_tap)),
             _ => None,
@@ -224,12 +224,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, key_action, TAP)
             {
                 if tap_key_code.is_letter() || tap_key_code.is_home_row() {
-                    (TapHoldMode::PermissiveHold, true)
+                    (MorseMode::PermissiveHold, true)
                 } else {
                     match Self::action_from_pattern(behavior_config, key_action, HOLD) {
                         Action::Modifier(_) | Action::LayerOn(_) => {
                             // MT/LT on non-letter, non-home-row keys
-                            (TapHoldMode::HoldOnOtherPress, false)
+                            (MorseMode::HoldOnOtherPress, false)
                         }
                         _ => (behavior_config.tap_hold.mode, behavior_config.tap_hold.unilateral_tap),
                     }
@@ -254,9 +254,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     Some(*tap_action)
                 }
             }
-            KeyAction::TapDance(idx) => behavior_config
-                .tap_dance
-                .tap_dances
+            KeyAction::Morse(idx) => behavior_config
+                .morse
+                .morses
                 .get(*idx as usize)
                 .and_then(|td| td.try_predict_final_action(pattern_start)),
             _ => None,

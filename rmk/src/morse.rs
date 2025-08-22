@@ -65,39 +65,38 @@ impl MorsePattern {
     }
 }
 
-/// Definition of a tap dance key.
+/// Definition of a morse key.
 ///
-/// A tap dance key is a key that behaves differently according to the pattern of a tap/hold sequence.
+/// A morse key is a key that behaves differently according to the pattern of a tap/hold sequence.
 /// The maximum number of taps is limited to 15 by the internal u16 representation of MorsePattern.
-/// There is a lists of (pattern, corresponding action) pairs for each tap_dance key:
+/// There is a lists of (pattern, corresponding action) pairs for each morse key:
 /// The number of pairs is limited by MAX_PATTERNS_PER_KEY, which is a const generic parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TapDance {
+pub struct Morse {
     /// The timeout time for each operation in milliseconds
     pub timeout_ms: u16,
     /// The decision mode of the morse key
-    pub mode: TapHoldMode,
+    pub mode: MorseMode,
     /// If the unilateral tap is enabled
     pub unilateral_tap: bool,
-
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
     //TODO: introduce settings to set gap and hold timeout separately
 }
 
-impl Default for TapDance {
+impl Default for Morse {
     fn default() -> Self {
         Self {
             timeout_ms: 250,
-            mode: TapHoldMode::HoldOnOtherPress,
+            mode: MorseMode::HoldOnOtherPress,
             unilateral_tap: false,
             actions: Vec::default(),
         }
     }
 }
 
-impl TapDance {
+impl Morse {
     pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
         let mut result = Self::default();
         if tap != Action::No {
@@ -116,8 +115,8 @@ impl TapDance {
         result
     }
 
-    /// Create a new tap dance with custom actions for each tap count
-    /// This allows for more flexible tap dance configurations
+    /// Create a new morse with custom actions for each tap count
+    /// This allows for more flexible morse configurations
     pub fn new_with_actions(
         tap_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         hold_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
@@ -221,7 +220,7 @@ impl TapDance {
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum TapHoldMode {
+pub enum MorseMode {
     /// Normal mode, the decision is made when timeout
     Normal,
     /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
