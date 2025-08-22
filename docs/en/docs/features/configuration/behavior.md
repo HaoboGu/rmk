@@ -147,10 +147,10 @@ RMK provides three methods for defining a Morse key.
 
 This method is fully compatible with Vial's Tap Dance, it defines four specific actions:
 
-1 `tap`: The action to be triggered on the first tap within the tapping term. This is the default action when the key is tapped once.
-2 `hold`: The action to be triggered when the key is held down (not tapped) beyond the tapping term.
-3 `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
-4 `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
+1. `tap`: The action to be triggered on the first tap. This is the default action when the key is tapped once.
+2. `hold`: The action to be triggered when the key is held down (not tapped) beyond the tapping term.
+3. `hold_after_tap`: The action to be triggered when the key is held down after being tapped once.
+4. `double_tap`: The action to be triggered when the key is tapped twice within the tapping term.
 
 Example:
 
@@ -166,8 +166,8 @@ morses = [
 
 This is an extended version of tap dance. It allows you to define sequences of actions for multiple taps and for holds that occur after a specific number of taps.
 
-- `tap_actions`: An array of actions triggered by sequential taps. Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. Tapping 5 times will trigger the 5th item in the `tap_actions` (`tap_actions[4]`). If the tap count exceeds the length of the array, the last action is used.
-- `hold_actions`: An array of actions triggered when the key is held *after* a certain number of taps. When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on. Holding the key after tapping 5 times will trigger 6th item in the `hold_actions` list (`hold_actions[5]`).
+- `tap_actions`: An array of actions triggered by sequential taps. Each tap within the tapping term increments the tap count and triggers the corresponding action from the `tap_actions` array. For example, `tap_actions = ["F1", "F2", "F3"]` means a single tap triggers "F1", double tap triggers "F2", triple tap triggers "F3", and so on. If the tap count exceeds the length of the array, the last action is used.
+- `hold_actions`: An array of actions triggered when the key is held *after* a certain number of taps. When a key is held after multiple taps, the corresponding action from the `hold_actions` array is triggered. For example, `hold_actions = ["MO(1)", "MO(2)", "MO(3)"]` means holding after one tap triggers "MO(1)", holding after two taps triggers "MO(2)", and so on.
 
 Example:
 
