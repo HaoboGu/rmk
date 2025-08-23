@@ -288,3 +288,15 @@ aside:hover {
     }
   }
 }
+
+/* 隐藏rmk title */
+.VPNav {
+  .title {
+    span {
+      display: none;
+    }
+  }
+  .VPNavBarSearch {
+    padding-left: 1rem;
+  }
+}
