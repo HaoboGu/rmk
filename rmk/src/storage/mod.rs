@@ -52,6 +52,8 @@ pub(crate) enum FlashOperationMessage {
     PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
+    // Clear the layout info
+    ResetLayout,
     // Clear info of given slot number
     ClearSlot(u8),
     // Layout option
@@ -782,6 +784,10 @@ pub struct Storage<
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     pub(crate) buffer: [u8; get_buffer_size()],
+
+    factory_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    factory_encoders: Option<[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+    factory_behavior: config::BehaviorConfig,
 }
 
 /// Read out storage config, update and then save back.
@@ -858,6 +864,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             flash,
             storage_range,
             buffer: [0; get_buffer_size()],
+
+            factory_keymap: *keymap,
+            factory_encoders: encoder_map.as_ref().map(|m| **m),
+            factory_behavior: behavior_config.clone(),
         };
 
         // Check whether keymap and configs have been storaged in flash
@@ -887,6 +897,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .await
                 .ok();
             }
+        } else if storage_config.clear_layout {
+            debug!("clear_layout=true; overwriting layout items without erase.");
+
+            let encoder_map = encoder_map.as_ref().map(|m| &**m);
+
+            let _ = storage.reset_layout_only(keymap, &encoder_map, behavior_config).await;
         }
 
         storage
@@ -911,6 +927,15 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 FlashOperationMessage::Reset => {
                     sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
+                }
+                FlashOperationMessage::ResetLayout => {
+                    let keymap_copy = self.factory_keymap;
+                    let behavior_copy = self.factory_behavior.clone();
+                    let enc_copy = self.factory_encoders;
+
+                    let enc_ro = enc_copy.as_ref().map(|m| &*m);
+
+                    self.reset_layout_only(&keymap_copy, &enc_ro, &behavior_copy).await
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
@@ -1414,6 +1439,95 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                     .map_err(|e| print_storage_error::<F>(e))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn reset_layout_only(
+        &mut self,
+        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+        encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        behavior: &config::BehaviorConfig,
+    ) -> Result<(), SSError<F::Error>> {
+        let mut cache = NoCache::new();
+
+        let layout_config = StorageData::LayoutConfig(LayoutConfig {
+            default_layer: 0,
+            layout_option: 0,
+        });
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut cache,
+            &mut self.buffer,
+            &layout_config.key(),
+            &layout_config,
+        )
+        .await?;
+
+        let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
+            morse_timeout: behavior.tap_hold.timeout.as_millis() as u16,
+            combo_timeout: behavior.combo.timeout.as_millis() as u16,
+            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            tap_interval: behavior.tap.tap_interval,
+            tap_capslock_interval: behavior.tap.tap_capslock_interval,
+            prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
+            unilateral_tap: behavior.tap_hold.unilateral_tap,
+        });
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut cache,
+            &mut self.buffer,
+            &behavior_config.key(),
+            &behavior_config,
+        )
+        .await?;
+
+        for (layer, layer_data) in keymap.iter().enumerate() {
+            for (row, row_data) in layer_data.iter().enumerate() {
+                for (col, action) in row_data.iter().enumerate() {
+                    let item = StorageData::KeymapKey(KeymapKey {
+                        row,
+                        col,
+                        layer,
+                        action: *action,
+                    });
+                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut cache,
+                        &mut self.buffer,
+                        &key,
+                        &item,
+                    )
+                    .await?;
+                }
+            }
+        }
+
+        if let Some(encoder_map) = encoder_map {
+            for (layer, layer_data) in encoder_map.iter().enumerate() {
+                for (idx, action) in layer_data.iter().enumerate() {
+                    let item = StorageData::EncoderConfig(EncoderConfig {
+                        idx,
+                        layer,
+                        action: *action,
+                    });
+                    let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut cache,
+                        &mut self.buffer,
+                        &key,
+                        &item,
+                    )
+                    .await?;
                 }
             }
         }

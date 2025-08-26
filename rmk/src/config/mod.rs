@@ -25,7 +25,7 @@ pub struct RmkConfig<'a> {
 }
 
 /// Config for configurable action behavior
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
@@ -143,6 +143,7 @@ pub struct StorageConfig {
     // Number of sectors used for storage, >= 2.
     pub num_sectors: u8,
     pub clear_storage: bool,
+    pub clear_layout: bool,
 }
 
 impl Default for StorageConfig {
@@ -151,6 +152,7 @@ impl Default for StorageConfig {
             start_addr: 0,
             num_sectors: 2,
             clear_storage: false,
+            clear_layout: false,
         }
     }
 }

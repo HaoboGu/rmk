@@ -350,6 +350,8 @@ pub struct StorageConfig {
     pub enabled: bool,
     // Clear on the storage at reboot, set this to true if you want to reset the keymap
     pub clear_storage: Option<bool>,
+    // Clear on the layout at reboot, set this to true if you want to reset the layout
+    pub clear_layout: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
