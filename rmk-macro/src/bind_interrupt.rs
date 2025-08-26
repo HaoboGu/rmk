@@ -85,7 +85,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_dle_central()?
                     .support_phy_update_central()?
                     .support_phy_update_peripheral()?
-                    .support_le_2m_phy()?
+                    // .support_le_2m_phy()?
                     #tx_power
                     .central_count(1)?
                     .peripheral_count(1)?
@@ -98,7 +98,7 @@ pub(crate) fn bind_interrupt_default(keyboard_config: &KeyboardTomlConfig) -> To
                     .support_peripheral()?
                     .support_dle_peripheral()?
                     .support_phy_update_peripheral()?
-                    .support_le_2m_phy()?
+                    // .support_le_2m_phy()?
                     #tx_power
                     .peripheral_count(1)?
                     .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?

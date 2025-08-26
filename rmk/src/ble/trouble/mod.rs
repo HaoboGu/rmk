@@ -586,7 +586,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                     supervision_timeout.as_millis()
                 );
             }
-            _ => (),
+            // _ => (),
         }
     }
     info!("[gatt] task finished");
@@ -688,8 +688,8 @@ pub(crate) async fn set_conn_params<
             min_connection_interval: Duration::from_millis(15),
             max_connection_interval: Duration::from_millis(15),
             max_latency: 30,
-            max_event_length: Duration::from_secs(0),
-            min_event_length: Duration::from_secs(0),
+            // max_event_length: Duration::from_secs(0),
+            event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(6),
         },
     )
@@ -705,8 +705,8 @@ pub(crate) async fn set_conn_params<
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
             max_latency: 99,
-            min_event_length: Duration::from_secs(0),
-            max_event_length: Duration::from_secs(0),
+            // min_event_length: Duration::from_secs(0),
+            event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(5),
         },
     )

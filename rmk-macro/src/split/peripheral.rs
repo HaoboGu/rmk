@@ -103,7 +103,7 @@ fn expand_bind_interrupt_for_split_peripheral(chip: &ChipModel, communication: &
                         .support_dle_central()?
                         .support_phy_update_central()?
                         .support_phy_update_peripheral()?
-                        .support_le_2m_phy()?
+                        // .support_le_2m_phy()?
                         #tx_power
                         .peripheral_count(1)?
                         .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
