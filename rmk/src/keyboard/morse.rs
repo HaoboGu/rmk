@@ -2,9 +2,10 @@ use embassy_time::{Duration, Instant};
 
 use crate::action::{Action, KeyAction};
 use crate::config::BehaviorConfig;
-use crate::event::KeyboardEvent;
+use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
+use crate::keycode::KeyCode;
 use crate::morse::{HOLD, MorseMode, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
@@ -177,7 +178,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     pub fn action_from_pattern(
-        behavior_config: &BehaviorConfig,
+        behavior_config: &BehaviorConfig<ROW, COL>,
         keyAction: &KeyAction,
         pattern: MorsePattern,
     ) -> Action {
@@ -197,7 +198,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    pub fn morse_timeout(behavior_config: &BehaviorConfig, keyAction: &KeyAction) -> Duration {
+    pub fn morse_timeout(behavior_config: &BehaviorConfig<ROW, COL>, keyAction: &KeyAction) -> Duration {
         match keyAction {
             KeyAction::Morse(idx) => behavior_config
                 .morse
@@ -209,8 +210,37 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         .unwrap_or_else(|| behavior_config.tap_hold.timeout)
     }
 
+    fn is_home_row(behavior_config: &BehaviorConfig<ROW, COL>, key_action: &KeyAction, pos: KeyboardEventPos) -> bool {
+        if let KeyboardEventPos::Key(pos) = pos
+            && let Some(info) = behavior_config.key_info
+        {
+            info[pos.row as usize][pos.col as usize].hrm
+        } else if let Action::Key(key_code) = Self::action_from_pattern(behavior_config, key_action, TAP) {
+            match key_code {
+                KeyCode::A
+                | KeyCode::S
+                | KeyCode::D
+                | KeyCode::F
+                | KeyCode::G
+                | KeyCode::H
+                | KeyCode::J
+                | KeyCode::K
+                | KeyCode::L
+                | KeyCode::Semicolon
+                | KeyCode::Quote => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
     /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
-    pub fn tap_hold_mode(behavior_config: &BehaviorConfig, key_action: &KeyAction) -> (MorseMode, bool) {
+    pub fn tap_hold_mode(
+        behavior_config: &BehaviorConfig<ROW, COL>,
+        key_action: &KeyAction,
+        pos: KeyboardEventPos,
+    ) -> (MorseMode, bool) {
         match key_action {
             KeyAction::Morse(idx) => behavior_config
                 .morse
@@ -220,10 +250,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             _ => None,
         }
         .unwrap_or_else(|| {
-            if behavior_config.tap_hold.enable_hrm // TODO instead of this let the HRM keycodes configurable!
-                && let Action::Key(tap_key_code) = Self::action_from_pattern(behavior_config, key_action, TAP)
-            {
-                if tap_key_code.is_letter() || tap_key_code.is_home_row() {
+            if behavior_config.tap_hold.enable_hrm {
+                if Self::is_home_row(&behavior_config, key_action, pos) {
                     (MorseMode::PermissiveHold, true)
                 } else {
                     match Self::action_from_pattern(behavior_config, key_action, HOLD) {
@@ -242,7 +270,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)
     pub fn try_predict_final_action(
-        behavior_config: &BehaviorConfig,
+        behavior_config: &BehaviorConfig<ROW, COL>,
         keyAction: &KeyAction,
         pattern_start: MorsePattern,
     ) -> Option<Action> {

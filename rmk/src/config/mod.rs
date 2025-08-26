@@ -24,9 +24,23 @@ pub struct RmkConfig<'a> {
     pub ble_battery_config: BleBatteryConfig<'a>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hand {
+    Unknown,
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct KeyInfo {
+    pub hand: Hand,
+    pub hrm: bool,
+}
+
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
-pub struct BehaviorConfig {
+pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
+    pub key_info: Option<[[KeyInfo; COL_NUM]; ROW_NUM]>,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
     pub tap_hold: TapHoldConfig,

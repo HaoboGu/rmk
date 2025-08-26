@@ -48,7 +48,7 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
         ..Default::default()
     };
 
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<1, 4>> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }

@@ -3,9 +3,14 @@ use crate::{BehaviorConfig, MacroOperation};
 impl crate::KeyboardTomlConfig {
     pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
         let default = self.behavior.clone().unwrap_or_default();
-        let layout = self.get_layout_config().unwrap();
+        let (layout, key_info) = self.get_layout_config().unwrap();
         match self.behavior.clone() {
             Some(mut behavior) => {
+                behavior.key_info = if key_info.is_empty() {
+                    default.key_info //TODO: fill with L/R based on column number, HRM based on ASDFJKL; in default layer
+                } else {
+                    Some(key_info)
+                };
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
                         if tri_layer.upper >= layout.layers {

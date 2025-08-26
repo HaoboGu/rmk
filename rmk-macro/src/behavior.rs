@@ -3,11 +3,35 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig, OneShotConfig,
+    CombosConfig, ForksConfig, KeyInfo, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig, OneShotConfig,
     TapHoldConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
+
+/// Push rows in the key_info
+fn expand_key_info(info: &Vec<Vec<KeyInfo>>) -> proc_macro2::TokenStream {
+    let mut rows = vec![];
+    for row in info {
+        rows.push(expand_key_info_row(row));
+    }
+    quote! { Some([#(#rows), *]) }
+}
+
+/// Push keys info in the row
+fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
+    let mut key_info = vec![];
+    for key in row {
+        let hand = match key.hand {
+            'l' | 'L' => quote! { Hand::Left },
+            'r' | 'R' => quote! { Hand::Right },
+            _ => quote! { Hand::Unknown },
+        };
+        let hrm = key.hrm;
+        key_info.push(quote! { KeyInfo { #hand, #hrm } });
+    }
+    quote! { [#(#key_info), *] }
+}
 
 fn expand_tri_layer(tri_layer: &Option<TriLayerConfig>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -439,6 +463,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let behavior = keyboard_config.get_behavior_config().unwrap();
+    let key_info = expand_key_info(&behavior.key_info.unwrap_or_default());
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let tap_hold = expand_tap_hold_config(&behavior.tap_hold);
     let one_shot = expand_one_shot(&behavior.one_shot);
@@ -449,6 +474,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
 
     quote! {
         let mut behavior_config = ::rmk::config::BehaviorConfig {
+            key_info: #key_info,
             tri_layer: #tri_layer,
             tap_hold: #tap_hold,
             one_shot: #one_shot,

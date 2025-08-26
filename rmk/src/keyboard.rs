@@ -17,8 +17,9 @@ use {
 use crate::action::{Action, KeyAction};
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
+use crate::config::{Hand, KeyInfo};
 use crate::descriptor::KeyboardReport;
-use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
 use crate::hid_state::{HidModifiers, HidMouseButtons};
@@ -621,6 +622,28 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         (keyboard_state_updated, decision_for_current_key)
     }
 
+    fn get_hand(key_info: &Option<[[KeyInfo; COL]; ROW]>, pos: KeyPos) -> Hand {
+        key_info
+            .map(|info| info[pos.row as usize][pos.col as usize].hand)
+            .unwrap_or_else(|| {
+                if COL >= ROW {
+                    // Horizontal
+                    if pos.col < (COL as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                } else {
+                    // Vertical
+                    if pos.row < (ROW as u8 / 2) {
+                        Hand::Left
+                    } else {
+                        Hand::Right
+                    }
+                }
+            })
+    }
+
     /// Make decisions for current key and each held key.
     ///
     /// This function iterates all held keys and makes decision for them if a special mode is triggered, such as permissive hold, etc.
@@ -672,7 +695,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
                     let (tap_hold_mode, unilateral_tap) =
-                        Self::tap_hold_mode(&self.keymap.borrow().behavior, &held_key.action);
+                        Self::tap_hold_mode(&self.keymap.borrow().behavior, &held_key.action, held_key.event.pos);
 
                     if event.pressed {
                         // The current key is being pressed
@@ -700,11 +723,20 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         if unilateral_tap
                             && event.pos != held_key.event.pos
                             && decision_for_current_key != KeyBehaviorDecision::Release
-                            && event.pos.is_same_hand::<ROW, COL>(held_key.event.pos)
+                            && let KeyboardEventPos::Key(pos1) = held_key.event.pos
+                            && let KeyboardEventPos::Key(pos2) = event.pos
                         {
-                            debug!("Unilateral tap triggered, resolve morse key as tapping");
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
-                            continue;
+                            let key_info = &self.keymap.borrow().behavior.key_info;
+
+                            let hand1 = Self::get_hand(key_info, pos1);
+                            let hand2 = Self::get_hand(key_info, pos2);
+
+                            if hand1 == hand2 && hand1 != Hand::Unknown {
+                                //if same hand
+                                debug!("Unilateral tap triggered, resolve morse key as tapping");
+                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::UnilateralTap));
+                                continue;
+                            }
                         }
 
                         // The current key is being released, check only the held key in permissive hold mode
@@ -2202,8 +2234,8 @@ mod test {
         }
     }
 
-    fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
-        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    fn create_test_keyboard_with_config(config: BehaviorConfig<5, 14>) -> Keyboard<'static, 5, 14, 2> {
+        static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<5, 14>> = static_cell::StaticCell::new();
         let behavior_config = BEHAVIOR_CONFIG.init(config);
 
         // Box::leak is acceptable in tests

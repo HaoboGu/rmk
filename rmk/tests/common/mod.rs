@@ -149,15 +149,15 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
     ]
 }
 
-pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
-    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
-    let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(config);
+pub fn create_test_keyboard_with_config(config: BehaviorConfig<5, 14>) -> Keyboard<'static, 5, 14, 2> {
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig<5, 14>> = static_cell::StaticCell::new();
+    let behavior_config: &'static mut BehaviorConfig<5, 14> = BEHAVIOR_CONFIG.init(config);
     Keyboard::new(wrap_keymap(get_keymap(), behavior_config))
 }
 
 pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
     keymap: [[[KeyAction; C]; R]; L],
-    config: &'static mut BehaviorConfig,
+    config: &'static mut BehaviorConfig<R, C>,
 ) -> &'a mut RefCell<KeyMap<'static, R, C, L>> {
     // Box::leak is acceptable in tests
     let leaked_keymap = Box::leak(Box::new(keymap));

@@ -815,7 +815,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage_config: &StorageConfig,
-        behavior_config: &config::BehaviorConfig,
+        behavior_config: &config::BehaviorConfig<ROW, COL>,
     ) -> Self {
         // Check storage setting
         assert!(
@@ -1281,7 +1281,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
     pub(crate) async fn read_behavior_config(
         &mut self,
-        behavior_config: &mut config::BehaviorConfig,
+        behavior_config: &mut config::BehaviorConfig<ROW, COL>,
     ) -> Result<(), ()> {
         if let Some(StorageData::BehaviorConfig(c)) = fetch_item::<u32, StorageData, _>(
             &mut self.flash,
@@ -1309,7 +1309,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        behavior: &config::BehaviorConfig,
+        behavior: &config::BehaviorConfig<ROW, COL>,
     ) -> Result<(), ()> {
         let mut cache = NoCache::new();
         // Save storage config

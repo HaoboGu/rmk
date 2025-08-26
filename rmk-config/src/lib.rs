@@ -406,10 +406,18 @@ pub struct LayoutConfig {
     pub keymap: Vec<Vec<Vec<String>>>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyInfo {
+    pub hand: char, // 'L' or 'R' or other chars
+    pub hrm: bool,
+}
+
 /// Configurations for actions behavior
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BehaviorConfig {
+    pub key_info: Option<Vec<Vec<KeyInfo>>>,
     pub tri_layer: Option<TriLayerConfig>,
     pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,

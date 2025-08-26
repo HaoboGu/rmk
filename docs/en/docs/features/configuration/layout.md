@@ -15,7 +15,10 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col)` coordinate pairs, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings
+The `matrix_map` is a string built from `(row, col, <l|r>, <hrm>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings
+The `L` / `R` is optional, can be used to associate each key to the left or right hand (this info is used during unilateral tap processing of home row keys).
+The `HRM` is also optional, can be used to mark the `home row`.
+
 
 ```toml
 # ┌───┬───┬───┬───┐
