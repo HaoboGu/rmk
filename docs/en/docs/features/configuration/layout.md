@@ -15,12 +15,25 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col, <l|r>, <hrm>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings
-The `L` / `R` is optional, can be used to associate each key to the left or right hand (this info is used during unilateral tap processing of home row keys).
-The `HRM` is also optional, can be used to mark the `home row`.
+The `matrix_map` is a string built from `(row, col, <hand>, <home_row>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
+With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
+The folowing optional fields are used mainly if `enable_hrm = true`:
+The `<hand>` is optional, can be used to associate each key to the left or right hand using the `L` or `R` values (this info is used during unilateral tap processing).
+The `<home_row>` is also optional, if given, marks the home row keys, its value is either `H` or `HR` or `HRM` (case insensitive, used to set PermissiveHold for the key) .
 
 ```toml
+# split ortho example for matrix map, with hand and home row information filled:
+matrix_map = """
+(0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
+(1, 0, L, H) (1, 1, L, H) (1, 2, L, H) (1, 3, L, H) (1, 4, L)         (1, 5, R)   (1, 6, R, H) (1, 7, R, H) (1, 8, R, H) (1, 9, R, H)
+(2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)   
+                                       (3, 3, L)    (3, 4, L)         (3, 5, R)   (3, 6, R) 
+"""
+```
+
+```toml
+# simple numpad example:
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤

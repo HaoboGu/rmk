@@ -214,7 +214,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
         {
-            info[pos.row as usize][pos.col as usize].hrm
+            info[pos.row as usize][pos.col as usize].home_row
         } else if let Action::Key(key_code) = Self::action_from_pattern(behavior_config, key_action, TAP) {
             match key_code {
                 KeyCode::A

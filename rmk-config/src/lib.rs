@@ -412,7 +412,7 @@ pub struct LayoutConfig {
 #[serde(deny_unknown_fields)]
 pub struct KeyInfo {
     pub hand: char, // 'L' or 'R' or other chars
-    pub hrm: bool,
+    pub home_row: bool,
 }
 
 /// Configurations for actions behavior

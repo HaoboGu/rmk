@@ -15,7 +15,7 @@ fn expand_key_info(info: &Vec<Vec<KeyInfo>>) -> proc_macro2::TokenStream {
     for row in info {
         rows.push(expand_key_info_row(row));
     }
-    quote! { Some([#(#rows), *]) }
+    quote! { [#(#rows), *] }
 }
 
 /// Push keys info in the row
@@ -23,12 +23,12 @@ fn expand_key_info_row(row: &Vec<KeyInfo>) -> proc_macro2::TokenStream {
     let mut key_info = vec![];
     for key in row {
         let hand = match key.hand {
-            'l' | 'L' => quote! { Hand::Left },
-            'r' | 'R' => quote! { Hand::Right },
-            _ => quote! { Hand::Unknown },
+            'l' | 'L' => quote! { rmk::config::Hand::Left },
+            'r' | 'R' => quote! { rmk::config::Hand::Right },
+            _ => quote! { rmk::config::Hand::Unknown },
         };
-        let hrm = key.hrm;
-        key_info.push(quote! { KeyInfo { #hand, #hrm } });
+        let home_row = key.home_row;
+        key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, home_row: #home_row } });
     }
     quote! { [#(#key_info), *] }
 }
@@ -462,7 +462,7 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 }
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
-    let behavior = keyboard_config.get_behavior_config().unwrap();
+    let (behavior, layout) = keyboard_config.get_behavior_config().unwrap();
     let key_info = expand_key_info(&behavior.key_info.unwrap_or_default());
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let tap_hold = expand_tap_hold_config(&behavior.tap_hold);
@@ -472,9 +472,12 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let forks = expand_forks(&behavior.fork);
     let morse = expand_morse(&behavior.morse);
 
+    let row = layout.rows as usize;
+    let col = layout.cols as usize;
+
     quote! {
-        let mut behavior_config = ::rmk::config::BehaviorConfig {
-            key_info: #key_info,
+        let mut behavior_config = ::rmk::config::BehaviorConfig::<#row, #col> {
+            key_info: ::core::option::Option::<[[rmk::config::KeyInfo; #col]; #row]>::Some(#key_info),
             tri_layer: #tri_layer,
             tap_hold: #tap_hold,
             one_shot: #one_shot,

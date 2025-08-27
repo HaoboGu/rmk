@@ -771,7 +771,14 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     flash: F,
     storage_config: StorageConfig,
 ) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(flash, &[], &None, &storage_config, &config::BehaviorConfig::default()).await
+    Storage::<F, 0, 0, 0, 0>::new(
+        flash,
+        &[],
+        &None,
+        &storage_config,
+        &config::BehaviorConfig::<0, 0>::default(),
+    )
+    .await
 }
 
 pub struct Storage<
@@ -1437,7 +1444,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         &mut self,
         keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        behavior: &config::BehaviorConfig,
+        behavior: &config::BehaviorConfig<ROW, COL>,
     ) -> Result<(), SSError<F::Error>> {
         let mut cache = NoCache::new();
 

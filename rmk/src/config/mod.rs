@@ -34,7 +34,7 @@ pub enum Hand {
 #[derive(Clone, Copy, Debug)]
 pub struct KeyInfo {
     pub hand: Hand,
-    pub hrm: bool,
+    pub home_row: bool,
 }
 
 /// Config for configurable action behavior

@@ -32,7 +32,8 @@ impl KeyboardTomlConfig {
             }
         }
         let mut final_layers = Vec::<Vec<Vec<String>>>::new();
-        let mut key_info = Vec::<Vec<KeyInfo>>::new();
+        let mut key_info: Vec<Vec<KeyInfo>> =
+            vec![vec![KeyInfo::default(); layout.cols as usize]; layout.rows as usize];
         let mut sequence_to_grid: Option<Vec<(u8, u8)>> = None;
         if let Some(matrix_map) = &layout.matrix_map {
             // process matrix_map first to build mapping between the electronic grid and the configuration sequence of keys
@@ -42,7 +43,7 @@ impl KeyboardTomlConfig {
             match Self::parse_matrix_map(matrix_map) {
                 Ok(info) => {
                     let mut coords = Vec::<(u8, u8)>::new();
-                    for (row, col, hand, hrm) in &info {
+                    for (row, col, hand, home_row) in &info {
                         if *row >= layout.rows || *col >= layout.cols {
                             return Err(format!(
                                 "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
@@ -61,7 +62,10 @@ impl KeyboardTomlConfig {
                             // separate coordinates from key info
                             coords.push((*row, *col));
                             grid_to_sequence[*row as usize][*col as usize] = Some(sequence_number);
-                            key_info[*row as usize][*col as usize] = KeyInfo { hand: *hand, hrm: *hrm };
+                            key_info[*row as usize][*col as usize] = KeyInfo {
+                                hand: *hand,
+                                home_row: *home_row,
+                            };
                         }
                         sequence_number += 1;
                     }
@@ -189,18 +193,18 @@ impl KeyboardTomlConfig {
                                         .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
 
                                     let mut hand = 'C'; // C for center (not specified)
-                                    let mut hrm = false; // HRM flag not specified
+                                    let mut home_row = false; // home_row flag not specified
 
                                     for part in items {
                                         match part.as_rule() {
                                             Rule::left_hand => hand = 'L',
                                             Rule::right_hand => hand = 'R',
-                                            Rule::hrm => hrm = true,
+                                            Rule::home_row => home_row = true,
                                             _ => {}
                                         }
                                     }
 
-                                    key_info.push((row, col, hand, hrm));
+                                    key_info.push((row, col, hand, home_row));
                                 }
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End Of Input marker

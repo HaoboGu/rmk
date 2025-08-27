@@ -121,8 +121,8 @@ key_map = { SOI ~ key_action* ~ EOI }
 left_hand = { ^"L" | ^"Left" }
 right_hand = { ^"R" | ^"Right" }
 hand = @{ left_hand | right_hand }
-hrm = { ^"HRM" }
-key_info = @{ hand | hrm }
+home_row = { ^"HRM" | ^"HR" | ^"H" }
+key_info = @{ hand | home_row }
 
 // Define the key_info structure, capturing row and col numbers, and optionally some extra key information
 keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ key_info)* ~ ")" }
