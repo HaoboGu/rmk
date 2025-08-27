@@ -25,7 +25,7 @@ pub struct RmkConfig<'a> {
 }
 
 /// Config for configurable action behavior
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
