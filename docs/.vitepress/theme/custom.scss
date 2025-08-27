@@ -1,19 +1,10 @@
 :root {
-  --default: clamp(1rem, 1.1vw , 2rem);
+  --default: clamp(1rem, 1.1vw, 1.2rem);
   --vp-fluid-sidebar: calc(20 * var(--default));
   --vp-sidebar-padding: calc(2 * var(--default));
   --vp-nav-height: calc(4 * var(--default));
 }
 
-@media (min-width: 960px) {
-  .VPHero {
-    .container {
-      .tagline {
-        max-width: 540px;
-      }
-    }
-  }
-}
 @media (min-width: 1440px) {
   :root {
     --vp-layout-max-width: min(92vw, 2400px);
@@ -169,8 +160,8 @@
             margin-top: 0;
             border-top-right-radius: calc(24 / 16 * var(--default));
             border-bottom-right-radius: calc(24 / 16 * var(--default));
-            padding: calc(4 / 16 * var(--default)) calc(12 / 16 * var(--default)) calc(4 / 16 * var(--default))
-              calc(8 / 16 * var(--default));
+            padding: calc(4 / 16 * var(--default)) calc(12 / 16 * var(--default))
+              calc(4 / 16 * var(--default)) calc(8 / 16 * var(--default));
           }
           .indicator {
             top: 0;
@@ -310,7 +301,7 @@
               padding: 0;
               .text {
                 font-size: calc(0.875 * var(--default));
-                span[class^="vpi-"] {
+                span[class^='vpi-'] {
                   width: calc(1 * var(--default));
                   height: calc(1 * var(--default));
                 }
@@ -356,7 +347,7 @@
             .icon {
               width: calc(1.125 * var(--default));
               height: calc(1.125 * var(--default));
-              [class^="vpi-"] {
+              [class^='vpi-'] {
                 top: calc(3 / 16 * var(--default));
                 left: calc(3 / 16 * var(--default));
                 width: calc(0.75 * var(--default));
@@ -377,7 +368,7 @@
             width: calc(2.25 * var(--default));
             height: calc(2.25 * var(--default));
             > svg,
-            > [class^="vpi-social-"] {
+            > [class^='vpi-social-'] {
               width: calc(1.25 * var(--default));
               height: calc(1.25 * var(--default));
             }
@@ -476,8 +467,8 @@
                       margin-top: calc(0.5 * var(--default));
                     }
                     input {
-                      margin: calc(3 / 16 * var(--default)) calc(0.5 * var(--default)) calc(3 / 16 * var(--default))
-                        calc(0.25 * var(--default));
+                      margin: calc(3 / 16 * var(--default)) calc(0.5 * var(--default))
+                        calc(3 / 16 * var(--default)) calc(0.25 * var(--default));
                       width: calc(13 / 16 * var(--default));
                       height: calc(13 / 16 * var(--default));
                     }
@@ -578,7 +569,7 @@
                       width: calc(6.5 * var(--default));
                     }
                   }
-                  div[class*="language-"] {
+                  div[class*='language-'] {
                     border-radius: var(--default);
                     margin: var(--default) 0;
                     button.copy {
@@ -638,7 +629,7 @@
                     p {
                       padding: calc(0 * var(--default)) calc(1 * var(--default));
                     }
-                    div[class*="language-"] {
+                    div[class*='language-'] {
                       margin: calc(1 * var(--default)) calc(1 * var(--default));
                       button.copy {
                         top: calc(0.55 * var(--default));
@@ -666,7 +657,8 @@
                   .pager-link {
                     border: calc(1 / 16 * var(--default)) solid var(--vp-c-divider);
                     border-radius: calc(0.5 * var(--default));
-                    padding: calc(11 / 16 * var(--default)) var(--default) calc(13 / 16 * var(--default));
+                    padding: calc(11 / 16 * var(--default)) var(--default)
+                      calc(13 / 16 * var(--default));
                     width: 100%;
                     height: 100%;
                     transition: border-color 0.25s;
@@ -688,29 +680,29 @@
     }
   }
 }
-@media (min-width: 2560px) { 
-  // .VPSidebar {
-  //   margin-left:  calc(10 * var(--default)); 
-  // }
-  // .VPNav {
-  //   padding: 0 calc(10 * var(--default)) ;
-  // }
-
-  // .Layout .VPContent.has-sidebar {
-  //     padding-left: calc(27 * var(--default));
-  //     padding-right: calc(12 * var(--default));
-  // }
-}
-@media (min-width: 3860px) { 
-  // .VPSidebar {
-  //   margin-left:  calc(15 * var(--default)); 
-  // }
-  // .VPNav {
-  //   padding: 0 calc(15 * var(--default)) ;
-  // }
+@media (min-width: 2560px) {
+  .VPSidebar {
+    margin-left: calc(15 * var(--default));
+  }
+  .VPNav {
+    padding: 0 calc(15 * var(--default));
+  }
 
   .Layout .VPContent.has-sidebar {
-      padding-left: calc(32 * var(--default));
-      padding-right: calc(17 * var(--default));
+    padding-left: calc(32 * var(--default));
+    padding-right: calc(17 * var(--default));
+  }
+}
+@media (min-width: 3860px) {
+  .VPSidebar {
+    margin-left: calc(35 * var(--default));
+  }
+  .VPNav {
+    padding: 0 calc(35 * var(--default));
+  }
+
+  .Layout .VPContent.has-sidebar {
+    padding-left: calc(52 * var(--default));
+    padding-right: calc(37 * var(--default));
   }
 }

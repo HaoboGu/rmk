@@ -180,3 +180,12 @@ macro_rules! morse {
         $crate::types::action::KeyAction::Morse($index)
     };
 }
+
+// Create a macro trigger action
+// Use `macros` because `macro` is a key word in Rust
+#[macro_export]
+macro_rules! macros {
+    ($index: literal) => {
+        $crate::action::KeyAction::Single($crate::action::Action::TriggerMacro($index))
+    };
+}
