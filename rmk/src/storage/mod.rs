@@ -784,10 +784,6 @@ pub struct Storage<
     pub(crate) flash: F,
     pub(crate) storage_range: Range<u32>,
     pub(crate) buffer: [u8; get_buffer_size()],
-
-    factory_keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
-    factory_encoders: Option<[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-    factory_behavior: config::BehaviorConfig,
 }
 
 /// Read out storage config, update and then save back.
@@ -864,10 +860,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             flash,
             storage_range,
             buffer: [0; get_buffer_size()],
-
-            factory_keymap: *keymap,
-            factory_encoders: encoder_map.as_ref().map(|m| **m),
-            factory_behavior: behavior_config.clone(),
         };
 
         // Check whether keymap and configs have been storaged in flash
@@ -929,13 +921,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
                 }
                 FlashOperationMessage::ResetLayout => {
-                    let keymap_copy = self.factory_keymap;
-                    let behavior_copy = self.factory_behavior.clone();
-                    let enc_copy = self.factory_encoders;
-
-                    let enc_ro = enc_copy.as_ref().map(|m| &*m);
-
-                    self.reset_layout_only(&keymap_copy, &enc_ro, &behavior_copy).await
+                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
+                    Ok(())
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
