@@ -63,10 +63,7 @@ const L2CAP_RXQ: u8 = 3;
 /// Size of L2CAP packets
 const L2CAP_MTU: usize = 251;
 
-const UNLOCK_KEYS: &[(u8, u8)] = &[
-    (0, 0),
-    (0, 1),
-];
+const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,

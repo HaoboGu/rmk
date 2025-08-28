@@ -25,8 +25,8 @@ bt-hci = { version = "0.4", default-features = false, features = ["defmt"] }
 
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.5"
-embassy-time = { version = "0.4", features = ["tick-hz-32_768", "defmt"] }
-embassy-nrf = { version = "0.6", features = [
+embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
+embassy-nrf = { version = "0.7", features = [
     "defmt",
     "nrf52832",
     "time-driver-rtc1",
@@ -34,7 +34,7 @@ embassy-nrf = { version = "0.6", features = [
     "unstable-pac",
     "time",
 ] }
-embassy-executor = { version = "0.8", features = [
+embassy-executor = { version = "0.9", features = [
     "defmt",
     "arch-cortex-m",
     "executor-thread",
@@ -50,9 +50,6 @@ once_cell = { version = "1.19", features = [
 rand = { version = "0.8.4", default-features = false }
 rand_core = { version = "0.6" }
 rand_chacha = { version = "0.3", default-features = false }
-
-[patch.crates-io]
-embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "03a16011f63c11c97ded10f7e6b872db81280a23" }
 
 
 [build-dependencies]
