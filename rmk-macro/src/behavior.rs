@@ -15,7 +15,7 @@ fn expand_key_info(info: &Vec<Vec<KeyInfo>>) -> proc_macro2::TokenStream {
     for row in info {
         rows.push(expand_key_info_row(row));
     }
-    quote! { [#(#rows), *] }
+    quote! { ::core::option::Option::Some([#(#rows), *]) }
 }
 
 /// Push keys info in the row
@@ -463,7 +463,6 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let (behavior, layout) = keyboard_config.get_behavior_config().unwrap();
-    let key_info = expand_key_info(&behavior.key_info.unwrap_or_default());
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
     let tap_hold = expand_tap_hold_config(&behavior.tap_hold);
     let one_shot = expand_one_shot(&behavior.one_shot);
@@ -475,9 +474,18 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let row = layout.rows as usize;
     let col = layout.cols as usize;
 
+    let key_info = if let Some(info) = &behavior.key_info
+        && info.len() == row
+        && info[0].len() == col
+    {
+        expand_key_info(&behavior.key_info.unwrap_or_default())
+    } else {
+        quote! { ::core::option::Option::None }
+    };
+
     quote! {
         let mut behavior_config = ::rmk::config::BehaviorConfig::<#row, #col> {
-            key_info: ::core::option::Option::<[[rmk::config::KeyInfo; #col]; #row]>::Some(#key_info),
+            key_info: #key_info,
             tri_layer: #tri_layer,
             tap_hold: #tap_hold,
             one_shot: #one_shot,
