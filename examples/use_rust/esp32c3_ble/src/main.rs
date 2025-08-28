@@ -71,7 +71,7 @@ async fn main(_s: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let mut behavior_config = BehaviorConfig::<ROW, COL>::default();
+    let mut behavior_config = BehaviorConfig::<{ ROW }, { COL }>::default();
     let (keymap, mut storage) =
         initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
 
