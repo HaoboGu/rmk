@@ -73,7 +73,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         _reorder_combos(&mut behavior.combo.combos);
 
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
-        fill_vec(&mut behavior.tap_dance.tap_dances);
+        fill_vec(&mut behavior.morse.morses);
 
         KeyMap {
             layers: action_map,
@@ -99,7 +99,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
         fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
-        fill_vec(&mut behavior.tap_dance.tap_dances);
+        fill_vec(&mut behavior.morse.morses);
 
         if let Some(storage) = storage {
             if {
@@ -118,8 +118,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_combos(&mut behavior.combo.combos).await)
                     // Read fork cache
                     .and(storage.read_forks(&mut behavior.fork.forks).await)
-                    // Read tap dance cache
-                    .and(storage.read_tap_dances(&mut behavior.tap_dance.tap_dances).await)
+                    // Read morse cache
+                    .and(storage.read_morses(&mut behavior.morse.morses).await)
             }
             .is_err()
             {

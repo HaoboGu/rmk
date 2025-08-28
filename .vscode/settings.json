@@ -18,6 +18,7 @@
     // "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf", // for esp32c6
     "rust-analyzer.linkedProjects": [
         "rmk-macro/Cargo.toml",
+        "rmk-config/Cargo.toml",
         "rmk/Cargo.toml",
         // To work on the examples, comment the line above and all of the cargo.features lines,
         // then uncomment ONE line below to select the chip you want to work on.

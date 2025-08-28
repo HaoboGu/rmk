@@ -56,8 +56,8 @@ pub enum KeyAction {
     Tap(Action),
     /// Tap hold action
     TapHold(Action, Action),
-    /// Tap dance action, references a tap dance configuration by index.
-    TapDance(u8),
+    /// Morse action, references a morse configuration by index.
+    Morse(u8),
 }
 
 impl KeyAction {
@@ -73,7 +73,7 @@ impl KeyAction {
     /// 'morse' is an alias for the superset of tap dance and tap hold keys,
     /// since their handling have many similarities
     pub fn is_morse(&self) -> bool {
-        matches!(self, KeyAction::TapHold(_, _) | KeyAction::TapDance(_))
+        matches!(self, KeyAction::TapHold(_, _) | KeyAction::Morse(_))
     }
 }
 

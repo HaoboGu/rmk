@@ -46,11 +46,11 @@ pub struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_fork_max_num")]
     pub fork_max_num: usize,
-    /// Maximum number of tap dances keyboard can store
+    /// Maximum number of morses keyboard can store
     #[serde_inline_default(8)]
-    #[serde(deserialize_with = "check_tap_dance_max_num")]
-    pub tap_dance_max_num: usize,
-    /// Maximum number of patterns a tap dance key can handle
+    #[serde(deserialize_with = "check_morse_max_num")]
+    pub morse_max_num: usize,
+    /// Maximum number of patterns a morse key can handle
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
     pub max_patterns_per_key: usize,
@@ -106,13 +106,13 @@ where
     Ok(value)
 }
 
-fn check_tap_dance_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+fn check_morse_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
 {
     let value = SerdeDeserialize::deserialize(deserializer)?;
     if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: tap_dance_max_num must be between 0 and 256, got {value}");
+        panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
     }
     Ok(value)
 }
@@ -148,7 +148,7 @@ impl Default for RmkConstantsConfig {
             combo_max_num: 8,
             combo_max_length: 4,
             fork_max_num: 8,
-            tap_dance_max_num: 8,
+            morse_max_num: 8,
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
@@ -230,8 +230,8 @@ impl KeyboardTomlConfig {
     }
 
     /// Auto calculate some parameters in toml:
-    /// - Update tap_dance_max_num to fit all configured tap dances
-    /// - Update max_patterns_per_key to fit the max number of configured (pattern, action) pairs per tap dance key
+    /// - Update morse_max_num to fit all configured morses
+    /// - Update max_patterns_per_key to fit the max number of configured (pattern, action) pairs per morse key
     /// - Update peripheral number based on the number of split boards
     /// - TODO: Update controller number based on the number of split boards
     pub fn auto_calculate_parameters(&mut self) {
@@ -249,27 +249,27 @@ impl KeyboardTomlConfig {
 
         if let Some(behavior) = &self.behavior {
             // Update the max_patterns_per_key
-            if let Some(tap_dance) = &behavior.tap_dance {
+            if let Some(morse) = &behavior.morse {
                 let mut max_required_patterns = self.rmk.max_patterns_per_key;
 
-                for tap_dance in &tap_dance.tap_dances {
-                    let tap_actions_len = tap_dance.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
-                    let hold_actions_len = tap_dance.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                for morse in &morse.morses {
+                    let tap_actions_len = morse.tap_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    let hold_actions_len = morse.hold_actions.as_ref().map(|v| v.len()).unwrap_or(0);
 
                     let n = tap_actions_len.max(hold_actions_len);
                     if n > 15 {
-                        panic!("The number of taps per tap dance is too large, the max number of taps is 15, got {n}");
+                        panic!("The number of taps per morse is too large, the max number of taps is 15, got {n}");
                     }
 
-                    let morse_actions_len = tap_dance.morse_actions.as_ref().map(|v| v.len()).unwrap_or(0);
+                    let morse_actions_len = morse.morse_actions.as_ref().map(|v| v.len()).unwrap_or(0);
 
                     max_required_patterns =
                         max_required_patterns.max(tap_actions_len + hold_actions_len + morse_actions_len);
                 }
                 self.rmk.max_patterns_per_key = max_required_patterns;
 
-                // Update the tap_dance_max_num
-                self.rmk.tap_dance_max_num = self.rmk.tap_dance_max_num.max(tap_dance.tap_dances.len());
+                // Update the morse_max_num
+                self.rmk.morse_max_num = self.rmk.morse_max_num.max(morse.morses.len());
             }
         }
     }
@@ -350,6 +350,8 @@ pub struct StorageConfig {
     pub enabled: bool,
     // Clear on the storage at reboot, set this to true if you want to reset the keymap
     pub clear_storage: Option<bool>,
+    // Clear on the layout at reboot, set this to true if you want to reset the layout
+    pub clear_layout: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
@@ -417,7 +419,7 @@ pub struct BehaviorConfig {
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
-    pub tap_dance: Option<TapDancesConfig>,
+    pub morse: Option<MorsesConfig>,
     pub autoshift: Option<AutoShiftConfig>,
 }
 
@@ -521,16 +523,16 @@ pub struct ForkConfig {
     pub bindable: Option<bool>,
 }
 
-/// Configurations for tap dances
+/// Configurations for morse keys
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct TapDancesConfig {
-    pub tap_dances: Vec<TapDanceConfig>,
+pub struct MorsesConfig {
+    pub morses: Vec<MorseConfig>,
 }
 
-/// Configurations for tap dance
+/// Configurations for morse
 #[derive(Clone, Debug, Deserialize)]
-pub struct TapDanceConfig {
+pub struct MorseConfig {
     pub tap: Option<String>,
     pub hold: Option<String>,
     pub hold_after_tap: Option<String>,

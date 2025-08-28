@@ -10,7 +10,7 @@
     "docs:dev": "vitepress dev --open",
     "docs:build": "vitepress build",
     "docs:preview": "vitepress preview",
-    "docs:format": "prettier --write \"./**/*.{md,json,js,ts,mts,vue}\"",
+    "docs:format": "prettier --write \"./**/*.{js,ts,mts,css,scss}\"",
     "docs:lint": "eslint --fix ."
   },
   "dependencies": {

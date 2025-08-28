@@ -7,7 +7,7 @@ use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::tap_dance::TapHoldMode;
+use rmk::morse::MorseMode;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -17,7 +17,7 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
             enable_hrm: false,
-            mode: TapHoldMode::PermissiveHold,
+            mode: MorseMode::PermissiveHold,
             unilateral_tap: false,
             ..TapHoldConfig::default()
         },
@@ -32,7 +32,7 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {
             enable_hrm: false,
-            mode: TapHoldMode::PermissiveHold,
+            mode: MorseMode::PermissiveHold,
             unilateral_tap: false,
             ..TapHoldConfig::default()
         },

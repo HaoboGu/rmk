@@ -95,12 +95,12 @@ pub mod keymap;
 pub mod layout_macro;
 pub mod light;
 pub mod matrix;
+pub mod morse;
 #[cfg(feature = "split")]
 pub mod split;
 pub mod state;
 #[cfg(feature = "storage")]
 pub mod storage;
-pub mod tap_dance;
 #[cfg(not(feature = "_no_usb"))]
 pub mod usb;
 pub mod via;
