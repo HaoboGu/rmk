@@ -2,7 +2,7 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::config::{BehaviorConfig, OneShotConfig};
-use rmk::keycode::ModifierCombination;
+use rmk::types::keycode::ModifierCombination;
 
 fn one_shot_config_with_short_timeout() -> OneShotConfig {
     OneShotConfig {
@@ -13,7 +13,7 @@ fn one_shot_config_with_short_timeout() -> OneShotConfig {
 mod one_shot_test {
     use std::cell::RefCell;
 
-    use rmk::action::KeyAction;
+    use rmk::types::action::KeyAction;
     use rmk::keyboard::Keyboard;
     use rmk::keymap::KeyMap;
     use rmk::{k, osl, osm, th, wm};

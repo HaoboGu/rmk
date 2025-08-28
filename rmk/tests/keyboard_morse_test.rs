@@ -1,11 +1,11 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::k;
-use rmk::keycode::{KeyCode, ModifierCombination};
+use rmk::types::keycode::{KeyCode, ModifierCombination};
+use rmk::types::action::{Action, KeyAction};
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;

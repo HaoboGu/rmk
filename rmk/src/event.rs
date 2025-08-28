@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
-use crate::{action::KeyAction, keycode::ModifierCombination, light::LedIndicator};
+use {crate::light::LedIndicator, rmk_types::action::KeyAction, rmk_types::keycode::ModifierCombination};
 
 /// Raw events from input devices and keyboards
 ///

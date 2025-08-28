@@ -1,6 +1,6 @@
 use embassy_time::{Duration, Instant};
 
-use crate::action::{Action, KeyAction};
+use rmk_types::action::{Action, KeyAction};
 use crate::config::BehaviorConfig;
 use crate::event::KeyboardEvent;
 use crate::keyboard::Keyboard;

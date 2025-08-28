@@ -2,11 +2,11 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::action::Action;
 use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
 use rmk::morse::Morse;
+use rmk::types::action::Action;
+use rmk::types::keycode::{KeyCode, ModifierCombination};
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
 

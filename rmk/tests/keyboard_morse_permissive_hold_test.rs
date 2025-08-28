@@ -1,12 +1,12 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::action::{Action, KeyAction};
+use rmk::types::action::{Action, KeyAction};
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
+use rmk::types::keycode::{KeyCode, ModifierCombination};
 use rmk::morse::MorseMode;
 use rusty_fork::rusty_fork_test;
 

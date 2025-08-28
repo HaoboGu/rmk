@@ -1,6 +1,6 @@
 use embassy_time::Instant;
 
-use crate::action::{Action, KeyAction};
+use rmk_types::action::{Action, KeyAction};
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::morse::MorsePattern;
 

@@ -1,5 +1,5 @@
 use crate::{COL, NUM_LAYER, ROW};
-use rmk::action::KeyAction;
+use rmk::types::action::KeyAction;
 use rmk::{a, k, layer, mo};
 
 #[rustfmt::skip]
