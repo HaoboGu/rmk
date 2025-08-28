@@ -432,8 +432,6 @@ pub struct AutoShiftConfig {
     pub enable_letters: Option<bool>,
     pub enable_numbers: Option<bool>,
     pub enable_symbols: Option<bool>,
-    pub custom_keys: Option<Vec<String>>,
-    pub key_timeouts: Option<HashMap<String, DurationMillis>>,
 }
 
 /// Configurations for tap hold

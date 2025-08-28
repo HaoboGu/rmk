@@ -458,7 +458,6 @@ fn expand_autoshift(autoshift: &Option<AutoShiftConfig>) -> proc_macro2::TokenSt
                         letters: #enable_letters,
                         numbers: #enable_numbers,
                         symbols: #enable_symbols,
-                        custom_keys: ::rmk::heapless::FnvIndexSet::new(),
                     },
                 }
             }
