@@ -31,6 +31,7 @@ impl BitOr for HidModifiers {
         Self::from_bits(self.into_bits() | rhs.into_bits())
     }
 }
+
 impl BitAnd for HidModifiers {
     type Output = Self;
 

@@ -1,4 +1,4 @@
-use crate::keycode::{KeyCode, ModifierCombination};
+use crate::keycode::{KeyCode, modifier::ModifierCombination};
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
