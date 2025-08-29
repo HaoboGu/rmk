@@ -118,14 +118,13 @@ key_map = { SOI ~ key_action* ~ EOI }
 // ============================================================================
 // rules for matrix_map parsing
 
-left_hand = { ^"L" | ^"Left" }
-right_hand = { ^"R" | ^"Right" }
-hand = @{ left_hand | right_hand }
-home_row = { ^"HRM" | ^"HR" | ^"H" }
-key_info = @{ hand | home_row }
+left_hand = { ^"L" | ^"LH" | ^"Left" }
+right_hand = { ^"R" | ^"RH" | ^"Right" }
+hand = _{ left_hand | right_hand }
+profile = { strict_identifier }
 
 // Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ key_info)* ~ ")" }
+keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ (":" ~ profile)? ~ ")" }
 
 // The main rule: Start, zero or more key_info or whitespace occurrences, End.
 // This ensures the entire string consists *only* of valid key_info tuples and whitespace.

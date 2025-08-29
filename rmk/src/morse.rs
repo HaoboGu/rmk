@@ -74,30 +74,20 @@ impl MorsePattern {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse {
-    /// The timeout time for each operation in milliseconds
-    pub timeout_ms: u16,
-    /// The decision mode of the morse key
-    pub mode: MorseMode,
-    /// If the unilateral tap is enabled
-    pub unilateral_tap: bool,
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
-    //TODO: introduce settings to set gap and hold timeout separately
 }
 
 impl Default for Morse {
     fn default() -> Self {
         Self {
-            timeout_ms: 250,
-            mode: MorseMode::HoldOnOtherPress,
-            unilateral_tap: false,
             actions: Vec::default(),
         }
     }
 }
 
 impl Morse {
-    pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action, timeout: u16) -> Self {
+    pub fn new_from_vial(tap: Action, hold: Action, hold_after_tap: Action, double_tap: Action) -> Self {
         let mut result = Self::default();
         if tap != Action::No {
             _ = result.actions.push((TAP, tap));
@@ -111,7 +101,6 @@ impl Morse {
         if hold_after_tap != Action::No {
             _ = result.actions.push((HOLD_AFTER_TAP, hold_after_tap));
         }
-        result.timeout_ms = timeout;
         result
     }
 
@@ -120,11 +109,9 @@ impl Morse {
     pub fn new_with_actions(
         tap_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         hold_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
-        timeout: u16,
     ) -> Self {
         assert!(MAX_PATTERNS_PER_KEY >= 4, "MAX_PATTERNS_PER_KEY must be at least 4");
         let mut result = Self::default();
-        result.timeout_ms = timeout;
 
         let mut pattern = 0b1u16;
         for item in tap_actions.iter() {

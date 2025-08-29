@@ -9,7 +9,11 @@ impl crate::KeyboardTomlConfig {
                 behavior.key_info = if key_info.is_empty()
                     || key_info.iter().all(|row| {
                         row.iter().all(|key| {
-                            key.hand != 'L' && key.hand != 'l' && key.hand != 'R' && key.hand != 'r' && !key.home_row
+                            key.hand != 'L'
+                                && key.hand != 'l'
+                                && key.hand != 'R'
+                                && key.hand != 'r'
+                                && key.profile.is_none()
                         })
                     }) {
                     None

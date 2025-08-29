@@ -411,35 +411,61 @@ pub struct LayoutConfig {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeyInfo {
-    pub hand: char, // 'L' or 'R' or other chars
-    pub home_row: bool,
+    pub hand: char,              // 'L' or 'R' or other chars
+    pub profile: Option<String>, // name of key profile (BehaviorConfig::key_profiles[self.profile])
 }
 
 /// Configurations for actions behavior
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BehaviorConfig {
-    pub key_info: Option<Vec<Vec<KeyInfo>>>,
     pub tri_layer: Option<TriLayerConfig>,
-    pub tap_hold: Option<TapHoldConfig>,
     pub one_shot: Option<OneShotConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
+
+    pub tap_hold: Option<TapHoldConfig>,
+    /// these can be used to overrides the defaults given in tap_hold
+    pub key_profiles: Option<HashMap<String, KeyProfile>>,
+    pub key_info: Option<Vec<Vec<KeyInfo>>>,
 }
 
-/// Configurations for tap hold
+/// default configurations profiles for morse, tap-hold, etc.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct TapHoldConfig {
-    pub enable_hrm: Option<bool>,
-    pub permissive_hold: Option<bool>,
-    pub unilateral_tap: Option<bool>,
-    pub hold_on_other_press: Option<bool>,
+    pub enable_flow_tap: Option<bool>, //default: false
+    /// used in permissive_hold mode
     pub prior_idle_time: Option<DurationMillis>,
+
+    pub unilateral_tap: Option<bool>,
+    /// The decision mode of the morse/tap-hold key
+    pub permissive_hold: Option<bool>,
+    pub hold_on_other_press: Option<bool>,
+
+    /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
     pub hold_timeout: Option<DurationMillis>,
+
+    /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
+    pub gap_timeout: Option<DurationMillis>,
+}
+
+/// Per Key configurations profiles for morse, tap-hold, etc.
+/// overrides the defaults given in TapHoldConfig
+#[derive(Clone, Debug, Deserialize, Default)]
+pub struct KeyProfile {
+    pub unilateral_tap: Option<bool>,
+    /// The decision mode of the morse/tap-hold key
+    pub permissive_hold: Option<bool>,
+    pub hold_on_other_press: Option<bool>,
+
+    /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
+    pub hold_timeout: Option<DurationMillis>,
+
+    /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
+    pub gap_timeout: Option<DurationMillis>,
 }
 
 /// Configurations for tri layer
@@ -537,8 +563,6 @@ pub struct MorseConfig {
     pub hold_actions: Option<Vec<String>>,
     /// Array of morse patter->action pairs  count (0-indexed)
     pub morse_actions: Option<Vec<MorseActionPair>>,
-    pub timeout: Option<DurationMillis>,
-    //TODO? mode, unilateral_tap
 }
 
 /// Configurations for morse action pairs

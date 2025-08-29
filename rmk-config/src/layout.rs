@@ -43,7 +43,7 @@ impl KeyboardTomlConfig {
             match Self::parse_matrix_map(matrix_map) {
                 Ok(info) => {
                     let mut coords = Vec::<(u8, u8)>::new();
-                    for (row, col, hand, home_row) in &info {
+                    for (row, col, hand, profile) in &info {
                         if *row >= layout.rows || *col >= layout.cols {
                             return Err(format!(
                                 "keyboard.toml: Coordinate ({},{}) in `layout.matrix_map` is out of bounds: ([0..{}], [0..{}]) is the expected range",
@@ -64,7 +64,7 @@ impl KeyboardTomlConfig {
                             grid_to_sequence[*row as usize][*col as usize] = Some(sequence_number);
                             key_info[*row as usize][*col as usize] = KeyInfo {
                                 hand: *hand,
-                                home_row: *home_row,
+                                profile: profile.clone(),
                             };
                         }
                         sequence_number += 1;
@@ -169,7 +169,7 @@ impl KeyboardTomlConfig {
 
     /// Parses and validates a matrix_map string using Pest.
     /// Ensures the string contains only valid coordinates and whitespace.
-    fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char, bool)>, String> {
+    fn parse_matrix_map(matrix_map: &str) -> Result<Vec<(u8, u8, char, Option<String>)>, String> {
         match ConfigParser::parse(Rule::matrix_map, matrix_map) {
             Ok(pairs) => {
                 let mut key_info = Vec::new();
@@ -193,18 +193,18 @@ impl KeyboardTomlConfig {
                                         .map_err(|e| format!("Failed to parse col '{}': {}", col_str, e))?;
 
                                     let mut hand = 'C'; // C for center (not specified)
-                                    let mut home_row = false; // home_row flag not specified
+                                    let mut profile = None; // home_row flag not specified
 
                                     for part in items {
                                         match part.as_rule() {
                                             Rule::left_hand => hand = 'L',
                                             Rule::right_hand => hand = 'R',
-                                            Rule::home_row => home_row = true,
+                                            Rule::profile => profile = Some(part.as_str().into()),
                                             _ => {}
                                         }
                                     }
 
-                                    key_info.push((row, col, hand, home_row));
+                                    key_info.push((row, col, hand, profile));
                                 }
                                 Rule::EOI | Rule::WHITESPACE => {
                                     // Ignore End Of Input marker

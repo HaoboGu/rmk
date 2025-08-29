@@ -5,7 +5,6 @@ use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
-use crate::keycode::KeyCode;
 use crate::morse::{HOLD, MorseMode, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
@@ -68,7 +67,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, key_action);
+            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
@@ -132,7 +131,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             // Use current release time for `IdleAfterTap` state
                             k.press_time = released_time; // Use release time as the "press_time"
                             k.timeout_time =
-                                k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, &k.action);
+                                k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, false);
                         }
                     }
                     KeyState::Holding(pattern) => {
@@ -142,7 +141,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         k.state = KeyState::Released(pattern);
                         // Use current release time for `IdleAfterTap` state
                         k.press_time = released_time; // Use release time as the "press_time"
-                        k.timeout_time = k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, &k.action);
+                        k.timeout_time =
+                            k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, false);
                     }
                     KeyState::ProcessedButReleaseNotReportedYet(action) => {
                         // Releasing a tap-hold action whose pressed HID report is already sent
@@ -198,74 +198,79 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         }
     }
 
-    pub fn morse_timeout(behavior_config: &BehaviorConfig<ROW, COL>, keyAction: &KeyAction) -> Duration {
-        match keyAction {
-            KeyAction::Morse(idx) => behavior_config
-                .morse
-                .morses
-                .get(*idx as usize)
-                .map(|td| Duration::from_millis(td.timeout_ms as u64)),
-            _ => None,
-        }
-        .unwrap_or_else(|| behavior_config.tap_hold.timeout)
-    }
-
-    fn is_home_row(behavior_config: &BehaviorConfig<ROW, COL>, key_action: &KeyAction, pos: KeyboardEventPos) -> bool {
-        if let KeyboardEventPos::Key(pos) = pos
+    pub fn morse_timeout(
+        behavior_config: &BehaviorConfig<ROW, COL>,
+        pos: KeyboardEventPos,
+        hold_timeout_needed: bool,
+    ) -> Duration {
+        let timeout = if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
+            && let Some(ref profile) = info[pos.row as usize][pos.col as usize].profile
         {
-            info[pos.row as usize][pos.col as usize].home_row
-        } else if let Action::Key(key_code) = Self::action_from_pattern(behavior_config, key_action, TAP) {
-            match key_code {
-                KeyCode::A
-                | KeyCode::S
-                | KeyCode::D
-                | KeyCode::F
-                | KeyCode::G
-                | KeyCode::H
-                | KeyCode::J
-                | KeyCode::K
-                | KeyCode::L
-                | KeyCode::Semicolon
-                | KeyCode::Quote => true,
-                _ => false,
+            if hold_timeout_needed {
+                profile.hold_timeout_ms
+            } else {
+                profile.gap_timeout_ms
             }
         } else {
-            false
-        }
+            if hold_timeout_needed {
+                behavior_config.tap_hold.default_profile.hold_timeout_ms
+            } else {
+                behavior_config.tap_hold.default_profile.gap_timeout_ms
+            }
+        };
+
+        Duration::from_millis(timeout as u64)
     }
 
+    // fn is_home_row(behavior_config: &BehaviorConfig<ROW, COL>, key_action: &KeyAction) -> bool {
+    //     if let Action::Key(key_code) = Self::action_from_pattern(behavior_config, key_action, TAP) {
+    //         match key_code {
+    //             KeyCode::A
+    //             | KeyCode::S
+    //             | KeyCode::D
+    //             | KeyCode::F
+    //             | KeyCode::G
+    //             | KeyCode::H
+    //             | KeyCode::J
+    //             | KeyCode::K
+    //             | KeyCode::L
+    //             | KeyCode::Semicolon
+    //             | KeyCode::Quote => true,
+    //             _ => false,
+    //         }
+    //     } else {
+    //         false
+    //     }
+    // }
+
     /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
-    pub fn tap_hold_mode(
-        behavior_config: &BehaviorConfig<ROW, COL>,
-        key_action: &KeyAction,
-        pos: KeyboardEventPos,
-    ) -> (MorseMode, bool) {
-        match key_action {
-            KeyAction::Morse(idx) => behavior_config
-                .morse
-                .morses
-                .get(*idx as usize)
-                .map(|td| (td.mode, td.unilateral_tap)),
-            _ => None,
+    pub fn tap_hold_mode(behavior_config: &BehaviorConfig<ROW, COL>, pos: KeyboardEventPos) -> (MorseMode, bool) {
+        if let KeyboardEventPos::Key(pos) = pos
+            && let Some(info) = behavior_config.key_info
+            && let Some(profile) = info[pos.row as usize][pos.col as usize].profile
+        {
+            (profile.mode, profile.unilateral_tap)
+        } else {
+            // if behavior_config.enable_hrm && Self::is_home_row(&behavior_config, key_action) {
+            //     (MorseMode::PermissiveHold, true)
+            // } else {
+            //     match Self::action_from_pattern(behavior_config, key_action, HOLD) {
+            //         Action::Modifier(_) | Action::LayerOn(_) => {
+            //             // MT/LT on non-letter, non-home-row keys
+            //             (MorseMode::HoldOnOtherPress, false)
+            //         }
+            //         _ => (
+            //             behavior_config.tap_hold.default_profile.mode,
+            //             behavior_config.tap_hold.default_profile.unilateral_tap,
+            //         ),
+            //     }
+            // }
+            (
+                behavior_config.tap_hold.default_profile.mode,
+                behavior_config.tap_hold.default_profile.unilateral_tap,
+            )
         }
-        .unwrap_or_else(|| {
-            if behavior_config.tap_hold.enable_hrm {
-                if Self::is_home_row(&behavior_config, key_action, pos) {
-                    (MorseMode::PermissiveHold, true)
-                } else {
-                    match Self::action_from_pattern(behavior_config, key_action, HOLD) {
-                        Action::Modifier(_) | Action::LayerOn(_) => {
-                            // MT/LT on non-letter, non-home-row keys
-                            (MorseMode::HoldOnOtherPress, false)
-                        }
-                        _ => (behavior_config.tap_hold.mode, behavior_config.tap_hold.unilateral_tap),
-                    }
-                }
-            } else {
-                (behavior_config.tap_hold.mode, behavior_config.tap_hold.unilateral_tap)
-            }
-        })
     }
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)

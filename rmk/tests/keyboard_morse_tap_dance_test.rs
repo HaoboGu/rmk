@@ -6,7 +6,7 @@ use rmk::action::Action;
 use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::Morse;
+use rmk::morse::{Morse, MorseMode};
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
 
@@ -26,24 +26,28 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
-                    250,
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
-                    250,
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::SHIFT),
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::GUI),
-                    250,
                 ),
             ])
             .unwrap(),
+        },
+        tap_hold: rmk::config::TapHoldConfig {
+            default_profile: rmk::config::KeyProfile {
+                mode: MorseMode::HoldOnOtherPress,
+                ..Default::default()
+            },
+            ..Default::default()
         },
         ..Default::default()
     };

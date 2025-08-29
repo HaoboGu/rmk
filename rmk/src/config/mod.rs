@@ -31,25 +31,21 @@ pub enum Hand {
     Right,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct KeyInfo {
-    pub hand: Hand,
-    pub home_row: bool,
-}
-
 /// Config for configurable action behavior
 #[derive(Debug, Default)]
 pub struct BehaviorConfig<const ROW_NUM: usize, const COL_NUM: usize> {
-    pub key_info: Option<[[KeyInfo; COL_NUM]; ROW_NUM]>,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
-    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+
+    // if a key_info.profile may override the defaults defined in tap_hold
+    pub tap_hold: TapHoldConfig,
+    pub key_info: Option<[[KeyInfo; COL_NUM]; ROW_NUM]>,
 }
 
 /// Configurations for morse behavior
@@ -81,27 +77,51 @@ impl Default for MorsesConfig {
     }
 }
 
-/// Configurations for morse behavior
-#[derive(Clone, Debug)]
-pub struct TapHoldConfig {
-    pub enable_hrm: bool,
-    pub prior_idle_time: Duration,
-    /// Default timeout time for tap or hold
-    pub timeout: Duration,
-    /// Default mode
-    pub mode: MorseMode,
+/// configuration for tap-hold and morse
+#[derive(Clone, Copy, Debug)]
+pub struct KeyProfile {
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
+    /// The decision mode of the morse/tap-hold key
+    pub mode: MorseMode,
+
+    /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
+    pub hold_timeout_ms: u16,
+    /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
+    pub gap_timeout_ms: u16,
+}
+
+impl Default for KeyProfile {
+    fn default() -> Self {
+        Self {
+            unilateral_tap: false,
+            mode: MorseMode::Normal,
+            hold_timeout_ms: 250u16,
+            gap_timeout_ms: 250u16,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct KeyInfo {
+    pub hand: Hand,
+    pub profile: Option<KeyProfile>,
+}
+
+/// configuration for tap-hold and morse, home row mods
+#[derive(Clone, Copy, Debug)]
+pub struct TapHoldConfig {
+    pub enable_flow_tap: bool,     //default: false
+    pub prior_idle_time: Duration, //used for flow tap detection, default: 120ms,
+    pub default_profile: KeyProfile,
 }
 
 impl Default for TapHoldConfig {
     fn default() -> Self {
         Self {
-            enable_hrm: false,
-            unilateral_tap: false,
-            mode: MorseMode::Normal,
+            enable_flow_tap: false,
             prior_idle_time: Duration::from_millis(120),
-            timeout: Duration::from_millis(250),
+            default_profile: KeyProfile::default(),
         }
     }
 }
