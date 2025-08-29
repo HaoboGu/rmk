@@ -186,8 +186,8 @@ async fn main(spawner: Spawner) {
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
     let mut behavior_config = BehaviorConfig::<8, 7>::default();
-    behavior_config.tap_hold.enable_hrm = true;
-    let mut encoder_map = keymap::get_default_encoder_map();
+    behavior_config.tap_hold.enable_flow_tap = true;
+    let mut encoder_map: [[rmk::action::EncoderAction; _]; _] = keymap::get_default_encoder_map();
     let (keymap, mut storage) = initialize_encoder_keymap_and_storage(
         &mut default_keymap,
         &mut encoder_map,

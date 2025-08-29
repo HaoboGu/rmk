@@ -1,6 +1,6 @@
 /// Test cases for home row mod(HRM)
 ///
-/// For HRM, `enable_hrm` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
+/// For HRM, `enable_flow_tap` and `unilateral_tap` is enabled, `prior-idle-time` will be considered.
 pub mod common;
 
 use embassy_time::Duration;
@@ -18,7 +18,6 @@ use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
-        //hrm = MorseMode::PermissiveHold, true
         key_info: Some([[
             KeyInfo {
                 hand: Hand::Left,
@@ -49,12 +48,11 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
             default_profile: KeyProfile {
                 unilateral_tap: true,
                 mode: MorseMode::PermissiveHold,
-                hold_timeout_ms: 250u16,
-                gap_timeout_ms: 250u16,
+                ..Default::default()
             },
-            ..TapHoldConfig::default()
+            ..Default::default()
         },
-        ..BehaviorConfig::default()
+        ..Default::default()
     })
 }
 

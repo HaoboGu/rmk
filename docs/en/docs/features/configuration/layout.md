@@ -15,21 +15,31 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col, <hand>, <home_row>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
+The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
-The folowing optional fields are used mainly if `enable_hrm = true`:
+The folowing optional fields are used mainly if `enable_flow_tap = true`:
 The `<hand>` is optional, can be used to associate each key to the left or right hand using the `L` or `R` values (this info is used during unilateral tap processing).
-The `<home_row>` is also optional, if given, marks the home row keys, its value is either `H` or `HR` or `HRM` (case insensitive, used to set PermissiveHold for the key) .
+The `<profile_name>` is also optional, if given, selects a key profile from `behavior.key_profiles` to override the defaults set in `behavior.tap_hold`.
 
 ```toml
 # split ortho example for matrix map, with hand and home row information filled:
 matrix_map = """
 (0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
-(1, 0, L, H) (1, 1, L, H) (1, 2, L, H) (1, 3, L, H) (1, 4, L)         (1, 5, R)   (1, 6, R, H) (1, 7, R, H) (1, 8, R, H) (1, 9, R, H)
+(1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)
 (2, 0, L)    (2, 1, L)    (2, 2, L)    (2, 3, L)    (2, 4, L)         (2, 5, R)   (2, 6, R)    (2, 7, R)    (2, 8, R)    (2, 9, R)   
-                                       (3, 3, L)    (3, 4, L)         (3, 5, R)   (3, 6, R) 
+                                       (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T) 
 """
+
+[behavior]
+tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_on_other_press = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+
+[behavior.key_profiles]
+# matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+# thumb tap-hold example
+T = { hold_on_other_press = true, unilateral_tap = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 ```
 
 ```toml
