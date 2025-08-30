@@ -52,7 +52,7 @@ rows = 5
 cols = 4
 # Number of layers. Be careful, since large layer number takes more flash and RAM
 layers = 3
-# keypad example:
+# keypad example: (for the key in position (2,1) the `H1` profile is activated)
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤
@@ -65,11 +65,11 @@ layers = 3
 # │   0   │ . │ T │
 # └───────┴───┴───┘
 matrix_map = """
-(0,0) (0,1) (0,2) (0,3)
-(1,0) (1,1) (1,2) (1,3)
-(2,0) (2,1) (2,2)
-(3,0) (3,1) (3,2) (3,3)
-(4,0)       (4,1)
+(0,0,R) (0,1,R)    (0,2,R) (0,3,R)
+(1,0,R) (1,1,R)    (1,2,R) (1,3,R)
+(2,0,R) (2,1,R:H1) (2,2,R)
+(3,0,R) (3,1,R)    (3,2,R) (3,3,R)
+(4,0,R)            (4,1,R)
 """
 
 # here are the aliases for the example layer.keys below
@@ -110,11 +110,16 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
 # Tap Hold configuration
-tap_hold = { enable_hrm = true, permissive_hold = true, unilateral_tap = true, prior_idle_time = "120ms", hold_timeout = "250ms" }
+tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_on_other_press = true, unilateral_false = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
+
+[behavior.key_profiles]
+# matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 
 # Combo configuration
 [behavior.combo]
@@ -136,10 +141,10 @@ morses = [
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
 
   # TD(1) Extended tap dance representation for function keys  
-  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
 
   # TD(2) Morse code like representation
-  { timeout = "300ms", morse_actions = [
+  { morse_actions = [
       {pattern = ".-", action = "A"}, 
       {pattern = "-...", action = "B"}, 
       {pattern = "-.-.", action = "C"}, 

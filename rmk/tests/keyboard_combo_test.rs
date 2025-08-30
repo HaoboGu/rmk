@@ -3,7 +3,7 @@ pub mod common;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk::combo::Combo;
-use rmk::config::CombosConfig;
+use rmk::config::{CombosConfig, KeyProfile};
 use rmk::keycode::ModifierCombination;
 use rmk::{k, osm};
 
@@ -183,9 +183,12 @@ mod combo_test {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            enable_hrm: true,
-                            mode: MorseMode::PermissiveHold,
-                            unilateral_tap: false,
+                            default_profile: KeyProfile {
+                                unilateral_tap: false,
+                                mode: MorseMode::PermissiveHold,
+                                hold_timeout_ms: 250u16,
+                                gap_timeout_ms: 250u16,
+                            },
                             ..TapHoldConfig::default()
                         },
                         combo: CombosConfig {

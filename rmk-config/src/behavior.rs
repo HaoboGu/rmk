@@ -1,11 +1,25 @@
-use crate::{BehaviorConfig, MacroOperation};
+use crate::{BehaviorConfig, LayoutConfig, MacroOperation};
 
 impl crate::KeyboardTomlConfig {
-    pub fn get_behavior_config(&self) -> Result<BehaviorConfig, String> {
+    pub fn get_behavior_config(&self) -> Result<(BehaviorConfig, LayoutConfig), String> {
         let default = self.behavior.clone().unwrap_or_default();
-        let layout = self.get_layout_config().unwrap();
+        let (layout, key_info) = self.get_layout_config().unwrap();
         match self.behavior.clone() {
             Some(mut behavior) => {
+                behavior.key_info = if key_info.is_empty()
+                    || key_info.iter().all(|row| {
+                        row.iter().all(|key| {
+                            key.hand != 'L'
+                                && key.hand != 'l'
+                                && key.hand != 'R'
+                                && key.hand != 'r'
+                                && key.profile.is_none()
+                        })
+                    }) {
+                    None
+                } else {
+                    Some(key_info)
+                };
                 behavior.tri_layer = match behavior.tri_layer {
                     Some(tri_layer) => {
                         if tri_layer.upper >= layout.layers {
@@ -81,9 +95,9 @@ impl crate::KeyboardTomlConfig {
                         return Err("keyboard.toml: number of morses is greater than morse_max_num configured under [rmk] section".to_string());
                     }
                 }
-                Ok(behavior)
+                Ok((behavior, layout))
             }
-            None => Ok(default),
+            None => Ok((default, layout)),
         }
     }
 }

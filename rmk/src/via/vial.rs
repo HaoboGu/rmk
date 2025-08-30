@@ -51,7 +51,8 @@ pub(crate) enum SettingKey {
     None,
     ComboTimeout = 0x02,
     OneShotTimeout = 0x06,
-    MorseTimeout = 0x07,
+    MorseHoldTimeout = 0x07,
+    MorseGapTimeout = 0x08,
     TapInterval = 0x12,
     TapCapslockInterval = 0x13,
     UnilateralTap = 0x1A,
@@ -192,9 +193,14 @@ pub(crate) async fn process_vial<
                     let combo_timeout = keymap.borrow().behavior.combo.timeout.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
                 }
-                SettingKey::MorseTimeout => {
+                SettingKey::MorseHoldTimeout => {
                     report.input_data[0] = 0;
-                    let tapping_term = keymap.borrow().behavior.tap_hold.timeout.as_millis() as u16;
+                    let tapping_term = keymap.borrow().behavior.tap_hold.default_profile.hold_timeout_ms;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
+                }
+                SettingKey::MorseGapTimeout => {
+                    report.input_data[0] = 0;
+                    let tapping_term = keymap.borrow().behavior.tap_hold.default_profile.gap_timeout_ms;
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
@@ -214,7 +220,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::UnilateralTap => {
                     report.input_data[0] = 0;
-                    let unilateral_tap = keymap.borrow().behavior.tap_hold.unilateral_tap;
+                    let unilateral_tap = keymap.borrow().behavior.tap_hold.default_profile.unilateral_tap;
                     if unilateral_tap {
                         report.input_data[1] = 1;
                     } else {
@@ -240,12 +246,20 @@ pub(crate) async fn process_vial<
                         .send(FlashOperationMessage::ComboTimeout(combo_timeout))
                         .await;
                 }
-                SettingKey::MorseTimeout => {
+                SettingKey::MorseHoldTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.tap_hold.timeout = Duration::from_millis(timeout_time as u64);
+                    keymap.borrow_mut().behavior.tap_hold.default_profile.hold_timeout_ms = timeout_time;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
-                        .send(FlashOperationMessage::MorseTimeout(timeout_time))
+                        .send(FlashOperationMessage::MorseHoldTimeout(timeout_time))
+                        .await;
+                }
+                SettingKey::MorseGapTimeout => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    keymap.borrow_mut().behavior.tap_hold.default_profile.gap_timeout_ms = timeout_time;
+                    #[cfg(feature = "storage")]
+                    FLASH_CHANNEL
+                        .send(FlashOperationMessage::MorseGapTimeout(timeout_time))
                         .await;
                 }
                 SettingKey::OneShotTimeout => {
@@ -273,7 +287,7 @@ pub(crate) async fn process_vial<
                         .await;
                 }
                 SettingKey::UnilateralTap => {
-                    keymap.borrow_mut().behavior.tap_hold.unilateral_tap = report.output_data[4] == 1;
+                    keymap.borrow_mut().behavior.tap_hold.default_profile.unilateral_tap = report.output_data[4] == 1;
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
@@ -329,7 +343,7 @@ pub(crate) async fn process_vial<
                                     .map_or(KeyAction::No, |a| KeyAction::Single(a)),
                             ),
                         );
-                        LittleEndian::write_u16(&mut report.input_data[9..11], morse.timeout_ms);
+                        LittleEndian::write_u16(&mut report.input_data[9..11], 250); //dummy morse.timeout_ms
                     } else {
                         report.input_data[1..11].fill(0);
                     }
@@ -349,13 +363,13 @@ pub(crate) async fn process_vial<
                             let hold = from_via_keycode(LittleEndian::read_u16(&report.output_data[6..8]));
                             let double_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[8..10]));
                             let hold_after_tap = from_via_keycode(LittleEndian::read_u16(&report.output_data[10..12]));
-                            let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
+                            //let timeout_ms = LittleEndian::read_u16(&report.output_data[12..14]);
 
                             morse.put(TAP, tap.to_action());
                             morse.put(DOUBLE_TAP, double_tap.to_action());
                             morse.put(HOLD, hold.to_action());
                             morse.put(HOLD_AFTER_TAP, hold_after_tap.to_action());
-                            morse.timeout_ms = timeout_ms;
+                            //morse.timeout_ms = timeout_ms;
 
                             #[cfg(feature = "storage")]
                             {

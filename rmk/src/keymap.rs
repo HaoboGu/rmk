@@ -36,7 +36,7 @@ pub struct KeyMap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize
     /// Rotary encoder cache
     encoder_layer_cache: [[u8; 2]; NUM_ENCODER],
     /// Options for configurable action behavior
-    pub(crate) behavior: &'a mut BehaviorConfig,
+    pub(crate) behavior: &'a mut BehaviorConfig<ROW, COL>,
     /// Publisher for controller channel
     #[cfg(feature = "controller")]
     controller_pub: ControllerPub,
@@ -63,7 +63,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub async fn new(
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
-        behavior: &'a mut BehaviorConfig,
+        behavior: &'a mut BehaviorConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
 
@@ -94,7 +94,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         action_map: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
         mut encoder_map: Option<&'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
         storage: Option<&mut Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>>,
-        behavior: &'a mut BehaviorConfig,
+        behavior: &'a mut BehaviorConfig<ROW, COL>,
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);

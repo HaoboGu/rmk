@@ -5,15 +5,17 @@ use quote::{format_ident, quote};
 use rmk_config::{KEYCODE_ALIAS, KeyboardTomlConfig};
 
 /// Read the default keymap setting in `keyboard.toml` and add as a `get_default_keymap` function
+/// Also add `get_default_encoder_map`
 pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> TokenStream2 {
     let num_encoder = keyboard_config.get_board_config().unwrap().get_num_encoder();
     let total_num_encoder = num_encoder.iter().sum::<usize>();
     // TODO: config encoder in keyboard.toml
     let encoders = vec![quote! { ::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No))}; total_num_encoder];
 
+    let (layout, _key_info) = keyboard_config.get_layout_config().unwrap();
     let mut layers = vec![];
     let mut encoder_map = vec![];
-    for layer in keyboard_config.get_layout_config().unwrap().keymap {
+    for layer in layout.keymap {
         layers.push(expand_layer(layer));
         encoder_map.push(quote! { [#(#encoders), *] });
     }
