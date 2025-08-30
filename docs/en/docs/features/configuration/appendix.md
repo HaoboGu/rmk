@@ -141,10 +141,10 @@ morses = [
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
 
   # TD(1) Extended tap dance representation for function keys  
-  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"], timeout = "300ms" }
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
 
   # TD(2) Morse code like representation
-  { timeout = "300ms", morse_actions = [
+  { morse_actions = [
       {pattern = ".-", action = "A"}, 
       {pattern = "-...", action = "B"}, 
       {pattern = "-.-.", action = "C"}, 

@@ -439,9 +439,10 @@ pub struct TapHoldConfig {
     pub enable_flow_tap: Option<bool>, //default: false
     /// used in permissive_hold mode
     pub prior_idle_time: Option<DurationMillis>,
-
+    /// if true, tap-hold key will always send tap action when tapped with the same hand only
     pub unilateral_tap: Option<bool>,
-    /// The decision mode of the morse/tap-hold key
+
+    /// The decision mode of the morse/tap-hold key (only one of permissive_hold and hold_on_other_press can be true)
     pub permissive_hold: Option<bool>,
     pub hold_on_other_press: Option<bool>,
 

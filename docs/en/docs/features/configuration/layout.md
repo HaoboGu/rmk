@@ -23,7 +23,11 @@ The `<hand>` is optional, can be used to associate each key to the left or right
 The `<profile_name>` is also optional, if given, selects a key profile from `behavior.key_profiles` to override the defaults set in `behavior.tap_hold`.
 
 ```toml
-# split ortho example for matrix map, with hand and home row information filled:
+# split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
+[layout]
+rows = 4
+cols = 10
+layers = 3
 matrix_map = """
 (0, 0, L)    (0, 1, L)    (0, 2, L)    (0, 3, L)    (0, 4, L)         (0, 5, R)   (0, 6, R)    (0, 7, R)    (0, 8, R)    (0, 9, R)   
 (1, 0, L:H2) (1, 1, L:H2) (1, 2, L:H1) (1, 3, L:H1) (1, 4, L)         (1, 5, R)   (1, 6, R:H1) (1, 7, R:H1) (1, 8, R:H2) (1, 9, R:H2)

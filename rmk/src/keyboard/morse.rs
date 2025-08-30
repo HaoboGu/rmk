@@ -223,27 +223,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         Duration::from_millis(timeout as u64)
     }
 
-    // fn is_home_row(behavior_config: &BehaviorConfig<ROW, COL>, key_action: &KeyAction) -> bool {
-    //     if let Action::Key(key_code) = Self::action_from_pattern(behavior_config, key_action, TAP) {
-    //         match key_code {
-    //             KeyCode::A
-    //             | KeyCode::S
-    //             | KeyCode::D
-    //             | KeyCode::F
-    //             | KeyCode::G
-    //             | KeyCode::H
-    //             | KeyCode::J
-    //             | KeyCode::K
-    //             | KeyCode::L
-    //             | KeyCode::Semicolon
-    //             | KeyCode::Quote => true,
-    //             _ => false,
-    //         }
-    //     } else {
-    //         false
-    //     }
-    // }
-
     /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
     pub fn tap_hold_mode(behavior_config: &BehaviorConfig<ROW, COL>, pos: KeyboardEventPos) -> (MorseMode, bool) {
         if let KeyboardEventPos::Key(pos) = pos
@@ -252,20 +231,6 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         {
             (profile.mode, profile.unilateral_tap)
         } else {
-            // if behavior_config.enable_hrm && Self::is_home_row(&behavior_config, key_action) {
-            //     (MorseMode::PermissiveHold, true)
-            // } else {
-            //     match Self::action_from_pattern(behavior_config, key_action, HOLD) {
-            //         Action::Modifier(_) | Action::LayerOn(_) => {
-            //             // MT/LT on non-letter, non-home-row keys
-            //             (MorseMode::HoldOnOtherPress, false)
-            //         }
-            //         _ => (
-            //             behavior_config.tap_hold.default_profile.mode,
-            //             behavior_config.tap_hold.default_profile.unilateral_tap,
-            //         ),
-            //     }
-            // }
             (
                 behavior_config.tap_hold.default_profile.mode,
                 behavior_config.tap_hold.default_profile.unilateral_tap,

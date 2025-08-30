@@ -37,13 +37,15 @@ fn expand_key_info_row(
             'r' | 'R' => quote! { rmk::config::Hand::Right },
             _ => quote! { rmk::config::Hand::Unknown },
         };
-        if let Some(profile_name) = &key.profile
-            && let Some(profiles) = key_profiles
-            && let Some(profile) = profiles.get(profile_name)
-        {
-            let config = expand_key_profile(profile, default);
-
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::Some(#config) } });
+        if let Some(profile_name) = &key.profile {
+            if let Some(profiles) = key_profiles
+               && let Some(profile) = profiles.get(profile_name)
+            {
+                let config = expand_key_profile(profile, default);
+                key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::Some(#config) } });
+            } else {
+                panic!("`\n❌ {:?}` profile name is not found in behavior.key_profiles", profile_name);
+            }            
         } else {
             key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::None } });
         };
