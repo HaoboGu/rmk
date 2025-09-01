@@ -17,13 +17,13 @@ rmk = { path = "../../../rmk", features = [
     "adafruit_bl",
     "controller",
 ] }
-nrf-sdc = { version = "0.2", default-features = false, features = [
+nrf-sdc = { version = "0.3", default-features = false, features = [
     "defmt",
     "peripheral",
     "central",
     "nrf52840",
 ] }
-nrf-mpsl = { version = "0.2", default-features = false, features = [
+nrf-mpsl = { version = "0.3", default-features = false, features = [
     "defmt",
     "critical-section-impl",
     "nrf52840",

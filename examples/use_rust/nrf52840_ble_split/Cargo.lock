@@ -177,20 +177,6 @@ dependencies = [
 
 [[package]]
 name = "bt-hci"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa7f7c19df9648c1da4f5356c4256533e38bd65633b6a41654922475a1c6d777"
-dependencies = [
- "defmt 1.0.1",
- "embassy-sync",
- "embedded-io",
- "embedded-io-async",
- "futures-intrusive",
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "bt-hci"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a496a585c0e2e00195e558af18342f79afd67598d3edb32e78c006e606a31386"
@@ -666,23 +652,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-embedded-hal"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1611b7a7ab5d1fbed84c338df26d56fd9bded58006ebb029075112ed2c5e039"
-dependencies = [
- "embassy-futures",
- "embassy-hal-internal",
- "embassy-sync",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-storage",
- "embedded-storage-async",
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embassy-embedded-hal"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "554e3e840696f54b4c9afcf28a0f24da431c927f4151040020416e7393d6d0d8"
@@ -772,35 +741,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "767c94872f4afd7539cbb67ad2c59b038996b5395b659c57d15b2af5187b189a"
-dependencies = [
- "bitflags 2.9.1",
- "cfg-if",
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "document-features",
- "embassy-embedded-hal 0.4.0",
- "embassy-hal-internal",
- "embassy-sync",
- "embassy-usb-driver",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-io",
- "embedded-io-async",
- "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "nrf-pac",
- "rand_core 0.6.4",
- "rand_core 0.9.3",
-]
-
-[[package]]
-name = "embassy-nrf"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86a0fd2ba2c12b27bc7116fbd33911eb78ebb72a059f1c4f875a5e1c65a6e372"
@@ -812,7 +752,7 @@ dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.5.0",
+ "embassy-embedded-hal",
  "embassy-hal-internal",
  "embassy-sync",
  "embassy-time 0.5.0",
@@ -1470,14 +1410,14 @@ dependencies = [
 
 [[package]]
 name = "nrf-mpsl"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6f849ad08f1738b908a80a1f6a7b0ef19df3ea76effd524c364f6c63efa5b5"
+checksum = "b74abf5519b4ed790e9e2bda4ed8aba09631f78c1ffb0b2cab82c12b4d8a0076"
 dependencies = [
  "cortex-m",
  "critical-section",
  "defmt 1.0.1",
- "embassy-nrf 0.6.0",
+ "embassy-nrf",
  "embassy-sync",
  "embedded-io",
  "embedded-storage",
@@ -1507,15 +1447,15 @@ dependencies = [
 
 [[package]]
 name = "nrf-sdc"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ca6ba5d9018af9c201a16c73474ea57362ddc64ac2bd1709148ca7b64cd5b1"
+checksum = "dd8a32e646b425ba916d6ae29171643e15cd800a9b8e8b5cb33990d1b9e4d675"
 dependencies = [
- "bt-hci 0.3.2",
+ "bt-hci",
  "critical-section",
  "defmt 1.0.1",
  "embassy-hal-internal",
- "embassy-nrf 0.6.0",
+ "embassy-nrf",
  "embassy-sync",
  "embedded-io",
  "embedded-io-async",
@@ -1881,7 +1821,7 @@ name = "rmk"
 version = "0.7.8"
 dependencies = [
  "bitfield-struct",
- "bt-hci 0.4.0",
+ "bt-hci",
  "byteorder",
  "chrono",
  "const-gen",
@@ -1889,10 +1829,10 @@ dependencies = [
  "crc32fast",
  "defmt 1.0.1",
  "document-features",
- "embassy-embedded-hal 0.5.0",
+ "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
- "embassy-nrf 0.7.0",
+ "embassy-nrf",
  "embassy-sync",
  "embassy-time 0.5.0",
  "embassy-usb",
@@ -1958,14 +1898,14 @@ dependencies = [
 name = "rmk-nrf52840"
 version = "0.2.0"
 dependencies = [
- "bt-hci 0.4.0",
+ "bt-hci",
  "const-gen",
  "cortex-m",
  "cortex-m-rt",
  "defmt 1.0.1",
  "defmt-rtt",
  "embassy-executor",
- "embassy-nrf 0.7.0",
+ "embassy-nrf",
  "embassy-time 0.5.0",
  "json",
  "nrf-mpsl",
@@ -2365,7 +2305,7 @@ version = "0.2.4"
 source = "git+https://github.com/haobogu/trouble?rev=c439474#c43947496da11db867e728bd363b4aae2d0e8b58"
 dependencies = [
  "aes",
- "bt-hci 0.4.0",
+ "bt-hci",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",

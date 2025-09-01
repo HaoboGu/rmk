@@ -28,8 +28,8 @@ portable-atomic = { version = "1.11", features = ["critical-section"] }
 defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
-cyw43 = { version = "0.4.0", features = ["defmt", "firmware-logs", "bluetooth"] }
-cyw43-pio = { version = "0.6.0", features = ["defmt"] }
+cyw43 = { version = "0.5.0", features = ["defmt", "firmware-logs", "bluetooth"] }
+cyw43-pio = { version = "0.8.0", features = ["defmt"] }
 static_cell = "2"
 bt-hci = { version = "0.4", default-features = false, features = ["defmt"] }
 rand = { version = "0.8.4", default-features = false }
