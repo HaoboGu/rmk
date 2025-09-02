@@ -2446,7 +2446,7 @@ mod test {
                     negative_output: KeyAction::Single(Action::Key(KeyCode::Dot)),
                     positive_output: KeyAction::Single(
                         Action::KeyWithModifier(KeyCode::Semicolon,
-                        ModifierCombination::default().with_shift(true),)
+                        ModifierCombination::default().with_left_shift(true),)
                     ),
                     match_any: StateBits {
                         modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),

@@ -121,6 +121,9 @@ impl ModifierCombination {
     /// the left side has higher priority
     pub const fn into_packed_bits(self) -> u8 {
         let bits = self.into_bits();
+        if bits == 0 {
+            return 0;
+        }
         let left_bits = bits & 0x0F; // Extract left side modifiers (bits 0-3)
         let right_bits = bits >> 4; // Extract right side modifiers (bits 4-7)
 
