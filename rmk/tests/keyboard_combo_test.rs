@@ -4,7 +4,7 @@ use embassy_time::Duration;
 use heapless::Vec;
 use rmk::combo::Combo;
 use rmk::config::CombosConfig;
-use rmk::types::keycode::modifier::ModifierCombination;
+use rmk::types::modifier::ModifierCombination;
 use rmk::{k, osm};
 
 // Get tested combo config

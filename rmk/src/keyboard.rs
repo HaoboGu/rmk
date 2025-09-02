@@ -10,7 +10,7 @@ use heapless::Vec;
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::hid_state::HidMouseButtons;
 use rmk_types::keycode::KeyCode;
-use rmk_types::keycode::modifier::ModifierCombination;
+use rmk_types::modifier::ModifierCombination;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {

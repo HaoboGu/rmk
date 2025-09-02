@@ -2,7 +2,7 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::config::{BehaviorConfig, OneShotConfig};
-use rmk::types::keycode::modifier::ModifierCombination;
+use rmk::types::modifier::ModifierCombination;
 
 fn one_shot_config_with_short_timeout() -> OneShotConfig {
     OneShotConfig {

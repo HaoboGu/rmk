@@ -12,7 +12,7 @@ use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::hid_state::HidMouseButtons;
-use rmk_types::keycode::modifier::ModifierCombination;
+use rmk_types::modifier::ModifierCombination;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};

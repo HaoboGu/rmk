@@ -19,7 +19,7 @@ use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
 use rmk::keymap::KeyMap;
 use rmk::types::action::KeyAction;
-use rmk::types::keycode::modifier::ModifierCombination;
+use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
 
 // Init logger for tests

@@ -78,7 +78,7 @@ impl quote::ToTokens for ModifierCombinationMacro {
         let ctrl = self.ctrl;
 
         tokens.extend(quote! {
-            ::rmk::types::keycode::modifier::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
+            ::rmk::types::modifier::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
         });
     }
 }

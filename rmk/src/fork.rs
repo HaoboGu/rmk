@@ -2,7 +2,7 @@ use core::ops::{BitAnd, BitOr, Not};
 
 use rmk_types::action::KeyAction;
 use rmk_types::hid_state::HidMouseButtons;
-use rmk_types::keycode::modifier::ModifierCombination;
+use rmk_types::modifier::ModifierCombination;
 
 use crate::light::LedIndicator;
 

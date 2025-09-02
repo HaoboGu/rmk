@@ -1,7 +1,7 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "controller")]
-use {crate::light::LedIndicator, rmk_types::action::KeyAction, rmk_types::keycode::modifier::ModifierCombination};
+use {crate::light::LedIndicator, rmk_types::action::KeyAction, rmk_types::modifier::ModifierCombination};
 
 use crate::input_device::rotary_encoder::Direction;
 

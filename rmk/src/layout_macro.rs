@@ -152,7 +152,7 @@ macro_rules! shifted {
     ($x: ident) => {
         $crate::wm!(
             $x,
-            $crate::types::keycode::modifier::ModifierCombination::new_from(false, false, false, true, false)
+            $crate::types::modifier::ModifierCombination::new_from(false, false, false, true, false)
         )
     };
 }

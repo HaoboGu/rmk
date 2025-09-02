@@ -1,8 +1,6 @@
-pub mod modifier;
-
 use strum::{EnumIter, FromRepr};
 
-use crate::keycode::modifier::ModifierCombination;
+use crate::modifier::ModifierCombination;
 
 impl From<u16> for ConsumerKey {
     fn from(value: u16) -> Self {

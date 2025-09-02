@@ -410,7 +410,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 mod test {
     use rmk_types::action::{Action, KeyAction};
     use rmk_types::keycode::KeyCode;
-    use rmk_types::keycode::modifier::ModifierCombination;
+    use rmk_types::modifier::ModifierCombination;
 
     use super::{_reorder_combos, Combo};
     use crate::fork::{Fork, StateBits};
