@@ -10,7 +10,8 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
-use rmk_types::hid_state::{HidModifiers, HidMouseButtons};
+use rmk_types::hid_state::HidMouseButtons;
+use rmk_types::keycode::modifier::ModifierCombination;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
@@ -534,16 +535,16 @@ impl Value<'_> for StorageData {
                     let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
 
                     let match_any = StateBits {
-                        modifiers: HidModifiers::from_bits((modifier_masks & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits((modifier_masks & 0xFF) as u8),
                         leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
                         mouse: HidMouseButtons::from_bits((mouse_masks & 0xFF) as u8),
                     };
                     let match_none = StateBits {
-                        modifiers: HidModifiers::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
                         leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
                         mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
                     };
-                    let kept_modifiers = HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
                     let bindable = (modifier_masks & (1 << 24)) != 0;
 
                     Ok(StorageData::ForkData(ForkData {

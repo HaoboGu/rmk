@@ -413,8 +413,8 @@ mod test {
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
     use rmk_types::action::{Action, KeyAction};
-    use rmk_types::hid_state::HidModifiers;
     use rmk_types::keycode::KeyCode;
+    use rmk_types::keycode::modifier::ModifierCombination;
 
     #[test]
     fn test_fill_vec() {
@@ -436,7 +436,7 @@ mod test {
                 k!(F),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
             Fork::new(
@@ -445,7 +445,7 @@ mod test {
                 k!(F),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
             Fork::new(
@@ -454,7 +454,7 @@ mod test {
                 k!(Y),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
         ])

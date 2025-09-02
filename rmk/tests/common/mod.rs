@@ -18,7 +18,7 @@ use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::types::keycode::ModifierCombination;
+use rmk::types::keycode::modifier::ModifierCombination;
 use rmk::keymap::KeyMap;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
 

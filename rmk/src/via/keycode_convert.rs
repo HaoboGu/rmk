@@ -1,5 +1,5 @@
 use rmk_types::action::{Action, KeyAction};
-use rmk_types::keycode::{KeyCode, ModifierCombination};
+use rmk_types::keycode::{KeyCode, modifier::ModifierCombination};
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
@@ -21,7 +21,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16
                 }
             }
-            Action::KeyWithModifier(k, m) => ((m.into_bits() as u16) << 8) | k as u16,
+            Action::KeyWithModifier(k, m) => ((m.into_packed_bits() as u16) << 8) | k as u16,
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
@@ -40,7 +40,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             Action::OneShotModifier(m) => {
                 // One-shot modifier
-                let modifier_bits = m.into_bits();
+                let modifier_bits = m.into_packed_bits();
                 0x52A0 | modifier_bits as u16
             }
             _ => 0x0000,
@@ -66,7 +66,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     Action::Key(k) => k as u16,
                     _ => 0,
                 };
-                0x2000 | ((m.into_bits() as u16) << 8) | keycode
+                0x2000 | ((m.into_packed_bits() as u16) << 8) | keycode
             }
             _ => 0x0000,
         },
@@ -86,7 +86,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x0100..=0x1FFF => {
             // WithModifier
             let keycode = (via_keycode & 0x00FF).into();
-            let modifier = ModifierCombination::from_bits((via_keycode >> 8) as u8);
+            let modifier = ModifierCombination::from_packed_bits((via_keycode >> 8) as u8);
             KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
         }
         0x2000..=0x3FFF => {
@@ -94,7 +94,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // For modifier tap-hold, if it's on the home row, use `new_hrm` instead
             // HRMs is in permissive hold mode, while other modifier tap-hold is in hold on other key press mode
             let keycode = (via_keycode & 0x00FF).into();
-            let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
+            let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
             KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier))
         }
         0x4000..=0x4FFF => {
@@ -131,7 +131,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x52A0..=0x52BF => {
             // One-shot modifier
-            let m = ModifierCombination::from_bits((via_keycode & 0x1F) as u8);
+            let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
             KeyAction::Single(Action::OneShotModifier(m))
         }
         0x52C0..=0x52DF => {

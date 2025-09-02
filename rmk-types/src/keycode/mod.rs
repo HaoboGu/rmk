@@ -2,7 +2,7 @@ pub mod modifier;
 
 use strum::{EnumIter, FromRepr};
 
-use crate::hid_state::HidModifiers;
+use crate::keycode::modifier::ModifierCombination;
 
 impl From<u16> for ConsumerKey {
     fn from(value: u16) -> Self {
@@ -994,17 +994,17 @@ impl KeyCode {
 
     /// Returns the byte with the bit corresponding to the USB HID
     /// modifier bitfield set.
-    pub fn to_hid_modifiers(self) -> HidModifiers {
+    pub fn to_hid_modifiers(self) -> ModifierCombination {
         match self {
-            KeyCode::LCtrl => HidModifiers::new().with_left_ctrl(true),
-            KeyCode::LShift => HidModifiers::new().with_left_shift(true),
-            KeyCode::LAlt => HidModifiers::new().with_left_alt(true),
-            KeyCode::LGui => HidModifiers::new().with_left_gui(true),
-            KeyCode::RCtrl => HidModifiers::new().with_right_ctrl(true),
-            KeyCode::RShift => HidModifiers::new().with_right_shift(true),
-            KeyCode::RAlt => HidModifiers::new().with_right_alt(true),
-            KeyCode::RGui => HidModifiers::new().with_right_gui(true),
-            _ => HidModifiers::new(),
+            KeyCode::LCtrl => ModifierCombination::new().with_left_ctrl(true),
+            KeyCode::LShift => ModifierCombination::new().with_left_shift(true),
+            KeyCode::LAlt => ModifierCombination::new().with_left_alt(true),
+            KeyCode::LGui => ModifierCombination::new().with_left_gui(true),
+            KeyCode::RCtrl => ModifierCombination::new().with_right_ctrl(true),
+            KeyCode::RShift => ModifierCombination::new().with_right_shift(true),
+            KeyCode::RAlt => ModifierCombination::new().with_right_alt(true),
+            KeyCode::RGui => ModifierCombination::new().with_right_gui(true),
+            _ => ModifierCombination::new(),
         }
     }
 

@@ -4,7 +4,7 @@ use embassy_time::Duration;
 use heapless::Vec;
 use rmk::combo::Combo;
 use rmk::config::CombosConfig;
-use rmk::types::keycode::ModifierCombination;
+use rmk::types::keycode::modifier::ModifierCombination;
 use rmk::{k, osm};
 
 // Get tested combo config
@@ -55,9 +55,9 @@ pub fn get_combos_config() -> CombosConfig {
 
 mod combo_test {
     use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
-    use rmk::types::keycode::KeyCode;
     use rmk::morse::MorseMode;
     use rmk::th;
+    use rmk::types::keycode::KeyCode;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
