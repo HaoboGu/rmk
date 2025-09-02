@@ -5,7 +5,8 @@ use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::k;
 use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::{KeyCode, ModifierCombination};
+use rmk::types::keycode::KeyCode;
+use rmk::types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -655,7 +656,6 @@ rusty_fork_test! {
     }
 
     #[test]
-    #[ignore]
     fn test_morse_hold_after_last_tapping() {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
@@ -668,7 +668,7 @@ rusty_fork_test! {
             expected_reports: [
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Press B
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
             ]
         };
@@ -728,8 +728,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT)),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
                                 k!(X),
                                 None,
                             )
@@ -760,8 +760,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT)),
-                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
                                 k!(X),
                                 None,
                             )

@@ -2125,7 +2125,7 @@ mod test {
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
     use rmk_types::action::KeyAction;
-    use rmk_types::hid_state::ModifierCombination;
+    use rmk_types::modifier::ModifierCombination;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
