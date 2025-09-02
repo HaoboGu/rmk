@@ -1,5 +1,6 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
@@ -16,7 +17,6 @@ use crate::keyboard_macros::MacroOperation;
 use crate::matrix::MatrixState;
 #[cfg(feature = "storage")]
 use crate::{boot::reboot_keyboard, storage::Storage};
-use rmk_types::action::{EncoderAction, KeyAction};
 
 /// Keymap represents the stack of layers.
 ///
@@ -408,13 +408,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+    use rmk_types::action::{Action, KeyAction};
+    use rmk_types::keycode::KeyCode;
+    use rmk_types::keycode::modifier::ModifierCombination;
+
     use super::{_reorder_combos, Combo};
     use crate::fork::{Fork, StateBits};
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
-    use rmk_types::action::{Action, KeyAction};
-    use rmk_types::keycode::KeyCode;
-    use rmk_types::keycode::modifier::ModifierCombination;
 
     #[test]
     fn test_fill_vec() {

@@ -2,6 +2,7 @@ use core::cell::RefCell;
 
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Duration;
+use rmk_types::action::KeyAction;
 use rmk_types::protocol::vial::{
     SettingKey, VIAL_COMBO_MAX_LENGTH, VIAL_EP_SIZE, VIAL_PROTOCOL_VERSION, VialCommand, VialDynamic,
 };
@@ -19,7 +20,6 @@ use crate::{
     storage::{ComboData, FlashOperationMessage},
 };
 use crate::{COMBO_MAX_NUM, MORSE_MAX_NUM};
-use rmk_types::action::KeyAction;
 
 /// Note: vial uses little endian, while via uses big endian
 pub(crate) async fn process_vial<

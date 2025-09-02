@@ -1,7 +1,8 @@
+use rmk_types::keycode::KeyCode;
+
 use crate::MACRO_SPACE_SIZE;
 use crate::keymap::fill_vec;
 use crate::via::keycode_convert::{from_ascii, to_ascii};
-use rmk_types::keycode::KeyCode;
 
 /// encoded with the two bytes, content at the third byte
 /// 0b 0000 0001 1000-1010 (VIAL_MACRO_EXT) are not supported

@@ -1,9 +1,9 @@
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
-
-use crate::input_device::rotary_encoder::Direction;
 #[cfg(feature = "controller")]
 use {crate::light::LedIndicator, rmk_types::action::KeyAction, rmk_types::keycode::modifier::ModifierCombination};
+
+use crate::input_device::rotary_encoder::Direction;
 
 /// Raw events from input devices and keyboards
 ///

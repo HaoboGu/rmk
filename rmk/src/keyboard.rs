@@ -9,7 +9,8 @@ use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::hid_state::HidMouseButtons;
-use rmk_types::keycode::{KeyCode, modifier::ModifierCombination};
+use rmk_types::keycode::KeyCode;
+use rmk_types::keycode::modifier::ModifierCombination;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {
@@ -2123,6 +2124,8 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
+    use rmk_types::action::KeyAction;
+    use rmk_types::hid_state::ModifierCombination;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
@@ -2130,8 +2133,6 @@ mod test {
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
     use crate::{a, k, layer, mo, th};
-    use rmk_types::action::KeyAction;
-    use rmk_types::hid_state::ModifierCombination;
 
     // Init logger for tests
     #[ctor::ctor]

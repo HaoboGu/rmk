@@ -2,10 +2,10 @@ pub mod common;
 
 mod macro_test {
     use heapless::Vec;
-    use rmk::types::action::{Action, KeyAction};
     use rmk::config::BehaviorConfig;
     use rmk::keyboard::Keyboard;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
+    use rmk::types::action::{Action, KeyAction};
     use rmk::types::keycode::KeyCode;
     use rusty_fork::rusty_fork_test;
 

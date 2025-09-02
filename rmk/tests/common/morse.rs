@@ -1,9 +1,9 @@
 use heapless::Vec;
-use rmk::types::action::Action;
 use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::types::keycode::{KeyCode, ModifierCombination};
 use rmk::morse::{Morse, MorsePattern};
+use rmk::types::action::Action;
+use rmk::types::keycode::{KeyCode, ModifierCombination};
 use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;

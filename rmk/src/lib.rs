@@ -42,7 +42,6 @@ use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
 use light::LedIndicator;
 use matrix::MatrixTrait;
-pub use rmk_types as types;
 use rmk_types::action::{EncoderAction, KeyAction};
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
@@ -60,7 +59,7 @@ use {
     descriptor::{CompositeReport, KeyboardReport},
     via::UsbVialReaderWriter,
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros};
+pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
 #[cfg(feature = "storage")]
 use {embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 

@@ -10,7 +10,6 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
 use log::debug;
-use rmk::types::action::KeyAction;
 use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
@@ -18,8 +17,9 @@ use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::types::keycode::modifier::ModifierCombination;
 use rmk::keymap::KeyMap;
+use rmk::types::action::KeyAction;
+use rmk::types::keycode::modifier::ModifierCombination;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
 
 // Init logger for tests

@@ -10,6 +10,7 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
+use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::hid_state::HidMouseButtons;
 use rmk_types::keycode::modifier::ModifierCombination;
 use sequential_storage::Error as SSError;
@@ -32,7 +33,6 @@ use crate::morse::{Morse, MorseMode, MorsePattern};
 use crate::split::ble::PeerAddress;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
-use rmk_types::action::{EncoderAction, KeyAction};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -1644,12 +1644,12 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
+    use rmk_types::action::Action;
+    use rmk_types::keycode::KeyCode;
     use sequential_storage::map::Value;
 
     use super::*;
     use crate::morse::{HOLD, MorseMode, TAP};
-    use rmk_types::action::Action;
-    use rmk_types::keycode::KeyCode;
 
     #[test]
     fn test_morse_serialization_deserialization() {

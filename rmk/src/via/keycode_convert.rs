@@ -1,5 +1,6 @@
 use rmk_types::action::{Action, KeyAction};
-use rmk_types::keycode::{KeyCode, modifier::ModifierCombination};
+use rmk_types::keycode::KeyCode;
+use rmk_types::keycode::modifier::ModifierCombination;
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
