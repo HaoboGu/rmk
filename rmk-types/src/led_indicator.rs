@@ -1,3 +1,7 @@
+//! LED indicator.
+//!
+//! This module handles keyboard LED indicators such as Caps Lock, Num Lock,
+//! and Scroll Lock. It provides efficient bitfield operations for these indicators.
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;

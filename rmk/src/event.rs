@@ -206,7 +206,7 @@ pub enum ControllerEvent {
     KeyboardIndicator(LedIndicator),
     /// Ble state changed
     #[cfg(feature = "_ble")]
-    BleState(u8, crate::ble::trouble::BleState),
+    BleState(u8, crate::ble::BleState),
     /// Ble profile changed
     #[cfg(feature = "_ble")]
     BleProfile(u8),

@@ -21,7 +21,7 @@ use {
 
 use super::ble_server::CCCD_TABLE_SIZE;
 use crate::NUM_BLE_PROFILE;
-use crate::ble::trouble::ACTIVE_PROFILE;
+use crate::ble::ACTIVE_PROFILE;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::state::CONNECTION_TYPE;
 

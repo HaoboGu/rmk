@@ -19,8 +19,8 @@ use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
 #[cfg(feature = "_ble")]
 use {
-    crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
-    crate::ble::trouble::profile::ProfileInfo,
+    crate::ble::ble_server::CCCD_TABLE_SIZE,
+    crate::ble::profile::ProfileInfo,
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 

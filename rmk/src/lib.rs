@@ -201,7 +201,7 @@ pub async fn run_rmk<
 ) -> ! {
     // Dispatch the keyboard runner
     #[cfg(feature = "_ble")]
-    crate::ble::trouble::run_ble(
+    crate::ble::run_ble(
         keymap,
         #[cfg(not(feature = "_no_usb"))]
         usb_driver,

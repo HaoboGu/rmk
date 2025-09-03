@@ -18,7 +18,7 @@ use esp_hal::rng::{Trng, TrngSource};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use esp_wifi::ble::controller::BleConnector;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
