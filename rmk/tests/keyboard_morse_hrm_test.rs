@@ -6,11 +6,10 @@ pub mod common;
 use embassy_time::Duration;
 use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, KeyProfile, TapHoldConfig};
+use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, TapHoldConfig, TapHoldProfile};
 use rmk::k;
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::MorseMode;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -21,23 +20,23 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
         key_info: Some([[
             KeyInfo {
                 hand: Hand::Left,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Left,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
         ]]),
 
@@ -45,11 +44,12 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
         tap_hold: TapHoldConfig {
             enable_flow_tap: true,
             prior_idle_time: Duration::from_millis(120),
-            default_profile: KeyProfile {
-                unilateral_tap: true,
-                mode: MorseMode::PermissiveHold,
-                ..Default::default()
-            },
+            default_profile: TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_unilateral_tap(true)
+                .with_permissive_hold(true)
+                .with_hold_timeout_ms(250u16)
+                .with_gap_timeout_ms(250u16),
             ..Default::default()
         },
         ..Default::default()
@@ -66,33 +66,34 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
         key_info: Some([[
             KeyInfo {
                 hand: Hand::Left,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Left,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
             KeyInfo {
                 hand: Hand::Right,
-                profile: None,
+                ..Default::default()
             },
         ]]),
 
         tap_hold: TapHoldConfig {
             enable_flow_tap: true,
-            default_profile: KeyProfile {
-                unilateral_tap: true,
-                mode: MorseMode::PermissiveHold,
-                ..Default::default()
-            },
+            default_profile: TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_unilateral_tap(true)
+                .with_permissive_hold(true)
+                .with_hold_timeout_ms(250u16)
+                .with_gap_timeout_ms(250u16),
             ..Default::default()
         },
         combo: CombosConfig {

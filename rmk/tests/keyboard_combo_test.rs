@@ -3,7 +3,7 @@ pub mod common;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk::combo::Combo;
-use rmk::config::{CombosConfig, KeyProfile};
+use rmk::config::{CombosConfig, TapHoldProfile};
 use rmk::keycode::ModifierCombination;
 use rmk::{k, osm};
 
@@ -56,7 +56,6 @@ pub fn get_combos_config() -> CombosConfig {
 mod combo_test {
     use rmk::config::{BehaviorConfig, OneShotConfig, TapHoldConfig};
     use rmk::keycode::KeyCode;
-    use rmk::morse::MorseMode;
     use rmk::th;
     use rusty_fork::rusty_fork_test;
 
@@ -183,12 +182,12 @@ mod combo_test {
                 keyboard: {
                     let behavior_config = BehaviorConfig {
                         tap_hold: TapHoldConfig {
-                            default_profile: KeyProfile {
-                                unilateral_tap: false,
-                                mode: MorseMode::PermissiveHold,
-                                hold_timeout_ms: 250u16,
-                                gap_timeout_ms: 250u16,
-                            },
+                            default_profile: TapHoldProfile::new()
+                            .with_is_filled(true)
+                            .with_unilateral_tap(false)
+                            .with_permissive_hold(true)
+                            .with_hold_timeout_ms(250u16)
+                            .with_gap_timeout_ms(250u16),
                             ..TapHoldConfig::default()
                         },
                         combo: CombosConfig {

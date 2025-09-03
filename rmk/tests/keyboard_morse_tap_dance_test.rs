@@ -3,10 +3,10 @@ pub mod common;
 
 use heapless::Vec;
 use rmk::action::Action;
-use rmk::config::{BehaviorConfig, MorsesConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig, TapHoldProfile};
 use rmk::keyboard::Keyboard;
 use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::{Morse, MorseMode};
+use rmk::morse::Morse;
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
 
@@ -43,10 +43,12 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
             .unwrap(),
         },
         tap_hold: rmk::config::TapHoldConfig {
-            default_profile: rmk::config::KeyProfile {
-                mode: MorseMode::HoldOnOtherPress,
-                ..Default::default()
-            },
+            default_profile: TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_unilateral_tap(false)
+                .with_hold_on_other_press(true)
+                .with_hold_timeout_ms(250u16)
+                .with_gap_timeout_ms(250u16),
             ..Default::default()
         },
         ..Default::default()

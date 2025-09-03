@@ -203,17 +203,3 @@ impl Morse {
         }
     }
 }
-
-/// Mode for morse key behavior
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum MorseMode {
-    /// Normal mode, the decision is made when timeout
-    Normal,
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
-    /// When another key is pressed and released during the current morse key is held,
-    /// the hold action of current morse key will be triggered
-    PermissiveHold,
-    /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
-    HoldOnOtherPress,
-}

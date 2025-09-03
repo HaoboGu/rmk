@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use quote::quote;
 use rmk_config::{
     CombosConfig, ForksConfig, KeyInfo, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig, OneShotConfig,
-    TapHoldConfig, TriLayerConfig, KeyProfile,
+    TapHoldConfig, TriLayerConfig, TapHoldProfile,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
@@ -14,12 +14,12 @@ use crate::layout::{get_key_with_alias, parse_key};
 /// Push rows in the key_info
 fn expand_key_info(
     info: &Vec<Vec<KeyInfo>>,
-    key_profiles: &Option<HashMap<String, KeyProfile>>,
+    tap_hold_profiles: &Option<HashMap<String, TapHoldProfile>>,
     default: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     let mut rows = vec![];
     for row in info {
-        rows.push(expand_key_info_row(row, key_profiles, default));
+        rows.push(expand_key_info_row(row, tap_hold_profiles, default));
     }
     quote! { ::core::option::Option::Some([#(#rows), *]) }
 }
@@ -27,7 +27,7 @@ fn expand_key_info(
 /// Push keys info in the row
 fn expand_key_info_row(
     row: &Vec<KeyInfo>,
-    key_profiles: &Option<HashMap<String, KeyProfile>>,
+    tap_hold_profiles: &Option<HashMap<String, TapHoldProfile>>,
     default: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     let mut key_info = vec![];
@@ -38,13 +38,13 @@ fn expand_key_info_row(
             _ => quote! { rmk::config::Hand::Unknown },
         };
         if let Some(profile_name) = &key.profile {
-            if let Some(profiles) = key_profiles
+            if let Some(profiles) = tap_hold_profiles
                && let Some(profile) = profiles.get(profile_name)
             {
-                let config = expand_key_profile(profile, default);
+                let config = expand_tap_hold_profile(profile, default);
                 key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::Some(#config) } });
             } else {
-                panic!("`\n❌ {:?}` profile name is not found in behavior.key_profiles", profile_name);
+                panic!("`\n❌ {:?}` profile name is not found in behavior.tap_hold_profiles", profile_name);
             }            
         } else {
             key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::None } });
@@ -128,7 +128,7 @@ fn expand_tap_hold_config(tap_hold_config: &Option<TapHoldConfig>) -> proc_macro
             None => quote! {},
         };
 
-        let default_profile = expand_key_profile(&KeyProfile {
+        let default_profile = expand_tap_hold_profile(&TapHoldProfile {
             unilateral_tap: config.unilateral_tap,
             permissive_hold: config.permissive_hold,
             hold_on_other_press: config.hold_on_other_press,
@@ -149,72 +149,69 @@ fn expand_tap_hold_config(tap_hold_config: &Option<TapHoldConfig>) -> proc_macro
     }
 }
 
-fn expand_key_profile(
-    key_profile: &KeyProfile,
+fn expand_tap_hold_profile(
+    tap_hold_profile: &TapHoldProfile,
     default: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     
-    let tap_hold_mode = if let Some(true) = key_profile.permissive_hold {
-        quote! { mode: ::rmk::morse::MorseMode::PermissiveHold, }
-    } else if let Some(true) = key_profile.hold_on_other_press {
-        quote! { mode: ::rmk::morse::MorseMode::HoldOnOtherPress, }
+    let mut filled = false;// whether any field is given
+
+    let permissive_hold = if let Some(enable) = tap_hold_profile.permissive_hold {
+        filled = true;
+        quote! { .with_permissive_hold(#enable) }
     } else {
-        quote! { mode: ::rmk::morse::MorseMode::Normal, }
+        quote! { }
     };
 
-    let unilateral_tap = match key_profile.unilateral_tap {
-        Some(enable) => quote! { unilateral_tap: #enable, },
-        None => match default {
-            Some(def) => match def.unilateral_tap {
-                Some(enable) => quote! { unilateral_tap: #enable, },
-                None => quote! {}                
-            }
-            None => quote! {},
-        },
+    let hold_on_other_press = if let Some(enable) = tap_hold_profile.hold_on_other_press {
+        filled = true;
+        quote! { .with_hold_on_other_press(#enable) }
+    } else {
+        quote! { }
     };
 
-    let hold_timeout = match &key_profile.hold_timeout {
+    // If unilateral_tap is not given, use default_profile.unilateral_tap if exists
+    let unilateral_tap = if let Some(enable) = tap_hold_profile.unilateral_tap {
+        filled = true;
+        quote! { .with_unilateral_tap(#enable) }
+    } else {
+        if let Some(def) = default{
+            let enable = def.unilateral_tap;
+            quote! { .with_unilateral_tap(#enable) }
+        } else {            
+            quote! {}
+        }
+    };
+    
+    let hold_timeout = match &tap_hold_profile.hold_timeout {
         Some (t) => {
+            filled = true;
             let timeout = t.0 as u16;
-            quote! { hold_timeout_ms: #timeout, }
+            quote! { .with_hold_timeout_ms(#timeout) }
         },
-        None => match default {
-            Some(def) => match &def.hold_timeout {
-                Some(t) => {
-                    let timeout = t.0 as u16;
-                    quote! { hold_timeout_ms: #timeout, }
-                },
-                None => quote! {}
-            }
-            None => quote! {},
-        }
+        None => quote! { .with_hold_timeout_ms(0u16) }        
     };
 
-    let gap_timeout = match &key_profile.gap_timeout {
+    let gap_timeout = match &tap_hold_profile.gap_timeout {
         Some (t) =>  {
+            filled = true;
             let timeout = t.0 as u16;
-            quote! { gap_timeout_ms: #timeout, }
+            quote! { .with_gap_timeout_ms(#timeout) }
         },
-        None => match default {
-            Some(def) => match &def.gap_timeout {
-                Some(t) => {
-                    let timeout = t.0 as u16;
-                    quote! { gap_timeout_ms: #timeout, }
-                },
-                None => quote! {}
-            }
-            None => quote! {},
-        }
+        None =>  quote! { .with_gap_timeout_ms(0u16) }
     };
 
-    quote! {
-        ::rmk::config::KeyProfile {
+    if filled {
+        quote! { ::rmk::config::TapHoldProfile::new()
+            .with_is_filled(true)
             #unilateral_tap
-            #tap_hold_mode
+            #permissive_hold
+            #hold_on_other_press            
             #hold_timeout
-            #gap_timeout
-            ..rmk::config::KeyProfile::default()
-        }        
+            #gap_timeout 
+        }
+    } else {
+        quote! { ::rmk::config::TapHoldProfile::new().with_is_filled(false) }
     }    
 }
 
@@ -543,7 +540,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
         && info.len() == row
         && info[0].len() == col
     {
-        expand_key_info(info, &behavior.key_profiles, &behavior.tap_hold)
+        expand_key_info(info, &behavior.tap_hold_profiles, &behavior.tap_hold)
     } else {
         quote! { ::core::option::Option::None }
     };

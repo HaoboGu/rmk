@@ -1303,9 +1303,18 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .map_err(|e| print_storage_error::<F>(e))?
         {
             behavior_config.tap_hold.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
-            behavior_config.tap_hold.default_profile.hold_timeout_ms = c.morse_hold_timeout;
-            behavior_config.tap_hold.default_profile.gap_timeout_ms = c.morse_gap_timeout;
-            behavior_config.tap_hold.default_profile.unilateral_tap = c.unilateral_tap;
+            behavior_config
+                .tap_hold
+                .default_profile
+                .set_hold_timeout_ms(c.morse_hold_timeout);
+            behavior_config
+                .tap_hold
+                .default_profile
+                .set_gap_timeout_ms(c.morse_gap_timeout);
+            behavior_config
+                .tap_hold
+                .default_profile
+                .set_unilateral_tap(c.unilateral_tap);
 
             behavior_config.combo.timeout = Duration::from_millis(c.combo_timeout as u64);
             behavior_config.one_shot.timeout = Duration::from_millis(c.one_shot_timeout as u64);
@@ -1358,9 +1367,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms,
-            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms,
-            unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap,
+            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms(),
+            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms(),
+            unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap(),
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
@@ -1458,9 +1467,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms,
-            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms,
-            unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap,
+            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms(),
+            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms(),
+            unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap(),
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,

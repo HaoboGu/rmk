@@ -412,7 +412,7 @@ pub struct LayoutConfig {
 #[serde(deny_unknown_fields)]
 pub struct KeyInfo {
     pub hand: char,              // 'L' or 'R' or other chars
-    pub profile: Option<String>, // name of key profile (BehaviorConfig::key_profiles[self.profile])
+    pub profile: Option<String>, // name of key profile (BehaviorConfig::tap_hold_profiles[self.profile])
 }
 
 /// Configurations for actions behavior
@@ -429,7 +429,7 @@ pub struct BehaviorConfig {
 
     pub tap_hold: Option<TapHoldConfig>,
     /// these can be used to overrides the defaults given in tap_hold
-    pub key_profiles: Option<HashMap<String, KeyProfile>>,
+    pub tap_hold_profiles: Option<HashMap<String, TapHoldProfile>>,
     pub key_info: Option<Vec<Vec<KeyInfo>>>,
 }
 
@@ -456,7 +456,7 @@ pub struct TapHoldConfig {
 /// Per Key configurations profiles for morse, tap-hold, etc.
 /// overrides the defaults given in TapHoldConfig
 #[derive(Clone, Debug, Deserialize, Default)]
-pub struct KeyProfile {
+pub struct TapHoldProfile {
     pub unilateral_tap: Option<bool>,
     /// The decision mode of the morse/tap-hold key
     pub permissive_hold: Option<bool>,

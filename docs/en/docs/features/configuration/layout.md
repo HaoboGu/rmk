@@ -20,7 +20,7 @@ With the help of this matrix map, the configuration of non-regular key matrices 
 
 The folowing optional fields are used mainly if `enable_flow_tap = true`:
 The `<hand>` is optional, can be used to associate each key to the left or right hand using the `L` or `R` values (this info is used during unilateral tap processing).
-The `<profile_name>` is also optional, if given, selects a key profile from `behavior.key_profiles` to override the defaults set in `behavior.tap_hold`.
+The `<profile_name>` is also optional, if given, selects a key profile from `behavior.tap_hold_profiles` to override the defaults set in `behavior.tap_hold`.
 
 ```toml
 # split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
@@ -38,7 +38,7 @@ matrix_map = """
 [behavior]
 tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_on_other_press = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 
-[behavior.key_profiles]
+[behavior.tap_hold_profiles]
 # matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }

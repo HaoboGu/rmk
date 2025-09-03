@@ -116,7 +116,7 @@ tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
 
-[behavior.key_profiles]
+[behavior.tap_hold_profiles]
 # matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }

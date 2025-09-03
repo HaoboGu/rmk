@@ -5,7 +5,7 @@ use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
-use crate::morse::{HOLD, MorseMode, MorsePattern, TAP};
+use crate::morse::{HOLD, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -203,39 +203,58 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         pos: KeyboardEventPos,
         hold_timeout_needed: bool,
     ) -> Duration {
-        let timeout = if let KeyboardEventPos::Key(pos) = pos
-            && let Some(info) = behavior_config.key_info
-            && let Some(ref profile) = info[pos.row as usize][pos.col as usize].profile
-        {
-            if hold_timeout_needed {
-                profile.hold_timeout_ms
-            } else {
-                profile.gap_timeout_ms
-            }
-        } else {
-            if hold_timeout_needed {
-                behavior_config.tap_hold.default_profile.hold_timeout_ms
-            } else {
-                behavior_config.tap_hold.default_profile.gap_timeout_ms
-            }
-        };
-
-        Duration::from_millis(timeout as u64)
-    }
-
-    /// Decides and returns the pair of (tap_hold_mode, unilateral_tap) based on configuration for the given key action
-    pub fn tap_hold_mode(behavior_config: &BehaviorConfig<ROW, COL>, pos: KeyboardEventPos) -> (MorseMode, bool) {
+        //first try to look for a positional override
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
-            && let Some(profile) = info[pos.row as usize][pos.col as usize].profile
         {
-            (profile.mode, profile.unilateral_tap)
-        } else {
-            (
-                behavior_config.tap_hold.default_profile.mode,
-                behavior_config.tap_hold.default_profile.unilateral_tap,
-            )
+            let profile = info[pos.row as usize][pos.col as usize].tap_hold_profile;
+            if profile.is_filled() {
+                let timeout = if hold_timeout_needed {
+                    profile.hold_timeout_ms()
+                } else {
+                    profile.gap_timeout_ms()
+                };
+
+                if timeout != 0 {
+                    return Duration::from_millis(timeout as u64);
+                }
+            }
         }
+
+        //otherwise return the global defaults
+        let timeout = if hold_timeout_needed {
+            behavior_config.tap_hold.default_profile.hold_timeout_ms()
+        } else {
+            behavior_config.tap_hold.default_profile.gap_timeout_ms()
+        };
+
+        Duration::from_millis(if timeout == 0 { 250u16 } else { timeout } as u64)
+    }
+
+    /// Decides and returns the tuple of (permissive_hold, hold_on_other_press, unilateral_tap)
+    /// based on configuration for the given key action
+    pub fn tap_hold_mode(behavior_config: &BehaviorConfig<ROW, COL>, pos: KeyboardEventPos) -> (bool, bool, bool) {
+        //first try to look for a positional override
+        if let KeyboardEventPos::Key(pos) = pos
+            && let Some(info) = behavior_config.key_info
+        {
+            let profile = info[pos.row as usize][pos.col as usize].tap_hold_profile;
+
+            if profile.is_filled() {
+                return (
+                    profile.permissive_hold(),
+                    profile.hold_on_other_press(),
+                    profile.unilateral_tap(),
+                );
+            }
+        }
+
+        //otherwise return the global defaults
+        (
+            behavior_config.tap_hold.default_profile.permissive_hold(),
+            behavior_config.tap_hold.default_profile.hold_on_other_press(),
+            behavior_config.tap_hold.default_profile.unilateral_tap(),
+        )
     }
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)

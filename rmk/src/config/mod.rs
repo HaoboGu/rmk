@@ -2,6 +2,7 @@
 mod ble_config;
 pub mod macro_config;
 
+use bitfield_struct::bitfield;
 #[cfg(feature = "_ble")]
 pub use ble_config::BleBatteryConfig;
 use embassy_time::Duration;
@@ -10,7 +11,7 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::{Morse, MorseMode};
+use crate::morse::Morse;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
@@ -29,6 +30,12 @@ pub enum Hand {
     Unknown,
     Left,
     Right,
+}
+
+impl Default for Hand {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 /// Config for configurable action behavior
@@ -77,35 +84,52 @@ impl Default for MorsesConfig {
     }
 }
 
-/// configuration for tap-hold and morse
-#[derive(Clone, Copy, Debug)]
-pub struct KeyProfile {
+/// configuration for tap-hold and morse (to save some ram, bitfield is used)
+#[bitfield(u32, order = Lsb, defmt = cfg(feature = "defmt"))]
+pub struct TapHoldProfile {
+    /// Whether this profile is filled with valid data, saves an Option, so saves memory
+    #[bits(1)]
+    pub is_filled: bool,
+
     /// If the previous key is on the same "hand", the current key will be determined as a tap
+    #[bits(1)]
     pub unilateral_tap: bool,
+
     /// The decision mode of the morse/tap-hold key
-    pub mode: MorseMode,
+    /// - If neither of them is set, the decision is made when timeout
+    /// - If permissive_hold is set, same as QMK's permissive hold:
+    ///   When another key is pressed and released while the current morse key is held,
+    ///   the hold action of current morse key will be triggered
+    ///   https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
+    /// - if hold_on_other_press is set - triggers hold immediately if any other non-morse
+    ///   key is pressed while the current morse key is held
+    /// - If permissive_hold and hold_on_other_press are mutually exclusive,
+    ///   you should not set both!
+    #[bits(1)]
+    pub permissive_hold: bool,
+    #[bits(1)]
+    pub hold_on_other_press: bool,
 
     /// If the key is pressed longer than this, it is accepted as `hold` (in milliseconds)
+    #[bits(14)] //likely 10 bits would be enough (1024ms)
     pub hold_timeout_ms: u16,
+
     /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
+    #[bits(14)] //likely 10 bits would be enough (1024ms)
     pub gap_timeout_ms: u16,
 }
 
-impl Default for KeyProfile {
-    fn default() -> Self {
-        Self {
-            unilateral_tap: false,
-            mode: MorseMode::Normal,
-            hold_timeout_ms: 250u16,
-            gap_timeout_ms: 250u16,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+/// Per key position information about a key
+/// In the future more fields can be added here for the future configurator GUI
+/// - physical key position and orientation
+/// - key size,
+/// - key shape,
+/// - backlight sequence number, etc.
+/// IDEA: For Keyboards with low memory, these should be compile time constants to save ram?
+#[derive(Clone, Copy, Default, Debug)]
 pub struct KeyInfo {
     pub hand: Hand,
-    pub profile: Option<KeyProfile>,
+    pub tap_hold_profile: TapHoldProfile, //only valid if tap_hold_profile.is_filled is true
 }
 
 /// configuration for tap-hold and morse, home row mods
@@ -113,7 +137,7 @@ pub struct KeyInfo {
 pub struct TapHoldConfig {
     pub enable_flow_tap: bool,     //default: false
     pub prior_idle_time: Duration, //used for flow tap detection, default: 120ms,
-    pub default_profile: KeyProfile,
+    pub default_profile: TapHoldProfile,
 }
 
 impl Default for TapHoldConfig {
@@ -121,7 +145,13 @@ impl Default for TapHoldConfig {
         Self {
             enable_flow_tap: false,
             prior_idle_time: Duration::from_millis(120),
-            default_profile: KeyProfile::default(),
+            default_profile: TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_unilateral_tap(false)
+                .with_permissive_hold(false)
+                .with_hold_on_other_press(false)
+                .with_hold_timeout_ms(250u16)
+                .with_gap_timeout_ms(250u16),
         }
     }
 }
