@@ -7,6 +7,11 @@ use embassy_futures::yield_now;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
+use rmk_types::action::{Action, KeyAction};
+use rmk_types::keycode::KeyCode;
+use rmk_types::led_indicator::LedIndicator;
+use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {
@@ -14,21 +19,17 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::action::{Action, KeyAction};
 use crate::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use crate::combo::Combo;
 use crate::descriptor::KeyboardReport;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::fork::{ActiveFork, StateBits};
 use crate::hid::Report;
-use crate::hid_state::{HidModifiers, HidMouseButtons};
 use crate::input_device::Runnable;
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard_macros::MacroOperation;
-use crate::keycode::{KeyCode, ModifierCombination};
 use crate::keymap::KeyMap;
-use crate::light::LedIndicator;
 use crate::morse::{MorseMode, MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
@@ -160,7 +161,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     osl_state: OneShotState<u8>,
 
     /// One shot modifier state
-    osm_state: OneShotState<HidModifiers>,
+    osm_state: OneShotState<ModifierCombination>,
 
     /// Caps word state - whether caps word is currently active
     caps_word_active: bool,
@@ -168,7 +169,7 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
     caps_word_timer: Option<Instant>,
 
     /// The modifiers coming from (last) Action::KeyWithModifier
-    with_modifiers: HidModifiers,
+    with_modifiers: ModifierCombination,
 
     /// Macro text typing state (affects the effective modifiers)
     macro_texting: bool,
@@ -176,10 +177,10 @@ pub struct Keyboard<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usi
 
     /// The real state before fork activations is stored here
     fork_states: [Option<ActiveFork>; FORK_MAX_NUM], // chosen replacement key of the currently triggered forks and the related modifier suppression
-    fork_keep_mask: HidModifiers, // aggregate here the explicit modifiers pressed since the last fork activations
+    fork_keep_mask: ModifierCombination, // aggregate here the explicit modifiers pressed since the last fork activations
 
     /// The held modifiers for the keyboard hid report
-    held_modifiers: HidModifiers,
+    held_modifiers: ModifierCombination,
 
     /// The held keys for the keyboard hid report, except the modifiers
     held_keycodes: [KeyCode; 6],
@@ -223,15 +224,15 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             osm_state: OneShotState::default(),
             caps_word_active: false,
             caps_word_timer: None,
-            with_modifiers: HidModifiers::default(),
+            with_modifiers: ModifierCombination::default(),
             macro_texting: false,
             macro_caps: false,
             fork_states: [None; FORK_MAX_NUM],
-            fork_keep_mask: HidModifiers::default(),
+            fork_keep_mask: ModifierCombination::default(),
             unprocessed_events: Vec::new(),
             held_buffer: HeldBuffer::new(),
             registered_keys: [None; 6],
-            held_modifiers: HidModifiers::default(),
+            held_modifiers: ModifierCombination::default(),
             held_keycodes: [KeyCode::No; 6],
             mouse_report: MouseReport {
                 buttons: 0,
@@ -795,7 +796,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Clear with_modifier if a new key is pressed
         if self.with_modifiers.into_bits() != 0 && event.pressed {
-            self.with_modifiers = HidModifiers::new();
+            self.with_modifiers = ModifierCombination::new();
         }
 
         #[cfg(feature = "_ble")]
@@ -848,12 +849,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(event.pressed),
             leds: LedIndicator::from_bits(LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed)),
-            mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
+            mouse: MouseButtons::from_bits(self.mouse_report.buttons),
         };
 
         let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
         let mut chain_starter: Option<usize> = None;
-        let mut combined_suppress = HidModifiers::default();
+        let mut combined_suppress = ModifierCombination::default();
         let mut replacement = *key_action;
 
         'bind: loop {
@@ -1086,11 +1087,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if event.pressed {
                     // These modifiers will be combined into the hid report, so
                     // they will be "pressed" the same time as the key (in same hid report)
-                    self.with_modifiers |= modifiers.to_hid_modifiers();
+                    self.with_modifiers |= modifiers;
                 } else {
                     // The modifiers will not be part of the hid report, so
                     // they will be "released" the same time as the key (in same hid report)
-                    self.with_modifiers &= !(modifiers.to_hid_modifiers());
+                    self.with_modifiers &= !(modifiers);
                 }
                 self.process_action_key(key_code, event).await
             }
@@ -1098,11 +1099,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 if event.pressed {
                     // These modifiers will be combined into the hid report, so
                     // they will be "pressed" the same time as the key (in same hid report)
-                    self.with_modifiers |= modifiers.to_hid_modifiers();
+                    self.with_modifiers |= modifiers;
                 } else {
                     // The modifiers will not be part of the hid report, so
                     // they will be "released" the same time as the key (in same hid report)
-                    self.with_modifiers &= !(modifiers.to_hid_modifiers());
+                    self.with_modifiers &= !(modifiers);
                 }
                 self.process_action_layer_switch(layer_num, event)
             }
@@ -1112,7 +1113,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 self.update_osm(event);
             }
             Action::OneShotModifier(m) => {
-                self.process_action_osm(m.to_hid_modifiers(), event).await;
+                self.process_action_osm(m, event).await;
                 // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
                 self.update_osl(event);
             }
@@ -1143,7 +1144,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             .for_each(|(i, k)| info!("\n✅Held buffer {}: {:?}, state: {:?}", i, k.event, k.state));
     }
 
-    async fn process_action_osm(&mut self, modifiers: HidModifiers, event: KeyboardEvent) {
+    async fn process_action_osm(&mut self, modifiers: ModifierCombination, event: KeyboardEvent) {
         // Update one shot state
         if event.pressed {
             // Add new modifier combination to existing one shot or init if none
@@ -1240,7 +1241,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// Calculates the combined effect of "explicit modifiers":
     /// - registered modifiers
     /// - one-shot modifiers
-    pub fn resolve_explicit_modifiers(&self, pressed: bool) -> HidModifiers {
+    pub fn resolve_explicit_modifiers(&self, pressed: bool) -> ModifierCombination {
         // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
         let mut result = self.held_modifiers;
 
@@ -1266,14 +1267,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     /// - one-shot modifiers
     /// - effect of Action::KeyWithModifiers (while they are pressed)
     /// - possible fork related modifier suppressions
-    pub fn resolve_modifiers(&mut self, pressed: bool) -> HidModifiers {
+    pub fn resolve_modifiers(&mut self, pressed: bool) -> ModifierCombination {
         // Text typing macro should not be affected by any modifiers,
         // only its own capitalization
         if self.macro_texting {
             if self.macro_caps {
-                return HidModifiers::new().with_left_shift(true);
+                return ModifierCombination::new().with_left_shift(true);
             } else {
-                return HidModifiers::new();
+                return ModifierCombination::new();
             }
         }
 
@@ -1282,7 +1283,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // The triggered forks suppress the 'match_any' modifiers automatically
         // unless they are configured as the 'kept_modifiers'
-        let mut fork_suppress = HidModifiers::default();
+        let mut fork_suppress = ModifierCombination::default();
         for fork_state in self.fork_states.iter().flatten() {
             fork_suppress |= fork_state.suppress;
         }
@@ -1304,7 +1305,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             && timer.elapsed() < Duration::from_secs(5)
         {
             if pressed {
-                result |= HidModifiers::new().with_left_shift(true);
+                result |= ModifierCombination::new().with_left_shift(true);
             }
         } else {
             self.caps_word_timer = None;
@@ -2009,10 +2010,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers |= key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
-        );
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
 
         // if a modifier key arrives after fork activation, it should be kept
         self.fork_keep_mask |= key.to_hid_modifiers();
@@ -2023,35 +2021,26 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         self.held_modifiers &= !key.to_hid_modifiers();
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
-        );
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
     }
 
     /// Register a modifier combination to be sent in hid report.
     fn register_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.held_modifiers |= modifiers.to_hid_modifiers();
+        self.held_modifiers |= modifiers;
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
-        );
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
 
         // if a modifier key arrives after fork activation, it should be kept
-        self.fork_keep_mask |= modifiers.to_hid_modifiers();
+        self.fork_keep_mask |= modifiers;
     }
 
     /// Unregister a modifier combination from hid report.
     fn unregister_modifiers(&mut self, modifiers: ModifierCombination) {
-        self.held_modifiers &= !modifiers.to_hid_modifiers();
+        self.held_modifiers &= !modifiers;
 
         #[cfg(feature = "controller")]
-        send_controller_event(
-            &mut self.controller_pub,
-            ControllerEvent::Modifier(ModifierCombination::from_hid_modifiers(self.held_modifiers)),
-        );
+        send_controller_event(&mut self.controller_pub, ControllerEvent::Modifier(self.held_modifiers));
     }
 
     /// Calculate mouse movement distance based on current repeat count and acceleration settings
@@ -2201,14 +2190,14 @@ mod test {
 
     use embassy_futures::block_on;
     use embassy_time::{Duration, Timer};
+    use rmk_types::action::KeyAction;
+    use rmk_types::modifier::ModifierCombination;
     use rusty_fork::rusty_fork_test;
 
     use super::*;
-    use crate::action::KeyAction;
     use crate::config::{BehaviorConfig, CombosConfig, ForksConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::fork::Fork;
-    use crate::hid_state::HidModifiers;
     use crate::{a, k, layer, mo, th};
 
     // Init logger for tests
@@ -2340,11 +2329,11 @@ mod test {
 
                 // Press Shift key
                 keyboard.register_key(KeyCode::LShift, KeyboardEvent::key(3, 0, true));
-                assert_eq!(keyboard.held_modifiers, HidModifiers::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
+                assert_eq!(keyboard.held_modifiers, ModifierCombination::new().with_left_shift(true)); // Left Shift's modifier bit is 0x02
 
                 // Release Shift key
                 keyboard.unregister_key(KeyCode::LShift, KeyboardEvent::key(3, 0, false));
-                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
+                assert_eq!(keyboard.held_modifiers, ModifierCombination::new());
             };
             block_on(main);
         }
@@ -2523,15 +2512,15 @@ mod test {
                     negative_output: KeyAction::Single(Action::Key(KeyCode::Dot)),
                     positive_output: KeyAction::Single(
                         Action::KeyWithModifier(KeyCode::Semicolon,
-                        ModifierCombination::default().with_shift(true),)
+                        ModifierCombination::default().with_left_shift(true),)
                     ),
                     match_any: StateBits {
-                        modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                        modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
-                    kept_modifiers: HidModifiers::default(),
+                    kept_modifiers: ModifierCombination::default(),
                     bindable: false,
                 };
 
@@ -2541,12 +2530,12 @@ mod test {
                     negative_output: KeyAction::Single(Action::Key(KeyCode::Comma)),
                     positive_output: KeyAction::Single(Action::Key(KeyCode::Semicolon)),
                     match_any: StateBits {
-                        modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                        modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
-                    kept_modifiers: HidModifiers::default(),
+                    kept_modifiers: ModifierCombination::default(),
                     bindable: false,
                 };
 
@@ -2567,7 +2556,7 @@ mod test {
                 keyboard.process_inner(KeyboardEvent::key(3, 9, true)).await;
                 assert_eq!(
                     keyboard.resolve_modifiers(true),
-                    HidModifiers::new().with_left_shift(true)
+                    ModifierCombination::new().with_left_shift(true)
                 );
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
 
@@ -2576,13 +2565,13 @@ mod test {
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
                 assert_eq!(
                     keyboard.resolve_modifiers(false),
-                    HidModifiers::new().with_left_shift(true)
+                    ModifierCombination::new().with_left_shift(true)
                 );
 
                 // Release LShift key
                 keyboard.process_inner(KeyboardEvent::key(3, 0, false)).await;
-                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
-                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+                assert_eq!(keyboard.held_modifiers, ModifierCombination::new());
+                assert_eq!(keyboard.resolve_modifiers(false), ModifierCombination::new());
 
                 // Press Comma key, by itself it should emit ','
                 keyboard.process_inner(KeyboardEvent::key(3, 8, true)).await;
@@ -2597,7 +2586,7 @@ mod test {
 
                 // Press Comma key, with shift it should emit ';' (shift is suppressed)
                 keyboard.process_inner(KeyboardEvent::key(3, 8, true)).await;
-                assert_eq!(keyboard.resolve_modifiers(true), HidModifiers::new());
+                assert_eq!(keyboard.resolve_modifiers(true), ModifierCombination::new());
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::Semicolon);
 
                 // Release Comma key, shift is still held
@@ -2605,13 +2594,13 @@ mod test {
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
                 assert_eq!(
                     keyboard.resolve_modifiers(false),
-                    HidModifiers::new().with_left_shift(true)
+                    ModifierCombination::new().with_left_shift(true)
                 );
 
                 // Release LShift key
                 keyboard.process_inner(KeyboardEvent::key(3, 0, false)).await;
-                assert_eq!(keyboard.held_modifiers, HidModifiers::new());
-                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+                assert_eq!(keyboard.held_modifiers, ModifierCombination::new());
+                assert_eq!(keyboard.resolve_modifiers(false), ModifierCombination::new());
             };
 
             block_on(main);
@@ -2625,16 +2614,16 @@ mod test {
                     negative_output: KeyAction::Single(Action::Key(KeyCode::MouseBtn5)),
                     positive_output: KeyAction::Single(Action::Key(KeyCode::C)),
                     match_any: StateBits {
-                        modifiers: HidModifiers::default()
+                        modifiers: ModifierCombination::default()
                             .with_left_ctrl(true)
                             .with_right_ctrl(true)
                             .with_left_shift(true)
                             .with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
-                    kept_modifiers: HidModifiers::default().with_left_shift(true).with_right_shift(true),
+                    kept_modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
                     bindable: false,
                 };
 
@@ -2644,12 +2633,12 @@ mod test {
                     negative_output: KeyAction::Single(Action::Key(KeyCode::S)),
                     positive_output: KeyAction::Single(Action::Key(KeyCode::D)),
                     match_any: StateBits {
-                        modifiers: HidModifiers::default(),
+                        modifiers: ModifierCombination::default(),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default().with_button5(true),
+                        mouse: MouseButtons::default().with_button5(true),
                     },
                     match_none: StateBits::default(),
-                    kept_modifiers: HidModifiers::default(),
+                    kept_modifiers: ModifierCombination::default(),
                     bindable: false,
                 };
 
@@ -2679,14 +2668,14 @@ mod test {
                 keyboard.process_inner(KeyboardEvent::key(3, 0, true)).await;
                 assert_eq!(
                     keyboard.resolve_modifiers(true),
-                    HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
+                    ModifierCombination::new().with_left_ctrl(true).with_left_shift(true)
                 );
 
                 // Press 'Z' key, with Ctrl it should emit 'C', with suppressed ctrl, but kept shift
                 keyboard.process_inner(KeyboardEvent::key(3, 1, true)).await;
                 assert_eq!(
                     keyboard.resolve_modifiers(true),
-                    HidModifiers::new().with_left_shift(true)
+                    ModifierCombination::new().with_left_shift(true)
                 );
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::C);
                 assert_eq!(keyboard.mouse_report.buttons, 0);
@@ -2696,19 +2685,19 @@ mod test {
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
                 assert_eq!(
                     keyboard.resolve_modifiers(false),
-                    HidModifiers::new().with_left_ctrl(true).with_left_shift(true)
+                    ModifierCombination::new().with_left_ctrl(true).with_left_shift(true)
                 );
 
                 // Release LCtrl key
                 keyboard.process_inner(KeyboardEvent::key(4, 0, false)).await;
                 assert_eq!(
                     keyboard.resolve_modifiers(false),
-                    HidModifiers::new().with_left_shift(true)
+                    ModifierCombination::new().with_left_shift(true)
                 );
 
                 // Release LShift key
                 keyboard.process_inner(KeyboardEvent::key(3, 0, false)).await;
-                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+                assert_eq!(keyboard.resolve_modifiers(false), ModifierCombination::new());
 
                 // Press 'A' key, by itself it should emit 'S'
                 keyboard.process_inner(KeyboardEvent::key(2, 1, true)).await;
@@ -2717,7 +2706,7 @@ mod test {
                 // Release 'A' key
                 keyboard.process_inner(KeyboardEvent::key(2, 1, false)).await;
                 assert_eq!(keyboard.held_keycodes[0], KeyCode::No);
-                assert_eq!(keyboard.resolve_modifiers(false), HidModifiers::new());
+                assert_eq!(keyboard.resolve_modifiers(false), ModifierCombination::new());
                 assert_eq!(keyboard.mouse_report.buttons, 0);
 
                 Timer::after(Duration::from_millis(200)).await; // wait a bit

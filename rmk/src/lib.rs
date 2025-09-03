@@ -40,8 +40,9 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
-use light::LedIndicator;
 use matrix::MatrixTrait;
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 use trouble_host::prelude::*;
@@ -53,24 +54,18 @@ use {
     crate::light::UsbLedReader,
     crate::usb::{UsbKeyboardWriter, add_usb_reader_writer, add_usb_writer, new_usb_builder},
 };
-#[cfg(feature = "storage")]
-use {
-    action::{EncoderAction, KeyAction},
-    embassy_futures::select::select,
-    embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash,
-    storage::Storage,
-};
 #[cfg(not(feature = "_ble"))]
 use {
     descriptor::{CompositeReport, KeyboardReport},
     via::UsbVialReaderWriter,
 };
-pub use {embassy_futures, futures, heapless, rmk_macro as macros};
+pub use {embassy_futures, futures, heapless, rmk_macro as macros, rmk_types as types};
+#[cfg(feature = "storage")]
+use {embassy_futures::select::select, embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash, storage::Storage};
 
 use crate::keyboard::LOCK_LED_STATES;
 use crate::state::ConnectionState;
 
-pub mod action;
 #[cfg(feature = "_ble")]
 pub mod ble;
 mod boot;
@@ -86,11 +81,9 @@ pub mod driver;
 pub mod event;
 pub mod fork;
 pub mod hid;
-pub mod hid_state;
 pub mod input_device;
 pub mod keyboard;
 pub mod keyboard_macros;
-pub mod keycode;
 pub mod keymap;
 pub mod layout_macro;
 pub mod light;
@@ -106,7 +99,7 @@ pub mod usb;
 pub mod via;
 
 pub async fn initialize_keymap<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
-    default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER>> {
     RefCell::new(KeyMap::new(default_keymap, None, behavior_config).await)
@@ -119,8 +112,8 @@ pub async fn initialize_encoder_keymap<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize,
 >(
-    default_keymap: &'a mut [[[action::KeyAction; COL]; ROW]; NUM_LAYER],
-    default_encoder_map: &'a mut [[action::EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    default_keymap: &'a mut [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    default_encoder_map: &'a mut [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     behavior_config: &'a mut config::BehaviorConfig,
 ) -> RefCell<KeyMap<'a, ROW, COL, NUM_LAYER, NUM_ENCODER>> {
     RefCell::new(KeyMap::new(default_keymap, Some(default_encoder_map), behavior_config).await)

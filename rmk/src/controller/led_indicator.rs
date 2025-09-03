@@ -1,30 +1,20 @@
 /// The controller for handling LEDindicators defines in HID spec, including NumLock, CapsLock, ScrollLock, Compose, and Kana.
 use embedded_hal::digital::StatefulOutputPin;
+use rmk_types::led_indicator::LedIndicatorType;
 
 use crate::channel::{CONTROLLER_CHANNEL, ControllerSub};
 use crate::controller::Controller;
 use crate::driver::gpio::OutputController;
 use crate::event::ControllerEvent;
 
-/// Indicators defined in the HID spec 11.1
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum KeyboardIndicator {
-    NumLock,
-    CapsLock,
-    ScrollLock,
-    Compose,
-    Kana,
-}
-
 pub struct KeyboardIndicatorController<P: StatefulOutputPin> {
     pin: OutputController<P>,
     sub: ControllerSub,
-    indicator: KeyboardIndicator,
+    indicator: LedIndicatorType,
 }
 
 impl<P: StatefulOutputPin> KeyboardIndicatorController<P> {
-    pub fn new(pin: P, low_active: bool, lock_name: KeyboardIndicator) -> Self {
+    pub fn new(pin: P, low_active: bool, lock_name: LedIndicatorType) -> Self {
         Self {
             pin: OutputController::new(pin, low_active),
             sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
@@ -40,11 +30,11 @@ impl<P: StatefulOutputPin> Controller for KeyboardIndicatorController<P> {
         match event {
             ControllerEvent::KeyboardIndicator(state) => {
                 let activated = match self.indicator {
-                    KeyboardIndicator::NumLock => state.num_lock(),
-                    KeyboardIndicator::CapsLock => state.caps_lock(),
-                    KeyboardIndicator::ScrollLock => state.scroll_lock(),
-                    KeyboardIndicator::Compose => state.compose(),
-                    KeyboardIndicator::Kana => state.kana(),
+                    LedIndicatorType::NumLock => state.num_lock(),
+                    LedIndicatorType::CapsLock => state.caps_lock(),
+                    LedIndicatorType::ScrollLock => state.scroll_lock(),
+                    LedIndicatorType::Compose => state.compose(),
+                    LedIndicatorType::Kana => state.kana(),
                 };
                 info!("Activating {} {}", self.indicator, activated);
                 if activated {
