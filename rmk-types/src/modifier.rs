@@ -1,3 +1,8 @@
+//! Modifier keys and their operations.
+//!
+//! This module provides efficient handling of keyboard modifier states using
+//! bitfield structures. It supports both left and right variants of all
+//! standard modifiers (Ctrl, Shift, Alt, GUI).
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;

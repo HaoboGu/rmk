@@ -1,3 +1,7 @@
+//! Complete keycode definitions.
+//!
+//! This module provides keycode definitions following the USB HID
+//! specification, extended with additional codes
 use strum::{EnumIter, FromRepr};
 
 use crate::modifier::ModifierCombination;

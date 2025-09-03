@@ -1,3 +1,7 @@
+//! Mouse button state and operations.
+//!
+//! This module handles mouse button combinations and states, supporting up to
+//! 8 mouse buttons.
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
