@@ -1627,7 +1627,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         #[cfg(feature = "_ble")]
         {
             use crate::NUM_BLE_PROFILE;
-            use crate::ble::trouble::profile::BleProfileAction;
+            use crate::ble::profile::BleProfileAction;
             use crate::channel::BLE_PROFILE_CHANNEL;
             // Get user key id
             let id = key as u8 - KeyCode::User0 as u8;

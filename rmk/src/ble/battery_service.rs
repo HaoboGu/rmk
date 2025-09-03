@@ -6,7 +6,7 @@ use embassy_time::{Duration, Instant, Timer, with_timeout};
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
-use crate::ble::trouble::SLEEPING_STATE;
+use crate::ble::SLEEPING_STATE;
 use crate::input_device::battery::{BATTERY_UPDATE, BatteryState};
 use crate::keyboard::LAST_KEY_TIMESTAMP;
 

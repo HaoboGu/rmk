@@ -13,7 +13,7 @@ use {
     crate::event::ControllerEvent,
 };
 
-use crate::ble::trouble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
+use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;

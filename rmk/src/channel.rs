@@ -5,10 +5,7 @@ use embassy_sync::channel::Channel;
 use embassy_sync::pubsub::PubSubChannel;
 pub use embassy_sync::{blocking_mutex, channel, pubsub, zerocopy_channel};
 #[cfg(feature = "_ble")]
-use {
-    crate::ble::trouble::profile::BleProfileAction, embassy_sync::signal::Signal,
-    rmk_types::led_indicator::LedIndicator,
-};
+use {crate::ble::profile::BleProfileAction, embassy_sync::signal::Signal, rmk_types::led_indicator::LedIndicator};
 #[cfg(feature = "controller")]
 use {
     crate::event::ControllerEvent,
