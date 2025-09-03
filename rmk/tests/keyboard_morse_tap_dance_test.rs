@@ -1,12 +1,13 @@
-/// Test cases for tap-dance
+/// Test cases for tap-dance like morses
 pub mod common;
 
 use heapless::Vec;
-use rmk::action::Action;
-use rmk::config::{BehaviorConfig, TapDancesConfig};
+use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::tap_dance::TapDance;
+use rmk::morse::Morse;
+use rmk::types::action::Action;
+use rmk::types::keycode::KeyCode;
+use rmk::types::modifier::ModifierCombination;
 use rmk::{k, td};
 use rusty_fork::rusty_fork_test;
 
@@ -19,27 +20,27 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
     ];
 
     let behavior_config = BehaviorConfig {
-        tap_dance: TapDancesConfig {
-            tap_dances: Vec::from_slice(&[
-                TapDance::new_from_vial(
+        morse: MorsesConfig {
+            morses: Vec::from_slice(&[
+                Morse::new_from_vial(
                     Action::Key(KeyCode::A),
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
                     250,
                 ),
-                TapDance::new_from_vial(
+                Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
                     250,
                 ),
-                TapDance::new_from_vial(
+                Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
-                    Action::Modifier(ModifierCombination::SHIFT),
+                    Action::Modifier(ModifierCombination::LSHIFT),
                     Action::Key(KeyCode::Kp2),
-                    Action::Modifier(ModifierCombination::GUI),
+                    Action::Modifier(ModifierCombination::LGUI),
                     250,
                 ),
             ])
@@ -48,6 +49,8 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
         ..Default::default()
     };
 
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    let behavior_config = BEHAVIOR_CONFIG.init(behavior_config);
     Keyboard::new(wrap_keymap(keymap, behavior_config))
 }
 
@@ -256,6 +259,27 @@ rusty_fork_test! {
                 [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
                 [0, [0, kc_to_u8!(Y), 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_rolling_3() {
+        key_sequence_test! {
+            keyboard: create_tap_dance_test_keyboard(),
+            sequence: [
+                [0, 0, true, 150], // Press td!(0)
+                [0, 0, false, 10], // Release td!(0)
+                [0, 0, true, 150], // Press td!(0)
+                [0, 1, true, 260], // Press td!(1),      td!(0) timeout (tap-hold) -> press "C"
+                [0, 1, false, 260], // Release td!(1) -> td(1) hold, gap -> tap "Y"
+                [0, 0, false, 260], // Release td!(0) -> release "C"
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]],
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };

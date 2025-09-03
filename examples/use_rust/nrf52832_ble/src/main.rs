@@ -18,7 +18,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
@@ -143,9 +143,9 @@ async fn main(spawner: Spawner) {
     // Initialze keyboard stuffs
     // Initialize the storage and keymap
     let mut default_keymap = keymap::get_default_keymap();
-    let behavior_config = BehaviorConfig::default();
+    let mut behavior_config = BehaviorConfig::default();
     let (keymap, mut storage) =
-        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, behavior_config).await;
+        initialize_keymap_and_storage(&mut default_keymap, flash, &storage_config, &mut behavior_config).await;
 
     // Initialize the matrix and keyboard
     let debouncer = DefaultDebouncer::<ROW, COL>::new();

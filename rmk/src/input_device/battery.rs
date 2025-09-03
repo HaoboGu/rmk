@@ -53,6 +53,8 @@ impl<I: InputPin> InputDevice for ChargingStateReader<I> {
     async fn read_event(&mut self) -> Event {
         // For the first read, don't check whether the charging state is changed
         if !self.first_read {
+            // Wait 2s before reading the first value
+            embassy_time::Timer::after_secs(2).await;
             let charging_state = self.state_input.is_low().unwrap_or(false);
             self.current_charging_state = charging_state;
             self.first_read = true;

@@ -10,7 +10,6 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Timer};
 use futures::join;
 use log::debug;
-use rmk::action::KeyAction;
 use rmk::channel::{KEY_EVENT_CHANNEL, KEYBOARD_REPORT_CHANNEL};
 use rmk::config::BehaviorConfig;
 use rmk::descriptor::KeyboardReport;
@@ -18,8 +17,9 @@ use rmk::event::KeyboardEvent;
 use rmk::hid::Report;
 use rmk::input_device::Runnable;
 use rmk::keyboard::Keyboard;
-use rmk::keycode::ModifierCombination;
 use rmk::keymap::KeyMap;
+use rmk::types::action::KeyAction;
+use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
 
 // Init logger for tests
@@ -150,12 +150,14 @@ pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
 }
 
 pub fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static, 5, 14, 2> {
-    Keyboard::new(wrap_keymap(get_keymap(), config))
+    static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
+    let behavior_config: &'static mut BehaviorConfig = BEHAVIOR_CONFIG.init(config);
+    Keyboard::new(wrap_keymap(get_keymap(), behavior_config))
 }
 
 pub fn wrap_keymap<'a, const R: usize, const C: usize, const L: usize>(
     keymap: [[[KeyAction; C]; R]; L],
-    config: BehaviorConfig,
+    config: &'static mut BehaviorConfig,
 ) -> &'a mut RefCell<KeyMap<'static, R, C, L>> {
     // Box::leak is acceptable in tests
     let leaked_keymap = Box::leak(Box::new(keymap));

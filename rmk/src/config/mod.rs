@@ -10,9 +10,8 @@ use macro_config::KeyboardMacrosConfig;
 
 use crate::combo::Combo;
 use crate::fork::Fork;
-use crate::morse::MorseKeyMode;
-use crate::tap_dance::TapDance;
-use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, TAP_DANCE_MAX_NUM};
+use crate::morse::{Morse, MorseMode};
+use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MORSE_MAX_NUM};
 
 /// Internal configurations for RMK keyboard.
 #[derive(Default)]
@@ -29,48 +28,66 @@ pub struct RmkConfig<'a> {
 #[derive(Debug, Default)]
 pub struct BehaviorConfig {
     pub tri_layer: Option<[u8; 3]>,
-    pub morse: MorseConfig,
+    pub tap: TapConfig,
+    pub tap_hold: TapHoldConfig,
     pub one_shot: OneShotConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
-    pub tap_dance: TapDancesConfig,
+    pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
 }
 
-/// Configuration for tap dance behavior
-#[derive(Clone, Debug)]
-pub struct TapDancesConfig {
-    pub tap_dances: Vec<TapDance, TAP_DANCE_MAX_NUM>,
+/// Configurations for morse behavior
+#[derive(Clone, Copy, Debug)]
+pub struct TapConfig {
+    // TODO: Use `Duration` instead?
+    pub tap_interval: u16,
+    pub tap_capslock_interval: u16,
 }
 
-impl Default for TapDancesConfig {
+impl Default for TapConfig {
     fn default() -> Self {
-        Self { tap_dances: Vec::new() }
+        Self {
+            tap_interval: 20,
+            tap_capslock_interval: 20,
+        }
+    }
+}
+
+/// Configuration for morse behavior
+#[derive(Clone, Debug)]
+pub struct MorsesConfig {
+    pub morses: Vec<Morse, MORSE_MAX_NUM>,
+}
+
+impl Default for MorsesConfig {
+    fn default() -> Self {
+        Self { morses: Vec::new() }
     }
 }
 
 /// Configurations for morse behavior
-#[derive(Clone, Copy, Debug)]
-pub struct MorseConfig {
+#[derive(Clone, Debug)]
+pub struct TapHoldConfig {
     pub enable_hrm: bool,
     pub prior_idle_time: Duration,
     /// Default timeout time for tap or hold
-    pub operation_timeout: Duration,
+    pub timeout: Duration,
     /// Default mode
-    pub mode: MorseKeyMode,
+    pub mode: MorseMode,
     /// If the previous key is on the same "hand", the current key will be determined as a tap
     pub unilateral_tap: bool,
 }
 
-impl Default for MorseConfig {
+impl Default for TapHoldConfig {
     fn default() -> Self {
         Self {
             enable_hrm: false,
             unilateral_tap: false,
-            mode: MorseKeyMode::Normal,
+            mode: MorseMode::Normal,
             prior_idle_time: Duration::from_millis(120),
-            operation_timeout: Duration::from_millis(250),
+            timeout: Duration::from_millis(250),
         }
     }
 }
@@ -126,6 +143,7 @@ pub struct StorageConfig {
     // Number of sectors used for storage, >= 2.
     pub num_sectors: u8,
     pub clear_storage: bool,
+    pub clear_layout: bool,
 }
 
 impl Default for StorageConfig {
@@ -134,6 +152,7 @@ impl Default for StorageConfig {
             start_addr: 0,
             num_sectors: 2,
             clear_storage: false,
+            clear_layout: false,
         }
     }
 }

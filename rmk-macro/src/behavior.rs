@@ -3,8 +3,8 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, OneShotConfig, TapDancesConfig, TapHoldConfig,
-    TriLayerConfig,
+    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig, OneShotConfig,
+    TapHoldConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
@@ -42,46 +42,73 @@ fn expand_one_shot(one_shot: &Option<OneShotConfig>) -> proc_macro2::TokenStream
     }
 }
 
-fn expand_morse(morse_config: &Option<TapHoldConfig>) -> proc_macro2::TokenStream {
-    let default = quote! {::rmk::config::MorseConfig::default()};
-    match morse_config {
-        Some(morse) => {
-            let enable_hrm = match morse.enable_hrm {
+fn expand_morse_action_pair(action_pair: &MorseActionPair) -> proc_macro2::TokenStream {
+    let mut pattern = 0b1u16;
+    for ch in action_pair.pattern.chars() {
+        match ch {
+            '1' => pattern = pattern << 1 | 1,
+            '-' => pattern = pattern << 1 | 1,
+            '_' => pattern = pattern << 1 | 1,
+            '0' => pattern = pattern << 1,
+            '.' => pattern = pattern << 1,
+            _ => {}
+        }
+    }
+    let action = parse_key(action_pair.action.to_owned());
+    quote! { (rmk::morse::MorsePattern::from_u16(#pattern), #action.to_action()) }
+}
+
+fn expand_morse_actions(actions: &Vec<MorseActionPair>) -> proc_macro2::TokenStream {
+    if actions.len() > 0 {
+        let action_pair_def = actions.iter().map(|action_pair| expand_morse_action_pair(action_pair));
+        quote! {
+            actions: ::rmk::heapless::Vec::from_iter([#(#action_pair_def),*]),
+        }
+    } else {
+        quote! {}
+    }
+}
+
+fn expand_tap_hold_config(tap_hold_config: &Option<TapHoldConfig>) -> proc_macro2::TokenStream {
+    let default = quote! {::rmk::config::TapHoldConfig::default()};
+    match tap_hold_config {
+        Some(tap_hold_config) => {
+            let enable_hrm = match tap_hold_config.enable_hrm {
                 Some(enable) => quote! { enable_hrm: #enable, },
                 None => quote! {},
             };
-            let morse_mode = if let Some(true) = morse.permissive_hold {
-                quote! { mode: ::rmk::morse::MorseKeyMode::PermissiveHold, }
-            } else if let Some(true) = morse.hold_on_other_press {
-                quote! { mode: ::rmk::morse::MorseKeyMode::HoldOnOtherPress, }
+            let tap_hold_mode = if let Some(true) = tap_hold_config.permissive_hold {
+                quote! { mode: ::rmk::morse::MorseMode::PermissiveHold, }
+            } else if let Some(true) = tap_hold_config.hold_on_other_press {
+                quote! { mode: ::rmk::morse::MorseMode::HoldOnOtherPress, }
             } else {
-                quote! { mode: ::rmk::morse::MorseKeyMode::Normal,}
+                quote! { mode: ::rmk::morse::MorseMode::Normal,}
             };
-            let unilateral_tap = match morse.unilateral_tap {
+            let unilateral_tap = match tap_hold_config.unilateral_tap {
                 Some(enable) => quote! { unilateral_tap: #enable, },
                 None => quote! {},
             };
-            let prior_idle_time = match &morse.prior_idle_time {
+            let prior_idle_time = match &tap_hold_config.prior_idle_time {
                 Some(t) => {
                     let timeout = t.0;
                     quote! { prior_idle_time: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
-            let hold_timeout = match &morse.hold_timeout {
+            let hold_timeout = match &tap_hold_config.hold_timeout {
                 Some(t) => {
                     let timeout = t.0;
-                    quote! { operation_timeout: ::embassy_time::Duration::from_millis(#timeout), }
+                    quote! { timeout: ::embassy_time::Duration::from_millis(#timeout), }
                 }
                 None => quote! {},
             };
 
             quote! {
-                ::rmk::config::MorseConfig {
+                ::rmk::config::TapHoldConfig {
                     #enable_hrm
                     #prior_idle_time
                     #hold_timeout
-                    #morse_mode
+                    #tap_hold_mode
                     #unilateral_tap
                     ..Default::default()
                 }
@@ -134,15 +161,15 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
                 let operations = m.operations.iter().map(|op| match op {
                     rmk_config::MacroOperation::Tap { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Down { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Up { keycode } => {
                         let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::keycode::KeyCode::#key).into_iter() }
+                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::KeyCode::#key).into_iter() }
                     }
                     rmk_config::MacroOperation::Delay { duration } => {
                         let millis = duration.0 as u16;
@@ -162,25 +189,41 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenStream {
+fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
-    match tap_dance {
-        Some(tap_dance) => {
-            let tap_dances_def = tap_dance.tap_dances.iter().map(|td| {
+    match morse {
+        Some(morse) => {
+            let morses_def = morse.morses.iter().map(|td| {
                 // Parse tapping term, default to 200ms if not specified
                 let timeout = match &td.timeout {
                     Some(duration) => {
-                        let millis = duration.0;
-                        quote! { #millis }
+                        let millis = duration.0 as u16;
+                        quote! { #millis as u16 }
                     }
-                    None => quote! { 200 },
+                    None => quote! { 200u16 },
                 };
 
-                if td.tap_actions.is_some() || td.hold_actions.is_some() {
+                if let Some(morse_actions) = &td.morse_actions {
+                    if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() || td.tap_actions.is_some() || td.hold_actions.is_some() {
+                        panic!("\n❌ keyboard.toml: `morse_actions` cannot be used together with `tap_actions`, `hold_actions`, `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
+                    }
+
+                    let actions_def = expand_morse_actions(&morse_actions);
+
+                    quote! {
+                        ::rmk::morse::Morse {
+                            timeout_ms: #timeout,
+                            #actions_def
+                            ..Default::default()
+                        }
+                    }
+
+                } else if td.tap_actions.is_some() || td.hold_actions.is_some() {
                     // Check first
                     if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() {
-                        panic!("\n❌ keyboard.toml: `tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#tap-dance");
+                        panic!("\n❌ keyboard.toml: `tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
                     }
+
                     let tap_actions_def = match &td.tap_actions {
                         Some(tap_actions) => {
                             let actions = tap_actions.iter().map(|action| {
@@ -204,10 +247,10 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     };
 
                     quote! {
-                        ::rmk::tap_dance::TapDance::new_with_actions(
+                        ::rmk::morse::Morse::new_with_actions(
                             #tap_actions_def,
                             #hold_actions_def,
-                            #timeout as u16
+                            #timeout,
                         )
                     }
                 } else {
@@ -217,20 +260,20 @@ fn expand_tap_dance(tap_dance: &Option<TapDancesConfig>) -> proc_macro2::TokenSt
                     let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
 
                     quote! {
-                        ::rmk::tap_dance::TapDance::new_from_vial(
+                        ::rmk::morse::Morse::new_from_vial(
                             #tap.to_action(),
                             #hold.to_action(),
                             #hold_after_tap.to_action(),
                             #double_tap.to_action(),
-                            #timeout as u16
+                            #timeout,
                         )
                     }
                 }
             });
 
             quote! {
-                ::rmk::config::TapDancesConfig {
-                    tap_dances: ::rmk::heapless::Vec::from_iter([#(#tap_dances_def),*]),
+                ::rmk::config::MorsesConfig {
+                    morses: ::rmk::heapless::Vec::from_iter([#(#morses_def),*]),
                 }
             }
         }
@@ -319,9 +362,9 @@ impl quote::ToTokens for StateBitsMacro {
 
         tokens.extend(quote! {
             ::rmk::fork::StateBits::new_from(
-                ::rmk::hid_state::HidModifiers::new_from(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
-                ::rmk::light::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
-                ::rmk::hid_state::HidMouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
+                ::rmk::types::modifier::ModifierCombination::new_from_vals(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
+                ::rmk::types::led_indicator::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
+                ::rmk::types::mouse_button::MouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
         });
     }
 }
@@ -397,24 +440,25 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let behavior = keyboard_config.get_behavior_config().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
-    let morse = expand_morse(&behavior.tap_hold);
+    let tap_hold = expand_tap_hold_config(&behavior.tap_hold);
     let one_shot = expand_one_shot(&behavior.one_shot);
     let combos = expand_combos(&behavior.combo);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork);
-    let tap_dance = expand_tap_dance(&behavior.tap_dance);
+    let morse = expand_morse(&behavior.morse);
 
     quote! {
-        let behavior_config = ::rmk::config::BehaviorConfig {
+        let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
-            morse: #morse,
+            tap_hold: #tap_hold,
             one_shot: #one_shot,
             combo: #combos,
             fork: #forks,
-            tap_dance: #tap_dance,
+            morse: #morse,
             keyboard_macros: #macros,
             // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
+            tap: ::rmk::config::TapConfig::default(),
         };
     }
 }

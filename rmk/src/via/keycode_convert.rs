@@ -1,8 +1,6 @@
-use num_enum::FromPrimitive;
-
-use crate::action::{Action, KeyAction};
-use crate::keycode::{KeyCode, ModifierCombination};
-use crate::morse::Morse;
+use rmk_types::action::{Action, KeyAction};
+use rmk_types::keycode::KeyCode;
+use rmk_types::modifier::ModifierCombination;
 
 pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
     match key_action {
@@ -24,7 +22,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     k as u16
                 }
             }
-            Action::KeyWithModifier(k, m) => ((m.into_bits() as u16) << 8) | k as u16,
+            Action::KeyWithModifier(k, m) => ((m.into_packed_bits() as u16) << 8) | k as u16,
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
@@ -43,7 +41,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             }
             Action::OneShotModifier(m) => {
                 // One-shot modifier
-                let modifier_bits = m.into_bits();
+                let modifier_bits = m.into_packed_bits();
                 0x52A0 | modifier_bits as u16
             }
             _ => 0x0000,
@@ -52,29 +50,28 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             warn!("Tap action is not supported by via");
             0
         }
-        KeyAction::Morse(m) => {
-            if m.tap_actions.len() == 1 && m.hold_actions.len() == m.tap_actions.len() {
-                // It a tap-hold behavior
-                let tap_code = match m.tap_action(0) {
-                    Action::Key(key_code) => key_code as u16,
+        KeyAction::TapHold(tap, hold) => match hold {
+            Action::LayerOn(l) => {
+                if l > 16 {
+                    0
+                } else {
+                    let keycode = match tap {
+                        Action::Key(k) => k as u16,
+                        _ => 0,
+                    };
+                    0x4000 | ((l as u16) << 8) | keycode
+                }
+            }
+            Action::Modifier(m) => {
+                let keycode = match tap {
+                    Action::Key(k) => k as u16,
                     _ => 0,
                 };
-                match m.hold_action(0) {
-                    Action::Modifier(m) => 0x2000 | ((m.into_bits() as u16) << 8) | tap_code,
-                    Action::LayerOn(l) => {
-                        if l > 16 {
-                            0
-                        } else {
-                            0x4000 | ((l as u16) << 8) | tap_code
-                        }
-                    }
-                    _ => 0,
-                }
-            } else {
-                0
+                0x2000 | ((m.into_packed_bits() as u16) << 8) | keycode
             }
-        }
-        KeyAction::TapDance(index) => {
+            _ => 0x0000,
+        },
+        KeyAction::Morse(index) => {
             // Tap dance keycodes: 0x5700..=0x57FF
             0x5700 | (index as u16)
         }
@@ -86,31 +83,27 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
     match via_keycode {
         0x0000 => KeyAction::No,
         0x0001 => KeyAction::Transparent,
-        0x0002..=0x00FF => KeyAction::Single(Action::Key(KeyCode::from_primitive(via_keycode))),
+        0x0002..=0x00FF => KeyAction::Single(Action::Key(via_keycode.into())),
         0x0100..=0x1FFF => {
             // WithModifier
-            let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            let modifier = ModifierCombination::from_bits((via_keycode >> 8) as u8);
+            let keycode = (via_keycode & 0x00FF).into();
+            let modifier = ModifierCombination::from_packed_bits((via_keycode >> 8) as u8);
             KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
         }
         0x2000..=0x3FFF => {
             // Modifier tap-hold.
             // For modifier tap-hold, if it's on the home row, use `new_hrm` instead
             // HRMs is in permissive hold mode, while other modifier tap-hold is in hold on other key press mode
-            let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            let modifier = ModifierCombination::from_bits(((via_keycode >> 8) & 0b11111) as u8);
-            if keycode.is_home_row() {
-                KeyAction::Morse(Morse::new_hrm(Action::Key(keycode), modifier))
-            } else {
-                KeyAction::Morse(Morse::new_modifier_tap_hold(Action::Key(keycode), modifier))
-            }
+            let keycode = (via_keycode & 0x00FF).into();
+            let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
+            KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier))
         }
         0x4000..=0x4FFF => {
             // Layer tap-hold.
             // Layer tap-hold is in hold on other key press mode by default
             let layer = (via_keycode >> 8) & 0xF;
-            let keycode = KeyCode::from_primitive(via_keycode & 0x00FF);
-            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(keycode), layer as u8))
+            let keycode = (via_keycode & 0x00FF).into();
+            KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8))
         }
         0x5200..=0x521F => {
             // Activate layer X and deactivate other layers(except default layer)
@@ -139,7 +132,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x52A0..=0x52BF => {
             // One-shot modifier
-            let m = ModifierCombination::from_bits((via_keycode & 0x1F) as u8);
+            let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
             KeyAction::Single(Action::OneShotModifier(m))
         }
         0x52C0..=0x52DF => {
@@ -150,7 +143,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5700..=0x57FF => {
             // Tap dance
             let index = (via_keycode & 0xFF) as u8;
-            KeyAction::TapDance(index)
+            KeyAction::Morse(index)
         }
         0x7000..=0x701F => {
             // TODO: QMK functions, such as swap ctrl/caps, gui on, haptic, music, clicky, combo, RGB, etc
@@ -160,7 +153,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7700..=0x770F => {
             // Macro
             let keycode = via_keycode & 0xFF | 0x500;
-            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
+            KeyAction::Single(Action::Key(keycode.into()))
         }
         0x7800..=0x783F => {
             // TODO: backlight and rgb configuration
@@ -171,7 +164,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7C00..=0x7C01 | 0x7C50..=0x7C52 => {
             // is_rmk() 's related
             let keycode = via_keycode & 0xFF | 0x700;
-            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
+            KeyAction::Single(Action::Key(keycode.into()))
         }
         // GraveEscape
         0x7C16 => KeyAction::Single(Action::Key(KeyCode::GraveEscape)),
@@ -192,7 +185,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7E00..=0x7E0F => {
             // QK_KB_N, aka UserN
             let keycode = via_keycode & 0xFF | 0x840;
-            KeyAction::Single(Action::Key(KeyCode::from_primitive(keycode)))
+            KeyAction::Single(Action::Key(keycode.into()))
         }
         _ => {
             warn!("Via keycode {:#X} is not processed", via_keycode);
@@ -502,54 +495,54 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 0)),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0)),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 3)),
+            KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3)),
             from_via_keycode(via_keycode)
         );
 
         // LSA_T(A) ->
         let via_keycode = 0x2604;
         assert_eq!(
-            KeyAction::Morse(Morse::new_hrm(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, false, true, true, false)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, false))
+            ), //hrm
             from_via_keycode(via_keycode)
         );
 
         // RCAG_T(B) ->
         let via_keycode = 0x3D05;
         assert_eq!(
-            KeyAction::Morse(Morse::new_modifier_tap_hold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::B),
-                ModifierCombination::new_from(true, true, true, false, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(true, true, true, false, true))
+            ),
             from_via_keycode(via_keycode)
         );
 
         // ALL_T(A) ->
         let via_keycode: u16 = 0x2F04;
         assert_eq!(
-            KeyAction::Morse(Morse::new_hrm(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::A),
-                ModifierCombination::new_from(false, true, true, true, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, true, true, true, true))
+            ), //hrm
             from_via_keycode(via_keycode)
         );
 
         // Meh_T(B) ->
         let via_keycode = 0x2705;
         assert_eq!(
-            KeyAction::Morse(Morse::new_modifier_tap_hold(
+            KeyAction::TapHold(
                 Action::Key(KeyCode::B),
-                ModifierCombination::new_from(false, false, true, true, true)
-            )),
+                Action::Modifier(ModifierCombination::new_from(false, false, true, true, true))
+            ),
             from_via_keycode(via_keycode)
         );
 
@@ -574,17 +567,17 @@ mod test {
             from_via_keycode(via_keycode)
         );
 
-        // TapDance(0)
+        // Morse(0)
         let via_keycode = 0x5700;
-        assert_eq!(KeyAction::TapDance(0), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(0), from_via_keycode(via_keycode));
 
-        // TapDance(5)
+        // Morse(5)
         let via_keycode = 0x5705;
-        assert_eq!(KeyAction::TapDance(5), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(5), from_via_keycode(via_keycode));
 
-        // TapDance(255)
+        // Morse(255)
         let via_keycode = 0x57FF;
-        assert_eq!(KeyAction::TapDance(255), from_via_keycode(via_keycode));
+        assert_eq!(KeyAction::Morse(255), from_via_keycode(via_keycode));
     }
 
     #[test]
@@ -640,39 +633,39 @@ mod test {
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 0));
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(0));
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::Morse(Morse::new_layer_tap_hold(Action::Key(KeyCode::A), 3));
+        let a = KeyAction::TapHold(Action::Key(KeyCode::A), Action::LayerOn(3));
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, false),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
+        );
         assert_eq!(0x2604, to_via_keycode(a));
 
         // RCAG_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(true, true, true, false, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
+        );
         assert_eq!(0x3D04, to_via_keycode(a));
 
         // ALL_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, true, true, true, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
+        );
         assert_eq!(0x2F04, to_via_keycode(a));
 
         // Meh_T(A) ->
-        let a = KeyAction::Morse(Morse::new_modifier_tap_hold(
+        let a = KeyAction::TapHold(
             Action::Key(KeyCode::A),
-            ModifierCombination::new_from(false, false, true, true, true),
-        ));
+            Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
+        );
         assert_eq!(0x2704, to_via_keycode(a));
 
         // ComboOff
@@ -687,14 +680,14 @@ mod test {
         let a = KeyAction::Single(Action::Key(KeyCode::RepeatKey));
         assert_eq!(0x7C79, to_via_keycode(a));
 
-        // TapDance
-        let a = KeyAction::TapDance(0);
+        // Morse
+        let a = KeyAction::Morse(0);
         assert_eq!(0x5700, to_via_keycode(a));
 
-        let a = KeyAction::TapDance(5);
+        let a = KeyAction::Morse(5);
         assert_eq!(0x5705, to_via_keycode(a));
 
-        let a = KeyAction::TapDance(255);
+        let a = KeyAction::Morse(255);
         assert_eq!(0x57FF, to_via_keycode(a));
     }
 

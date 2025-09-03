@@ -1,6 +1,16 @@
-use crate::TAP_DANCE_MAX_TAP;
-use crate::keycode::{KeyCode, ModifierCombination};
-use crate::morse::Morse;
+//! Keyboard actions and behaviors.
+//!
+//! This module defines the core action system used in RMK firmware.
+//! Actions represent what happens when a key is pressed, from simple key
+//! presses to complex behaviors like tap-hold, layer switching, and macros.
+//!
+//! Key types:
+//! - [`Action`] - Single operations that keyboards send or execute
+//! - [`KeyAction`] - Complex behaviors that keyboards should behave
+//! - [`EncoderAction`] - Rotary encoder actions
+
+use crate::keycode::KeyCode;
+use crate::modifier::ModifierCombination;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
@@ -18,7 +28,9 @@ impl Default for EncoderAction {
         }
     }
 }
+
 impl EncoderAction {
+    /// Create a new encoder action.
     pub const fn new(clockwise: KeyAction, counter_clockwise: KeyAction) -> Self {
         Self {
             clockwise,
@@ -26,18 +38,22 @@ impl EncoderAction {
         }
     }
 
+    /// Set the clockwise action.
     pub fn set_clockwise(&mut self, clockwise: KeyAction) {
         self.clockwise = clockwise;
     }
 
+    /// Set the counter clockwise action.
     pub fn set_counter_clockwise(&mut self, counter_clockwise: KeyAction) {
         self.counter_clockwise = counter_clockwise;
     }
 
+    /// Get the clockwise action.
     pub fn clockwise(&self) -> KeyAction {
         self.clockwise
     }
 
+    /// Get the counter clockwise action.
     pub fn counter_clockwise(&self) -> KeyAction {
         self.counter_clockwise
     }
@@ -56,10 +72,10 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// Tap dance action, references a tap dance configuration by index.
-    TapDance(u8),
-    /// Morse action
-    Morse(Morse<TAP_DANCE_MAX_TAP>),
+    /// Tap hold action
+    TapHold(Action, Action),
+    /// Morse action, references a morse configuration by index.
+    Morse(u8),
 }
 
 impl KeyAction {
@@ -70,6 +86,12 @@ impl KeyAction {
             KeyAction::Single(a) | KeyAction::Tap(a) => a,
             _ => Action::No,
         }
+    }
+
+    /// 'morse' is an alias for the superset of tap dance and tap hold keys,
+    /// since their handling have many similarities
+    pub fn is_morse(&self) -> bool {
+        matches!(self, KeyAction::TapHold(_, _) | KeyAction::Morse(_))
     }
 }
 
