@@ -12,15 +12,6 @@ use crate::event::{Event, KeyboardEvent};
 use crate::input_device::InputDevice;
 use crate::state::ConnectionState;
 
-#[cfg(all(feature = "col2row", feature = "bidirectional"))]
-compile_error!("feature \"col2row\" and feature \"bidirectional\" cannot be enabled at the same time");
-
-#[cfg(all(feature = "col2row", feature = "row2col"))]
-compile_error!("feature \"col2row\" and feature \"row2col\" cannot be enabled at the same time");
-
-#[cfg(all(feature = "row2col", feature = "bidirectional"))]
-compile_error!("feature \"row2col\" and feature \"bidirectional\" cannot be enabled at the same time");
-
 /// Recording the matrix pressed state
 #[cfg(feature = "matrix_tester")]
 pub struct MatrixState<const ROW: usize, const COL: usize> {
@@ -153,8 +144,7 @@ pub struct Matrix<
     /// Debouncer
     debouncer: D,
     /// Key state matrix
-    #[cfg(feature = "bidirectional")] key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM * 2],
-    #[cfg(not(feature = "bidirectional"))] key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
+    key_states: [[KeyState; INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
     /// Start scanning
     scan_start: Option<Instant>,
     /// Current scan pos: (out_idx, in_idx)
@@ -162,12 +152,9 @@ pub struct Matrix<
 }
 
 impl<
-    #[cfg(all(not(feature = "bidirectional"), not(feature = "async_matrix")))] In: InputPin,
-    #[cfg(all(not(feature = "bidirectional"), feature = "async_matrix"))] In: Wait + InputPin,
-    #[cfg(all(feature = "bidirectional", not(feature = "async_matrix")))] In: InputPin + OutputPin,
-    #[cfg(all(feature = "bidirectional", feature = "async_matrix"))] In: Wait + InputPin + OutputPin,
-    #[cfg(not(feature = "bidirectional"))] Out: OutputPin,
-    #[cfg(feature = "bidirectional")] Out: OutputPin + InputPin,
+    #[cfg(not(feature = "async_matrix"))] In: InputPin,
+    #[cfg(feature = "async_matrix")] In: Wait + InputPin,
+    Out: OutputPin,
     D: DebouncerTrait,
     const INPUT_PIN_NUM: usize,
     const OUTPUT_PIN_NUM: usize,
@@ -179,8 +166,7 @@ impl<
             input_pins,
             output_pins,
             debouncer,
-            #[cfg(not(feature = "bidirectional"))] key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
-            #[cfg(feature = "bidirectional")] key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM * 2],
+            key_states: [[KeyState::new(); INPUT_PIN_NUM]; OUTPUT_PIN_NUM],
             scan_start: None,
             scan_pos: (0, 0),
         }
@@ -198,100 +184,48 @@ impl<
 {
     async fn read_event(&mut self) -> crate::event::Event {
         loop {
-            let (mut out_idx_start, mut in_idx_start) = self.scan_pos;
+            let (out_idx_start, in_idx_start) = self.scan_pos;
             #[cfg(feature = "async_matrix")]
             self.wait_for_key().await;
 
-            if out_idx_start < OUTPUT_PIN_NUM {
-                // Scan matrix and send report
-                for out_idx in out_idx_start..self.output_pins.len() {
-                    // Pull up output pin, wait 1us ensuring the change comes into effect
-                    if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
-                        out_pin.set_high().ok();
+            // Scan matrix and send report
+            for out_idx in out_idx_start..self.output_pins.len() {
+                // Pull up output pin, wait 1us ensuring the change comes into effect
+                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                    out_pin.set_high().ok();
+                }
+                Timer::after_micros(1).await;
+                for in_idx in in_idx_start..self.input_pins.len() {
+                    let in_pin = self.input_pins.get_mut(in_idx).unwrap();
+                    // Check input pins and debounce
+                    let debounce_state = self.debouncer.detect_change_with_debounce(
+                        in_idx,
+                        out_idx,
+                        in_pin.is_high().ok().unwrap_or_default(),
+                        &self.key_states[out_idx][in_idx],
+                    );
+
+                    if let DebounceState::Debounced = debounce_state {
+                        self.key_states[out_idx][in_idx].toggle_pressed();
+                        #[cfg(feature = "col2row")]
+                        let (row, col, key_state) = (in_idx, out_idx, self.key_states[out_idx][in_idx]);
+                        #[cfg(not(feature = "col2row"))]
+                        let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
+
+                        self.scan_pos = (out_idx, in_idx);
+                        return Event::Key(KeyboardEvent::key(row as u8, col as u8, key_state.pressed));
                     }
-                    Timer::after_micros(1).await;
-                    let in_idx_start_current = if out_idx == out_idx_start { in_idx_start } else { 0 };
-                    for in_idx in in_idx_start_current..self.input_pins.len() {
-                        let in_pin = self.input_pins.get_mut(in_idx).unwrap();
-                        // Check input pins and debounce
-                        let debounce_state = self.debouncer.detect_change_with_debounce(
-                            in_idx,
-                            out_idx,
-                            in_pin.is_high().ok().unwrap_or_default(),
-                            &self.key_states[out_idx][in_idx],
-                        );
-    
-                        if let DebounceState::Debounced = debounce_state {
-                            self.key_states[out_idx][in_idx].toggle_pressed();
-                            #[cfg(feature = "col2row")]
-                            let (row, col, key_state) = (in_idx, out_idx, self.key_states[out_idx][in_idx]);
-                            #[cfg(feature = "row2col")]
-                            let (row, col, key_state) = (out_idx, in_idx, self.key_states[out_idx][in_idx]);
-                            #[cfg(feature = "bidirectional")]
-                            let (row, col, key_state) = (in_idx, out_idx * 2, self.key_states[out_idx][in_idx]);
-    
-                            self.scan_pos = (out_idx, in_idx);
-                            return Event::Key(KeyboardEvent::key(row as u8, col as u8, key_state.pressed));
-                        }
-    
-                        // If there's key still pressed, always refresh the self.scan_start
-                        #[cfg(feature = "async_matrix")]
-                        if self.key_states[out_idx][in_idx].pressed {
-                            self.scan_start = Some(Instant::now());
-                        }
-                    }
-    
-                    // Pull it back to low
-                    if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
-                        out_pin.set_low().ok();
+
+                    // If there's key still pressed, always refresh the self.scan_start
+                    #[cfg(feature = "async_matrix")]
+                    if self.key_states[out_idx][in_idx].pressed {
+                        self.scan_start = Some(Instant::now());
                     }
                 }
-                #[cfg(feature = "bidirectional")]
-                {
-                    out_idx_start = OUTPUT_PIN_NUM;
-                    in_idx_start = 0;
-                }
-            }
-            #[cfg(feature = "bidirectional")]
-            {
-                // Scan matrix in reverse and send report
-                let local_in_idx_start = out_idx_start - OUTPUT_PIN_NUM;
-                let local_out_idx_start = in_idx_start;
-                for in_idx in local_in_idx_start..self.input_pins.len() {
-                    // Pull up output pin, wait 1us ensuring the change comes into effect
-                    if let Some(in_pin) = self.input_pins.get_mut(in_idx) {
-                        in_pin.set_high().ok();
-                    }
-                    Timer::after_micros(1).await;
-                    let out_idx_start_current = if in_idx == local_in_idx_start { local_out_idx_start } else { 0 };
-                    for out_idx in out_idx_start_current..self.output_pins.len() {
-                        let col_idx = out_idx + OUTPUT_PIN_NUM;
-                        let out_pin = self.input_pins.get_mut(out_idx).unwrap();
-                        // Check input pins and debounce
-                        let debounce_state = self.debouncer.detect_change_with_debounce(
-                            col_idx,
-                            in_idx,
-                            out_pin.is_high().ok().unwrap_or_default(),
-                            &self.key_states[col_idx][in_idx],
-                        );
-    
-                        if let DebounceState::Debounced = debounce_state {
-                            self.key_states[col_idx][in_idx].toggle_pressed();
-                            self.scan_pos = (col_idx, in_idx);
-                            return Event::Key(KeyboardEvent::key(in_idx as u8, out_idx * 2 + 1 as u8, self.key_states[col_idx][in_idx].pressed));
-                        }
-    
-                        // If there's key still pressed, always refresh the self.scan_start
-                        #[cfg(feature = "async_matrix")]
-                        if self.key_states[col_idx][in_idx].pressed {
-                            self.scan_start = Some(Instant::now());
-                        }
-                    }
-    
-                    // Pull it back to low
-                    if let Some(in_pin) = self.output_pins.get_mut(in_idx) {
-                        in_pin.set_low().ok();
-                    }
+
+                // Pull it back to low
+                if let Some(out_pin) = self.output_pins.get_mut(out_idx) {
+                    out_pin.set_low().ok();
                 }
             }
             self.scan_pos = (0, 0);
@@ -308,15 +242,13 @@ impl<
     const OUTPUT_PIN_NUM: usize,
 > MatrixTrait for Matrix<In, Out, D, INPUT_PIN_NUM, OUTPUT_PIN_NUM>
 {
-    #[cfg(any(feature = "col2row", feature = "bidirectional"))]
+    #[cfg(feature = "col2row")]
     const ROW: usize = INPUT_PIN_NUM;
     #[cfg(feature = "col2row")]
     const COL: usize = OUTPUT_PIN_NUM;
-    #[cfg(feature = "bidirectional")]
-    const COL: usize = OUTPUT_PIN_NUM * 2;
-    #[cfg(feature = "row2col")]
+    #[cfg(not(feature = "col2row"))]
     const ROW: usize = OUTPUT_PIN_NUM;
-    #[cfg(feature = "row2col")]
+    #[cfg(not(feature = "col2row"))]
     const COL: usize = INPUT_PIN_NUM;
 
     #[cfg(feature = "async_matrix")]

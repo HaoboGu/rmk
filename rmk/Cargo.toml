@@ -108,7 +108,7 @@ features = ["split"]
 cortex-m = { version = "0.7" }
 
 [features]
-default = ["col2row", "defmt", "storage", "vial_lock"]
+default = ["col2row", "defmt", "storage", "vial_lock", "bidirectional"]
 
 ## the matrix tester is optional to store matrix state
 matrix_tester = []
@@ -122,10 +122,7 @@ storage = ["dep:embedded-storage", "dep:embedded-storage-async"]
 ## If your PCB diode's direction is col2row, enable this feature. If it's row2col, disable this feature by `default-features = false`.
 col2row = []
 
-## If your PCB has diodes and is scanned from rows to columns, enable this feature.
-row2col = []
-
-## If your PCB has column diodes with different orientations that are scanned bidirectionally, enable this feature.
+## Enable bidirectional feature
 bidirectional = []
 
 ## Enable defmt feature
