@@ -1,3 +1,5 @@
+//! Vial protocol
+
 use strum::FromRepr;
 
 pub const VIA_PROTOCOL_VERSION: u16 = 0x0009;

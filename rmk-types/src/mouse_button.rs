@@ -2,6 +2,7 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 
+/// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
 
