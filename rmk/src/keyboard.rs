@@ -263,7 +263,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let KeyAction::TapHold(tap_action, _) = action {
             if let Action::Key(keycode) = tap_action {
                 let behavior_config = &self.keymap.borrow().behavior;
-                return keycode.supports_autoshift(&behavior_config.autoshift.enabled_keys);
+                return keycode.supports_autoshift(
+                    behavior_config.autoshift.enabled_keys.letters,
+                    behavior_config.autoshift.enabled_keys.numbers,
+                    behavior_config.autoshift.enabled_keys.symbols,
+                );
             }
         }
         false
@@ -280,9 +284,11 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
         // Only apply to Single key actions (not existing TapHold or other complex actions)
         match action {
-            KeyAction::Single(Action::Key(keycode)) => {
-                keycode.supports_autoshift(&behavior_config.autoshift.enabled_keys)
-            }
+            KeyAction::Single(Action::Key(keycode)) => keycode.supports_autoshift(
+                behavior_config.autoshift.enabled_keys.letters,
+                behavior_config.autoshift.enabled_keys.numbers,
+                behavior_config.autoshift.enabled_keys.symbols,
+            ),
             _ => false,
         }
     }

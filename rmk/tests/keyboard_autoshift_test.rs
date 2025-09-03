@@ -67,24 +67,24 @@ rusty_fork_test! {
         };
 
         // Test letters
-        assert!(KeyCode::A.supports_autoshift(&config));
-        assert!(KeyCode::Z.supports_autoshift(&config));
+        assert!(KeyCode::A.supports_autoshift(true, true, true));
+        assert!(KeyCode::Z.supports_autoshift(true, true, true));
 
         // Test numbers
-        assert!(KeyCode::Kc1.supports_autoshift(&config));
-        assert!(KeyCode::Kc0.supports_autoshift(&config));
+        assert!(KeyCode::Kc1.supports_autoshift(true, true, true));
+        assert!(KeyCode::Kc0.supports_autoshift(true, true, true));
 
         // Test symbols
-        assert!(KeyCode::Semicolon.supports_autoshift(&config));
-        assert!(KeyCode::Quote.supports_autoshift(&config));
-        assert!(KeyCode::Comma.supports_autoshift(&config));
-        assert!(KeyCode::Dot.supports_autoshift(&config));
-        assert!(KeyCode::Slash.supports_autoshift(&config));
+        assert!(KeyCode::Semicolon.supports_autoshift(true, true, true));
+        assert!(KeyCode::Quote.supports_autoshift(true, true, true));
+        assert!(KeyCode::Comma.supports_autoshift(true, true, true));
+        assert!(KeyCode::Dot.supports_autoshift(true, true, true));
+        assert!(KeyCode::Slash.supports_autoshift(true, true, true));
 
         // Test non-supported keys
-        assert!(!KeyCode::F1.supports_autoshift(&config));
-        assert!(!KeyCode::Enter.supports_autoshift(&config));
-        assert!(!KeyCode::Space.supports_autoshift(&config));
+        assert!(!KeyCode::F1.supports_autoshift(true, true, true));
+        assert!(!KeyCode::Enter.supports_autoshift(true, true, true));
+        assert!(!KeyCode::Space.supports_autoshift(true, true, true));
     }
 
     #[test]
