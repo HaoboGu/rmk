@@ -25,7 +25,7 @@ use rmk::ble::trouble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, BleBatteryConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::controller::EventController as _;
-use rmk::controller::led_indicator::{KeyboardIndicator, KeyboardIndicatorController};
+use rmk::controller::led_indicator::KeyboardIndicatorController;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::{join, join4};
 use rmk::input_device::Runnable;
@@ -227,7 +227,7 @@ async fn main(spawner: Spawner) {
             embassy_nrf::gpio::OutputDrive::Standard,
         ),
         false,
-        KeyboardIndicator::CapsLock,
+        rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
     // Start

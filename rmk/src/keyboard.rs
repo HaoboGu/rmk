@@ -9,6 +9,7 @@ use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::keycode::KeyCode;
+use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
@@ -29,7 +30,6 @@ use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
-use crate::light::LedIndicator;
 use crate::morse::{MorseMode, MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;

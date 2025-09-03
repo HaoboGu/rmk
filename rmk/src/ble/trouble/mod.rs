@@ -11,6 +11,7 @@ use embassy_futures::select::{Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
 use profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use rand_core::{CryptoRng, RngCore};
+use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
@@ -44,7 +45,6 @@ use crate::channel::{KEYBOARD_REPORT_CHANNEL, LED_SIGNAL, VIAL_READ_CHANNEL};
 use crate::config::RmkConfig;
 use crate::hid::{DummyWriter, RunnableHidWriter};
 use crate::keymap::KeyMap;
-use crate::light::LedIndicator;
 #[cfg(feature = "split")]
 use crate::split::ble::central::CENTRAL_SLEEP;
 use crate::state::{ConnectionState, ConnectionType};

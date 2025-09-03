@@ -40,9 +40,9 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex as RawMutex;
 use embassy_usb::driver::Driver;
 use hid::{HidReaderTrait, HidWriterTrait, RunnableHidWriter};
 use keymap::KeyMap;
-use light::LedIndicator;
 use matrix::MatrixTrait;
 use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::led_indicator::LedIndicator;
 use state::CONNECTION_STATE;
 #[cfg(feature = "_ble")]
 use trouble_host::prelude::*;

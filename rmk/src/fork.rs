@@ -1,10 +1,9 @@
 use core::ops::{BitAnd, BitOr, Not};
 
 use rmk_types::action::KeyAction;
+use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
 use rmk_types::mouse_button::MouseButtons;
-
-use crate::light::LedIndicator;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
