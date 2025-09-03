@@ -10,6 +10,10 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::led_indicator::LedIndicator;
+use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
@@ -20,13 +24,10 @@ use {
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
-use crate::action::{EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
 use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
-use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::light::LedIndicator;
 use crate::morse::{Morse, MorseMode, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
@@ -534,16 +535,16 @@ impl Value<'_> for StorageData {
                     let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
 
                     let match_any = StateBits {
-                        modifiers: HidModifiers::from_bits((modifier_masks & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits((modifier_masks & 0xFF) as u8),
                         leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
-                        mouse: HidMouseButtons::from_bits((mouse_masks & 0xFF) as u8),
+                        mouse: MouseButtons::from_bits((mouse_masks & 0xFF) as u8),
                     };
                     let match_none = StateBits {
-                        modifiers: HidModifiers::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
                         leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
-                        mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
+                        mouse: MouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
                     };
-                    let kept_modifiers = HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
                     let bindable = (modifier_masks & (1 << 24)) != 0;
 
                     Ok(StorageData::ForkData(ForkData {
@@ -1643,11 +1644,11 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
+    use rmk_types::action::Action;
+    use rmk_types::keycode::KeyCode;
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::action::Action;
-    use crate::keycode::KeyCode;
     use crate::morse::{HOLD, MorseMode, TAP};
 
     #[test]
