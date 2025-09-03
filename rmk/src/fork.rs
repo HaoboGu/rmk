@@ -1,8 +1,8 @@
 use core::ops::{BitAnd, BitOr, Not};
 
 use rmk_types::action::KeyAction;
-use rmk_types::hid_state::HidMouseButtons;
 use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 
 use crate::light::LedIndicator;
 
@@ -11,7 +11,7 @@ use crate::light::LedIndicator;
 pub struct StateBits {
     pub(crate) modifiers: ModifierCombination,
     pub(crate) leds: LedIndicator,
-    pub(crate) mouse: HidMouseButtons,
+    pub(crate) mouse: MouseButtons,
     // note: layer active states could be added too if needed
 }
 
@@ -50,7 +50,7 @@ impl Not for StateBits {
 }
 
 impl StateBits {
-    pub const fn new_from(modifiers: ModifierCombination, leds: LedIndicator, mouse: HidMouseButtons) -> Self {
+    pub const fn new_from(modifiers: ModifierCombination, leds: LedIndicator, mouse: MouseButtons) -> Self {
         StateBits { modifiers, leds, mouse }
     }
 }

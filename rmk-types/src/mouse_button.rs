@@ -5,7 +5,7 @@ use bitfield_struct::bitfield;
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
 #[derive(Eq, PartialEq)]
 
-pub struct HidMouseButtons {
+pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left
     #[bits(1)]
@@ -24,39 +24,39 @@ pub struct HidMouseButtons {
     pub button8: bool,
 }
 
-impl BitOr for HidMouseButtons {
+impl BitOr for MouseButtons {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         Self::from_bits(self.into_bits() | rhs.into_bits())
     }
 }
-impl BitAnd for HidMouseButtons {
+impl BitAnd for MouseButtons {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
         Self::from_bits(self.into_bits() & rhs.into_bits())
     }
 }
-impl Not for HidMouseButtons {
+impl Not for MouseButtons {
     type Output = Self;
 
     fn not(self) -> Self::Output {
         Self::from_bits(!self.into_bits())
     }
 }
-impl BitAndAssign for HidMouseButtons {
+impl BitAndAssign for MouseButtons {
     fn bitand_assign(&mut self, rhs: Self) {
         *self = *self & rhs;
     }
 }
-impl BitOrAssign for HidMouseButtons {
+impl BitOrAssign for MouseButtons {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = *self | rhs;
     }
 }
 
-impl HidMouseButtons {
+impl MouseButtons {
     pub const BUTTON1: Self = Self::new().with_button1(true);
     pub const BUTTON2: Self = Self::new().with_button2(true);
     pub const BUTTON3: Self = Self::new().with_button3(true);

@@ -364,7 +364,7 @@ impl quote::ToTokens for StateBitsMacro {
             ::rmk::fork::StateBits::new_from(
                 ::rmk::types::modifier::ModifierCombination::new_from_vals(#left_ctrl, #left_shift, #left_alt, #left_gui, #right_ctrl, #right_shift, #right_alt, #right_gui),
                 ::rmk::light::LedIndicator::new_from(#num_lock, #caps_lock, #scroll_lock, #compose, #kana),
-                ::rmk::types::hid_state::HidMouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
+                ::rmk::types::mouse_button::MouseButtons::new_from(#button1, #button2, #button3, #button4, #button5, #button6, #button7, #button8))
         });
     }
 }

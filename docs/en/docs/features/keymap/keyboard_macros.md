@@ -230,7 +230,7 @@ pub(crate) fn get_forks() -> ForksConfig {
                 StateBits::new_from(
                     ModifierCombination::LSHIFT,
                     LedIndicator::default(),
-                    HidMouseButtons::default(),
+                    MouseButtons::default(),
                 ),
                 StateBits::default(),
                 ModifierCombination::default(),

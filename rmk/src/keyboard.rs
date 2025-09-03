@@ -8,9 +8,9 @@ use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
 use rmk_types::action::{Action, KeyAction};
-use rmk_types::hid_state::HidMouseButtons;
 use rmk_types::keycode::KeyCode;
 use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
 #[cfg(feature = "controller")]
 use {
@@ -783,7 +783,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             // "explicit modifiers" includes the effect of one-shot modifiers, held modifiers keys only
             modifiers: self.resolve_explicit_modifiers(event.pressed),
             leds: LedIndicator::from_bits(LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed)),
-            mouse: HidMouseButtons::from_bits(self.mouse_report.buttons),
+            mouse: MouseButtons::from_bits(self.mouse_report.buttons),
         };
 
         let mut triggered_forks = [false; FORK_MAX_NUM]; // used to avoid loops
@@ -2451,7 +2451,7 @@ mod test {
                     match_any: StateBits {
                         modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
                     kept_modifiers: ModifierCombination::default(),
@@ -2466,7 +2466,7 @@ mod test {
                     match_any: StateBits {
                         modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
                     kept_modifiers: ModifierCombination::default(),
@@ -2554,7 +2554,7 @@ mod test {
                             .with_left_shift(true)
                             .with_right_shift(true),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default(),
+                        mouse: MouseButtons::default(),
                     },
                     match_none: StateBits::default(),
                     kept_modifiers: ModifierCombination::default().with_left_shift(true).with_right_shift(true),
@@ -2569,7 +2569,7 @@ mod test {
                     match_any: StateBits {
                         modifiers: ModifierCombination::default(),
                         leds: LedIndicator::default(),
-                        mouse: HidMouseButtons::default().with_button5(true),
+                        mouse: MouseButtons::default().with_button5(true),
                     },
                     match_none: StateBits::default(),
                     kept_modifiers: ModifierCombination::default(),

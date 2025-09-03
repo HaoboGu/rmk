@@ -116,7 +116,7 @@ impl CompositeReportType {
 )]
 #[derive(Default, Serialize)]
 pub struct CompositeReport {
-    pub(crate) buttons: u8, // HidMouseButtons
+    pub(crate) buttons: u8, // MouseButtons
     pub(crate) x: i8,
     pub(crate) y: i8,
     pub(crate) wheel: i8, // Scroll down (negative) or up (positive) this many units

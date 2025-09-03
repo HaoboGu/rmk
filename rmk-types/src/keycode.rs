@@ -2,99 +2,6 @@ use strum::{EnumIter, FromRepr};
 
 use crate::modifier::ModifierCombination;
 
-impl From<u16> for ConsumerKey {
-    fn from(value: u16) -> Self {
-        Self::from_repr(value).unwrap_or(Self::Zero)
-    }
-}
-
-/// Keys in consumer page
-/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
-#[non_exhaustive]
-#[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ConsumerKey {
-    Zero = 0x00,
-    // 15.5 Display Controls
-    SnapShot = 0x65,
-    /// <https://www.usb.org/sites/default/files/hutrr41_0.pdf>
-    BrightnessUp = 0x6F,
-    BrightnessDown = 0x70,
-    // 15.7 Transport Controls
-    Play = 0xB0,
-    Pause = 0xB1,
-    Record = 0xB2,
-    FastForward = 0xB3,
-    Rewind = 0xB4,
-    NextTrack = 0xB5,
-    PrevTrack = 0xB6,
-    StopPlay = 0xB7,
-    Eject = 0xB8,
-    RandomPlay = 0xB9,
-    Repeat = 0xBC,
-    StopEject = 0xCC,
-    PlayPause = 0xCD,
-    // 15.9.1 Audio Controls - Volume
-    Mute = 0xE2,
-    VolumeIncrement = 0xE9,
-    VolumeDecrement = 0xEA,
-    Reserved = 0xEB,
-    // 15.15 Application Launch Buttons
-    Email = 0x18A,
-    Calculator = 0x192,
-    LocalBrowser = 0x194,
-    Lock = 0x19E,
-    ControlPanel = 0x19F,
-    Assistant = 0x1CB,
-    // 15.16 Generic GUI Application Controls
-    New = 0x201,
-    Open = 0x202,
-    Close = 0x203,
-    Exit = 0x204,
-    Maximize = 0x205,
-    Minimize = 0x206,
-    Save = 0x207,
-    Print = 0x208,
-    Properties = 0x209,
-    Undo = 0x21A,
-    Copy = 0x21B,
-    Cut = 0x21C,
-    Paste = 0x21D,
-    SelectAll = 0x21E,
-    Find = 0x21F,
-    Search = 0x221,
-    Home = 0x223,
-    Back = 0x224,
-    Forward = 0x225,
-    Stop = 0x226,
-    Refresh = 0x227,
-    Bookmarks = 0x22A,
-    NextKeyboardLayoutSelect = 0x29D,
-    DesktopShowAllWindows = 0x29F,
-    AcSoftKeyLeft = 0x2A0,
-}
-
-/// Keys in `Generic Desktop Page`, generally used for system control
-/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
-#[non_exhaustive]
-#[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum SystemControlKey {
-    Zero = 0x00,
-    PowerDown = 0x81,
-    Sleep = 0x82,
-    WakeUp = 0x83,
-    Restart = 0x8F,
-}
-
-impl From<u16> for KeyCode {
-    fn from(value: u16) -> Self {
-        Self::from_repr(value).unwrap_or(Self::No)
-    }
-}
-
 /// KeyCode is the internal representation of all keycodes, keyboard operations, etc.
 /// Use flat representation of keycodes.
 #[repr(u16)]
@@ -1150,7 +1057,7 @@ impl KeyCode {
             KeyCode::Assistant => ConsumerKey::Assistant,
             KeyCode::MissionControl => ConsumerKey::DesktopShowAllWindows,
             KeyCode::Launchpad => ConsumerKey::AcSoftKeyLeft,
-            _ => ConsumerKey::Zero,
+            _ => ConsumerKey::No,
         }
     }
 
@@ -1162,5 +1069,104 @@ impl KeyCode {
             KeyCode::SystemWake => Some(SystemControlKey::WakeUp),
             _ => None,
         }
+    }
+}
+
+impl From<u16> for KeyCode {
+    fn from(value: u16) -> Self {
+        Self::from_repr(value).unwrap_or(Self::No)
+    }
+}
+
+/// Keys in consumer page
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
+#[non_exhaustive]
+#[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ConsumerKey {
+    No = 0x00,
+    // 15.5 Display Controls
+    SnapShot = 0x65,
+    /// <https://www.usb.org/sites/default/files/hutrr41_0.pdf>
+    BrightnessUp = 0x6F,
+    BrightnessDown = 0x70,
+    // 15.7 Transport Controls
+    Play = 0xB0,
+    Pause = 0xB1,
+    Record = 0xB2,
+    FastForward = 0xB3,
+    Rewind = 0xB4,
+    NextTrack = 0xB5,
+    PrevTrack = 0xB6,
+    StopPlay = 0xB7,
+    Eject = 0xB8,
+    RandomPlay = 0xB9,
+    Repeat = 0xBC,
+    StopEject = 0xCC,
+    PlayPause = 0xCD,
+    // 15.9.1 Audio Controls - Volume
+    Mute = 0xE2,
+    VolumeIncrement = 0xE9,
+    VolumeDecrement = 0xEA,
+    Reserved = 0xEB,
+    // 15.15 Application Launch Buttons
+    Email = 0x18A,
+    Calculator = 0x192,
+    LocalBrowser = 0x194,
+    Lock = 0x19E,
+    ControlPanel = 0x19F,
+    Assistant = 0x1CB,
+    // 15.16 Generic GUI Application Controls
+    New = 0x201,
+    Open = 0x202,
+    Close = 0x203,
+    Exit = 0x204,
+    Maximize = 0x205,
+    Minimize = 0x206,
+    Save = 0x207,
+    Print = 0x208,
+    Properties = 0x209,
+    Undo = 0x21A,
+    Copy = 0x21B,
+    Cut = 0x21C,
+    Paste = 0x21D,
+    SelectAll = 0x21E,
+    Find = 0x21F,
+    Search = 0x221,
+    Home = 0x223,
+    Back = 0x224,
+    Forward = 0x225,
+    Stop = 0x226,
+    Refresh = 0x227,
+    Bookmarks = 0x22A,
+    NextKeyboardLayoutSelect = 0x29D,
+    DesktopShowAllWindows = 0x29F,
+    AcSoftKeyLeft = 0x2A0,
+}
+
+impl From<u16> for ConsumerKey {
+    fn from(value: u16) -> Self {
+        Self::from_repr(value).unwrap_or(Self::No)
+    }
+}
+
+/// Keys in `Generic Desktop Page`, generally used for system control
+/// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=26>
+#[non_exhaustive]
+#[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromRepr, EnumIter)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum SystemControlKey {
+    No = 0x00,
+    PowerDown = 0x81,
+    Sleep = 0x82,
+    WakeUp = 0x83,
+    Restart = 0x8F,
+}
+
+impl From<u16> for SystemControlKey {
+    fn from(value: u16) -> Self {
+        Self::from_repr(value).unwrap_or(Self::No)
     }
 }
