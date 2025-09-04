@@ -38,7 +38,7 @@ numslock.pin = "P0_01"
 numslock.low_active = false
 
 [behavior]
-tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_timeout = "250ms", gap_timeout = "250ms" }
+tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_timeout = "240ms", gap_timeout = "230ms" }
 
 [behavior.tap_hold_profiles]
 # matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
@@ -50,6 +50,7 @@ tap = "A"
 hold = "WM(A, LShift)"
 double_tap = "CapsLock"
 hold_after_tap = "A"
+profile = "H2"
 
 [[behavior.morse.morses]]
 tap = "Space"

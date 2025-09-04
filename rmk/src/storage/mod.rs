@@ -83,10 +83,6 @@ pub(crate) enum FlashOperationMessage {
     WriteFork(ForkData),
     // Write morse config
     WriteMorse(u8, Morse),
-    // Timeout time for morse keys
-    MorseHoldTimeout(u16),
-    // Timeout time for morse keys
-    MorseGapTimeout(u16),
     // Timeout time for combos
     ComboTimeout(u16),
     // Timeout time for one-shot keys
@@ -97,7 +93,9 @@ pub(crate) enum FlashOperationMessage {
     TapCapslockInterval(u16),
     // The prior-idle-time in ms used for in flow tap
     PriorIdleTime(u16),
-    // Whether the unilateral tap is enabled
+    // Timeout time for morse keys in default tap hold profile
+    MorseHoldTimeout(u16),
+    // Whether the unilateral tap is enabled in default tap hold profile
     UnilateralTap(bool),
 }
 
@@ -236,15 +234,14 @@ impl Value<'_> for StorageData {
             StorageData::BehaviorConfig(c) => {
                 buffer[0] = StorageKeys::BehaviorConfig as u8;
                 BigEndian::write_u16(&mut buffer[1..3], c.prior_idle_time);
-                BigEndian::write_u16(&mut buffer[3..5], c.morse_hold_timeout);
-                BigEndian::write_u16(&mut buffer[5..7], c.morse_gap_timeout);
-                buffer[7] = if c.unilateral_tap { 1 } else { 0 };
+                BigEndian::write_u16(&mut buffer[3..5], c.morse_hold_timeout_ms);
+                buffer[5] = if c.unilateral_tap { 1 } else { 0 };
 
-                BigEndian::write_u16(&mut buffer[8..10], c.combo_timeout);
-                BigEndian::write_u16(&mut buffer[10..12], c.one_shot_timeout);
-                BigEndian::write_u16(&mut buffer[12..14], c.tap_interval);
-                BigEndian::write_u16(&mut buffer[14..16], c.tap_capslock_interval);
-                Ok(16)
+                BigEndian::write_u16(&mut buffer[6..8], c.combo_timeout);
+                BigEndian::write_u16(&mut buffer[8..10], c.one_shot_timeout);
+                BigEndian::write_u16(&mut buffer[10..12], c.tap_interval);
+                BigEndian::write_u16(&mut buffer[12..14], c.tap_capslock_interval);
+                Ok(14)
             }
             StorageData::KeymapKey(k) => {
                 buffer[0] = StorageKeys::KeymapConfig as u8;
@@ -323,13 +320,14 @@ impl Value<'_> for StorageData {
                 Ok(15)
             }
             StorageData::MorseData(morse) => {
-                let total_size = 3 + 4 * morse.actions.len();
+                let total_size = 7 + 4 * morse.actions.len();
                 if buffer.len() < total_size {
                     return Err(SerializationError::BufferTooSmall);
                 }
                 buffer[0] = StorageKeys::MorseData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], morse.actions.len() as u16);
-                let mut i = 3;
+                BigEndian::write_u32(&mut buffer[1..5], morse.profile.into());
+                BigEndian::write_u16(&mut buffer[5..7], morse.actions.len() as u16);
+                let mut i = 7;
                 for (pattern, action) in &morse.actions {
                     BigEndian::write_u16(
                         &mut buffer[i..i + 2],
@@ -454,14 +452,13 @@ impl Value<'_> for StorageData {
                     }
                     let keymap_config = BehaviorConfig {
                         prior_idle_time: BigEndian::read_u16(&buffer[1..3]),
-                        morse_hold_timeout: BigEndian::read_u16(&buffer[3..5]),
-                        morse_gap_timeout: BigEndian::read_u16(&buffer[5..7]),
-                        unilateral_tap: buffer[7] == 1,
+                        morse_hold_timeout_ms: BigEndian::read_u16(&buffer[3..5]),
+                        unilateral_tap: buffer[5] != 0,
 
-                        combo_timeout: BigEndian::read_u16(&buffer[8..10]),
-                        one_shot_timeout: BigEndian::read_u16(&buffer[10..12]),
-                        tap_interval: BigEndian::read_u16(&buffer[12..14]),
-                        tap_capslock_interval: BigEndian::read_u16(&buffer[14..16]),
+                        combo_timeout: BigEndian::read_u16(&buffer[6..8]),
+                        one_shot_timeout: BigEndian::read_u16(&buffer[8..10]),
+                        tap_interval: BigEndian::read_u16(&buffer[10..12]),
+                        tap_capslock_interval: BigEndian::read_u16(&buffer[12..14]),
                     };
                     Ok(StorageData::BehaviorConfig(keymap_config))
                 }
@@ -550,18 +547,20 @@ impl Value<'_> for StorageData {
                     }))
                 }
                 StorageKeys::MorseData => {
-                    if buffer.len() < 3 {
+                    if buffer.len() < 7 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let count = BigEndian::read_u16(&buffer[1..3]) as usize;
+                    let profile = BigEndian::read_u32(&buffer[1..5]);
+                    let count = BigEndian::read_u16(&buffer[5..7]) as usize;
 
-                    if buffer.len() < 3 + 4 * count {
+                    if buffer.len() < 7 + 4 * count {
                         return Err(SerializationError::InvalidData);
                     }
 
                     let mut morse = Morse::default();
+                    morse.profile = profile.into();
 
-                    let mut i = 3;
+                    let mut i = 7;
                     for _ in 0..count {
                         let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
                         let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
@@ -725,12 +724,12 @@ pub(crate) struct ForkData {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) struct BehaviorConfig {
+    // Enable flow tap for morse/tap-hold
+    //pub(crate) enable_flow_tap: bool,
     // The prior-idle-time in ms used for in flow tap
     pub(crate) prior_idle_time: u16,
-    // Timeout time for morse keys
-    pub(crate) morse_hold_timeout: u16,
-    pub(crate) morse_gap_timeout: u16,
-    // Whether the unilateral tap is enabled
+    // morse/tap-hold defaults
+    pub(crate) morse_hold_timeout_ms: u16,
     pub(crate) unilateral_tap: bool,
 
     // Timeout time for combos
@@ -1081,20 +1080,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                FlashOperationMessage::MorseHoldTimeout(morse_hold_timeout) => update_storage_field!(
+                FlashOperationMessage::MorseHoldTimeout(morse_hold_timeout_ms) => update_storage_field!(
                     &mut self.flash,
                     &mut self.buffer,
                     &mut storage_cache,
                     BehaviorConfig,
-                    morse_hold_timeout,
-                    self.storage_range.clone()
-                ),
-                FlashOperationMessage::MorseGapTimeout(morse_gap_timeout) => update_storage_field!(
-                    &mut self.flash,
-                    &mut self.buffer,
-                    &mut storage_cache,
-                    BehaviorConfig,
-                    morse_gap_timeout,
+                    morse_hold_timeout_ms,
                     self.storage_range.clone()
                 ),
                 FlashOperationMessage::ComboTimeout(combo_timeout) => update_storage_field!(
@@ -1306,11 +1297,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             behavior_config
                 .tap_hold
                 .default_profile
-                .set_hold_timeout_ms(c.morse_hold_timeout);
-            behavior_config
-                .tap_hold
-                .default_profile
-                .set_gap_timeout_ms(c.morse_gap_timeout);
+                .set_hold_timeout_ms(c.morse_hold_timeout_ms);
             behavior_config
                 .tap_hold
                 .default_profile
@@ -1367,8 +1354,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms(),
-            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms(),
+            morse_hold_timeout_ms: behavior.tap_hold.default_profile.hold_timeout_ms(),
             unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap(),
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
@@ -1466,9 +1452,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .await?;
 
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
+            //enable_flow_tap: behavior.tap_hold.enable_flow_tap,
             prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
-            morse_hold_timeout: behavior.tap_hold.default_profile.hold_timeout_ms(),
-            morse_gap_timeout: behavior.tap_hold.default_profile.gap_timeout_ms(),
+            morse_hold_timeout_ms: behavior.tap_hold.default_profile.hold_timeout_ms(),
             unilateral_tap: behavior.tap_hold.default_profile.unilateral_tap(),
 
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
@@ -1659,6 +1645,7 @@ mod tests {
 
     use super::*;
     use crate::action::Action;
+    use crate::config::TapHoldProfile;
     use crate::keycode::KeyCode;
     use crate::morse::{HOLD, TAP};
 
@@ -1669,10 +1656,16 @@ mod tests {
             Action::Key(KeyCode::B),
             Action::Key(KeyCode::C),
             Action::Key(KeyCode::D),
+            TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_permissive_hold(true)
+                .with_unilateral_tap(true)
+                .with_hold_timeout_ms(190u16)
+                .with_gap_timeout_ms(180u16),
         );
 
         // Serialization
-        let mut buffer = [0u8; 3 + 4 * 4];
+        let mut buffer = [0u8; 7 + 4 * 4];
         let storage_data = StorageData::MorseData(morse.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1687,6 +1680,8 @@ mod tests {
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
+                // profile
+                assert_eq!(deserialized_morse.profile, morse.profile);
             }
             _ => panic!("Expected MorseData"),
         }
@@ -1700,7 +1695,7 @@ mod tests {
         _ = morse.put(HOLD, Action::Key(KeyCode::B));
 
         // Serialization
-        let mut buffer = [0u8; 3 + 4 * 4];
+        let mut buffer = [0u8; 7 + 4 * 4];
         let storage_data = StorageData::MorseData(morse.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1715,6 +1710,8 @@ mod tests {
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
+                // profile
+                assert_eq!(deserialized_morse.profile, morse.profile);
             }
             _ => panic!("Expected MorseData"),
         }
@@ -1723,6 +1720,12 @@ mod tests {
     #[test]
     fn test_morse_with_morse_serialization_deserialization() {
         let mut morse = Morse {
+            profile: TapHoldProfile::new()
+                .with_is_filled(true)
+                .with_hold_on_other_press(true)
+                .with_unilateral_tap(false)
+                .with_hold_timeout_ms(210u16)
+                .with_gap_timeout_ms(220u16),
             actions: Vec::default(),
         };
         morse
@@ -1739,7 +1742,7 @@ mod tests {
             .ok();
 
         // Serialization
-        let mut buffer = [0u8; 3 + 3 * 4];
+        let mut buffer = [0u8; 7 + 3 * 4];
         let storage_data = StorageData::MorseData(morse.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
@@ -1754,6 +1757,8 @@ mod tests {
                 for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
+                // profile
+                assert_eq!(deserialized_morse.profile, morse.profile);
             }
             _ => panic!("Expected MorseData"),
         }

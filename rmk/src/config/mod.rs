@@ -86,6 +86,7 @@ impl Default for MorsesConfig {
 
 /// configuration for tap-hold and morse (to save some ram, bitfield is used)
 #[bitfield(u32, order = Lsb, defmt = cfg(feature = "defmt"))]
+#[derive(PartialEq, Eq)]
 pub struct TapHoldProfile {
     /// Whether this profile is filled with valid data, saves an Option, so saves memory
     #[bits(1)]

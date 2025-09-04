@@ -120,6 +120,7 @@ one_shot = { timeout = "1s" }
 # matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+MRZ = { hold_timeout = "200ms", gap_timeout = "200ms" }
 
 # Combo configuration
 [behavior.combo]
@@ -181,7 +182,7 @@ morses = [
       {pattern = "---..", action = "Kc8"}, 
       {pattern = "----.", action = "Kc9"}, 
       {pattern = "-----", action = "Kc0"}
-    ] }
+    ], profile = "MRZ" }
 ]
 
 # Fork configuration

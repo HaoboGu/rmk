@@ -377,7 +377,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             self.process_key_action_normal(action, event).await;
             // Push back after triggered press
             let now = Instant::now();
-            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, true);
+            let time_out = now + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, key_action, true);
             self.held_buffer.push(HeldKey::new(
                 event,
                 *key_action,
@@ -411,7 +411,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 debug!("Current key is buffered, return LoopState::Queue");
                 let press_time = Instant::now();
                 let timeout_time = if key_action.is_morse() {
-                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, true)
+                    press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, key_action, true)
                 } else {
                     press_time
                 };
@@ -695,7 +695,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
                     let (permissive_hold, hold_on_other_press, unilateral_tap) =
-                        Self::tap_hold_mode(&self.keymap.borrow().behavior, held_key.event.pos);
+                        Self::tap_hold_mode(&self.keymap.borrow().behavior, held_key.event.pos, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed

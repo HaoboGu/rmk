@@ -554,6 +554,9 @@ pub struct MorsesConfig {
 /// Configurations for morse
 #[derive(Clone, Debug, Deserialize)]
 pub struct MorseConfig {
+    // name of tap hold profile (to address BehaviorConfig::tap_hold_profiles[self.profile])
+    pub profile: Option<String>,
+
     pub tap: Option<String>,
     pub hold: Option<String>,
     pub hold_after_tap: Option<String>,

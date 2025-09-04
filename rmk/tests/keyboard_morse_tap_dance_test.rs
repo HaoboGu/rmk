@@ -26,18 +26,21 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
+                    TapHoldProfile::new().with_is_filled(false),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
+                    TapHoldProfile::new().with_is_filled(false),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::SHIFT),
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::GUI),
+                    TapHoldProfile::new().with_is_filled(false),
                 ),
             ])
             .unwrap(),

@@ -15,11 +15,11 @@ use crate::layout::{get_key_with_alias, parse_key};
 fn expand_key_info(
     info: &Vec<Vec<KeyInfo>>,
     tap_hold_profiles: &Option<HashMap<String, TapHoldProfile>>,
-    default: &Option<TapHoldConfig>,
+    default_profile: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     let mut rows = vec![];
     for row in info {
-        rows.push(expand_key_info_row(row, tap_hold_profiles, default));
+        rows.push(expand_key_info_row(row, tap_hold_profiles, default_profile));
     }
     quote! { ::core::option::Option::Some([#(#rows), *]) }
 }
@@ -28,7 +28,7 @@ fn expand_key_info(
 fn expand_key_info_row(
     row: &Vec<KeyInfo>,
     tap_hold_profiles: &Option<HashMap<String, TapHoldProfile>>,
-    default: &Option<TapHoldConfig>,
+    default_profile: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     let mut key_info = vec![];
     for key in row {
@@ -41,13 +41,13 @@ fn expand_key_info_row(
             if let Some(profiles) = tap_hold_profiles
                && let Some(profile) = profiles.get(profile_name)
             {
-                let config = expand_tap_hold_profile(profile, default);
-                key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::Some(#config) } });
+                let config = expand_tap_hold_profile(profile, default_profile);
+                key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: #config } });
             } else {
                 panic!("`\n❌ {:?}` profile name is not found in behavior.tap_hold_profiles", profile_name);
             }            
         } else {
-            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::core::option::Option::None } });
+            key_info.push(quote! { rmk::config::KeyInfo { hand: #hand, profile: ::rmk::config::TapHoldProfile::new().with_is_filled(false) } });
         };
     }
     quote! { [#(#key_info), *] }
@@ -151,7 +151,7 @@ fn expand_tap_hold_config(tap_hold_config: &Option<TapHoldConfig>) -> proc_macro
 
 fn expand_tap_hold_profile(
     tap_hold_profile: &TapHoldProfile,
-    default: &Option<TapHoldConfig>,
+    default_profile: &Option<TapHoldConfig>,
 ) -> proc_macro2::TokenStream {
     
     let mut filled = false;// whether any field is given
@@ -175,7 +175,7 @@ fn expand_tap_hold_profile(
         filled = true;
         quote! { .with_unilateral_tap(#enable) }
     } else {
-        if let Some(def) = default{
+        if let Some(def) = default_profile {
             let enable = def.unilateral_tap;
             quote! { .with_unilateral_tap(#enable) }
         } else {            
@@ -286,13 +286,33 @@ fn expand_macros(macros: &Option<MacrosConfig>) -> proc_macro2::TokenStream {
     }
 }
 
-fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
+fn expand_morse(morse: &Option<MorsesConfig>,
+    tap_hold_profiles: &Option<HashMap<String, TapHoldProfile>>,
+    default_profile: &Option<TapHoldConfig>,
+) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
+
     match morse {
         Some(morse) => {
-            let morses_def = morse.morses.iter().map(|td| {                
-                if let Some(morse_actions) = &td.morse_actions {
-                    if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() || td.tap_actions.is_some() || td.hold_actions.is_some() {
+            let morses_def = morse.morses.iter().map(|morse| {
+                let profile = if let Some(profile_name) = &morse.profile {                
+                    if let Some(profiles) = tap_hold_profiles {
+                        if let Some(profile) = profiles.get(profile_name)
+                        {
+                            let config = expand_tap_hold_profile(profile, default_profile);
+                            quote! { #config }
+                        } else {
+                            panic!("\n❌ `{:?}` profile name is not found in behavior.tap_hold_profiles", profile_name);
+                        }       
+                    } else {
+                        panic!("\n❌ behavior.tap_hold_profiles is missing, so `{:?}` is not found", profile_name);
+                    }
+                } else {                
+                    quote! { ::rmk::config::TapHoldProfile::new().with_is_filled(false) }                
+                };
+
+                if let Some(morse_actions) = &morse.morse_actions {
+                    if morse.tap.is_some() || morse.hold.is_some() || morse.hold_after_tap.is_some() || morse.double_tap.is_some() || morse.tap_actions.is_some() || morse.hold_actions.is_some() {
                         panic!("\n❌ keyboard.toml: `morse_actions` cannot be used together with `tap_actions`, `hold_actions`, `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
                     }
 
@@ -300,18 +320,19 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
 
                     quote! {
                         ::rmk::morse::Morse {
+                            profile: #profile,
                             #actions_def
                             ..Default::default()
                         }
                     }
 
-                } else if td.tap_actions.is_some() || td.hold_actions.is_some() {
+                } else if morse.tap_actions.is_some() || morse.hold_actions.is_some() {
                     // Check first
-                    if td.tap.is_some() || td.hold.is_some() || td.hold_after_tap.is_some() || td.double_tap.is_some() {
+                    if morse.tap.is_some() || morse.hold.is_some() || morse.hold_after_tap.is_some() || morse.double_tap.is_some() {
                         panic!("\n❌ keyboard.toml: `tap_actions` and `hold_actions` cannot be used together with `tap`, `hold`, `hold_after_tap`, or `double_tap`. Please check the documentation: https://rmk.rs/docs/features/configuration/behavior.html#morse");
                     }
 
-                    let tap_actions_def = match &td.tap_actions {
+                    let tap_actions_def = match &morse.tap_actions {
                         Some(tap_actions) => {
                             let actions = tap_actions.iter().map(|action| {
                                 let parsed_action = parse_key(action.clone());
@@ -322,7 +343,7 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
                         None => quote! { ::rmk::heapless::Vec::new() },
                     };
 
-                    let hold_actions_def = match &td.hold_actions {
+                    let hold_actions_def = match &morse.hold_actions {
                         Some(hold_actions) => {
                             let actions = hold_actions.iter().map(|action| {
                                 let parsed_action = parse_key(action.clone());
@@ -337,13 +358,14 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
                         ::rmk::morse::Morse::new_with_actions(
                             #tap_actions_def,
                             #hold_actions_def,
+                            #profile,
                         )
                     }
                 } else {
-                    let tap = parse_key(td.tap.clone().unwrap_or_else(|| "No".to_string()));
-                    let hold = parse_key(td.hold.clone().unwrap_or_else(|| "No".to_string()));
-                    let hold_after_tap = parse_key(td.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
-                    let double_tap = parse_key(td.double_tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let tap = parse_key(morse.tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let hold = parse_key(morse.hold.clone().unwrap_or_else(|| "No".to_string()));
+                    let hold_after_tap = parse_key(morse.hold_after_tap.clone().unwrap_or_else(|| "No".to_string()));
+                    let double_tap = parse_key(morse.double_tap.clone().unwrap_or_else(|| "No".to_string()));
 
                     quote! {
                         ::rmk::morse::Morse::new_from_vial(
@@ -351,6 +373,7 @@ fn expand_morse(morse: &Option<MorsesConfig>) -> proc_macro2::TokenStream {
                             #hold.to_action(),
                             #hold_after_tap.to_action(),
                             #double_tap.to_action(),
+                            #profile,
                         )
                     }
                 }
@@ -529,7 +552,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let combos = expand_combos(&behavior.combo);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork);
-    let morse = expand_morse(&behavior.morse);
+    let morse = expand_morse(&behavior.morse, &behavior.tap_hold_profiles, &behavior.tap_hold);
 
     let row = layout.rows as usize;
     let col = layout.cols as usize;

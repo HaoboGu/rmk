@@ -22,7 +22,7 @@ Available fields:
 - `hold_timeout`: Defines the duration a tap-hold key must be pressed to determine hold behavior. If tap-hold key is released within this time, the key is recognized as a "tap". Holding it beyond this duration triggers the "hold" action. Defaults to 250ms.
 - `gap_timeout`: Defines the duration a tap-hold key must be released to terminate a morse sequence. Defaults to 250ms.
 
-In the `key-profiles` sub-table you can configure individual key profiles, which may override the defaults set in the `tap_hold` sub-table.
+In the `tap_hold_profiles` sub-table you can configure individual key profiles, which may override the defaults set in the `tap_hold` sub-table.
 
 Available fields (they have the same meaning as in the `tap_hold` sub-table):
 - `permissive_hold` or `unilateral_tap` can be set to true if normal mode is not suitable
@@ -45,7 +45,7 @@ tap_hold = { enable_flow_tap = false, hold_on_other_press = true, hold_timeout =
 # This example is the most basic configuration
 tap_hold = { enable_flow_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
 
-[behavior.key-profiles]
+[behavior.tap_hold_profiles]
 # this is recommended on the home row, when enable_flow_tap = true, and the hold action activates a layer or acts as a modifier (aka home row mod)
 HRM = { unilateral_tap = true, permissive_hold = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 
@@ -216,7 +216,7 @@ morses = [
         { pattern = "-...", action = "B" },
         { pattern = "-.-.", action = "C" },
         { pattern = "-..", action = "D" },
-    ] },
+    ], profile = "MRZ" },
 ]
 ```
 
@@ -232,11 +232,13 @@ Mixing fields from different methods in the same definition is not allowed.
 
 :::
 
-### Common configuration
+### Fine tuning
 
-The following setting applies to all three definition methods:
+To fine tune the timing, tap hold behavior, it is possible to set the tap hold profile of any morse key regardless of its configuration style:
+ - `profile` : refers a profile name from `[behavior.tap_hold_profiles]`
 
-  - `timeout`: The time window (in milliseconds or seconds) within which taps are considered part of the same morse sequence. Defaults to 200ms if not specified.
+ If this is not set then we look for positional tap hold profile settings (see `matrix_map`).
+ If that is also missing at that kay position, then the defaults will be applied from `[behavior.tap_hold]`.
 
 ### Global Configuration Limits
 
@@ -271,10 +273,10 @@ max_patterns_per_key = 36
 [behavior.morse]
 morses = [
   # td(0): Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
-  { tap = "F1", hold = "MO(1)", double_tap = "F2" },
+  { tap = "F1", double_tap = "F2", hold = "MO(1)" },
   
-  # td(1): Modifier key that outputs Ctrl on tap, Alt on double tap, Shift on hold
-  { tap = "LCtrl", hold = "LShift", double_tap = "LAlt" },
+  # td(1): Modifier key that outputs Shift on hold, Alt on hold after tap, 
+  { tap = "LCtrl", hold = "LShift", hold_after_tap = "LAlt" },
   
   # td(2): Navigation key that outputs Tab on tap, Escape on double tap, layer 2 on hold
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape" },

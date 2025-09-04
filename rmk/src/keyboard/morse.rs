@@ -67,7 +67,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if event.pressed {
             // Pressed, check the held buffer, update the tap state
             let pressed_time = self.get_timer_value(event).unwrap_or(Instant::now());
-            let timeout_time = pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, true);
+            let timeout_time =
+                pressed_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, key_action, true);
             match self.held_buffer.find_pos_mut(event.pos) {
                 Some(k) => {
                     // The current key is already in the buffer, update its state
@@ -130,8 +131,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                             k.state = KeyState::Released(pattern);
                             // Use current release time for `IdleAfterTap` state
                             k.press_time = released_time; // Use release time as the "press_time"
-                            k.timeout_time =
-                                k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, false);
+                            k.timeout_time = k.press_time
+                                + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, &k.action, false);
                         }
                     }
                     KeyState::Holding(pattern) => {
@@ -141,8 +142,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         k.state = KeyState::Released(pattern);
                         // Use current release time for `IdleAfterTap` state
                         k.press_time = released_time; // Use release time as the "press_time"
-                        k.timeout_time =
-                            k.press_time + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, false);
+                        k.timeout_time = k.press_time
+                            + Self::morse_timeout(&self.keymap.borrow().behavior, event.pos, &k.action, false);
                     }
                     KeyState::ProcessedButReleaseNotReportedYet(action) => {
                         // Releasing a tap-hold action whose pressed HID report is already sent
@@ -201,9 +202,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     pub fn morse_timeout(
         behavior_config: &BehaviorConfig<ROW, COL>,
         pos: KeyboardEventPos,
+        key_action: &KeyAction,
         hold_timeout_needed: bool,
     ) -> Duration {
-        //first try to look for a positional override
+        //first: try to look for a per-key profile config
+        if let KeyAction::Morse(index) = key_action
+            && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
+        {
+            if morse.profile.is_filled() {
+                let timeout = if hold_timeout_needed {
+                    morse.profile.hold_timeout_ms()
+                } else {
+                    morse.profile.gap_timeout_ms()
+                };
+
+                if timeout != 0 {
+                    return Duration::from_millis(timeout as u64);
+                }
+            }
+        }
+
+        //second: try to look for a positional profile override
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
         {
@@ -221,7 +240,7 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
             }
         }
 
-        //otherwise return the global defaults
+        //otherwise return the global default profile
         let timeout = if hold_timeout_needed {
             behavior_config.tap_hold.default_profile.hold_timeout_ms()
         } else {
@@ -232,9 +251,27 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     }
 
     /// Decides and returns the tuple of (permissive_hold, hold_on_other_press, unilateral_tap)
-    /// based on configuration for the given key action
-    pub fn tap_hold_mode(behavior_config: &BehaviorConfig<ROW, COL>, pos: KeyboardEventPos) -> (bool, bool, bool) {
-        //first try to look for a positional override
+    /// based on configuration for the given key action / key position
+    pub fn tap_hold_mode(
+        behavior_config: &BehaviorConfig<ROW, COL>,
+        pos: KeyboardEventPos,
+        key_action: &KeyAction,
+    ) -> (bool, bool, bool) {
+        //first: try to look for a per-key profile config
+        if let KeyAction::Morse(index) = key_action
+            && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
+            && morse.profile.is_filled()
+        {
+            if morse.profile.is_filled() {
+                return (
+                    morse.profile.permissive_hold(),
+                    morse.profile.hold_on_other_press(),
+                    morse.profile.unilateral_tap(),
+                );
+            }
+        }
+
+        //second: try to look for a positional profile override
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
         {
