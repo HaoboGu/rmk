@@ -19,11 +19,11 @@ pub(crate) fn expand_default_keymap(keyboard_config: &KeyboardTomlConfig) -> Tok
     }
 
     quote! {
-        pub const fn get_default_keymap() -> [[[::rmk::action::KeyAction; COL]; ROW]; NUM_LAYER] {
+        pub const fn get_default_keymap() -> [[[::rmk::types::action::KeyAction; COL]; ROW]; NUM_LAYER] {
             [#(#layers), *]
         }
 
-        pub const fn get_default_encoder_map() -> [[::rmk::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
+        pub const fn get_default_encoder_map() -> [[::rmk::types::action::EncoderAction; NUM_ENCODER]; NUM_LAYER] {
             [#(#encoder_map), *]
         }
     }
@@ -78,7 +78,7 @@ impl quote::ToTokens for ModifierCombinationMacro {
         let ctrl = self.ctrl;
 
         tokens.extend(quote! {
-            ::rmk::keycode::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
+            ::rmk::types::modifier::ModifierCombination::new_from(#right, #gui, #alt, #shift, #ctrl)
         });
     }
 }
@@ -372,6 +372,12 @@ pub(crate) fn parse_key(key: String) -> TokenStream2 {
             let index = get_number(s.clone(), s.get(0..3).unwrap(), ")");
             quote! {
                 ::rmk::td!(#index)
+            }
+        }
+        s if s.to_lowercase().starts_with("m(") => {
+            let index = get_number(s.clone(), s.get(0..2).unwrap(), ")");
+            quote! {
+                ::rmk::m!(#index)
             }
         }
         _ => {

@@ -1,13 +1,11 @@
 @font-face {
   font-family: 'Open Sans';
-  src:
-    url('OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+  src: url('OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
   font-style: normal;
 }
 @font-face {
   font-family: 'Fira Code';
-  src:
-    url('FiraCode-VariableFont_wght.ttf') format('truetype');
+  src: url('FiraCode-VariableFont_wght.ttf') format('truetype');
   font-style: normal, italic, bold;
 }
 :root {

@@ -19,7 +19,7 @@ use embassy_rp::pio::{self, Pio};
 use embassy_rp::usb::{self, Driver};
 use keymap::{COL, ROW};
 use rand::SeedableRng;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::{BehaviorConfig, KeyboardUsbConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;

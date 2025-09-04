@@ -1,4 +1,4 @@
-# RMK introdution
+# RMK introduction
 
 <div class="badge-container" style="display: flex; gap: 0.5rem; align-items: center; justify-content: start;   margin: 1rem 0;">
 

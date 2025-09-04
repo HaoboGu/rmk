@@ -1,12 +1,12 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig};
 use rmk::k;
-use rmk::keycode::{KeyCode, ModifierCombination};
-use rmk::morse::Morse;
+use rmk::types::action::{Action, KeyAction};
+use rmk::types::keycode::KeyCode;
+use rmk::types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -656,7 +656,6 @@ rusty_fork_test! {
     }
 
     #[test]
-    #[ignore]
     fn test_morse_hold_after_last_tapping() {
         key_sequence_test! {
             keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
@@ -669,7 +668,7 @@ rusty_fork_test! {
             expected_reports: [
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Press B
                 [0, [0, 0, 0, 0, 0, 0]], // Release B
             ]
         };
@@ -729,7 +728,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT))), KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
                                 k!(X),
                                 None,
                             )
@@ -760,7 +760,8 @@ rusty_fork_test! {
                     combo: CombosConfig {
                         combos: heapless::Vec::from_iter([
                             Combo::new(
-                                [KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT))), KeyAction::Morse(Morse::new_tap_hold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI)))],
+                                [KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT)),
+                                 KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI))],
                                 k!(X),
                                 None,
                             )
@@ -777,6 +778,106 @@ rusty_fork_test! {
             ],
             expected_reports: [
                 [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_abc_c() {
+        key_sequence_test! {
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
+            sequence: [
+                //C
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 80],
+                [0, 4, false, 80], //.
+                [0, 4, true, 80],
+                [0, 4, false, 300], //-
+                [0, 4, true, 80],
+                [0, 4, false, 80], //.
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_abc_s_o_s() {
+        key_sequence_test! {
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
+            sequence: [
+                //S
+                [0, 4, true, 300],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+
+                //O
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+
+                //S
+                [0, 4, true, 300],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(S), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(O), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(S), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        };
+    }
+
+    #[test]
+    fn test_morse_rmk() {
+        key_sequence_test! {
+            keyboard: create_simple_morse_keyboard(BehaviorConfig::default()),
+            sequence: [
+                //R .-.
+                [0, 4, true, 300],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+
+                //M --
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+
+                //K -.-
+                [0, 4, true, 300],
+                [0, 4, false, 300], //-
+                [0, 4, true, 10],
+                [0, 4, false, 10], //.
+                [0, 4, true, 10],
+                [0, 4, false, 300], //-
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(R), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(M), 0, 0, 0, 0, 0]],
+                [0, [0, 0, 0, 0, 0, 0]],
+                [0, [kc_to_u8!(K), 0, 0, 0, 0, 0]],
                 [0, [0, 0, 0, 0, 0, 0]],
             ]
         };

@@ -393,7 +393,7 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(Self::layer_name_resolver("TO", inner_pair, layer_names)?);
                                 }
 
-                                //tap-hold actions:
+                                // tap-hold actions:
                                 Rule::mt_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
@@ -403,7 +403,12 @@ impl KeyboardTomlConfig {
                                     key_action_sequence.push(action);
                                 }
 
-                                Rule::tap_dance_action => {
+                                Rule::morse_action => {
+                                    let action = inner_pair.as_str().to_string();
+                                    key_action_sequence.push(action);
+                                }
+
+                                Rule::trigger_macro_action => {
                                     let action = inner_pair.as_str().to_string();
                                     key_action_sequence.push(action);
                                 }
@@ -528,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tap_dance_action_parsing() {
+    fn test_morse_action_parsing() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
 
@@ -542,14 +547,33 @@ mod tests {
     }
 
     #[test]
-    fn test_tap_dance_action_grammar() {
+    fn test_macro_trigger_action_parsing() {
+        let aliases = std::collections::HashMap::new();
+        let layer_names = std::collections::HashMap::new();
+
+        // Test parsing a keymap string with macro trigger actions
+        let keymap = "A Macro(0) B MACRO(1) C macro(255)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        let actions = result.unwrap();
+        assert_eq!(actions, vec!["A", "Macro(0)", "B", "MACRO(1)", "C", "macro(255)"]);
+    }
+
+    #[test]
+    fn test_morse_action_grammar() {
         // Test that TD actions are parsed correctly by the grammar
         let test_cases = vec![
-            ("TD(0)", Rule::tap_dance_action),
-            ("TD(1)", Rule::tap_dance_action),
-            ("TD(255)", Rule::tap_dance_action),
-            ("td(0)", Rule::tap_dance_action), // Case insensitive
-            ("td(1)", Rule::tap_dance_action),
+            ("TD(0)", Rule::morse_action),
+            ("TD(1)", Rule::morse_action),
+            ("TD(255)", Rule::morse_action),
+            ("td(0)", Rule::morse_action), // Case insensitive
+            ("td(1)", Rule::morse_action),
+            ("MORSE(0)", Rule::morse_action),
+            ("MORSE(1)", Rule::morse_action),
+            ("MORSE(255)", Rule::morse_action),
+            ("Morse(0)", Rule::morse_action), // Case insensitive
+            ("morse(1)", Rule::morse_action),
         ];
 
         for (input, expected_rule) in test_cases {
@@ -561,7 +585,49 @@ mod tests {
                 if pair.as_rule() == Rule::key_map {
                     for inner_pair in pair.into_inner() {
                         match inner_pair.as_rule() {
-                            Rule::tap_dance_action => {
+                            Rule::morse_action => {
+                                found_rule = Some(inner_pair.as_rule());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            assert_eq!(
+                found_rule,
+                Some(expected_rule),
+                "Input: {} should be parsed as {:?}",
+                input,
+                expected_rule
+            );
+        }
+    }
+
+    #[test]
+    fn test_macro_grammar() {
+        // Test that macro actions are parsed correctly by the grammar
+        let test_cases = vec![
+            ("Macro(0)", Rule::trigger_macro_action),
+            ("Macro(1)", Rule::trigger_macro_action),
+            ("Macro(255)", Rule::trigger_macro_action),
+            ("MACRO(0)", Rule::trigger_macro_action), // Case insensitive
+            ("MACRO(1)", Rule::trigger_macro_action),
+            ("macro(0)", Rule::trigger_macro_action), // Case insensitive
+            ("macro(1)", Rule::trigger_macro_action),
+            ("macro(255)", Rule::trigger_macro_action),
+        ];
+
+        for (input, expected_rule) in test_cases {
+            let result = ConfigParser::parse(Rule::key_map, input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            let mut found_rule = None;
+            for pair in result.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner_pair in pair.into_inner() {
+                        match inner_pair.as_rule() {
+                            Rule::trigger_macro_action => {
                                 found_rule = Some(inner_pair.as_rule());
                             }
                             _ => {}

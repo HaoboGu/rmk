@@ -20,16 +20,48 @@ cols = 3
 layers = 2
 keymap = [
     [
-        ["A", "B", "C"],
-        ["Kc1", "Kc2", "Kc3"],
-        ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+        [
+            "A",
+            "B",
+            "C",
+        ],
+        [
+            "Kc1",
+            "Kc2",
+            "Kc3",
+        ],
+        [
+            "LCtrl",
+            "MO(1)",
+            "LShift",
+        ],
+        [
+            "OSL(1)",
+            "LT(2, Kc9)",
+            "LM(1, LShift | LGui)",
+        ],
     ],
     [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"]
+        [
+            "_",
+            "TT(1)",
+            "TG(2)",
+        ],
+        [
+            "_",
+            "_",
+            "_",
+        ],
+        [
+            "_",
+            "_",
+            "_",
+        ],
+        [
+            "_",
+            "_",
+            "_",
+        ],
     ],
 ]
 
@@ -48,4 +80,5 @@ keymap = [
 # enabled = false
 
 [rmk]
-tap_dance_max_tap = 4
+morse_max_num = 8
+max_patterns_per_key = 8

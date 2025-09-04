@@ -24,7 +24,7 @@ pub(crate) fn expand_controller_init(
             let mut numslock_controller = ::rmk::controller::led_indicator::KeyboardIndicatorController::new(
                 #p,
                 #low_active,
-                ::rmk::controller::led_indicator::KeyboardIndicator::NumLock,
+                ::rmk::types::led_indicator::LedIndicatorType::NumLock,
             );
         };
         initializers.extend(numlock_init);
@@ -38,7 +38,7 @@ pub(crate) fn expand_controller_init(
             let mut scrolllock_controller = ::rmk::controller::led_indicator::KeyboardIndicatorController::new(
                 #p,
                 #low_active,
-                ::rmk::controller::led_indicator::KeyboardIndicator::ScrollLock,
+                ::rmk::types::led_indicator::LedIndicatorType::ScrollLock,
             );
         };
         initializers.extend(scrollock_init);
@@ -52,7 +52,7 @@ pub(crate) fn expand_controller_init(
             let mut capslock_controller = ::rmk::controller::led_indicator::KeyboardIndicatorController::new(
                 #p,
                 #low_active,
-                ::rmk::controller::led_indicator::KeyboardIndicator::CapsLock,
+                ::rmk::types::led_indicator::LedIndicatorType::CapsLock,
             );
         };
         initializers.extend(capslock_init);

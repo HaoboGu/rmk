@@ -17,7 +17,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
-use rmk::ble::trouble::build_ble_stack;
+use rmk::ble::build_ble_stack;
 use rmk::channel::EVENT_CHANNEL;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;

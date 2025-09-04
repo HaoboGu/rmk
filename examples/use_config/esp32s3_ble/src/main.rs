@@ -25,6 +25,6 @@ mod keyboard {
             ::bt_hci::controller::ExternalController::new(connector);
         let ble_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
         let mut host_resources = ::rmk::HostResources::new();
-        let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+        let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
     }
 }

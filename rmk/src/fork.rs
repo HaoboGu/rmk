@@ -1,15 +1,16 @@
 use core::ops::{BitAnd, BitOr, Not};
 
-use crate::action::KeyAction;
-use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::light::LedIndicator;
+use rmk_types::action::KeyAction;
+use rmk_types::led_indicator::LedIndicator;
+use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct StateBits {
-    pub(crate) modifiers: HidModifiers,
+    pub(crate) modifiers: ModifierCombination,
     pub(crate) leds: LedIndicator,
-    pub(crate) mouse: HidMouseButtons,
+    pub(crate) mouse: MouseButtons,
     // note: layer active states could be added too if needed
 }
 
@@ -48,7 +49,7 @@ impl Not for StateBits {
 }
 
 impl StateBits {
-    pub const fn new_from(modifiers: HidModifiers, leds: LedIndicator, mouse: HidMouseButtons) -> Self {
+    pub const fn new_from(modifiers: ModifierCombination, leds: LedIndicator, mouse: MouseButtons) -> Self {
         StateBits { modifiers, leds, mouse }
     }
 }
@@ -61,7 +62,7 @@ pub struct Fork {
     pub(crate) positive_output: KeyAction,
     pub(crate) match_any: StateBits,
     pub(crate) match_none: StateBits,
-    pub(crate) kept_modifiers: HidModifiers,
+    pub(crate) kept_modifiers: ModifierCombination,
     pub(crate) bindable: bool,
 }
 
@@ -78,7 +79,7 @@ impl Fork {
         positive_output: KeyAction,
         match_any: StateBits,
         match_none: StateBits,
-        kept_modifiers: HidModifiers,
+        kept_modifiers: ModifierCombination,
         bindable: bool,
     ) -> Self {
         Self {
@@ -119,7 +120,7 @@ impl Fork {
             KeyAction::No,
             StateBits::default(),
             StateBits::default(),
-            HidModifiers::default(),
+            ModifierCombination::default(),
             false,
         )
     }
@@ -129,5 +130,5 @@ impl Fork {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ActiveFork {
     pub(crate) replacement: KeyAction, // the final replacement decision of the full fork chain
-    pub(crate) suppress: HidModifiers, // aggregate the chain's match_any modifiers here
+    pub(crate) suppress: ModifierCombination, // aggregate the chain's match_any modifiers here
 }

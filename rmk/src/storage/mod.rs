@@ -10,31 +10,29 @@ use embassy_time::Duration;
 use embedded_storage::nor_flash::NorFlash;
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 use heapless::Vec;
+use rmk_types::action::{EncoderAction, KeyAction};
+use rmk_types::led_indicator::LedIndicator;
+use rmk_types::modifier::ModifierCombination;
+use rmk_types::mouse_button::MouseButtons;
 use sequential_storage::Error as SSError;
 use sequential_storage::cache::NoCache;
 use sequential_storage::map::{SerializationError, Value, fetch_all_items, fetch_item, store_item};
 #[cfg(feature = "_ble")]
 use {
-    crate::ble::trouble::ble_server::CCCD_TABLE_SIZE,
-    crate::ble::trouble::profile::ProfileInfo,
+    crate::ble::ble_server::CCCD_TABLE_SIZE,
+    crate::ble::profile::ProfileInfo,
     trouble_host::{BondInformation, IdentityResolvingKey, LongTermKey, prelude::*},
 };
 
-use crate::action::{Action, EncoderAction, KeyAction};
 use crate::channel::FLASH_CHANNEL;
 use crate::combo::Combo;
 use crate::config::{self, StorageConfig};
 use crate::fork::{Fork, StateBits};
-use crate::hid_state::{HidModifiers, HidMouseButtons};
-use crate::light::LedIndicator;
-use crate::morse::Morse;
+use crate::morse::{Morse, MorseMode, MorsePattern};
 #[cfg(all(feature = "_ble", feature = "split"))]
 use crate::split::ble::PeerAddress;
-use crate::tap_dance::TapDance;
 use crate::via::keycode_convert::{from_via_keycode, to_via_keycode};
-use crate::{
-    BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, TAP_DANCE_MAX_NUM, TAP_DANCE_MAX_TAP,
-};
+use crate::{BUILD_HASH, COMBO_MAX_LENGTH, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM};
 
 /// Signal to synchronize the flash operation status, usually used outside of the flash task.
 /// True if the flash operation is finished correctly, false if the flash operation is finished with error.
@@ -55,6 +53,8 @@ pub(crate) enum FlashOperationMessage {
     PeerAddress(PeerAddress),
     // Clear the storage
     Reset,
+    // Clear the layout info
+    ResetLayout,
     // Clear info of given slot number
     ClearSlot(u8),
     // Layout option
@@ -82,8 +82,8 @@ pub(crate) enum FlashOperationMessage {
     WriteCombo(ComboData),
     // Write fork
     WriteFork(ForkData),
-    // Write tap dance
-    WriteTapDance(u8, TapDance),
+    // Write morse config
+    WriteMorse(u8, Morse),
     // Timeout time for morse keys
     MorseTimeout(u16),
     // Timeout time for combos
@@ -115,7 +115,7 @@ pub(crate) enum StorageKeys {
     ConnectionType = 6,
     EncoderKeys = 7,
     ForkData = 8,
-    TapDanceData = 9,
+    MorseData = 9,
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress = 0xED,
     #[cfg(feature = "_ble")]
@@ -136,7 +136,7 @@ impl StorageKeys {
             6 => Some(StorageKeys::ConnectionType),
             7 => Some(StorageKeys::EncoderKeys),
             8 => Some(StorageKeys::ForkData),
-            9 => Some(StorageKeys::TapDanceData),
+            9 => Some(StorageKeys::MorseData),
             #[cfg(all(feature = "_ble", feature = "split"))]
             0xED => Some(StorageKeys::PeerAddress),
             #[cfg(feature = "_ble")]
@@ -160,7 +160,7 @@ pub(crate) enum StorageData {
     ComboData(ComboData),
     ConnectionType(u8),
     ForkData(ForkData),
-    TapDanceData(TapDance),
+    MorseData(Morse),
     #[cfg(all(feature = "_ble", feature = "split"))]
     PeerAddress(PeerAddress),
     #[cfg(feature = "_ble")]
@@ -175,7 +175,7 @@ pub(crate) fn get_keymap_key<const ROW: usize, const COL: usize, const NUM_LAYER
     col: usize,
     layer: usize,
 ) -> u32 {
-    (0x1000 + layer * COL * ROW + row * COL + col) as u32
+    0x1000 + (layer * COL * ROW + row * COL + col) as u32
 }
 
 /// Get the key to retrieve the bond info from the storage.
@@ -185,16 +185,16 @@ pub(crate) fn get_bond_info_key(slot_num: u8) -> u32 {
 
 /// Get the key to retrieve the combo from the storage.
 pub(crate) fn get_combo_key(idx: usize) -> u32 {
-    (0x3000 + idx) as u32
+    0x3000 + idx as u32
 }
 
 /// Get the key to retrieve the encoder config from the storage.
 pub(crate) fn get_encoder_config_key<const NUM_ENCODER: usize>(idx: usize, layer: usize) -> u32 {
-    (0x4000 + idx + NUM_ENCODER * layer) as u32
+    0x4000 + (idx + NUM_ENCODER * layer) as u32
 }
 
 pub(crate) fn get_fork_key(idx: usize) -> u32 {
-    (0x5000 + idx) as u32
+    0x5000 + idx as u32
 }
 
 /// Get the key to retrieve the peer address from the storage.
@@ -202,8 +202,8 @@ pub(crate) fn get_peer_address_key(peer_id: u8) -> u32 {
     0x6000 + peer_id as u32
 }
 
-/// Get the key to retrieve the tap dance from the storage.
-pub(crate) fn get_tap_dance_key(idx: u8) -> u32 {
+/// Get the key to retrieve the morse key from the storage.
+pub(crate) fn get_morse_key(idx: u8) -> u32 {
     0x7000 + idx as u32
 }
 
@@ -323,30 +323,33 @@ impl Value<'_> for StorageData {
                 );
                 Ok(15)
             }
-            StorageData::TapDanceData(tap_dance) => {
-                let total_size = 3 + TAP_DANCE_MAX_TAP * 4;
+            StorageData::MorseData(morse) => {
+                let total_size = 6 + 4 * morse.actions.len();
                 if buffer.len() < total_size {
                     return Err(SerializationError::BufferTooSmall);
                 }
-                buffer[0] = StorageKeys::TapDanceData as u8;
-                BigEndian::write_u16(&mut buffer[1..3], tap_dance.0.timeout_ms);
+                buffer[0] = StorageKeys::MorseData as u8;
+                BigEndian::write_u16(&mut buffer[1..3], morse.actions.len() as u16);
+                BigEndian::write_u16(&mut buffer[3..5], morse.timeout_ms);
 
-                // Serialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
-                for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.0.tap_action(i);
-                    BigEndian::write_u16(
-                        &mut buffer[3 + i * 2..5 + i * 2],
-                        to_via_keycode(KeyAction::Single(action)),
-                    );
+                let mut flags = match morse.mode {
+                    MorseMode::Normal => 0,
+                    MorseMode::PermissiveHold => 1,
+                    MorseMode::HoldOnOtherPress => 2,
+                };
+                if morse.unilateral_tap {
+                    flags |= 0x10;
                 }
+                buffer[5] = flags;
 
-                // Serialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
-                for i in 0..TAP_DANCE_MAX_TAP {
-                    let action = tap_dance.0.hold_action(i);
+                let mut i = 6;
+                for (pattern, action) in &morse.actions {
                     BigEndian::write_u16(
-                        &mut buffer[3 + (TAP_DANCE_MAX_TAP + i) * 2..5 + (TAP_DANCE_MAX_TAP + i) * 2],
-                        to_via_keycode(KeyAction::Single(action)),
+                        &mut buffer[i..i + 2],
+                        pattern.to_u16(), //pattern
                     );
+                    BigEndian::write_u16(&mut buffer[i + 2..i + 4], to_via_keycode(KeyAction::Single(*action)));
+                    i += 4;
                 }
 
                 Ok(total_size)
@@ -532,16 +535,16 @@ impl Value<'_> for StorageData {
                     let modifier_masks = BigEndian::read_u32(&buffer[11..15]);
 
                     let match_any = StateBits {
-                        modifiers: HidModifiers::from_bits((modifier_masks & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits((modifier_masks & 0xFF) as u8),
                         leds: LedIndicator::from_bits((led_masks & 0xFF) as u8),
-                        mouse: HidMouseButtons::from_bits((mouse_masks & 0xFF) as u8),
+                        mouse: MouseButtons::from_bits((mouse_masks & 0xFF) as u8),
                     };
                     let match_none = StateBits {
-                        modifiers: HidModifiers::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
+                        modifiers: ModifierCombination::from_bits(((modifier_masks >> 8) & 0xFF) as u8),
                         leds: LedIndicator::from_bits(((led_masks >> 8) & 0xFF) as u8),
-                        mouse: HidMouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
+                        mouse: MouseButtons::from_bits(((mouse_masks >> 8) & 0xFF) as u8),
                     };
-                    let kept_modifiers = HidModifiers::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
+                    let kept_modifiers = ModifierCombination::from_bits(((modifier_masks >> 16) & 0xFF) as u8);
                     let bindable = (modifier_masks & (1 << 24)) != 0;
 
                     Ok(StorageData::ForkData(ForkData {
@@ -557,31 +560,37 @@ impl Value<'_> for StorageData {
                         ),
                     }))
                 }
-                StorageKeys::TapDanceData => {
-                    if buffer.len() < 3 + TAP_DANCE_MAX_TAP * 4 {
+                StorageKeys::MorseData => {
+                    if buffer.len() < 6 {
                         return Err(SerializationError::InvalidData);
                     }
-                    let timeout = BigEndian::read_u16(&buffer[1..3]);
+                    let count = BigEndian::read_u16(&buffer[1..3]) as usize;
 
-                    // Deserialize tap_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut tap_actions = [Action::No; TAP_DANCE_MAX_TAP];
-                    for i in 0..TAP_DANCE_MAX_TAP {
-                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[3 + i * 2..5 + i * 2]));
-                        tap_actions[i] = key_action.to_action();
+                    if buffer.len() < 6 + 4 * count {
+                        return Err(SerializationError::InvalidData);
                     }
 
-                    // Deserialize hold_actions (up to TAP_DANCE_MAX_TAP actions)
-                    let mut hold_actions = [Action::No; TAP_DANCE_MAX_TAP];
-                    for i in 0..TAP_DANCE_MAX_TAP {
-                        let key_action = from_via_keycode(BigEndian::read_u16(
-                            &buffer[3 + TAP_DANCE_MAX_TAP * 2 + i * 2..5 + TAP_DANCE_MAX_TAP * 2 + i * 2],
-                        ));
-                        hold_actions[i] = key_action.to_action();
+                    let mut morse = Morse::default();
+                    morse.timeout_ms = BigEndian::read_u16(&buffer[3..5]);
+
+                    let flags = buffer[5];
+                    match flags & 0x0F {
+                        0 => morse.mode = MorseMode::Normal,
+                        1 => morse.mode = MorseMode::PermissiveHold,
+                        2 => morse.mode = MorseMode::HoldOnOtherPress,
+                        _ => {}
+                    }
+                    morse.unilateral_tap = flags & 0x10 != 0;
+
+                    let mut i = 6;
+                    for _ in 0..count {
+                        let pattern = MorsePattern::from_u16(BigEndian::read_u16(&buffer[i..i + 2]));
+                        let key_action = from_via_keycode(BigEndian::read_u16(&buffer[i + 2..i + 4]));
+                        _ = morse.actions.push((pattern, key_action.to_action()));
+                        i += 4;
                     }
 
-                    let tap_dance = TapDance(Morse::new_tap_dance(tap_actions, hold_actions, timeout));
-
-                    Ok(StorageData::TapDanceData(tap_dance))
+                    Ok(StorageData::MorseData(morse))
                 }
                 #[cfg(all(feature = "_ble", feature = "split"))]
                 StorageKeys::PeerAddress => {
@@ -673,8 +682,8 @@ impl StorageData {
             StorageData::ForkData(_) => {
                 panic!("To get fork key for ForkData, use `get_fork_key` instead");
             }
-            StorageData::TapDanceData(_) => {
-                panic!("To get tap dance key for TapDanceData, use `get_tap_dance_key` instead");
+            StorageData::MorseData(_) => {
+                panic!("To get morse key for MorseData, use `get_morse_key` instead");
             }
             #[cfg(all(feature = "_ble", feature = "split"))]
             StorageData::PeerAddress(p) => get_peer_address_key(p.peer_id),
@@ -881,6 +890,12 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 .await
                 .ok();
             }
+        } else if storage_config.clear_layout {
+            debug!("clear_layout=true; overwriting layout items without erase.");
+
+            let encoder_map = encoder_map.as_ref().map(|m| &**m);
+
+            let _ = storage.reset_layout_only(keymap, &encoder_map, behavior_config).await;
         }
 
         storage
@@ -905,6 +920,10 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 FlashOperationMessage::Reset => {
                     sequential_storage::erase_all(&mut self.flash, self.storage_range.clone()).await
+                }
+                FlashOperationMessage::ResetLayout => {
+                    info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
+                    Ok(())
                 }
                 FlashOperationMessage::DefaultLayer(default_layer) => {
                     // Read out layout options, update layer option and save back
@@ -1004,15 +1023,15 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                 }
-                FlashOperationMessage::WriteTapDance(id, tap_dance) => {
-                    let key = get_tap_dance_key(id);
+                FlashOperationMessage::WriteMorse(id, morse) => {
+                    let key = get_morse_key(id);
                     store_item(
                         &mut self.flash,
                         self.storage_range.clone(),
                         &mut storage_cache,
                         &mut self.buffer,
                         &key,
-                        &StorageData::TapDanceData(tap_dance),
+                        &StorageData::MorseData(morse),
                     )
                     .await
                 }
@@ -1252,12 +1271,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         Ok(())
     }
 
-    pub(crate) async fn read_tap_dances(
-        &mut self,
-        tap_dances: &mut Vec<TapDance, TAP_DANCE_MAX_NUM>,
-    ) -> Result<(), ()> {
-        for (i, item) in tap_dances.iter_mut().enumerate() {
-            let key = get_tap_dance_key(i as u8);
+    pub(crate) async fn read_morses(&mut self, morses: &mut Vec<Morse, MORSE_MAX_NUM>) -> Result<(), ()> {
+        for (i, item) in morses.iter_mut().enumerate() {
+            let key = get_morse_key(i as u8);
             let read_data = fetch_item::<u32, StorageData, _>(
                 &mut self.flash,
                 self.storage_range.clone(),
@@ -1268,8 +1284,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
             .await
             .map_err(|e| print_storage_error::<F>(e))?;
 
-            if let Some(StorageData::TapDanceData(tap_dance)) = read_data {
-                *item = tap_dance;
+            if let Some(StorageData::MorseData(morse)) = read_data {
+                *item = morse;
             }
         }
 
@@ -1290,9 +1306,9 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         .await
         .map_err(|e| print_storage_error::<F>(e))?
         {
-            behavior_config.morse.timeout = Duration::from_millis(c.morse_timeout as u64);
-            behavior_config.morse.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
-            behavior_config.morse.unilateral_tap = c.unilateral_tap;
+            behavior_config.tap_hold.timeout = Duration::from_millis(c.morse_timeout as u64);
+            behavior_config.tap_hold.prior_idle_time = Duration::from_millis(c.prior_idle_time as u64);
+            behavior_config.tap_hold.unilateral_tap = c.unilateral_tap;
             behavior_config.combo.timeout = Duration::from_millis(c.combo_timeout as u64);
             behavior_config.one_shot.timeout = Duration::from_millis(c.one_shot_timeout as u64);
             behavior_config.tap.tap_interval = c.tap_interval;
@@ -1343,13 +1359,13 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
 
         // Save behavior config
         let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
-            morse_timeout: behavior.morse.timeout.as_millis() as u16,
+            morse_timeout: behavior.tap_hold.timeout.as_millis() as u16,
             combo_timeout: behavior.combo.timeout.as_millis() as u16,
             one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
             tap_interval: behavior.tap.tap_interval,
             tap_capslock_interval: behavior.tap.tap_capslock_interval,
-            prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
-            unilateral_tap: behavior.morse.unilateral_tap,
+            prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
+            unilateral_tap: behavior.tap_hold.unilateral_tap,
         });
 
         store_item(
@@ -1411,6 +1427,95 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                     )
                     .await
                     .map_err(|e| print_storage_error::<F>(e))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn reset_layout_only(
+        &mut self,
+        keymap: &[[[KeyAction; COL]; ROW]; NUM_LAYER],
+        encoder_map: &Option<&[[EncoderAction; NUM_ENCODER]; NUM_LAYER]>,
+        behavior: &config::BehaviorConfig,
+    ) -> Result<(), SSError<F::Error>> {
+        let mut cache = NoCache::new();
+
+        let layout_config = StorageData::LayoutConfig(LayoutConfig {
+            default_layer: 0,
+            layout_option: 0,
+        });
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut cache,
+            &mut self.buffer,
+            &layout_config.key(),
+            &layout_config,
+        )
+        .await?;
+
+        let behavior_config = StorageData::BehaviorConfig(BehaviorConfig {
+            morse_timeout: behavior.tap_hold.timeout.as_millis() as u16,
+            combo_timeout: behavior.combo.timeout.as_millis() as u16,
+            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            tap_interval: behavior.tap.tap_interval,
+            tap_capslock_interval: behavior.tap.tap_capslock_interval,
+            prior_idle_time: behavior.tap_hold.prior_idle_time.as_millis() as u16,
+            unilateral_tap: behavior.tap_hold.unilateral_tap,
+        });
+        store_item(
+            &mut self.flash,
+            self.storage_range.clone(),
+            &mut cache,
+            &mut self.buffer,
+            &behavior_config.key(),
+            &behavior_config,
+        )
+        .await?;
+
+        for (layer, layer_data) in keymap.iter().enumerate() {
+            for (row, row_data) in layer_data.iter().enumerate() {
+                for (col, action) in row_data.iter().enumerate() {
+                    let item = StorageData::KeymapKey(KeymapKey {
+                        row,
+                        col,
+                        layer,
+                        action: *action,
+                    });
+                    let key = get_keymap_key::<ROW, COL, NUM_LAYER>(row, col, layer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut cache,
+                        &mut self.buffer,
+                        &key,
+                        &item,
+                    )
+                    .await?;
+                }
+            }
+        }
+
+        if let Some(encoder_map) = encoder_map {
+            for (layer, layer_data) in encoder_map.iter().enumerate() {
+                for (idx, action) in layer_data.iter().enumerate() {
+                    let item = StorageData::EncoderConfig(EncoderConfig {
+                        idx,
+                        layer,
+                        action: *action,
+                    });
+                    let key = get_encoder_config_key::<NUM_ENCODER>(idx, layer);
+                    store_item(
+                        &mut self.flash,
+                        self.storage_range.clone(),
+                        &mut cache,
+                        &mut self.buffer,
+                        &key,
+                        &item,
+                    )
+                    .await?;
                 }
             }
         }
@@ -1539,26 +1644,26 @@ macro_rules! read_storage {
 
 #[cfg(test)]
 mod tests {
-    use embassy_time::Duration;
+    use rmk_types::action::Action;
+    use rmk_types::keycode::KeyCode;
     use sequential_storage::map::Value;
 
     use super::*;
-    use crate::action::{Action, KeyAction};
-    use crate::keycode::KeyCode;
+    use crate::morse::{HOLD, MorseMode, TAP};
 
     #[test]
-    fn test_tap_dance_serialization_deserialization() {
-        let tap_dance = TapDance::new(
-            KeyAction::Single(Action::Key(KeyCode::A)),
-            KeyAction::Single(Action::Key(KeyCode::B)),
-            KeyAction::Single(Action::Key(KeyCode::C)),
-            KeyAction::Single(Action::Key(KeyCode::D)),
-            Duration::from_millis(200),
+    fn test_morse_serialization_deserialization() {
+        let morse = Morse::new_from_vial(
+            Action::Key(KeyCode::A),
+            Action::Key(KeyCode::B),
+            Action::Key(KeyCode::C),
+            Action::Key(KeyCode::D),
+            200,
         );
 
         // Serialization
-        let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
-        let storage_data = StorageData::TapDanceData(tap_dance);
+        let mut buffer = [0u8; 6 + 4 * 4];
+        let storage_data = StorageData::MorseData(morse.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -1566,49 +1671,34 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::TapDanceData(deserialized_tap_dance) => {
-                // timeout
-                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
-                // tap_actions
-                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
-                for (original, deserialized) in tap_dance
-                    .tap_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.tap_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
-                // hold_actions
-                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
-                for (original, deserialized) in tap_dance
-                    .hold_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.hold_actions.iter())
-                {
+            StorageData::MorseData(deserialized_morse) => {
+                assert_eq!(deserialized_morse.timeout_ms, morse.timeout_ms);
+                assert_eq!(deserialized_morse.mode, morse.mode);
+                assert_eq!(deserialized_morse.unilateral_tap, morse.unilateral_tap);
+
+                // actions
+                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
+                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
             }
-            _ => panic!("Expected TapDanceData"),
+            _ => panic!("Expected MorseData"),
         }
     }
 
     #[test]
-    fn test_tap_dance_with_partial_actions() {
-        // Create a TapDance with partial actions
-        let mut tap_dance: TapDance = TapDance::default();
-        tap_dance
-            .tap_actions
-            .push(KeyAction::Single(Action::Key(KeyCode::A)))
-            .ok();
-        tap_dance
-            .hold_actions
-            .push(KeyAction::Single(Action::Key(KeyCode::B)))
-            .ok();
-        tap_dance.timeout = Duration::from_millis(150);
+    fn test_morse_with_partial_actions() {
+        // Create a Morse with partial actions
+        let mut morse: Morse = Morse::default();
+        _ = morse.put(TAP, Action::Key(KeyCode::A));
+        _ = morse.put(HOLD, Action::Key(KeyCode::B));
+        morse.timeout_ms = 150;
+        morse.unilateral_tap = true;
+        morse.mode = MorseMode::PermissiveHold;
 
         // Serialization
-        let mut buffer = [0u8; 3 + TAP_DANCE_MAX_TAP * 4];
-        let storage_data = StorageData::TapDanceData(tap_dance);
+        let mut buffer = [0u8; 6 + 4 * 4];
+        let storage_data = StorageData::MorseData(morse.clone());
         let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
 
         // Deserialization
@@ -1616,29 +1706,64 @@ mod tests {
 
         // Validation
         match deserialized_data {
-            StorageData::TapDanceData(deserialized_tap_dance) => {
-                // timeout
-                assert_eq!(deserialized_tap_dance.timeout, tap_dance.timeout);
-                // tap_actions
-                assert_eq!(deserialized_tap_dance.tap_actions.len(), tap_dance.tap_actions.len());
-                for (original, deserialized) in tap_dance
-                    .tap_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.tap_actions.iter())
-                {
-                    assert_eq!(original, deserialized);
-                }
-                // hold_actions
-                assert_eq!(deserialized_tap_dance.hold_actions.len(), tap_dance.hold_actions.len());
-                for (original, deserialized) in tap_dance
-                    .hold_actions
-                    .iter()
-                    .zip(deserialized_tap_dance.hold_actions.iter())
-                {
+            StorageData::MorseData(deserialized_morse) => {
+                assert_eq!(deserialized_morse.timeout_ms, morse.timeout_ms);
+                assert_eq!(deserialized_morse.mode, morse.mode);
+                assert_eq!(deserialized_morse.unilateral_tap, morse.unilateral_tap);
+
+                // actions
+                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
+                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
                     assert_eq!(original, deserialized);
                 }
             }
-            _ => panic!("Expected TapDanceData"),
+            _ => panic!("Expected MorseData"),
+        }
+    }
+
+    #[test]
+    fn test_morse_with_morse_serialization_deserialization() {
+        let mut morse = Morse {
+            timeout_ms: 200,
+            mode: MorseMode::Normal,
+            unilateral_tap: true,
+            actions: Vec::default(),
+        };
+        morse
+            .actions
+            .push((MorsePattern::from_u16(0b1_01), Action::Key(KeyCode::A)))
+            .ok();
+        morse
+            .actions
+            .push((MorsePattern::from_u16(0b1_1000), Action::Key(KeyCode::B)))
+            .ok();
+        morse
+            .actions
+            .push((MorsePattern::from_u16(0b1_1010), Action::Key(KeyCode::C)))
+            .ok();
+
+        // Serialization
+        let mut buffer = [0u8; 6 + 3 * 4];
+        let storage_data = StorageData::MorseData(morse.clone());
+        let serialized_size = Value::serialize_into(&storage_data, &mut buffer).unwrap();
+
+        // Deserialization
+        let deserialized_data = StorageData::deserialize_from(&buffer[..serialized_size]).unwrap();
+
+        // Validation
+        match deserialized_data {
+            StorageData::MorseData(deserialized_morse) => {
+                assert_eq!(deserialized_morse.timeout_ms, morse.timeout_ms);
+                assert_eq!(deserialized_morse.mode, morse.mode);
+                assert_eq!(deserialized_morse.unilateral_tap, morse.unilateral_tap);
+
+                // actions
+                assert_eq!(deserialized_morse.actions.len(), morse.actions.len());
+                for (original, deserialized) in morse.actions.iter().zip(deserialized_morse.actions.iter()) {
+                    assert_eq!(original, deserialized);
+                }
+            }
+            _ => panic!("Expected MorseData"),
         }
     }
 }

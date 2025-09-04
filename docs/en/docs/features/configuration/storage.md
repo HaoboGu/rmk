@@ -15,4 +15,8 @@ num_sectors = 2
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.
 clear_storage = false
+# Clear layout at keyboard boot.
+# Set it to true will reset the layout(including keymap, encoder map, behavior config, etc.) at each reboot.
+# This option is useful when testing the firmware without losing bluetooth pairing informations.
+clear_layout = false
 ```

@@ -1,5 +1,6 @@
 #[cfg(feature = "storage")]
 use embedded_storage_async::nor_flash::NorFlash;
+use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "controller")]
 use {
     crate::channel::{CONTROLLER_CHANNEL, ControllerPub, send_controller_event},
@@ -7,7 +8,6 @@ use {
 };
 
 use crate::COMBO_MAX_NUM;
-use crate::action::{EncoderAction, KeyAction};
 use crate::combo::Combo;
 use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
@@ -54,7 +54,7 @@ fn _reorder_combos(combos: &mut heapless::Vec<Combo, COMBO_MAX_NUM>) {
 pub(crate) fn fill_vec<T: Default + Clone, const N: usize>(vector: &mut heapless::Vec<T, N>) {
     vector
         .resize(vector.capacity(), T::default())
-        .expect("impossible error, as we resie to the capcacity of the vector!");
+        .expect("impossible error, as we resize to the capacity of the vector!");
 }
 
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -72,7 +72,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         //reorder the combos
         _reorder_combos(&mut behavior.combo.combos);
 
-        fill_vec(&mut behavior.fork.forks);
+        fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
+        fill_vec(&mut behavior.morse.morses);
 
         KeyMap {
             layers: action_map,
@@ -97,8 +98,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     ) -> Self {
         // If the storage is initialized, read keymap from storage
         fill_vec(&mut behavior.combo.combos);
-        fill_vec(&mut behavior.fork.forks);
-        fill_vec(&mut behavior.tap_dance.tap_dances);
+        fill_vec(&mut behavior.fork.forks); // Is this needed? (has no Vial support)
+        fill_vec(&mut behavior.morse.morses);
 
         if let Some(storage) = storage {
             if {
@@ -117,8 +118,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                     .and(storage.read_combos(&mut behavior.combo.combos).await)
                     // Read fork cache
                     .and(storage.read_forks(&mut behavior.fork.forks).await)
-                    // Read tap dance cache
-                    .and(storage.read_tap_dances(&mut behavior.tap_dance.tap_dances).await)
+                    // Read morse cache
+                    .and(storage.read_morses(&mut behavior.morse.morses).await)
             }
             .is_err()
             {
@@ -407,11 +408,12 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
 #[cfg(test)]
 mod test {
+    use rmk_types::action::{Action, KeyAction};
+    use rmk_types::keycode::KeyCode;
+    use rmk_types::modifier::ModifierCombination;
+
     use super::{_reorder_combos, Combo};
-    use crate::action::{Action, KeyAction};
     use crate::fork::{Fork, StateBits};
-    use crate::hid_state::HidModifiers;
-    use crate::keycode::KeyCode;
     use crate::keymap::fill_vec;
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
@@ -435,7 +437,7 @@ mod test {
                 k!(F),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
             Fork::new(
@@ -444,7 +446,7 @@ mod test {
                 k!(F),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
             Fork::new(
@@ -453,7 +455,7 @@ mod test {
                 k!(Y),
                 StateBits::default(),
                 StateBits::default(),
-                HidModifiers::new(),
+                ModifierCombination::new(),
                 false,
             ),
         ])

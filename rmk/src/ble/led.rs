@@ -1,6 +1,7 @@
+use rmk_types::led_indicator::LedIndicator;
+
 use crate::channel::LED_SIGNAL;
 use crate::hid::{HidError, HidReaderTrait};
-use crate::light::LedIndicator;
 
 pub(crate) struct BleLedReader {}
 
