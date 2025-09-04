@@ -1,12 +1,13 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::action::{Action, KeyAction};
 use rmk::combo::Combo;
 use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig, TapHoldProfile};
 use rmk::k;
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
+use rmk::types::action::{Action, KeyAction};
+use rmk::types::keycode::KeyCode;
+use rmk::types::modifier::ModifierCombination;
 use rusty_fork::rusty_fork_test;
 
 use crate::common::morse::create_simple_morse_keyboard;
@@ -30,8 +31,8 @@ fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
 }
 
 fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
-    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::SHIFT));
-    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::GUI));
+    let combo_key = KeyAction::TapHold(Action::Key(KeyCode::B), Action::Modifier(ModifierCombination::LSHIFT));
+    let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
     create_simple_morse_keyboard(BehaviorConfig {
         tap_hold: TapHoldConfig {

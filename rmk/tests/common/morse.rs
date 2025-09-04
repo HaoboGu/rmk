@@ -1,9 +1,10 @@
 use heapless::Vec;
-use rmk::action::Action;
 use rmk::config::{BehaviorConfig, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::keycode::{KeyCode, ModifierCombination};
 use rmk::morse::{Morse, MorsePattern};
+use rmk::types::action::Action;
+use rmk::types::keycode::KeyCode;
+use rmk::types::modifier::ModifierCombination;
 use rmk::{k, lt, mt, td};
 
 use crate::common::wrap_keymap;
@@ -12,8 +13,8 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig<1, 5>) -> Ke
     let keymap = [
         [[
             k!(A),
-            mt!(B, ModifierCombination::SHIFT),
-            mt!(C, ModifierCombination::GUI),
+            mt!(B, ModifierCombination::LSHIFT),
+            mt!(C, ModifierCombination::LGUI),
             lt!(1, D),
             td!(0),
         ]],

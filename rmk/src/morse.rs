@@ -1,7 +1,7 @@
 use heapless::Vec;
+use rmk_types::action::Action;
 
 use crate::MAX_PATTERNS_PER_KEY;
-use crate::action::Action;
 use crate::config::TapHoldProfile;
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:

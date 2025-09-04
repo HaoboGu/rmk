@@ -102,7 +102,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                     let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(sdc, ble_addr, &mut rng_gen, &mut host_resources).await;
                 },
                 _ => quote! {},
             };
@@ -164,7 +164,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                     let mut rosc_rng = ::embassy_rp::clocks::RoscRng {};
                     use rand_core::SeedableRng;
                     let mut rng = ::rand_chacha::ChaCha12Rng::from_rng(&mut rosc_rng).unwrap();
-                    let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                    let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
                 }
             } else {
                 quote! {
@@ -189,7 +189,7 @@ pub(crate) fn chip_init_default(keyboard_config: &KeyboardTomlConfig, peripheral
                 let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
                 let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::trouble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
+                let stack = ::rmk::ble::build_ble_stack(controller, ble_addr, &mut rng, &mut host_resources).await;
             }
         }
     }

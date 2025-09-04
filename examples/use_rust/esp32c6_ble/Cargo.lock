@@ -1695,27 +1695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_enum"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
-dependencies = [
- "num_enum_derive",
- "rustversion",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
 name = "object"
 version = "0.36.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2042,17 +2021,18 @@ dependencies = [
  "futures",
  "heapless 0.8.0",
  "log",
- "num_enum",
  "paste",
  "postcard",
  "rand_core 0.6.4",
  "rmk-config",
  "rmk-macro",
+ "rmk-types",
  "sequential-storage",
  "serde",
  "serde_derive",
  "ssmarshal",
  "static_cell",
+ "strum",
  "toml 0.9.5",
  "trouble-host",
  "usbd-hid",
@@ -2114,6 +2094,16 @@ dependencies = [
  "serde_derive",
  "syn 2.0.104",
  "toml 0.8.23",
+]
+
+[[package]]
+name = "rmk-types"
+version = "0.1.0"
+dependencies = [
+ "bitfield-struct",
+ "postcard",
+ "serde",
+ "strum",
 ]
 
 [[package]]

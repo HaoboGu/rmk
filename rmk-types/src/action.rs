@@ -1,4 +1,16 @@
-use crate::keycode::{KeyCode, ModifierCombination};
+//! Keyboard actions and behaviors.
+//!
+//! This module defines the core action system used in RMK firmware.
+//! Actions represent what happens when a key is pressed, from simple key
+//! presses to complex behaviors like tap-hold, layer switching, and macros.
+//!
+//! Key types:
+//! - [`Action`] - Single operations that keyboards send or execute
+//! - [`KeyAction`] - Complex behaviors that keyboards should behave
+//! - [`EncoderAction`] - Rotary encoder actions
+
+use crate::keycode::KeyCode;
+use crate::modifier::ModifierCombination;
 
 /// EncoderAction is the action at a encoder position, stored in encoder_map.
 #[derive(Clone, Copy, Debug)]
@@ -16,7 +28,9 @@ impl Default for EncoderAction {
         }
     }
 }
+
 impl EncoderAction {
+    /// Create a new encoder action.
     pub const fn new(clockwise: KeyAction, counter_clockwise: KeyAction) -> Self {
         Self {
             clockwise,
@@ -24,18 +38,22 @@ impl EncoderAction {
         }
     }
 
+    /// Set the clockwise action.
     pub fn set_clockwise(&mut self, clockwise: KeyAction) {
         self.clockwise = clockwise;
     }
 
+    /// Set the counter clockwise action.
     pub fn set_counter_clockwise(&mut self, counter_clockwise: KeyAction) {
         self.counter_clockwise = counter_clockwise;
     }
 
+    /// Get the clockwise action.
     pub fn clockwise(&self) -> KeyAction {
         self.clockwise
     }
 
+    /// Get the counter clockwise action.
     pub fn counter_clockwise(&self) -> KeyAction {
         self.counter_clockwise
     }

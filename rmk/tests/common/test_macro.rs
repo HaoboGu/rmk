@@ -42,6 +42,6 @@ macro_rules! key_sequence_test {
 #[macro_export]
 macro_rules! kc_to_u8 {
     ($key: ident) => {
-        rmk::keycode::KeyCode::$key as u8
+        rmk::types::keycode::KeyCode::$key as u8
     };
 }
