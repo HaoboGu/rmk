@@ -54,7 +54,7 @@ paste = "1"
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { version = "0.2.4", git = "https://github.com/haobogu/trouble", rev = "c439474", features = [
+trouble-host = { version = "0.2.4", git = "https://github.com/haobogu/trouble", rev = "b57bb1c", features = [
     "gatt",
     "scan",
     "derive",
