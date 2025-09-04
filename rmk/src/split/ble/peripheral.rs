@@ -9,11 +9,11 @@ use trouble_host::prelude::*;
 #[cfg(feature = "storage")]
 use {super::PeerAddress, crate::storage::Storage, embedded_storage_async::nor_flash::NorFlash};
 
-use crate::CONNECTION_STATE;
 use crate::split::ble::central::HAND_STATE;
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
+use crate::{CONNECTION_STATE, channel::KEY_EVENT_CHANNEL};
 #[cfg(feature = "controller")]
 use crate::{
     channel::{CONTROLLER_CHANNEL, send_controller_event},
@@ -203,6 +203,17 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<
                     HAND_STATE.store(false, Ordering::Relaxed);
                     info!("Disconnected from the central");
                 }
+                Err(BleHostError::BleHost(Error::Timeout)) => {
+                    // Timeout, wait new keys to continue
+                    error!("Connect to central timeout");
+                    KEY_EVENT_CHANNEL.clear();
+                    #[cfg(feature = "controller")]
+                    send_controller_event(&mut controller_pub, ControllerEvent::SplitCentral(true));
+                    let _ = KEY_EVENT_CHANNEL.receive().await;
+                    #[cfg(feature = "controller")]
+                    send_controller_event(&mut controller_pub, ControllerEvent::SplitCentral(false));
+                    continue;
+                }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
@@ -244,7 +255,10 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             let advertiser = peripheral
                 .advertise(&AdvertisementParameters::default(), advertisement)
                 .await?;
-            Ok(advertiser.accept().await?.with_attribute_server(server)?)
+            match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+                Ok(re) => Ok(re?.with_attribute_server(server)?),
+                Err(_e) => Err(BleHostError::BleHost(Error::Timeout)),
+            }
         }
     }
 }
