@@ -269,11 +269,11 @@ pub(crate) async fn process_vial<
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[3..5],
-                            to_via_keycode(morse.get(DOUBLE_TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
+                            to_via_keycode(morse.get(HOLD).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[5..7],
-                            to_via_keycode(morse.get(HOLD).map_or(KeyAction::No, |a| KeyAction::Single(a))),
+                            to_via_keycode(morse.get(DOUBLE_TAP).map_or(KeyAction::No, |a| KeyAction::Single(a))),
                         );
                         LittleEndian::write_u16(
                             &mut report.input_data[7..9],

@@ -142,7 +142,8 @@ The `layer.keys` string should follow several rules:
 
 The definitions of those operations are same with QMK, you can found [here](https://docs.qmk.fm/#/feature_layers). If you want other actions, please [fire an issue](https://github.com/HaoboGu/rmk/issues/new).
 
-5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod.
+5. For modifier-tap-hold, use `MT(key, modifier)` where the modifier can be a chain like explained on point 1. 
+<!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
 
 6. For generic key tap-hold, use `TH(key-tap, key-hold)`
 
@@ -150,7 +151,7 @@ The definitions of those operations are same with QMK, you can found [here](http
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
-9. For keyboard macros, use `Macro(n)`
+9.  For keyboard macros, use `Macro(n)`
 
 ## Aliases
 
