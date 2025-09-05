@@ -25,7 +25,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            $LIBSSL
+            libssl*.deb
           key: ${{ runner.os }}-libssl
       - name: Install libssl
         run: |
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            $LIBSSL
+            libssl*.deb
           key: ${{ runner.os }}-libssl
       - name: Install libssl
         run: |
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            $LIBSSL
+            libssl*.deb
           key: ${{ runner.os }}-libssl
       - name: Install libssl
         run: |
