@@ -243,6 +243,7 @@ aside:hover {
 /* color */
 /* item：hover */
 .VPSidebarItem .item:hover {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   background-color: var(--vp-sidebar-bg-2);
   .text {
     font-weight: 500;
@@ -251,6 +252,7 @@ aside:hover {
 }
 /* item:pick */
 .VPSidebarItem .item:active {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   background-color: var(--vp-sidebar-bg-3);
   .text {
     font-weight: 500;
