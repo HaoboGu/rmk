@@ -15,12 +15,14 @@ matrix_map = """
 """
 ```
 
-The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tuples, listed in the same order as you want to define your keys in your key map. The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
+The `matrix_map` is a string built from `(row, col, <hand> : <profile_name>)` tuples, listed in the same order as you want to define your keys in your key map. 
+The `(row, col)` coordinates are using zero based indexing and referring to the position in the "electronic matrix" of your keyboard. As you can see in [matrix configuration](keyboard_matrix.md), even the direct pin based keyboards are represented with a matrix. In case of split keyboards, the positions refer to the position in the "big unified matrix" of all split parts. 
 With the help of this matrix map, the configuration of non-regular key matrices can be intuitively arranged in your key maps. (Triple quote mark `"""` is used to limit multi-line strings)
 
-The folowing optional fields are used mainly if `enable_flow_tap = true`:
-The `<hand>` is optional, can be used to associate each key to the left or right hand using the `L` or `R` values (this info is used during unilateral tap processing).
-The `<profile_name>` is also optional, if given, selects a key profile from `behavior.tap_hold_profiles` to override the defaults set in `behavior.tap_hold`.
+The `<hand>` field is optional and used only if `enable_flow_tap = true` and `unilateral_tap = true` are set in a key's profile:
+`<hand>` is sed to associate each key to the left or right hand using the `L` or `R` values. This information is used during unilateral tap processing.
+
+The `<profile_name>` is also optional, if given, selects a key profile from `behavior.morse.profiles` to override the defaults set in `behavior.morse`.
 
 ```toml
 # split ortho example for matrix map, with L/R hand information filled and home row, thumb keys have profile names:
@@ -35,11 +37,17 @@ matrix_map = """
                                        (3, 3, L:T)  (3, 4, L:T)       (3, 5, R:T) (3, 6, R:T) 
 """
 
-[behavior]
-tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_on_other_press = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+# default profile for morse, tap dance and tap-hold keys:
+[behavior.morse]
+enable_flow_tap = true, 
+prior_idle_time = "120ms", 
+hold_on_other_press = true, 
+hold_timeout = "250ms", 
+gap_timeout = "250ms" }
 
-[behavior.tap_hold_profiles]
-# matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions by referring these profiles by their name
+# this example is a home row mod
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 # thumb tap-hold example

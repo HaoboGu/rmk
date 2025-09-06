@@ -2,9 +2,10 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, TapHoldConfig, TapHoldProfile};
+use rmk::config::{BehaviorConfig, CombosConfig, MorseProfile, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
+use rmk::morse::MorseMode;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -15,16 +16,15 @@ use crate::common::{KC_LGUI, KC_LSHIFT};
 
 fn create_permissive_hold_keyboard() -> Keyboard<'static, 1, 5, 2> {
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
+        morse: MorsesConfig {
             enable_flow_tap: false,
-            default_profile: TapHoldProfile::new()
-                .with_is_filled(true)
-                .with_unilateral_tap(false)
-                .with_permissive_hold(true)
-                .with_hold_timeout_ms(250u16)
-                .with_gap_timeout_ms(250u16),
-
-            ..TapHoldConfig::default()
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::PermissiveHold),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
         },
         ..BehaviorConfig::default()
     })
@@ -35,15 +35,15 @@ fn create_permissive_hold_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
     let combo_key_2 = KeyAction::TapHold(Action::Key(KeyCode::C), Action::Modifier(ModifierCombination::LGUI));
     let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::D), Action::LayerOn(1));
     create_simple_morse_keyboard(BehaviorConfig {
-        tap_hold: TapHoldConfig {
+        morse: MorsesConfig {
             enable_flow_tap: false,
-            default_profile: TapHoldProfile::new()
-                .with_is_filled(true)
-                .with_unilateral_tap(false)
-                .with_permissive_hold(true)
-                .with_hold_timeout_ms(250u16)
-                .with_gap_timeout_ms(250u16),
-            ..TapHoldConfig::default()
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::PermissiveHold),
+                Some(250u16),
+                Some(250u16),
+            ),
+            ..Default::default()
         },
         combo: CombosConfig {
             combos: heapless::Vec::from_iter([

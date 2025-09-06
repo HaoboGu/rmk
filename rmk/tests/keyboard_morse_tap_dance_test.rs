@@ -2,9 +2,9 @@
 pub mod common;
 
 use heapless::Vec;
-use rmk::config::{BehaviorConfig, MorsesConfig, TapHoldProfile};
+use rmk::config::{BehaviorConfig, MorseProfile, MorsesConfig};
 use rmk::keyboard::Keyboard;
-use rmk::morse::Morse;
+use rmk::morse::{Morse, MorseMode};
 use rmk::types::action::Action;
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -21,38 +21,37 @@ pub fn create_tap_dance_test_keyboard() -> Keyboard<'static, 1, 4, 2> {
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
+            enable_flow_tap: false,
+            default_profile: MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(250u16),
+                Some(250u16),
+            ),
             morses: Vec::from_slice(&[
                 Morse::new_from_vial(
                     Action::Key(KeyCode::A),
                     Action::Key(KeyCode::B),
                     Action::Key(KeyCode::C),
                     Action::Key(KeyCode::D),
-                    TapHoldProfile::new().with_is_filled(false),
+                    MorseProfile::default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::X),
                     Action::Key(KeyCode::Y),
                     Action::Key(KeyCode::Z),
                     Action::Key(KeyCode::Space),
-                    TapHoldProfile::new().with_is_filled(false),
+                    MorseProfile::default(),
                 ),
                 Morse::new_from_vial(
                     Action::Key(KeyCode::Kp1),
                     Action::Modifier(ModifierCombination::LSHIFT),
                     Action::Key(KeyCode::Kp2),
                     Action::Modifier(ModifierCombination::LGUI),
-                    TapHoldProfile::new().with_is_filled(false),
+                    MorseProfile::default(),
                 ),
             ])
             .unwrap(),
-        },
-        tap_hold: rmk::config::TapHoldConfig {
-            default_profile: TapHoldProfile::new()
-                .with_is_filled(true)
-                .with_unilateral_tap(false)
-                .with_hold_on_other_press(true)
-                .with_hold_timeout_ms(250u16)
-                .with_gap_timeout_ms(250u16),
             ..Default::default()
         },
         ..Default::default()

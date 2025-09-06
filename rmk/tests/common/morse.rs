@@ -39,6 +39,7 @@ pub fn create_simple_morse_keyboard(behavior_config: BehaviorConfig<1, 5>) -> Ke
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
             morses: Vec::from_slice(&[morse0]).unwrap(),
+            ..behavior_config.morse
         },
         ..behavior_config
     };

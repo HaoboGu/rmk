@@ -5,7 +5,7 @@ use crate::config::BehaviorConfig;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keyboard::held_buffer::{HeldKey, KeyState};
-use crate::morse::{HOLD, MorsePattern, TAP};
+use crate::morse::{HOLD, MorseMode, MorsePattern, TAP};
 
 // 'morse' is an alias for the superset of tap dance and tap hold keys, since their handling have many similarities
 impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
@@ -209,16 +209,14 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let KeyAction::Morse(index) = key_action
             && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
         {
-            if morse.profile.is_filled() {
-                let timeout = if hold_timeout_needed {
-                    morse.profile.hold_timeout_ms()
-                } else {
-                    morse.profile.gap_timeout_ms()
-                };
+            let timeout = if hold_timeout_needed {
+                morse.profile.hold_timeout_ms()
+            } else {
+                morse.profile.gap_timeout_ms()
+            };
 
-                if timeout != 0 {
-                    return Duration::from_millis(timeout as u64);
-                }
+            if let Some(timeout) = timeout {
+                return Duration::from_millis(timeout as u64);
             }
         }
 
@@ -226,72 +224,88 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
         {
-            let profile = info[pos.row as usize][pos.col as usize].tap_hold_profile;
-            if profile.is_filled() {
-                let timeout = if hold_timeout_needed {
-                    profile.hold_timeout_ms()
-                } else {
-                    profile.gap_timeout_ms()
-                };
+            let profile = info[pos.row as usize][pos.col as usize].morse_profile_override;
 
-                if timeout != 0 {
-                    return Duration::from_millis(timeout as u64);
-                }
+            let timeout = if hold_timeout_needed {
+                profile.hold_timeout_ms()
+            } else {
+                profile.gap_timeout_ms()
+            };
+
+            if let Some(timeout) = timeout {
+                return Duration::from_millis(timeout as u64);
             }
         }
 
         //otherwise return the global default profile
         let timeout = if hold_timeout_needed {
-            behavior_config.tap_hold.default_profile.hold_timeout_ms()
+            behavior_config.morse.default_profile.hold_timeout_ms()
         } else {
-            behavior_config.tap_hold.default_profile.gap_timeout_ms()
-        };
+            behavior_config.morse.default_profile.gap_timeout_ms()
+        }
+        .unwrap_or(250u16);
 
         Duration::from_millis(if timeout == 0 { 250u16 } else { timeout } as u64)
     }
 
-    /// Decides and returns the tuple of (permissive_hold, hold_on_other_press, unilateral_tap)
+    /// Decides and returns the morse mode
     /// based on configuration for the given key action / key position
     pub fn tap_hold_mode(
         behavior_config: &BehaviorConfig<ROW, COL>,
         pos: KeyboardEventPos,
         key_action: &KeyAction,
-    ) -> (bool, bool, bool) {
+    ) -> MorseMode {
         //first: try to look for a per-key profile config
         if let KeyAction::Morse(index) = key_action
             && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
-            && morse.profile.is_filled()
+            && let Some(mode) = morse.profile.mode()
         {
-            if morse.profile.is_filled() {
-                return (
-                    morse.profile.permissive_hold(),
-                    morse.profile.hold_on_other_press(),
-                    morse.profile.unilateral_tap(),
-                );
-            }
+            return mode;
         }
 
         //second: try to look for a positional profile override
         if let KeyboardEventPos::Key(pos) = pos
             && let Some(info) = behavior_config.key_info
+            && let Some(mode) = info[pos.row as usize][pos.col as usize].morse_profile_override.mode()
         {
-            let profile = info[pos.row as usize][pos.col as usize].tap_hold_profile;
-
-            if profile.is_filled() {
-                return (
-                    profile.permissive_hold(),
-                    profile.hold_on_other_press(),
-                    profile.unilateral_tap(),
-                );
-            }
+            return mode;
         }
 
-        //otherwise return the global defaults
-        (
-            behavior_config.tap_hold.default_profile.permissive_hold(),
-            behavior_config.tap_hold.default_profile.hold_on_other_press(),
-            behavior_config.tap_hold.default_profile.unilateral_tap(),
-        )
+        //otherwise return the global default
+        behavior_config
+            .morse
+            .default_profile
+            .mode()
+            .unwrap_or(MorseMode::Normal)
+    }
+
+    /// Decides and returns the morse mode
+    /// based on configuration for the given key action / key position
+    pub fn is_unilateral_tap_enabled(
+        behavior_config: &BehaviorConfig<ROW, COL>,
+        pos: KeyboardEventPos,
+        key_action: &KeyAction,
+    ) -> bool {
+        //first: try to look for a per-key profile config
+        if let KeyAction::Morse(index) = key_action
+            && let Some(morse) = behavior_config.morse.morses.get(*index as usize)
+            && let Some(mode) = morse.profile.unilateral_tap()
+        {
+            return mode;
+        }
+
+        //second: try to look for a positional profile override
+        if let KeyboardEventPos::Key(pos) = pos
+            && let Some(info) = behavior_config.key_info
+            && let Some(mode) = info[pos.row as usize][pos.col as usize]
+                .morse_profile_override
+                .unilateral_tap()
+        {
+            return mode;
+        }
+
+        //otherwise return the global default
+        behavior_config.morse.default_profile.unilateral_tap().unwrap_or(false)
     }
 
     //returns Some(action) if the ending of the given pattern can be "predicted" (unique)

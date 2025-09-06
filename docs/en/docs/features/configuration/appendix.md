@@ -109,34 +109,21 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
-# Tap Hold configuration
-tap_hold = { enable_flow_tap = true, prior_idle_time = "120ms", hold_on_other_press = true, unilateral_false = false, hold_timeout = "250ms", gap_timeout = "250ms" }
 # Tri Layer configuration
 tri_layer = { upper = 1, lower = 2, adjust = 3 }
 # One Shot configuration
 one_shot = { timeout = "1s" }
 
-[behavior.tap_hold_profiles]
-# matrix_map may refer these to override the defaults given in tap_hold for some key positions - this example is a home row mod
-H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
-H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
-MRZ = { hold_timeout = "200ms", gap_timeout = "200ms" }
-
-# Combo configuration
-[behavior.combo]
-timeout = "150ms"
-combos = [
-  # Press J and K keys simultaneously to output Escape key
-  { actions = ["J", "K"], output = "Escape" }
-]
-
-# Macro configuration
-[[behavior.macro.macros]]
-operations = [
-    { operation = "text", text = "Hello" }
-]
-
 [behavior.morse]
+# default profile for morse, tap dance and tap-hold keys:
+enable_flow_tap = true
+prior_idle_time = "120ms"
+hold_on_other_press = true
+unilateral_false = false
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+# list of morse (tap dance) keys:
 morses = [
   # TD(0) Function key that outputs F1 on tap, F2 on double tap, layer 1 on hold
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
@@ -183,6 +170,26 @@ morses = [
       {pattern = "----.", action = "Kc9"}, 
       {pattern = "-----", action = "Kc0"}
     ], profile = "MRZ" }
+]
+
+[behavior.morse.profiles]
+# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
+H2 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
+MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
+
+# Combo configuration
+[behavior.combo]
+timeout = "150ms"
+combos = [
+  # Press J and K keys simultaneously to output Escape key
+  { actions = ["J", "K"], output = "Escape" }
+]
+
+# Macro configuration
+[[behavior.macro.macros]]
+operations = [
+    { operation = "text", text = "Hello" }
 ]
 
 # Fork configuration

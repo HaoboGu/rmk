@@ -31,7 +31,7 @@ use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
-use crate::morse::{MorsePattern, TAP};
+use crate::morse::{MorseMode, MorsePattern, TAP};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::{FORK_MAX_NUM, boot};
@@ -364,9 +364,9 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
     async fn process_key_action(&mut self, key_action: &KeyAction, event: KeyboardEvent, is_combo: bool) -> LoopState {
         // When pressing a morse key, check flow tap first.
         if event.pressed
-            && self.keymap.borrow().behavior.tap_hold.enable_flow_tap
+            && self.keymap.borrow().behavior.morse.enable_flow_tap
             && key_action.is_morse()
-            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.tap_hold.prior_idle_time
+            && self.last_press_time.elapsed() < self.keymap.borrow().behavior.morse.prior_idle_time
         {
             // It's in key streak, trigger the first tap action
             debug!("Flow tap detected, trigger tap action for current morse key");
@@ -695,25 +695,35 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
 
                 // The remaining keys are not same as the current key, check only morse keys
                 if held_key.event.pos != event.pos && held_key.action.is_morse() {
-                    let (permissive_hold, hold_on_other_press, unilateral_tap) =
+                    let mode =
                         Self::tap_hold_mode(&self.keymap.borrow().behavior, held_key.event.pos, &held_key.action);
 
                     if event.pressed {
                         // The current key is being pressed
 
                         // Check morse key mode
-                        if permissive_hold {
-                            // Permissive hold mode checks key releases, so push current key press into buffer.
-                            decision_for_current_key = KeyBehaviorDecision::Buffer;
-                        } else if hold_on_other_press {
-                            debug!(
-                                "Trigger morse key due to hold on other key press: {:?}",
-                                held_key.action
-                            );
-                            let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
-                            decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                        match mode {
+                            MorseMode::PermissiveHold => {
+                                // Permissive hold mode checks key releases, so push current key press into buffer.
+                                decision_for_current_key = KeyBehaviorDecision::Buffer;
+                            }
+                            MorseMode::HoldOnOtherPress => {
+                                debug!(
+                                    "Trigger morse key due to hold on other key press: {:?}",
+                                    held_key.action
+                                );
+                                let _ = decisions.push((held_key.event.pos, HeldKeyDecision::HoldOnOtherKeyPress));
+                                decision_for_current_key = KeyBehaviorDecision::CleanBuffer;
+                            }
+                            _ => {}
                         }
                     } else {
+                        let unilateral_tap = Self::is_unilateral_tap_enabled(
+                            &self.keymap.borrow().behavior,
+                            held_key.event.pos,
+                            &held_key.action,
+                        );
+
                         // 1. Check unilateral tap of held key
                         // Note: `decision for current key == Release` means that current held key is pressed AFTER the current releasing key,
                         // releasing a key should not trigger unilateral tap of keys which are pressed AFTER the released key
@@ -737,7 +747,8 @@ impl<'a, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_E
                         }
 
                         // The current key is being released, check only the held key in permissive hold mode
-                        if decision_for_current_key != KeyBehaviorDecision::Release && permissive_hold {
+                        if decision_for_current_key != KeyBehaviorDecision::Release && mode == MorseMode::PermissiveHold
+                        {
                             debug!("Permissive hold!");
                             // Check first current releasing key is in the buffer, AND after the current key
                             let _ = decisions.push((held_key.event.pos, HeldKeyDecision::PermissiveHold));

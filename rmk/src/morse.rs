@@ -2,7 +2,7 @@ use heapless::Vec;
 use rmk_types::action::Action;
 
 use crate::MAX_PATTERNS_PER_KEY;
-use crate::config::TapHoldProfile;
+use crate::config::MorseProfile;
 
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
@@ -76,8 +76,9 @@ impl MorsePattern {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Morse {
     /// The profile of this morse key, which defines the timing parameters, etc.
-    /// used only if profile.is_filled() is set to true
-    pub profile: TapHoldProfile,
+    /// if some of its fields are filled with None, the positional override given in KeyInfo,
+    /// or the defaults given in MorsesConfig will be used instead.
+    pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
     pub actions: Vec<(MorsePattern, Action), MAX_PATTERNS_PER_KEY>,
 }
@@ -85,7 +86,7 @@ pub struct Morse {
 impl Default for Morse {
     fn default() -> Self {
         Self {
-            profile: TapHoldProfile::new().with_is_filled(false),
+            profile: MorseProfile::default(),
             actions: Vec::default(),
         }
     }
@@ -97,7 +98,7 @@ impl Morse {
         hold: Action,
         hold_after_tap: Action,
         double_tap: Action,
-        profile: TapHoldProfile,
+        profile: MorseProfile,
     ) -> Self {
         let mut result = Self {
             profile: profile,
@@ -124,7 +125,7 @@ impl Morse {
     pub fn new_with_actions(
         tap_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
         hold_actions: Vec<Action, MAX_PATTERNS_PER_KEY>,
-        profile: TapHoldProfile,
+        profile: MorseProfile,
     ) -> Self {
         assert!(MAX_PATTERNS_PER_KEY >= 4, "MAX_PATTERNS_PER_KEY must be at least 4");
         let mut result = Self {
@@ -215,4 +216,19 @@ impl Morse {
             }
         }
     }
+}
+
+/// Mode for morse key behavior
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[repr(u8)]
+pub enum MorseMode {
+    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
+    /// When another key is pressed and released during the current morse key is held,
+    /// the hold action of current morse key will be triggered
+    PermissiveHold,
+    /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
+    HoldOnOtherPress,
+    /// Normal mode, the decision is made when timeout
+    Normal,
 }

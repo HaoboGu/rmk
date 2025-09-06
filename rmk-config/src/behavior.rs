@@ -33,7 +33,6 @@ impl crate::KeyboardTomlConfig {
                     }
                     None => default.tri_layer,
                 };
-                behavior.tap_hold = behavior.tap_hold.or(default.tap_hold);
                 behavior.one_shot = behavior.one_shot.or(default.one_shot);
                 behavior.combo = behavior.combo.or(default.combo);
                 if let Some(combo) = &behavior.combo {
@@ -84,16 +83,23 @@ impl crate::KeyboardTomlConfig {
                     }
                 }
                 behavior.fork = behavior.fork.or(default.fork);
-                if let Some(fork) = &behavior.fork {
-                    if fork.forks.len() > self.rmk.fork_max_num {
-                        return Err("keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section".to_string());
-                    }
+                if let Some(fork) = &behavior.fork
+                    && fork.forks.len() > self.rmk.fork_max_num
+                {
+                    return Err(
+                        "keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section"
+                            .to_string(),
+                    );
                 }
                 behavior.morse = behavior.morse.or(default.morse);
-                if let Some(morse) = &behavior.morse {
-                    if morse.morses.len() > self.rmk.morse_max_num {
-                        return Err("keyboard.toml: number of morses is greater than morse_max_num configured under [rmk] section".to_string());
-                    }
+                if let Some(morse) = &behavior.morse
+                    && let Some(morses) = &morse.morses
+                    && morses.len() > self.rmk.morse_max_num
+                {
+                    return Err(
+                        "keyboard.toml: number of morses is greater than morse_max_num configured under [rmk] section"
+                            .to_string(),
+                    );
                 }
                 Ok((behavior, layout))
             }

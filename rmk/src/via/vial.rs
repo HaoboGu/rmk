@@ -138,7 +138,13 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::MorseTimeout => {
                     report.input_data[0] = 0;
-                    let tapping_term = keymap.borrow().behavior.tap_hold.default_profile.hold_timeout_ms();
+                    let tapping_term = keymap
+                        .borrow()
+                        .behavior
+                        .morse
+                        .default_profile
+                        .hold_timeout_ms()
+                        .unwrap_or(0);
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
@@ -158,7 +164,13 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::UnilateralTap => {
                     report.input_data[0] = 0;
-                    let unilateral_tap = keymap.borrow().behavior.tap_hold.default_profile.unilateral_tap();
+                    let unilateral_tap = keymap
+                        .borrow()
+                        .behavior
+                        .morse
+                        .default_profile
+                        .unilateral_tap()
+                        .unwrap_or(false);
                     if unilateral_tap {
                         report.input_data[1] = 1;
                     } else {
@@ -167,7 +179,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::PriorIdleTime => {
                     report.input_data[0] = 0;
-                    let prior_idle_time = keymap.borrow().behavior.tap_hold.prior_idle_time.as_millis() as u16;
+                    let prior_idle_time = keymap.borrow().behavior.morse.prior_idle_time.as_millis() as u16;
                     LittleEndian::write_u16(&mut report.input_data[1..3], prior_idle_time);
                 }
             }
@@ -186,12 +198,8 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap
-                        .borrow_mut()
-                        .behavior
-                        .tap_hold
-                        .default_profile
-                        .set_hold_timeout_ms(timeout_time);
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    keymap.borrow_mut().behavior.morse.default_profile = old.with_hold_timeout_ms(Some(timeout_time));
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::MorseHoldTimeout(timeout_time))
@@ -222,12 +230,9 @@ pub(crate) async fn process_vial<
                         .await;
                 }
                 SettingKey::UnilateralTap => {
-                    keymap
-                        .borrow_mut()
-                        .behavior
-                        .tap_hold
-                        .default_profile
-                        .set_unilateral_tap(report.output_data[4] == 1);
+                    let old = keymap.borrow().behavior.morse.default_profile;
+                    keymap.borrow_mut().behavior.morse.default_profile =
+                        old.with_unilateral_tap(Some(report.output_data[4] == 1));
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::UnilateralTap(report.output_data[4] == 1))
@@ -235,8 +240,7 @@ pub(crate) async fn process_vial<
                 }
                 SettingKey::PriorIdleTime => {
                     let prior_idle_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    keymap.borrow_mut().behavior.tap_hold.prior_idle_time =
-                        Duration::from_millis(prior_idle_time as u64);
+                    keymap.borrow_mut().behavior.morse.prior_idle_time = Duration::from_millis(prior_idle_time as u64);
                     #[cfg(feature = "storage")]
                     FLASH_CHANNEL
                         .send(FlashOperationMessage::PriorIdleTime(prior_idle_time))

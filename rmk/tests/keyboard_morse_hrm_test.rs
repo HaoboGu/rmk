@@ -5,9 +5,10 @@ pub mod common;
 
 use embassy_time::Duration;
 use rmk::combo::Combo;
-use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, TapHoldConfig, TapHoldProfile};
+use rmk::config::{BehaviorConfig, CombosConfig, Hand, KeyInfo, MorseProfile, MorsesConfig};
 use rmk::k;
 use rmk::keyboard::Keyboard;
+use rmk::morse::MorseMode;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::KeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -42,15 +43,10 @@ fn create_hrm_keyboard() -> Keyboard<'static, 1, 5, 2> {
         ]]),
 
         // All unknown hand, not home row
-        tap_hold: TapHoldConfig {
+        morse: MorsesConfig {
             enable_flow_tap: true,
             prior_idle_time: Duration::from_millis(120),
-            default_profile: TapHoldProfile::new()
-                .with_is_filled(true)
-                .with_unilateral_tap(true)
-                .with_permissive_hold(true)
-                .with_hold_timeout_ms(250u16)
-                .with_gap_timeout_ms(250u16),
+            default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250u16), Some(250u16)),
             ..Default::default()
         },
         ..Default::default()
@@ -87,14 +83,10 @@ fn create_hrm_keyboard_with_combo() -> Keyboard<'static, 1, 5, 2> {
             },
         ]]),
 
-        tap_hold: TapHoldConfig {
+        morse: MorsesConfig {
             enable_flow_tap: true,
-            default_profile: TapHoldProfile::new()
-                .with_is_filled(true)
-                .with_unilateral_tap(true)
-                .with_permissive_hold(true)
-                .with_hold_timeout_ms(250u16)
-                .with_gap_timeout_ms(250u16),
+            prior_idle_time: Duration::from_millis(120),
+            default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250u16), Some(250u16)),
             ..Default::default()
         },
         combo: CombosConfig {
