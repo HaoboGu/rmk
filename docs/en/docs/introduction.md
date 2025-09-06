@@ -2,17 +2,17 @@
 
 <div class="badge-container" style="display: flex; gap: 0.5rem; align-items: center; justify-content: start;   margin: 1rem 0;">
 
-<div>
+<div id="crates-io">
 
 [![Crates.io](https://img.shields.io/crates/v/rmk)](https://crates.io/crates/rmk)
 
 </div>
-<div>
+<div id="docs-rs">
 
 [![Docs](https://img.shields.io/docsrs/rmk)](https://docs.rs/rmk/latest/rmk/)
 
 </div>
-<div>
+<div id="github-actions">
 
 [![Build](https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg)](https://github.com/HaoboGu/rmk/actions)
 
