@@ -3,8 +3,8 @@
 
 use quote::quote;
 use rmk_config::{
-    CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig, OneShotConfig,
-    TapHoldConfig, TriLayerConfig,
+    AutoShiftConfig, CombosConfig, ForksConfig, KeyboardTomlConfig, MacrosConfig, MorseActionPair, MorsesConfig,
+    OneShotConfig, TapHoldConfig, TriLayerConfig,
 };
 
 use crate::layout::{get_key_with_alias, parse_key};
@@ -437,6 +437,35 @@ fn expand_forks(forks: &Option<ForksConfig>) -> proc_macro2::TokenStream {
     }
 }
 
+fn expand_autoshift(autoshift: &Option<AutoShiftConfig>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+    match autoshift {
+        Some(autoshift) => {
+            let enable = autoshift.enable.unwrap_or(false);
+            let timeout = autoshift.timeout.as_ref().map(|t| t.0).unwrap_or(175);
+            let enable_letters = autoshift.enable_letters.unwrap_or(true);
+            let enable_numbers = autoshift.enable_numbers.unwrap_or(true);
+            let enable_symbols = autoshift.enable_symbols.unwrap_or(true);
+
+            let timeout_duration = quote! { ::embassy_time::Duration::from_millis(#timeout) };
+
+            quote! {
+                ::rmk::config::AutoShiftConfig {
+                    enable: #enable,
+                    timeout: #timeout_duration,
+                    key_overrides: ::rmk::heapless::FnvIndexMap::new(),
+                    enabled_keys: ::rmk::config::AutoShiftKeySet {
+                        letters: #enable_letters,
+                        numbers: #enable_numbers,
+                        symbols: #enable_symbols,
+                    },
+                }
+            }
+        }
+        None => default,
+    }
+}
+
 pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> proc_macro2::TokenStream {
     let behavior = keyboard_config.get_behavior_config().unwrap();
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
@@ -446,6 +475,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.fork);
     let morse = expand_morse(&behavior.morse);
+    let autoshift = expand_autoshift(&behavior.autoshift);
 
     quote! {
         let mut behavior_config = ::rmk::config::BehaviorConfig {
@@ -459,6 +489,7 @@ pub(crate) fn expand_behavior_config(keyboard_config: &KeyboardTomlConfig) -> pr
             // keyboard_macros: ::rmk::config::macro_config::KeyboardMacrosConfig::default(),
             mouse_key: ::rmk::config::MouseKeyConfig::default(),
             tap: ::rmk::config::TapConfig::default(),
+            autoshift: #autoshift,
         };
     }
 }

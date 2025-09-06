@@ -81,6 +81,7 @@ impl crate::KeyboardTomlConfig {
                         return Err("keyboard.toml: number of morses is greater than morse_max_num configured under [rmk] section".to_string());
                     }
                 }
+                behavior.autoshift = behavior.autoshift.or(default.autoshift);
                 Ok(behavior)
             }
             None => Ok(default),

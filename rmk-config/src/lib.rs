@@ -420,6 +420,18 @@ pub struct BehaviorConfig {
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
+    pub autoshift: Option<AutoShiftConfig>,
+}
+
+/// Configurations for autoshift
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutoShiftConfig {
+    pub enable: Option<bool>,
+    pub timeout: Option<DurationMillis>,
+    pub enable_letters: Option<bool>,
+    pub enable_numbers: Option<bool>,
+    pub enable_symbols: Option<bool>,
 }
 
 /// Configurations for tap hold
